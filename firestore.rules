@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isNewDocOwner() {
+      return isAuthenticated() && request.auth.uid == request.resource.data.userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string &&
+             data.email is string;
+    }
+
+    function isValidUserSettings(data) {
+      return (!('theme' in data) || data.theme in ['light', 'dark']) &&
+             (!('unit' in data) || data.unit in ['mm', 'cm', 'm']) &&
+             (!('gridEnabled' in data) || data.gridEnabled is bool) &&
+             (!('floorEnabled' in data) || data.floorEnabled is bool) &&
+             (!('allNotesVisible' in data) || data.allNotesVisible is bool);
+    }
+
+    function isCollaborator(modelId) {
+      return isAuthenticated() && ('email' in request.auth.token) && (
+        exists(/databases/$(database)/documents/collaborations/$(modelId + "_" + request.auth.token.email.lower())) ||
+        exists(/databases/$(database)/documents/collaborations/$(modelId + "_" + request.auth.uid))
+      );
+    }
+
+    function isInvited(modelId) {
+      return isCollaborator(modelId);
+    }
+
+    function isValidModel(data) {
+      return data.keys().hasAll(['name', 'userId', 'shapes']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.userId is string &&
+             data.shapes is list;
+    }
+
+    function isValidMaterial(data) {
+      return data.keys().hasAll(['userId', 'name', 'type', 'value']) &&
+             data.userId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.type in ['color', 'texture'] &&
+             data.value is string;
+    }
+
+    function isValidScript(data) {
+      return data.keys().hasAll(['userId', 'name', 'code']) &&
+             data.userId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.code is string && data.code.size() < 100000;
+    }
+
+    function isValidCollaboration(data) {
+      return data.keys().hasAll(['modelId', 'email', 'role', 'status']) &&
+             data.modelId is string &&
+             data.email is string &&
+             data.role in ['owner', 'collaborator'] &&
+             data.status in ['invited', 'active', 'offline'];
+    }
+
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'text', 'timestamp']) &&
+             data.uid is string &&
+             data.displayName is string &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.timestamp is number;
+    }
+
+    // Rules Definitions
+
+    match /user_settings/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /counters/{counterId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+    }
+
+    match /models/{modelId} {
+      allow list, get: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || resource.data.isPublic == true || isInvited(modelId));
+      allow create: if isNewDocOwner() && isValidModel(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isInvited(modelId));
+      allow delete: if isDocOwner();
+
+      match /messages/{messageId} {
+        allow read, list: if isAuthenticated();
+        allow create: if isAuthenticated() && isValidChatMessage(request.resource.data);
+      }
+    }
+
+    match /materials/{materialId} {
+      allow read, list: if isAuthenticated();
+      allow create: if isNewDocOwner() && isValidMaterial(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isInvited(resource.data.modelId)) && isValidMaterial(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /scripts/{scriptId} {
+      allow read, list: if isAuthenticated();
+      allow create: if isNewDocOwner() && isValidScript(request.resource.data);
+      allow update: if isDocOwner() && isValidScript(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /collaborations/{collabId} {
+      allow read, list, get: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidCollaboration(request.resource.data);
+      allow update, delete: if isAuthenticated();
+    }
+  }
+}

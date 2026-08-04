@@ -1,0 +1,131 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "theme": { "type": "string", "enum": ["light", "dark"] },
+            "bannerColor": { "type": "string" }
+          }
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Model": {
+      "title": "Model",
+      "description": "A 3D model design saved by a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "userId": { "type": "string" },
+        "shapes": { "type": "array" },
+        "previewUrl": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "userId", "shapes"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Custom material or texture",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["color", "texture"] },
+        "value": { "type": "string", "description": "Hex color or texture URL" },
+        "pbr": {
+          "type": "object",
+          "properties": {
+            "roughness": { "type": "number" },
+            "metalness": { "type": "number" },
+            "opacity": { "type": "number" }
+          }
+        }
+      },
+      "required": ["id", "userId", "name", "type", "value"]
+    },
+    "Script": {
+      "title": "Script",
+      "description": "A saved JavaScript automation script",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "code": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "code"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Customizable user interface and application settings",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "unit": { "type": "string", "enum": ["mm", "cm", "m"] },
+        "gridEnabled": { "type": "boolean" },
+        "floorEnabled": { "type": "boolean" },
+        "allNotesVisible": { "type": "boolean" },
+        "updatedAt": { "type": "number", "description": "Timestamp in milliseconds" }
+      }
+    },
+    "Collaboration": {
+      "title": "Collaboration",
+      "description": "A record of a user's access to a shared design session",
+      "type": "object",
+      "properties": {
+        "modelId": { "type": "string" },
+        "email": { "type": "string" },
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "collaborator"] },
+        "status": { "type": "string", "enum": ["invited", "active", "offline"] },
+        "lastSeen": { "type": "number" },
+        "invitedBy": { "type": "string" },
+        "invitedByEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["modelId", "email", "role", "status"]
+    }
+  },
+  "firestore": {
+    "/user_settings/{userId}": {
+      "schema": "UserSettings",
+      "description": "User-specific application preferences"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Private user profile and settings"
+    },
+    "/models/{modelId}": {
+      "schema": "Model",
+      "description": "User-owned 3D models"
+    },
+    "/materials/{materialId}": {
+      "schema": "Material",
+      "description": "User-owned custom materials"
+    },
+    "/scripts/{scriptId}": {
+      "schema": "Script",
+      "description": "User-owned automation scripts"
+    },
+    "/collaborations/{collabId}": {
+      "schema": "Collaboration",
+      "description": "Access control records for shared designs"
+    }
+  }
+}

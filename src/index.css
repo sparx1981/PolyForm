@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-trimble-blue: #0063A3;
+  --color-trimble-dark-blue: #003865;
+  --color-trimble-gray: #252A2E;
+  --color-gray-6: #6A6E79;
+  --color-gray-light: #F4F5F6;
+  --color-trimble-yellow: #FBAD26;
+  --color-trimble-red: #DA212C;
+  --color-trimble-green: #006638;
+
+  --shadow-modus-1: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-modus-2: 0 4px 8px rgba(0, 0, 0, 0.15);
+  --shadow-modus-3: 0 8px 16px rgba(0, 0, 0, 0.2);
+  
+  --color-help-bg: #172030;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+
+@layer base {
+  body {
+    @apply font-sans text-trimble-gray bg-white overflow-hidden;
+  }
+}
+
+@layer components {
+  .panel-bg {
+    @apply bg-gray-light border-l border-gray-200;
+  }
+  
+  .toolbar-btn {
+    @apply w-10 h-10 flex items-center justify-center rounded-sm transition-colors hover:bg-gray-200;
+  }
+  
+  .toolbar-btn-active {
+    @apply bg-trimble-blue text-white hover:bg-trimble-blue;
+  }
+}

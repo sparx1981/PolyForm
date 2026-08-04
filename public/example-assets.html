@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DraftUp Asset Library Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            padding: 24px;
+        }
+        h3 {
+            margin-top: 0;
+            color: #0f172a;
+            font-size: 1.25rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+        p {
+            font-size: 0.875rem;
+            color: #64748b;
+            line-height: 1.5;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        }
+        .card h4 {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #007eff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.8125rem;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0063cc;
+        }
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h3>DraftUp Asset Library</h3>
+    <p>Click the buttons below to inject assets directly into your DraftUp scene via the SDK.</p>
+
+    <div class="card">
+        <h4>London Map Overlay</h4>
+        <p>Import a high-resolution map of Trafalgar Square into your workspace.</p>
+        <button onclick="
+            parent.sdk.worldView.importMap({ 
+                lat: 51.5074, 
+                lng: -0.1278, 
+                zoom: 18 
+            });
+            parent.sdk.log('Action: Imported London Map at Trafalgar Square');
+        ">Import London Map</button>
+    </div>
+
+    <div class="card">
+        <h4>Base Architecture</h4>
+        <p>Add a foundation block for your project.</p>
+        <button onclick="
+            parent.sdk.addObject('box', { 
+                position: [0, 1, 0], 
+                args: [20, 2, 20], 
+                color: '#cbd5e1',
+                name: 'Foundation Block'
+            });
+            parent.sdk.log('Action: Added Foundation Block (20m x 20m)');
+        ">Add Foundation</button>
+    </div>
+
+    <div class="card">
+        <h4>Diagnostic Test</h4>
+        <p>Send a message back to the AI Diagnostic Log.</p>
+        <button onclick="
+            parent.sdk.log('Action: Website and console connection confirmed! PING received.');
+            parent.sdk.diagLog('WEB_LIBRARY', 'User requested asset from library', { source: window.location.href });
+        ">Send Ping</button>
+    </div>
+
+    <script>
+        // Check if we are inside an iframe and sdk is available
+        if (window.parent && window.parent.sdk) {
+            console.log("DraftUp SDK detected in parent window.");
+        } else {
+            console.warn("DraftUp SDK not detected. This page should be opened via sdk.openWebpage().");
+        }
+    </script>
+</body>
+</html>

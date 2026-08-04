@@ -1,0 +1,7 @@
+{
+  "name": "PolyForm",
+  "description": "An architectural 3D modeling workspace with WorldView geolocation mapping, human-scale precision, and advanced developer tools.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
