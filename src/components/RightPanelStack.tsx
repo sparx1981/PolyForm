@@ -566,7 +566,7 @@ export default function RightPanelStack() {
                           default:
                             volume = Array.isArray(args) ? (args[0] * args[1] * args[2] || 0) : 0;
                         }
-                        return `${(volume * 1000000).toFixed(0)} cm³`;
+                        return volume >= 1 ? `${volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} m³` : `${(volume * 1000000).toFixed(0)} cm³`;
                       })()}
                     </div>
                   </div>

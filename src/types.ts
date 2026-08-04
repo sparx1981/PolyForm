@@ -360,7 +360,7 @@ export interface AppState {
     depth: string;
   };
   setRectangleInputState: (state: any | ((prev: any) => any)) => void;
-  syncStatus: 'synced' | 'syncing' | 'error' | 'offline';
+  syncStatus: 'synced' | 'syncing' | 'error' | 'offline' | 'unsaved';
   isDiagnosticLogOpen: boolean;
   setIsDiagnosticLogOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   lastInteractionData: any;
