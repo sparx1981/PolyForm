@@ -24,7 +24,7 @@ import {
   Crown,
   Sparkles,
   Eye,
-  EyeOff,
+  EyeOff,  Trash2,
   Settings
 } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
@@ -566,7 +566,7 @@ export default function RightPanelStack() {
                           default:
                             volume = Array.isArray(args) ? (args[0] * args[1] * args[2] || 0) : 0;
                         }
-                        return volume >= 1 ? `${volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} m³` : `${(volume * 1000000).toFixed(0)} cm³`;
+                        if (volume >= 1e9) return `${(volume / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 })} km³`; if (volume >= 1) return `${volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} m³`; if (volume >= 1e-6) return `${(volume * 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 })} cm³`; return `${(volume * 1e9).toLocaleString(undefined, { maximumFractionDigits: 0 })} mm³`;
                       })()}
                     </div>
                   </div>
@@ -823,9 +823,9 @@ export default function RightPanelStack() {
                 <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
                   <button 
                     onClick={() => removeShape(selectedShape.id)}
-                    className="text-[10px] font-bold text-red-500 uppercase tracking-wider hover:underline"
+                    className="flex items-center gap-1 text-[10px] font-bold text-red-500 hover:underline" title="Delete Entity"
                   >
-                    Delete Entity
+                    <Trash2 size={13} />
                   </button>
                 </div>
               </div>
