@@ -356,6 +356,7 @@ export interface AppState {
   rectangleInputState: {
     active: boolean;
     startPoint: { x: number, y: number, z: number } | null;
+    normal?: { x: number, y: number, z: number } | null;
     width: string;
     depth: string;
   };
