@@ -2562,6 +2562,7 @@ function Scene() {
 
       {/* Render grids and selection highlights for all shapes */}
       {shapes.map(shape => {
+      if (shape.hidden) return null;
         const divisions = shape.surfaceDivisions || {};
         const materials = shape.surfaceMaterials || {};
         const facesWithGrids = new Set([
@@ -2809,6 +2810,7 @@ function Scene() {
       )}
 
       {shapes.map((shape) => {
+      if (shape.hidden) return null;
         const isVisible = !shape.tags || shape.tags.length === 0 || shape.tags.some(tagId => {
           const tag = tags.find(t => t.id === tagId);
           return tag ? tag.visible : true;
