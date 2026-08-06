@@ -2850,7 +2850,7 @@ function Scene() {
                     const v = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
                     const dist = v.distanceTo(localPoint);
                     if (dist < radius) {
-                      const force = (1 - dist / radius) * strength * 0.05;
+                      const force = (1 - dist / radius) * strength * 0.2;
                       const normal = new THREE.Vector3().fromBufferAttribute(normalAttr || new THREE.BufferAttribute(new Float32Array(positionAttr.count * 3), 3), i);
                       
                       if (direction === 'outward') v.addScaledVector(normal, force);
