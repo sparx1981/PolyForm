@@ -23,7 +23,7 @@ export interface Shape {
   metalness?: number;
   opacity?: number;
   tags?: string[];
-  groupId?: string;
+  groupId?: string; hidden?: boolean;
   surfaceMaterials?: Record<number, string>; // face index -> material/color
   surfaceDivisions?: Record<number, number | [number, number]>; // face index -> gridSize or [gridX, gridY]
   bevelAmount?: number;
