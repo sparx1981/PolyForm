@@ -842,11 +842,7 @@ function Scene() {
     const w = parseFloat(rectangleInputState.width) || 0;
     const d = parseFloat(rectangleInputState.depth) || 0;
     
-    if (w > 0 && d > 0) {
-      const tangent = new THREE.Vector3(1, 0, 0);
-      const bitangent = new THREE.Vector3(0, 0, 1);
-      const normal = new THREE.Vector3(0, 1, 0);
-      const start = new THREE.Vector3(rectangleInputState.startPoint.x, rectangleInputState.startPoint.y, rectangleInputState.startPoint.z);
+    if (w > 0 && d > 0) { const normal = rectangleInputState.normal ? new THREE.Vector3(rectangleInputState.normal.x, rectangleInputState.normal.y, rectangleInputState.normal.z) : new THREE.Vector3(0, 1, 0); const up = new THREE.Vector3(0, 1, 0); if (Math.abs(normal.dot(up)) > 0.99) { up.set(0, 0, 1); } const tangent = new THREE.Vector3().crossVectors(normal, up).normalize(); const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize(); const start = new THREE.Vector3(rectangleInputState.startPoint.x, rectangleInputState.startPoint.y, rectangleInputState.startPoint.z);
       
       const centerX = start.clone().add(tangent.clone().multiplyScalar(w / 2)).add(bitangent.clone().multiplyScalar(d / 2));
       centerX.add(normal.clone().multiplyScalar(0.005));
@@ -1604,7 +1600,7 @@ function Scene() {
       const timeDiff = Date.now() - pointerDownInfo.time;
       const distDiff = e.point.distanceTo(pointerDownInfo.pos);
       if (timeDiff < 250 && distDiff < 0.1) {
-        setRectangleInputState({ active: true, startPoint: e.point.clone(), width: '', depth: '' });
+                setRectangleInputState({ active: true, startPoint: e.point.clone(), normal: drawingNormal ? { x: drawingNormal.x, y: drawingNormal.y, z: drawingNormal.z } : null, width: '', depth: '' });
         setDrawingStart(null);
         setDrawingNormal(null);
         setDrawingStep(0);
