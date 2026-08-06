@@ -926,19 +926,7 @@ export default function RightPanelStack() {
               <div className="flex items-center gap-2 py-1 px-2 bg-trimble-blue/10 rounded text-trimble-blue">
                 <BoxSelect size={12} />
                 <span>Model Root</span>
-              </div>
-              {shapes.map(shape => (
-                <div 
-                  key={shape.id} 
-                  onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }}
-                  className={cn(
-                  "flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100",
-                  selectedId === shape.id && "bg-trimble-blue/10 text-trimble-blue"
-                )}>
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shape.color }} />
-                  <span>{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span>
-                </div>
-              ))}
+              </div>{shapes.map(shape => (<div key={shape.id} onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }} className={cn("flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group", selectedId === shape.id && "bg-trimble-blue/10 text-trimble-blue", shape.hidden && "opacity-40")}><div className="w-2 h-2 rounded-full" style={{ backgroundColor: shape.color }} /><span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span>span><button onClick={(e) => { e.stopPropagation(); setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, hidden: !s.hidden } : s)); }} className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0" title={shape.hidden ? "Show" : "Hide"}>{shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>button><button onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0" title="Delete"><Trash2 size={13} /></button>button></div>div>))}</span>
             </div>
           </Panel>
         )}
