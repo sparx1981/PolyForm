@@ -25,9 +25,13 @@ import {
   Sparkles,
   Eye,
   EyeOff,  Trash2,
-  Settings
+  Settings,
+  Wand2,
+  KeyRound,
+  ImageOff
 } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
+import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
 import { ToolModifierPalette } from './ToolModifierPalette';
 import Messaging from './Messaging';
@@ -309,7 +313,15 @@ export default function RightPanelStack() {
   
   const [openPanels, setOpenPanels] = useState<string[]>([]);
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'premade'>('color');
+  const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'premade' | 'ai'>('color');
+  const [hfToken, setHfTokenState] = useState<string>(() => HuggingFaceService.getToken());
+  const setHfToken = (t: string) => { setHfTokenState(t); HuggingFaceService.setToken(t); };
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiPreviewUrl, setAiPreviewUrl] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [removeBgEnabled, setRemoveBgEnabled] = useState(false);
+  const [removingBg, setRemovingBg] = useState(false);
   const [newColor, setNewColor] = useState('#ffffff');
   const [uploading, setUploading] = useState(false);
   const [pbrSettings, setPbrSettings] = useState({
@@ -420,6 +432,43 @@ export default function RightPanelStack() {
     }
   };
 
+  const handleGenerateAIMaterial = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const dataUrl = await HuggingFaceService.generateMaterialImage(aiPrompt.trim());
+      setAiPreviewUrl(dataUrl);
+    } catch (err: any) {
+      setAiError(err?.message || 'Failed to generate material.');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleAddAIMaterial = async () => {
+    if (!user || !aiPreviewUrl) return;
+    try {
+      const materialId = Math.random().toString(36).substr(2, 9);
+      const material = {
+        id: materialId,
+        name: `AI: ${aiPrompt.trim().slice(0, 40)}`,
+        userId: user.uid,
+        type: 'texture',
+        value: aiPreviewUrl,
+        pbr: pbrSettings,
+        createdAt: new Date()
+      };
+      await addDoc(collection(db, 'materials'), { ...material, createdAt: serverTimestamp() });
+      refreshMaterials();
+      setIsAddMaterialOpen(false);
+      setAiPreviewUrl(null);
+      setAiPrompt('');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'materials');
+    }
+  };
+
   const handleTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -435,8 +484,23 @@ export default function RightPanelStack() {
     }, 60000);
 
       try {
+        let uploadBlob: Blob = file;
+        if (removeBgEnabled) {
+          try {
+            setRemovingBg(true);
+            uploadBlob = await HuggingFaceService.removeBackground(file);
+          } catch (bgErr: any) {
+            clearTimeout(timeoutId);
+            setUploading(false);
+            setRemovingBg(false);
+            alert(bgErr?.message || 'Background removal failed.');
+            return;
+          } finally {
+            setRemovingBg(false);
+          }
+        }
         const storageRef = ref(storage, `textures/${user.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
+        await uploadBytes(storageRef, uploadBlob);
         const url = await getDownloadURL(storageRef);
         
         const materialId = Math.random().toString(36).substr(2, 9);
@@ -2552,6 +2616,16 @@ export default function RightPanelStack() {
                 >
                   Pre-Made PBRs
                 </button>
+                <button 
+                  onClick={() => setActiveTab('ai')}
+                  className={cn(
+                    "flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-1",
+                    activeTab === 'ai' ? "text-trimble-blue border-b-2 border-trimble-blue" : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <Wand2 size={14} />
+                  AI Generate
+                </button>
               </div>
 
               <div className="p-6 overflow-y-auto max-h-[60vh]">
@@ -2594,6 +2668,22 @@ export default function RightPanelStack() {
                         </div>
                         <input type="file" className="hidden" accept="image/*" onChange={handleTextureUpload} disabled={uploading} />
                       </label>
+                      <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer pt-1">
+                        <input
+                          type="checkbox"
+                          checked={removeBgEnabled}
+                          onChange={(e) => setRemoveBgEnabled(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        <ImageOff size={14} className="text-gray-400" />
+                        <span>Remove background with AI (Hugging Face)</span>
+                      </label>
+                      {removingBg && (
+                        <div className="flex items-center gap-2 text-trimble-blue text-xs">
+                          <Loader2 className="animate-spin" size={14} />
+                          <span>Removing background&hellip;</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-4">
@@ -2611,7 +2701,7 @@ export default function RightPanelStack() {
                       </div>
                     )}
                   </div>
-                ) : (
+                ) : activeTab === 'premade' ? (
                   <div className="grid grid-cols-2 gap-4">
                     {premadeMaterials.map((mat: any, i: number) => (
                       <div 
@@ -2651,6 +2741,79 @@ export default function RightPanelStack() {
                       <div className="col-span-2 py-12 text-center text-gray-400">
                         <Loader2 size={24} className="animate-spin mx-auto mb-2" />
                         <span>Loading PBR library...</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                        <KeyRound size={12} />
+                        Hugging Face API Token
+                      </label>
+                      <input
+                        type="password"
+                        value={hfToken}
+                        onChange={(e) => setHfToken(e.target.value)}
+                        placeholder="hf_..."
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-trimble-blue/30"
+                      />
+                      <p className="text-[11px] text-gray-400">
+                        Free at huggingface.co/settings/tokens. Used for AI material generation, background removal, and Photo to 3D. Stored only in your browser.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Describe the material</label>
+                      <textarea
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        placeholder="e.g. weathered oak planks, brushed titanium, cracked red brick"
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-trimble-blue/30"
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleGenerateAIMaterial}
+                      disabled={aiGenerating || !aiPrompt.trim()}
+                      className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {aiGenerating ? (
+                        <>
+                          <Loader2 className="animate-spin" size={18} />
+                          Generating&hellip;
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={18} />
+                          Generate Material
+                        </>
+                      )}
+                    </button>
+
+                    {aiError && (
+                      <div className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2">{aiError}</div>
+                    )}
+
+                    {aiPreviewUrl && (
+                      <div className="space-y-4 pt-2 border-t border-gray-100">
+                        <div className="aspect-square w-32 mx-auto rounded-lg overflow-hidden border-4 border-gray-100 shadow-inner">
+                          <img src={aiPreviewUrl} alt="AI generated material" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2">
+                            <Settings2 size={16} className="text-gray-400" />
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
+                          </div>
+                          <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
+                        </div>
+                        <button
+                          onClick={handleAddAIMaterial}
+                          className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all"
+                        >
+                          Add to Palette
+                        </button>
                       </div>
                     )}
                   </div>

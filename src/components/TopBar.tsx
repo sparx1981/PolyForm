@@ -20,7 +20,8 @@ import {
   BookOpen,
   FileText,
   Layers,
-  HelpCircle
+  HelpCircle,
+  Camera
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
@@ -34,7 +35,7 @@ import { cn } from '../lib/utils';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
-import { SketchupService } from '../services/sketchupService';
+import { SketchupService, HuggingFaceService } from '../services/sketchupService';
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
 
@@ -416,6 +417,44 @@ export default function TopBar() {
     setIsMenuOpen(false);
   };
 
+  const handlePhotoTo3D = () => {
+    const token = HuggingFaceService.getToken();
+    if (!token) {
+      alert('Add a Hugging Face API token first: open Materials \u2192 Add Material \u2192 AI Generate tab to set it, then try Photo to 3D again.');
+      setIsMenuOpen(false);
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      diagLog('Import', 'Converting photo to 3D model', { name: file.name });
+      try {
+        const group = await HuggingFaceService.photoTo3D(file);
+        const id = Math.random().toString(36).substr(2, 9);
+        const newShape: any = {
+          id,
+          name: file.name.split('.')[0] + ' (AI 3D)',
+          type: 'custom',
+          position: [0, 0, 0],
+          args: {},
+          color: '#ffffff',
+          geometryData: group.toJSON()
+        };
+        setShapes(prev => [...prev, newShape]);
+        alert('Generated a 3D model from your photo!');
+      } catch (err: any) {
+        console.error('Photo to 3D error:', err);
+        alert(err?.message || 'Failed to generate a 3D model from this photo.');
+      }
+    };
+    input.click();
+    setIsMenuOpen(false);
+  };
+
   return (
     <header 
       className="h-12 text-white flex items-center justify-between px-4 z-50 transition-colors duration-300"
@@ -458,6 +497,7 @@ export default function TopBar() {
                   <div className="absolute left-full top-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/export:block z-[60]">
                     <div className="absolute -left-2 top-0 w-2 h-full" />
                     <MenuButton icon={<Download size={14} />} label="Import SKP" onClick={handleImportSKP} />
+              <MenuButton icon={<Camera size={14} />} label="Photo to 3D (AI)" onClick={handlePhotoTo3D} />
                     <div className="h-px bg-gray-100 my-1" />
                     <MenuButton icon={<Share2 size={14} />} label="Export GLTF" onClick={() => handleExport('gltf')} />
                     <MenuButton icon={<Share2 size={14} />} label="Export STL" onClick={() => handleExport('stl')} />
