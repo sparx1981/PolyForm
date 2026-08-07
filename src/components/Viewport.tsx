@@ -31,7 +31,7 @@ import { useApp } from '../AppContext';
 import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation } from '../types';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
-import { ChevronRight, ChevronDown, X, CheckCircle2, History as HistoryIcon } from 'lucide-react';
+import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote } from 'lucide-react';
 
 // Module-level texture cache: avoids re-creating (and re-downloading) a THREE.Texture
 // on every render when a material/light uses an image URL as its map. Previously each
@@ -657,6 +657,9 @@ function Scene() {
         setPushPullState(null);
         setAxisLock(null);
         setFaceEditMode(null);
+        setSnapIndicator(null);
+        setTypedLength('');
+        setLastDrawTarget(null);
         setSelectedSurface(null);
         setContextMenu(null);
 
@@ -715,6 +718,9 @@ function Scene() {
   const [drawingStep, setDrawingStep] = useState<0 | 1 | 2>(0); // 0: idle, 1: base, 2: height
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
+  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' } | null>(null);
+  const [typedLength, setTypedLength] = useState<string>('');
+  const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
   const [placingNotePos, setPlacingNotePos] = useState<THREE.Vector3 | null>(null);
   const [noteInputText, setNoteInputText] = useState('');
@@ -987,6 +993,21 @@ function Scene() {
       
       const key = e.key.toLowerCase();
 
+      // Numeric length entry while drawing a line (SketchUp-style inference)
+      if (activeTool === 'line' && drawingStart && !e.ctrlKey && !e.metaKey) {
+        if (/^[0-9.]$/.test(e.key)) {
+          e.preventDefault();
+          setTypedLength(prev => prev + e.key);
+          return;
+        }
+        if (e.key === 'Backspace' && typedLength.length > 0) {
+          e.preventDefault();
+          setTypedLength(prev => prev.slice(0, -1));
+          return;
+        }
+      }
+
+
       // Undo/Redo
       if (e.ctrlKey || e.metaKey) {
         if (key === 'z') {
@@ -1023,6 +1044,9 @@ function Scene() {
         setPushPullState(null);
         setAxisLock(null);
         setFaceEditMode(null);
+        setSnapIndicator(null);
+        setTypedLength('');
+        setLastDrawTarget(null);
         setSelectedSurface(null);
         setContextMenu(null);
         setPolyVertices([]);
@@ -1033,6 +1057,40 @@ function Scene() {
       }
 
       if (e.key === 'Enter') {
+        if (activeTool === 'line' && drawingStart && drawingNormal && typedLength.trim() && lastDrawTarget) {
+          e.preventDefault();
+          const raw = parseFloat(typedLength);
+          if (!isNaN(raw) && raw > 0) {
+            const worldLen = unit === 'mm' ? raw / 1000 : unit === 'cm' ? raw / 100 : raw;
+            const dir = new THREE.Vector3().subVectors(lastDrawTarget, drawingStart);
+            if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
+            dir.normalize();
+            const endPoint = drawingStart.clone().add(dir.clone().multiplyScalar(worldLen));
+            const linePos = drawingStart.clone().lerp(endPoint, 0.5).add(drawingNormal.clone().multiplyScalar(0.01));
+            const quatLine2 = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+            addShape({
+              id: Math.random().toString(36).substr(2, 9),
+              type: 'line',
+              position: [linePos.x, linePos.y, linePos.z],
+              quaternion: [quatLine2.x, quatLine2.y, quatLine2.z, quatLine2.w],
+              args: [0.01, 0.01, worldLen, 8],
+              color: activeMaterial,
+              roughness: activePBR.roughness,
+              metalness: activePBR.metalness,
+              opacity: activePBR.opacity
+            } as Shape);
+            setDrawingStart(null);
+            setDrawingNormal(null);
+            setDrawingOnId(null);
+            setPreviewShape(null);
+            setDrawingStep(0);
+            setTypedLength('');
+            setSnapIndicator(null);
+            setLastDrawTarget(null);
+          }
+          return;
+        }
+
         if (activeTool === 'poly' && polyVertices.length >= 3) {
           e.preventDefault();
           finalizePoly();
@@ -1050,6 +1108,9 @@ function Scene() {
         if (key === 'x') setAxisLock(prev => prev === 'x' ? null : 'x');
         if (key === 'y') setAxisLock(prev => prev === 'y' ? null : 'y');
         if (key === 'z') setAxisLock(prev => prev === 'z' ? null : 'z');
+      } else if (drawingStart && ['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && (key === 'x' || key === 'y' || key === 'z')) {
+        setAxisLock(prev => prev === key ? null : (key as 'x' | 'y' | 'z'));
+        return;
       }
 
       // Tool Shortcuts
@@ -1192,11 +1253,17 @@ function Scene() {
         setMeasurements('Click second point to measure.');
       } else {
         const distance = tapeStart.distanceTo(point);
-        setLastMeasurement({
-          start: [tapeStart.x, tapeStart.y, tapeStart.z],
-          end: [point.x, point.y, point.z],
-          distance,
-        });
+        addShape({
+          id: Math.random().toString(36).substr(2, 9),
+          type: 'measurement',
+          position: [(tapeStart.x + point.x) / 2, (tapeStart.y + point.y) / 2, (tapeStart.z + point.z) / 2],
+          args: {
+            start: [tapeStart.x, tapeStart.y, tapeStart.z],
+            end: [point.x, point.y, point.z],
+            distance,
+          },
+          color: '#FFD700',
+        } as Shape);
         setMeasurements(`Distance: ${formatValue(distance, unit, 2)}`);
         setTapeStart(null);
         setTapeEnd(null);
@@ -1297,6 +1364,54 @@ function Scene() {
       const target = new THREE.Vector3();
       
       if (drawingStep === 1 && ray.intersectPlane(plane, target)) {
+        // --- Inference locking: endpoint/midpoint snapping + axis lock ---
+        let snapHit: { point: THREE.Vector3; type: 'endpoint' | 'midpoint' } | null = null;
+        if (!axisLock) {
+          const snapThresholdWorld = 0.35;
+          let bestDist = snapThresholdWorld;
+          shapes.forEach(sh => {
+            if (sh.type === 'measurement') return;
+            const obj = scene.getObjectByName(sh.id);
+            if (!obj) return;
+            const box = new THREE.Box3().setFromObject(obj);
+            if (!isFinite(box.min.x) || !isFinite(box.max.x)) return;
+            const xs = [box.min.x, box.max.x], ys = [box.min.y, box.max.y], zs = [box.min.z, box.max.z];
+            const corners: THREE.Vector3[] = [];
+            xs.forEach(x => ys.forEach(y => zs.forEach(z => corners.push(new THREE.Vector3(x, y, z)))));
+            corners.forEach(c => {
+              const d = target.distanceTo(c);
+              if (d < bestDist) {
+                bestDist = d;
+                snapHit = { point: c.clone(), type: 'endpoint' };
+              }
+            });
+            for (let ci = 0; ci < 8; ci++) {
+              for (let cj = ci + 1; cj < 8; cj++) {
+                const a = corners[ci], b = corners[cj];
+                const diffs = [a.x !== b.x, a.y !== b.y, a.z !== b.z].filter(Boolean).length;
+                if (diffs === 1) {
+                  const mid = a.clone().lerp(b, 0.5);
+                  const d = target.distanceTo(mid);
+                  if (d < bestDist) {
+                    bestDist = d;
+                    snapHit = { point: mid, type: 'midpoint' };
+                  }
+                }
+              }
+            }
+          });
+          if (snapHit) target.copy((snapHit as { point: THREE.Vector3; type: 'endpoint' | 'midpoint' }).point);
+        }
+        if (axisLock) {
+          const axisVec = axisLock === 'x' ? new THREE.Vector3(1, 0, 0) : axisLock === 'y' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+          const delta = target.clone().sub(drawingStart);
+          const projLength = delta.dot(axisVec);
+          target.copy(drawingStart.clone().add(axisVec.multiplyScalar(projLength)));
+          snapHit = null;
+        }
+        setSnapIndicator(snapHit ? { point: [(snapHit as any).point.x, (snapHit as any).point.y, (snapHit as any).point.z], type: (snapHit as any).type } : null);
+        setLastDrawTarget(target.clone());
+
         // Step 1: Base Dimensions
         const up = new THREE.Vector3(0, 1, 0);
         if (Math.abs(drawingNormal.dot(up)) > 0.99) {
@@ -2651,6 +2766,7 @@ function Scene() {
       {/* Render grids and selection highlights for all shapes */}
       {shapes.map(shape => {
       if (shape.hidden) return null;
+        if (shape.type === 'measurement') return null;
         const divisions = shape.surfaceDivisions || {};
         const materials = shape.surfaceMaterials || {};
         const facesWithGrids = new Set([
@@ -2817,21 +2933,21 @@ function Scene() {
         <Html fullscreen zIndexRange={[1000, 2000]} portal={{ current: document.body }}>
           <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[4px]">
             <div 
-              className="bg-white/95 dark:bg-gray-800/95 p-10 rounded-[2rem] shadow-[0_60px_150px_rgba(0,0,0,0.6)] border border-gray-200 dark:border-gray-700 w-[1200px] max-w-[95vw] space-y-8 animate-in zoom-in-95 duration-500" 
+              className="bg-white/95 dark:bg-gray-800/95 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-[560px] max-w-[92vw] space-y-5 animate-in zoom-in-95 duration-200" 
               onPointerDown={e => e.stopPropagation()}
               style={{ pointerEvents: 'auto' }}
             >
               <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-2xl bg-trimble-blue/10 flex items-center justify-center">
-                    <HistoryIcon size={20} className="text-trimble-blue" />
+                    <StickyNote size={20} className="text-trimble-blue" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-wider leading-none">New Design Note</h4>
+                    <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide leading-none">New Design Note</h4>
                     <p className="text-[10px] text-gray-400 mt-1 font-medium italic">Describe your design intent or leave a comment for collaborators</p>
                   </div>
                 </div>
-                <div className="text-[10px] text-trimble-blue font-bold px-4 py-2 bg-trimble-blue/10 rounded-full border border-trimble-blue/20 shadow-sm transition-all hover:bg-trimble-blue/20">
+                <div className="text-[10px] text-trimble-blue font-bold px-3 py-1 bg-trimble-blue/10 rounded-full border border-trimble-blue/20 shadow-sm transition-all hover:bg-trimble-blue/20">
                   COORD: {placingNotePos.x.toFixed(2)}, {placingNotePos.y.toFixed(2)}, {placingNotePos.z.toFixed(2)}
                 </div>
               </div>
@@ -2840,7 +2956,7 @@ function Scene() {
                 value={noteInputText}
                 onChange={e => setNoteInputText(e.target.value)}
                 placeholder="Type your note here..."
-                className="w-full h-40 p-6 text-xl bg-gray-50/50 dark:bg-gray-900/50 border-2 border-gray-100 dark:border-gray-800 rounded-[1.5rem] focus:ring-4 focus:ring-trimble-blue/20 focus:border-trimble-blue outline-none text-gray-900 dark:text-white resize-none transition-all placeholder:text-gray-400 font-medium"
+                className="w-full h-28 p-4 text-sm bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-trimble-blue/20 focus:border-trimble-blue outline-none text-gray-900 dark:text-white resize-none transition-all placeholder:text-gray-400 font-medium"
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -2905,6 +3021,35 @@ function Scene() {
         });
 
         if (!isVisible) return null;
+
+        if (shape.type === 'measurement') {
+          const mArgs: any = shape.args || {};
+          const mStart: [number, number, number] = mArgs.start || [0, 0, 0];
+          const mEnd: [number, number, number] = mArgs.end || [0, 0, 0];
+          const mDist: number = mArgs.distance ?? 0;
+          const isSel = selectedId === shape.id;
+          return (
+            <group key={shape.id}>
+              <Line
+                points={[mStart, mEnd]}
+                color={isSel ? '#FFFFFF' : (shape.color || '#FFD700')}
+                lineWidth={isSel ? 3 : 2}
+              />
+              <Html
+                position={[(mStart[0] + mEnd[0]) / 2, (mStart[1] + mEnd[1]) / 2, (mStart[2] + mEnd[2]) / 2]}
+                center
+                occlude={false}
+              >
+                <div
+                  onClick={(e: any) => { e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }}
+                  className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-trimble-blue border-white' : 'bg-black/80 border-yellow-500/50 hover:border-yellow-400'}`}
+                >
+                  {formatValue(mDist, unit, 2)}
+                </div>
+              </Html>
+            </group>
+          );
+        }
 
         const meshProps = {
           name: shape.id,
@@ -3332,6 +3477,52 @@ function Scene() {
         );
       })}
 
+      {/* Inference Locking: snap indicator */}
+      {snapIndicator && (
+        <Html position={snapIndicator.point} center occlude={false} zIndexRange={[50, 60]}>
+          <div className="flex flex-col items-center gap-1 pointer-events-none -translate-y-4">
+            <div
+              className={cn(
+                'w-2.5 h-2.5 shadow-lg',
+                snapIndicator.type === 'endpoint' ? 'bg-green-400 rotate-45 border border-green-600' : 'bg-cyan-400 rounded-full border border-cyan-600'
+              )}
+            />
+            <div className="bg-black/80 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap">
+              {snapIndicator.type === 'endpoint' ? 'Endpoint' : 'Midpoint'}
+            </div>
+          </div>
+        </Html>
+      )}
+
+      {/* Inference Locking: axis-lock guide line */}
+      {axisLock && drawingStart && (
+        <Line
+          points={[
+            [drawingStart.x - (axisLock === 'x' ? 500 : 0), drawingStart.y - (axisLock === 'y' ? 500 : 0), drawingStart.z - (axisLock === 'z' ? 500 : 0)],
+            [drawingStart.x + (axisLock === 'x' ? 500 : 0), drawingStart.y + (axisLock === 'y' ? 500 : 0), drawingStart.z + (axisLock === 'z' ? 500 : 0)],
+          ]}
+          color={axisLock === 'x' ? '#ef4444' : axisLock === 'y' ? '#22c55e' : '#3b82f6'}
+          lineWidth={1.5}
+          dashed
+          dashScale={8}
+          transparent
+          opacity={0.6}
+        />
+      )}
+
+      {/* Inference Locking: typed-length HUD while drawing a line */}
+      {typedLength && drawingStart && lastDrawTarget && (
+        <Html
+          position={[(drawingStart.x + lastDrawTarget.x) / 2, (drawingStart.y + lastDrawTarget.y) / 2 + 0.4, (drawingStart.z + lastDrawTarget.z) / 2]}
+          center
+          occlude={false}
+        >
+          <div className="bg-trimble-blue text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap shadow-lg border border-white/30">
+            {typedLength}{unit === 'mm' ? ' mm' : unit === 'cm' ? ' cm' : ' m'}<span className="animate-pulse">|</span>
+          </div>
+        </Html>
+      )}
+
       {/* Measuring Tape Preview (in-progress) */}
       {tapeStart && tapeEnd && (
         <group>
@@ -3347,30 +3538,6 @@ function Scene() {
           >
             <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border border-yellow-500/50">
               {formatValue(tapeStart.distanceTo(tapeEnd), unit, 2)}
-            </div>
-          </Html>
-        </group>
-      )}
-
-      {/* Measuring Tape - last completed measurement */}
-      {lastMeasurement && !(tapeStart && tapeEnd) && (
-        <group>
-          <Line
-            points={[lastMeasurement.start, lastMeasurement.end]}
-            color="#FFD700"
-            lineWidth={2}
-          />
-          <Html
-            position={[
-              (lastMeasurement.start[0] + lastMeasurement.end[0]) / 2,
-              (lastMeasurement.start[1] + lastMeasurement.end[1]) / 2,
-              (lastMeasurement.start[2] + lastMeasurement.end[2]) / 2,
-            ]}
-            center
-            occlude={false}
-          >
-            <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border border-yellow-500/50">
-              {formatValue(lastMeasurement.distance, unit, 2)}
             </div>
           </Html>
         </group>

@@ -2561,8 +2561,9 @@ export default function RightPanelStack() {
                   </div>
                 ))}
                 {notes.length === 0 && (
-                  <div className="text-center py-8 text-gray-400 italic text-[10px] bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                    No notes found
+                  <div className="text-center py-8 px-4 text-gray-400 text-[10px] bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center gap-2">
+                    <StickyNote size={16} className="text-gray-300" />
+                    <span>No notes yet. Click <span className="font-bold text-gray-500">Add New Note</span>, then click a spot on the model.</span>
                   </div>
                 )}
               </div>
