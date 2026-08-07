@@ -85,7 +85,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'surface' | 'multi' | 'light', data?: any } | null>(null);
   const [history, setHistory] = useState<Shape[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline' | 'unsaved'>('unsaved');
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline'>('synced');
   const [quotaLockdownTime, setQuotaLockdownTime] = useState<number>(0);
   const [totalReads, setTotalReads] = useState(0);
   
@@ -459,11 +459,7 @@ console.log("Created rectangle:", myRect.id);`);
 
   // Push local changes to Firestore (Debounced)
   useEffect(() => {
-    if (!currentModelId || !user) {
-      setSyncStatus('unsaved');
-      return;
-    }
-    if (checkQuota()) return;
+    if (!currentModelId || !user || checkQuota()) return;
     
     // If this update was triggered by a remote sync, don't push it back
     if (isRemoteUpdate.current) {
@@ -736,7 +732,6 @@ console.log("Created rectangle:", myRect.id);`);
     setShapes([]);
     setCurrentModelId(null);
     setCurrentModelName(null);
-    setSyncStatus('unsaved');
     setSelectedId(null);
     setSelectedIds([]);
     setSelectedSurface(null);

@@ -26,7 +26,7 @@ import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHel
 // @ts-ignore
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'; import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { useApp } from '../AppContext';
 import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation } from '../types';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
@@ -472,7 +472,7 @@ function Scene() {
     isAIGenerateOpen
   } = useApp();
   
-  const frictionPausedUntilRef = useRef<number>(0);    const sunAnimRef = useRef<{ radius: number; angle: number } | null>(null);
+  const frictionPausedUntilRef = useRef<number>(0);
   const hasReachedFrictionRef = useRef<boolean>(false);
   const lastValidPosRef = useRef<THREE.Vector3 | null>(null);
   const { raycaster, mouse, camera, scene, gl } = useThree();
@@ -633,9 +633,9 @@ function Scene() {
   const lastTransformBroadcastRef = useRef<number>(0);
 
   useFrame((state) => {
-    if (!animateSun) { sunAnimRef.current = null; } if (animateSun) {
-      if (!sunAnimRef.current) { sunAnimRef.current = { radius: Math.sqrt(lightPosition[0] * lightPosition[0] + lightPosition[2] * lightPosition[2]) || 10, angle: Math.atan2(lightPosition[2], lightPosition[0]) }; } sunAnimRef.current.angle += state.clock.getDelta() * sunSpeed * 0.5;
-      const radius = sunAnimRef.current.radius; const time = sunAnimRef.current.angle;
+    if (animateSun) {
+      const time = state.clock.getElapsedTime() * sunSpeed * 0.5;
+      const radius = 10;
       setLightPosition([
         Math.cos(time) * radius,
         lightPosition[1],
@@ -710,7 +710,7 @@ function Scene() {
     id: string;
     initialAmount: number;
     startX: number;
-    type: 'radius' | 'chamfer'; maxRadius: number;
+    type: 'radius' | 'chamfer';
   } | null>(null);
 
   useEffect(() => {
@@ -842,7 +842,11 @@ function Scene() {
     const w = parseFloat(rectangleInputState.width) || 0;
     const d = parseFloat(rectangleInputState.depth) || 0;
     
-    if (w > 0 && d > 0) { const normal = rectangleInputState.normal ? new THREE.Vector3(rectangleInputState.normal.x, rectangleInputState.normal.y, rectangleInputState.normal.z) : new THREE.Vector3(0, 1, 0); const up = new THREE.Vector3(0, 1, 0); if (Math.abs(normal.dot(up)) > 0.99) { up.set(0, 0, 1); } const tangent = new THREE.Vector3().crossVectors(normal, up).normalize(); const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize(); const start = new THREE.Vector3(rectangleInputState.startPoint.x, rectangleInputState.startPoint.y, rectangleInputState.startPoint.z);
+    if (w > 0 && d > 0) {
+      const tangent = new THREE.Vector3(1, 0, 0);
+      const bitangent = new THREE.Vector3(0, 0, 1);
+      const normal = new THREE.Vector3(0, 1, 0);
+      const start = new THREE.Vector3(rectangleInputState.startPoint.x, rectangleInputState.startPoint.y, rectangleInputState.startPoint.z);
       
       const centerX = start.clone().add(tangent.clone().multiplyScalar(w / 2)).add(bitangent.clone().multiplyScalar(d / 2));
       centerX.add(normal.clone().multiplyScalar(0.005));
@@ -1492,7 +1496,7 @@ function Scene() {
     }
     if (bevelState) {
       const deltaX = e.nativeEvent.clientX - bevelState.startX;
-      const amount = Math.max(0, bevelState.initialAmount + deltaX * (bevelState.maxRadius > 0 ? bevelState.maxRadius / 300 : 0.001));
+      const amount = Math.max(0, bevelState.initialAmount + deltaX * 0.001);
       
       const shape = shapes.find(s => s.id === bevelState.id);
       if (shape) {
@@ -1600,7 +1604,7 @@ function Scene() {
       const timeDiff = Date.now() - pointerDownInfo.time;
       const distDiff = e.point.distanceTo(pointerDownInfo.pos);
       if (timeDiff < 250 && distDiff < 0.1) {
-                setRectangleInputState({ active: true, startPoint: e.point.clone(), normal: drawingNormal ? { x: drawingNormal.x, y: drawingNormal.y, z: drawingNormal.z } : null, width: '', depth: '' });
+        setRectangleInputState({ active: true, startPoint: e.point.clone(), width: '', depth: '' });
         setDrawingStart(null);
         setDrawingNormal(null);
         setDrawingStep(0);
@@ -2071,7 +2075,7 @@ function Scene() {
         id: shape.id,
         initialAmount: shape.bevelAmount || 0,
         startX: e.nativeEvent.clientX,
-        type: activeBevelType, maxRadius: (shape.type === 'box' || shape.type === 'rect') ? Math.min(...shape.args) / 2 : 1
+        type: activeBevelType
       });
     } else if (activeTool === 'paint') {
       e.stopPropagation();
@@ -2203,11 +2207,11 @@ function Scene() {
       targetMesh.updateMatrixWorld(true);
       cutterMesh.updateMatrixWorld(true);
 
-      const targetBrush = new Brush(mergeVertices(targetMesh.geometry.clone()), targetMesh.material);
+      const targetBrush = new Brush(targetMesh.geometry.clone(), targetMesh.material);
       // We keep targetBrush at identity because we want the result in its local space
       targetBrush.updateMatrixWorld();
 
-      const cutterBrush = new Brush(mergeVertices(cutterMesh.geometry.clone()), cutterMesh.material);
+      const cutterBrush = new Brush(cutterMesh.geometry.clone(), cutterMesh.material);
       // Transform cutter into target's local space
       const targetInv = targetMesh.matrixWorld.clone().invert();
       const cutterInTargetSpace = cutterMesh.matrixWorld.clone().premultiply(targetInv);
@@ -2558,7 +2562,6 @@ function Scene() {
 
       {/* Render grids and selection highlights for all shapes */}
       {shapes.map(shape => {
-      if (shape.hidden) return null;
         const divisions = shape.surfaceDivisions || {};
         const materials = shape.surfaceMaterials || {};
         const facesWithGrids = new Set([
@@ -2722,7 +2725,7 @@ function Scene() {
       )}
 
       {placingNotePos && (
-        <Html fullscreen zIndexRange={[1000, 2000]} portal={{ current: document.body }}>
+        <Html fullscreen zIndexRange={[1000, 2000]}>
           <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[4px]">
             <div 
               className="bg-white/95 dark:bg-gray-800/95 p-10 rounded-[2rem] shadow-[0_60px_150px_rgba(0,0,0,0.6)] border border-gray-200 dark:border-gray-700 w-[1200px] max-w-[95vw] space-y-8 animate-in zoom-in-95 duration-500" 
@@ -2806,7 +2809,6 @@ function Scene() {
       )}
 
       {shapes.map((shape) => {
-      if (shape.hidden) return null;
         const isVisible = !shape.tags || shape.tags.length === 0 || shape.tags.some(tagId => {
           const tag = tags.find(t => t.id === tagId);
           return tag ? tag.visible : true;
@@ -2848,7 +2850,7 @@ function Scene() {
                     const v = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
                     const dist = v.distanceTo(localPoint);
                     if (dist < radius) {
-                      const force = (1 - dist / radius) * strength * 0.2;
+                      const force = (1 - dist / radius) * strength * 0.05;
                       const normal = new THREE.Vector3().fromBufferAttribute(normalAttr || new THREE.BufferAttribute(new Float32Array(positionAttr.count * 3), 3), i);
                       
                       if (direction === 'outward') v.addScaledVector(normal, force);
@@ -4441,7 +4443,7 @@ export default function Viewport() {
                 )}
               </div>
               <button 
-                onClick={() => { if (shape.type === 'box' || shape.type === 'rect') setIsDividePopupOpen(true); }} disabled={shape.type !== 'box' && shape.type !== 'rect'} title={(shape.type === 'box' || shape.type === 'rect') ? undefined : 'Only available on box/rectangle faces'}
+                onClick={() => setIsDividePopupOpen(true)}
                 className={cn(
                   "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
                   theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
