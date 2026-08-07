@@ -503,8 +503,17 @@ function Scene() {
     contactFrictionEnabled,
     autoOrbitEnabled,
     orbitRotationSpeed,
-    isAIGenerateOpen
+    isAIGenerateOpen,
+    showAllDimensions
   } = useApp();
+
+  // Measuring Tape tool state: tapeStart persists once the user clicks the first point;
+  // tapeEnd tracks the live cursor position for the preview line/label while the second
+  // point hasn't been placed yet. lastMeasurement holds the most recently completed
+  // measurement so its line + label stay visible after the second click.
+  const [tapeStart, setTapeStart] = useState<THREE.Vector3 | null>(null);
+  const [tapeEnd, setTapeEnd] = useState<THREE.Vector3 | null>(null);
+  const [lastMeasurement, setLastMeasurement] = useState<{ start: [number, number, number]; end: [number, number, number]; distance: number } | null>(null);
   
   const frictionPausedUntilRef = useRef<number>(0);    const sunAnimRef = useRef<{ radius: number; angle: number } | null>(null);
   const hasReachedFrictionRef = useRef<boolean>(false);
@@ -1171,6 +1180,30 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'tape') {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+
+      if (!tapeStart) {
+        setTapeStart(point);
+        setTapeEnd(point);
+        setMeasurements('Click second point to measure.');
+      } else {
+        const distance = tapeStart.distanceTo(point);
+        setLastMeasurement({
+          start: [tapeStart.x, tapeStart.y, tapeStart.z],
+          end: [point.x, point.y, point.z],
+          distance,
+        });
+        setMeasurements(`Distance: ${formatValue(distance, unit, 2)}`);
+        setTapeStart(null);
+        setTapeEnd(null);
+      }
+      return;
+    }
+
     if (['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
       e.stopPropagation();
       
@@ -1206,6 +1239,14 @@ function Scene() {
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (activeTool === 'tape' && tapeStart) {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+      setTapeEnd(point);
+      setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
+    }
+
     if (activeTool === 'poly' && polyPlane && polyNormal) {
       const ray = raycaster.ray;
       const target = new THREE.Vector3();
@@ -2129,6 +2170,8 @@ function Scene() {
       e.stopPropagation();
       setSelectedId(shape.id);
       setSelectedIds([shape.id]);
+    } else if (activeTool === 'tape') {
+      handlePointerDown(e);
     } else if (['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
       handlePointerDown(e);
     }
@@ -2877,6 +2920,12 @@ function Scene() {
           onContextMenu: (e: any) => handleContextMenu(e, shape.id),
           onPointerDown: (e: any) => handleMeshPointerDown(e, shape),
           onPointerMove: (e: any) => {
+            if (activeTool === 'tape' && tapeStart) {
+              const point = e.point.clone();
+              setTapeEnd(point);
+              setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
+              return;
+            }
             if (activeTool === 'deform' && e.buttons === 1) {
               e.stopPropagation();
               const { radius, strength, direction } = deformationSettings;
@@ -3233,6 +3282,98 @@ function Scene() {
 
       {shadowsEnabled && (
         <ContactShadows position={[0, 0, 0]} opacity={shadowOpacity} scale={10} blur={1.5} far={0.8} />
+      )}
+
+      {/* Show All Dimensions - per-shape labels, toggled from the Measure tool popout */}
+      {showAllDimensions && shapes.map((shape) => {
+        if (shape.hidden) return null;
+        const args = Array.isArray(shape.args) ? (shape.args as number[]) : [];
+        let label: string | null = null;
+        switch (shape.type) {
+          case 'rect':
+          case 'box':
+            label = `${formatValue(args[0] || 0, unit, 1)} x ${formatValue(args[1] || 0, unit, 1)} x ${formatValue(args[2] || 0, unit, 1)}`;
+            break;
+          case 'sphere':
+          case 'dome':
+            label = `Radius: ${formatValue(args[0] || 0, unit, 1)}`;
+            break;
+          case 'cone':
+            label = `Radius: ${formatValue(args[0] || 0, unit, 1)}`;
+            break;
+          case 'pyramid':
+            label = `Base: ${formatValue(args[0] || 0, unit, 1)}`;
+            break;
+          case 'donut':
+            label = `Major Radius: ${formatValue(args[0] || 0, unit, 1)}`;
+            break;
+          case 'circle':
+            label = `Radius: ${formatValue(args[0] || 0, unit, 1)}`;
+            break;
+          case 'triangle':
+            label = `Side: ${formatValue(args[0] || 0, unit, 1)}`;
+            break;
+          default:
+            label = null;
+        }
+        if (!label || !Array.isArray(shape.position)) return null;
+
+        return (
+          <Html
+            key={`dim-${shape.id}`}
+            position={[shape.position[0], shape.position[1] + 0.6, shape.position[2]]}
+            center
+            occlude={false}
+          >
+            <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap pointer-events-none shadow-lg border border-cyan-500/40">
+              {label}
+            </div>
+          </Html>
+        );
+      })}
+
+      {/* Measuring Tape Preview (in-progress) */}
+      {tapeStart && tapeEnd && (
+        <group>
+          <Line
+            points={[[tapeStart.x, tapeStart.y, tapeStart.z], [tapeEnd.x, tapeEnd.y, tapeEnd.z]]}
+            color="#FFD700"
+            lineWidth={2}
+          />
+          <Html
+            position={[(tapeStart.x + tapeEnd.x) / 2, (tapeStart.y + tapeEnd.y) / 2, (tapeStart.z + tapeEnd.z) / 2]}
+            center
+            occlude={false}
+          >
+            <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border border-yellow-500/50">
+              {formatValue(tapeStart.distanceTo(tapeEnd), unit, 2)}
+            </div>
+          </Html>
+        </group>
+      )}
+
+      {/* Measuring Tape - last completed measurement */}
+      {lastMeasurement && !(tapeStart && tapeEnd) && (
+        <group>
+          <Line
+            points={[lastMeasurement.start, lastMeasurement.end]}
+            color="#FFD700"
+            lineWidth={2}
+          />
+          <Html
+            position={[
+              (lastMeasurement.start[0] + lastMeasurement.end[0]) / 2,
+              (lastMeasurement.start[1] + lastMeasurement.end[1]) / 2,
+              (lastMeasurement.start[2] + lastMeasurement.end[2]) / 2,
+            ]}
+            center
+            occlude={false}
+          >
+            <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border border-yellow-500/50">
+              {formatValue(lastMeasurement.distance, unit, 2)}
+            </div>
+          </Html>
+        </group>
       )}
 
       {/* Poly Drawing Preview */}

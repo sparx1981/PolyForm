@@ -58,6 +58,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [scenes, setScenes] = useState<SceneState[]>([]);
   const [shadowsEnabled, setShadowsEnabled] = useState(false);
   const [showLightsource, setShowLightsource] = useState(false);
+  const [showAllDimensions, setShowAllDimensions] = useState(false);
   const [lightPosition, setLightPosition] = useState<[number, number, number]>([5, 5, 5]);
   const [animateSun, setAnimateSun] = useState(false);
   const [sunSpeed, setSunSpeed] = useState(1.0);
@@ -876,6 +877,8 @@ console.log("Created rectangle:", myRect.id);`);
       setShadowsEnabled: handleSetShadowsEnabled,
       showLightsource,
       setShowLightsource,
+      showAllDimensions,
+      setShowAllDimensions,
       lightPosition,
       setLightPosition: handleSetLightPosition,
       animateSun,

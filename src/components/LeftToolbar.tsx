@@ -29,7 +29,10 @@ import {
   Scissors,
   CircleDashed,
   Grab,
-  Wand2
+  Wand2,
+  Ruler,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -77,6 +80,8 @@ export default function LeftToolbar() {
     toolbarVisibility, 
     activeTool, 
     setActiveTool,
+    showAllDimensions,
+    setShowAllDimensions,
     activeBevelType,
     setActiveBevelType,
     activeBevelAmount,
@@ -97,10 +102,12 @@ export default function LeftToolbar() {
   const [is3DPopoutOpen, setIs3DPopoutOpen] = useState(false);
   const [isLinePopoutOpen, setIsLinePopoutOpen] = useState(false);
   const [isBevelPopoutOpen, setIsBevelPopoutOpen] = useState(false);
+  const [isMeasurePopoutOpen, setIsMeasurePopoutOpen] = useState(false);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hover3DTimeout, setHover3DTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hoverLineTimeout, setHoverLineTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hoverBevelTimeout, setHoverBevelTimeout] = useState<NodeJS.Timeout|null>(null);
+  const [hoverMeasureTimeout, setHoverMeasureTimeout] = useState<NodeJS.Timeout|null>(null);
 
   const runPinnedScript = async (scriptId: string) => {
     const script = developerScripts.find(s => s.id === scriptId);
@@ -173,6 +180,18 @@ export default function LeftToolbar() {
       setIsBevelPopoutOpen(false);
     }, 300);
     setHoverBevelTimeout(timeout);
+  };
+
+  const handleMeasureEnter = () => {
+    if (hoverMeasureTimeout) clearTimeout(hoverMeasureTimeout);
+    setIsMeasurePopoutOpen(true);
+  };
+
+  const handleMeasureLeave = () => {
+    const timeout = setTimeout(() => {
+      setIsMeasurePopoutOpen(false);
+    }, 300);
+    setHoverMeasureTimeout(timeout);
   };
 
   const handleLineEnter = () => {
@@ -454,7 +473,57 @@ export default function LeftToolbar() {
       
       <ToolButton tool="pushpull" icon={<ArrowUpFromLine size={20} />} label="Push/Pull (P)" />
       <ToolButton tool="subtract" icon={<Scissors size={20} />} label="Subtract Tool - 1st click on the object to keep, 2nd click on object to subtract" />
-      <ToolButton tool="deform" icon={<CircleDashed size={20} />} label="Deformation Brush" />
+      <div 
+        className="relative"
+        onMouseEnter={handleMeasureEnter}
+        onMouseLeave={handleMeasureLeave}
+      >
+        <button 
+          onClick={() => setActiveTool('tape')}
+          className={cn(
+            "toolbar-btn transition-colors",
+            activeTool === 'tape' && "toolbar-btn-active"
+          )}
+          title="Measure Tool"
+        >
+          <Ruler size={20} />
+        </button>
+
+        <AnimatePresence>
+          {isMeasurePopoutOpen && (
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              className={cn(
+                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[190px] z-50",
+                theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+              )}
+            >
+              <button 
+                onClick={() => setActiveTool('tape')}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                  activeTool === 'tape' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                )}
+              >
+                <Ruler size={16} />
+                <span>Measuring Tape</span>
+              </button>
+              <button 
+                onClick={() => setShowAllDimensions(!showAllDimensions)}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                  showAllDimensions ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                )}
+              >
+                {showAllDimensions ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                <span>Show All Dimensions</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       
       <div className="w-8 h-px bg-gray-200 my-1" />
       
