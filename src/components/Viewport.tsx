@@ -315,6 +315,152 @@ const CAMERA_VIEWS: Record<string, { pos: [number, number, number], target: [num
   right: { pos: [10, 0, 0], target: [0, 0, 0] }
 };
 
+function MiniShapeMesh({ shape }: { shape: Shape }) {
+  if (shape.hidden) return null;
+  const args = Array.isArray(shape.args) ? (shape.args as number[]) : [];
+  const materialProps: any = {
+    color: (shape as any).color || '#cccccc',
+    roughness: (shape as any).roughness ?? 0.6,
+    metalness: (shape as any).metalness ?? 0,
+    transparent: ((shape as any).opacity ?? 1) < 1,
+    opacity: (shape as any).opacity ?? 1,
+    side: THREE.DoubleSide
+  };
+  const pos = shape.position as [number, number, number];
+  const quat = (shape.quaternion as [number, number, number, number]) || [0, 0, 0, 1];
+  switch (shape.type) {
+    case 'box':
+    case 'rect':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <boxGeometry args={[args[0] || 1, args[1] || 1, args[2] || 1]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'circle':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <cylinderGeometry args={[args[0] || 1, args[0] || 1, args[2] || 0.01, args[3] || 32]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'triangle':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <cylinderGeometry args={[args[0] || 1, args[0] || 1, args[2] || 0.01, 3]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'sphere':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <sphereGeometry args={[args[0] || 1, args[1] || 16, args[2] || 16]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'cone':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <coneGeometry args={[args[0] || 1, args[1] || 1, args[2] || 32]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'pyramid':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <coneGeometry args={[args[0] || 1, args[1] || 1, args[2] || 4]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'donut':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <torusGeometry args={[args[0] || 1, args[1] || 0.3, args[2] || 16, args[3] || 100]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'dome':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <sphereGeometry args={[args[0] || 1, args[1] || 32, args[2] || 32, args[3] || 0, args[4] || Math.PI * 2, args[5] || 0, args[6] || Math.PI / 2]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    default:
+      return null;
+  }
+}
+
+function computeMiniViewBounds(shapes: Shape[]) {
+  const box = new THREE.Box3();
+  let has = false;
+  shapes.forEach(shape => {
+    if (shape.hidden) return;
+    const args = Array.isArray(shape.args) ? (shape.args as number[]) : [];
+    let r = 1;
+    switch (shape.type) {
+      case 'box':
+      case 'rect':
+        r = Math.sqrt(Math.pow(args[0] || 1, 2) + Math.pow(args[1] || 1, 2) + Math.pow(args[2] || 1, 2)) / 2;
+        break;
+      case 'circle':
+      case 'triangle':
+        r = Math.max(args[0] || 1, (args[2] || 0.01) / 2);
+        break;
+      case 'sphere':
+        r = args[0] || 1;
+        break;
+      case 'cone':
+      case 'pyramid':
+        r = Math.max(args[0] || 1, (args[1] || 1) / 2);
+        break;
+      case 'donut':
+        r = (args[0] || 1) + (args[1] || 0.3);
+        break;
+      case 'dome':
+        r = args[0] || 1;
+        break;
+      default:
+        r = 1;
+    }
+    const pos = shape.position as [number, number, number];
+    box.union(new THREE.Box3(
+      new THREE.Vector3(pos[0] - r, pos[1] - r, pos[2] - r),
+      new THREE.Vector3(pos[0] + r, pos[1] + r, pos[2] + r)
+    ));
+    has = true;
+  });
+  if (!has) return { center: new THREE.Vector3(0, 0, 0), radius: 8 };
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const radius = Math.max(size.length() / 2, 2);
+  return { center, radius };
+}
+
+function MiniScene({ view }: { view: 'top' | 'front' | 'right' }) {
+  const { shapes, theme } = useApp();
+  const { center, radius } = React.useMemo(() => computeMiniViewBounds(shapes), [shapes]);
+  const dist = radius * 2.2 + 4;
+  const camPos: [number, number, number] =
+    view === 'top' ? [center.x, center.y + dist, center.z + 0.01] :
+    view === 'front' ? [center.x, center.y, center.z + dist] :
+    [center.x + dist, center.y, center.z];
+  const target: [number, number, number] = [center.x, center.y, center.z];
+  const gridSize = Math.max(radius * 5, 60);
+  return (
+    <>
+      <PerspectiveCamera makeDefault position={camPos} fov={35} />
+      <OrbitControls target={target} enableRotate={false} enablePan={true} enableZoom={true} />
+      <ambientLight intensity={0.8} />
+      <directionalLight position={[10, 20, 10]} intensity={0.7} />
+      <gridHelper args={[gridSize, 60, theme === 'dark' ? '#444444' : '#cccccc', theme === 'dark' ? '#2a2a2a' : '#e5e5e5']} />
+      {shapes.filter(s => !s.hidden).map(shape => <MiniShapeMesh key={shape.id} shape={shape} />)}
+    </>
+  );
+}
+
 function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape: Shape, faceIndex: number, gridSize: number | [number, number], isSelected?: boolean, showGrid?: boolean }) {
   if (shape.type !== 'box' && shape.type !== 'rect') return null;
   
@@ -4324,6 +4470,7 @@ export default function Viewport() {
     unit
   } = useApp();
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
+  const [quadView, setQuadView] = useState(false);
   const [perspectiveTimeout, setPerspectiveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [metadataShapeId, setMetadataShapeId] = useState<string | null>(null);
   const [metadataLightId, setMetadataLightId] = useState<string | null>(null);
@@ -4464,7 +4611,10 @@ export default function Viewport() {
       "flex-1 relative overflow-hidden transition-colors duration-300",
       theme === 'dark' ? "bg-gray-900" : "bg-[#f8f9fa]"
     )}>
-      <Canvas 
+      {quadView ? (
+        <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-black/30 z-0">
+          <div className="relative overflow-hidden bg-inherit">
+            <Canvas 
         shadows={{ type: THREE.PCFShadowMap }} 
         dpr={[1, 2]} 
         gl={{ preserveDrawingBuffer: true }}
@@ -4475,6 +4625,40 @@ export default function Viewport() {
           <Scene />
         </React.Suspense>
       </Canvas>
+            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-trimble-blue text-white pointer-events-none z-10">Perspective</div>
+          </div>
+          <div className="relative overflow-hidden bg-inherit">
+            <Canvas dpr={[1, 2]} frameloop="always">
+              <MiniScene view="top" />
+            </Canvas>
+            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white pointer-events-none z-10">Top</div>
+          </div>
+          <div className="relative overflow-hidden bg-inherit">
+            <Canvas dpr={[1, 2]} frameloop="always">
+              <MiniScene view="front" />
+            </Canvas>
+            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white pointer-events-none z-10">Front</div>
+          </div>
+          <div className="relative overflow-hidden bg-inherit">
+            <Canvas dpr={[1, 2]} frameloop="always">
+              <MiniScene view="right" />
+            </Canvas>
+            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white pointer-events-none z-10">Right</div>
+          </div>
+        </div>
+      ) : (
+        <Canvas 
+        shadows={{ type: THREE.PCFShadowMap }} 
+        dpr={[1, 2]} 
+        gl={{ preserveDrawingBuffer: true }}
+        frameloop="always"
+      >
+        <React.Suspense fallback={null}>
+          <EnvironmentLighting />
+          <Scene />
+        </React.Suspense>
+      </Canvas>
+      )}
 
       {contextMenu && (
         <div 
@@ -5080,6 +5264,17 @@ export default function Viewport() {
             </div>
           )}
         </div>
+
+        <button
+          onClick={() => setQuadView(v => !v)}
+          title="Toggle 4-way split view"
+          className={cn(
+            "backdrop-blur-sm px-3 py-1.5 rounded border text-[10px] font-bold uppercase transition-all hover:bg-white/90 grid grid-cols-2 grid-rows-2 gap-0.5 w-fit",
+            quadView ? "bg-trimble-blue border-trimble-blue text-white" : (theme === 'dark' ? "bg-gray-800/80 border-gray-700 text-gray-300" : "bg-white/80 border-gray-200 text-gray-600")
+          )}
+        >
+          <span className="col-span-2 -my-0.5">4-View</span>
+        </button>
       </div>
       {isDividePopupOpen && selectedSurface && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-[2px]">
