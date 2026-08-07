@@ -1003,7 +1003,7 @@ function Scene() {
       const key = e.key.toLowerCase();
 
       // Numeric length entry while drawing a line (SketchUp-style inference)
-      if (activeTool === 'line' && drawingStart && !e.ctrlKey && !e.metaKey) {
+      if (['line', 'circle', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStart && !e.ctrlKey && !e.metaKey) {
         if (/^[0-9.]$/.test(e.key)) {
           e.preventDefault();
           setTypedLength(prev => prev + e.key);
@@ -1088,6 +1088,115 @@ function Scene() {
               metalness: activePBR.metalness,
               opacity: activePBR.opacity
             } as Shape);
+            setDrawingStart(null);
+            setDrawingNormal(null);
+            setDrawingOnId(null);
+            setPreviewShape(null);
+            setDrawingStep(0);
+            setTypedLength('');
+            setSnapIndicator(null);
+            setLastDrawTarget(null);
+          }
+          return;
+        }
+
+        if (['circle', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStep === 1 && drawingStart && drawingNormal && typedLength.trim()) {
+          e.preventDefault();
+          const raw = parseFloat(typedLength);
+          if (!isNaN(raw) && raw > 0) {
+            const worldRadius = unit === 'mm' ? raw / 1000 : unit === 'cm' ? raw / 100 : raw;
+
+            const up = new THREE.Vector3(0, 1, 0);
+            if (Math.abs(drawingNormal.dot(up)) > 0.99) { up.set(0, 0, 1); }
+            const tangent = new THREE.Vector3().crossVectors(drawingNormal, up).normalize();
+            const zAxis = new THREE.Vector3().crossVectors(tangent, drawingNormal).normalize();
+            const basisMatrix = new THREE.Matrix4().makeBasis(tangent, drawingNormal, zAxis);
+            const quat = new THREE.Quaternion().setFromRotationMatrix(basisMatrix);
+            const quatArray: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
+            const offsetPos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
+
+            let newShape: { type: string; position: [number, number, number]; quaternion: [number, number, number, number]; args: number[] } | null = null;
+
+            if (activeTool === 'circle') {
+              newShape = { type: 'circle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, 32] };
+            } else if (activeTool === 'triangle') {
+              newShape = { type: 'triangle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, 3] };
+            } else if (activeTool === 'sphere') {
+              newShape = { type: 'sphere', position: [drawingStart.x, drawingStart.y, drawingStart.z], quaternion: [0, 0, 0, 1], args: [worldRadius, 32, 32] };
+            } else if (activeTool === 'cone') {
+              newShape = { type: 'cone', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, 0.01, 32] };
+            } else if (activeTool === 'pyramid') {
+              newShape = { type: 'pyramid', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, 0.01, 4] };
+            } else if (activeTool === 'donut') {
+              newShape = { type: 'donut', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, 0.01, 16, 100] };
+            } else if (activeTool === 'dome') {
+              newShape = { type: 'dome', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2] };
+            }
+
+            if (newShape) {
+              const needsHeight = ['cone', 'pyramid', 'donut', 'dome'].includes(activeTool);
+              if (needsHeight) {
+                setPreviewShape(newShape as any);
+                setTypedLength('');
+                setDrawingStep(2);
+              } else {
+                addShape({
+                  id: Math.random().toString(36).substr(2, 9),
+                  type: newShape.type as any,
+                  position: newShape.position,
+                  quaternion: newShape.quaternion,
+                  args: newShape.args,
+                  color: activeMaterial,
+                  roughness: activePBR.roughness,
+                  metalness: activePBR.metalness,
+                  opacity: activePBR.opacity
+                } as Shape);
+                setDrawingStart(null);
+                setDrawingNormal(null);
+                setDrawingOnId(null);
+                setPreviewShape(null);
+                setDrawingStep(0);
+                setTypedLength('');
+                setSnapIndicator(null);
+                setLastDrawTarget(null);
+              }
+            }
+          }
+          return;
+        }
+
+        if (['cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStep === 2 && previewShape && drawingStart && drawingNormal && typedLength.trim()) {
+          e.preventDefault();
+          const rawH = parseFloat(typedLength);
+          if (!isNaN(rawH) && rawH > 0) {
+            const worldHeight = unit === 'mm' ? rawH / 1000 : unit === 'cm' ? rawH / 100 : rawH;
+            const newArgs2 = [...previewShape.args];
+            let newPos2 = [...previewShape.position] as [number, number, number];
+
+            if (activeTool === 'cone' || activeTool === 'pyramid') {
+              newArgs2[1] = worldHeight;
+              newPos2 = [
+                drawingStart.x + drawingNormal.x * (worldHeight / 2),
+                drawingStart.y + drawingNormal.y * (worldHeight / 2),
+                drawingStart.z + drawingNormal.z * (worldHeight / 2)
+              ];
+            } else if (activeTool === 'donut') {
+              newArgs2[1] = worldHeight;
+            }
+            // dome: height drag is a no-op in this app (matches mouse-drag behavior), commit as-is
+
+            addShape({
+              id: Math.random().toString(36).substr(2, 9),
+              type: previewShape.type as any,
+              position: newPos2,
+              quaternion: previewShape.quaternion,
+              args: newArgs2,
+              color: activeMaterial,
+              roughness: activePBR.roughness,
+              metalness: activePBR.metalness,
+              opacity: activePBR.opacity
+            } as Shape);
+
             setDrawingStart(null);
             setDrawingNormal(null);
             setDrawingOnId(null);
