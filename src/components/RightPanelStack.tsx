@@ -45,6 +45,94 @@ const COLORS = [
   '#ec4899', '#f43f5e', '#71717a', '#18181b'
 ];
 
+// Generates a small, fully client-side procedural preview texture for a
+// Pre-Made PBR material, based on its base colour, roughness and metalness,
+// plus simple keyword-based category detection (metal / wood / fabric /
+// stone / glossy). Replaces the old approach of trying to load a photo from
+// an external site (which usually 404'd) and falling back to a random,
+// unrelated stock photo from picsum.photos - which is why materials looked
+// like flat colour swatches (or, worse, an unrelated photo) instead of an
+// actual texture. Runs once per material and is cached on the object, so it
+// never touches the network.
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const n = parseInt(full || '888888', 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function shadeRgb(rgb: [number, number, number], amt: number): [number, number, number] {
+  return rgb.map(c => Math.max(0, Math.min(255, Math.round(c + amt)))) as [number, number, number];
+}
+function rgbCss(rgb: [number, number, number], a: number = 1): string {
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+}
+function generateMaterialTexture(mat: { name?: string; color?: string; roughness?: number; metalness?: number }): string {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  const base = hexToRgb(mat.color || '#888888');
+  ctx.fillStyle = rgbCss(base);
+  ctx.fillRect(0, 0, size, size);
+
+  const name = (mat.name || '').toLowerCase();
+  const metalness = mat.metalness ?? 0;
+  const roughness = mat.roughness ?? 0.5;
+
+  if (metalness > 0.5) {
+    // Brushed metal: horizontal streaks of varying tone.
+    for (let y = 0; y < size; y++) {
+      const n = (Math.sin(y * 0.7) + Math.sin(y * 3.1 + 2)) * 0.5;
+      ctx.fillStyle = rgbCss(shadeRgb(base, n * 22), 0.5);
+      ctx.fillRect(0, y, size, 1);
+    }
+  } else if (/wood|oak|pine|walnut|mahogany|ebony|cork/.test(name)) {
+    // Wood grain: wavy vertical lines.
+    for (let x = 0; x < size; x += 3) {
+      ctx.strokeStyle = rgbCss(shadeRgb(base, -20 - (x % 9)));
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let y = 0; y <= size; y += 8) {
+        const wob = Math.sin((y + x) * 0.15) * 4;
+        ctx.lineTo(x + wob, y);
+      }
+      ctx.stroke();
+    }
+  } else if (/denim|velvet|felt|canvas|leather|fabric/.test(name)) {
+    // Woven fabric: crosshatch.
+    ctx.strokeStyle = rgbCss(shadeRgb(base, -25), 0.5);
+    for (let i = -size; i < size; i += 6) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + size, size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(i + size, 0); ctx.lineTo(i, size); ctx.stroke();
+    }
+  } else if (/concrete|stone|granite|marble|slate|sandstone|limestone|asphalt|brick|chalk|sand|ceramic|porcelain|snow|moss/.test(name)) {
+    // Speckled / mottled surface.
+    for (let i = 0; i < 900; i++) {
+      const x = Math.random() * size, y = Math.random() * size;
+      ctx.fillStyle = rgbCss(shadeRgb(base, (Math.random() - 0.5) * 50), 0.5);
+      ctx.fillRect(x, y, 1.5, 1.5);
+    }
+  } else if (roughness < 0.15) {
+    // Glossy / glass: soft diagonal sheen.
+    const grad = ctx.createLinearGradient(0, 0, size, size);
+    grad.addColorStop(0, rgbCss(shadeRgb(base, 40)));
+    grad.addColorStop(0.5, rgbCss(base));
+    grad.addColorStop(1, rgbCss(shadeRgb(base, -30)));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+  } else {
+    // Default: subtle grain noise so it never reads as a flat swatch.
+    for (let i = 0; i < 500; i++) {
+      const x = Math.random() * size, y = Math.random() * size;
+      ctx.fillStyle = rgbCss(shadeRgb(base, (Math.random() - 0.5) * 18), 0.4);
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return canvas.toDataURL('image/png');
+}
+
 interface PanelProps {
   id: string;
   title: string;
@@ -237,8 +325,8 @@ export default function RightPanelStack() {
   useEffect(() => {
     if (isAddMaterialOpen && premadeMaterials.length === 0) {
       // Use local curated list to avoid CORS/reliability issues with external APIs
-      setPremadeMaterials([{ name: 'Aluminum', roughness: 0.1, metalness: 1.0, color: '#EBEDEE' }, { name: 'Aluminum (Anodized Red)', roughness: 0.2, metalness: 1.0, color: '#990000' }, { name: 'Amber', roughness: 0.05, metalness: 0.0, color: '#D44A09' }, { name: 'Asphalt (Fresh)', roughness: 0.8, metalness: 0.0, color: '#0B0A0A' }, { name: 'Banana', roughness: 0.6, metalness: 0.0, color: '#A28B1C' }, { name: 'Beryllium', roughness: 0.1, metalness: 1.0, color: '#898788' }, { name: 'Blackboard', roughness: 0.9, metalness: 0.0, color: '#0A0A0A' }, { name: 'Blood', roughness: 0.3, metalness: 0.0, color: '#A40101' }, { name: 'Polished Steel', roughness: 0.05, metalness: 1.0, color: '#c0c0c0' }, { name: 'Gold', roughness: 0.1, metalness: 1.0, color: '#ffd700' }, { name: 'Copper', roughness: 0.2, metalness: 1.0, color: '#b87333' }, { name: 'Rubber', roughness: 0.9, metalness: 0.0, color: '#222222' }, { name: 'Plastic', roughness: 0.3, metalness: 0.0, color: '#ffffff' }, { name: 'Glass', roughness: 0.01, metalness: 0.0, color: '#ffffff', opacity: 0.3 }, { name: 'Wood (Oak)', roughness: 0.7, metalness: 0.0, color: '#7b5c3d' }, { name: 'Concrete', roughness: 0.85, metalness: 0.0, color: '#9ca3af' }, { name: 'Brass', roughness: 0.25, metalness: 1.0, color: '#B5A642' }, { name: 'Bronze', roughness: 0.3, metalness: 1.0, color: '#CD7F32' }, { name: 'Chrome', roughness: 0.05, metalness: 1.0, color: '#C4C4C4' }, { name: 'Titanium', roughness: 0.35, metalness: 1.0, color: '#878681' }, { name: 'Silver', roughness: 0.1, metalness: 1.0, color: '#C0C0C0' }, { name: 'Tin', roughness: 0.4, metalness: 1.0, color: '#D9D9D9' }, { name: 'Rusted Iron', roughness: 0.85, metalness: 0.6, color: '#8B4513' }, { name: 'Stainless Steel', roughness: 0.2, metalness: 1.0, color: '#B7C3C9' }, { name: 'Walnut', roughness: 0.65, metalness: 0.0, color: '#5C4033' }, { name: 'Pine', roughness: 0.7, metalness: 0.0, color: '#DEB887' }, { name: 'Mahogany', roughness: 0.6, metalness: 0.0, color: '#4E2A1E' }, { name: 'Oak (Light)', roughness: 0.7, metalness: 0.0, color: '#C19A6B' }, { name: 'Ebony', roughness: 0.5, metalness: 0.0, color: '#3D2B1F' }, { name: 'Marble (White)', roughness: 0.15, metalness: 0.0, color: '#F5F5F0' }, { name: 'Granite', roughness: 0.5, metalness: 0.0, color: '#736F6E' }, { name: 'Sandstone', roughness: 0.8, metalness: 0.0, color: '#C2A878' }, { name: 'Slate', roughness: 0.6, metalness: 0.0, color: '#2F4F4F' }, { name: 'Limestone', roughness: 0.75, metalness: 0.0, color: '#E8DCC5' }, { name: 'Denim', roughness: 0.9, metalness: 0.0, color: '#3B5998' }, { name: 'Velvet', roughness: 0.95, metalness: 0.0, color: '#4B0082' }, { name: 'Leather (Brown)', roughness: 0.55, metalness: 0.0, color: '#5C3317' }, { name: 'Canvas', roughness: 0.85, metalness: 0.0, color: '#E8E4C9' }, { name: 'Felt', roughness: 0.95, metalness: 0.0, color: '#7A7A7A' }, { name: 'Plastic (Glossy Red)', roughness: 0.1, metalness: 0.0, color: '#FF3B30' }, { name: 'Plastic (Matte Green)', roughness: 0.7, metalness: 0.0, color: '#34C759' }, { name: 'ABS (Black)', roughness: 0.4, metalness: 0.0, color: '#1C1C1E' }, { name: 'PVC (White)', roughness: 0.35, metalness: 0.0, color: '#F2F2F7' }, { name: 'Frosted Glass', roughness: 0.4, metalness: 0.0, color: '#FFFFFF', opacity: 0.5 }, { name: 'Tinted Glass (Blue)', roughness: 0.05, metalness: 0.0, color: '#4A90D9', opacity: 0.35 }, { name: 'Ice', roughness: 0.1, metalness: 0.0, color: '#D6ECF0', opacity: 0.6 }, { name: 'Porcelain', roughness: 0.2, metalness: 0.0, color: '#FFFFF0' }, { name: 'Ceramic Tile (White)', roughness: 0.25, metalness: 0.0, color: '#FAFAFA' }, { name: 'Brick (Red)', roughness: 0.85, metalness: 0.0, color: '#B22222' }, { name: 'Cardboard', roughness: 0.9, metalness: 0.0, color: '#C19A6B' }, { name: 'Chalk', roughness: 0.95, metalness: 0.0, color: '#FFFFFF' }, { name: 'Cork', roughness: 0.8, metalness: 0.0, color: '#9B6B43' }, { name: 'Charcoal', roughness: 0.9, metalness: 0.0, color: '#1C1C1C' }, { name: 'Snow', roughness: 0.85, metalness: 0.0, color: '#FFFAFA' }, { name: 'Sand', roughness: 0.85, metalness: 0.0, color: '#EDC9AF' }, { name: 'Moss', roughness: 0.9, metalness: 0.0, color: '#4A6741' },
-      ]);
+      setPremadeMaterials([{ name: 'Aluminum', roughness: 0.1, metalness: 1.0, color: '#EBEDEE' }, { name: 'Aluminum (Anodized Red)', roughness: 0.2, metalness: 1.0, color: '#990000' }, { name: 'Amber', roughness: 0.05, metalness: 0.0, color: '#D44A09' }, { name: 'Asphalt (Fresh)', roughness: 0.8, metalness: 0.0, color: '#0B0A0A' }, { name: 'Banana', roughness: 0.6, metalness: 0.0, color: '#F2C94C' }, { name: 'Beryllium', roughness: 0.1, metalness: 1.0, color: '#898788' }, { name: 'Blackboard', roughness: 0.9, metalness: 0.0, color: '#0A0A0A' }, { name: 'Blood', roughness: 0.3, metalness: 0.0, color: '#A40101' }, { name: 'Polished Steel', roughness: 0.05, metalness: 1.0, color: '#c0c0c0' }, { name: 'Gold', roughness: 0.1, metalness: 1.0, color: '#ffd700' }, { name: 'Copper', roughness: 0.2, metalness: 1.0, color: '#b87333' }, { name: 'Rubber', roughness: 0.9, metalness: 0.0, color: '#222222' }, { name: 'Plastic', roughness: 0.3, metalness: 0.0, color: '#ffffff' }, { name: 'Glass', roughness: 0.01, metalness: 0.0, color: '#ffffff', opacity: 0.3 }, { name: 'Wood (Oak)', roughness: 0.7, metalness: 0.0, color: '#7b5c3d' }, { name: 'Concrete', roughness: 0.85, metalness: 0.0, color: '#9ca3af' }, { name: 'Brass', roughness: 0.25, metalness: 1.0, color: '#B5A642' }, { name: 'Bronze', roughness: 0.3, metalness: 1.0, color: '#CD7F32' }, { name: 'Chrome', roughness: 0.05, metalness: 1.0, color: '#C4C4C4' }, { name: 'Titanium', roughness: 0.35, metalness: 1.0, color: '#878681' }, { name: 'Silver', roughness: 0.1, metalness: 1.0, color: '#C0C0C0' }, { name: 'Tin', roughness: 0.4, metalness: 1.0, color: '#D9D9D9' }, { name: 'Rusted Iron', roughness: 0.85, metalness: 0.6, color: '#8B4513' }, { name: 'Stainless Steel', roughness: 0.2, metalness: 1.0, color: '#B7C3C9' }, { name: 'Walnut', roughness: 0.65, metalness: 0.0, color: '#5C4033' }, { name: 'Pine', roughness: 0.7, metalness: 0.0, color: '#DEB887' }, { name: 'Mahogany', roughness: 0.6, metalness: 0.0, color: '#4E2A1E' }, { name: 'Oak (Light)', roughness: 0.7, metalness: 0.0, color: '#C19A6B' }, { name: 'Ebony', roughness: 0.5, metalness: 0.0, color: '#3D2B1F' }, { name: 'Marble (White)', roughness: 0.15, metalness: 0.0, color: '#F5F5F0' }, { name: 'Granite', roughness: 0.5, metalness: 0.0, color: '#736F6E' }, { name: 'Sandstone', roughness: 0.8, metalness: 0.0, color: '#C2A878' }, { name: 'Slate', roughness: 0.6, metalness: 0.0, color: '#2F4F4F' }, { name: 'Limestone', roughness: 0.75, metalness: 0.0, color: '#E8DCC5' }, { name: 'Denim', roughness: 0.9, metalness: 0.0, color: '#3B5998' }, { name: 'Velvet', roughness: 0.95, metalness: 0.0, color: '#4B0082' }, { name: 'Leather (Brown)', roughness: 0.55, metalness: 0.0, color: '#5C3317' }, { name: 'Canvas', roughness: 0.85, metalness: 0.0, color: '#E8E4C9' }, { name: 'Felt', roughness: 0.95, metalness: 0.0, color: '#7A7A7A' }, { name: 'Plastic (Glossy Red)', roughness: 0.1, metalness: 0.0, color: '#FF3B30' }, { name: 'Plastic (Matte Green)', roughness: 0.7, metalness: 0.0, color: '#34C759' }, { name: 'ABS (Black)', roughness: 0.4, metalness: 0.0, color: '#1C1C1E' }, { name: 'PVC (White)', roughness: 0.35, metalness: 0.0, color: '#F2F2F7' }, { name: 'Frosted Glass', roughness: 0.4, metalness: 0.0, color: '#FFFFFF', opacity: 0.5 }, { name: 'Tinted Glass (Blue)', roughness: 0.05, metalness: 0.0, color: '#4A90D9', opacity: 0.35 }, { name: 'Ice', roughness: 0.1, metalness: 0.0, color: '#D6ECF0', opacity: 0.6 }, { name: 'Porcelain', roughness: 0.2, metalness: 0.0, color: '#FFFFF0' }, { name: 'Ceramic Tile (White)', roughness: 0.25, metalness: 0.0, color: '#FAFAFA' }, { name: 'Brick (Red)', roughness: 0.85, metalness: 0.0, color: '#B22222' }, { name: 'Cardboard', roughness: 0.9, metalness: 0.0, color: '#C19A6B' }, { name: 'Chalk', roughness: 0.95, metalness: 0.0, color: '#FFFFFF' }, { name: 'Cork', roughness: 0.8, metalness: 0.0, color: '#9B6B43' }, { name: 'Charcoal', roughness: 0.9, metalness: 0.0, color: '#1C1C1C' }, { name: 'Snow', roughness: 0.85, metalness: 0.0, color: '#FFFAFA' }, { name: 'Sand', roughness: 0.85, metalness: 0.0, color: '#EDC9AF' }, { name: 'Moss', roughness: 0.9, metalness: 0.0, color: '#4A6741' },
+      ].map(m => ({ ...m, texture: generateMaterialTexture(m) })));
     }
   }, [isAddMaterialOpen, premadeMaterials.length]);
 
@@ -2529,12 +2617,8 @@ export default function RightPanelStack() {
                       <div 
                         key={i}
                         onClick={() => {
-                          if (mat.color) {
-                            setActiveMaterial(mat.color);
-                            setNewColor(mat.color);
-                          } else {
-                            setActiveMaterial(mat.preview_url || mat.url);
-                          }
+                          setActiveMaterial(mat.texture || mat.color);
+                          if (mat.color) setNewColor(mat.color);
                           setActiveTool('paint');
                           const newPbr = {
                             roughness: mat.roughness !== undefined ? mat.roughness : 0.5,
@@ -2548,19 +2632,11 @@ export default function RightPanelStack() {
                         className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-trimble-blue transition-all"
                       >
                         <div className="aspect-square bg-gray-100 relative">
-                          {mat.color ? (
-                            <div className="w-full h-full" style={{ backgroundColor: mat.color }} />
-                          ) : (
-                            <img 
-                              src={mat.preview_url || `https://physicallybased.info/images/materials/${mat.name.toLowerCase().replace(/ /g, '-')}.jpg`} 
-                              alt={mat.name} 
-                              className="w-full h-full object-cover" 
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${mat.name}/200/200`;
-                              }}
-                            />
-                          )}
+                          <img
+                            src={mat.texture}
+                            alt={mat.name}
+                            className="w-full h-full object-cover"
+                          />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <Plus size={24} className="text-white" />
                           </div>

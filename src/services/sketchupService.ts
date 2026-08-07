@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { buildScene, toGLB } from 'openskp';
 
 /**
  * Service to handle SketchUp (.skp) file interactions.
@@ -45,25 +46,56 @@ export const SketchupService = {
    * as the high-fidelity bridge format.
    */
   importSKP: async (file: File): Promise<THREE.Group> => {
+    const lowerName = file.name.toLowerCase();
+
+    // Real binary .skp files: parse natively with OpenSKP (an open-source,
+    // reverse-engineered reader for SketchUp's binary format that runs
+    // entirely client-side - no SketchUp SDK, no server round-trip), then
+    // bridge the result through GLTFLoader so it renders like any other
+    // imported model.
+    if (lowerName.endsWith('.skp')) {
+      const buffer = await file.arrayBuffer();
+      const head = new Uint8Array(buffer.slice(0, 4));
+      // Our legacy "bridge" .skp files are just GLTF JSON text saved with a
+      // .skp extension - they start with '{' (0x7b) or whitespace. Real
+      // SketchUp binaries start with a VFF/MFC binary header and won't.
+      const looksLikeTextBridge = head[0] === 0x7b || head[0] === 0x20 || head[0] === 0x0a || head[0] === 0x09;
+
+      if (!looksLikeTextBridge) {
+        try {
+          const scene = buildScene(buffer);
+          const glb = toGLB(scene);
+          const glbBuffer = glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength);
+          return await new Promise((resolve, reject) => {
+            const loader = new GLTFLoader();
+            loader.parse(
+              glbBuffer,
+              '',
+              (gltf: any) => {
+                console.log('[SketchupService] Parsed native .skp via OpenSKP');
+                resolve(gltf.scene);
+              },
+              (error: any) => {
+                console.error('[SketchupService] GLB build error:', error);
+                reject(new Error('Read the SketchUp file but could not build a viewable model from it.'));
+              }
+            );
+          });
+        } catch (err: any) {
+          console.error('[SketchupService] OpenSKP parse failed:', err);
+          throw new Error(`Could not read this SketchUp file (${err?.message || 'unknown error'}). It may use a SketchUp version or feature that isn't supported yet.`);
+        }
+      }
+      // Falls through to the legacy text/GLTF-bridge path below for old
+      // bridge-exported files.
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async (e) => {
         const contents = e.target?.result;
         if (typeof contents !== 'string') {
           reject(new Error('Invalid file format. Please use a text-based GLTF file.'));
-          return;
-        }
-
-        // Detect SketchUp binary signature
-        const isSkp = contents.startsWith('SketchUp') || 
-                      contents.includes('SketchUp Model') || 
-                      contents.includes('໿SketchUp') ||
-                      contents.charCodeAt(0) === 0x0BF3 || // ໿ character
-                      contents.startsWith('\xFF\xFE') || // UTF-16 BOM sometimes present in binary exports
-                      contents.includes('binary');
-
-        if (isSkp && !contents.includes('"asset"')) { // GLTF usually has "asset" key
-          reject(new Error('DraftUp supports .skp files via the GLTF bridge. Please export your SketchUp model as .gltf/.glb before importing, or use our desktop extension. Native binary .skp parsing is not available in-browser.'));
           return;
         }
 

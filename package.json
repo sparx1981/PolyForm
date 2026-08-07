@@ -27,6 +27,7 @@
     "google-map-react": "^2.2.5",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "openskp": "^0.3.1",
     "postprocessing": "^6.39.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

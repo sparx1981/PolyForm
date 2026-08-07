@@ -33,6 +33,23 @@ import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, History as HistoryIcon } from 'lucide-react';
 
+// Module-level texture cache: avoids re-creating (and re-downloading) a THREE.Texture
+// on every render when a material/light uses an image URL as its map. Previously each
+// inline "new THREE.TextureLoader().load(url)" call ran on every React re-render, which
+// could recreate the texture before the previous one finished loading - the likely cause
+// of uploaded/URL textures failing to display or flickering on a surface.
+const _polyformTextureCache = new Map<string, THREE.Texture>();
+function getCachedTexture(url: string): THREE.Texture {
+  let tex = _polyformTextureCache.get(url);
+  if (!tex) {
+    tex = new THREE.TextureLoader().load(url);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    _polyformTextureCache.set(url, tex);
+  }
+  return tex;
+}
+
 const fogFragmentShader = `
   uniform vec3 color1;
   uniform vec3 color2;
@@ -1507,7 +1524,12 @@ function Scene() {
         
         let segments = 3;
         if (bevelState.type === 'radius') {
-          segments = Math.max(3, Math.floor(clampedAmount * 200));
+          // Cap smoothness at 8 - visually indistinguishable from higher values but far
+          // cheaper to rebuild every pointermove during a drag. The old formula
+          // (clampedAmount * 200) could ask RoundedBox for 100+ segments on a modest
+          // drag, rebuilding a very dense geometry on every mouse-move frame - this was
+          // the cause of Radius bevel feeling much slower than Chamfer.
+          segments = Math.min(8, Math.max(3, Math.floor(clampedAmount * 20)));
         } else {
           segments = 1;
         }
@@ -2924,11 +2946,11 @@ function Scene() {
         const materialElements = shape.type === 'box' && shape.surfaceMaterials && !shape.bevelAmount ? (
           [0, 2, 4, 6, 8, 10].map((idx) => {
             const mat = shape.surfaceMaterials?.[idx] || shape.color;
-            return mat.startsWith('http') ? (
+            return (mat.startsWith('http') || mat.startsWith('data:')) ? (
               <meshStandardMaterial 
                 key={idx}
                 attach={`material-${idx/2}`}
-                map={new THREE.TextureLoader().load(mat)} 
+                map={getCachedTexture(mat)} 
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
                 transparent={shape.opacity !== undefined && shape.opacity < 1}
@@ -2951,9 +2973,9 @@ function Scene() {
             );
           })
         ) : (
-          shape.color.startsWith('http') ? (
+          (shape.color.startsWith('http') || shape.color.startsWith('data:')) ? (
             <meshStandardMaterial 
-              map={new THREE.TextureLoader().load(shape.color)} 
+              map={getCachedTexture(shape.color)} 
               roughness={shape.roughness ?? 0.5}
               metalness={shape.metalness ?? 0}
               transparent={true}
@@ -3062,11 +3084,11 @@ function Scene() {
           {shape.type === 'box' && shape.surfaceMaterials ? (
             [0, 2, 4, 6, 8, 10].map((idx) => {
               const mat = shape.surfaceMaterials?.[idx] || shape.color;
-              return mat.startsWith('http') ? (
+              return (mat.startsWith('http') || mat.startsWith('data:')) ? (
                 <meshStandardMaterial 
                   key={idx}
                   attach={`material-${idx/2}`}
-                  map={new THREE.TextureLoader().load(mat)} 
+                  map={getCachedTexture(mat)} 
                   roughness={shape.roughness ?? 0.5}
                   metalness={shape.metalness ?? 0}
                   transparent={shape.opacity !== undefined && shape.opacity < 1}
@@ -3091,9 +3113,9 @@ function Scene() {
               );
             })
           ) : (
-            shape.color.startsWith('http') ? (
+            (shape.color.startsWith('http') || shape.color.startsWith('data:')) ? (
               <meshStandardMaterial 
-                map={new THREE.TextureLoader().load(shape.color)} 
+                map={getCachedTexture(shape.color)} 
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
                 transparent={true}
