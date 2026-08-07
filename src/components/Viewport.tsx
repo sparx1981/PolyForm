@@ -1307,37 +1307,41 @@ function Scene() {
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
         } else if (activeTool === 'cone') {
           const radius = drawingStart.distanceTo(target);
+          const conePos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'cone',
-            position: [drawingStart.x, drawingStart.y, drawingStart.z],
-            quaternion: [0, 0, 0, 1],
+            position: [conePos.x, conePos.y, conePos.z],
+            quaternion: quatArray,
             args: [radius, 0.01, 32] // Height is small for now
           });
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
         } else if (activeTool === 'pyramid') {
           const radius = drawingStart.distanceTo(target);
+          const pyramidPos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'pyramid',
-            position: [drawingStart.x, drawingStart.y, drawingStart.z],
-            quaternion: [0, 0, 0, 1],
+            position: [pyramidPos.x, pyramidPos.y, pyramidPos.z],
+            quaternion: quatArray,
             args: [radius, 0.01, 4]
           });
           setMeasurements(`Base: ${formatValue(radius, unit, 1)}`);
         } else if (activeTool === 'donut') {
           const radius = drawingStart.distanceTo(target);
+          const donutPos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'donut',
-            position: [drawingStart.x, drawingStart.y, drawingStart.z],
-            quaternion: [0, 0, 0, 1],
+            position: [donutPos.x, donutPos.y, donutPos.z],
+            quaternion: quatArray,
             args: [radius, 0.01, 16, 100]
           });
           setMeasurements(`Major Radius: ${formatValue(radius, unit, 1)}`);
         } else if (activeTool === 'dome') {
           const radius = drawingStart.distanceTo(target);
+          const domePos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'dome',
-            position: [drawingStart.x, drawingStart.y, drawingStart.z],
-            quaternion: [0, 0, 0, 1],
+            position: [domePos.x, domePos.y, domePos.z],
+            quaternion: quatArray,
             args: [radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2]
           });
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
