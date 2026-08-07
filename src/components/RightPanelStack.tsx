@@ -24,7 +24,7 @@ import {
   Crown,
   Sparkles,
   Eye,
-  EyeOff,
+  EyeOff,  Trash2,
   Settings
 } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
@@ -237,23 +237,7 @@ export default function RightPanelStack() {
   useEffect(() => {
     if (isAddMaterialOpen && premadeMaterials.length === 0) {
       // Use local curated list to avoid CORS/reliability issues with external APIs
-      setPremadeMaterials([
-        { name: 'Aluminum', roughness: 0.1, metalness: 1.0, color: '#EBEDEE' },
-        { name: 'Aluminum (Anodized Red)', roughness: 0.2, metalness: 1.0, color: '#990000' },
-        { name: 'Amber', roughness: 0.05, metalness: 0.0, color: '#D44A09' },
-        { name: 'Asphalt (Fresh)', roughness: 0.8, metalness: 0.0, color: '#0B0A0A' },
-        { name: 'Banana', roughness: 0.6, metalness: 0.0, color: '#A2881C' },
-        { name: 'Beryllium', roughness: 0.1, metalness: 1.0, color: '#898788' },
-        { name: 'Blackboard', roughness: 0.9, metalness: 0.0, color: '#0A0A0A' },
-        { name: 'Blood', roughness: 0.3, metalness: 0.0, color: '#A40101' },
-        { name: 'Polished Steel', roughness: 0.05, metalness: 1.0, color: '#c0c0c0' },
-        { name: 'Gold', roughness: 0.1, metalness: 1.0, color: '#ffd700' },
-        { name: 'Copper', roughness: 0.2, metalness: 1.0, color: '#b87333' },
-        { name: 'Rubber', roughness: 0.9, metalness: 0.0, color: '#222222' },
-        { name: 'Plastic', roughness: 0.3, metalness: 0.0, color: '#ffffff' },
-        { name: 'Glass', roughness: 0.01, metalness: 0.0, color: '#ffffff', opacity: 0.3 },
-        { name: 'Wood (Oak)', roughness: 0.7, metalness: 0.0, color: '#7b5c3d' },
-        { name: 'Concrete', roughness: 0.85, metalness: 0.0, color: '#9ca3af' }
+      setPremadeMaterials([{ name: 'Aluminum', roughness: 0.1, metalness: 1.0, color: '#EBEDEE' }, { name: 'Aluminum (Anodized Red)', roughness: 0.2, metalness: 1.0, color: '#990000' }, { name: 'Amber', roughness: 0.05, metalness: 0.0, color: '#D44A09' }, { name: 'Asphalt (Fresh)', roughness: 0.8, metalness: 0.0, color: '#0B0A0A' }, { name: 'Banana', roughness: 0.6, metalness: 0.0, color: '#A28B1C' }, { name: 'Beryllium', roughness: 0.1, metalness: 1.0, color: '#898788' }, { name: 'Blackboard', roughness: 0.9, metalness: 0.0, color: '#0A0A0A' }, { name: 'Blood', roughness: 0.3, metalness: 0.0, color: '#A40101' }, { name: 'Polished Steel', roughness: 0.05, metalness: 1.0, color: '#c0c0c0' }, { name: 'Gold', roughness: 0.1, metalness: 1.0, color: '#ffd700' }, { name: 'Copper', roughness: 0.2, metalness: 1.0, color: '#b87333' }, { name: 'Rubber', roughness: 0.9, metalness: 0.0, color: '#222222' }, { name: 'Plastic', roughness: 0.3, metalness: 0.0, color: '#ffffff' }, { name: 'Glass', roughness: 0.01, metalness: 0.0, color: '#ffffff', opacity: 0.3 }, { name: 'Wood (Oak)', roughness: 0.7, metalness: 0.0, color: '#7b5c3d' }, { name: 'Concrete', roughness: 0.85, metalness: 0.0, color: '#9ca3af' }, { name: 'Brass', roughness: 0.25, metalness: 1.0, color: '#B5A642' }, { name: 'Bronze', roughness: 0.3, metalness: 1.0, color: '#CD7F32' }, { name: 'Chrome', roughness: 0.05, metalness: 1.0, color: '#C4C4C4' }, { name: 'Titanium', roughness: 0.35, metalness: 1.0, color: '#878681' }, { name: 'Silver', roughness: 0.1, metalness: 1.0, color: '#C0C0C0' }, { name: 'Tin', roughness: 0.4, metalness: 1.0, color: '#D9D9D9' }, { name: 'Rusted Iron', roughness: 0.85, metalness: 0.6, color: '#8B4513' }, { name: 'Stainless Steel', roughness: 0.2, metalness: 1.0, color: '#B7C3C9' }, { name: 'Walnut', roughness: 0.65, metalness: 0.0, color: '#5C4033' }, { name: 'Pine', roughness: 0.7, metalness: 0.0, color: '#DEB887' }, { name: 'Mahogany', roughness: 0.6, metalness: 0.0, color: '#4E2A1E' }, { name: 'Oak (Light)', roughness: 0.7, metalness: 0.0, color: '#C19A6B' }, { name: 'Ebony', roughness: 0.5, metalness: 0.0, color: '#3D2B1F' }, { name: 'Marble (White)', roughness: 0.15, metalness: 0.0, color: '#F5F5F0' }, { name: 'Granite', roughness: 0.5, metalness: 0.0, color: '#736F6E' }, { name: 'Sandstone', roughness: 0.8, metalness: 0.0, color: '#C2A878' }, { name: 'Slate', roughness: 0.6, metalness: 0.0, color: '#2F4F4F' }, { name: 'Limestone', roughness: 0.75, metalness: 0.0, color: '#E8DCC5' }, { name: 'Denim', roughness: 0.9, metalness: 0.0, color: '#3B5998' }, { name: 'Velvet', roughness: 0.95, metalness: 0.0, color: '#4B0082' }, { name: 'Leather (Brown)', roughness: 0.55, metalness: 0.0, color: '#5C3317' }, { name: 'Canvas', roughness: 0.85, metalness: 0.0, color: '#E8E4C9' }, { name: 'Felt', roughness: 0.95, metalness: 0.0, color: '#7A7A7A' }, { name: 'Plastic (Glossy Red)', roughness: 0.1, metalness: 0.0, color: '#FF3B30' }, { name: 'Plastic (Matte Green)', roughness: 0.7, metalness: 0.0, color: '#34C759' }, { name: 'ABS (Black)', roughness: 0.4, metalness: 0.0, color: '#1C1C1E' }, { name: 'PVC (White)', roughness: 0.35, metalness: 0.0, color: '#F2F2F7' }, { name: 'Frosted Glass', roughness: 0.4, metalness: 0.0, color: '#FFFFFF', opacity: 0.5 }, { name: 'Tinted Glass (Blue)', roughness: 0.05, metalness: 0.0, color: '#4A90D9', opacity: 0.35 }, { name: 'Ice', roughness: 0.1, metalness: 0.0, color: '#D6ECF0', opacity: 0.6 }, { name: 'Porcelain', roughness: 0.2, metalness: 0.0, color: '#FFFFF0' }, { name: 'Ceramic Tile (White)', roughness: 0.25, metalness: 0.0, color: '#FAFAFA' }, { name: 'Brick (Red)', roughness: 0.85, metalness: 0.0, color: '#B22222' }, { name: 'Cardboard', roughness: 0.9, metalness: 0.0, color: '#C19A6B' }, { name: 'Chalk', roughness: 0.95, metalness: 0.0, color: '#FFFFFF' }, { name: 'Cork', roughness: 0.8, metalness: 0.0, color: '#9B6B43' }, { name: 'Charcoal', roughness: 0.9, metalness: 0.0, color: '#1C1C1C' }, { name: 'Snow', roughness: 0.85, metalness: 0.0, color: '#FFFAFA' }, { name: 'Sand', roughness: 0.85, metalness: 0.0, color: '#EDC9AF' }, { name: 'Moss', roughness: 0.9, metalness: 0.0, color: '#4A6741' },
       ]);
     }
   }, [isAddMaterialOpen, premadeMaterials.length]);
@@ -566,7 +550,7 @@ export default function RightPanelStack() {
                           default:
                             volume = Array.isArray(args) ? (args[0] * args[1] * args[2] || 0) : 0;
                         }
-                        return `${(volume * 1000000).toFixed(0)} cm³`;
+                        if (volume >= 1e9) return `${(volume / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 })} km³`; if (volume >= 1) return `${volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} m³`; if (volume >= 1e-6) return `${(volume * 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 })} cm³`; return `${(volume * 1e9).toLocaleString(undefined, { maximumFractionDigits: 0 })} mm³`;
                       })()}
                     </div>
                   </div>
@@ -823,9 +807,9 @@ export default function RightPanelStack() {
                 <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
                   <button 
                     onClick={() => removeShape(selectedShape.id)}
-                    className="text-[10px] font-bold text-red-500 uppercase tracking-wider hover:underline"
+                    className="flex items-center gap-1 text-[10px] font-bold text-red-500 hover:underline" title="Delete Entity"
                   >
-                    Delete Entity
+                    <Trash2 size={13} />
                   </button>
                 </div>
               </div>
@@ -926,19 +910,7 @@ export default function RightPanelStack() {
               <div className="flex items-center gap-2 py-1 px-2 bg-trimble-blue/10 rounded text-trimble-blue">
                 <BoxSelect size={12} />
                 <span>Model Root</span>
-              </div>
-              {shapes.map(shape => (
-                <div 
-                  key={shape.id} 
-                  onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }}
-                  className={cn(
-                  "flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100",
-                  selectedId === shape.id && "bg-trimble-blue/10 text-trimble-blue"
-                )}>
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shape.color }} />
-                  <span>{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span>
-                </div>
-              ))}
+              </div>{shapes.map(shape => (<div key={shape.id} onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }} className={cn("flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group", selectedId === shape.id && "bg-trimble-blue/10 text-trimble-blue", shape.hidden && "opacity-40")}><div className="w-2 h-2 rounded-full" style={{ backgroundColor: shape.color }} /><span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span><button onClick={(e) => { e.stopPropagation(); setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, hidden: !s.hidden } : s)); }} className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0" title={shape.hidden ? "Show" : "Hide"}>{shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button><button onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0" title="Delete"><Trash2 size={13} /></button></div>))}
             </div>
           </Panel>
         )}
