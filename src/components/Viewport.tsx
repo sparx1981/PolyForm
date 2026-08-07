@@ -38,6 +38,15 @@ import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote } from 'lucide-r
 // inline "new THREE.TextureLoader().load(url)" call ran on every React re-render, which
 // could recreate the texture before the previous one finished loading - the likely cause
 // of uploaded/URL textures failing to display or flickering on a surface.
+// Stable portal target + zIndexRange for the New Note overlay (drei <Html>).
+// Passing fresh object/array literals as props (e.g. portal={{ current: document.body }} or
+// zIndexRange={[1000, 2000]}) creates a new reference every render. Because typing in the note
+// textarea updates React state -> re-renders Viewport -> creates new literals -> drei's <Html>
+// tears down and remounts its portaled DOM node every keystroke. Fast typing then only keeps the
+// last character, since prior keystrokes land on a node that's about to be discarded. Using
+// stable, module-level references fixes it.
+const _polyformBodyPortalRef: { current: HTMLElement | null } = { current: typeof document !== 'undefined' ? document.body : null };
+const _polyformNoteZIndexRange: [number, number] = [1000, 2000];
 const _polyformTextureCache = new Map<string, THREE.Texture>();
 const _polyformTextureLoader = new THREE.TextureLoader();
 _polyformTextureLoader.setCrossOrigin('anonymous');
@@ -723,7 +732,7 @@ function Scene() {
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
   const [placingNotePos, setPlacingNotePos] = useState<THREE.Vector3 | null>(null);
-  const [noteInputText, setNoteInputText] = useState('');
+  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [polyVertices, setPolyVertices] = useState<THREE.Vector3[]>([]);
   const [polyPlane, setPolyPlane] = useState<THREE.Plane | null>(null);
   const [polyNormal, setPolyNormal] = useState<THREE.Vector3 | null>(null);
@@ -2091,7 +2100,6 @@ function Scene() {
     if (activeTool === 'note') {
       e.stopPropagation();
       setPlacingNotePos(e.point.clone());
-      setNoteInputText('');
       return;
     }
 
@@ -2930,7 +2938,7 @@ function Scene() {
       )}
 
       {placingNotePos && (
-        <Html fullscreen zIndexRange={[1000, 2000]} portal={{ current: document.body }}>
+        <Html fullscreen zIndexRange={_polyformNoteZIndexRange} portal={_polyformBodyPortalRef}>
           <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[4px]">
             <div 
               className="bg-white/95 dark:bg-gray-800/95 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-[560px] max-w-[92vw] space-y-5 animate-in zoom-in-95 duration-200" 
@@ -2953,17 +2961,18 @@ function Scene() {
               </div>
               <textarea
                 autoFocus
-                value={noteInputText}
-                onChange={e => setNoteInputText(e.target.value)}
+                ref={noteTextareaRef}
+                defaultValue=""
                 placeholder="Type your note here..."
                 className="w-full h-28 p-4 text-sm bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-trimble-blue/20 focus:border-trimble-blue outline-none text-gray-900 dark:text-white resize-none transition-all placeholder:text-gray-400 font-medium"
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if (noteInputText.trim()) {
+                    const _noteText = (noteTextareaRef.current?.value || '').trim();
+                    if (_noteText) {
                       const newNote: SceneNote = {
                         id: Math.random().toString(36).substr(2, 9),
-                        text: noteInputText.trim(),
+                        text: _noteText,
                         position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
                         authorUid: user?.uid || 'anonymous',
                         authorName: user?.displayName || 'Anonymous',
@@ -2971,7 +2980,7 @@ function Scene() {
                         completed: false
                       };
                       setNotes(prev => [...prev, newNote]);
-                      recordAction(`sdk.addNote("${noteInputText.trim()}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
                     }
                     setPlacingNotePos(null);
                   }
@@ -2987,10 +2996,11 @@ function Scene() {
                 </button>
                 <button
                   onClick={() => {
-                    if (noteInputText.trim()) {
+                    const _noteText = (noteTextareaRef.current?.value || '').trim();
+                    if (_noteText) {
                       const newNote: SceneNote = {
                         id: Math.random().toString(36).substr(2, 9),
-                        text: noteInputText.trim(),
+                        text: _noteText,
                         position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
                         authorUid: user?.uid || 'anonymous',
                         authorName: user?.displayName || 'Anonymous',
@@ -2998,7 +3008,7 @@ function Scene() {
                         completed: false
                       };
                       setNotes(prev => [...prev, newNote]);
-                      recordAction(`sdk.addNote("${noteInputText.trim()}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
                     }
                     setPlacingNotePos(null);
                   }}
