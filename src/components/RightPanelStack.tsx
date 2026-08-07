@@ -931,6 +931,7 @@ export default function RightPanelStack() {
                     onClick={() => {
                       setActiveMaterial(color);
                       setActivePBR({ roughness: 0.5, metalness: 0, opacity: 1 });
+                      setActiveTool('paint');
                     }}
                     className={cn(
                       "aspect-square rounded-sm border cursor-pointer transition-transform hover:scale-110",
@@ -945,6 +946,7 @@ export default function RightPanelStack() {
                     onClick={() => {
                       setActiveMaterial(m.value);
                       if (m.pbr) setActivePBR(m.pbr);
+                      setActiveTool('paint');
                     }}
                     className={cn(
                       "aspect-square rounded-sm border cursor-pointer transition-transform hover:scale-110",
@@ -971,6 +973,7 @@ export default function RightPanelStack() {
                         onClick={() => {
                           setActiveMaterial(m.value);
                           if (m.pbr) setActivePBR(m.pbr);
+                          setActiveTool('paint');
                         }}
                         className={cn(
                           "aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-110",
@@ -2532,6 +2535,7 @@ export default function RightPanelStack() {
                           } else {
                             setActiveMaterial(mat.preview_url || mat.url);
                           }
+                          setActiveTool('paint');
                           const newPbr = {
                             roughness: mat.roughness !== undefined ? mat.roughness : 0.5,
                             metalness: mat.metalness !== undefined ? mat.metalness : 0,

@@ -4441,7 +4441,7 @@ export default function Viewport() {
                 )}
               </div>
               <button 
-                onClick={() => { if (shape.type === 'box' || shape.type === 'rect') setIsDividePopupOpen(true); }} disabled={shape.type !== 'box' && shape.type !== 'rect'} title={(shape.type === 'box' || shape.type === 'rect') ? undefined : 'Only available on box/rectangle faces'}
+                onClick={() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; if (st === 'box' || st === 'rect') setIsDividePopupOpen(true); }} disabled={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return st !== 'box' && st !== 'rect'; })()} title={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return (st === 'box' || st === 'rect') ? undefined : 'Only available on box/rectangle faces'; })()}
                 className={cn(
                   "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
                   theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
