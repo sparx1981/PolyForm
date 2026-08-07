@@ -1340,7 +1340,7 @@ export default function RightPanelStack() {
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-gray-400 uppercase">See Lightsource</span>
                   <button 
-                    onClick={() => setShowLightsource(!shadowsEnabled)}
+                    onClick={() => setShowLightsource(!showLightsource)}
                     className={cn(
                       "w-8 h-4 rounded-full relative transition-colors",
                       showLightsource ? "bg-trimble-blue" : "bg-gray-300"

@@ -39,10 +39,27 @@ import { ChevronRight, ChevronDown, X, CheckCircle2, History as HistoryIcon } fr
 // could recreate the texture before the previous one finished loading - the likely cause
 // of uploaded/URL textures failing to display or flickering on a surface.
 const _polyformTextureCache = new Map<string, THREE.Texture>();
+const _polyformTextureLoader = new THREE.TextureLoader();
+_polyformTextureLoader.setCrossOrigin('anonymous');
 function getCachedTexture(url: string): THREE.Texture {
   let tex = _polyformTextureCache.get(url);
   if (!tex) {
-    tex = new THREE.TextureLoader().load(url);
+    tex = _polyformTextureLoader.load(
+      url,
+      (loaded) => {
+        // Confirms the image actually decoded successfully; if this never fires the
+        // surface will stay blank/black even though a Texture object exists.
+        loaded.needsUpdate = true;
+      },
+      undefined,
+      (err) => {
+        // Uploaded/URL textures were rendering as solid black with no visible error -
+        // most likely a failed image load (CORS, expired/invalid Storage URL, or a
+        // network hiccup) leaving the GPU texture empty. Log it clearly instead of
+        // failing silently so this is diagnosable from the console.
+        console.error('[PolyForm] Failed to load texture, surface may appear black:', url, err);
+      }
+    );
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.needsUpdate = true;
     _polyformTextureCache.set(url, tex);
@@ -1251,7 +1268,13 @@ function Scene() {
         const xDist = diff.dot(tangent);
         const yDist = diff.dot(bitangent);
         
-        const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), drawingNormal);
+        // Build rotation directly from the tangent/normal/bitangent basis used for the
+        // drag-plane math above, instead of THREE's arbitrary shortest-arc twist. This keeps
+        // the drawn shape's local X/Z axes aligned with the actual drag directions (tangent/
+        // bitangent) on every face, including vertical faces reached after rotating the camera.
+        const zAxis = new THREE.Vector3().crossVectors(tangent, drawingNormal).normalize();
+        const basisMatrix = new THREE.Matrix4().makeBasis(tangent, drawingNormal, zAxis);
+        const quat = new THREE.Quaternion().setFromRotationMatrix(basisMatrix);
         const quatArray: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
 
         if (activeTool === 'rectangle') {
@@ -2990,10 +3013,10 @@ function Scene() {
           ) : (
             <meshStandardMaterial 
               color={shape.color} 
-              roughness={shape.roughness ?? 0.5}
-              metalness={shape.metalness ?? 0}
+              roughness={shape.roughness || 0.5}
+              metalness={shape.metalness || 0}
               transparent={shape.opacity !== undefined && shape.opacity < 1}
-              opacity={shape.opacity ?? 1}
+              opacity={shape.opacity || 1}
               emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
               emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
             />
