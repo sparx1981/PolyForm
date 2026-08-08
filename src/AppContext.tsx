@@ -102,7 +102,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isMessagingCollapsed, setIsMessagingCollapsed] = useState(false);
   const [isMessagingDocked, setIsMessagingDocked] = useState(false);
   const [activeBevelAmount, setActiveBevelAmount] = useState(1);
-  const [contactFrictionEnabled, setContactFrictionEnabled] = useState(false);
+  // Default true: this restores SketchUp-style movement friction (dragging pauses
+  // briefly the instant two objects' surfaces touch, then lets you continue past it).
+  // It's fully wired (Viewport.tsx's handleTransformObjectChange + checkCollision, and
+  // the "Contact Friction" toggle in ToolModifierPalette/RightPanelStack), but was
+  // defaulting to off with no obvious way to discover the toggle, which made the
+  // feature look removed.
+  const [contactFrictionEnabled, setContactFrictionEnabled] = useState(true);
   const [isToolModifierDocked, setIsToolModifierDocked] = useState(true);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
   const [autoOrbitEnabled, setAutoOrbitEnabled] = useState(false);
