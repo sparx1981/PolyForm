@@ -45,6 +45,28 @@ import { SketchupService, HuggingFaceService } from '../services/sketchupService
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
 
+function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const hasUv = geometries.every(g => !!g.attributes.uv);
+  geometries.forEach(geo => {
+    const posAttr = geo.attributes.position;
+    const normAttr = geo.attributes.normal;
+    const uvAttr = geo.attributes.uv;
+    for (let i = 0; i < posAttr.count; i++) {
+      positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+      normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
+      if (hasUv && uvAttr) uvs.push(uvAttr.getX(i), uvAttr.getY(i));
+    }
+  });
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  if (hasUv) merged.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  return merged;
+}
+
 export default function TopBar() {
     const { 
       user, 
@@ -406,6 +428,40 @@ export default function TopBar() {
       diagLog('Import', 'Importing SketchUp file', { name: file.name });
       try {
         const group = await SketchupService.importSKP(file);
+        // Bridge the imported Object3D group into the single BufferGeometry
+        // that CustomGeometry expects. CustomGeometry parses shape.geometryData
+        // with THREE.BufferGeometryLoader, which only understands a plain
+        // BufferGeometry.toJSON() payload - not an Object3D/group toJSON().
+        // Passing the group's own toJSON() here always failed to parse and
+        // silently fell back to a 1x1x1 placeholder box, which is why every
+        // SKP import appeared as "a small cube" regardless of the source model.
+        group.updateMatrixWorld(true);
+        const meshGeometries: THREE.BufferGeometry[] = [];
+        group.traverse((child: any) => {
+          if (child.isMesh && child.geometry) {
+            let geo = child.geometry.clone();
+            geo.applyMatrix4(child.matrixWorld);
+            if (geo.index) geo = geo.toNonIndexed();
+            if (!geo.attributes.normal) geo.computeVertexNormals();
+            meshGeometries.push(geo);
+          }
+        });
+        if (meshGeometries.length === 0) {
+          throw new Error('No mesh geometry found in the imported SketchUp file.');
+        }
+        // mergeGeometries requires every geometry to share the same attribute
+        // set, so keep only the attributes common to all meshes.
+        const commonAttrs = ['position', 'normal', 'uv'].filter(key =>
+          meshGeometries.every(geo => !!geo.attributes[key])
+        );
+        meshGeometries.forEach(geo => {
+          Object.keys(geo.attributes).forEach(key => {
+            if (!commonAttrs.includes(key)) geo.deleteAttribute(key);
+          });
+        });
+        const mergedGeo = meshGeometries.length === 1
+          ? meshGeometries[0]
+          : mergeBufferGeometriesLocal(meshGeometries);
         // Add as a custom shape
         const id = Math.random().toString(36).substr(2, 9);
         const newShape: any = {
@@ -415,7 +471,7 @@ export default function TopBar() {
           position: [0, 0, 0],
           args: {},
           color: '#ffffff',
-          geometryData: group.toJSON() // Simplified for demo
+          geometryData: mergedGeo.toJSON()
         };
         setShapes(prev => [...prev, newShape]);
         alert('Imported SketchUp model successfully!');
