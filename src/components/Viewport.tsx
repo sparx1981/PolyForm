@@ -874,6 +874,7 @@ function Scene() {
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' } | null>(null);
+  const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
@@ -1664,6 +1665,29 @@ function Scene() {
               }
             }
           });
+                    // Hover-to-lock: sustain a snap through a brief dwell so precise clicks land exactly on the point
+          const now = performance.now();
+          const sameAsPrev = inferenceLockRef.current && snapHit ? inferenceLockRef.current.point.distanceTo(snapHit.point) < 0.05 : false;
+          if (snapHit && sameAsPrev) {
+            // still hovering the same candidate - dwell timer keeps running
+          } else if (snapHit) {
+            inferenceLockRef.current = { point: snapHit.point.clone(), type: snapHit.type, since: now, locked: false };
+          } else if (inferenceLockRef.current && !inferenceLockRef.current.locked) {
+            inferenceLockRef.current = null;
+          }
+          if (inferenceLockRef.current) {
+            if (!inferenceLockRef.current.locked && now - inferenceLockRef.current.since >= 350) {
+              inferenceLockRef.current.locked = true;
+            }
+            if (inferenceLockRef.current.locked) {
+              const releaseThreshold = 1.1;
+              if (target.distanceTo(inferenceLockRef.current.point) < releaseThreshold) {
+                snapHit = { point: inferenceLockRef.current.point, type: inferenceLockRef.current.type };
+              } else {
+                inferenceLockRef.current = null;
+              }
+            }
+          }
           if (snapHit) target.copy((snapHit as { point: THREE.Vector3; type: 'endpoint' | 'midpoint' }).point);
         }
         if (axisLock) {
