@@ -873,8 +873,8 @@ function Scene() {
   const [drawingStep, setDrawingStep] = useState<0 | 1 | 2>(0); // 0: idle, 1: base, 2: height
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
-  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' } | null>(null);
-  const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint'; since: number; locked: boolean } | null>(null);
+  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center' } | null>(null);
+  const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
@@ -1630,7 +1630,7 @@ function Scene() {
       
       if (drawingStep === 1 && ray.intersectPlane(plane, target)) {
         // --- Inference locking: endpoint/midpoint snapping + axis lock ---
-        let snapHit: { point: THREE.Vector3; type: 'endpoint' | 'midpoint' } | null = null;
+        let snapHit: { point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center' } | null = null;
         if (!axisLock) {
           const snapThresholdWorld = 0.35;
           let bestDist = snapThresholdWorld;
@@ -1664,6 +1664,21 @@ function Scene() {
                 }
               }
             }
+            const faceCenters: THREE.Vector3[] = [
+              new THREE.Vector3(box.min.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
+              new THREE.Vector3(box.max.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
+              new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2),
+              new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2),
+              new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z),
+              new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z),
+            ];
+            faceCenters.forEach(c => {
+              const d = target.distanceTo(c);
+              if (d < bestDist) {
+                bestDist = d;
+                snapHit = { point: c.clone(), type: 'center' };
+              }
+            });
           });
                     // Hover-to-lock: sustain a snap through a brief dwell so precise clicks land exactly on the point
           const now = performance.now();
@@ -1688,7 +1703,7 @@ function Scene() {
               }
             }
           }
-          if (snapHit) target.copy((snapHit as { point: THREE.Vector3; type: 'endpoint' | 'midpoint' }).point);
+          if (snapHit) target.copy((snapHit as { point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center' }).point);
         }
         if (axisLock) {
           const axisVec = axisLock === 'x' ? new THREE.Vector3(1, 0, 0) : axisLock === 'y' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
@@ -3793,11 +3808,11 @@ function Scene() {
             <div
               className={cn(
                 'w-2.5 h-2.5 shadow-lg',
-                snapIndicator.type === 'endpoint' ? 'bg-green-400 rotate-45 border border-green-600' : 'bg-cyan-400 rounded-full border border-cyan-600'
+                snapIndicator.type === 'endpoint' ? 'bg-green-400 rotate-45 border border-green-600' : snapIndicator.type === 'midpoint' ? 'bg-cyan-400 rounded-full border border-cyan-600' : 'bg-fuchsia-400 rounded-full border border-fuchsia-600 ring-2 ring-fuchsia-200'
               )}
             />
             <div className="bg-black/80 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap">
-              {snapIndicator.type === 'endpoint' ? 'Endpoint' : 'Midpoint'}
+              {snapIndicator.type === 'endpoint' ? 'Endpoint' : snapIndicator.type === 'midpoint' ? 'Midpoint' : 'Center'}
             </div>
           </div>
         </Html>
