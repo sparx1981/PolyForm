@@ -4507,6 +4507,7 @@ export default function Viewport() {
   } = useApp();
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
   const [quadView, setQuadView] = useState(false);
+  const [panelViews, setPanelViews] = useState<Array<'perspective' | 'top' | 'front' | 'right'>>(['perspective', 'top', 'front', 'right']);
   const [perspectiveTimeout, setPerspectiveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [metadataShapeId, setMetadataShapeId] = useState<string | null>(null);
   const [metadataLightId, setMetadataLightId] = useState<string | null>(null);
@@ -4649,38 +4650,45 @@ export default function Viewport() {
     )}>
       {quadView ? (
         <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-black/30 z-0">
-          <div className="relative overflow-hidden bg-inherit">
-            <Canvas 
-        shadows={{ type: THREE.PCFShadowMap }} 
-        dpr={[1, 2]} 
-        gl={{ preserveDrawingBuffer: true }}
-        frameloop="always"
-      >
-        <React.Suspense fallback={null}>
-          <EnvironmentLighting />
-          <Scene />
-        </React.Suspense>
-      </Canvas>
-            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-trimble-blue text-white pointer-events-none z-10">Perspective</div>
-          </div>
-          <div className="relative overflow-hidden bg-inherit">
-            <Canvas dpr={[1, 2]} frameloop="always">
-              <MiniScene view="top" />
-            </Canvas>
-            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white pointer-events-none z-10">Top</div>
-          </div>
-          <div className="relative overflow-hidden bg-inherit">
-            <Canvas dpr={[1, 2]} frameloop="always">
-              <MiniScene view="front" />
-            </Canvas>
-            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white pointer-events-none z-10">Front</div>
-          </div>
-          <div className="relative overflow-hidden bg-inherit">
-            <Canvas dpr={[1, 2]} frameloop="always">
-              <MiniScene view="right" />
-            </Canvas>
-            <div className="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white pointer-events-none z-10">Right</div>
-          </div>
+          {panelViews.map((view, idx) => (
+            <div key={idx} className="relative overflow-hidden bg-inherit">
+              {view === 'perspective' ? (
+                <Canvas
+                  shadows={{ type: THREE.PCFShadowMap }}
+                  dpr={[1, 2]}
+                  gl={{ preserveDrawingBuffer: true }}
+                  frameloop="always"
+                >
+                  <React.Suspense fallback={null}>
+                    <EnvironmentLighting />
+                    <Scene />
+                  </React.Suspense>
+                </Canvas>
+              ) : (
+                <Canvas dpr={[1, 2]} frameloop="always">
+                  <MiniScene view={view} />
+                </Canvas>
+              )}
+              <select
+                value={view}
+                onChange={(e) => {
+                  const next = [...panelViews];
+                  next[idx] = e.target.value as 'perspective' | 'top' | 'front' | 'right';
+                  setPanelViews(next);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className={cn(
+                  "absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded z-10 border-none outline-none cursor-pointer appearance-none",
+                  view === 'perspective' ? "bg-trimble-blue text-white" : "bg-black/60 text-white"
+                )}
+              >
+                <option value="perspective">Perspective</option>
+                <option value="top">Top</option>
+                <option value="front">Front</option>
+                <option value="right">Right</option>
+              </select>
+            </div>
+          ))}
         </div>
       ) : (
         <Canvas 
@@ -5309,7 +5317,7 @@ export default function Viewport() {
             quadView ? "bg-trimble-blue border-trimble-blue text-white" : (theme === 'dark' ? "bg-gray-800/80 border-gray-700 text-gray-300" : "bg-white/80 border-gray-200 text-gray-600")
           )}
         >
-          <span className="col-span-2 -my-0.5">4-View</span>
+          <span className="col-span-2 -my-0.5">Split View</span>
         </button>
       </div>
       {isDividePopupOpen && selectedSurface && (
