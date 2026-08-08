@@ -1961,12 +1961,15 @@ function Scene() {
       const shape = shapes.find(s => s.id === bevelState.id);
       if (shape) {
         let minEdge = 1;
-        if (shape.type === 'box') {
-          minEdge = Math.min(...shape.args);
-        } else if (shape.type === 'rect') {
+        if (shape.type === 'box' || shape.type === 'rect') {
           minEdge = Math.min(...shape.args);
         }
-        const maxRadius = minEdge / 2;
+        const maxRadius =
+          (shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism')
+            ? Math.max(0.01, Math.min(shape.args[0], shape.args[2] / 2))
+            : shape.type === 'poly'
+              ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
+              : minEdge / 2;
         const clampedAmount = Math.min(amount, maxRadius);
         
         let segments = 3;
@@ -2539,7 +2542,13 @@ function Scene() {
         id: shape.id,
         initialAmount: shape.bevelAmount || 0,
         startX: e.nativeEvent.clientX,
-        type: activeBevelType, maxRadius: (shape.type === 'box' || shape.type === 'rect') ? Math.min(...shape.args) / 2 : 1
+        type: activeBevelType, maxRadius: (shape.type === 'box' || shape.type === 'rect')
+          ? Math.min(...shape.args) / 2
+          : (shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism')
+            ? Math.max(0.01, Math.min(shape.args[0], shape.args[2] / 2))
+            : shape.type === 'poly'
+              ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
+              : 1
       });
     } else if (activeTool === 'paint') {
       e.stopPropagation();
@@ -3545,7 +3554,18 @@ function Scene() {
 
         return (
           <mesh key={shape.id} {...meshProps}>
-          {shape.type === 'circle' || shape.type === 'line' || shape.type === 'triangle' || shape.type === 'prism' ? (
+          {(shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism') && shape.bevelAmount ? (
+            <PolyGeometry
+              vertices={regularPolygonVertices(
+                Array.isArray(shape.args) ? shape.args[0] : 1,
+                (shape.type === 'triangle' || shape.type === 'prism') ? 3 : (Array.isArray(shape.args) ? (shape.args[3] || 32) : 32)
+              )}
+              height={Array.isArray(shape.args) ? shape.args[2] : 1}
+              bevelAmount={shape.bevelAmount}
+              bevelSegments={shape.bevelSegments || 4}
+              uprightY
+            />
+          ) : shape.type === 'circle' || shape.type === 'line' || shape.type === 'triangle' || shape.type === 'prism' ? (
             <cylinderGeometry args={[
               Array.isArray(shape.args) ? shape.args[0] : 1,
               Array.isArray(shape.args) ? shape.args[1] : 1,
@@ -3561,7 +3581,7 @@ function Scene() {
           ) : shape.type === 'dome' ? (
             <sphereGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 32, 32]) as any} />
           ) : shape.type === 'poly' ? (
-            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height || 1} />
+            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height || 1} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} />
           ) : shape.type === 'custom' ? (
             <CustomGeometry shape={shape} />
           ) : (
@@ -4388,7 +4408,17 @@ function SurfaceHighlight({ shapeId, faceIndex, subFaceIndex }: { shapeId: strin
   );
 }
 
-function PolyGeometry({ vertices, height = 0 }: { vertices: [number, number][], height?: number }) {
+function regularPolygonVertices(radius: number, segments: number): [number, number][] {
+  const verts: [number, number][] = [];
+  const n = Math.max(3, Math.round(segments));
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 + Math.PI / n;
+    verts.push([radius * Math.sin(angle), radius * Math.cos(angle)]);
+  }
+  return verts;
+}
+
+function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, uprightY = false }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, uprightY?: boolean }) {
   const geometry = useMemo(() => {
     if (!vertices || vertices.length < 3) return new THREE.BufferGeometry();
     
@@ -4412,18 +4442,24 @@ function PolyGeometry({ vertices, height = 0 }: { vertices: [number, number][], 
       if (height === 0) {
         return new THREE.ShapeGeometry(shape);
       } else {
+        const safeBevel = Math.max(0, Math.min(bevelAmount, height / 2 - 0.001));
         const geo = new THREE.ExtrudeGeometry(shape, {
           depth: height,
-          bevelEnabled: false
+          bevelEnabled: safeBevel > 0,
+          bevelThickness: safeBevel,
+          bevelSize: safeBevel,
+          bevelSegments: Math.max(1, bevelSegments),
+          bevelOffset: 0
         });
         geo.translate(0, 0, -height / 2); // Center in Z to match other primitives
+        if (uprightY) geo.rotateX(-Math.PI / 2); // Re-orient extrusion axis from Z to Y for cylinder/prism-style shapes
         return geo;
       }
     } catch (err) {
       console.error('[PolyGeometry] Failed to create geometry:', err);
       return new THREE.BufferGeometry();
     }
-  }, [vertices, height]);
+  }, [vertices, height, bevelAmount, bevelSegments, uprightY]);
 
   useEffect(() => {
     return () => {
