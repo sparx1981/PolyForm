@@ -307,6 +307,8 @@ export interface AppState {
   setWorldViewAltitude: (alt: number) => void;
   worldViewRadius: number;
   setWorldViewRadius: (radius: number) => void;
+  worldViewMapType: 'satellite' | '3d';
+  setWorldViewMapType: (type: 'satellite' | '3d') => void;
   isWorldViewActive: boolean;
   setIsWorldViewActive: (active: boolean) => void;
   focusOnMapTrigger: number;

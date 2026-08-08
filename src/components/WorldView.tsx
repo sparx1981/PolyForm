@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Globe, Search, MapPin, Layers, Navigation2, AlertCircle, ExternalLink } from 'lucide-react';
 import { useApp } from '../AppContext';
@@ -16,6 +16,112 @@ const MapMarker = ({ children, className }: MapMarkerProps) => (
   <div className={className}>{children}</div>
 );
 
+interface Map3DPreviewProps {
+  lat: number;
+  lng: number;
+  apiKey: string;
+}
+
+// Loads Google's Photorealistic 3D Maps (maps3d library) and renders a live,
+// navigable 3D view of the chosen site. See: https://mapsplatform.google.com/demos/3d-maps/
+function Map3DPreview({ lat, lng, apiKey }: Map3DPreviewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const elementRef = useRef<any>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (!apiKey) return;
+    let cancelled = false;
+
+    const loadScript = () => {
+      if ((window as any).google?.maps?.importLibrary) return Promise.resolve();
+      const existing = document.getElementById('gmaps-3d-script') as HTMLScriptElement | null;
+      if (existing) {
+        return new Promise<void>((resolve, reject) => {
+          existing.addEventListener('load', () => resolve());
+          existing.addEventListener('error', () => reject(new Error('Failed to load Google Maps script')));
+        });
+      }
+      return new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.id = 'gmaps-3d-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=alpha&libraries=maps3d`;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Google Maps script'));
+        document.head.appendChild(script);
+      });
+    };
+
+    setStatus('loading');
+    loadScript()
+      .then(() => (window as any).google.maps.importLibrary('maps3d'))
+      .then((lib: any) => {
+        if (cancelled || !containerRef.current) return;
+        const { Map3DElement } = lib;
+        const el = new Map3DElement({
+          center: { lat, lng, altitude: 250 },
+          range: 900,
+          tilt: 60,
+          heading: 0,
+        });
+        el.style.width = '100%';
+        el.style.height = '100%';
+        containerRef.current.innerHTML = '';
+        containerRef.current.appendChild(el);
+        elementRef.current = el;
+        setStatus('ready');
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        console.error('[WorldView] Failed to load 3D Photorealistic Maps:', err);
+        setErrorMsg(err?.message || 'Unknown error');
+        setStatus('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiKey]);
+
+  // Re-center the 3D camera when the chosen location changes
+  useEffect(() => {
+    if (status === 'ready' && elementRef.current) {
+      try {
+        elementRef.current.center = { lat, lng, altitude: 250 };
+      } catch (err) {
+        console.warn('[WorldView] Could not update 3D map center:', err);
+      }
+    }
+  }, [lat, lng, status]);
+
+  if (!apiKey) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-center p-8 text-gray-400 text-sm">
+        Add a Google Maps API key to preview this location in 3D.
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full relative">
+      <div ref={containerRef} className="w-full h-full" />
+      {status === 'loading' && (
+        <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm bg-gray-100 dark:bg-gray-950">
+          Loading 3D Photorealistic Maps…
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 gap-2 bg-gray-100 dark:bg-gray-950">
+          <span className="text-sm text-gray-400">3D Photorealistic Maps isn't available here.</span>
+          <span className="text-[10px] text-gray-500">{errorMsg}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function WorldView() {
   const { 
     isWorldViewOpen, 
@@ -28,6 +134,8 @@ export default function WorldView() {
     setWorldViewRadius,
     isWorldViewActive,
     setIsWorldViewActive,
+    worldViewMapType,
+    setWorldViewMapType,
     theme
   } = useApp();
 
@@ -180,6 +288,37 @@ export default function WorldView() {
                     </a>
                   </div>
                 )}
+                <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setWorldViewMapType('satellite')}
+                    className={cn(
+                      "flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-md transition-colors",
+                      worldViewMapType === 'satellite'
+                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm"
+                        : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    )}
+                  >
+                    Satellite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWorldViewMapType('3d')}
+                    className={cn(
+                      "flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-md transition-colors",
+                      worldViewMapType === '3d'
+                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm"
+                        : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    )}
+                  >
+                    3D Photorealistic
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 italic leading-tight -mt-2 mb-3">
+                  {worldViewMapType === '3d'
+                    ? "Fly around the real 3D imagery to confirm your site. The in-model overlay always uses the flat satellite image below."
+                    : "Preview and pick your site on a flat satellite image."}
+                </p>
                 <form onSubmit={handleSearch} className="relative">
                   <input
                     type="text"
@@ -289,7 +428,10 @@ export default function WorldView() {
 
             {/* Map Area */}
             <div className="flex-1 bg-gray-100 dark:bg-gray-950 relative overflow-hidden">
-              <GoogleMapReact
+              {worldViewMapType === '3d' ? (
+                <Map3DPreview lat={worldViewLocation.lat} lng={worldViewLocation.lng} apiKey={apiKey} />
+              ) : (
+                <GoogleMapReact
                 bootstrapURLKeys={{ key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '' }}
                 center={{ lat: worldViewLocation.lat, lng: worldViewLocation.lng }}
                 zoom={18}
@@ -313,6 +455,7 @@ export default function WorldView() {
                   </div>
                 </MapMarker>
               </GoogleMapReact>
+              )}
 
               {/* Map Info Overlay */}
               <div className="absolute bottom-4 right-4 flex flex-col gap-2 items-end">

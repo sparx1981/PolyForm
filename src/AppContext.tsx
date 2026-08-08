@@ -528,6 +528,7 @@ console.log("Created rectangle:", myRect.id);`);
   const [worldViewLocation, setWorldViewLocation] = useState<{ lat: number, lng: number, address?: string }>({ lat: 51.5074, lng: -0.1278 }); // London default
   const [worldViewAltitude, setWorldViewAltitude] = useState(-0.1);
   const [worldViewRadius, setWorldViewRadius] = useState(100); // 100m default
+  const [worldViewMapType, setWorldViewMapType] = useState<'satellite' | '3d'>('satellite');
 
   const [isWorldViewActive, setIsWorldViewActive] = useState(false);
   const [focusOnMapTrigger, setFocusOnMapTrigger] = useState(0);
@@ -976,6 +977,8 @@ console.log("Created rectangle:", myRect.id);`);
       setWorldViewAltitude,
       worldViewRadius,
       setWorldViewRadius,
+      worldViewMapType,
+      setWorldViewMapType,
       isWorldViewActive,
       setIsWorldViewActive,
       focusOnMapTrigger,
