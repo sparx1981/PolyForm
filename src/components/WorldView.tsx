@@ -46,7 +46,7 @@ function Map3DPreview({ lat, lng, apiKey }: Map3DPreviewProps) {
       return new Promise<void>((resolve, reject) => {
         const script = document.createElement('script');
         script.id = 'gmaps-3d-script';
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=alpha&libraries=maps3d`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=beta&libraries=maps3d`;
         script.async = true;
         script.onload = () => resolve();
         script.onerror = () => reject(new Error('Failed to load Google Maps script'));
@@ -136,12 +136,13 @@ export default function WorldView() {
     setIsWorldViewActive,
     worldViewMapType,
     setWorldViewMapType,
+    googleMapsApiKey,
     theme
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+  const apiKey = googleMapsApiKey || '';
   const isKeyMissing = !apiKey || apiKey === '';
 
   if (!isWorldViewOpen) return null;
@@ -432,7 +433,7 @@ export default function WorldView() {
                 <Map3DPreview lat={worldViewLocation.lat} lng={worldViewLocation.lng} apiKey={apiKey} />
               ) : (
                 <GoogleMapReact
-                bootstrapURLKeys={{ key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '' }}
+                bootstrapURLKeys={{ key: apiKey }}
                 center={{ lat: worldViewLocation.lat, lng: worldViewLocation.lng }}
                 zoom={18}
                 options={{

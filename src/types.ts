@@ -309,6 +309,8 @@ export interface AppState {
   setWorldViewRadius: (radius: number) => void;
   worldViewMapType: 'satellite' | '3d';
   setWorldViewMapType: (type: 'satellite' | '3d') => void;
+  googleMapsApiKey: string;
+  setGoogleMapsApiKey: (key: string) => void;
   isWorldViewActive: boolean;
   setIsWorldViewActive: (active: boolean) => void;
   focusOnMapTrigger: number;

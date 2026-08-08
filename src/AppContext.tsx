@@ -529,6 +529,20 @@ console.log("Created rectangle:", myRect.id);`);
   const [worldViewAltitude, setWorldViewAltitude] = useState(-0.1);
   const [worldViewRadius, setWorldViewRadius] = useState(100); // 100m default
   const [worldViewMapType, setWorldViewMapType] = useState<'satellite' | '3d'>('satellite');
+  const [googleMapsApiKey, setGoogleMapsApiKeyState] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_google_maps_api_key');
+      if (stored) return stored;
+    } catch (e) {}
+    return (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
+  });
+  const setGoogleMapsApiKey = (key: string) => {
+    setGoogleMapsApiKeyState(key);
+    try {
+      if (key) localStorage.setItem('polyform_google_maps_api_key', key);
+      else localStorage.removeItem('polyform_google_maps_api_key');
+    } catch (e) {}
+  };
 
   const [isWorldViewActive, setIsWorldViewActive] = useState(false);
   const [focusOnMapTrigger, setFocusOnMapTrigger] = useState(0);
@@ -979,6 +993,8 @@ console.log("Created rectangle:", myRect.id);`);
       setWorldViewRadius,
       worldViewMapType,
       setWorldViewMapType,
+      googleMapsApiKey,
+      setGoogleMapsApiKey,
       isWorldViewActive,
       setIsWorldViewActive,
       focusOnMapTrigger,

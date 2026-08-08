@@ -21,7 +21,13 @@ import {
   FileText,
   Layers,
   HelpCircle,
-  Camera
+  Camera,
+  KeyRound,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
@@ -81,13 +87,18 @@ export default function TopBar() {
       setDefaultCameraTarget,
       isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
-      diagLog
+      diagLog,
+      googleMapsApiKey,
+      setGoogleMapsApiKey
     } = useApp();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSavedModelsOpen, setIsSavedModelsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [hfTokenInput, setHfTokenInput] = useState<string>(() => HuggingFaceService.getToken());
+  const [showHfToken, setShowHfToken] = useState(false);
+  const [showMapsKey, setShowMapsKey] = useState(false);
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [newModelName, setNewModelName] = useState('Untitled Model');
   const [savedModels, setSavedModels] = useState<any[]>([]);
@@ -777,6 +788,101 @@ export default function TopBar() {
                   <Palette size={14} className="text-gray-400" />
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* API Keys Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <KeyRound size={14} className="text-gray-400" />
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">API Keys</label>
+            </div>
+
+            <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Google Maps API Key</span>
+                {googleMapsApiKey ? (
+                  <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                    <CheckCircle2 size={12} /> Configured
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <AlertTriangle size={12} /> Not set
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showMapsKey ? 'text' : 'password'}
+                  value={googleMapsApiKey}
+                  onChange={(e) => setGoogleMapsApiKey(e.target.value)}
+                  placeholder="Paste your Google Maps API key"
+                  className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMapsKey(!showMapsKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showMapsKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Powers WorldView's Satellite &amp; 3D Photorealistic map and in-model geolocation imagery. Enable the "Maps JavaScript API" on your key.{' '}
+                <a
+                  href="https://console.cloud.google.com/google/maps-apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
+                >
+                  Get a key <ExternalLink size={10} />
+                </a>
+              </p>
+            </div>
+
+            <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Hugging Face API Token</span>
+                {hfTokenInput ? (
+                  <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                    <CheckCircle2 size={12} /> Configured
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <AlertTriangle size={12} /> Not set
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showHfToken ? 'text' : 'password'}
+                  value={hfTokenInput}
+                  onChange={(e) => {
+                    setHfTokenInput(e.target.value);
+                    HuggingFaceService.setToken(e.target.value);
+                  }}
+                  placeholder="hf_..."
+                  className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowHfToken(!showHfToken)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showHfToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Powers AI Photo-to-3D and AI PBR material generation. Free "read" token from{' '}
+                <a
+                  href="https://huggingface.co/settings/tokens"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
+                >
+                  huggingface.co/settings/tokens <ExternalLink size={10} />
+                </a>
+              </p>
             </div>
           </div>
         </div>

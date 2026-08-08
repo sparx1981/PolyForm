@@ -5411,8 +5411,8 @@ function CustomGeometry({ shape }: { shape: Shape }) {
 }
 
 function RenderMapTexture({ lat, lng }: { lat: number, lng: number }) {
-  const { worldViewAltitude, worldViewRadius, setConsoleOutput } = useApp();
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+  const { worldViewAltitude, worldViewRadius, setConsoleOutput, googleMapsApiKey } = useApp();
+  const apiKey = googleMapsApiKey || '';
   
   // Calculate zoom based on worldViewRadius to cover the requested ground area
   const zoom = useMemo(() => {
