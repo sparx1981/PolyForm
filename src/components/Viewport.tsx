@@ -1635,7 +1635,22 @@ function Scene() {
           const snapThresholdWorld = 0.35;
           let bestDist = snapThresholdWorld;
           shapes.forEach(sh => {
-            if (sh.type === 'measurement') return;
+            if (sh.type === 'measurement') {
+              if (sh.args && Array.isArray(sh.args.start) && Array.isArray(sh.args.end)) {
+                const mStart = new THREE.Vector3(sh.args.start[0], sh.args.start[1], sh.args.start[2]);
+                const mEnd = new THREE.Vector3(sh.args.end[0], sh.args.end[1], sh.args.end[2]);
+                const mMid = mStart.clone().lerp(mEnd, 0.5);
+                const mCandidates: [THREE.Vector3, 'endpoint' | 'midpoint'][] = [[mStart, 'endpoint'], [mEnd, 'endpoint'], [mMid, 'midpoint']];
+                mCandidates.forEach(([p, t]) => {
+                  const d = target.distanceTo(p);
+                  if (d < bestDist) {
+                    bestDist = d;
+                    snapHit = { point: p.clone(), type: t };
+                  }
+                });
+              }
+              return;
+            }
             const obj = scene.getObjectByName(sh.id);
             if (!obj) return;
             const box = new THREE.Box3().setFromObject(obj);
