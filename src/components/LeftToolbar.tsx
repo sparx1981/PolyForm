@@ -294,7 +294,7 @@ export default function LeftToolbar() {
           )}
           title="Line, Poly & Arc Tools"
         >
-          {activeTool === 'poly' ? <Pentagon size={20} /> : activeTool === 'arc' ? <Spline size={20} /> : <Penline size={20} />}
+          {activeTool === 'poly' ? <Pentagon size={20} /> : activeTool === 'arc' ? <Spline size={20} /> : <PenLine size={20} />}
         </button>
 
         <AnimatePresence>
