@@ -12,7 +12,7 @@ export type SkyboxType = 'none' | 'golden-hour' | 'woodland' | 'sunrise' | 'twil
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'measurement';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'measurement' | 'arc';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];

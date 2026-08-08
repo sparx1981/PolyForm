@@ -11,6 +11,7 @@ import {
   Circle as SphereIcon,
   Torus,
   Pyramid as PyramidIcon,
+  Spline,
   Pentagon,
   Move, 
   RotateCw, 
@@ -289,11 +290,11 @@ export default function LeftToolbar() {
           onClick={() => setActiveTool('line')}
           className={cn(
             "toolbar-btn transition-colors",
-            (activeTool === 'line' || activeTool === 'poly') && "toolbar-btn-active"
+            (activeTool === 'line' || activeTool === 'poly' || activeTool === 'arc') && "toolbar-btn-active"
           )}
-          title="Line & Poly Tools"
+          title="Line, Poly & Arc Tools"
         >
-          {activeTool === 'poly' ? <Pentagon size={20} /> : <PenLine size={20} />}
+          {activeTool === 'poly' ? <Pentagon size={20} /> : activeTool === 'arc' ? <Spline size={20} /> : <Penline size={20} />}
         </button>
 
         <AnimatePresence>
@@ -326,6 +327,16 @@ export default function LeftToolbar() {
               >
                 <Pentagon size={16} />
                 <span>Poly Tool</span>
+              </button>
+              <button
+                onClick={() => setActiveTool('arc')}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                  activeTool === 'arc' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                )}
+              >
+                <Spline size={16} />
+                <span>Arc Tool</span>
               </button>
             </motion.div>
           )}

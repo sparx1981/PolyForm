@@ -273,6 +273,45 @@ const getGridDimensions = (division: number | [number, number] | undefined): [nu
 };
 
 // Poly tool helpers
+const computeArcPoints = (p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, segments: number = 32): THREE.Vector3[] | null => {
+  const a = p1.clone().sub(p0);
+  const b = p2.clone().sub(p0);
+  const axb = a.clone().cross(b);
+  const axbLenSq = axb.lengthSq();
+  if (axbLenSq < 1e-8) return null;
+  const aLenSq = a.lengthSq();
+  const bLenSq = b.lengthSq();
+  const term1 = axb.clone().cross(a).multiplyScalar(bLenSq);
+  const term2 = b.clone().cross(axb).multiplyScalar(aLenSq);
+  const center = p0.clone().add(term1.add(term2).multiplyScalar(1 / (2 * axbLenSq)));
+  const radius = center.distanceTo(p0);
+  if (radius < 1e-6) return null;
+  const u = p0.clone().sub(center).normalize();
+  const w = axb.clone().normalize();
+  const v = w.clone().cross(u).normalize();
+  const angleOf = (p: THREE.Vector3) => {
+    const vec = p.clone().sub(center);
+    return Math.atan2(vec.dot(v), vec.dot(u));
+  };
+  const normalizeAngle = (ang: number) => {
+    let a2 = ang % (Math.PI * 2);
+    if (a2 < 0) a2 += Math.PI * 2;
+    return a2;
+  };
+  const a1n = normalizeAngle(angleOf(p1));
+  const a2n = normalizeAngle(angleOf(p2));
+  let sweep = a1n;
+  if (!(a2n > 0 && a2n < a1n)) {
+    sweep = a1n - Math.PI * 2;
+  }
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = (i / segments) * sweep;
+    pts.push(center.clone().add(u.clone().multiplyScalar(radius * Math.cos(t))).add(v.clone().multiplyScalar(radius * Math.sin(t))));
+  }
+  return pts;
+};
+
 const checkSelfIntersection = (points: THREE.Vector2[]): boolean => {
   const n = points.length;
   if (n < 4) return false;
@@ -669,6 +708,10 @@ function Scene() {
   const [tapeStart, setTapeStart] = useState<THREE.Vector3 | null>(null);
   const [tapeEnd, setTapeEnd] = useState<THREE.Vector3 | null>(null);
   const [lastMeasurement, setLastMeasurement] = useState<{ start: [number, number, number]; end: [number, number, number]; distance: number } | null>(null);
+  const [arcStart, setArcStart] = useState<THREE.Vector3 | null>(null);
+  const [arcEnd, setArcEnd] = useState<THREE.Vector3 | null>(null);
+  const [arcBulge, setArcBulge] = useState<THREE.Vector3 | null>(null);
+  const [arcStep, setArcStep] = useState<0 | 1 | 2>(0);
   
   const frictionPausedUntilRef = useRef<number>(0);    const sunAnimRef = useRef<{ radius: number; angle: number } | null>(null);
   const hasReachedFrictionRef = useRef<boolean>(false);
@@ -1209,6 +1252,10 @@ function Scene() {
         setPolyPlane(null);
         setPolyNormal(null);
         setPolyCandidatePos(null);
+        setArcStart(null);
+        setArcEnd(null);
+        setArcBulge(null);
+        setArcStep(0);
         return;
       }
 
@@ -1535,6 +1582,48 @@ function Scene() {
       }
       return;
     }
+    if (activeTool === 'arc') {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+      if (arcStep === 0) {
+        setArcStart(point);
+        setArcEnd(point);
+        setArcStep(1);
+        setMeasurements('Click end point.');
+      } else if (arcStep === 1) {
+        setArcEnd(point);
+        setArcBulge(point);
+        setArcStep(2);
+        setMeasurements('Click to set arc bulge.');
+      } else if (arcStep === 2 && arcStart && arcEnd) {
+        const arcPts = computeArcPoints(arcStart, arcEnd, point);
+        if (arcPts) {
+          addShape({
+            id: Math.random().toString(36).substr(2, 9),
+            type: 'arc',
+            position: [0, 0, 0],
+            args: {
+              start: [arcStart.x, arcStart.y, arcStart.z],
+              end: [arcEnd.x, arcEnd.y, arcEnd.z],
+              through: [point.x, point.y, point.z],
+              points: arcPts.map(p => [p.x, p.y, p.z]),
+            },
+            color: activeMaterial,
+          } as Shape);
+          setMeasurements('Arc created.');
+        } else {
+          setMeasurements('Points are in a line - could not fit an arc. Try again.');
+        }
+        setArcStart(null);
+        setArcEnd(null);
+        setArcBulge(null);
+        setArcStep(0);
+      }
+      return;
+    }
+
 
     if (['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
       e.stopPropagation();
@@ -1578,6 +1667,21 @@ function Scene() {
       setTapeEnd(point);
       setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
     }
+    if (activeTool === 'arc' && arcStep === 1 && arcStart) {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+      setArcEnd(point);
+      setMeasurements(`Distance: ${formatValue(arcStart.distanceTo(point), unit, 2)}`);
+    }
+
+    if (activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd) {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+      setArcBulge(point);
+    }
+
 
     if (activeTool === 'poly' && polyPlane && polyNormal) {
       const ray = raycaster.ray;
@@ -3378,6 +3482,37 @@ function Scene() {
             </group>
           );
         }
+        if (shape.type === 'arc') {
+          const aargs: any = shape.args || {};
+          const apts: [number, number, number][] = aargs.points || [];
+          if (apts.length < 2) return null;
+          const isSel = selectedId === shape.id;
+          let totalLen = 0;
+          for (let i = 1; i < apts.length; i++) {
+            totalLen += Math.hypot(apts[i][0] - apts[i - 1][0], apts[i][1] - apts[i - 1][1], apts[i][2] - apts[i - 1][2]);
+          }
+          const midPt = apts[Math.floor(apts.length / 2)] || apts[0];
+          return (
+            <group key={shape.id}>
+              <Line
+                points={apts}
+                color={isSel ? '#ffffff' : (shape.color || '#4ade80')}
+                lineWidth={isSel ? 3 : 2}
+              />
+              {(showAllDimensions || isSel) && (
+                <Html position={midPt} center occlude={false}>
+                  <div
+                    onClick={(e: any) => { e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }}
+                    className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-trimble-blue border-white' : 'bg-black/80 border-green-500/50 hover:border-green-400'}`}
+                  >
+                    {formatValue(totalLen, unit, 2)}
+                  </div>
+                </Html>
+              )}
+            </group>
+          );
+        }
+
 
         const meshProps = {
           name: shape.id,
@@ -3881,6 +4016,28 @@ function Scene() {
           </Html>
         </group>
       )}
+      {activeTool === 'arc' && arcStep === 1 && arcStart && arcEnd && (
+        <group>
+          <Line
+            points={[[arcStart.x, arcStart.y, arcStart.z], [arcEnd.x, arcEnd.y, arcEnd.z]]}
+            color='#4ade80'
+            lineWidth={2}
+          />
+        </group>
+      )}
+
+      {activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd && arcBulge && (() => {
+        const previewPts = computeArcPoints(arcStart, arcEnd, arcBulge);
+        if (!previewPts) return null;
+        return (
+          <Line
+            points={previewPts.map(p => [p.x, p.y, p.z])}
+            color='#4ade80'
+            lineWidth={2}
+          />
+        );
+      })()}
+
 
       {/* Poly Drawing Preview */}
       {activeTool === 'poly' && polyVertices.length > 0 && (
