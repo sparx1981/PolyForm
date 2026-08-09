@@ -312,6 +312,77 @@ const computeArcPoints = (p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector
   return pts;
 };
 
+type Pt2 = { x: number; y: number };
+
+function pointInPolygon2D(pt: Pt2, poly: Pt2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+      (pt.x < (xj - xi) * (pt.y - yi) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function distanceToPolygonEdges2D(pt: Pt2, poly: Pt2[]): number {
+  let min = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const abx = b.x - a.x, aby = b.y - a.y;
+    const lenSq = (abx * abx + aby * aby) || 1;
+    let t = ((pt.x - a.x) * abx + (pt.y - a.y) * aby) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = a.x + t * abx, cy = a.y + t * aby;
+    const d = Math.hypot(pt.x - cx, pt.y - cy);
+    if (d < min) min = d;
+  }
+  return min;
+}
+
+function lineIntersect2D(a1: Pt2, a2: Pt2, b1: Pt2, b2: Pt2): Pt2 | null {
+  const d1x = a2.x - a1.x, d1y = a2.y - a1.y;
+  const d2x = b2.x - b1.x, d2y = b2.y - b1.y;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / denom;
+  return { x: a1.x + t * d1x, y: a1.y + t * d1y };
+}
+
+// Offsets a closed 2D polygon outward (positive distance) or inward (negative distance)
+// by shifting each edge along its normal and re-intersecting adjacent edges (miter join).
+function computeOffsetPolygon(points: Pt2[], distance: number): Pt2[] {
+  const n = points.length;
+  if (n < 3 || distance === 0) return points;
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const p1 = points[i], p2 = points[(i + 1) % n];
+    area += p1.x * p2.y - p2.x * p1.y;
+  }
+  const sign = area >= 0 ? 1 : -1;
+  const edges: { p1: Pt2; p2: Pt2 }[] = [];
+  for (let i = 0; i < n; i++) {
+    const p1 = points[i], p2 = points[(i + 1) % n];
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const nx = sign * uy, ny = sign * -ux;
+    edges.push({
+      p1: { x: p1.x + nx * distance, y: p1.y + ny * distance },
+      p2: { x: p2.x + nx * distance, y: p2.y + ny * distance },
+    });
+  }
+  const result: Pt2[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = edges[(i - 1 + n) % n];
+    const curr = edges[i];
+    const ip = lineIntersect2D(prev.p1, prev.p2, curr.p1, curr.p2);
+    result.push(ip || curr.p1);
+  }
+  return result;
+}
+
 const checkSelfIntersection = (points: THREE.Vector2[]): boolean => {
   const n = points.length;
   if (n < 4) return false;
@@ -712,6 +783,8 @@ function Scene() {
   const [arcEnd, setArcEnd] = useState<THREE.Vector3 | null>(null);
   const [arcBulge, setArcBulge] = useState<THREE.Vector3 | null>(null);
   const [arcStep, setArcStep] = useState<0 | 1 | 2>(0);
+  const [offsetPreviewPoints, setOffsetPreviewPoints] = useState<THREE.Vector3[] | null>(null);
+  const [offsetPreviewDistance, setOffsetPreviewDistance] = useState<number>(0);
   
   const frictionPausedUntilRef = useRef<number>(0);    const sunAnimRef = useRef<{ radius: number; angle: number } | null>(null);
   const hasReachedFrictionRef = useRef<boolean>(false);
@@ -1256,6 +1329,7 @@ function Scene() {
         setArcEnd(null);
         setArcBulge(null);
         setArcStep(0);
+        setOffsetPreviewPoints(null);
         return;
       }
 
@@ -1622,6 +1696,43 @@ function Scene() {
         setArcStep(0);
       }
       return;
+    if (activeTool === 'offset') {
+      e.stopPropagation();
+      const srcShape = shapes.find(s => s.id === selectedId && s.type === 'poly');
+      if (!srcShape) {
+        setMeasurements('Select a Poly shape first, then use the Offset tool.');
+        return;
+      }
+      if (!offsetPreviewPoints || offsetPreviewPoints.length < 4) {
+        return;
+      }
+      const origin = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
+      const qArr = srcShape.quaternion || [0, 0, 0, 1];
+      const quat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
+      const invQuat = quat.clone().invert();
+      const localVerts: [number, number][] = offsetPreviewPoints.slice(0, -1).map(p => {
+        const l = p.clone().sub(origin).applyQuaternion(invQuat);
+        return [l.x, l.y] as [number, number];
+      });
+      const newOffsetShape = {
+        id: Math.random().toString(36).substr(2, 9),
+        type: 'poly',
+        position: [origin.x, origin.y, origin.z],
+        quaternion: [quat.x, quat.y, quat.z, quat.w],
+        args: { vertices: localVerts },
+        color: srcShape.color,
+        roughness: srcShape.roughness,
+        metalness: srcShape.metalness,
+        opacity: srcShape.opacity,
+      } as Shape;
+      addShape(newOffsetShape);
+      commitHistory();
+      setSelectedId(newOffsetShape.id);
+      const finalDist = offsetPreviewDistance;
+      setOffsetPreviewPoints(null);
+      setMeasurements(`Offset shape created: ${formatValue(Math.abs(finalDist), unit, 2)}`);
+      return;
+    }
     }
 
 
@@ -1682,6 +1793,34 @@ function Scene() {
       setArcBulge(point);
     }
 
+    if (activeTool === 'offset' && selectedId) {
+      const srcShape = shapes.find(s => s.id === selectedId && s.type === 'poly');
+      if (srcShape) {
+        const origin = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
+        const qArr = srcShape.quaternion || [0, 0, 0, 1];
+        const quat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
+        const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(quat);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, origin);
+        const hit = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, hit)) {
+          const invQuat = quat.clone().invert();
+          const local = hit.clone().sub(origin).applyQuaternion(invQuat);
+          const poly2D = (srcShape.args.vertices as [number, number][]).map((v: [number, number]) => ({ x: v[0], y: v[1] }));
+          const cursorLocal = { x: local.x, y: local.y };
+          const inside = pointInPolygon2D(cursorLocal, poly2D);
+          const dist = distanceToPolygonEdges2D(cursorLocal, poly2D);
+          const signedDist = inside ? -dist : dist;
+          const offsetPoly = computeOffsetPolygon(poly2D, signedDist);
+          const worldPts = offsetPoly.map(p => new THREE.Vector3(p.x, p.y, 0).applyQuaternion(quat).add(origin));
+          if (worldPts.length > 0) worldPts.push(worldPts[0].clone());
+          setOffsetPreviewPoints(worldPts);
+          setOffsetPreviewDistance(signedDist);
+          setMeasurements(`Offset: ${formatValue(Math.abs(signedDist), unit, 2)}${inside ? ' (inward)' : ' (outward)'} - click to confirm.`);
+        }
+      } else {
+        setOffsetPreviewPoints(null);
+      }
+    }
 
     if (activeTool === 'poly' && polyPlane && polyNormal) {
       const ray = raycaster.ray;
@@ -4038,6 +4177,13 @@ function Scene() {
         );
       })()}
 
+      {activeTool === 'offset' && offsetPreviewPoints && offsetPreviewPoints.length > 2 && (
+        <Line
+          points={offsetPreviewPoints.map(p => [p.x, p.y, p.z] as [number, number, number])}
+          color={offsetPreviewDistance < 0 ? '#f59e0b' : '#22c55e'}
+          lineWidth={2}
+        />
+      )}
 
       {/* Poly Drawing Preview */}
       {activeTool === 'poly' && polyVertices.length > 0 && (
