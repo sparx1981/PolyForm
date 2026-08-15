@@ -225,6 +225,14 @@ export default function RightPanelStack() {
     setShadowsEnabled,
     showLightsource,
     setShowLightsource,
+    edgeLinesEnabled,
+    setEdgeLinesEnabled,
+    edgeLinesColor,
+    setEdgeLinesColor,
+    edgeLinesOpacity,
+    setEdgeLinesOpacity,
+    edgeLinesThickness,
+    setEdgeLinesThickness,
     lightPosition,
     setLightPosition,
     animateSun,
@@ -302,7 +310,8 @@ export default function RightPanelStack() {
     showCollaboratorCursors,
     setShowCollaboratorCursors,
     diagLog,
-    refreshMaterials
+    openMaterialsSignal,
+  refreshMaterials
   } = useApp();
 
   useEffect(() => {
@@ -312,10 +321,17 @@ export default function RightPanelStack() {
   }, [fogSettings.enabled, fogSettings.animate, setFogSettings]);
   
   const [openPanels, setOpenPanels] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (openMaterialsSignal > 0) {
+      setOpenPanels(prev => prev.includes('materials') ? prev : [...prev, 'materials']);
+    }
+  }, [openMaterialsSignal]);
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'premade' | 'ai'>('color');
   const [hfToken, setHfTokenState] = useState<string>(() => HuggingFaceService.getToken());
   const setHfToken = (t: string) => { setHfTokenState(t); HuggingFaceService.setToken(t); };
+  useEffect(() => { if (activeTab === 'ai') setHfTokenState(HuggingFaceService.getToken()); }, [activeTab]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreviewUrl, setAiPreviewUrl] = useState<string | null>(null);
@@ -1370,6 +1386,60 @@ export default function RightPanelStack() {
                 </div>
               </div>
 
+              <div className="space-y-3 px-2 py-1 border-b border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase">Edge Lines</span>
+                  <button
+                    onClick={() => setEdgeLinesEnabled(!edgeLinesEnabled)}
+                    className={cn(
+                      "w-8 h-4 rounded-full relative transition-colors",
+                      edgeLinesEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                      edgeLinesEnabled ? "left-4.5" : "left-0.5"
+                    )} />
+                  </button>
+                </div>
+                {edgeLinesEnabled && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Line Color</span>
+                      <input
+                        type="color"
+                        value={edgeLinesColor}
+                        onChange={(e) => setEdgeLinesColor(e.target.value)}
+                        className="w-6 h-6 rounded cursor-pointer border-none p-0"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[8px] font-bold text-gray-400 uppercase">Opacity</label>
+                        <span className="text-[8px] text-gray-400">{Math.round(edgeLinesOpacity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range" min="0.1" max="1" step="0.05"
+                        value={edgeLinesOpacity}
+                        onChange={(e) => setEdgeLinesOpacity(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[8px] font-bold text-gray-400 uppercase">Thickness</label>
+                        <span className="text-[8px] text-gray-400">{edgeLinesThickness}px</span>
+                      </div>
+                      <input
+                        type="range" min="1" max="5" step="0.5"
+                        value={edgeLinesThickness}
+                        onChange={(e) => setEdgeLinesThickness(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
               <SubSection title="Skybox">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Environment</label>

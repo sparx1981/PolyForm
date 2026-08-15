@@ -179,6 +179,8 @@ export interface AppState {
   setUser: (user: any | null) => void;
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
+  openMaterialsSignal: number;
+  setOpenMaterialsSignal: (value: number | ((prev: number) => number)) => void;
   bannerColor: string;
   setBannerColor: (color: string) => void;
   customMaterials: any[];

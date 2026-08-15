@@ -121,6 +121,7 @@ export default function TopBar() {
   const [hfTokenInput, setHfTokenInput] = useState<string>(() => HuggingFaceService.getToken());
   const [showHfToken, setShowHfToken] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
+  useEffect(() => { if (isSettingsOpen) setHfTokenInput(HuggingFaceService.getToken()); }, [isSettingsOpen]);
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [newModelName, setNewModelName] = useState('Untitled Model');
   const [savedModels, setSavedModels] = useState<any[]>([]);

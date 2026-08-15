@@ -6,6 +6,7 @@ import {
   RoundedBox, 
   useTexture, 
   Line, 
+  Edges,
   PerspectiveCamera, 
   OrbitControls, 
   Grid, 
@@ -272,6 +273,77 @@ const getGridDimensions = (division: number | [number, number] | undefined): [nu
   return [division, division];
 };
 
+const closestDivisionFit = (frac: number): number | null => {
+  for (let n = 2; n <= 10; n++) {
+    for (let k = 1; k < n; k++) {
+      if (Math.abs(frac - k / n) < 0.02) return n;
+    }
+  }
+  return null;
+};
+
+const tryAutoDivideOnLineCrossing = (p1: THREE.Vector3, p2: THREE.Vector3, worldNormal: THREE.Vector3, allShapes: Shape[]): { shapeId: string; faceIdx: number; gridX: number; gridY: number } | null => {
+  const AXES: [THREE.Vector3, number][] = [
+    [new THREE.Vector3(1, 0, 0), 0], [new THREE.Vector3(-1, 0, 0), 2],
+    [new THREE.Vector3(0, 1, 0), 4], [new THREE.Vector3(0, -1, 0), 6],
+    [new THREE.Vector3(0, 0, 1), 8], [new THREE.Vector3(0, 0, -1), 10],
+  ];
+  const EPS_PLANE = 0.06, EPS_EDGE = 0.06, EPS_ALIGN = 0.06;
+  for (const s of allShapes) {
+    if (s.type !== 'box') continue;
+    const boxArgs = Array.isArray(s.args) ? s.args as number[] : [1, 1, 1];
+    const [W, H, D] = boxArgs;
+    const qArr = (s as any).quaternion || [0, 0, 0, 1];
+    const quat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
+    const invQuat = quat.clone().invert();
+    const origin = new THREE.Vector3(s.position[0], s.position[1], s.position[2]);
+    for (const [axis, faceKey] of AXES) {
+      const worldFaceNormal = axis.clone().applyQuaternion(quat);
+      if (worldFaceNormal.dot(worldNormal) < 0.98) continue;
+      const l1 = p1.clone().sub(origin).applyQuaternion(invQuat);
+      const l2 = p2.clone().sub(origin).applyQuaternion(invQuat);
+      let u1: number, v1: number, u2: number, v2: number, halfU: number, halfV: number, depth1: number, depth2: number, halfDepth: number;
+      if (faceKey === 0 || faceKey === 2) {
+        u1 = l1.z; v1 = l1.y; u2 = l2.z; v2 = l2.y; halfU = D / 2; halfV = H / 2; depth1 = l1.x; depth2 = l2.x; halfDepth = W / 2;
+      } else if (faceKey === 4 || faceKey === 6) {
+        u1 = l1.x; v1 = l1.z; u2 = l2.x; v2 = l2.z; halfU = W / 2; halfV = D / 2; depth1 = l1.y; depth2 = l2.y; halfDepth = H / 2;
+      } else {
+        u1 = l1.x; v1 = l1.y; u2 = l2.x; v2 = l2.y; halfU = W / 2; halfV = H / 2; depth1 = l1.z; depth2 = l2.z; halfDepth = D / 2;
+      }
+      const sign = (faceKey === 0 || faceKey === 4 || faceKey === 8) ? 1 : -1;
+      if (Math.abs(depth1 - sign * halfDepth) > EPS_PLANE) continue;
+      if (Math.abs(depth2 - sign * halfDepth) > EPS_PLANE) continue;
+      if (Math.abs(u1) > halfU + EPS_EDGE || Math.abs(v1) > halfV + EPS_EDGE) continue;
+      if (Math.abs(u2) > halfU + EPS_EDGE || Math.abs(v2) > halfV + EPS_EDGE) continue;
+      const onBoundary = (u: number, v: number) => Math.abs(Math.abs(u) - halfU) < EPS_EDGE || Math.abs(Math.abs(v) - halfV) < EPS_EDGE;
+      if (!onBoundary(u1, v1) || !onBoundary(u2, v2)) continue;
+
+      let gridX: number | null = null;
+      let gridY: number | null = null;
+      if (Math.abs(u1 - u2) < EPS_ALIGN && Math.abs(v1 - v2) > halfV) {
+        const frac = ((u1 + u2) / 2 + halfU) / (2 * halfU);
+        gridX = closestDivisionFit(frac);
+      } else if (Math.abs(v1 - v2) < EPS_ALIGN && Math.abs(u1 - u2) > halfU) {
+        const frac = ((v1 + v2) / 2 + halfV) / (2 * halfV);
+        gridY = closestDivisionFit(frac);
+      } else {
+        continue;
+      }
+      if (gridX === null && gridY === null) continue;
+
+      const existing = s.surfaceDivisions?.[faceKey];
+      const [curGX, curGY] = getGridDimensions(existing);
+      if (gridX !== null && curGX > 1) continue;
+      if (gridY !== null && curGY > 1) continue;
+      const finalGX = gridX !== null ? gridX : curGX;
+      const finalGY = gridY !== null ? gridY : curGY;
+      if (finalGX === curGX && finalGY === curGY) continue;
+      return { shapeId: s.id, faceIdx: faceKey, gridX: finalGX, gridY: finalGY };
+    }
+  }
+  return null;
+};
+
 // Poly tool helpers
 const computeArcPoints = (p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, segments: number = 32): THREE.Vector3[] | null => {
   const a = p1.clone().sub(p0);
@@ -425,6 +497,57 @@ const CAMERA_VIEWS: Record<string, { pos: [number, number, number], target: [num
   right: { pos: [10, 0, 0], target: [0, 0, 0] }
 };
 
+
+function getOffsetFaceBasis(faceKey: number): { normal: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3 } {
+  switch (faceKey) {
+    case 0: return { normal: new THREE.Vector3(1, 0, 0), u: new THREE.Vector3(0, 1, 0), v: new THREE.Vector3(0, 0, 1) };
+    case 2: return { normal: new THREE.Vector3(-1, 0, 0), u: new THREE.Vector3(0, 0, 1), v: new THREE.Vector3(0, 1, 0) };
+    case 4: return { normal: new THREE.Vector3(0, 1, 0), u: new THREE.Vector3(0, 0, 1), v: new THREE.Vector3(1, 0, 0) };
+    case 6: return { normal: new THREE.Vector3(0, -1, 0), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 0, 1) }; 
+    case 8: return { normal: new THREE.Vector3(0, 0, 1), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 1, 0) };
+    case 10: return { normal: new THREE.Vector3(0, 0, -1), u: new THREE.Vector3(0, 1, 0), v: new THREE.Vector3(1, 0, 0) };
+    default: return { normal: new THREE.Vector3(0, 1, 0), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 0, 1) };
+  }
+}
+function boxHalfExtentAlongAxis(axis: THREE.Vector3, args: number[]): number {
+  const hw = (args[0] || 1) / 2, hh = (args[1] || 1) / 2, hd = (args[2] || 1) / 2;
+  if (Math.abs(axis.x) > 0.5) return hw;
+  if (Math.abs(axis.y) > 0.5) return hh;
+  return hd;
+}
+function getOffsetSourcePoly2D(srcShape: Shape, faceKey: number): { poly2D: Pt2[]; normalLocal: THREE.Vector3; uLocal: THREE.Vector3; vLocal: THREE.Vector3; faceOriginLocal: THREE.Vector3 } {
+  const isBoxLike = srcShape.type === 'box' || srcShape.type === 'rect';
+  const isDisc = srcShape.type === 'circle' || srcShape.type === 'triangle' || srcShape.type === 'prism';
+  if (isBoxLike) {
+    const args = Array.isArray((srcShape as any).args) ? (srcShape as any).args as number[] : [1, 1, 1];
+    const { normal, u, v } = getOffsetFaceBasis(faceKey);
+    const halfU = boxHalfExtentAlongAxis(u, args);
+    const halfV = boxHalfExtentAlongAxis(v, args);
+    const halfN = boxHalfExtentAlongAxis(normal, args);
+    const poly2D: Pt2[] = [{ x: -halfU, y: -halfV }, { x: halfU, y: -halfV }, { x: halfU, y: halfV }, { x: -halfU, y: halfV }];
+    return { poly2D, normalLocal: normal, uLocal: u, vLocal: v, faceOriginLocal: normal.clone().multiplyScalar(halfN) };
+  } else if (isDisc) {
+    const args = Array.isArray((srcShape as any).args) ? (srcShape as any).args as number[] : [1, 1, 1];
+    const radius = args[0] || 1;
+    const sides = (srcShape.type === 'triangle' || srcShape.type === 'prism') ? 3 : (args[3] || 32);
+    const verts = regularPolygonVertices(radius, sides);
+    // u/v swapped (poly2D x/y swapped to match) vs the naive X/Z mapping: u,v,normal must form a
+    // RIGHT-handed basis (u x v = normal), matching the box branch's convention, or THREE's
+    // setFromRotationMatrix on makeBasis(u,v,normal) downstream produces a degenerate/reflected
+    // quaternion -- this was the source of the "90 degree vertical rotation" on circle/triangle Offset (Task #145).
+    const poly2D: Pt2[] = verts.map((p: [number, number]) => ({ x: p[1], y: p[0] }));
+    const height = args[2] || 1;
+    const normal = new THREE.Vector3(0, 0, 1); // Task #153 fix: extrusion/cap axis for poly shapes is local Z (matches Push/Pull's isCap check on localNormal.z), not Y -- Y is already used by vLocal for the in-plane vertex Y component, so reusing it here made normalLocal===vLocal, producing a degenerate (singular) basis matrix in makeBasis() whenever Offset was applied to an existing poly/ring shape (double-offset) or a native poly-tool-drawn shape. That corrupted the resulting ring's quaternion, which explains the scale-like Push/Pull distortion Craig saw on poly-tool and re-offset cases.
+    return { poly2D, normalLocal: normal, uLocal: new THREE.Vector3(0, 0, 1), vLocal: new THREE.Vector3(1, 0, 0), faceOriginLocal: normal.clone().multiplyScalar(height / 2) };
+  } else {
+    const vertices = (((srcShape as any).args && (srcShape as any).args.vertices) || []) as [number, number][];
+    const poly2D: Pt2[] = vertices.map((v: [number, number]) => ({ x: v[0], y: v[1] }));
+    const height = (((srcShape as any).args && (srcShape as any).args.height) || 0);
+    const normal = new THREE.Vector3(0, 0, 1);
+    return { poly2D, normalLocal: normal, uLocal: new THREE.Vector3(1, 0, 0), vLocal: new THREE.Vector3(0, 1, 0), faceOriginLocal: normal.clone().multiplyScalar(height / 2) };
+  }
+}
+
 function MiniShapeMesh({ shape }: { shape: Shape }) {
   if (shape.hidden) return null;
   const args = Array.isArray(shape.args) ? (shape.args as number[]) : [];
@@ -496,6 +619,13 @@ function MiniShapeMesh({ shape }: { shape: Shape }) {
           <meshStandardMaterial {...materialProps} />
         </mesh>
       );
+    case 'custom':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <CustomGeometry shape={shape} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
     default:
       return null;
   }
@@ -530,6 +660,16 @@ function computeMiniViewBounds(shapes: Shape[]) {
       case 'dome':
         r = args[0] || 1;
         break;
+      case 'custom': {
+        try {
+          const geo = new THREE.BufferGeometryLoader().parse((shape as any).geometryData);
+          geo.computeBoundingSphere();
+          r = geo.boundingSphere ? geo.boundingSphere.radius : 1;
+        } catch {
+          r = 1;
+        }
+        break;
+      }
       default:
         r = 1;
     }
@@ -550,7 +690,7 @@ function computeMiniViewBounds(shapes: Shape[]) {
 }
 
 function MiniScene({ view }: { view: 'top' | 'front' | 'right' }) {
-  const { shapes, theme } = useApp();
+  const { shapes, theme, activeTool } = useApp();
   const { center, radius } = React.useMemo(() => computeMiniViewBounds(shapes), [shapes]);
   const dist = radius * 2.2 + 4;
   const camPos: [number, number, number] =
@@ -562,7 +702,18 @@ function MiniScene({ view }: { view: 'top' | 'front' | 'right' }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={camPos} fov={35} />
-      <OrbitControls target={target} enableRotate={false} enablePan={true} enableZoom={true} />
+      <OrbitControls
+        target={target}
+        enableRotate={false}
+        enablePan={true}
+        enableZoom={true}
+        zoomToCursor
+        mouseButtons={{
+          LEFT: activeTool === 'pan' ? THREE.MOUSE.PAN : (activeTool === 'zoom' ? THREE.MOUSE.DOLLY : null),
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN
+        }}
+      />
       <ambientLight intensity={0.8} />
       <directionalLight position={[10, 20, 10]} intensity={0.7} />
       <gridHelper args={[gridSize, 60, theme === 'dark' ? '#444444' : '#cccccc', theme === 'dark' ? '#2a2a2a' : '#e5e5e5']} />
@@ -769,6 +920,10 @@ function Scene() {
     autoOrbitEnabled,
     orbitRotationSpeed,
     isAIGenerateOpen,
+    edgeLinesEnabled,
+    edgeLinesColor,
+    edgeLinesOpacity,
+    edgeLinesThickness,
     showAllDimensions
   } = useApp();
 
@@ -785,6 +940,7 @@ function Scene() {
   const [arcStep, setArcStep] = useState<0 | 1 | 2>(0);
   const [offsetPreviewPoints, setOffsetPreviewPoints] = useState<THREE.Vector3[] | null>(null);
   const [offsetPreviewDistance, setOffsetPreviewDistance] = useState<number>(0);
+  const [offsetFaceKey, setOffsetFaceKey] = useState<number | null>(null);
   
   const frictionPausedUntilRef = useRef<number>(0);    const sunAnimRef = useRef<{ radius: number; angle: number } | null>(null);
   const hasReachedFrictionRef = useRef<boolean>(false);
@@ -1024,6 +1180,7 @@ function Scene() {
     faceIndex?: number;
     subFaceIndex?: number;
     parentDepth?: number;
+    edgeIndex?: number; // Task #148: which polygon boundary edge (vertices[i]->vertices[i+1]) was clicked, for single-wall push/pull
   } | null>(null);
 
   // Bevel state
@@ -1261,12 +1418,12 @@ function Scene() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isDeveloperConsoleOpen) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { if (e.key === 'Enter' && rectangleInputState.active) { e.preventDefault(); finalizeRectangleInput(); } else if (e.key === 'Escape' && rectangleInputState.active) { e.preventDefault(); setRectangleInputState({ active: false, startPoint: null, width: '', depth: '' }); } return; }
       
       const key = e.key.toLowerCase();
 
       // Numeric length entry while drawing a line (SketchUp-style inference)
-      if (['line', 'circle', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStart && !e.ctrlKey && !e.metaKey) {
+      if (['line', 'circle', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStart && !e.ctrlKey && !e.metaKey) { 
         if (/^[0-9.]$/.test(e.key)) {
           e.preventDefault();
           setTypedLength(prev => prev + e.key);
@@ -1548,6 +1705,48 @@ function Scene() {
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
 
+    if (activeTool === 'offset') {
+    e.stopPropagation();
+    if (offsetPreviewPoints && offsetPreviewPoints.length > 2 && selectedId) {
+      const srcShape = shapes.find(s => s.id === selectedId && (s.type === 'poly' || s.type === 'box' || s.type === 'rect'));
+      if (srcShape) {
+        const qArr = (srcShape as any).quaternion || [0, 0, 0, 1];
+        const quat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
+        const invQuat = quat.clone().invert();
+        const origin = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
+        const isBoxLike = srcShape.type === 'box' || srcShape.type === 'rect';
+        const localPts = offsetPreviewPoints.slice(0, -1).map((p: THREE.Vector3) => p.clone().sub(origin).applyQuaternion(invQuat));
+        const newId = Math.random().toString(36).substring(2, 9);
+        let newShape: Shape;
+        if (isBoxLike) {
+          const xs = localPts.map((p: THREE.Vector3) => p.x);
+          const zs = localPts.map((p: THREE.Vector3) => p.z);
+          const newW = Math.max(...xs) - Math.min(...xs);
+          const newD = Math.max(...zs) - Math.min(...zs);
+          const origArgs = Array.isArray((srcShape as any).args) ? (srcShape as any).args as number[] : [1, 1, 1];
+          newShape = {
+            ...srcShape,
+            id: newId,
+            args: [Math.max(newW, 0.01), origArgs[1] || 1, Math.max(newD, 0.01)]
+          } as Shape;
+        } else {
+          const vertices = localPts.map((p: THREE.Vector3) => [p.x, p.y] as [number, number]);
+          newShape = {
+            ...srcShape,
+            id: newId,
+            args: { ...(srcShape.args as any), vertices }
+          };
+        }
+        addShape(newShape);
+        setSelectedId(newId);
+        setSelectedIds([newId]);
+      }
+    }
+    setOffsetPreviewPoints(null);
+    setOffsetPreviewDistance(null);
+    setMeasurements('');
+    return;
+  }
     if (activeTool === 'poly') {
       e.stopPropagation();
       
@@ -1793,36 +1992,56 @@ function Scene() {
       setArcBulge(point);
     }
 
-    if (activeTool === 'offset' && selectedId) {
-      const srcShape = shapes.find(s => s.id === selectedId && s.type === 'poly');
-      if (srcShape) {
-        const origin = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
-        const qArr = srcShape.quaternion || [0, 0, 0, 1];
-        const quat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
-        const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(quat);
-        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, origin);
-        const hit = new THREE.Vector3();
-        if (raycaster.ray.intersectPlane(plane, hit)) {
-          const invQuat = quat.clone().invert();
-          const local = hit.clone().sub(origin).applyQuaternion(invQuat);
-          const poly2D = (srcShape.args.vertices as [number, number][]).map((v: [number, number]) => ({ x: v[0], y: v[1] }));
-          const cursorLocal = { x: local.x, y: local.y };
-          const inside = pointInPolygon2D(cursorLocal, poly2D);
-          const dist = distanceToPolygonEdges2D(cursorLocal, poly2D);
-          const signedDist = inside ? -dist : dist;
-          const offsetPoly = computeOffsetPolygon(poly2D, signedDist);
-          const worldPts = offsetPoly.map(p => new THREE.Vector3(p.x, p.y, 0).applyQuaternion(quat).add(origin));
-          if (worldPts.length > 0) worldPts.push(worldPts[0].clone());
-          setOffsetPreviewPoints(worldPts);
-          setOffsetPreviewDistance(signedDist);
-          setMeasurements(`Offset: ${formatValue(Math.abs(signedDist), unit, 2)}${inside ? ' (inward)' : ' (outward)'} - click to confirm.`);
+    if (activeTool === 'offset') {
+        const evObj: any = (e as any).object;
+        const evId = evObj && evObj.userData && evObj.userData.isShape ? evObj.userData.id : null;
+        if (evId && evId !== selectedId) {
+          const rcShape = shapes.find(s => s.id === evId && (s.type === 'poly' || s.type === 'box' || s.type === 'rect' || s.type === 'circle' || s.type === 'triangle' || s.type === 'prism'));
+          if (rcShape) { setSelectedId(evId); setSelectedIds([evId]); }
         }
-      } else {
-        setOffsetPreviewPoints(null);
       }
-    }
-
-    if (activeTool === 'poly' && polyPlane && polyNormal) {
+      if (activeTool === 'offset' && selectedId) {
+        const srcShape = shapes.find(s => s.id === selectedId && (s.type === 'poly' || s.type === 'box' || s.type === 'rect' || s.type === 'circle' || s.type === 'triangle' || s.type === 'prism'));
+        if (srcShape) {
+          const qArr = (srcShape as any).quaternion || [0, 0, 0, 1];
+          const baseQuat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
+          const center = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
+          const isBoxLike = srcShape.type === 'box' || srcShape.type === 'rect';
+          let faceKey = 4;
+          if (isBoxLike) {
+            const evObj2: any = (e as any).object;
+            const isSelfHover = evObj2 && evObj2.userData && evObj2.userData.id === srcShape.id;
+            const fi = isSelfHover ? (e as any).faceIndex : undefined;
+            faceKey = typeof fi === 'number' ? Math.floor(fi / 2) * 2 : (typeof offsetFaceKey === 'number' ? offsetFaceKey : 4);
+          }
+          const { poly2D, normalLocal, uLocal, vLocal, faceOriginLocal } = getOffsetSourcePoly2D(srcShape, faceKey);
+          const normal = normalLocal.clone().applyQuaternion(baseQuat);
+          const origin = center.clone().add(faceOriginLocal.clone().applyQuaternion(baseQuat));
+          const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, origin);
+          const hit = new THREE.Vector3();
+          if (raycaster.ray.intersectPlane(plane, hit)) {
+            const rel = hit.clone().sub(origin);
+            const uWorld = uLocal.clone().applyQuaternion(baseQuat);
+            const vWorld = vLocal.clone().applyQuaternion(baseQuat);
+            const cursorLocal = { x: rel.dot(uWorld), y: rel.dot(vWorld) };
+            const inside = pointInPolygon2D(cursorLocal, poly2D);
+            const dist = distanceToPolygonEdges2D(cursorLocal, poly2D);
+            const signedDist = inside ? -dist : dist;
+            const offsetPoly = computeOffsetPolygon(poly2D, signedDist);
+            const worldPts = offsetPoly.map(p => origin.clone().add(uWorld.clone().multiplyScalar(p.x)).add(vWorld.clone().multiplyScalar(p.y)));
+            if (worldPts.length > 0) worldPts.push(worldPts[0].clone());
+            setOffsetPreviewPoints(worldPts);
+            setOffsetPreviewDistance(signedDist);
+            setOffsetFaceKey(faceKey);
+            setMeasurements(`Offset: ${formatValue(Math.abs(signedDist), unit, 2)}${inside ? ' (inward)' : ' (outward)'} - click to confirm.`);
+          } else {
+            setOffsetPreviewPoints(null);
+          }
+        } else {
+          setOffsetPreviewPoints(null);
+        }
+      }
+      if (activeTool === 'poly' && polyPlane && polyNormal) {
       const ray = raycaster.ray;
       const target = new THREE.Vector3();
       if (ray.intersectPlane(polyPlane, target)) {
@@ -2175,24 +2394,51 @@ function Scene() {
             newPos[1] = pushPullState.initialPos[1] + (dist * pushPullState.normal.y) / 2;
             newPos[2] = pushPullState.initialPos[2] + (dist * pushPullState.normal.z) / 2;
           } else {
-            // Extruding a side of a polygon - scale the vertices uniformly (like circle radius)
-            // This is a simple approximation of "behaving like a circle/triangle"
-            const scale = 1 + dist / 5; // slow scaling
-            if (scale > 0.1) {
-              const vertices = (pushPullState.initialArgs as any).vertices as [number, number][];
-              // Calculate centroid for scaling
+            // Task #148: push/pull only the ONE boundary edge that was actually clicked,
+            // keeping every other vertex exactly where it was -- matching how pushing one
+            // face of a box only changes that one dimension. The previous fix (Task #140)
+            // offset every vertex outward by the same amount, which still inflated/deflated
+            // the whole polygon and looked just like the Scale tool.
+            const vertices = (pushPullState.initialArgs as any).vertices as [number, number][];
+            const ei = pushPullState.edgeIndex;
+            if (vertices && vertices.length >= 3 && ei !== undefined && ei < vertices.length) {
+              const n = vertices.length;
+              const a = vertices[ei];
+              const b = vertices[(ei + 1) % n];
+              const prev = vertices[(ei - 1 + n) % n];
+              const next2 = vertices[(ei + 2) % n];
+
+              const ex = b[0] - a[0], ey = b[1] - a[1];
+              const elen = Math.hypot(ex, ey) || 1;
+              let nx = -ey / elen, ny = ex / elen;
               let cx = 0, cy = 0;
               vertices.forEach(v => { cx += v[0]; cy += v[1]; });
-              cx /= vertices.length;
-              cy /= vertices.length;
-              
-              const newVertices = vertices.map(v => [
-                cx + (v[0] - cx) * scale,
-                cy + (v[1] - cy) * scale
-              ]);
+              cx /= n; cy /= n;
+              const midx = (a[0] + b[0]) / 2, midy = (a[1] + b[1]) / 2;
+              if (nx * (midx - cx) + ny * (midy - cy) < 0) { nx = -nx; ny = -ny; }
+
+              const a2x = a[0] + nx * dist, a2y = a[1] + ny * dist;
+
+              const intersect = (p1x: number, p1y: number, d1x: number, d1y: number, p2x: number, p2y: number, d2x: number, d2y: number, fx: number, fy: number): [number, number] => {
+                const denom = d1x * d2y - d1y * d2x;
+                if (Math.abs(denom) < 1e-9) return [fx, fy];
+                const t = ((p2x - p1x) * d2y - (p2y - p1y) * d2x) / denom;
+                return [p1x + d1x * t, p1y + d1y * t];
+              };
+
+              const prevDx = a[0] - prev[0], prevDy = a[1] - prev[1];
+              const nextDx = next2[0] - b[0], nextDy = next2[1] - b[1];
+              const newA = intersect(prev[0], prev[1], prevDx, prevDy, a2x, a2y, ex, ey, a2x, a2y);
+              const newB = intersect(b[0], b[1], nextDx, nextDy, a2x, a2y, ex, ey, a2x, a2y);
+
+              const newVertices = vertices.map((v, i) => {
+                if (i === ei) return newA;
+                if (i === (ei + 1) % n) return newB;
+                return v;
+              });
               (newArgs as any).vertices = newVertices;
             }
-          }
+        }
         } else if (pushPullState.type === 'circle' || pushPullState.type === 'triangle' || pushPullState.type === 'prism') {
         // Cylinder/Triangle prism axis is Y in Three.js default
         const isCap = Math.abs(pushPullState.localNormal.y) > 0.9;
@@ -2410,6 +2656,24 @@ function Scene() {
           opacity: activePBR.opacity
         });
       }
+      if (previewShape && previewShape.type === 'line' && drawingNormal) {
+        const lineQuat = new THREE.Quaternion(previewShape.quaternion[0], previewShape.quaternion[1], previewShape.quaternion[2], previewShape.quaternion[3]);
+        const dir = new THREE.Vector3(0, 1, 0).applyQuaternion(lineQuat);
+        const mid = new THREE.Vector3(previewShape.position[0], previewShape.position[1], previewShape.position[2]);
+        const lineArgs = previewShape.args as number[];
+        const halfLen = (Array.isArray(lineArgs) ? lineArgs[2] : 0) / 2;
+        const lp1 = mid.clone().addScaledVector(dir, -halfLen);
+        const lp2 = mid.clone().addScaledVector(dir, halfLen);
+        const crossing = tryAutoDivideOnLineCrossing(lp1, lp2, drawingNormal.clone(), shapes);
+        if (crossing) {
+          const otherIdx = crossing.faceIdx % 2 === 0 ? crossing.faceIdx + 1 : crossing.faceIdx - 1;
+          setShapes(prev => prev.map(s => {
+            if (s.id !== crossing.shapeId) return s;
+            const sd = s.surfaceDivisions || {};
+            return { ...s, surfaceDivisions: { ...sd, [crossing.faceIdx]: [crossing.gridX, crossing.gridY], [otherIdx]: [crossing.gridX, crossing.gridY] } };
+          }));
+        }
+      }
       
       setDrawingStart(null);
       setDrawingNormal(null);
@@ -2426,6 +2690,18 @@ function Scene() {
         // dist here is the movement of the center. The face movement is 2x this for boxes.
         const centerDist = currentPos.distanceTo(initialPos) * (currentPos.clone().sub(initialPos).dot(pushPullState.normal) >= 0 ? 1 : -1);
         const faceDist = pushPullState.type === 'box' || pushPullState.type === 'rect' ? centerDist * 2 : centerDist;
+
+        // Task #158: click-to-start / click-to-commit support, alongside the existing
+        // click-and-drag gesture. If the mouse barely moved between down and up (a plain
+        // click, not a drag) and we haven't already armed this gesture, don't finalize yet --
+        // arm it and keep pushPullState alive so hovering continues to live-preview the push,
+        // and the NEXT click (handled in handleMeshPointerDown below) commits it. A real
+        // click-and-drag still finalizes immediately here since faceDist is already non-trivial
+        // by the time the button is released.
+        if (Math.abs(faceDist) < 0.02 && !pushPullState.clickCommitArmed) {
+          setPushPullState({ ...pushPullState, clickCommitArmed: true });
+          return;
+        }
 
         if (pushPullState.isSubFace && pushPullState.parentShapeId) {
           // Heal Rule: If pushed face becomes coplanar with back face (faceDist = -parentDepth)
@@ -2536,25 +2812,83 @@ function Scene() {
       }
       setSelectedLightId(null);
     } else if (activeTool === 'paint') {
-      if (subFaceIndex !== undefined) {
-        // Apply to sub-face
-        const key = `${e.faceIndex}-${subFaceIndex}`;
-        setShapes(prev => prev.map(s => {
-          if (s.id === id) {
-            return {
-              ...s,
-              surfaceMaterials: {
-                ...(s.surfaceMaterials || {}),
-                [key]: activeMaterial
-              }
-            };
-          }
-          return s;
-        }));
-      } else {
-        // Apply to whole object
-        updateShapeColor(id, activeMaterial, activePBR);
+    if (!e.shiftKey && subFaceIndex !== undefined) {
+      // Apply to sub-face
+      const key = `${e.faceIndex}-${subFaceIndex}`;
+      setShapes(prev => prev.map(s => {
+        if (s.id === id) {
+          return {
+            ...s,
+            surfaceMaterials: {
+              ...(s.surfaceMaterials || {}),
+              [key]: activeMaterial
+            }
+          };
+        }
+        return s;
+      }));
+    } else if (!e.shiftKey && shape && shape.type === 'box' && !shape.bevelAmount && e.faceIndex !== undefined) {
+      // Apply to a single box face (each face = 2 triangles; normalize to the even index the renderer expects)
+      const faceKey = Math.floor(e.faceIndex / 2) * 2;
+      setShapes(prev => prev.map(s => {
+        if (s.id === id) {
+          return {
+            ...s,
+            surfaceMaterials: {
+              ...(s.surfaceMaterials || {}),
+              [faceKey]: activeMaterial
+            }
+          };
+        }
+        return s;
+      }));
+    } else {
+      // Apply to whole object (default for shapes without per-face support, or forced via Shift+click)
+      updateShapeColor(id, activeMaterial, activePBR);
+    }
+  } else if (activeTool === 'offset') {
+      if (offsetPreviewPoints && offsetPreviewPoints.length > 2 && selectedId) {
+        const srcShape = shapes.find(s => s.id === selectedId && (s.type === 'poly' || s.type === 'box' || s.type === 'rect' || s.type === 'circle' || s.type === 'triangle' || s.type === 'prism'));
+        if (srcShape) {
+          const qArr = (srcShape as any).quaternion || [0, 0, 0, 1];
+          const baseQuat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
+          const center = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
+          const isBoxLike = srcShape.type === 'box' || srcShape.type === 'rect';
+      const isSolidType = isBoxLike || srcShape.type === 'circle' || srcShape.type === 'triangle' || srcShape.type === 'prism';
+          const faceKey = isBoxLike ? (typeof offsetFaceKey === 'number' ? offsetFaceKey : 4) : 4;
+          const { poly2D: srcPoly2D, normalLocal, uLocal, vLocal, faceOriginLocal } = getOffsetSourcePoly2D(srcShape, faceKey);
+      // Only keep the original solid underneath the new ring/inner when it is a genuinely thick 3D
+      // object (e.g. offsetting one face of an already-extruded box/prism) -- for a flat, freshly-drawn
+      // primitive (the default ~0.01 thickness) keeping it around just sits a nearly-coincident duplicate
+      // under the ring, which raycasting can hit instead of the ring/inner (Task #147: hover highlight
+      // showing the whole surface, and losing the ability to hover/push-pull the offset ring's inner face).
+      const isSolid = isSolidType && faceOriginLocal.length() > 0.05;
+          const normalWorld = normalLocal.clone().applyQuaternion(baseQuat);
+          const uWorld = uLocal.clone().applyQuaternion(baseQuat);
+          const vWorld = vLocal.clone().applyQuaternion(baseQuat);
+          const faceOrigin = center.clone().add(faceOriginLocal.clone().applyQuaternion(baseQuat));
+          const innerPts2D: [number, number][] = offsetPreviewPoints.slice(0, -1).map((p: THREE.Vector3) => { const rel = p.clone().sub(faceOrigin); return [rel.dot(uWorld), rel.dot(vWorld)] as [number, number]; });
+          const outerPts2D: [number, number][] = srcPoly2D.map(p => [p.x, p.y] as [number, number]);
+          const signedAreaOf = (pts: [number, number][]) => { let a = 0; for (let i = 0; i < pts.length; i++) { const p1 = pts[i], p2 = pts[(i + 1) % pts.length]; a += p1[0] * p2[1] - p2[0] * p1[1]; } return a / 2; };
+          const holePts = ((signedAreaOf(innerPts2D) < 0) === (signedAreaOf(outerPts2D) < 0)) ? [...innerPts2D].reverse() : innerPts2D;
+          const overlayOffset = isSolid ? 0.003 : 0;
+          const overlayPos = faceOrigin.clone().add(normalWorld.clone().multiplyScalar(overlayOffset));
+          const ringQuat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(uWorld, vWorld, normalWorld));
+          const ringId = Math.random().toString(36).substring(2, 9);
+          const innerId = Math.random().toString(36).substring(2, 9);
+          const ringShape: Shape = { ...srcShape, id: ringId, type: 'poly', position: [overlayPos.x, overlayPos.y, overlayPos.z], quaternion: [ringQuat.x, ringQuat.y, ringQuat.z, ringQuat.w], bevelAmount: 0, args: { vertices: outerPts2D, height: 0, holes: [holePts] } };
+          const innerShape: Shape = { ...srcShape, id: innerId, type: 'poly', position: [overlayPos.x, overlayPos.y, overlayPos.z], quaternion: [ringQuat.x, ringQuat.y, ringQuat.z, ringQuat.w], bevelAmount: 0, args: { vertices: innerPts2D, height: 0 } };
+          if (!isSolid) { removeShape(selectedId); }
+          addShape(ringShape);
+          addShape(innerShape);
+          setSelectedId(innerId);
+          setSelectedIds([innerId]);
+        }
       }
+      setOffsetPreviewPoints(null);
+      setOffsetPreviewDistance(null);
+      setOffsetFaceKey(null);
+      setMeasurements('');
     } else if (activeTool === 'eraser') {
       if (subFaceIndex !== undefined) {
         const key = `${e.faceIndex}-${subFaceIndex}`;
@@ -2673,6 +3007,14 @@ function Scene() {
        return;
     }
     
+    // Task #158: if a push/pull gesture is already armed (waiting for a second click
+    // to commit, per the click-to-start/click-to-commit UX below), treat this next click
+    // as the commit rather than starting a brand new push/pull from scratch.
+    if (activeTool === 'pushpull' && pushPullState && (pushPullState as any).clickCommitArmed) {
+      e.stopPropagation();
+      handlePointerUp(e as any);
+      return;
+    }
     if (activeTool === 'pushpull') {
       e.stopPropagation();
       
@@ -2824,6 +3166,31 @@ function Scene() {
         return;
       }
 
+      // Task #148: if this is a poly-type side wall (not a top/bottom cap), figure out
+      // which boundary edge was actually clicked so Push/Pull can move just that one
+      // wall -- matching how pushing one face of a box only changes that one dimension,
+      // instead of inflating/deflating the whole polygon (which looked like the Scale tool).
+      let clickedEdgeIndex: number | undefined = undefined;
+      if (shape.type === 'poly' && Math.abs(localNormal.z) <= 0.9 && (shape.args as any)?.vertices) {
+        const invQuat = new THREE.Quaternion(...(shape.quaternion || [0, 0, 0, 1])).invert();
+        const localHit = e.point.clone().sub(new THREE.Vector3(...shape.position)).applyQuaternion(invQuat);
+        const verts = (shape.args as any).vertices as [number, number][];
+        let bestDist = Infinity, bestIdx = 0;
+        for (let i = 0; i < verts.length; i++) {
+          const a = verts[i], b = verts[(i + 1) % verts.length];
+          const abx = b[0] - a[0], aby = b[1] - a[1];
+          const apx = localHit.x - a[0], apy = localHit.y - a[1];
+          const abLen2 = abx * abx + aby * aby || 1;
+          let t = (apx * abx + apy * aby) / abLen2;
+          t = Math.max(0, Math.min(1, t));
+          const cx = a[0] + t * abx, cy = a[1] + t * aby;
+          const dx = localHit.x - cx, dy = localHit.y - cy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestDist) { bestDist = d2; bestIdx = i; }
+        }
+        clickedEdgeIndex = bestIdx;
+      }
+
       setPushPullState({
         id: shape.id,
         type: shape.type,
@@ -2831,7 +3198,8 @@ function Scene() {
         initialArgs: shape.args,
         normal: worldNormal,
         localNormal: localNormal,
-        startPoint: e.point.clone()
+        startPoint: e.point.clone(),
+        edgeIndex: clickedEdgeIndex
       });
     } else if (activeTool === 'bevel') {
       e.stopPropagation();
@@ -3196,6 +3564,13 @@ function Scene() {
 
   return (
     <>
+      <Html fullscreen style={{ pointerEvents: 'none' }}>
+        {pushPullState && (
+          <div style={{position:'absolute', top:8, left:8, zIndex:99999, background:'rgba(220,0,0,0.92)', color:'#fff', padding:'6px 10px', fontSize:11, fontFamily:'monospace', maxWidth:500, wordBreak:'break-all'}}>
+            PPDEBUG: {JSON.stringify(pushPullState)}
+          </div>
+        )}
+      </Html>
       <PerspectiveCamera 
         makeDefault 
         position={defaultCameraPosition} 
@@ -3204,6 +3579,7 @@ function Scene() {
       />
       <OrbitControls 
         makeDefault 
+        zoomToCursor
         autoRotate={autoOrbitEnabled}
         autoRotateSpeed={orbitRotationSpeed * 2}
         ref={(ref) => { 
@@ -3876,6 +4252,12 @@ function Scene() {
               {materialElements}
               {selectionHighlight}
               {subtractHighlight}
+              {/* Task #149: SketchUp-style dark edge lines between adjacent faces */}
+              {edgeLinesEnabled && (
+                  <Edges threshold={15} renderOrder={2}>
+                    <lineBasicMaterial color={edgeLinesColor} transparent opacity={edgeLinesOpacity} linewidth={edgeLinesThickness} depthTest={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
+                  </Edges>
+                )}
             </RoundedBox>
           );
         }
@@ -3909,7 +4291,7 @@ function Scene() {
           ) : shape.type === 'dome' ? (
             <sphereGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 32, 32]) as any} />
           ) : shape.type === 'poly' ? (
-            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height || 1} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} />
+            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 1} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={(shape.args as any)?.holes} />
           ) : shape.type === 'custom' ? (
             <CustomGeometry shape={shape} />
           ) : (
@@ -3973,6 +4355,12 @@ function Scene() {
           )}
           {selectionHighlight}
           {subtractHighlight}
+          {/* Task #149: SketchUp-style dark edge lines between adjacent faces */}
+          {edgeLinesEnabled && (
+                  <Edges threshold={15} renderOrder={2}>
+                    <lineBasicMaterial color={edgeLinesColor} transparent opacity={edgeLinesOpacity} linewidth={edgeLinesThickness} depthTest={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
+                  </Edges>
+                )}
         </mesh>
       );
     })}
@@ -4265,7 +4653,8 @@ function EnvironmentLighting() {
     skybox, 
     skyboxBlur, 
     environmentIntensity, 
-    skyboxRotation 
+    skyboxRotation,
+    theme
   } = useApp();
   const { gl, scene } = useThree();
 
@@ -4285,7 +4674,7 @@ function EnvironmentLighting() {
   if (skybox === 'none' || !isHDRSupported) {
     return (
       <>
-        {skybox === 'none' ? <color attach="background" args={['#2B2B2B']} /> : null}
+        {skybox === 'none' ? <color attach="background" args={[theme === 'light' ? '#e5e5e5' : '#2B2B2B']} /> : null}
         <hemisphereLight intensity={0.5} groundColor="#444444" />
       </>
     );
@@ -4639,7 +5028,7 @@ function SurfaceHighlight({ shapeId, faceIndex, subFaceIndex }: { shapeId: strin
       return (
         <group position={shape.position} quaternion={shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined} scale={shape.scale}>
           <mesh position={[0, 0, 0.005]}>
-            <PolyGeometry vertices={shape.args.vertices} height={0.01} />
+            <PolyGeometry vertices={shape.args.vertices} height={0.01} holes={(shape.args as any).holes} />
             <meshBasicMaterial color="#0063A3" transparent opacity={0.4} side={THREE.DoubleSide} />
           </mesh>
         </group>
@@ -4652,7 +5041,7 @@ function SurfaceHighlight({ shapeId, faceIndex, subFaceIndex }: { shapeId: strin
     return (
       <group position={shape.position} quaternion={shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined} scale={shape.scale}>
         <mesh position={[0, 0, zOffset]}>
-          <PolyGeometry vertices={shape.args.vertices} height={0.01} />
+          <PolyGeometry vertices={shape.args.vertices} height={0.01} holes={(shape.args as any).holes} />
           <meshBasicMaterial color="#0063A3" transparent opacity={0.4} side={THREE.DoubleSide} />
         </mesh>
       </group>
@@ -4769,13 +5158,13 @@ function regularPolygonVertices(radius: number, segments: number): [number, numb
   const verts: [number, number][] = [];
   const n = Math.max(3, Math.round(segments));
   for (let i = 0; i < n; i++) {
-    const angle = (i / n) * Math.PI * 2 + Math.PI / n;
+    const angle = (i / n) * Math.PI * 2; // No half-segment offset: must match THREE.CylinderGeometry's own vertex placement (theta starts at 0), or offset outlines misalign with the real triangle/circle mesh (Task #142/#143)
     verts.push([radius * Math.sin(angle), radius * Math.cos(angle)]);
   }
   return verts;
 }
 
-function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, uprightY = false }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, uprightY?: boolean }) {
+function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, uprightY = false, holes = undefined }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, uprightY?: boolean, holes?: [number, number][][] }) {
   const geometry = useMemo(() => {
     if (!vertices || vertices.length < 3) return new THREE.BufferGeometry();
     
@@ -4793,7 +5182,7 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
     for (let i = 1; i < filtered.length; i++) {
       shape.lineTo(filtered[i][0], filtered[i][1]);
     }
-    shape.closePath();
+    shape.closePath(); if (holes && holes.length > 0) { for (const holePts of holes) { if (!holePts || holePts.length < 3) continue; const path = new THREE.Path(); path.moveTo(holePts[0][0], holePts[0][1]); for (let i = 1; i < holePts.length; i++) { path.lineTo(holePts[i][0], holePts[i][1]); } path.closePath(); shape.holes.push(path); } }
     
     try {
       if (height === 0) {
@@ -4816,7 +5205,7 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
       console.error('[PolyGeometry] Failed to create geometry:', err);
       return new THREE.BufferGeometry();
     }
-  }, [vertices, height, bevelAmount, bevelSegments, uprightY]);
+  }, [vertices, height, bevelAmount, bevelSegments, uprightY, holes]);
 
   useEffect(() => {
     return () => {
@@ -5026,7 +5415,7 @@ export default function Viewport() {
                   <MiniScene view={view} />
                 </Canvas>
               )}
-              <select
+              {idx !== 0 && (<select
                 value={view}
                 onChange={(e) => {
                   const next = [...panelViews];
@@ -5035,15 +5424,15 @@ export default function Viewport() {
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 className={cn(
-                  "absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded z-10 border-none outline-none cursor-pointer appearance-none",
-                  view === 'perspective' ? "bg-trimble-blue text-white" : "bg-black/60 text-white"
-                )}
+            "absolute top-2 left-2 z-10 backdrop-blur-sm px-3 py-1.5 rounded border text-[10px] font-bold uppercase outline-none cursor-pointer appearance-none transition-all hover:bg-white/90",
+            theme === 'dark' ? "bg-gray-800/80 border-gray-700 text-gray-300" : "bg-white/80 border-gray-200 text-gray-600"
+          )}
               >
                 <option value="perspective">Perspective</option>
                 <option value="top">Top</option>
                 <option value="front">Front</option>
                 <option value="right">Right</option>
-              </select>
+              </select>)}
             </div>
           ))}
         </div>
@@ -5670,11 +6059,11 @@ export default function Viewport() {
           onClick={() => setQuadView(v => !v)}
           title="Toggle 4-way split view"
           className={cn(
-            "backdrop-blur-sm px-3 py-1.5 rounded border text-[10px] font-bold uppercase transition-all hover:bg-white/90 grid grid-cols-2 grid-rows-2 gap-0.5 w-fit",
+            "backdrop-blur-sm px-3 py-1.5 rounded border text-[10px] font-bold uppercase transition-all hover:bg-white/90 ",
             quadView ? "bg-trimble-blue border-trimble-blue text-white" : (theme === 'dark' ? "bg-gray-800/80 border-gray-700 text-gray-300" : "bg-white/80 border-gray-200 text-gray-600")
           )}
         >
-          <span className="col-span-2 -my-0.5">Split View</span>
+          <span className="">Split View</span>
         </button>
       </div>
       {isDividePopupOpen && selectedSurface && (

@@ -50,14 +50,17 @@ interface ToolButtonProps {
 }
 
 function ToolButton({ tool, icon, label }: ToolButtonProps) {
-  const { activeTool, setActiveTool, toolbarVisibility } = useApp();
+  const { activeTool, setActiveTool, toolbarVisibility, setOpenMaterialsSignal } = useApp();
   const isActive = activeTool === tool;
 
   if (toolbarVisibility[tool] === false) return null;
 
   return (
     <button
-      onClick={() => setActiveTool(tool)}
+      onClick={() => {
+        setActiveTool(tool);
+        if (tool === 'paint') setOpenMaterialsSignal((s: number) => s + 1);
+      }}
       className={cn(
         "toolbar-btn relative group",
         isActive && "toolbar-btn-active"
@@ -277,7 +280,7 @@ export default function LeftToolbar() {
       
       <ToolButton tool="select" icon={<MousePointer2 size={20} />} label="Select (Space)" />
       <ToolButton tool="eraser" icon={<Eraser size={20} />} label="Eraser (E)" />
-      <ToolButton tool="paint" icon={<PaintBucket size={20} />} label="Paint Bucket (B)" />
+      <ToolButton tool="paint" icon={<PaintBucket size={20} />} label="Paint Bucket (B) - click: face/sub-face, Shift+click: whole object" />
       <ToolButton tool="component" icon={<Box size={20} />} label="Make Component (G)" />
       
       <div className="w-8 h-px bg-gray-200 my-1" />

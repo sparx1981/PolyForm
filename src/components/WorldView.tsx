@@ -29,10 +29,16 @@ function Map3DPreview({ lat, lng, apiKey }: Map3DPreviewProps) {
   const elementRef = useRef<any>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!apiKey) return;
     let cancelled = false;
+
+    let timedOut = false;
+
+    const timeoutId = window.setTimeout(() => { if (cancelled) return; timedOut = true;
+      console.error('[WorldView] 3D Photorealistic Maps load timed out'); setErrorMsg('Loading timed out — this can happen if it briefly conflicts with the 2D preview. Click Retry to try again.'); setStatus('error'); }, 12000);
 
     const loadScript = () => {
       if ((window as any).google?.maps?.importLibrary) return Promise.resolve();
@@ -58,7 +64,8 @@ function Map3DPreview({ lat, lng, apiKey }: Map3DPreviewProps) {
     loadScript()
       .then(() => (window as any).google.maps.importLibrary('maps3d'))
       .then((lib: any) => {
-        if (cancelled || !containerRef.current) return;
+      if (cancelled || timedOut || !containerRef.current) return;
+      window.clearTimeout(timeoutId);
         const { Map3DElement } = lib;
         const el = new Map3DElement({
           center: { lat, lng, altitude: 250 },
@@ -73,17 +80,16 @@ function Map3DPreview({ lat, lng, apiKey }: Map3DPreviewProps) {
         elementRef.current = el;
         setStatus('ready');
       })
-      .catch((err: any) => {
-        if (cancelled) return;
+    .catch((err: any) => {
+        if (cancelled || timedOut) return;
+        window.clearTimeout(timeoutId);
         console.error('[WorldView] Failed to load 3D Photorealistic Maps:', err);
         setErrorMsg(err?.message || 'Unknown error');
         setStatus('error');
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [apiKey]);
+    return () => { cancelled = true; window.clearTimeout(timeoutId); };
+  }, [apiKey, retryKey]);
 
   // Re-center the 3D camera when the chosen location changes
   useEffect(() => {
@@ -116,6 +122,7 @@ function Map3DPreview({ lat, lng, apiKey }: Map3DPreviewProps) {
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 gap-2 bg-gray-100 dark:bg-gray-950">
           <span className="text-sm text-gray-400">3D Photorealistic Maps isn't available here.</span>
           <span className="text-[10px] text-gray-500">{errorMsg}</span>
+        <button onClick={() => { setStatus('loading'); setRetryKey(k => k + 1); }} className="mt-2 px-3 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors">Retry</button>
         </div>
       )}
     </div>

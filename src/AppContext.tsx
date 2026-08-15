@@ -48,6 +48,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isAIQueryOpen, setIsAIQueryOpen] = useState(false);
   const [user, setUser] = useState<any | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [openMaterialsSignal, setOpenMaterialsSignal] = useState(0);
   const [bannerColor, setBannerColor] = useState('#0063A3');
   const [customMaterials, setCustomMaterials] = useState<any[]>([]);
   const [currentModelId, setCurrentModelId] = useState<string | null>(null);
@@ -59,6 +60,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [shadowsEnabled, setShadowsEnabled] = useState(false);
   const [showLightsource, setShowLightsource] = useState(false);
   const [showAllDimensions, setShowAllDimensions] = useState(false);
+  // Task #155: SketchUp-style edge line rendering settings -- user-configurable on/off, colour, opacity.
+  const [edgeLinesEnabled, setEdgeLinesEnabled] = useState<boolean>(true);
+  const [edgeLinesColor, setEdgeLinesColor] = useState<string>('#1a1a1a');
+  const [edgeLinesOpacity, setEdgeLinesOpacity] = useState<number>(1);
+  const [edgeLinesThickness, setEdgeLinesThickness] = useState<number>(2);
   const [lightPosition, setLightPosition] = useState<[number, number, number]>([5, 5, 5]);
   const [animateSun, setAnimateSun] = useState(false);
   const [sunSpeed, setSunSpeed] = useState(1.0);
@@ -879,6 +885,8 @@ console.log("Created rectangle:", myRect.id);`);
       setUser,
       theme,
       setTheme,
+    openMaterialsSignal,
+    setOpenMaterialsSignal,
       bannerColor,
       setBannerColor,
       customMaterials,
@@ -900,6 +908,14 @@ console.log("Created rectangle:", myRect.id);`);
       setShowLightsource,
       showAllDimensions,
       setShowAllDimensions,
+      edgeLinesEnabled,
+      setEdgeLinesEnabled,
+      edgeLinesColor,
+      setEdgeLinesColor,
+      edgeLinesOpacity,
+      setEdgeLinesOpacity,
+      edgeLinesThickness,
+      setEdgeLinesThickness,
       lightPosition,
       setLightPosition: handleSetLightPosition,
       animateSun,
