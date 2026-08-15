@@ -3577,6 +3577,7 @@ function Scene() {
 
   return (
     <>
+
       <PerspectiveCamera 
         makeDefault 
         position={defaultCameraPosition} 
@@ -3710,7 +3711,7 @@ function Scene() {
           onPointerUp={handlePointerUp}
         >
           <sphereGeometry args={[1000, 16, 16]} />
-          <meshBasicMaterial transparent opacity={0} />
+          <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} />
         </mesh>
       )}
 
