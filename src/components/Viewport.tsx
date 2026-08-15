@@ -1081,7 +1081,7 @@ function Scene() {
         setDrawingOnId(null);
         setPreviewShape(null);
         setDrawingStep(0);
-        setPushPullState(null);
+        setPushPullStateSync(null);
         setAxisLock(null);
         setFaceEditMode(null);
         setSnapIndicator(null);
@@ -1182,6 +1182,14 @@ function Scene() {
     parentDepth?: number;
     edgeIndex?: number; // Task #148: which polygon boundary edge (vertices[i]->vertices[i+1]) was clicked, for single-wall push/pull
   } | null>(null);
+  // Task #158 fix: ref mirrors pushPullState synchronously so the SAME-tick pointerup
+  // right after a pointerdown-created state can see it (React state updates are async,
+  // so on a plain click the closure value in handlePointerUp would otherwise still be stale/null).
+  const pushPullStateRef = useRef(pushPullState);
+  const setPushPullStateSync = (val: any) => {
+    pushPullStateRef.current = typeof val === 'function' ? val(pushPullStateRef.current) : val;
+    setPushPullState(val);
+  };
 
   // Bevel state
   const [bevelState, setBevelState] = useState<{
@@ -1299,7 +1307,7 @@ function Scene() {
   useEffect(() => {
     // Cancel Push/Pull if tool changes
     if (activeTool !== 'pushpull') {
-      setPushPullState(null);
+      setPushPullStateSync(null);
     }
     // Cancel Rectangle Input if tool changes
     if (activeTool !== 'rectangle') {
@@ -1470,7 +1478,7 @@ function Scene() {
         setDrawingOnId(null);
         setPreviewShape(null);
         setDrawingStep(0);
-        setPushPullState(null);
+        setPushPullStateSync(null);
         setAxisLock(null);
         setFaceEditMode(null);
         setSnapIndicator(null);
@@ -2610,6 +2618,11 @@ function Scene() {
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    // Task #158 fix: use the ref (always current) instead of the closure variable.
+    // On a plain click, pointerdown creates pushPullState and pointerup fires in the
+    // same synchronous browser event tick, before React has re-rendered -- so the
+    // closure's pushPullState would still read as null/stale here without this.
+    const pushPullState = pushPullStateRef.current;
     // Detect single click for Rectangle Input
     if (activeTool === 'rectangle' && pointerDownInfo) {
       const timeDiff = Date.now() - pointerDownInfo.time;
@@ -2699,7 +2712,7 @@ function Scene() {
         // click-and-drag still finalizes immediately here since faceDist is already non-trivial
         // by the time the button is released.
         if (Math.abs(faceDist) < 0.02 && !pushPullState.clickCommitArmed) {
-          setPushPullState({ ...pushPullState, clickCommitArmed: true });
+          setPushPullStateSync({ ...pushPullState, clickCommitArmed: true });
           return;
         }
 
@@ -2745,7 +2758,7 @@ function Scene() {
           }
         }
       }
-      setPushPullState(null);
+      setPushPullStateSync(null);
       setMeasurements('');
     }
   };
@@ -3068,7 +3081,7 @@ function Scene() {
           
           addShape(newShape);
           
-          setPushPullState({
+          setPushPullStateSync({
             id: newId,
             type: 'box',
             initialPos: newShape.position,
@@ -3149,7 +3162,7 @@ function Scene() {
         
         const depth = (e.faceIndex <= 1 || e.faceIndex >= 2 && e.faceIndex <= 3) ? w : (e.faceIndex <= 7 ? h : d);
         
-        setPushPullState({
+        setPushPullStateSync({
           id: newId,
           type: 'box',
           initialPos: newShape.position,
@@ -3191,7 +3204,7 @@ function Scene() {
         clickedEdgeIndex = bestIdx;
       }
 
-      setPushPullState({
+      setPushPullStateSync({
         id: shape.id,
         type: shape.type,
         initialPos: shape.position,
@@ -3564,13 +3577,6 @@ function Scene() {
 
   return (
     <>
-      <Html fullscreen style={{ pointerEvents: 'none' }}>
-        {pushPullState && (
-          <div style={{position:'absolute', top:8, left:8, zIndex:99999, background:'rgba(220,0,0,0.92)', color:'#fff', padding:'6px 10px', fontSize:11, fontFamily:'monospace', maxWidth:500, wordBreak:'break-all'}}>
-            PPDEBUG: {JSON.stringify(pushPullState)}
-          </div>
-        )}
-      </Html>
       <PerspectiveCamera 
         makeDefault 
         position={defaultCameraPosition} 
