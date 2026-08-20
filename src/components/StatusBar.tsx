@@ -44,7 +44,12 @@ dome: 'Click and drag to draw a dome.',
 bevel: 'Click an edge to bevel it.',
 subtract: 'Click the object to keep, then click the object to subtract.',
 note: 'Click to place a note.',
-deform: 'Click and drag on the surface to deform it.'
+deform: 'Click and drag on the surface to deform it.',
+  wall: 'Click & drag or click points (90° default, hold Shift for free angles). Double-click, Enter or Esc to finish.',
+  door: 'Click on a wall to place door & cut opening (or place on ground). Move tool repositions.',
+  window: 'Click on a wall to place window & cut opening (or place on ground). Move tool repositions.',
+  step: 'Click to place an architectural step with nosing.',
+  staircase: 'Click to place a 12-step architectural staircase flight.'
 };
 
 export default function StatusBar() {

@@ -3,5 +3,8 @@
   "description": "An architectural 3D modeling workspace with WorldView geolocation mapping, human-scale precision, and advanced developer tools.",
   "requestFramePermissions": [
     "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }

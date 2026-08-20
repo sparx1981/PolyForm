@@ -111,7 +111,11 @@ export default function TopBar() {
       setIsDiagnosticLogOpen,
       diagLog,
       googleMapsApiKey,
-      setGoogleMapsApiKey
+      setGoogleMapsApiKey,
+      isArchitectureToolbarEnabled,
+      setIsArchitectureToolbarEnabled,
+      isLandscapesToolbarEnabled,
+      setIsLandscapesToolbarEnabled
     } = useApp();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -796,6 +800,19 @@ export default function TopBar() {
           <div className="space-y-3">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Interface Visibility</label>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+              <CollapsibleSection title="Toolbars" className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg px-2" defaultOpen={true}>
+                <VisibilityToggle 
+                  label="Basic Architecture Toolbar"
+                  isVisible={isArchitectureToolbarEnabled}
+                  onToggle={() => setIsArchitectureToolbarEnabled(!isArchitectureToolbarEnabled)}
+                />
+                <VisibilityToggle 
+                  label="Landscapes Toolbar"
+                  isVisible={isLandscapesToolbarEnabled}
+                  onToggle={() => setIsLandscapesToolbarEnabled(!isLandscapesToolbarEnabled)}
+                />
+              </CollapsibleSection>
+
               <CollapsibleSection title="Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
                 {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'orbit', 'pan', 'zoom', 'component'].map(tool => (
                   <VisibilityToggle 
@@ -983,8 +1000,8 @@ function VisibilityToggle({ label, isVisible, onToggle }: { label: string, isVis
   );
 }
 
-function CollapsibleSection({ title, children, className }: { title: string, children: React.ReactNode, className?: string }) {
-  const [isOpen, setIsOpen] = useState(false);
+function CollapsibleSection({ title, children, className, defaultOpen = false }: { title: string, children: React.ReactNode, className?: string, defaultOpen?: boolean }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
     <div className={cn("border-b border-gray-100 pb-2 transition-all", className)}>
       <button 

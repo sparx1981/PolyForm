@@ -28,11 +28,30 @@ import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHel
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'; import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils';
+import { 
+  createWallGeometry, 
+  createWallWithOpeningsGeometry,
+  WallOpening,
+  createDoorGeometry, 
+  createWindowGeometry, 
+  createStepGeometry, 
+  createStaircaseGeometry 
+} from '../lib/archGeometry';
+import {
+  createTreeGeometry,
+  createBushGeometry,
+  createFenceGeometry,
+  createRailingGeometry,
+  createLampGeometry,
+  createBenchGeometry,
+  createRockGeometry
+} from '../lib/landscapeGeometry';
 import { useApp } from '../AppContext';
 import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation } from '../types';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
-import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote } from 'lucide-react';
+import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers } from 'lucide-react';
+import StyleLibraryModal from './StyleLibraryModal';
 
 // Module-level texture cache: avoids re-creating (and re-downloading) a THREE.Texture
 // on every render when a material/light uses an image URL as its map. Previously each
@@ -531,21 +550,137 @@ function getOffsetSourcePoly2D(srcShape: Shape, faceKey: number): { poly2D: Pt2[
     const radius = args[0] || 1;
     const sides = (srcShape.type === 'triangle' || srcShape.type === 'prism') ? 3 : (args[3] || 32);
     const verts = regularPolygonVertices(radius, sides);
-    // u/v swapped (poly2D x/y swapped to match) vs the naive X/Z mapping: u,v,normal must form a
-    // RIGHT-handed basis (u x v = normal), matching the box branch's convention, or THREE's
-    // setFromRotationMatrix on makeBasis(u,v,normal) downstream produces a degenerate/reflected
-    // quaternion -- this was the source of the "90 degree vertical rotation" on circle/triangle Offset (Task #145).
-    const poly2D: Pt2[] = verts.map((p: [number, number]) => ({ x: p[1], y: p[0] }));
-    const height = args[2] || 1;
-    const normal = new THREE.Vector3(0, 0, 1); // Task #153 fix: extrusion/cap axis for poly shapes is local Z (matches Push/Pull's isCap check on localNormal.z), not Y -- Y is already used by vLocal for the in-plane vertex Y component, so reusing it here made normalLocal===vLocal, producing a degenerate (singular) basis matrix in makeBasis() whenever Offset was applied to an existing poly/ring shape (double-offset) or a native poly-tool-drawn shape. That corrupted the resulting ring's quaternion, which explains the scale-like Push/Pull distortion Craig saw on poly-tool and re-offset cases.
-    return { poly2D, normalLocal: normal, uLocal: new THREE.Vector3(0, 0, 1), vLocal: new THREE.Vector3(1, 0, 0), faceOriginLocal: normal.clone().multiplyScalar(height / 2) };
+    // CylinderGeometry in Three.js has top cap at local +Y, with vertices in X-Z: (r*sin(a), r*cos(a))
+    // With normal = (0,1,0), u = (1,0,0), v = (0,0,-1): u x v = (0,1,0) = normal (Right-handed basis)
+    // poly2D coordinates: x = px, y = -pz -> in 3D: x*u + y*v = (px, 0, pz)
+    const poly2D: Pt2[] = verts.map((p: [number, number]) => ({ x: p[0], y: -p[1] }));
+    const height = args[2] || 0.01;
+    const normal = new THREE.Vector3(0, 1, 0);
+    const u = new THREE.Vector3(1, 0, 0);
+    const v = new THREE.Vector3(0, 0, -1);
+    return { poly2D, normalLocal: normal, uLocal: u, vLocal: v, faceOriginLocal: normal.clone().multiplyScalar(height / 2) };
   } else {
     const vertices = (((srcShape as any).args && (srcShape as any).args.vertices) || []) as [number, number][];
     const poly2D: Pt2[] = vertices.map((v: [number, number]) => ({ x: v[0], y: v[1] }));
     const height = (((srcShape as any).args && (srcShape as any).args.height) || 0);
     const normal = new THREE.Vector3(0, 0, 1);
-    return { poly2D, normalLocal: normal, uLocal: new THREE.Vector3(1, 0, 0), vLocal: new THREE.Vector3(0, 1, 0), faceOriginLocal: normal.clone().multiplyScalar(height / 2) };
+    return { poly2D, normalLocal: normal, uLocal: new THREE.Vector3(1, 0, 0), vLocal: new THREE.Vector3(0, 1, 0), faceOriginLocal: normal.clone().multiplyScalar(height > 0 ? height / 2 : 0) };
   }
+}
+
+function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }) {
+  const args = Array.isArray(shape.args) ? (shape.args as number[]) : [];
+
+  // Compute hash of relevant openings so wall geometry only updates when its hosted openings move/change
+  const openingsHash = useMemo(() => {
+    if (shape.type !== 'wall') return '';
+    const relevant = shapes.filter(s => (s.type === 'door' || s.type === 'window') && !s.hidden);
+    return relevant.map(s => `${s.id}-${s.hostWallId}-${s.archStyle || ''}-${(s.position || []).join(',')}-${JSON.stringify(s.args)}`).join('|');
+  }, [shape.id, shape.type, shapes]);
+
+  const geometry = useMemo(() => {
+    switch (shape.type) {
+      case 'wall': {
+        const wallLength = args[0] || 3.0;
+        const wallHeight = args[1] || 2.8;
+        const wallThick = args[2] || 0.2;
+        const wallPos = new THREE.Vector3(...shape.position);
+        const wallQuat = new THREE.Quaternion(...(shape.quaternion || [0, 0, 0, 1]));
+        const invWallQuat = wallQuat.clone().invert();
+
+        const openings: WallOpening[] = [];
+        for (const s of shapes) {
+          if (s.type !== 'door' && s.type !== 'window') continue;
+          if (s.hidden) continue;
+
+          const sPos = new THREE.Vector3(...s.position);
+          const sArgs = Array.isArray(s.args) ? s.args : [1, 1, 1];
+          const sWidth = sArgs[0] || (s.type === 'door' ? 0.9 : 1.2);
+          const sHeight = sArgs[1] || (s.type === 'door' ? 2.1 : 1.2);
+          const sDepth = sArgs[2] || (s.type === 'door' ? 0.15 : 0.12);
+
+          const isHosted = s.hostWallId === shape.id;
+          const localPos = sPos.clone().sub(wallPos).applyQuaternion(invWallQuat);
+
+          // Spatial check: is the opening hosted on or overlapping this wall?
+          const inX = Math.abs(localPos.x) <= wallLength / 2 + 0.2;
+          const inY = Math.abs(localPos.y) <= wallHeight / 2 + 0.5;
+          const inZ = Math.abs(localPos.z) <= wallThick / 2 + 0.35;
+
+          if (isHosted || (inX && inY && inZ)) {
+            openings.push({
+              id: s.id,
+              type: s.type,
+              localX: localPos.x,
+              localY: localPos.y,
+              width: sWidth,
+              height: sHeight,
+              depth: sDepth
+            });
+          }
+        }
+
+        return createWallWithOpeningsGeometry(wallLength, wallHeight, wallThick, openings);
+      }
+      case 'door': {
+        const dWidth = args[0] || 0.9;
+        const dHeight = args[1] || 2.1;
+        const dDepth = args[2] || 0.15;
+        return createDoorGeometry(dWidth, dHeight, dDepth, shape.archStyle || 'flush');
+      }
+      case 'window': {
+        const wWidth = args[0] || 1.2;
+        const wHeight = args[1] || 1.2;
+        const wDepth = args[2] || 0.12;
+        return createWindowGeometry(wWidth, wHeight, wDepth, shape.archStyle || 'cross');
+      }
+      case 'step':
+        return createStepGeometry(args[0] || 1.0, args[1] || 0.18, args[2] || 0.30);
+      case 'staircase':
+        return createStaircaseGeometry(args[0] || 1.0, args[1] || 2.16, args[2] || 3.6, args[3] || 12);
+      default:
+        return new THREE.BoxGeometry(1, 1, 1);
+    }
+  }, [shape.type, shape.position, shape.quaternion, shape.archStyle, args[0], args[1], args[2], args[3], openingsHash]);
+
+  useEffect(() => {
+    return () => {
+      if (geometry) geometry.dispose();
+    };
+  }, [geometry]);
+
+  return <primitive object={geometry} attach="geometry" />;
+}
+
+function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
+  const geometry = useMemo(() => {
+    switch (shape.type) {
+      case 'tree':
+        return createTreeGeometry();
+      case 'bush':
+        return createBushGeometry();
+      case 'fence':
+        return createFenceGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.4, Array.isArray(shape.args) ? shape.args[1] : 1.1);
+      case 'railing':
+        return createRailingGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.0, Array.isArray(shape.args) ? shape.args[1] : 1.0);
+      case 'lamp':
+        return createLampGeometry(Array.isArray(shape.args) ? shape.args[1] : 3.2);
+      case 'bench':
+        return createBenchGeometry(Array.isArray(shape.args) ? shape.args[0] : 1.8);
+      case 'rock':
+        return createRockGeometry(Array.isArray(shape.args) ? shape.args[0] : 1.2);
+      default:
+        return new THREE.BoxGeometry(1, 1, 1);
+    }
+  }, [shape.type, shape.args]);
+
+  useEffect(() => {
+    return () => {
+      if (geometry) geometry.dispose();
+    };
+  }, [geometry]);
+
+  return <primitive object={geometry} attach="geometry" />;
 }
 
 function MiniShapeMesh({ shape }: { shape: Shape }) {
@@ -567,6 +702,17 @@ function MiniShapeMesh({ shape }: { shape: Shape }) {
       return (
         <mesh position={pos} quaternion={quat}>
           <boxGeometry args={[args[0] || 1, args[1] || 1, args[2] || 1]} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'wall':
+    case 'door':
+    case 'window':
+    case 'step':
+    case 'staircase':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <ArchGeometry shape={shape} />
           <meshStandardMaterial {...materialProps} />
         </mesh>
       );
@@ -623,6 +769,19 @@ function MiniShapeMesh({ shape }: { shape: Shape }) {
       return (
         <mesh position={pos} quaternion={quat}>
           <CustomGeometry shape={shape} />
+          <meshStandardMaterial {...materialProps} />
+        </mesh>
+      );
+    case 'tree':
+    case 'bush':
+    case 'fence':
+    case 'railing':
+    case 'lamp':
+    case 'bench':
+    case 'rock':
+      return (
+        <mesh position={pos} quaternion={quat}>
+          <LandscapeFeatureGeometry shape={shape} />
           <meshStandardMaterial {...materialProps} />
         </mesh>
       );
@@ -924,8 +1083,139 @@ function Scene() {
     edgeLinesColor,
     edgeLinesOpacity,
     edgeLinesThickness,
-    showAllDimensions
+    showAllDimensions,
+    landscapeSculptSettings,
+    setLandscapeSculptSettings,
+    landscapeRoadSettings,
+    setLandscapeRoadSettings
   } = useApp();
+
+  const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
+  const [sculptCursorPos, setSculptCursorPos] = useState<THREE.Vector3 | null>(null);
+  const isSculptingDragRef = useRef(false);
+
+  // Helper for applying sculpting brush deformation to a terrain shape
+  const applyTerrainSculpt = (hitPoint: THREE.Vector3, isContinuous = false) => {
+    const terrainShape = (selectedId ? shapes.find(s => s.id === selectedId && s.type === 'terrain' && s.terrainData) : null) || shapes.find(s => s.type === 'terrain' && s.terrainData);
+    if (!terrainShape || !terrainShape.terrainData) return;
+
+    const terrain = terrainShape.terrainData;
+    const { gridX, gridY, width, depth } = terrain;
+    const heights = [...terrain.heights];
+    const { mode, radius, intensity, masked } = landscapeSculptSettings;
+    const factor = isContinuous ? intensity * 0.35 : intensity * 0.8;
+
+    const terrainPos = new THREE.Vector3(...terrainShape.position);
+    // Convert world hit point to local terrain mesh coordinate
+    const localHit = hitPoint.clone().sub(terrainPos);
+
+    let modified = false;
+    for (let j = 0; j < gridY; j++) {
+      for (let i = 0; i < gridX; i++) {
+        const vx = (i / (gridX - 1) - 0.5) * width;
+        // In PlaneGeometry rotated by -PI/2 around X, Z coordinates follow this row position
+        const vz = (j / (gridY - 1) - 0.5) * depth;
+        const idx = j * gridX + i;
+        const currentH = heights[idx] !== undefined ? heights[idx] : 0;
+
+        const dist = Math.hypot(vx - localHit.x, vz - localHit.z);
+        if (dist <= radius) {
+          // If masked mode is enabled, skip boundary edges
+          if (masked && (i <= 1 || i >= gridX - 2 || j <= 1 || j >= gridY - 2)) {
+            continue;
+          }
+
+          // Smooth radial falloff (cosine kernel)
+          const falloff = 0.5 * (1 + Math.cos((Math.PI * dist) / radius));
+          const delta = factor * falloff;
+
+          if (mode === 'push') {
+            heights[idx] = Math.max(-25, currentH - delta);
+          } else if (mode === 'pull') {
+            heights[idx] = Math.min(50, currentH + delta);
+          } else if (mode === 'smooth') {
+            // Average with neighboring points
+            let sum = 0;
+            let count = 0;
+            for (let dj = -1; dj <= 1; dj++) {
+              for (let di = -1; di <= 1; di++) {
+                const ni = i + di;
+                const nj = j + dj;
+                if (ni >= 0 && ni < gridX && nj >= 0 && nj < gridY) {
+                  sum += heights[nj * gridX + ni];
+                  count++;
+                }
+              }
+            }
+            const avg = count > 0 ? sum / count : currentH;
+            heights[idx] = THREE.MathUtils.lerp(currentH, avg, Math.min(1, delta * 2.5));
+          } else if (mode === 'flatten') {
+            const targetElevation = Math.max(-15, Math.min(50, localHit.y));
+            heights[idx] = THREE.MathUtils.lerp(currentH, targetElevation, Math.min(1, delta * 2.5));
+          } else if (mode === 'pinch') {
+            const targetElevation = Math.max(-15, Math.min(50, localHit.y));
+            const direction = currentH >= targetElevation ? 1 : -1;
+            heights[idx] = THREE.MathUtils.lerp(currentH, currentH + direction * delta * 0.8, 0.5);
+          }
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      setShapes(prev => prev.map(s => {
+        if (s.id === terrainShape.id) {
+          return {
+            ...s,
+            terrainData: {
+              ...s.terrainData!,
+              heights
+            }
+          };
+        }
+        return s;
+      }));
+    }
+  };
+
+  const finalizeRoadCreation = (pts: THREE.Vector3[]) => {
+    if (pts.length < 2) {
+      setRoadPoints([]);
+      return;
+    }
+
+    const { width, embankment, roadColor } = landscapeRoadSettings;
+
+    // Create a 3D road strip following the plotted path
+    const curvePoints = pts.map(p => [p.x, p.y + 0.05, p.z] as [number, number, number]);
+    const totalDist = pts.reduce((acc, p, idx) => {
+      if (idx === 0) return 0;
+      return acc + p.distanceTo(pts[idx - 1]);
+    }, 0);
+
+    const roadShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: `Road Pathway (${formatValue(totalDist, unit, 1)})`,
+      type: 'custom',
+      position: [0, 0, 0],
+      quaternion: [0, 0, 0, 1],
+      color: roadColor,
+      args: {
+        isRoad: true,
+        path: curvePoints,
+        width,
+        embankment
+      },
+      roughness: 0.8,
+      metalness: 0.1
+    };
+
+    addShape(roadShape);
+    commitHistory();
+    setRoadPoints([]);
+    setMeasurements(`Road created: ${formatValue(totalDist, unit, 1)} long, ${formatValue(width, unit, 1)} wide`);
+    setConsoleOutput(prev => [...prev, `[Landscapes] Created road pathway (${formatValue(totalDist, unit, 1)}) with ${pts.length} waypoints`]);
+  };
 
   // Measuring Tape tool state: tapeStart persists once the user clicks the first point;
   // tapeEnd tracks the live cursor position for the preview line/label while the second
@@ -942,7 +1232,9 @@ function Scene() {
   const [offsetPreviewDistance, setOffsetPreviewDistance] = useState<number>(0);
   const [offsetFaceKey, setOffsetFaceKey] = useState<number | null>(null);
   
-  const frictionPausedUntilRef = useRef<number>(0);    const sunAnimRef = useRef<{ radius: number; angle: number } | null>(null);
+  const frictionPausedUntilRef = useRef<number>(0);
+  const sunAnimRef = useRef<{ radius: number; angle: number } | null>(null);
+  const pointerUpHandledRef = useRef<boolean>(false);
   const hasReachedFrictionRef = useRef<boolean>(false);
   const lastValidPosRef = useRef<THREE.Vector3 | null>(null);
   const { raycaster, mouse, camera, scene, gl } = useThree();
@@ -1159,6 +1451,12 @@ function Scene() {
   const [polyCandidatePos, setPolyCandidatePos] = useState<THREE.Vector3 | null>(null);
   const [polyPlaneOnId, setPolyPlaneOnId] = useState<string | null>(null);
 
+  const [wallVertices, setWallVertices] = useState<THREE.Vector3[]>([]);
+  const [wallPlane, setWallPlane] = useState<THREE.Plane | null>(null);
+  const [wallCandidatePos, setWallCandidatePos] = useState<THREE.Vector3 | null>(null);
+  const [wallHoveredVertex, setWallHoveredVertex] = useState<number | null>(null);
+  const wallDragStartRef = useRef<{ point: THREE.Vector3; time: number } | null>(null);
+
   const [previewShape, setPreviewShape] = useState<{ 
     type: Shape['type'], 
     position: [number, number, number], 
@@ -1180,7 +1478,9 @@ function Scene() {
     faceIndex?: number;
     subFaceIndex?: number;
     parentDepth?: number;
+    customBounds?: { minU: number; maxU: number; minV: number; maxV: number };
     edgeIndex?: number; // Task #148: which polygon boundary edge (vertices[i]->vertices[i+1]) was clicked, for single-wall push/pull
+    clickCommitArmed?: boolean;
   } | null>(null);
   // Task #158 fix: ref mirrors pushPullState synchronously so the SAME-tick pointerup
   // right after a pointerdown-created state can see it (React state updates are async,
@@ -1423,6 +1723,45 @@ function Scene() {
     recordAction(`sdk.createPoly({ vertices: ${JSON.stringify(newShape.args.vertices)} });`);
   }, [polyVertices, polyNormal, polyPlaneOnId, activeMaterial, activePBR, addShape, commitHistory, setActiveTool, setSelectedId, diagLog, recordAction, setConsoleOutput, setPolyVertices, setPolyPlane, setPolyNormal, setPolyCandidatePos]);
 
+  const finalizeWallChain = useCallback(() => {
+    setWallVertices([]);
+    setWallPlane(null);
+    setWallCandidatePos(null);
+    setWallHoveredVertex(null);
+    setMeasurements('');
+    wallDragStartRef.current = null;
+  }, [setMeasurements]);
+
+  const createWallSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, wallHeight = 2.8, wallThickness = 0.2) => {
+    const dist = pA.distanceTo(pB);
+    if (dist < 0.1) return null;
+
+    const center = pA.clone().lerp(pB, 0.5);
+    center.y = Math.max(pA.y, pB.y) + wallHeight / 2;
+
+    const dir = new THREE.Vector3().subVectors(pB, pA);
+    const angle = Math.atan2(dir.z, dir.x);
+    const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+
+    const newShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      type: 'wall',
+      position: [center.x, center.y, center.z],
+      quaternion: [quat.x, quat.y, quat.z, quat.w],
+      args: [dist, wallHeight, wallThickness],
+      color: activeMaterial || '#e2e8f0',
+      roughness: activePBR.roughness,
+      metalness: activePBR.metalness,
+      opacity: activePBR.opacity,
+      name: `Wall ${shapes.filter(s => s.type === 'wall').length + 1}`
+    };
+
+    addShape(newShape);
+    commitHistory();
+    recordAction(`sdk.createWall({ length: ${dist.toFixed(2)}, height: ${wallHeight.toFixed(2)}, thickness: ${wallThickness.toFixed(2)}, position: [${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}] });`);
+    return newShape;
+  }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isDeveloperConsoleOpen) return;
@@ -1449,7 +1788,13 @@ function Scene() {
       if (e.ctrlKey || e.metaKey) {
         if (key === 'z') {
           e.preventDefault();
-          if (activeTool === 'poly' && polyVertices.length > 0) {
+          if (activeTool === 'wall' && wallVertices.length > 0) {
+            setWallVertices(prev => prev.slice(0, -1));
+            if (wallVertices.length <= 1) {
+              finalizeWallChain();
+            }
+            return;
+          } else if (activeTool === 'poly' && polyVertices.length > 0) {
             setPolyVertices(prev => prev.slice(0, -1));
             if (polyVertices.length === 1) {
               setPolyPlane(null);
@@ -1469,6 +1814,9 @@ function Scene() {
 
       // Escape
       if (e.key === 'Escape') {
+        if (activeTool === 'wall' && wallVertices.length > 0) {
+          diagLog('TOOL', 'Wall drawing cancelled', { vertexCount: wallVertices.length });
+        }
         if (activeTool === 'poly' && polyVertices.length > 0) {
           diagLog('TOOL', 'Poly drawing cancelled', { vertexCount: polyVertices.length });
         }
@@ -1490,6 +1838,11 @@ function Scene() {
         setPolyPlane(null);
         setPolyNormal(null);
         setPolyCandidatePos(null);
+        setWallVertices([]);
+        setWallPlane(null);
+        setWallCandidatePos(null);
+        setWallHoveredVertex(null);
+        wallDragStartRef.current = null;
         setArcStart(null);
         setArcEnd(null);
         setArcBulge(null);
@@ -1499,6 +1852,11 @@ function Scene() {
       }
 
       if (e.key === 'Enter') {
+        if (activeTool === 'wall' && wallVertices.length > 0) {
+          e.preventDefault();
+          finalizeWallChain();
+          return;
+        }
         if (activeTool === 'line' && drawingStart && drawingNormal && typedLength.trim() && lastDrawTarget) {
           e.preventDefault();
           const raw = parseFloat(typedLength);
@@ -1706,55 +2064,14 @@ function Scene() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, polyVertices.length, finalizePoly, rectangleInputState.active, finalizeRectangleInput]);
+  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, rectangleInputState.active, finalizeRectangleInput]);
 
   const [pointerDownInfo, setPointerDownInfo] = useState<{ time: number, pos: THREE.Vector3 } | null>(null);
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    pointerUpHandledRef.current = false;
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
 
-    if (activeTool === 'offset') {
-    e.stopPropagation();
-    if (offsetPreviewPoints && offsetPreviewPoints.length > 2 && selectedId) {
-      const srcShape = shapes.find(s => s.id === selectedId && (s.type === 'poly' || s.type === 'box' || s.type === 'rect'));
-      if (srcShape) {
-        const qArr = (srcShape as any).quaternion || [0, 0, 0, 1];
-        const quat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
-        const invQuat = quat.clone().invert();
-        const origin = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
-        const isBoxLike = srcShape.type === 'box' || srcShape.type === 'rect';
-        const localPts = offsetPreviewPoints.slice(0, -1).map((p: THREE.Vector3) => p.clone().sub(origin).applyQuaternion(invQuat));
-        const newId = Math.random().toString(36).substring(2, 9);
-        let newShape: Shape;
-        if (isBoxLike) {
-          const xs = localPts.map((p: THREE.Vector3) => p.x);
-          const zs = localPts.map((p: THREE.Vector3) => p.z);
-          const newW = Math.max(...xs) - Math.min(...xs);
-          const newD = Math.max(...zs) - Math.min(...zs);
-          const origArgs = Array.isArray((srcShape as any).args) ? (srcShape as any).args as number[] : [1, 1, 1];
-          newShape = {
-            ...srcShape,
-            id: newId,
-            args: [Math.max(newW, 0.01), origArgs[1] || 1, Math.max(newD, 0.01)]
-          } as Shape;
-        } else {
-          const vertices = localPts.map((p: THREE.Vector3) => [p.x, p.y] as [number, number]);
-          newShape = {
-            ...srcShape,
-            id: newId,
-            args: { ...(srcShape.args as any), vertices }
-          };
-        }
-        addShape(newShape);
-        setSelectedId(newId);
-        setSelectedIds([newId]);
-      }
-    }
-    setOffsetPreviewPoints(null);
-    setOffsetPreviewDistance(null);
-    setMeasurements('');
-    return;
-  }
     if (activeTool === 'poly') {
       e.stopPropagation();
       
@@ -1812,6 +2129,58 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'wall') {
+      e.stopPropagation();
+      
+      // If clicking first vertex -> close loop & finalize
+      if (wallHoveredVertex === 0 && wallVertices.length >= 2) {
+        const prev = wallVertices[wallVertices.length - 1];
+        createWallSegment(prev, wallVertices[0]);
+        finalizeWallChain();
+        return;
+      }
+
+      let pointToPlace = wallCandidatePos?.clone();
+
+      if (wallVertices.length === 0) {
+        // First vertex determines plane
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+
+        let normal = new THREE.Vector3(0, 1, 0);
+        let p = new THREE.Vector3();
+
+        if (shapeIntersect && shapeIntersect.face) {
+          normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
+          p = shapeIntersect.point.clone();
+        } else {
+          const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          if (!raycaster.ray.intersectPlane(ground, p)) {
+            p = e.point.clone();
+          }
+        }
+
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p);
+        setWallPlane(plane);
+        setWallVertices([p]);
+        wallDragStartRef.current = { point: p.clone(), time: Date.now() };
+        diagLog("TOOL", "Wall started at point", { pos: [p.x, p.y, p.z] });
+      } else {
+        if (!pointToPlace) pointToPlace = e.point.clone();
+        const prev = wallVertices[wallVertices.length - 1];
+        if (prev.distanceTo(pointToPlace) >= 0.15) {
+          createWallSegment(prev, pointToPlace);
+          setWallVertices(prevVerts => [...prevVerts, pointToPlace]);
+          wallDragStartRef.current = { point: pointToPlace.clone(), time: Date.now() };
+          diagLog("TOOL", "Wall segment placed", { 
+            from: [prev.x, prev.y, prev.z], 
+            to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] 
+          });
+        }
+      }
+      return;
+    }
+
     if (placingLightId) {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
@@ -1831,6 +2200,33 @@ function Scene() {
       
       setAnimations(prev => prev.map(a => a.id === placingAnimationId ? { ...a, position: [point.x, point.y, point.z] } : a));
       setPlacingAnimationId(null);
+      return;
+    }
+
+    if (activeTool === 'landscape_sculpt' || activeTool === 'landscape_mask') {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      applyTerrainSculpt(hitPoint, false);
+      isSculptingDragRef.current = true;
+      return;
+    }
+
+    if (activeTool === 'landscape_road' || activeTool === 'landscape_zone') {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+
+      if (e.nativeEvent.detail === 2 || (roadPoints.length > 0 && hitPoint.distanceTo(roadPoints[roadPoints.length - 1]) < 0.2)) {
+        // Double-click or click very close -> finalize road
+        finalizeRoadCreation(roadPoints);
+      } else {
+        const nextPts = [...roadPoints, hitPoint];
+        setRoadPoints(nextPts);
+        setMeasurements(`Road Path: ${nextPts.length} points placed · Click to add curve points · Double click to finalize.`);
+      }
       return;
     }
 
@@ -1903,47 +2299,179 @@ function Scene() {
         setArcStep(0);
       }
       return;
-    if (activeTool === 'offset') {
+    }
+
+
+    if (activeTool === 'door' || activeTool === 'window') {
       e.stopPropagation();
-      const srcShape = shapes.find(s => s.id === selectedId && s.type === 'poly');
-      if (!srcShape) {
-        setMeasurements('Select a Poly shape first, then use the Offset tool.');
-        return;
+
+      let targetWall: Shape | null = null;
+      let worldPos: THREE.Vector3 | null = null;
+      let quatArray: [number, number, number, number] = [0, 0, 0, 1];
+      const width = activeTool === 'door' ? 0.9 : 1.2;
+      const height = activeTool === 'door' ? 2.1 : 1.2;
+      let depth = 0.2;
+
+      if (previewShape && previewShape.type === activeTool) {
+        worldPos = new THREE.Vector3(...previewShape.position);
+        quatArray = previewShape.quaternion;
+        depth = Array.isArray(previewShape.args) ? (previewShape.args[2] || 0.2) : 0.2;
+        if ((previewShape as any).hostWallId) {
+          targetWall = shapes.find(s => s.id === (previewShape as any).hostWallId) || null;
+        }
       }
-      if (!offsetPreviewPoints || offsetPreviewPoints.length < 4) {
-        return;
+
+      if (!worldPos) {
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+        let hitPoint: THREE.Vector3 | null = null;
+
+        if (shapeIntersect && shapeIntersect.object.userData.id) {
+          const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
+          if (hitShape && hitShape.type === 'wall') {
+            targetWall = hitShape;
+            hitPoint = shapeIntersect.point.clone();
+          }
+        }
+
+        if (!targetWall) {
+          const ray = raycaster.ray;
+          const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          const groundHit = new THREE.Vector3();
+          if (ray.intersectPlane(groundPlane, groundHit)) {
+            hitPoint = groundHit;
+            let minWallDist = 1.2;
+            for (const sh of shapes) {
+              if (sh.type !== 'wall') continue;
+              const wPos = new THREE.Vector3(...sh.position);
+              const wQuat = new THREE.Quaternion(...(sh.quaternion || [0, 0, 0, 1]));
+              const wArgs = Array.isArray(sh.args) ? sh.args : [3.0, 2.8, 0.2];
+              const wLen = wArgs[0] || 3.0;
+
+              const invQuat = wQuat.clone().invert();
+              const localP = groundHit.clone().sub(wPos).applyQuaternion(invQuat);
+
+              if (Math.abs(localP.x) <= wLen / 2 + 0.5 && Math.abs(localP.z) <= 0.85) {
+                const d = Math.abs(localP.z);
+                if (d < minWallDist) {
+                  minWallDist = d;
+                  targetWall = sh;
+                }
+              }
+            }
+          }
+        }
+
+        if (targetWall && hitPoint) {
+          const wallPos = new THREE.Vector3(...targetWall.position);
+          const wallQuat = new THREE.Quaternion(...(targetWall.quaternion || [0, 0, 0, 1]));
+          const wallArgs = Array.isArray(targetWall.args) ? targetWall.args : [3.0, 2.8, 0.2];
+          const wallLen = wallArgs[0] || 3.0;
+          const wallH = wallArgs[1] || 2.8;
+          const wallT = wallArgs[2] || 0.2;
+          depth = wallT;
+
+          const invQuat = wallQuat.clone().invert();
+          const localHit = hitPoint.clone().sub(wallPos).applyQuaternion(invQuat);
+
+          const maxLocalX = Math.max(0, wallLen / 2 - width / 2);
+          const localX = Math.max(-maxLocalX, Math.min(maxLocalX, localHit.x));
+          const localY = activeTool === 'door'
+            ? (-wallH / 2 + height / 2)
+            : (-wallH / 2 + 0.9 + height / 2);
+
+          const localPos = new THREE.Vector3(localX, localY, 0);
+          worldPos = localPos.applyQuaternion(wallQuat).add(wallPos);
+          quatArray = [wallQuat.x, wallQuat.y, wallQuat.z, wallQuat.w];
+        } else if (hitPoint) {
+          const groundY = hitPoint.y + (activeTool === 'door' ? height / 2 : 1.5);
+          worldPos = new THREE.Vector3(hitPoint.x, groundY, hitPoint.z);
+          quatArray = [0, 0, 0, 1];
+        }
       }
-      const origin = new THREE.Vector3(srcShape.position[0], srcShape.position[1], srcShape.position[2]);
-      const qArr = srcShape.quaternion || [0, 0, 0, 1];
-      const quat = new THREE.Quaternion(qArr[0], qArr[1], qArr[2], qArr[3]);
-      const invQuat = quat.clone().invert();
-      const localVerts: [number, number][] = offsetPreviewPoints.slice(0, -1).map(p => {
-        const l = p.clone().sub(origin).applyQuaternion(invQuat);
-        return [l.x, l.y] as [number, number];
-      });
-      const newOffsetShape = {
-        id: Math.random().toString(36).substr(2, 9),
-        type: 'poly',
-        position: [origin.x, origin.y, origin.z],
-        quaternion: [quat.x, quat.y, quat.z, quat.w],
-        args: { vertices: localVerts },
-        color: srcShape.color,
-        roughness: srcShape.roughness,
-        metalness: srcShape.metalness,
-        opacity: srcShape.opacity,
-      } as Shape;
-      addShape(newOffsetShape);
-      commitHistory();
-      setSelectedId(newOffsetShape.id);
-      const finalDist = offsetPreviewDistance;
-      setOffsetPreviewPoints(null);
-      setMeasurements(`Offset shape created: ${formatValue(Math.abs(finalDist), unit, 2)}`);
+
+      if (worldPos) {
+        const shapeColor = (activeMaterial && activeMaterial !== '#ffffff' && activeMaterial !== '#8b5a2b' && activeMaterial !== '#38bdf8') ? activeMaterial : '#ffffff';
+        const newDoorWindowShape: Shape = {
+          id: Math.random().toString(36).substr(2, 9),
+          name: activeTool === 'door' ? 'Door' : 'Window',
+          type: activeTool,
+          position: [worldPos.x, worldPos.y, worldPos.z],
+          quaternion: quatArray,
+          args: [width, height, depth],
+          color: shapeColor,
+          archStyle: activeTool === 'door' ? 'flush' : 'cross',
+          roughness: 0.4,
+          metalness: 0.05,
+          opacity: 1,
+          hostWallId: targetWall ? targetWall.id : undefined
+        };
+
+        addShape(newDoorWindowShape);
+        commitHistory();
+        setSelectedId(newDoorWindowShape.id);
+        setSelectedIds([newDoorWindowShape.id]);
+        setPreviewShape(null);
+        setActiveTool('select');
+        setMeasurements(`${activeTool === 'door' ? 'Door' : 'Window'} placed & wall opening cut. Use Move tool to reposition.`);
+        recordAction(`sdk.addShape(${JSON.stringify(newDoorWindowShape)});`);
+      }
       return;
     }
+
+    if (['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      let hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      if (!shapeIntersect) {
+        const ray = raycaster.ray;
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+        if (ray.intersectPlane(groundPlane, groundHit)) {
+          hitPoint = groundHit;
+        }
+      }
+
+      const colorMap: Record<string, string> = {
+        tree: '#2d6a4f',
+        bush: '#40916c',
+        fence: '#854d0e',
+        railing: '#475569',
+        lamp: '#1e293b',
+        bench: '#9a3412',
+        rock: '#78716c'
+      };
+
+      const nameMap: Record<string, string> = {
+        tree: 'Landscape Tree',
+        bush: 'Garden Bush',
+        fence: 'Post & Rail Fence',
+        railing: 'Safety Railing',
+        lamp: 'Street Lamp Post',
+        bench: 'Park Bench',
+        rock: 'Landscape Boulder'
+      };
+
+      const newShape: Shape = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: nameMap[activeTool] || 'Landscape Feature',
+        type: activeTool as any,
+        position: [hitPoint.x, hitPoint.y, hitPoint.z],
+        quaternion: [0, 0, 0, 1],
+        args: [1, 1, 1],
+        color: colorMap[activeTool] || '#2d6a4f',
+        roughness: 0.7,
+        metalness: 0.1
+      };
+
+      addShape(newShape);
+      commitHistory();
+      setMeasurements(`Placed ${nameMap[activeTool]} at [${hitPoint.x.toFixed(1)}, ${hitPoint.y.toFixed(1)}, ${hitPoint.z.toFixed(1)}]`);
+      return;
     }
 
-
-    if (['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
+    if (['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'step', 'staircase'].includes(activeTool)) {
       e.stopPropagation();
       
       if (drawingStep === 2) {
@@ -1978,6 +2506,17 @@ function Scene() {
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (activeTool === 'landscape_sculpt' || activeTool === 'landscape_mask') {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      setSculptCursorPos(hitPoint);
+      if (isSculptingDragRef.current) {
+        applyTerrainSculpt(hitPoint, true);
+      }
+      return;
+    }
+
     if (activeTool === 'tape' && tapeStart) {
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
@@ -2091,6 +2630,209 @@ function Scene() {
 
         setPolyCandidatePos(finalPos);
       }
+    }
+
+    if (activeTool === 'wall') {
+      const plane = wallPlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const target = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(plane, target)) {
+        let finalPos = target.clone();
+        
+        // 1. Check start vertex snap to close wall loop
+        let isClosingLoop = false;
+        if (wallVertices.length >= 2) {
+          const d = target.distanceTo(wallVertices[0]);
+          if (d < 0.65) {
+            finalPos = wallVertices[0].clone();
+            setWallHoveredVertex(0);
+            isClosingLoop = true;
+          } else {
+            setWallHoveredVertex(null);
+          }
+        } else {
+          setWallHoveredVertex(null);
+        }
+
+        // 2. Default to 90-degree orthogonal angles, allow free angle if Shift is held down
+        if (!e.shiftKey && wallVertices.length > 0 && !isClosingLoop) {
+          const lastVertex = wallVertices[wallVertices.length - 1];
+          const dx = target.x - lastVertex.x;
+          const dz = target.z - lastVertex.z;
+
+          if (wallVertices.length >= 2) {
+            // Include both relative 90° angles (to previous wall) and world X/Z axes
+            const prevCorner = wallVertices[wallVertices.length - 2];
+            const pdx = lastVertex.x - prevCorner.x;
+            const pdz = lastVertex.z - prevCorner.z;
+            const pLen = Math.hypot(pdx, pdz);
+
+            const candidates: THREE.Vector3[] = [];
+
+            // World X-axis alignment
+            candidates.push(new THREE.Vector3(target.x, lastVertex.y, lastVertex.z));
+            // World Z-axis alignment
+            candidates.push(new THREE.Vector3(lastVertex.x, lastVertex.y, target.z));
+
+            if (pLen > 0.001) {
+              // Relative parallel (continuation)
+              const uParX = pdx / pLen;
+              const uParZ = pdz / pLen;
+              const dotPar = dx * uParX + dz * uParZ;
+              candidates.push(new THREE.Vector3(lastVertex.x + dotPar * uParX, lastVertex.y, lastVertex.z + dotPar * uParZ));
+
+              // Relative perpendicular (90° / -90° turn)
+              const uPerpX = -uParZ;
+              const uPerpZ = uParX;
+              const dotPerp = dx * uPerpX + dz * uPerpZ;
+              candidates.push(new THREE.Vector3(lastVertex.x + dotPerp * uPerpX, lastVertex.y, lastVertex.z + dotPerp * uPerpZ));
+            }
+
+            // Find closest 90° candidate to cursor target
+            let bestCand = candidates[0];
+            let minD = target.distanceTo(bestCand);
+            for (let i = 1; i < candidates.length; i++) {
+              const d = target.distanceTo(candidates[i]);
+              if (d < minD) {
+                minD = d;
+                bestCand = candidates[i];
+              }
+            }
+            finalPos = bestCand;
+          } else {
+            // First wall segment: lock strictly along dominant World X or Z axis
+            if (Math.abs(dx) >= Math.abs(dz)) {
+              finalPos.x = target.x;
+              finalPos.z = lastVertex.z;
+            } else {
+              finalPos.x = lastVertex.x;
+              finalPos.z = target.z;
+            }
+          }
+        } else if (!e.shiftKey && wallVertices.length === 0) {
+          // Snap to other shapes' origins when initiating first wall point
+          let bestDist = 0.5;
+          let snapTarget: THREE.Vector3 | null = null;
+          shapes.forEach(sh => {
+            const shPos = new THREE.Vector3(...sh.position);
+            const d = finalPos.distanceTo(shPos);
+            if (d < bestDist) {
+              snapTarget = shPos.clone();
+              bestDist = d;
+            }
+          });
+          if (snapTarget) finalPos = snapTarget;
+        }
+
+        setWallCandidatePos(finalPos);
+
+        if (wallVertices.length > 0) {
+          const lastVertex = wallVertices[wallVertices.length - 1];
+          const dist = lastVertex.distanceTo(finalPos);
+          const angleMode = e.shiftKey ? 'Free Angle' : '90° Locked';
+          if (dist >= 0.05) {
+            setMeasurements(`Wall: Length ${formatValue(dist, unit, 2)} × Height 2.80m × Thickness 0.20m (${angleMode} · ${e.shiftKey ? 'Release Shift for 90° lock' : 'Hold Shift for free angles'} · Double-click/Esc to finish)`);
+          }
+        } else {
+          setMeasurements(`Wall: Click or Drag to start drawing wall (90° default · Hold Shift for free angles)`);
+        }
+      }
+    }
+
+    if (activeTool === 'door' || activeTool === 'window') {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+
+      let targetWall: Shape | null = null;
+      let hitPoint: THREE.Vector3 | null = null;
+
+      if (shapeIntersect && shapeIntersect.object.userData.id) {
+        const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
+        if (hitShape && hitShape.type === 'wall') {
+          targetWall = hitShape;
+          hitPoint = shapeIntersect.point.clone();
+        }
+      }
+
+      if (!targetWall) {
+        const ray = raycaster.ray;
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+        if (ray.intersectPlane(groundPlane, groundHit)) {
+          hitPoint = groundHit;
+          let minWallDist = 1.0;
+          for (const sh of shapes) {
+            if (sh.type !== 'wall') continue;
+            const wPos = new THREE.Vector3(...sh.position);
+            const wQuat = new THREE.Quaternion(...(sh.quaternion || [0, 0, 0, 1]));
+            const wArgs = Array.isArray(sh.args) ? sh.args : [3.0, 2.8, 0.2];
+            const wLen = wArgs[0] || 3.0;
+
+            const invQuat = wQuat.clone().invert();
+            const localP = groundHit.clone().sub(wPos).applyQuaternion(invQuat);
+
+            if (Math.abs(localP.x) <= wLen / 2 + 0.5 && Math.abs(localP.z) <= 0.8) {
+              const d = Math.abs(localP.z);
+              if (d < minWallDist) {
+                minWallDist = d;
+                targetWall = sh;
+              }
+            }
+          }
+        }
+      }
+
+      if (targetWall && hitPoint) {
+        const wallPos = new THREE.Vector3(...targetWall.position);
+        const wallQuat = new THREE.Quaternion(...(targetWall.quaternion || [0, 0, 0, 1]));
+        const wallArgs = Array.isArray(targetWall.args) ? targetWall.args : [3.0, 2.8, 0.2];
+        const wallLen = wallArgs[0] || 3.0;
+        const wallH = wallArgs[1] || 2.8;
+        const wallT = wallArgs[2] || 0.2;
+
+        const invQuat = wallQuat.clone().invert();
+        const localHit = hitPoint.clone().sub(wallPos).applyQuaternion(invQuat);
+
+        const width = activeTool === 'door' ? 0.9 : 1.2;
+        const height = activeTool === 'door' ? 2.1 : 1.2;
+        const depth = wallT;
+
+        const maxLocalX = Math.max(0, wallLen / 2 - width / 2);
+        const localX = Math.max(-maxLocalX, Math.min(maxLocalX, localHit.x));
+        const localY = activeTool === 'door'
+          ? (-wallH / 2 + height / 2)
+          : (-wallH / 2 + 0.9 + height / 2);
+
+        const localPos = new THREE.Vector3(localX, localY, 0);
+        const worldPos = localPos.applyQuaternion(wallQuat).add(wallPos);
+        const quatArray: [number, number, number, number] = [wallQuat.x, wallQuat.y, wallQuat.z, wallQuat.w];
+
+        setPreviewShape({
+          type: activeTool,
+          position: [worldPos.x, worldPos.y, worldPos.z],
+          quaternion: quatArray,
+          args: [width, height, depth],
+          hostWallId: targetWall.id
+        } as any);
+
+        setMeasurements(
+          activeTool === 'door'
+            ? `Door: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} on Wall (Click to insert & cut opening)`
+            : `Window: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} (Sill ${formatValue(0.9, unit, 2)}) on Wall (Click to insert & cut opening)`
+        );
+      } else if (hitPoint) {
+        const width = activeTool === 'door' ? 0.9 : 1.2;
+        const height = activeTool === 'door' ? 2.1 : 1.2;
+        const depth = 0.15;
+        const groundY = hitPoint.y + (activeTool === 'door' ? height / 2 : 1.5);
+        setPreviewShape({
+          type: activeTool,
+          position: [hitPoint.x, groundY, hitPoint.z],
+          quaternion: [0, 0, 0, 1],
+          args: [width, height, depth]
+        });
+        setMeasurements(`Click on a wall to insert ${activeTool} and cut opening.`);
+      }
+      return;
     }
 
     if (drawingStart && drawingNormal) {
@@ -2312,6 +3054,24 @@ function Scene() {
             args: [radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2]
           });
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
+        } else if (activeTool === 'step') {
+          const stepPos = target.clone().add(drawingNormal.clone().multiplyScalar(0.09));
+          setPreviewShape({
+            type: 'step',
+            position: [stepPos.x, stepPos.y, stepPos.z],
+            quaternion: quatArray,
+            args: [1.0, 0.18, 0.30]
+          });
+          setMeasurements(`Step: 1.00m × 0.30m × 0.18m`);
+        } else if (activeTool === 'staircase') {
+          const stairPos = target.clone().add(drawingNormal.clone().multiplyScalar(1.08));
+          setPreviewShape({
+            type: 'staircase',
+            position: [stairPos.x, stairPos.y, stairPos.z],
+            quaternion: quatArray,
+            args: [1.0, 2.16, 3.6, 12]
+          });
+          setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m)`);
         }
       } else if (drawingStep === 2 && previewShape) {
         // Step 2: Height
@@ -2392,11 +3152,12 @@ function Scene() {
         
         // Update dimensions and position
         if (pushPullState.type === 'poly') {
-          const isCap = Math.abs(pushPullState.localNormal.z) > 0.9;
+          const polyInitialHeight = (pushPullState.initialArgs as any)?.height || 0;
+          const isCap = polyInitialHeight === 0 || Math.abs(pushPullState.localNormal.z) > 0.5;
           if (isCap) {
-            const currentHeight = (pushPullState.initialArgs as any).height || 0;
-            const newHeight = currentHeight + dist;
-            (newArgs as any).height = Math.max(0.001, Math.abs(newHeight));
+            const currentHeight = polyInitialHeight;
+            const newHeight = polyInitialHeight === 0 ? Math.abs(dist) : Math.max(0.001, currentHeight + dist);
+            (newArgs as any).height = Math.max(0.001, newHeight);
             
             newPos[0] = pushPullState.initialPos[0] + (dist * pushPullState.normal.x) / 2;
             newPos[1] = pushPullState.initialPos[1] + (dist * pushPullState.normal.y) / 2;
@@ -2446,7 +3207,7 @@ function Scene() {
               });
               (newArgs as any).vertices = newVertices;
             }
-        }
+          }
         } else if (pushPullState.type === 'circle' || pushPullState.type === 'triangle' || pushPullState.type === 'prism') {
         // Cylinder/Triangle prism axis is Y in Three.js default
         const isCap = Math.abs(pushPullState.localNormal.y) > 0.9;
@@ -2547,13 +3308,19 @@ function Scene() {
     }
   };
 
-  const performTunnelSplit = (parentId: string, subFaceId: string, faceIndex: number, subFaceIndex: number) => {
+  const performTunnelSplit = (
+    parentId: string, 
+    subFaceId?: string, 
+    faceIndex: number = 4, 
+    subFaceIndex?: number,
+    customBounds?: { minU: number; maxU: number; minV: number; maxV: number },
+    cutDepth?: number
+  ) => {
     const parent = shapes.find(s => s.id === parentId);
-    if (!parent || parent.type !== 'box') return;
+    if (!parent || (parent.type !== 'box' && parent.type !== 'rect')) return;
 
-    const [W, H, D] = parent.args;
-    const division = parent.surfaceDivisions?.[faceIndex];
-    const [gridX, gridY] = getGridDimensions(division);
+    const args = Array.isArray(parent.args) ? parent.args : [1, 1, 1];
+    const [W, H, D] = args;
     
     let size: [number, number] = [1, 1];
     let depth = 1;
@@ -2561,44 +3328,68 @@ function Scene() {
     else if (faceIndex <= 7) { size = [W, D]; depth = H; }
     else { size = [W, H]; depth = D; }
     
-    const cellW = size[0] / gridX;
-    const cellH = size[1] / gridY;
-    const ix = subFaceIndex % gridX;
-    const iy = Math.floor(subFaceIndex / gridX);
-    
-    const hx = -size[0]/2 + cellW/2 + ix * cellW;
-    const hy = -size[1]/2 + cellH/2 + iy * cellH;
+    let minU = 0, maxU = 0, minV = 0, maxV = 0;
+    if (customBounds) {
+      minU = customBounds.minU;
+      maxU = customBounds.maxU;
+      minV = customBounds.minV;
+      maxV = customBounds.maxV;
+    } else if (subFaceIndex !== undefined) {
+      const division = parent.surfaceDivisions?.[faceIndex];
+      const [gridX, gridY] = getGridDimensions(division);
+      const cellW = size[0] / gridX;
+      const cellH = size[1] / gridY;
+      const ix = subFaceIndex % gridX;
+      const iy = Math.floor(subFaceIndex / gridX);
+      const hx = -size[0]/2 + cellW/2 + ix * cellW;
+      const hy = -size[1]/2 + cellH/2 + iy * cellH;
+      minU = hx - cellW / 2;
+      maxU = hx + cellW / 2;
+      minV = hy - cellH / 2;
+      maxV = hy + cellH / 2;
+    } else {
+      return;
+    }
+
+    minU = Math.max(-size[0]/2, Math.min(size[0]/2, minU));
+    maxU = Math.max(-size[0]/2, Math.min(size[0]/2, maxU));
+    minV = Math.max(-size[1]/2, Math.min(size[1]/2, minV));
+    maxV = Math.max(-size[1]/2, Math.min(size[1]/2, maxV));
+
+    const holeW = maxU - minU;
+    const holeH = maxV - minV;
+    if (holeW <= 0.001 || holeH <= 0.001) return;
+
+    const actualCutDepth = (cutDepth !== undefined && cutDepth > 0 && cutDepth < depth - 0.02) ? cutDepth : depth;
+    const isThroughCut = actualCutDepth >= depth - 0.02;
 
     const parentQuat = new THREE.Quaternion(...(parent.quaternion || [0,0,0,1]));
     const parentPos = new THREE.Vector3(...parent.position);
 
+    let rot = new THREE.Euler();
+    if (faceIndex <= 1) rot.set(0, Math.PI/2, 0);
+    else if (faceIndex <= 3) rot.set(0, -Math.PI/2, 0);
+    else if (faceIndex <= 5) rot.set(-Math.PI/2, 0, 0);
+    else if (faceIndex <= 7) rot.set(Math.PI/2, 0, 0);
+    else if (faceIndex <= 9) rot.set(0, 0, 0);
+    else if (faceIndex <= 11) rot.set(0, Math.PI, 0);
+    
+    const faceQuat = new THREE.Quaternion().setFromEuler(rot);
+    const worldQuat = parentQuat.clone().multiply(faceQuat);
+
     const newSideShapes: Shape[] = [];
-    const addSideBox = (lx: number, ly: number, lw: number, lh: number) => {
-      if (lw <= 0.001 || lh <= 0.001) return;
+    const addPiece = (lx: number, ly: number, lw: number, lh: number, pieceDepth: number, zCenterOffset: number) => {
+      if (lw <= 0.001 || lh <= 0.001 || pieceDepth <= 0.001) return;
       
-      const localPos = new THREE.Vector3(lx, ly, 0);
-      let rot = new THREE.Euler();
-      if (faceIndex <= 1) rot.set(0, Math.PI/2, 0);
-      else if (faceIndex <= 3) rot.set(0, -Math.PI/2, 0);
-      else if (faceIndex <= 5) rot.set(-Math.PI/2, 0, 0);
-      else if (faceIndex <= 7) rot.set(Math.PI/2, 0, 0);
-      else if (faceIndex <= 9) rot.set(0, 0, 0);
-      else if (faceIndex <= 11) rot.set(0, Math.PI, 0);
-      
-      const faceQuat = new THREE.Quaternion().setFromEuler(rot);
-      const faceCenterLocal = new THREE.Vector3(0, 0, depth/2).applyQuaternion(faceQuat);
-      const boxLocalPos = localPos.clone().applyQuaternion(faceQuat).add(faceCenterLocal);
-      boxLocalPos.add(new THREE.Vector3(0, 0, -depth/2).applyQuaternion(faceQuat));
-      
-      const worldPos = boxLocalPos.clone().applyQuaternion(parentQuat).add(parentPos);
-      const worldQuat = parentQuat.clone().multiply(faceQuat);
+      const localPos = new THREE.Vector3(lx, ly, zCenterOffset);
+      const worldPos = localPos.clone().applyQuaternion(faceQuat).applyQuaternion(parentQuat).add(parentPos);
       
       newSideShapes.push({
         id: Math.random().toString(36).substr(2, 9),
         type: 'box',
         position: [worldPos.x, worldPos.y, worldPos.z],
         quaternion: [worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w],
-        args: [lw, lh, depth],
+        args: [lw, lh, pieceDepth],
         color: parent.color,
         roughness: parent.roughness,
         metalness: parent.metalness,
@@ -2606,23 +3397,78 @@ function Scene() {
       });
     };
 
-    addSideBox((-size[0]/2 + (hx - cellW/2)) / 2, 0, (hx - cellW/2) - (-size[0]/2), size[1]);
-    addSideBox((hx + cellW/2 + size[0]/2) / 2, 0, size[0]/2 - (hx + cellW/2), size[1]);
-    addSideBox(hx, (hy + cellH/2 + size[1]/2) / 2, cellW, size[1]/2 - (hy + cellH/2));
-    addSideBox(hx, (-size[1]/2 + (hy - cellH/2)) / 2, cellW, (hy - cellH/2) - (-size[1]/2));
+    const frameZ = depth / 2 - actualCutDepth / 2;
+
+    // 1. Left side piece
+    const leftW = minU - (-size[0]/2);
+    if (leftW > 0.001) {
+      addPiece(-size[0]/2 + leftW/2, 0, leftW, size[1], actualCutDepth, frameZ);
+    }
+    // 2. Right side piece
+    const rightW = (size[0]/2) - maxU;
+    if (rightW > 0.001) {
+      addPiece(maxU + rightW/2, 0, rightW, size[1], actualCutDepth, frameZ);
+    }
+    // 3. Top piece (between minU and maxU)
+    const topH = (size[1]/2) - maxV;
+    if (topH > 0.001) {
+      addPiece((minU + maxU)/2, maxV + topH/2, holeW, topH, actualCutDepth, frameZ);
+    }
+    // 4. Bottom piece (between minU and maxU)
+    const bottomH = minV - (-size[1]/2);
+    if (bottomH > 0.001) {
+      addPiece((minU + maxU)/2, -size[1]/2 + bottomH/2, holeW, bottomH, actualCutDepth, frameZ);
+    }
+
+    // 5. If this is a pocket/recess (not a through cut), add the solid backing base:
+    if (!isThroughCut) {
+      const baseDepth = depth - actualCutDepth;
+      const baseZ = -depth / 2 + baseDepth / 2;
+      addPiece(0, 0, size[0], size[1], baseDepth, baseZ);
+    }
 
     setShapes(prev => {
-      const filtered = prev.filter(s => s.id !== parentId && s.id !== subFaceId);
+      const filtered = prev.filter(s => s.id !== parentId && (!subFaceId || s.id !== subFaceId));
       return [...filtered, ...newSideShapes];
     });
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    if (e?.stopPropagation) e.stopPropagation();
+    if (pointerUpHandledRef.current) return;
+    pointerUpHandledRef.current = true;
+
+    if (isSculptingDragRef.current) {
+      isSculptingDragRef.current = false;
+      commitHistory();
+    }
+
     // Task #158 fix: use the ref (always current) instead of the closure variable.
     // On a plain click, pointerdown creates pushPullState and pointerup fires in the
     // same synchronous browser event tick, before React has re-rendered -- so the
     // closure's pushPullState would still read as null/stale here without this.
     const pushPullState = pushPullStateRef.current;
+
+    if (activeTool === 'wall' && wallDragStartRef.current) {
+      const dragInfo = wallDragStartRef.current;
+      const currPos = wallCandidatePos ? wallCandidatePos.clone() : e.point.clone();
+      const dragDist = dragInfo.point.distanceTo(currPos);
+      const dragTime = Date.now() - dragInfo.time;
+
+      if (dragDist >= 0.35 && dragTime > 60) {
+        if (wallVertices.length <= 1) {
+          createWallSegment(dragInfo.point, currPos);
+          setWallVertices([currPos]);
+          setWallPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -currPos.y));
+        } else {
+          const lastVertex = wallVertices[wallVertices.length - 2];
+          createWallSegment(lastVertex, currPos);
+          setWallVertices(prev => [...prev.slice(0, -1), currPos]);
+        }
+      }
+      wallDragStartRef.current = null;
+    }
+
     // Detect single click for Rectangle Input
     if (activeTool === 'rectangle' && pointerDownInfo) {
       const timeDiff = Date.now() - pointerDownInfo.time;
@@ -2668,6 +3514,30 @@ function Scene() {
           metalness: activePBR.metalness,
           opacity: activePBR.opacity
         });
+      } else if (['step', 'staircase'].includes(activeTool)) {
+        // Direct click placement fallback
+        const pos = drawingStart.clone();
+        let args: any = [1, 1, 1];
+        let offsetHeight = 0;
+        if (activeTool === 'step') {
+          args = [1.0, 0.18, 0.30];
+          offsetHeight = 0.09;
+        } else if (activeTool === 'staircase') {
+          args = [1.0, 2.16, 3.6, 12];
+          offsetHeight = 1.08;
+        }
+        pos.add(drawingNormal.clone().multiplyScalar(offsetHeight));
+        addShape({
+          id: Math.random().toString(36).substr(2, 9),
+          type: activeTool as Shape['type'],
+          position: [pos.x, pos.y, pos.z],
+          quaternion: [0, 0, 0, 1],
+          args,
+          color: activeMaterial,
+          roughness: activePBR.roughness,
+          metalness: activePBR.metalness,
+          opacity: activePBR.opacity
+        });
       }
       if (previewShape && previewShape.type === 'line' && drawingNormal) {
         const lineQuat = new THREE.Quaternion(previewShape.quaternion[0], previewShape.quaternion[1], previewShape.quaternion[2], previewShape.quaternion[3]);
@@ -2700,9 +3570,9 @@ function Scene() {
       if (shape) {
         const currentPos = new THREE.Vector3(...shape.position);
         const initialPos = new THREE.Vector3(...pushPullState.initialPos);
-        // dist here is the movement of the center. The face movement is 2x this for boxes.
+        // dist here is the movement of the center. The face movement is 2x this for centered extrusions (box, rect, poly, circle, triangle, prism).
         const centerDist = currentPos.distanceTo(initialPos) * (currentPos.clone().sub(initialPos).dot(pushPullState.normal) >= 0 ? 1 : -1);
-        const faceDist = pushPullState.type === 'box' || pushPullState.type === 'rect' ? centerDist * 2 : centerDist;
+        const faceDist = centerDist * 2;
 
         // Task #158: click-to-start / click-to-commit support, alongside the existing
         // click-and-drag gesture. If the mouse barely moved between down and up (a plain
@@ -2717,20 +3587,25 @@ function Scene() {
         }
 
         if (pushPullState.isSubFace && pushPullState.parentShapeId) {
-          // Heal Rule: If pushed face becomes coplanar with back face (faceDist = -parentDepth)
+          // Heal Rule / Through-Cut / Pocket Rebate Rule:
           if (Math.abs(faceDist) < 0.001) {
             removeShape(pushPullState.id);
           } else if (pushPullState.parentDepth && faceDist <= -pushPullState.parentDepth + 0.1) {
-            // Create hole
-            performTunnelSplit(pushPullState.parentShapeId, pushPullState.id, pushPullState.faceIndex!, pushPullState.subFaceIndex!);
+            // Create hole / through-cut cavity
+            performTunnelSplit(pushPullState.parentShapeId, pushPullState.id, pushPullState.faceIndex ?? 4, pushPullState.subFaceIndex, pushPullState.customBounds);
+            commitHistory();
+          } else if (faceDist < -0.01 && pushPullState.parentDepth) {
+            // Create recessed pocket / rebate
+            performTunnelSplit(pushPullState.parentShapeId, pushPullState.id, pushPullState.faceIndex ?? 4, pushPullState.subFaceIndex, pushPullState.customBounds, Math.abs(faceDist));
+            commitHistory();
           } else {
-            // Finalize extrusion
+            // Finalize extrusion (step/boss upwards)
             setShapes(prev => prev.map(s => {
               if (s.id === pushPullState.id) {
                 let newType = s.type;
                 if (s.type === 'rect') newType = 'box';
                 else if (s.type === 'triangle') newType = 'prism';
-                return { ...s, type: newType, opacity: 1, transparent: false };
+                return { ...s, type: newType, opacity: 1, transparent: false, parentShapeId: undefined };
               }
               return s;
             }));
@@ -2765,6 +3640,10 @@ function Scene() {
 
   const handleMeshDoubleClick = (e: ThreeEvent<MouseEvent>, id: string) => {
     e.stopPropagation();
+    if (activeTool === 'wall' && wallVertices.length > 0) {
+      finalizeWallChain();
+      return;
+    }
     if (activeTool === 'select') {
       if (e.faceIndex !== undefined) {
         const shape = shapes.find(s => s.id === id);
@@ -2889,13 +3768,46 @@ function Scene() {
           const ringQuat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(uWorld, vWorld, normalWorld));
           const ringId = Math.random().toString(36).substring(2, 9);
           const innerId = Math.random().toString(36).substring(2, 9);
-          const ringShape: Shape = { ...srcShape, id: ringId, type: 'poly', position: [overlayPos.x, overlayPos.y, overlayPos.z], quaternion: [ringQuat.x, ringQuat.y, ringQuat.z, ringQuat.w], bevelAmount: 0, args: { vertices: outerPts2D, height: 0, holes: [holePts] } };
-          const innerShape: Shape = { ...srcShape, id: innerId, type: 'poly', position: [overlayPos.x, overlayPos.y, overlayPos.z], quaternion: [ringQuat.x, ringQuat.y, ringQuat.z, ringQuat.w], bevelAmount: 0, args: { vertices: innerPts2D, height: 0 } };
+
+          const boxArgs = Array.isArray(srcShape.args) ? srcShape.args : [1, 1, 1];
+          const depth = (faceKey <= 3) ? boxArgs[0] : (faceKey <= 7 ? boxArgs[1] : boxArgs[2]);
+          const minU = Math.min(...innerPts2D.map(p => p[0]));
+          const maxU = Math.max(...innerPts2D.map(p => p[0]));
+          const minV = Math.min(...innerPts2D.map(p => p[1]));
+          const maxV = Math.max(...innerPts2D.map(p => p[1]));
+
+          const ringShape: Shape = { 
+            ...srcShape, 
+            id: ringId, 
+            type: 'poly', 
+            position: [overlayPos.x, overlayPos.y, overlayPos.z], 
+            quaternion: [ringQuat.x, ringQuat.y, ringQuat.z, ringQuat.w], 
+            bevelAmount: 0, 
+            args: { vertices: outerPts2D, height: 0, holes: [holePts] },
+            parentShapeId: isSolid ? srcShape.id : undefined,
+            parentDepth: isSolid ? depth : undefined,
+            faceIndex: isSolid ? faceKey : undefined,
+            isRingSection: true
+          };
+          const innerShape: Shape = { 
+            ...srcShape, 
+            id: innerId, 
+            type: 'poly', 
+            position: [overlayPos.x, overlayPos.y, overlayPos.z], 
+            quaternion: [ringQuat.x, ringQuat.y, ringQuat.z, ringQuat.w], 
+            bevelAmount: 0, 
+            args: { vertices: innerPts2D, height: 0 },
+            parentShapeId: isSolid ? srcShape.id : undefined,
+            parentDepth: isSolid ? depth : undefined,
+            faceIndex: isSolid ? faceKey : undefined,
+            customBounds: isSolid ? { minU, maxU, minV, maxV } : undefined
+          };
           if (!isSolid) { removeShape(selectedId); }
           addShape(ringShape);
           addShape(innerShape);
           setSelectedId(innerId);
           setSelectedIds([innerId]);
+          commitHistory();
         }
       }
       setOffsetPreviewPoints(null);
@@ -2985,6 +3897,7 @@ function Scene() {
   };
 
   const handleMeshPointerDown = (e: ThreeEvent<PointerEvent>, shape: Shape) => {
+    pointerUpHandledRef.current = false;
     if (placingLightId) {
       e.stopPropagation();
       setCustomLights(prev => prev.map(l => l.id === placingLightId ? { ...l, position: [e.point.x, e.point.y, e.point.z] } : l));
@@ -3043,8 +3956,34 @@ function Scene() {
         subFaceIndex = ix + iy * gridX;
       }
 
-      const localNormal = e.face?.normal.clone() || new THREE.Vector3(0, 1, 0);
-      const worldNormal = localNormal.clone().applyQuaternion(e.object.quaternion).normalize();
+      const shapeQuat = new THREE.Quaternion(...(shape.quaternion || [0, 0, 0, 1]));
+      let localNormal = e.face?.normal ? e.face.normal.clone() : (shape.type === 'poly' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0));
+
+      if (shape.type === 'poly') {
+        const polyH = (shape.args as any)?.height || 0;
+        if (polyH === 0) {
+          // Flat poly / offset surface / ring: local normal is strictly +Z
+          localNormal = new THREE.Vector3(0, 0, 1);
+        } else if (Math.abs(localNormal.z) > 0.5) {
+          // Top or bottom cap of extruded poly
+          localNormal = localNormal.z >= 0 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 0, -1);
+        }
+      } else if (shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism') {
+        if (Math.abs(localNormal.y) > 0.5) {
+          localNormal = localNormal.y >= 0 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, -1, 0);
+        }
+      } else if (shape.type === 'box' || shape.type === 'rect') {
+        const ax = Math.abs(localNormal.x), ay = Math.abs(localNormal.y), az = Math.abs(localNormal.z);
+        if (ax >= ay && ax >= az) {
+          localNormal = new THREE.Vector3(Math.sign(localNormal.x) || 1, 0, 0);
+        } else if (ay >= ax && ay >= az) {
+          localNormal = new THREE.Vector3(0, Math.sign(localNormal.y) || 1, 0);
+        } else {
+          localNormal = new THREE.Vector3(0, 0, Math.sign(localNormal.z) || 1);
+        }
+      }
+
+      const worldNormal = localNormal.clone().applyQuaternion(shapeQuat).normalize();
 
       if (shape.type === 'prism') {
         const radialSegments = shape.args[3] || 3;
@@ -3184,7 +4123,8 @@ function Scene() {
       // wall -- matching how pushing one face of a box only changes that one dimension,
       // instead of inflating/deflating the whole polygon (which looked like the Scale tool).
       let clickedEdgeIndex: number | undefined = undefined;
-      if (shape.type === 'poly' && Math.abs(localNormal.z) <= 0.9 && (shape.args as any)?.vertices) {
+      const polyHeight = (shape.args as any)?.height || 0;
+      if (shape.type === 'poly' && polyHeight > 0 && Math.abs(localNormal.z) <= 0.9 && (shape.args as any)?.vertices) {
         const invQuat = new THREE.Quaternion(...(shape.quaternion || [0, 0, 0, 1])).invert();
         const localHit = e.point.clone().sub(new THREE.Vector3(...shape.position)).applyQuaternion(invQuat);
         const verts = (shape.args as any).vertices as [number, number][];
@@ -3212,7 +4152,12 @@ function Scene() {
         normal: worldNormal,
         localNormal: localNormal,
         startPoint: e.point.clone(),
-        edgeIndex: clickedEdgeIndex
+        edgeIndex: clickedEdgeIndex,
+        isSubFace: !!shape.parentShapeId,
+        parentShapeId: shape.parentShapeId,
+        parentDepth: shape.parentDepth,
+        faceIndex: shape.faceIndex,
+        customBounds: shape.customBounds
       });
     } else if (activeTool === 'bevel') {
       e.stopPropagation();
@@ -3237,7 +4182,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
@@ -3316,14 +4261,53 @@ function Scene() {
       if (mesh) {
         mesh.matrixAutoUpdate = true;
         const position: [number, number, number] = [mesh.position.x, mesh.position.y, mesh.position.z];
-        const quaternion: [number, number, number, number] = [mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w];
+        let quaternion: [number, number, number, number] = [mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w];
         const scale: [number, number, number] = [mesh.scale.x, mesh.scale.y, mesh.scale.z];
         
+        const currentShape = shapes.find(s => s.id === sId);
+        let updatedHostWallId = currentShape?.hostWallId;
+
+        // If a door or window was repositioned with Move tool, snap/re-host to nearest wall
+        if (currentShape && (currentShape.type === 'door' || currentShape.type === 'window')) {
+          const meshPos = new THREE.Vector3(...position);
+          let closestWall: Shape | null = null;
+          let minDistance = 0.85;
+
+          for (const sh of shapes) {
+            if (sh.type !== 'wall' || sh.id === sId) continue;
+            const wPos = new THREE.Vector3(...sh.position);
+            const wQuat = new THREE.Quaternion(...(sh.quaternion || [0, 0, 0, 1]));
+            const wArgs = Array.isArray(sh.args) ? sh.args : [3.0, 2.8, 0.2];
+            const wLen = wArgs[0] || 3.0;
+
+            const invQuat = wQuat.clone().invert();
+            const localP = meshPos.clone().sub(wPos).applyQuaternion(invQuat);
+
+            if (Math.abs(localP.x) <= wLen / 2 + 0.5 && Math.abs(localP.z) <= 0.85) {
+              const d = Math.abs(localP.z);
+              if (d < minDistance) {
+                minDistance = d;
+                closestWall = sh;
+              }
+            }
+          }
+
+          if (closestWall) {
+            updatedHostWallId = closestWall.id;
+            const wQuat = closestWall.quaternion || [0, 0, 0, 1];
+            quaternion = [wQuat[0], wQuat[1], wQuat[2], wQuat[3]];
+            mesh.quaternion.set(wQuat[0], wQuat[1], wQuat[2], wQuat[3]);
+          } else {
+            updatedHostWallId = undefined;
+          }
+        }
+
         setShapes(prev => prev.map(s => s.id === sId ? { 
           ...s, 
           position, 
           quaternion,
-          scale 
+          scale,
+          hostWallId: updatedHostWallId
         } : s));
 
         // Clear active transform from presence
@@ -3608,7 +4592,7 @@ function Scene() {
           MIDDLE: THREE.MOUSE.ROTATE,
           RIGHT: THREE.MOUSE.PAN
         }}
-        enabled={!drawingStart && !pushPullState}
+        enabled={!drawingStart && !pushPullState && !isSculptingDragRef.current && activeTool !== 'landscape_sculpt' && activeTool !== 'landscape_mask'}
         minPolarAngle={floorEnabled ? 0 : -Math.PI}
         maxPolarAngle={floorEnabled ? Math.PI / 2 : Math.PI}
       />
@@ -3692,23 +4676,43 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (activeTool === 'wall' && wallVertices.length > 0) {
+              finalizeWallChain();
+            } else if (activeTool === 'poly' && polyVertices.length >= 3) {
+              finalizePoly();
+            } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
+              finalizeRoadCreation(roadPoints);
+            }
+          }}
         >
           <planeGeometry args={[1000, 1000]} />
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
       )}
 
-      {(drawingStart || pushPullState) && (
+      {(drawingStart || pushPullState || isSculptingDragRef.current || (activeTool === 'wall' && wallVertices.length > 0) || (activeTool === 'poly' && polyVertices.length > 0) || ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length > 0)) && (
         <mesh 
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (activeTool === 'wall' && wallVertices.length > 0) {
+              finalizeWallChain();
+            } else if (activeTool === 'poly' && polyVertices.length >= 3) {
+              finalizePoly();
+            } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
+              finalizeRoadCreation(roadPoints);
+            }
+          }}
         >
           <sphereGeometry args={[1000, 16, 16]} />
           <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} />
@@ -4097,13 +5101,13 @@ function Scene() {
               }
             }
 
-            if (activeTool === 'pushpull') {
+            if (['pushpull', 'offset', 'paint', 'select', 'eraser'].includes(activeTool)) {
               e.stopPropagation();
               if (['sphere', 'donut', 'dome'].includes(shape.type)) {
                 document.body.style.cursor = 'not-allowed';
                 setHoveredFace(null);
               } else {
-                document.body.style.cursor = 'crosshair';
+                document.body.style.cursor = activeTool === 'pushpull' ? 'crosshair' : activeTool === 'offset' ? 'copy' : 'pointer';
                 let subFaceIndex: number | undefined = undefined;
                 if (shape.surfaceDivisions && e.faceIndex !== undefined && shape.surfaceDivisions[e.faceIndex] && e.uv) {
                   const division = shape.surfaceDivisions[e.faceIndex];
@@ -4117,13 +5121,13 @@ function Scene() {
                   // For prisms, we use faceIndex directly to highlight the side/cap
                   subFaceIndex = undefined;
                 }
-                setHoveredFace({ shapeId: shape.id, faceIndex: e.faceIndex!, subFaceIndex });
+                setHoveredFace({ shapeId: shape.id, faceIndex: e.faceIndex ?? 4, subFaceIndex });
               }
             }
             handlePointerMove(e);
           },
           onPointerOut: (e: any) => {
-            if (activeTool === 'pushpull') {
+            if (['pushpull', 'offset', 'paint', 'select', 'eraser'].includes(activeTool)) {
               document.body.style.cursor = 'auto';
               setHoveredFace(null);
             }
@@ -4202,35 +5206,7 @@ function Scene() {
           )
         );
 
-  const selectionHighlight = selectedId === shape.id && (
-    <mesh position={[0, 0, 0]}>
-      {shape.type === 'circle' || shape.type === 'line' || shape.type === 'triangle' || shape.type === 'prism' ? (
-        <cylinderGeometry args={[
-          ((Array.isArray(shape.args) ? shape.args[0] : 0) || 0) + 0.02, 
-          ((Array.isArray(shape.args) ? shape.args[1] : 0) || 0) + 0.02, 
-          ((Array.isArray(shape.args) ? shape.args[2] : 0) || 0) + 0.02, 
-          (shape.type === 'triangle' || shape.type === 'prism') ? 3 : ((Array.isArray(shape.args) ? shape.args[3] : 32) || 32)
-        ]} />
-      ) : (shape.type === 'box' || shape.type === 'rect') ? (
-        shape.bevelAmount ? (
-          <RoundedBox args={[
-            ((Array.isArray(shape.args) ? shape.args[0] : 0) || 0) + 0.05, 
-            ((Array.isArray(shape.args) ? shape.args[1] : 0) || 0) + 0.05, 
-            ((Array.isArray(shape.args) ? shape.args[2] : 0) || 0) + 0.05
-          ]} radius={shape.bevelAmount} smoothness={shape.bevelSegments || 4} />
-        ) : (
-          <boxGeometry args={[
-            ((Array.isArray(shape.args) ? shape.args[0] : 0) || 0) + 0.05, 
-            ((Array.isArray(shape.args) ? shape.args[1] : 0) || 0) + 0.05, 
-            ((Array.isArray(shape.args) ? shape.args[2] : 0) || 0) + 0.05
-          ]} />
-        )
-      ) : shape.type === 'poly' ? (
-        <PolyGeometry vertices={shape.args?.vertices || []} height={((shape.args as any)?.height || 0) + 0.02} />
-      ) : null}
-      <meshBasicMaterial color="#0063A3" wireframe transparent opacity={0.3} />
-    </mesh>
-  );
+  const selectionHighlight = null;
 
         const subtractHighlight = subtractTargetId === shape.id && (
           <mesh>
@@ -4241,7 +5217,7 @@ function Scene() {
                 ((Array.isArray(shape.args) ? shape.args[2] : 0) || 0) + 0.1
               ]} />
             ) : shape.type === 'poly' ? (
-              <PolyGeometry vertices={shape.args?.vertices || []} height={((shape.args as any)?.height || 0) + 0.1} />
+              <PolyGeometry vertices={shape.args?.vertices || []} height={((shape.args as any)?.height || 0) + 0.1} holes={(shape.args as any)?.holes} />
             ) : null}
             <meshBasicMaterial color="#ef4444" wireframe transparent opacity={0.5} />
           </mesh>
@@ -4261,10 +5237,20 @@ function Scene() {
               {subtractHighlight}
               {/* Task #149: SketchUp-style dark edge lines between adjacent faces */}
               {edgeLinesEnabled && (
-                  <Edges threshold={15} renderOrder={2}>
-                    <lineBasicMaterial color={edgeLinesColor} transparent opacity={edgeLinesOpacity} linewidth={edgeLinesThickness} depthTest={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
-                  </Edges>
-                )}
+                <Edges 
+                  threshold={15} 
+                  color={edgeLinesColor} 
+                  lineWidth={edgeLinesThickness}
+                  linewidth={edgeLinesThickness}
+                  transparent={edgeLinesOpacity < 1} 
+                  opacity={edgeLinesOpacity} 
+                  depthTest={true} 
+                  polygonOffset 
+                  polygonOffsetFactor={-2} 
+                  polygonOffsetUnits={-2} 
+                  renderOrder={2} 
+                />
+              )}
             </RoundedBox>
           );
         }
@@ -4299,12 +5285,56 @@ function Scene() {
             <sphereGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 32, 32]) as any} />
           ) : shape.type === 'poly' ? (
             <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 1} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={(shape.args as any)?.holes} />
+          ) : ['wall', 'door', 'window', 'step', 'staircase'].includes(shape.type) ? (
+            <ArchGeometry shape={shape} shapes={shapes} />
+          ) : ['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(shape.type) ? (
+            <LandscapeFeatureGeometry shape={shape} />
           ) : shape.type === 'custom' ? (
             <CustomGeometry shape={shape} />
+          ) : shape.type === 'terrain' ? (
+            <TerrainGeometry terrainData={shape.terrainData} />
           ) : (
             <boxGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 1, 1]) as any} />
           )}
-          {shape.type === 'box' && shape.surfaceMaterials ? (
+          {shape.type === 'door' || shape.type === 'window' ? (
+            <>
+              {/* Material 0: Frame and solid panels (White / custom finish) */}
+              <meshStandardMaterial 
+                attach="material-0"
+                color={shape.color || '#ffffff'} 
+                roughness={shape.roughness ?? 0.4}
+                metalness={shape.metalness ?? 0.05}
+                transparent={shape.opacity !== undefined && shape.opacity < 1}
+                opacity={shape.opacity ?? 1}
+                side={THREE.DoubleSide}
+                emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
+                emissiveIntensity={selectedId === shape.id ? 0.35 : 0}
+              />
+              {/* Material 1: Crystal Clear See-Through Architectural Glass */}
+              <meshStandardMaterial 
+                attach="material-1"
+                color="#e0f2fe" 
+                roughness={0.05}
+                metalness={0.1}
+                transparent={true}
+                opacity={0.20}
+                depthWrite={false}
+                side={THREE.DoubleSide}
+                emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
+                emissiveIntensity={selectedId === shape.id ? 0.2 : 0}
+              />
+              {/* Material 2: Architectural Brushed Hardware (Knobs / Lever Handles / Pulls) */}
+              <meshStandardMaterial 
+                attach="material-2"
+                color="#94a3b8" 
+                roughness={0.2}
+                metalness={0.85}
+                side={THREE.DoubleSide}
+                emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
+                emissiveIntensity={selectedId === shape.id ? 0.35 : 0}
+              />
+            </>
+          ) : shape.type === 'box' && shape.surfaceMaterials ? (
             [0, 2, 4, 6, 8, 10].map((idx) => {
               const mat = shape.surfaceMaterials?.[idx] || shape.color;
               return (mat.startsWith('http') || mat.startsWith('data:')) ? (
@@ -4343,18 +5373,19 @@ function Scene() {
                 metalness={shape.metalness ?? 0}
                 transparent={true}
                 opacity={shape.opacity ?? 1}
-                side={shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide}
+                side={(shape.type === 'poly' || shape.type === 'terrain') ? THREE.DoubleSide : THREE.FrontSide}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
               />
             ) : (
               <meshStandardMaterial 
-                color={shape.color} 
+                color={shape.type === 'terrain' && shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default' ? '#ffffff' : shape.color} 
+                vertexColors={shape.type === 'terrain' && !!shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default'}
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
                 transparent={shape.opacity !== undefined && shape.opacity < 1}
                 opacity={shape.opacity ?? 1}
-                side={shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide}
+                side={(shape.type === 'poly' || shape.type === 'terrain' || (shape.type === 'custom' && shape.args?.isRoad)) ? THREE.DoubleSide : THREE.FrontSide}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
               />
@@ -4364,10 +5395,20 @@ function Scene() {
           {subtractHighlight}
           {/* Task #149: SketchUp-style dark edge lines between adjacent faces */}
           {edgeLinesEnabled && (
-                  <Edges threshold={15} renderOrder={2}>
-                    <lineBasicMaterial color={edgeLinesColor} transparent opacity={edgeLinesOpacity} linewidth={edgeLinesThickness} depthTest={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
-                  </Edges>
-                )}
+            <Edges 
+              threshold={15} 
+              color={edgeLinesColor} 
+              lineWidth={edgeLinesThickness}
+              linewidth={edgeLinesThickness}
+              transparent={edgeLinesOpacity < 1} 
+              opacity={edgeLinesOpacity} 
+              depthTest={true} 
+              polygonOffset 
+              polygonOffsetFactor={-2} 
+              polygonOffsetUnits={-2} 
+              renderOrder={2} 
+            />
+          )}
         </mesh>
       );
     })}
@@ -4426,10 +5467,20 @@ function Scene() {
             <torusGeometry args={previewShape.args} />
           ) : previewShape.type === 'dome' ? (
             <sphereGeometry args={previewShape.args} />
+          ) : ['wall', 'door', 'window', 'step', 'staircase'].includes(previewShape.type) ? (
+            <ArchGeometry shape={previewShape as any} shapes={shapes} />
           ) : (
             <boxGeometry args={previewShape.args} />
           )}
-          <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} />
+          {previewShape.type === 'door' || previewShape.type === 'window' ? (
+            <>
+              <meshBasicMaterial attach="material-0" color="#ffffff" transparent opacity={0.7} />
+              <meshBasicMaterial attach="material-1" color="#bae6fd" transparent opacity={0.25} />
+              <meshBasicMaterial attach="material-2" color="#cbd5e1" transparent opacity={0.7} />
+            </>
+          ) : (
+            <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} />
+          )}
         </mesh>
       )}
 
@@ -4446,6 +5497,21 @@ function Scene() {
           case 'rect':
           case 'box':
             label = `${formatValue(args[0] || 0, unit, 1)} x ${formatValue(args[1] || 0, unit, 1)} x ${formatValue(args[2] || 0, unit, 1)}`;
+            break;
+          case 'wall':
+            label = `Wall: ${formatValue(args[0] || 0, unit, 1)} × ${formatValue(args[1] || 0, unit, 1)}`;
+            break;
+          case 'door':
+            label = `Door: ${formatValue(args[0] || 0, unit, 1)} × ${formatValue(args[1] || 0, unit, 1)}`;
+            break;
+          case 'window':
+            label = `Window: ${formatValue(args[0] || 0, unit, 1)} × ${formatValue(args[1] || 0, unit, 1)}`;
+            break;
+          case 'step':
+            label = `Step: ${formatValue(args[0] || 0, unit, 1)} × ${formatValue(args[2] || 0, unit, 1)}`;
+            break;
+          case 'staircase':
+            label = `Staircase: ${args[3] || 12} steps`;
             break;
           case 'sphere':
           case 'dome':
@@ -4465,6 +5531,27 @@ function Scene() {
             break;
           case 'triangle':
             label = `Side: ${formatValue(args[0] || 0, unit, 1)}`;
+            break;
+          case 'tree':
+            label = `Tree: 4.2m`;
+            break;
+          case 'bush':
+            label = `Bush: 1.0m`;
+            break;
+          case 'fence':
+            label = `Fence: 2.4m × 1.1m`;
+            break;
+          case 'railing':
+            label = `Railing: 2.0m × 1.0m`;
+            break;
+          case 'lamp':
+            label = `Lamp Post: 3.2m`;
+            break;
+          case 'bench':
+            label = `Park Bench: 1.8m`;
+            break;
+          case 'rock':
+            label = `Rock: 1.2m`;
             break;
           default:
             label = null;
@@ -4572,6 +5659,55 @@ function Scene() {
         );
       })()}
 
+      {/* Landscape Sculpting Cursor Preview */}
+      {(activeTool === 'landscape_sculpt' || activeTool === 'landscape_mask') && sculptCursorPos && (
+        <group position={[sculptCursorPos.x, sculptCursorPos.y + 0.05, sculptCursorPos.z]}>
+          {/* Circular ring denoting brush radius */}
+          {(() => {
+            const rad = landscapeSculptSettings.radius;
+            const segments = 48;
+            const ringPts: [number, number, number][] = [];
+            for (let i = 0; i <= segments; i++) {
+              const theta = (i / segments) * Math.PI * 2;
+              ringPts.push([Math.cos(theta) * rad, 0, Math.sin(theta) * rad]);
+            }
+            const brushColor = 
+              landscapeSculptSettings.mode === 'pull' ? '#ef4444' :
+              landscapeSculptSettings.mode === 'push' ? '#3b82f6' :
+              landscapeSculptSettings.mode === 'smooth' ? '#10b981' :
+              landscapeSculptSettings.mode === 'flatten' ? '#f59e0b' : '#8b5cf6';
+            return (
+              <>
+                <Line points={ringPts} color={brushColor} lineWidth={3} />
+                <mesh position={[0, 0, 0]}>
+                  <sphereGeometry args={[0.08, 16, 16]} />
+                  <meshBasicMaterial color={brushColor} />
+                </mesh>
+              </>
+            );
+          })()}
+        </group>
+      )}
+
+      {/* Landscape Road Drawing Preview */}
+      {(activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length > 0 && (
+        <group>
+          {roadPoints.length >= 2 && (
+            <Line
+              points={roadPoints.map(p => [p.x, p.y + 0.05, p.z] as [number, number, number])}
+              color="#f59e0b"
+              lineWidth={3.5}
+            />
+          )}
+          {roadPoints.map((pt, idx) => (
+            <mesh key={idx} position={[pt.x, pt.y + 0.08, pt.z]}>
+              <cylinderGeometry args={[0.12, 0.12, 0.08, 16]} />
+              <meshBasicMaterial color={idx === 0 ? "#22c55e" : idx === roadPoints.length - 1 ? "#ef4444" : "#f59e0b"} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
       {activeTool === 'offset' && offsetPreviewPoints && offsetPreviewPoints.length > 2 && (
         <Line
           points={offsetPreviewPoints.map(p => [p.x, p.y, p.z] as [number, number, number])}
@@ -4626,6 +5762,72 @@ function Scene() {
         </group>
       )}
 
+      {/* Wall Drawing Preview (Poly-style continuous 3D wall placement) */}
+      {activeTool === 'wall' && wallVertices.length > 0 && (
+        <group>
+          {/* Active 3D Wall Box Preview */}
+          {wallCandidatePos && (() => {
+            const lastV = wallVertices[wallVertices.length - 1];
+            const dist = lastV.distanceTo(wallCandidatePos);
+            if (dist < 0.05) return null;
+            const wallH = 2.8;
+            const wallT = 0.2;
+            const center = lastV.clone().lerp(wallCandidatePos, 0.5);
+            center.y = Math.max(lastV.y, wallCandidatePos.y) + wallH / 2;
+            const dir = new THREE.Vector3().subVectors(wallCandidatePos, lastV);
+            const angle = Math.atan2(dir.z, dir.x);
+            const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+
+            return (
+              <group>
+                <mesh position={center} quaternion={quat}>
+                  <boxGeometry args={[dist, wallH, wallT]} />
+                  <meshStandardMaterial 
+                    color={activeMaterial || '#3b82f6'} 
+                    roughness={activePBR.roughness} 
+                    metalness={activePBR.metalness}
+                    transparent 
+                    opacity={0.65} 
+                  />
+                </mesh>
+                {/* Baseline Guide */}
+                <Line
+                  points={[
+                    [lastV.x, lastV.y + 0.02, lastV.z],
+                    [wallCandidatePos.x, wallCandidatePos.y + 0.02, wallCandidatePos.z]
+                  ]}
+                  color={wallHoveredVertex === 0 ? "#FFD700" : "#3b82f6"}
+                  lineWidth={3}
+                />
+              </group>
+            );
+          })()}
+
+          {/* Ghost Closing Line if looping back to start vertex */}
+          {wallVertices.length >= 2 && wallCandidatePos && (
+            <Line
+              points={[
+                [wallCandidatePos.x, wallCandidatePos.y + 0.02, wallCandidatePos.z],
+                [wallVertices[0].x, wallVertices[0].y + 0.02, wallVertices[0].z]
+              ]}
+              color={wallHoveredVertex === 0 ? "#FFD700" : "#94a3b8"}
+              lineWidth={wallHoveredVertex === 0 ? 4 : 1.5}
+              dashed={wallHoveredVertex !== 0}
+              dashSize={0.15}
+              gapSize={0.08}
+            />
+          )}
+
+          {/* Corner Node Markers */}
+          {wallVertices.map((v, i) => (
+            <mesh key={i} position={[v.x, v.y + 0.05, v.z]}>
+              <cylinderGeometry args={[i === 0 && wallHoveredVertex === 0 ? 0.12 : 0.06, i === 0 && wallHoveredVertex === 0 ? 0.12 : 0.06, 0.1, 16]} />
+              <meshBasicMaterial color={i === 0 && wallHoveredVertex === 0 ? "#FFD700" : (i === 0 ? "#22c55e" : "#3b82f6")} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
       {(ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))) && (
         <EffectComposer enableNormalPass={ambientOcclusionEnabled}>
           {ambientOcclusionEnabled && (
@@ -4643,7 +5845,7 @@ function Scene() {
           )}
         </EffectComposer>
       )}
-      {hoveredFace && activeTool === 'pushpull' && !pushPullState && (
+      {hoveredFace && ['pushpull', 'offset', 'paint', 'select', 'eraser'].includes(activeTool) && !pushPullState && (
         <SurfaceHighlight 
           shapeId={hoveredFace.shapeId} 
           faceIndex={hoveredFace.faceIndex} 
@@ -5019,57 +6221,128 @@ function CustomLightComponent({
   );
 }
 
+const stippleTexture = (() => {
+  if (typeof document === 'undefined') return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 8;
+    canvas.height = 8;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, 8, 8);
+      ctx.fillStyle = '#0063A3';
+      ctx.fillRect(0, 0, 1.5, 1.5);
+      ctx.fillRect(4, 4, 1.5, 1.5);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(24, 24);
+    return tex;
+  } catch {
+    return null;
+  }
+})();
+
+function StippledPolyMesh({ vertices, holes, height = 0.005 }: { vertices: [number, number][], holes?: [number, number][][], height?: number }) {
+  const outerLoop: [number, number, number][] = [...vertices, vertices[0]].map(v => [v[0], v[1], 0.002]);
+  return (
+    <group>
+      <mesh position={[0, 0, 0]}>
+        <PolyGeometry vertices={vertices} height={height} holes={holes} />
+        <meshBasicMaterial color="#0063A3" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {stippleTexture && (
+        <mesh position={[0, 0, 0.001]}>
+          <PolyGeometry vertices={vertices} height={height} holes={holes} />
+          <meshBasicMaterial color="#0063A3" map={stippleTexture} transparent opacity={0.85} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+      )}
+      <Line points={outerLoop} color="#0063A3" lineWidth={2.5} />
+      {(holes || []).map((hole, hIdx) => {
+        const holeLoop: [number, number, number][] = [...hole, hole[0]].map(v => [v[0], v[1], 0.002]);
+        return <Line key={hIdx} points={holeLoop} color="#0063A3" lineWidth={2.5} />;
+      })}
+    </group>
+  );
+}
+
+function StippledPlaneMesh({ width, height }: { width: number, height: number }) {
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const borderPoints: [number, number, number][] = [
+    [-halfW, -halfH, 0.002],
+    [halfW, -halfH, 0.002],
+    [halfW, halfH, 0.002],
+    [-halfW, halfH, 0.002],
+    [-halfW, -halfH, 0.002],
+  ];
+  return (
+    <group>
+      <mesh position={[0, 0, 0]}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial color="#0063A3" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {stippleTexture && (
+        <mesh position={[0, 0, 0.001]}>
+          <planeGeometry args={[width, height]} />
+          <meshBasicMaterial color="#0063A3" map={stippleTexture} transparent opacity={0.85} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+      )}
+      <Line points={borderPoints} color="#0063A3" lineWidth={2.5} />
+    </group>
+  );
+}
+
+function StippledDiscMesh({ radius, segments }: { radius: number, segments: number }) {
+  const edgePts: [number, number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const angle = (i % segments) * ((Math.PI * 2) / segments);
+    edgePts.push([Math.cos(angle) * radius, 0.002, Math.sin(angle) * radius]);
+  }
+  return (
+    <group>
+      <mesh position={[0, 0, 0]}>
+        <cylinderGeometry args={[radius, radius, 0.005, segments]} />
+        <meshBasicMaterial color="#0063A3" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {stippleTexture && (
+        <mesh position={[0, 0.001, 0]}>
+          <cylinderGeometry args={[radius, radius, 0.005, segments]} />
+          <meshBasicMaterial color="#0063A3" map={stippleTexture} transparent opacity={0.85} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+      )}
+      <Line points={edgePts} color="#0063A3" lineWidth={2.5} />
+    </group>
+  );
+}
+
 function SurfaceHighlight({ shapeId, faceIndex, subFaceIndex }: { shapeId: string, faceIndex: number, subFaceIndex?: number }) {
   const { shapes } = useApp();
   const shape = shapes.find(s => s.id === shapeId);
-  if (!shape || (shape.type !== 'box' && shape.type !== 'rect' && shape.type !== 'triangle' && shape.type !== 'prism' && shape.type !== 'poly')) return null;
+  if (!shape || (shape.type !== 'box' && shape.type !== 'rect' && shape.type !== 'triangle' && shape.type !== 'prism' && shape.type !== 'poly' && shape.type !== 'circle')) return null;
 
   if (shape.type === 'poly') {
     const height = shape.args.height || 0;
-    
-    // We can't easily highlight EXACT faces for extruded poly without geometry analysis,
-    // so we highlight the top/bottom caps or the whole side shell.
-    
-    // Simplification: if height is 0, just highlight the whole thing.
-    if (height === 0) {
-      return (
-        <group position={shape.position} quaternion={shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined} scale={shape.scale}>
-          <mesh position={[0, 0, 0.005]}>
-            <PolyGeometry vertices={shape.args.vertices} height={0.01} holes={(shape.args as any).holes} />
-            <meshBasicMaterial color="#0063A3" transparent opacity={0.4} side={THREE.DoubleSide} />
-          </mesh>
-        </group>
-      );
-    }
-
-    // If height > 0, we'll just show a selection-like highlight for now, 
-    // but positioned at the top cap as a hint.
-    const zOffset = height / 2 + 0.005;
+    const zOffset = height > 0 ? height / 2 + 0.005 : 0.005;
     return (
       <group position={shape.position} quaternion={shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined} scale={shape.scale}>
-        <mesh position={[0, 0, zOffset]}>
-          <PolyGeometry vertices={shape.args.vertices} height={0.01} holes={(shape.args as any).holes} />
-          <meshBasicMaterial color="#0063A3" transparent opacity={0.4} side={THREE.DoubleSide} />
-        </mesh>
+        <group position={[0, 0, zOffset]}>
+          <StippledPolyMesh vertices={shape.args.vertices} holes={(shape.args as any).holes} />
+        </group>
       </group>
     );
   }
 
-  if (shape.type === 'triangle' || shape.type === 'prism') {
+  if (shape.type === 'triangle' || shape.type === 'prism' || shape.type === 'circle') {
     const radius = shape.args[0];
-    const height = shape.args[2];
-    const radialSegments = shape.args[3] || 3;
+    const height = shape.args[2] || 0.01;
+    const radialSegments = (shape.type === 'triangle' || shape.type === 'prism') ? 3 : (shape.args[3] || 32);
 
-    // Determine if it's a side, top, or bottom face
-    // For a 3-segment prism:
-    // 0-5: sides (2 triangles per side)
-    // 6: top
-    // 7: bottom
-    
     let pos: [number, number, number] = [0, 0, 0];
     let rot: [number, number, number] = [0, 0, 0];
     let size: [number, number] = [0, 0];
-    let isTriangle = false;
+    let isCap = false;
 
     if (faceIndex < radialSegments * 2) {
       // Side face
@@ -5089,24 +6362,23 @@ function SurfaceHighlight({ shapeId, faceIndex, subFaceIndex }: { shapeId: strin
       // Top face
       pos = [0, height / 2 + 0.005, 0];
       rot = [0, 0, 0];
-      isTriangle = true;
+      isCap = true;
     } else if (faceIndex === radialSegments * 2 + 1) {
       // Bottom face
       pos = [0, -height / 2 - 0.005, 0];
       rot = [0, 0, 0];
-      isTriangle = true;
+      isCap = true;
     }
 
     return (
       <group position={shape.position} quaternion={shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined} scale={shape.scale}>
-        <mesh position={pos} rotation={rot}>
-          {isTriangle ? (
-            <cylinderGeometry args={[radius, radius, 0.01, radialSegments]} />
+        <group position={pos} rotation={rot}>
+          {isCap ? (
+            <StippledDiscMesh radius={radius} segments={radialSegments} />
           ) : (
-            <planeGeometry args={size} />
+            <StippledPlaneMesh width={size[0]} height={size[1]} />
           )}
-          <meshBasicMaterial color="#0063A3" transparent opacity={0.4} side={THREE.DoubleSide} />
-        </mesh>
+        </group>
       </group>
     );
   }
@@ -5142,10 +6414,9 @@ function SurfaceHighlight({ shapeId, faceIndex, subFaceIndex }: { shapeId: strin
     return (
       <group position={shape.position} quaternion={shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined} scale={shape.scale}>
         <group rotation={rot} position={pos}>
-           <mesh position={[localX, localY, 0]}>
-             <planeGeometry args={[cellW, cellH]} />
-             <meshBasicMaterial color="#0063A3" transparent opacity={0.6} side={THREE.DoubleSide} />
-           </mesh>
+           <group position={[localX, localY, 0]}>
+             <StippledPlaneMesh width={cellW} height={cellH} />
+           </group>
         </group>
       </group>
     );
@@ -5153,10 +6424,9 @@ function SurfaceHighlight({ shapeId, faceIndex, subFaceIndex }: { shapeId: strin
 
   return (
     <group position={shape.position} quaternion={shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined} scale={shape.scale}>
-      <mesh position={pos} rotation={rot}>
-        <planeGeometry args={size} />
-        <meshBasicMaterial color="#0063A3" transparent opacity={0.4} side={THREE.DoubleSide} />
-      </mesh>
+      <group position={pos} rotation={rot}>
+        <StippledPlaneMesh width={size[0]} height={size[1]} />
+      </group>
     </group>
   );
 }
@@ -5169,6 +6439,16 @@ function regularPolygonVertices(radius: number, segments: number): [number, numb
     verts.push([radius * Math.sin(angle), radius * Math.cos(angle)]);
   }
   return verts;
+}
+
+function normalizePolyWinding(pts: [number, number][], ccw: boolean): [number, number][] {
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+    area += p1[0] * p2[1] - p2[0] * p1[1];
+  }
+  const isCCW = area > 0;
+  return isCCW === ccw ? pts : [...pts].reverse();
 }
 
 function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, uprightY = false, holes = undefined }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, uprightY?: boolean, holes?: [number, number][][] }) {
@@ -5184,12 +6464,27 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
 
     if (filtered.length < 3) return new THREE.BufferGeometry();
 
+    const outerCCW = normalizePolyWinding(filtered, true);
     const shape = new THREE.Shape();
-    shape.moveTo(filtered[0][0], filtered[0][1]);
-    for (let i = 1; i < filtered.length; i++) {
-      shape.lineTo(filtered[i][0], filtered[i][1]);
+    shape.moveTo(outerCCW[0][0], outerCCW[0][1]);
+    for (let i = 1; i < outerCCW.length; i++) {
+      shape.lineTo(outerCCW[i][0], outerCCW[i][1]);
     }
-    shape.closePath(); if (holes && holes.length > 0) { for (const holePts of holes) { if (!holePts || holePts.length < 3) continue; const path = new THREE.Path(); path.moveTo(holePts[0][0], holePts[0][1]); for (let i = 1; i < holePts.length; i++) { path.lineTo(holePts[i][0], holePts[i][1]); } path.closePath(); shape.holes.push(path); } }
+    shape.closePath();
+    
+    if (holes && holes.length > 0) {
+      for (const holePts of holes) {
+        if (!holePts || holePts.length < 3) continue;
+        const holeCW = normalizePolyWinding(holePts, false);
+        const path = new THREE.Path();
+        path.moveTo(holeCW[0][0], holeCW[0][1]);
+        for (let i = 1; i < holeCW.length; i++) {
+          path.lineTo(holeCW[i][0], holeCW[i][1]);
+        }
+        path.closePath();
+        shape.holes.push(path);
+      }
+    }
     
     try {
       if (height === 0) {
@@ -5220,7 +6515,205 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
     };
   }, [geometry]);
 
-  return <primitive object={geometry} />;
+  return <primitive object={geometry} attach="geometry" />;
+}
+
+function CustomGeometry({ shape }: { shape: Shape }) {
+  const geometry = useMemo(() => {
+    // 1. Roadway Strip 3D Geometry
+    if (shape.args?.isRoad && Array.isArray(shape.args?.path) && shape.args.path.length >= 2) {
+      const pathPts = shape.args.path.map((p: any) => new THREE.Vector3(p[0], p[1], p[2]));
+      const width = typeof shape.args.width === 'number' ? shape.args.width : 4.0;
+      const embankment = !!shape.args.embankment;
+
+      // Sample path finely using CatmullRomCurve3 if >= 2 points
+      let samplePoints: THREE.Vector3[] = [];
+      if (pathPts.length === 2) {
+        const steps = 24;
+        for (let s = 0; s <= steps; s++) {
+          samplePoints.push(new THREE.Vector3().lerpVectors(pathPts[0], pathPts[1], s / steps));
+        }
+      } else {
+        const curve = new THREE.CatmullRomCurve3(pathPts, false, 'centripetal');
+        samplePoints = curve.getPoints(Math.max(36, pathPts.length * 16));
+      }
+
+      const vertices: number[] = [];
+      const normals: number[] = [];
+      const uvs: number[] = [];
+      const indices: number[] = [];
+
+      let totalLen = 0;
+      const dists: number[] = [0];
+      for (let i = 1; i < samplePoints.length; i++) {
+        totalLen += samplePoints[i].distanceTo(samplePoints[i - 1]);
+        dists.push(totalLen);
+      }
+
+      for (let i = 0; i < samplePoints.length; i++) {
+        const curr = samplePoints[i];
+        let tangent = new THREE.Vector3();
+        if (i === 0) {
+          tangent.subVectors(samplePoints[1], curr).normalize();
+        } else if (i === samplePoints.length - 1) {
+          tangent.subVectors(curr, samplePoints[i - 1]).normalize();
+        } else {
+          tangent.subVectors(samplePoints[i + 1], samplePoints[i - 1]).normalize();
+        }
+
+        const up = new THREE.Vector3(0, 1, 0);
+        let side = new THREE.Vector3().crossVectors(tangent, up).normalize();
+        if (side.lengthSq() < 0.001) side = new THREE.Vector3(1, 0, 0);
+
+        const vFrac = dists[i] / (totalLen || 1);
+        const halfW = width / 2;
+
+        if (embankment) {
+          // 4 vertices per cross-section: Outer left slope, Left road edge, Right road edge, Outer right slope
+          const p0 = curr.clone().addScaledVector(side, -halfW - 0.8).add(new THREE.Vector3(0, -0.22, 0));
+          const p1 = curr.clone().addScaledVector(side, -halfW).add(new THREE.Vector3(0, 0.05, 0));
+          const p2 = curr.clone().addScaledVector(side, halfW).add(new THREE.Vector3(0, 0.05, 0));
+          const p3 = curr.clone().addScaledVector(side, halfW + 0.8).add(new THREE.Vector3(0, -0.22, 0));
+
+          vertices.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
+          normals.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
+          uvs.push(0, vFrac * totalLen, 0.2, vFrac * totalLen, 0.8, vFrac * totalLen, 1, vFrac * totalLen);
+        } else {
+          // 2 main top vertices with slight thickness
+          const pLeft = curr.clone().addScaledVector(side, -halfW).add(new THREE.Vector3(0, 0.05, 0));
+          const pRight = curr.clone().addScaledVector(side, halfW).add(new THREE.Vector3(0, 0.05, 0));
+
+          vertices.push(pLeft.x, pLeft.y, pLeft.z, pRight.x, pRight.y, pRight.z);
+          normals.push(0, 1, 0, 0, 1, 0);
+          uvs.push(0, vFrac * totalLen, 1, vFrac * totalLen);
+        }
+      }
+
+      const numCols = embankment ? 4 : 2;
+      for (let i = 0; i < samplePoints.length - 1; i++) {
+        for (let c = 0; c < numCols - 1; c++) {
+          const row1 = i * numCols;
+          const row2 = (i + 1) * numCols;
+          const a = row1 + c;
+          const b = row1 + c + 1;
+          const c_idx = row2 + c + 1;
+          const d = row2 + c;
+
+          indices.push(a, b, c_idx);
+          indices.push(a, c_idx, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // 2. Custom JSON BufferGeometry
+    if (shape.geometryData) {
+      try {
+        const loader = new THREE.BufferGeometryLoader();
+        return loader.parse(shape.geometryData);
+      } catch (err) {
+        console.warn('Error parsing custom geometryData:', err);
+      }
+    }
+
+    // Fallback
+    return new THREE.BoxGeometry(1, 1, 1);
+  }, [shape.args, shape.geometryData]);
+
+  useEffect(() => {
+    return () => {
+      if (geometry) geometry.dispose();
+    };
+  }, [geometry]);
+
+  return <primitive object={geometry} attach="geometry" />;
+}
+
+function TerrainGeometry({ terrainData }: { terrainData?: any }) {
+  const geometry = useMemo(() => {
+    if (!terrainData || !terrainData.heights) {
+      return new THREE.PlaneGeometry(20, 20, 32, 32);
+    }
+    const { gridX, gridY, width, depth, heights, shadingMode } = terrainData;
+    const geo = new THREE.PlaneGeometry(width, depth, gridX - 1, gridY - 1);
+    geo.rotateX(-Math.PI / 2); // Orient horizontally in XZ plane with Y as elevation
+
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      if (heights[i] !== undefined) {
+        pos.setY(i, heights[i]);
+      }
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+
+    // Generate vertex colors if elevation, slope, or contour shading is requested
+    if (shadingMode && shadingMode !== 'default') {
+      const colors: number[] = [];
+      const normals = geo.attributes.normal;
+      
+      let minH = Infinity, maxH = -Infinity;
+      for (let i = 0; i < heights.length; i++) {
+        if (heights[i] < minH) minH = heights[i];
+        if (heights[i] > maxH) maxH = heights[i];
+      }
+      const rangeH = (maxH - minH) || 1;
+
+      for (let i = 0; i < pos.count; i++) {
+        const h = pos.getY(i);
+        const normY = normals ? normals.getY(i) : 1; // 1 = flat horizontal, < 0.7 = steep
+        const hFrac = Math.max(0, Math.min(1, (h - minH) / rangeH));
+
+        if (shadingMode === 'slope') {
+          // Green on flats, warm rock on medium slope, dark cliff on steep slope
+          if (normY > 0.85) {
+            colors.push(0.3, 0.65, 0.2);
+          } else if (normY > 0.6) {
+            colors.push(0.55, 0.5, 0.4);
+          } else {
+            colors.push(0.25, 0.25, 0.3);
+          }
+        } else if (shadingMode === 'contours') {
+          // Stepped contour band lines
+          const band = Math.sin(h * Math.PI * 4);
+          if (band > 0.8) {
+            colors.push(0.9, 0.8, 0.2);
+          } else {
+            colors.push(0.25 + hFrac * 0.3, 0.45 + hFrac * 0.25, 0.2);
+          }
+        } else {
+          // 'elevation' mode: Lush green valley -> Stone mountain -> Snowy crest
+          if (hFrac < 0.35) {
+            colors.push(0.25, 0.55 + hFrac * 0.3, 0.15);
+          } else if (hFrac < 0.75) {
+            const t = (hFrac - 0.35) / 0.4;
+            colors.push(0.35 + t * 0.25, 0.45 - t * 0.1, 0.25 + t * 0.15);
+          } else {
+            const t = (hFrac - 0.75) / 0.25;
+            colors.push(0.6 + t * 0.38, 0.6 + t * 0.38, 0.65 + t * 0.34);
+          }
+        }
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    }
+
+    return geo;
+  }, [terrainData]);
+
+  useEffect(() => {
+    return () => {
+      if (geometry) geometry.dispose();
+    };
+  }, [geometry]);
+
+  return <primitive key={terrainData ? `${terrainData.gridX}-${terrainData.gridY}-${terrainData.shadingMode}` : 'default'} object={geometry} attach="geometry" />;
 }
 
 export default function Viewport() {
@@ -5235,6 +6728,8 @@ export default function Viewport() {
     activePBR, 
     setShapes, 
     addShape,
+    commitHistory,
+    setMeasurements,
     skybox, 
     activeTagId, 
     shapes, 
@@ -5258,6 +6753,7 @@ export default function Viewport() {
     showCollaboratorCursors,
     unit
   } = useApp();
+  const [styleLibraryTargetId, setStyleLibraryTargetId] = useState<string | null>(null);
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
   const [quadView, setQuadView] = useState(false);
   const [panelViews, setPanelViews] = useState<Array<'perspective' | 'top' | 'front' | 'right'>>(['perspective', 'top', 'front', 'right']);
@@ -5897,6 +7393,27 @@ export default function Viewport() {
                   </div>
                 )}
               </div>
+              {(() => {
+                const shape = shapes.find(sh => sh.id === contextMenu.data.shapeId);
+                if (shape && (shape.type === 'door' || shape.type === 'window')) {
+                  return (
+                    <button 
+                      onClick={() => {
+                        setStyleLibraryTargetId(shape.id);
+                        setContextMenu(null);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-trimble-blue",
+                        theme === 'dark' ? "hover:bg-gray-700 bg-trimble-blue/10" : "hover:bg-gray-100 bg-trimble-blue/5"
+                      )}
+                    >
+                      <Palette size={14} className="text-trimble-blue shrink-0" />
+                      <span>Change Style...</span>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <button 
                 onClick={() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; if (st === 'box' || st === 'rect') setIsDividePopupOpen(true); }} disabled={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return st !== 'box' && st !== 'rect'; })()} title={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return (st === 'box' || st === 'rect') ? undefined : 'Only available on box/rectangle faces'; })()}
                 className={cn(
@@ -5927,6 +7444,29 @@ export default function Viewport() {
             </>
           ) : (
             <>
+              {(() => {
+                if (Array.isArray(contextMenu.data) && contextMenu.data.length === 1) {
+                  const singleShape = shapes.find(s => s.id === contextMenu.data[0]);
+                  if (singleShape && (singleShape.type === 'door' || singleShape.type === 'window')) {
+                    return (
+                      <button 
+                        onClick={() => {
+                          setStyleLibraryTargetId(singleShape.id);
+                          setContextMenu(null);
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-trimble-blue",
+                          theme === 'dark' ? "hover:bg-gray-700 bg-trimble-blue/10" : "hover:bg-gray-100 bg-trimble-blue/5"
+                        )}
+                      >
+                        <Palette size={14} className="text-trimble-blue shrink-0" />
+                        <span>Change Style...</span>
+                      </button>
+                    );
+                  }
+                }
+                return null;
+              })()}
               <button 
                 onClick={() => {
                   const groupId = Math.random().toString(36).substr(2, 9);
@@ -6189,22 +7729,33 @@ export default function Viewport() {
           </div>
         </div>
       )}
+
+      {/* Style Library Modal for Doors and Windows */}
+      <StyleLibraryModal 
+        isOpen={!!styleLibraryTargetId}
+        targetShape={shapes.find(s => s.id === styleLibraryTargetId) || null}
+        onClose={() => setStyleLibraryTargetId(null)}
+        theme={theme}
+        onApplyStyle={(styleId, dims) => {
+          if (!styleLibraryTargetId) return;
+          setShapes(prev => prev.map(s => {
+            if (s.id === styleLibraryTargetId) {
+              const updatedArgs = dims || s.args;
+              return {
+                ...s,
+                archStyle: styleId,
+                args: updatedArgs
+              };
+            }
+            return s;
+          }));
+          commitHistory();
+          setMeasurements(`Updated style to ${styleId.toUpperCase()}`);
+          setStyleLibraryTargetId(null);
+        }}
+      />
     </div>
   );
-}
-
-function CustomGeometry({ shape }: { shape: Shape }) {
-  const geometry = useMemo(() => {
-    try {
-      console.log(`[CustomGeometry] Parsing geometry for ${shape.id}`);
-      return new THREE.BufferGeometryLoader().parse(shape.geometryData);
-    } catch (err) {
-      console.error(`[CustomGeometry] Failed to parse geometry for ${shape.id}:`, err);
-      return new THREE.BoxGeometry(1, 1, 1);
-    }
-  }, [shape.geometryData, shape.id]);
-
-  return <primitive object={geometry} attach="geometry" />;
 }
 
 function RenderMapTexture({ lat, lng }: { lat: number, lng: number }) {

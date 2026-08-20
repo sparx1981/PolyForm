@@ -14,6 +14,8 @@ import { cn } from './lib/utils';
 import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle } from 'lucide-react';
 import TopBar from './components/TopBar';
 import LeftToolbar from './components/LeftToolbar';
+import ArchitectureToolbar from './components/ArchitectureToolbar';
+import LandscapesToolbar from './components/LandscapesToolbar';
 import RightPanelStack from './components/RightPanelStack';
 import StatusBar from './components/StatusBar';
 import Viewport from './components/Viewport';
@@ -242,6 +244,8 @@ function AppContent() {
 
       <main className="flex-1 flex overflow-hidden relative">
         <LeftToolbar />
+        <ArchitectureToolbar />
+        <LandscapesToolbar />
         <Viewport />
         
         {!isToolModifierDocked && <ToolModifierPalette />}

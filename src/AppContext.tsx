@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight } from './types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
@@ -291,6 +291,68 @@ console.log("Created rectangle:", myRect.id);`);
   const [subtractCutterId, setSubtractCutterId] = useState<string | null>(null);
   const [subtractTargetId, setSubtractTargetId] = useState<string | null>(null);
 
+  // Architecture Toolbar (Disabled by default, persisted across sessions)
+  const [isArchitectureToolbarEnabled, setIsArchitectureToolbarEnabledState] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_arch_toolbar');
+      if (stored !== null) return stored === 'true';
+    } catch (e) {}
+    return false;
+  });
+
+  const setIsArchitectureToolbarEnabled = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsArchitectureToolbarEnabledState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_arch_toolbar', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  // Landscapes Toolbar (Disabled by default, persisted across sessions)
+  const [isLandscapesToolbarEnabled, setIsLandscapesToolbarEnabledState] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_landscapes_toolbar');
+      if (stored !== null) return stored === 'true';
+    } catch (e) {}
+    return false;
+  });
+
+  const setIsLandscapesToolbarEnabled = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsLandscapesToolbarEnabledState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_landscapes_toolbar', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const [landscapeSculptSettings, setLandscapeSculptSettings] = useState<{
+    mode: 'push' | 'pull' | 'smooth' | 'flatten' | 'pinch';
+    radius: number;
+    intensity: number;
+    masked: boolean;
+  }>({
+    mode: 'push',
+    radius: 3,
+    intensity: 0.5,
+    masked: false
+  });
+
+  const [landscapeRoadSettings, setLandscapeRoadSettings] = useState<{
+    width: number;
+    embankment: boolean;
+    roadColor: string;
+    curbHeight: number;
+  }>({
+    width: 3.5,
+    embankment: true,
+    roadColor: '#334155',
+    curbHeight: 0.15
+  });
+
   // Persistence for user settings
   useEffect(() => {
     if (user?.uid) {
@@ -305,6 +367,8 @@ console.log("Created rectangle:", myRect.id);`);
             allNotesVisible,
             defaultCameraPosition,
             defaultCameraTarget,
+            isArchitectureToolbarEnabled,
+            isLandscapesToolbarEnabled,
             updatedAt: Date.now()
           }, { merge: true });
         } catch (error: any) {
@@ -316,7 +380,7 @@ console.log("Created rectangle:", myRect.id);`);
       const timeout = setTimeout(saveSettings, 30000); // 30s debounce for settings
       return () => clearTimeout(timeout);
     }
-  }, [theme, unit, gridEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, user?.uid]);
+  }, [theme, unit, gridEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, user?.uid]);
 
   // Load user settings
   const lastSettingsLoad = useRef<number>(0);
@@ -338,6 +402,12 @@ console.log("Created rectangle:", myRect.id);`);
           if (data.allNotesVisible !== undefined) setAllNotesVisible(data.allNotesVisible);
           if (data.defaultCameraPosition) setDefaultCameraPosition(data.defaultCameraPosition);
           if (data.defaultCameraTarget) setDefaultCameraTarget(data.defaultCameraTarget);
+          if (data.isArchitectureToolbarEnabled !== undefined) {
+            setIsArchitectureToolbarEnabled(Boolean(data.isArchitectureToolbarEnabled));
+          }
+          if (data.isLandscapesToolbarEnabled !== undefined) {
+            setIsLandscapesToolbarEnabled(Boolean(data.isLandscapesToolbarEnabled));
+          }
         }
       } catch (error: any) {
         console.error('[Settings] Load error:', error);
@@ -351,8 +421,8 @@ console.log("Created rectangle:", myRect.id);`);
   // Real-time Collaboration Sync
   useEffect(() => {
     if (!currentModelId || checkQuota()) {
-      setCollaborators([]);
-      setChatMessages([]);
+      setCollaborators(prev => prev.length > 0 ? [] : prev);
+      setChatMessages(prev => prev.length > 0 ? [] : prev);
       return;
     }
 
@@ -605,40 +675,40 @@ console.log("Created rectangle:", myRect.id);`);
     });
   };
 
-  const setShapesSilent = (newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
+  const setShapesSilent = useCallback((newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
     lastStateHash.current = ''; // Force next push to re-evaluate if needed, but not immediately
     setShapes(newShapesOrFn);
-  };
+  }, []);
 
-  const setTagsSilent = (newTagsOrFn: Tag[] | ((prev: Tag[]) => Tag[])) => {
+  const setTagsSilent = useCallback((newTagsOrFn: Tag[] | ((prev: Tag[]) => Tag[])) => {
     lastStateHash.current = '';
     setTags(newTagsOrFn);
-  };
+  }, []);
   
-  const setScenesSilent = (newScenesOrFn: SceneState[] | ((prev: SceneState[]) => SceneState[])) => {
+  const setScenesSilent = useCallback((newScenesOrFn: SceneState[] | ((prev: SceneState[]) => SceneState[])) => {
     lastStateHash.current = '';
     setScenes(newScenesOrFn);
-  };
+  }, []);
 
-  const setCustomMaterialsSilent = (newMaterialsOrFn: any[] | ((prev: any[]) => any[])) => {
+  const setCustomMaterialsSilent = useCallback((newMaterialsOrFn: any[] | ((prev: any[]) => any[])) => {
     lastStateHash.current = '';
     setCustomMaterials(newMaterialsOrFn);
-  };
+  }, []);
 
-  const setAnimationsSilent = (newAnimationsOrFn: SceneAnimation[] | ((prev: SceneAnimation[]) => SceneAnimation[])) => {
+  const setAnimationsSilent = useCallback((newAnimationsOrFn: SceneAnimation[] | ((prev: SceneAnimation[]) => SceneAnimation[])) => {
     lastStateHash.current = '';
     setAnimations(newAnimationsOrFn);
-  };
+  }, []);
 
-  const setCustomLightsSilent = (newLightsOrFn: CustomLight[] | ((prev: CustomLight[]) => CustomLight[])) => {
+  const setCustomLightsSilent = useCallback((newLightsOrFn: CustomLight[] | ((prev: CustomLight[]) => CustomLight[])) => {
     lastStateHash.current = '';
     setCustomLights(newLightsOrFn);
-  };
+  }, []);
 
-  const setNotesSilent = (newNotesOrFn: SceneNote[] | ((prev: SceneNote[]) => SceneNote[])) => {
+  const setNotesSilent = useCallback((newNotesOrFn: SceneNote[] | ((prev: SceneNote[]) => SceneNote[])) => {
     lastStateHash.current = '';
     setNotes(newNotesOrFn);
-  };
+  }, []);
 
   const commitHistory = () => {
     saveToHistory(shapes);
@@ -1063,6 +1133,15 @@ console.log("Created rectangle:", myRect.id);`);
       syncStatus,
       isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
+      // Architecture & Landscapes Toolbars
+      isArchitectureToolbarEnabled,
+      setIsArchitectureToolbarEnabled,
+      isLandscapesToolbarEnabled,
+      setIsLandscapesToolbarEnabled,
+      landscapeSculptSettings,
+      setLandscapeSculptSettings,
+      landscapeRoadSettings,
+      setLandscapeRoadSettings,
       contactFrictionEnabled,
       setContactFrictionEnabled,
       isAIGenerateOpen,

@@ -5,19 +5,35 @@ export type ToolType =
   | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section'
   | 'orbit' | 'pan' | 'zoom' | 'zoomextents'
   | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome'
-  | 'bevel' | 'subtract' | 'note' | 'deform';
+  | 'bevel' | 'subtract' | 'note' | 'deform'
+  | 'wall' | 'door' | 'window' | 'step' | 'staircase'
+  | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
+  | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock';
 
 export type SkyboxType = 'none' | 'golden-hour' | 'woodland' | 'sunrise' | 'twilight' | 'cyberspace-neon' | 'studio';
+
+export interface TerrainData {
+  gridX: number;
+  gridY: number;
+  width: number;
+  depth: number;
+  heights: number[];
+  masks?: number[];
+  shadingMode?: 'default' | 'slope' | 'elevation' | 'aspect' | 'contours';
+  contourInterval?: number;
+  zones?: Array<{ id: string; name: string; color: string; polygon: [number, number][] }>;
+}
 
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'measurement' | 'arc';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
   scale?: [number, number, number];
   args: any;
+  terrainData?: TerrainData;
   color: string;
   roughness?: number;
   metalness?: number;
@@ -30,6 +46,13 @@ export interface Shape {
   bevelType?: 'radius' | 'chamfer';
   bevelSegments?: number;
   geometryData?: any; // For custom/CSG meshes
+  hostWallId?: string; // For door/window shapes hosted on a wall
+  archStyle?: string; // Style identifier for architectural doors and windows
+  parentShapeId?: string;
+  parentDepth?: number;
+  faceIndex?: number;
+  customBounds?: { minU: number; maxU: number; minV: number; maxV: number };
+  isRingSection?: boolean;
 }
 
 export interface Tag {
@@ -383,6 +406,35 @@ export interface AppState {
   incrementReads: (count: number) => void;
   quotaLockdownTime: number;
   isQuotaLocked: () => boolean;
+  // Architecture & Landscapes Toolbars & Edge Lines
+  isArchitectureToolbarEnabled: boolean;
+  setIsArchitectureToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  isLandscapesToolbarEnabled: boolean;
+  setIsLandscapesToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  landscapeSculptSettings: {
+    mode: 'push' | 'pull' | 'smooth' | 'flatten' | 'pinch';
+    radius: number;
+    intensity: number;
+    masked: boolean;
+  };
+  setLandscapeSculptSettings: (settings: any | ((prev: any) => any)) => void;
+  landscapeRoadSettings: {
+    width: number;
+    embankment: boolean;
+    roadColor: string;
+    curbHeight: number;
+  };
+  setLandscapeRoadSettings: (settings: any | ((prev: any) => any)) => void;
+  edgeLinesEnabled: boolean;
+  setEdgeLinesEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  edgeLinesColor: string;
+  setEdgeLinesColor: (color: string) => void;
+  edgeLinesOpacity: number;
+  setEdgeLinesOpacity: (opacity: number) => void;
+  edgeLinesThickness: number;
+  setEdgeLinesThickness: (thickness: number) => void;
+  showAllDimensions: boolean;
+  setShowAllDimensions: (show: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 export interface DiagLogEntry {
