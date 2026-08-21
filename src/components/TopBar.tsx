@@ -112,10 +112,14 @@ export default function TopBar() {
       diagLog,
       googleMapsApiKey,
       setGoogleMapsApiKey,
+      isBasicToolbarEnabled,
+      setIsBasicToolbarEnabled,
       isArchitectureToolbarEnabled,
       setIsArchitectureToolbarEnabled,
       isLandscapesToolbarEnabled,
-      setIsLandscapesToolbarEnabled
+      setIsLandscapesToolbarEnabled,
+      layoutMode,
+      setLayoutMode
     } = useApp();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -798,9 +802,45 @@ export default function TopBar() {
           </div>
 
           <div className="space-y-3">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Toolbar Layout</label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setLayoutMode('classic')}
+                className={cn(
+                  "py-2 text-xs font-bold rounded-md transition-all",
+                  layoutMode === 'classic' 
+                    ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                )}
+              >
+                Classic
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutMode('unified')}
+                className={cn(
+                  "py-2 text-xs font-bold rounded-md transition-all",
+                  layoutMode === 'unified' 
+                    ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                )}
+              >
+                Unified
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 italic">Choose between separate sidebars (Classic) or a consolidated tool palette (Unified).</p>
+          </div>
+
+          <div className="space-y-3">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Interface Visibility</label>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
               <CollapsibleSection title="Toolbars" className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg px-2" defaultOpen={true}>
+                <VisibilityToggle 
+                  label="Standard 3D Modeling Toolbar"
+                  isVisible={isBasicToolbarEnabled}
+                  onToggle={() => setIsBasicToolbarEnabled(!isBasicToolbarEnabled)}
+                />
                 <VisibilityToggle 
                   label="Basic Architecture Toolbar"
                   isVisible={isArchitectureToolbarEnabled}

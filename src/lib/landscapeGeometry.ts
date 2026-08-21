@@ -2,56 +2,176 @@ import * as THREE from 'three';
 // @ts-ignore
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils';
 
-export function createTreeGeometry(type: string = 'standard'): THREE.BufferGeometry {
+export function createTreeGeometry(speciesId: string = 'english_oak'): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = [];
 
-  // Trunk
-  const trunk = new THREE.CylinderGeometry(0.18, 0.28, 2.0, 10);
-  trunk.translate(0, 1.0, 0);
-  geometries.push(trunk);
+  switch (speciesId) {
+    case 'mediterranean_cypress': {
+      // Columnar slender tree
+      const trunk = new THREE.CylinderGeometry(0.12, 0.20, 1.2, 8);
+      trunk.translate(0, 0.6, 0);
+      geometries.push(trunk);
 
-  // Multi-tier lush foliage
-  const tier1 = new THREE.SphereGeometry(1.35, 14, 14);
-  tier1.scale(1, 0.75, 1);
-  tier1.translate(0, 2.3, 0);
-  geometries.push(tier1);
+      const foliage = new THREE.ConeGeometry(0.9, 6.5, 12);
+      foliage.translate(0, 4.0, 0);
+      geometries.push(foliage);
+      break;
+    }
 
-  const tier2 = new THREE.SphereGeometry(1.05, 14, 14);
-  tier2.scale(1, 0.75, 1);
-  tier2.translate(0, 3.0, 0);
-  geometries.push(tier2);
+    case 'scots_pine': {
+      // Tall bare trunk with high umbrella canopy
+      const trunk = new THREE.CylinderGeometry(0.15, 0.26, 4.5, 8);
+      trunk.translate(0, 2.25, 0);
+      geometries.push(trunk);
 
-  const tier3 = new THREE.SphereGeometry(0.7, 12, 12);
-  tier3.scale(1, 0.8, 1);
-  tier3.translate(0, 3.65, 0);
-  geometries.push(tier3);
+      const crown1 = new THREE.SphereGeometry(1.6, 12, 10);
+      crown1.scale(1.3, 0.5, 1.3);
+      crown1.translate(0, 4.8, 0);
+      geometries.push(crown1);
+
+      const crown2 = new THREE.SphereGeometry(1.1, 10, 8);
+      crown2.scale(1.1, 0.5, 1.1);
+      crown2.translate(0.4, 5.4, -0.3);
+      geometries.push(crown2);
+      break;
+    }
+
+    case 'silver_birch': {
+      // Slender delicate tree
+      const trunk = new THREE.CylinderGeometry(0.10, 0.18, 3.2, 8);
+      trunk.translate(0, 1.6, 0);
+      geometries.push(trunk);
+
+      const t1 = new THREE.SphereGeometry(1.1, 12, 10);
+      t1.scale(0.8, 1.2, 0.8);
+      t1.translate(0, 3.5, 0);
+      geometries.push(t1);
+
+      const t2 = new THREE.SphereGeometry(0.8, 10, 8);
+      t2.scale(0.7, 1.1, 0.7);
+      t2.translate(0, 4.5, 0);
+      geometries.push(t2);
+      break;
+    }
+
+    case 'japanese_maple': {
+      // Multi-stem low spreading canopy
+      const stem1 = new THREE.CylinderGeometry(0.08, 0.14, 1.6, 6);
+      stem1.rotateZ(0.2);
+      stem1.translate(-0.15, 0.8, 0);
+      geometries.push(stem1);
+
+      const stem2 = new THREE.CylinderGeometry(0.07, 0.12, 1.5, 6);
+      stem2.rotateZ(-0.25);
+      stem2.translate(0.2, 0.75, 0.1);
+      geometries.push(stem2);
+
+      const dome = new THREE.SphereGeometry(1.7, 12, 10);
+      dome.scale(1.4, 0.6, 1.3);
+      dome.translate(0, 2.3, 0);
+      geometries.push(dome);
+      break;
+    }
+
+    case 'olive_tree': {
+      // Gnarled wide sculptural trunk with wide spherical umbrella
+      const trunk = new THREE.CylinderGeometry(0.28, 0.42, 1.4, 8);
+      trunk.translate(0, 0.7, 0);
+      geometries.push(trunk);
+
+      const branch = new THREE.CylinderGeometry(0.12, 0.18, 1.2, 6);
+      branch.rotateZ(0.35);
+      branch.translate(0.3, 1.4, 0);
+      geometries.push(branch);
+
+      const crown = new THREE.SphereGeometry(1.65, 12, 10);
+      crown.scale(1.3, 0.75, 1.25);
+      crown.translate(0.1, 2.2, 0);
+      geometries.push(crown);
+      break;
+    }
+
+    case 'weeping_willow': {
+      const trunk = new THREE.CylinderGeometry(0.22, 0.35, 2.2, 8);
+      trunk.translate(0, 1.1, 0);
+      geometries.push(trunk);
+
+      const dome = new THREE.CylinderGeometry(1.8, 2.4, 3.2, 12);
+      dome.translate(0, 3.0, 0);
+      geometries.push(dome);
+      break;
+    }
+
+    default: {
+      // English Oak / Standard Broadleaf
+      const trunk = new THREE.CylinderGeometry(0.18, 0.28, 2.0, 10);
+      trunk.translate(0, 1.0, 0);
+      geometries.push(trunk);
+
+      const tier1 = new THREE.SphereGeometry(1.35, 14, 14);
+      tier1.scale(1, 0.75, 1);
+      tier1.translate(0, 2.3, 0);
+      geometries.push(tier1);
+
+      const tier2 = new THREE.SphereGeometry(1.05, 14, 14);
+      tier2.scale(1, 0.75, 1);
+      tier2.translate(0, 3.0, 0);
+      geometries.push(tier2);
+
+      const tier3 = new THREE.SphereGeometry(0.7, 12, 12);
+      tier3.scale(1, 0.8, 1);
+      tier3.translate(0, 3.65, 0);
+      geometries.push(tier3);
+      break;
+    }
+  }
 
   const merged = mergeGeometries(geometries);
   geometries.forEach(g => g.dispose());
   return merged || new THREE.BoxGeometry(1, 1, 1);
 }
 
-export function createBushGeometry(): THREE.BufferGeometry {
+export function createBushGeometry(speciesId: string = 'boxwood_hedge_bush'): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = [];
 
-  const main = new THREE.SphereGeometry(0.65, 14, 14);
-  main.scale(1.1, 0.9, 1.0);
-  main.translate(0, 0.55, 0);
-  geometries.push(main);
+  if (speciesId === 'lavender_shrub') {
+    const main = new THREE.SphereGeometry(0.45, 12, 10);
+    main.scale(1.1, 0.8, 1.1);
+    main.translate(0, 0.35, 0);
+    geometries.push(main);
 
-  const left = new THREE.SphereGeometry(0.48, 12, 12);
-  left.scale(1.0, 0.85, 1.0);
-  left.translate(-0.35, 0.42, 0.2);
-  geometries.push(left);
+    for (let i = 0; i < 5; i++) {
+      const spike = new THREE.CylinderGeometry(0.04, 0.08, 0.35, 6);
+      const angle = (i / 5) * Math.PI * 2;
+      spike.translate(Math.cos(angle) * 0.25, 0.55, Math.sin(angle) * 0.25);
+      geometries.push(spike);
+    }
+  } else if (speciesId === 'hydrangea_bush') {
+    const main = new THREE.SphereGeometry(0.75, 14, 14);
+    main.scale(1.2, 0.85, 1.1);
+    main.translate(0, 0.65, 0);
+    geometries.push(main);
+  } else {
+    // Standard / Boxwood cluster
+    const main = new THREE.SphereGeometry(0.65, 14, 14);
+    main.scale(1.1, 0.9, 1.0);
+    main.translate(0, 0.55, 0);
+    geometries.push(main);
 
-  const right = new THREE.SphereGeometry(0.52, 12, 12);
-  right.scale(1.0, 0.85, 1.0);
-  right.translate(0.35, 0.46, -0.15);
-  geometries.push(right);
+    const left = new THREE.SphereGeometry(0.48, 12, 12);
+    left.scale(1.0, 0.85, 1.0);
+    left.translate(-0.35, 0.42, 0.2);
+    geometries.push(left);
 
-  const back = new THREE.SphereGeometry(0.42, 12, 12);
-  back.translate(0.1, 0.4, 0.3);
-  geometries.push(back);
+    const right = new THREE.SphereGeometry(0.52, 12, 12);
+    right.scale(1.0, 0.85, 1.0);
+    right.translate(0.35, 0.46, -0.15);
+    geometries.push(right);
+
+    const back = new THREE.SphereGeometry(0.42, 12, 12);
+    back.translate(0.1, 0.4, 0.3);
+    geometries.push(back);
+  }
 
   const merged = mergeGeometries(geometries);
   geometries.forEach(g => g.dispose());
@@ -61,16 +181,23 @@ export function createBushGeometry(): THREE.BufferGeometry {
 export function createFenceGeometry(length: number = 2.4, height: number = 1.1): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = [];
   const postWidth = 0.12;
+  const postSpacing = Math.min(2.0, Math.max(0.8, length / Math.max(1, Math.round(length / 2.0))));
+  const numPosts = Math.max(2, Math.round(length / postSpacing) + 1);
+  const actualSpacing = length / (numPosts - 1);
 
-  // Left Post
-  const leftPost = new THREE.BoxGeometry(postWidth, height, postWidth);
-  leftPost.translate(-length / 2 + postWidth / 2, height / 2, 0);
-  geometries.push(leftPost);
+  // Vertical Posts spaced along the segment
+  for (let i = 0; i < numPosts; i++) {
+    const px = -length / 2 + i * actualSpacing;
+    const post = new THREE.BoxGeometry(postWidth, height, postWidth);
+    post.translate(px, height / 2, 0);
+    geometries.push(post);
 
-  // Right Post
-  const rightPost = new THREE.BoxGeometry(postWidth, height, postWidth);
-  rightPost.translate(length / 2 - postWidth / 2, height / 2, 0);
-  geometries.push(rightPost);
+    // Decorative pyramid cap on top of post
+    const cap = new THREE.ConeGeometry(postWidth * 0.75, 0.08, 4);
+    cap.rotateY(Math.PI / 4);
+    cap.translate(px, height + 0.04, 0);
+    geometries.push(cap);
+  }
 
   // Bottom Rail
   const bottomRail = new THREE.BoxGeometry(length, 0.08, 0.05);
@@ -95,18 +222,20 @@ export function createRailingGeometry(length: number = 2.0, height: number = 1.0
   topRail.translate(0, height - 0.025, 0);
   geometries.push(topRail);
 
-  // 3 Vertical Posts (Left, Center, Right)
-  const postPositions = [-length / 2 + 0.05, 0, length / 2 - 0.05];
-  for (const px of postPositions) {
+  // Vertical Posts spaced ~1.2m apart
+  const numPosts = Math.max(2, Math.round(length / 1.2) + 1);
+  const step = length / (numPosts - 1);
+  for (let i = 0; i < numPosts; i++) {
+    const px = -length / 2 + i * step;
     const post = new THREE.CylinderGeometry(0.025, 0.025, height - 0.05, 10);
     post.translate(px, (height - 0.05) / 2, 0);
     geometries.push(post);
   }
 
-  // 4 Horizontal Safety Infill Rods
-  const rodLevels = [0.2, 0.4, 0.6, 0.8];
+  // Horizontal Safety Infill Rods
+  const rodLevels = [0.22, 0.42, 0.62, 0.82];
   for (const rL of rodLevels) {
-    const rod = new THREE.CylinderGeometry(0.01, 0.01, length - 0.1, 8);
+    const rod = new THREE.CylinderGeometry(0.01, 0.01, length, 8);
     rod.rotateZ(Math.PI / 2);
     rod.translate(0, height * rL, 0);
     geometries.push(rod);

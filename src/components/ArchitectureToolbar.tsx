@@ -24,15 +24,17 @@ interface ArchToolButtonProps {
 }
 
 function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonProps) {
-  const { activeTool, setActiveTool, bannerColor, theme } = useApp();
+  const { activeTool, setActiveTool, bannerColor, theme, toolbarVisibility } = useApp();
   const isActive = activeTool === tool;
+
+  if (toolbarVisibility[tool] === false) return null;
 
   return (
     <button
       id={`arch-tool-${tool}`}
       onClick={() => setActiveTool(tool)}
       className={cn(
-        "toolbar-btn relative group flex items-center justify-center transition-all",
+        "toolbar-btn relative group hover:z-50 flex items-center justify-center transition-all",
         isActive && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
         theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
       )}
@@ -42,7 +44,7 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonP
       {icon}
       
       {/* Tooltip */}
-      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl border border-gray-700 transition-opacity">
+      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[100] shadow-xl border border-gray-700 transition-opacity">
         <div className="font-semibold flex items-center gap-1.5">
           <span>{label}</span>
           {hotkey && <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">({hotkey})</span>}
@@ -56,14 +58,11 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonP
 export default function ArchitectureToolbar() {
   const { 
     isArchitectureToolbarEnabled, 
-    setIsArchitectureToolbarEnabled,
     theme, 
     bannerColor,
     activeTool,
     setActiveTool
   } = useApp();
-
-  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
 
   if (!isArchitectureToolbarEnabled) return null;
 
@@ -72,7 +71,7 @@ export default function ArchitectureToolbar() {
       id="architecture-toolbar"
       aria-label="Basic Architecture Toolbar"
       className={cn(
-        "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
+        "w-12 border-r flex flex-col items-center py-2 gap-1 z-30 hover:z-50 transition-colors duration-300 select-none shadow-sm relative",
         theme === 'dark' ? "bg-gray-850 border-gray-700" : "bg-slate-50/90 border-gray-200"
       )}
     >
@@ -111,24 +110,6 @@ export default function ArchitectureToolbar() {
         label="Staircase Flight" 
         subtitle="12-step architectural staircase flight (Rise 2.16m, Run 3.6m)"
       />
-
-      <div className="w-8 h-px bg-gray-200 dark:bg-gray-700 my-1" />
-
-      {/* Close / Hide Toolbar button with quick tooltip */}
-      <button
-        id="hide-arch-toolbar-btn"
-        onClick={() => setIsArchitectureToolbarEnabled(false)}
-        className={cn(
-          "toolbar-btn relative group text-gray-400 hover:text-red-500 transition-colors mt-auto",
-          theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-red-50"
-        )}
-        title="Hide Architecture Toolbar (Toggle anytime in Settings)"
-      >
-        <X size={16} />
-        <div className="absolute left-full ml-2 px-2.5 py-1 bg-gray-900 text-white text-[11px] rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg border border-gray-700">
-          Hide Toolbar <span className="text-gray-400">(Re-enable in Settings)</span>
-        </div>
-      </button>
     </aside>
   );
 }

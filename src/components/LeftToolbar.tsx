@@ -62,21 +62,26 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
         if (tool === 'paint') setOpenMaterialsSignal((s: number) => s + 1);
       }}
       className={cn(
-        "toolbar-btn relative group",
+        "toolbar-btn relative group hover:z-50",
         isActive && "toolbar-btn-active"
       )}
       title={label}
     >
       {icon}
-      <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-modus-2">
+      <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[100] shadow-modus-2">
         {label}
       </div>
     </button>
   );
 }
 
-export default function LeftToolbar() {
+interface LeftToolbarProps {
+  layoutMode?: 'classic' | 'unified';
+}
+
+export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
   const { 
+    isBasicToolbarEnabled,
     setIsAIRendererOpen, 
     setIsAIQueryOpen, 
     setIsAIGenerateOpen,
@@ -212,6 +217,8 @@ export default function LeftToolbar() {
   };
 
   const is3DActive = ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool);
+
+  if (!isBasicToolbarEnabled) return null;
 
   return (
     <aside className={cn(

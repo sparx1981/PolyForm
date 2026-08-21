@@ -36,6 +36,7 @@ import { useApp } from '../AppContext';
 import { ToolModifierPalette } from './ToolModifierPalette';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator } from '../types';
+import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -352,9 +353,77 @@ export default function RightPanelStack() {
 
   useEffect(() => {
     if (isAddMaterialOpen && premadeMaterials.length === 0) {
-      // Use local curated list to avoid CORS/reliability issues with external APIs
-      setPremadeMaterials([{ name: 'Aluminum', roughness: 0.1, metalness: 1.0, color: '#EBEDEE' }, { name: 'Aluminum (Anodized Red)', roughness: 0.2, metalness: 1.0, color: '#990000' }, { name: 'Amber', roughness: 0.05, metalness: 0.0, color: '#D44A09' }, { name: 'Asphalt (Fresh)', roughness: 0.8, metalness: 0.0, color: '#0B0A0A' }, { name: 'Banana', roughness: 0.6, metalness: 0.0, color: '#F2C94C' }, { name: 'Beryllium', roughness: 0.1, metalness: 1.0, color: '#898788' }, { name: 'Blackboard', roughness: 0.9, metalness: 0.0, color: '#0A0A0A' }, { name: 'Blood', roughness: 0.3, metalness: 0.0, color: '#A40101' }, { name: 'Polished Steel', roughness: 0.05, metalness: 1.0, color: '#c0c0c0' }, { name: 'Gold', roughness: 0.1, metalness: 1.0, color: '#ffd700' }, { name: 'Copper', roughness: 0.2, metalness: 1.0, color: '#b87333' }, { name: 'Rubber', roughness: 0.9, metalness: 0.0, color: '#222222' }, { name: 'Plastic', roughness: 0.3, metalness: 0.0, color: '#ffffff' }, { name: 'Glass', roughness: 0.01, metalness: 0.0, color: '#ffffff', opacity: 0.3 }, { name: 'Wood (Oak)', roughness: 0.7, metalness: 0.0, color: '#7b5c3d' }, { name: 'Concrete', roughness: 0.85, metalness: 0.0, color: '#9ca3af' }, { name: 'Brass', roughness: 0.25, metalness: 1.0, color: '#B5A642' }, { name: 'Bronze', roughness: 0.3, metalness: 1.0, color: '#CD7F32' }, { name: 'Chrome', roughness: 0.05, metalness: 1.0, color: '#C4C4C4' }, { name: 'Titanium', roughness: 0.35, metalness: 1.0, color: '#878681' }, { name: 'Silver', roughness: 0.1, metalness: 1.0, color: '#C0C0C0' }, { name: 'Tin', roughness: 0.4, metalness: 1.0, color: '#D9D9D9' }, { name: 'Rusted Iron', roughness: 0.85, metalness: 0.6, color: '#8B4513' }, { name: 'Stainless Steel', roughness: 0.2, metalness: 1.0, color: '#B7C3C9' }, { name: 'Walnut', roughness: 0.65, metalness: 0.0, color: '#5C4033' }, { name: 'Pine', roughness: 0.7, metalness: 0.0, color: '#DEB887' }, { name: 'Mahogany', roughness: 0.6, metalness: 0.0, color: '#4E2A1E' }, { name: 'Oak (Light)', roughness: 0.7, metalness: 0.0, color: '#C19A6B' }, { name: 'Ebony', roughness: 0.5, metalness: 0.0, color: '#3D2B1F' }, { name: 'Marble (White)', roughness: 0.15, metalness: 0.0, color: '#F5F5F0' }, { name: 'Granite', roughness: 0.5, metalness: 0.0, color: '#736F6E' }, { name: 'Sandstone', roughness: 0.8, metalness: 0.0, color: '#C2A878' }, { name: 'Slate', roughness: 0.6, metalness: 0.0, color: '#2F4F4F' }, { name: 'Limestone', roughness: 0.75, metalness: 0.0, color: '#E8DCC5' }, { name: 'Denim', roughness: 0.9, metalness: 0.0, color: '#3B5998' }, { name: 'Velvet', roughness: 0.95, metalness: 0.0, color: '#4B0082' }, { name: 'Leather (Brown)', roughness: 0.55, metalness: 0.0, color: '#5C3317' }, { name: 'Canvas', roughness: 0.85, metalness: 0.0, color: '#E8E4C9' }, { name: 'Felt', roughness: 0.95, metalness: 0.0, color: '#7A7A7A' }, { name: 'Plastic (Glossy Red)', roughness: 0.1, metalness: 0.0, color: '#FF3B30' }, { name: 'Plastic (Matte Green)', roughness: 0.7, metalness: 0.0, color: '#34C759' }, { name: 'ABS (Black)', roughness: 0.4, metalness: 0.0, color: '#1C1C1E' }, { name: 'PVC (White)', roughness: 0.35, metalness: 0.0, color: '#F2F2F7' }, { name: 'Frosted Glass', roughness: 0.4, metalness: 0.0, color: '#FFFFFF', opacity: 0.5 }, { name: 'Tinted Glass (Blue)', roughness: 0.05, metalness: 0.0, color: '#4A90D9', opacity: 0.35 }, { name: 'Ice', roughness: 0.1, metalness: 0.0, color: '#D6ECF0', opacity: 0.6 }, { name: 'Porcelain', roughness: 0.2, metalness: 0.0, color: '#FFFFF0' }, { name: 'Ceramic Tile (White)', roughness: 0.25, metalness: 0.0, color: '#FAFAFA' }, { name: 'Brick (Red)', roughness: 0.85, metalness: 0.0, color: '#B22222' }, { name: 'Cardboard', roughness: 0.9, metalness: 0.0, color: '#C19A6B' }, { name: 'Chalk', roughness: 0.95, metalness: 0.0, color: '#FFFFFF' }, { name: 'Cork', roughness: 0.8, metalness: 0.0, color: '#9B6B43' }, { name: 'Charcoal', roughness: 0.9, metalness: 0.0, color: '#1C1C1C' }, { name: 'Snow', roughness: 0.85, metalness: 0.0, color: '#FFFAFA' }, { name: 'Sand', roughness: 0.85, metalness: 0.0, color: '#EDC9AF' }, { name: 'Moss', roughness: 0.9, metalness: 0.0, color: '#4A6741' },
-      ].map(m => ({ ...m, texture: generateMaterialTexture(m) })));
+      // Curated standard PBR materials
+      const standardList = [
+        { name: 'Aluminum', roughness: 0.1, metalness: 1.0, color: '#EBEDEE' }, 
+        { name: 'Aluminum (Anodized Red)', roughness: 0.2, metalness: 1.0, color: '#990000' }, 
+        { name: 'Amber', roughness: 0.05, metalness: 0.0, color: '#D44A09' }, 
+        { name: 'Asphalt (Fresh)', roughness: 0.8, metalness: 0.0, color: '#0B0A0A' }, 
+        { name: 'Banana', roughness: 0.6, metalness: 0.0, color: '#F2C94C' }, 
+        { name: 'Beryllium', roughness: 0.1, metalness: 1.0, color: '#898788' }, 
+        { name: 'Blackboard', roughness: 0.9, metalness: 0.0, color: '#0A0A0A' }, 
+        { name: 'Blood', roughness: 0.3, metalness: 0.0, color: '#A40101' }, 
+        { name: 'Polished Steel', roughness: 0.05, metalness: 1.0, color: '#c0c0c0' }, 
+        { name: 'Gold', roughness: 0.1, metalness: 1.0, color: '#ffd700' }, 
+        { name: 'Copper', roughness: 0.2, metalness: 1.0, color: '#b87333' }, 
+        { name: 'Rubber', roughness: 0.9, metalness: 0.0, color: '#222222' }, 
+        { name: 'Plastic', roughness: 0.3, metalness: 0.0, color: '#ffffff' }, 
+        { name: 'Glass', roughness: 0.01, metalness: 0.0, color: '#ffffff', opacity: 0.3 }, 
+        { name: 'Wood (Oak)', roughness: 0.7, metalness: 0.0, color: '#7b5c3d' }, 
+        { name: 'Concrete', roughness: 0.85, metalness: 0.0, color: '#9ca3af' }, 
+        { name: 'Brass', roughness: 0.25, metalness: 1.0, color: '#B5A642' }, 
+        { name: 'Bronze', roughness: 0.3, metalness: 1.0, color: '#CD7F32' }, 
+        { name: 'Chrome', roughness: 0.05, metalness: 1.0, color: '#C4C4C4' }, 
+        { name: 'Titanium', roughness: 0.35, metalness: 1.0, color: '#878681' }, 
+        { name: 'Silver', roughness: 0.1, metalness: 1.0, color: '#C0C0C0' }, 
+        { name: 'Tin', roughness: 0.4, metalness: 1.0, color: '#D9D9D9' }, 
+        { name: 'Rusted Iron', roughness: 0.85, metalness: 0.6, color: '#8B4513' }, 
+        { name: 'Stainless Steel', roughness: 0.2, metalness: 1.0, color: '#B7C3C9' }, 
+        { name: 'Walnut', roughness: 0.65, metalness: 0.0, color: '#5C4033' }, 
+        { name: 'Pine', roughness: 0.7, metalness: 0.0, color: '#DEB887' }, 
+        { name: 'Mahogany', roughness: 0.6, metalness: 0.0, color: '#4E2A1E' }, 
+        { name: 'Oak (Light)', roughness: 0.7, metalness: 0.0, color: '#C19A6B' }, 
+        { name: 'Ebony', roughness: 0.5, metalness: 0.0, color: '#3D2B1F' }, 
+        { name: 'Marble (White)', roughness: 0.15, metalness: 0.0, color: '#F5F5F0' }, 
+        { name: 'Granite', roughness: 0.5, metalness: 0.0, color: '#736F6E' }, 
+        { name: 'Sandstone', roughness: 0.8, metalness: 0.0, color: '#C2A878' }, 
+        { name: 'Slate', roughness: 0.6, metalness: 0.0, color: '#2F4F4F' }, 
+        { name: 'Limestone', roughness: 0.75, metalness: 0.0, color: '#E8DCC5' }, 
+        { name: 'Denim', roughness: 0.9, metalness: 0.0, color: '#3B5998' }, 
+        { name: 'Velvet', roughness: 0.95, metalness: 0.0, color: '#4B0082' }, 
+        { name: 'Leather (Brown)', roughness: 0.55, metalness: 0.0, color: '#5C3317' }, 
+        { name: 'Canvas', roughness: 0.85, metalness: 0.0, color: '#E8E4C9' }, 
+        { name: 'Felt', roughness: 0.95, metalness: 0.0, color: '#7A7A7A' }, 
+        { name: 'Plastic (Glossy Red)', roughness: 0.1, metalness: 0.0, color: '#FF3B30' }, 
+        { name: 'Plastic (Matte Green)', roughness: 0.7, metalness: 0.0, color: '#34C759' }, 
+        { name: 'ABS (Black)', roughness: 0.4, metalness: 0.0, color: '#1C1C1E' }, 
+        { name: 'PVC (White)', roughness: 0.35, metalness: 0.0, color: '#F2F2F7' }, 
+        { name: 'Frosted Glass', roughness: 0.4, metalness: 0.0, color: '#FFFFFF', opacity: 0.5 }, 
+        { name: 'Tinted Glass (Blue)', roughness: 0.05, metalness: 0.0, color: '#4A90D9', opacity: 0.35 }, 
+        { name: 'Ice', roughness: 0.1, metalness: 0.0, color: '#D6ECF0', opacity: 0.6 }, 
+        { name: 'Porcelain', roughness: 0.2, metalness: 0.0, color: '#FFFFF0' }, 
+        { name: 'Ceramic Tile (White)', roughness: 0.25, metalness: 0.0, color: '#FAFAFA' }, 
+        { name: 'Brick (Red)', roughness: 0.85, metalness: 0.0, color: '#B22222' }, 
+        { name: 'Cardboard', roughness: 0.9, metalness: 0.0, color: '#C19A6B' }, 
+        { name: 'Chalk', roughness: 0.95, metalness: 0.0, color: '#FFFFFF' }, 
+        { name: 'Cork', roughness: 0.8, metalness: 0.0, color: '#9B6B43' }, 
+        { name: 'Charcoal', roughness: 0.9, metalness: 0.0, color: '#1C1C1C' }, 
+        { name: 'Snow', roughness: 0.85, metalness: 0.0, color: '#FFFAFA' }, 
+        { name: 'Sand', roughness: 0.85, metalness: 0.0, color: '#EDC9AF' }, 
+        { name: 'Moss', roughness: 0.9, metalness: 0.0, color: '#4A6741' },
+      ].map(m => ({ ...m, texture: generateMaterialTexture(m) }));
+
+      // Photorealistic landscape textures
+      const landscapeList = LANDSCAPE_TEXTURES.map(t => ({
+        id: t.id,
+        name: `${t.name} (Landscape)`,
+        roughness: t.roughness,
+        metalness: t.metalness,
+        color: t.previewColor,
+        texture: t.generate()
+      }));
+
+      setPremadeMaterials([...landscapeList, ...standardList]);
     }
   }, [isAddMaterialOpen, premadeMaterials.length]);
 
@@ -428,23 +497,29 @@ export default function RightPanelStack() {
   }
 
   const handleAddColor = async () => {
-    if (!user) return;
-    try {
-      const materialId = Math.random().toString(36).substr(2, 9);
-      const material = {
-        id: materialId,
-        name: `Color ${newColor}`,
-        userId: user.uid,
-        type: 'color',
-        value: newColor,
-        pbr: pbrSettings,
-        createdAt: new Date()
-      };
-      await addDoc(collection(db, 'materials'), { ...material, createdAt: serverTimestamp() });
-      refreshMaterials();
-      setIsAddMaterialOpen(false);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'materials');
+    const materialId = Math.random().toString(36).substr(2, 9);
+    const material = {
+      id: materialId,
+      name: `Color ${newColor}`,
+      userId: user?.uid || 'local',
+      type: 'color',
+      value: newColor,
+      pbr: pbrSettings,
+      createdAt: new Date()
+    };
+    setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
+    setActiveMaterial(newColor);
+    setActivePBR(pbrSettings);
+    setActiveTool('paint');
+    setIsAddMaterialOpen(false);
+
+    if (user?.uid) {
+      try {
+        await addDoc(collection(db, 'materials'), { ...material, createdAt: serverTimestamp() });
+        refreshMaterials();
+      } catch (err) {
+        console.warn('[AddColor] Firestore write error:', err);
+      }
     }
   };
 
@@ -463,83 +538,115 @@ export default function RightPanelStack() {
   };
 
   const handleAddAIMaterial = async () => {
-    if (!user || !aiPreviewUrl) return;
-    try {
-      const materialId = Math.random().toString(36).substr(2, 9);
-      const material = {
-        id: materialId,
-        name: `AI: ${aiPrompt.trim().slice(0, 40)}`,
-        userId: user.uid,
-        type: 'texture',
-        value: aiPreviewUrl,
-        pbr: pbrSettings,
-        createdAt: new Date()
-      };
-      await addDoc(collection(db, 'materials'), { ...material, createdAt: serverTimestamp() });
-      refreshMaterials();
-      setIsAddMaterialOpen(false);
-      setAiPreviewUrl(null);
-      setAiPrompt('');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'materials');
+    if (!aiPreviewUrl) return;
+    const materialId = Math.random().toString(36).substr(2, 9);
+    const cleanName = `AI: ${aiPrompt.trim().slice(0, 40) || 'Custom Material'}`;
+    const material = {
+      id: materialId,
+      name: cleanName,
+      userId: user?.uid || 'local',
+      type: 'texture',
+      value: aiPreviewUrl,
+      pbr: pbrSettings,
+      createdAt: new Date()
+    };
+    setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
+    setActiveMaterial(aiPreviewUrl);
+    setActivePBR(pbrSettings);
+    setActiveTool('paint');
+    setIsAddMaterialOpen(false);
+    setAiPreviewUrl(null);
+    setAiPrompt('');
+
+    if (user?.uid) {
+      try {
+        await addDoc(collection(db, 'materials'), { ...material, createdAt: serverTimestamp() });
+        refreshMaterials();
+      } catch (err) {
+        console.warn('[AddAIMaterial] Firestore write error:', err);
+      }
     }
   };
 
   const handleTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     setUploading(true);
-    
-    // 60 second timeout
-    const timeoutId = setTimeout(() => {
-      if (uploading) {
-        setUploading(false);
-        alert('Upload timed out. Please try again.');
-      }
-    }, 60000);
 
-      try {
-        let uploadBlob: Blob = file;
-        if (removeBgEnabled) {
-          try {
-            setRemovingBg(true);
-            uploadBlob = await HuggingFaceService.removeBackground(file);
-          } catch (bgErr: any) {
-            clearTimeout(timeoutId);
-            setUploading(false);
-            setRemovingBg(false);
-            alert(bgErr?.message || 'Background removal failed.');
-            return;
-          } finally {
-            setRemovingBg(false);
-          }
+    try {
+      let uploadBlob: Blob = file;
+      if (removeBgEnabled) {
+        try {
+          setRemovingBg(true);
+          uploadBlob = await HuggingFaceService.removeBackground(file);
+        } catch (bgErr: any) {
+          console.warn('[TextureUpload] AI background removal failed, using original image:', bgErr);
+          uploadBlob = file;
+        } finally {
+          setRemovingBg(false);
         }
-        const storageRef = ref(storage, `textures/${user.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, uploadBlob);
-        const url = await getDownloadURL(storageRef);
-        
-        const materialId = Math.random().toString(36).substr(2, 9);
-        const material = {
-          id: materialId,
-          name: file.name,
-          userId: user.uid,
-          type: 'texture',
-          value: url,
-          pbr: pbrSettings,
-          createdAt: new Date()
-        };
-        
-        await addDoc(collection(db, 'materials'), { ...material, createdAt: serverTimestamp() });
-        refreshMaterials();
-        clearTimeout(timeoutId);
-        setIsAddMaterialOpen(false);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'materials');
-      } finally {
-        setUploading(false);
-        clearTimeout(timeoutId);
       }
+
+      // Convert image blob to base64 DataURL
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(uploadBlob);
+      });
+
+      const materialId = Math.random().toString(36).substr(2, 9);
+      const cleanName = file.name.replace(/\.[^/.]+$/, "");
+      const newMaterial = {
+        id: materialId,
+        name: cleanName,
+        userId: user?.uid || 'local',
+        type: 'texture',
+        value: dataUrl,
+        pbr: pbrSettings,
+        createdAt: new Date()
+      };
+
+      // Instantly add to custom materials in state & activate paint tool with this material
+      setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), newMaterial]);
+      setActiveMaterial(dataUrl);
+      setActivePBR(pbrSettings);
+      setActiveTool('paint');
+      setIsAddMaterialOpen(false);
+
+      // If user is authenticated, persist to Firebase Storage and Firestore in background
+      if (user?.uid) {
+        try {
+          let finalUrl = dataUrl;
+          try {
+            const storageRef = ref(storage, `textures/${user.uid}/${Date.now()}_${file.name}`);
+            await uploadBytes(storageRef, uploadBlob);
+            finalUrl = await getDownloadURL(storageRef);
+          } catch (storageErr) {
+            console.warn('[TextureUpload] Storage upload fallback to DataURL:', storageErr);
+          }
+          await addDoc(collection(db, 'materials'), {
+            id: materialId,
+            name: cleanName,
+            userId: user.uid,
+            type: 'texture',
+            value: finalUrl,
+            pbr: pbrSettings,
+            createdAt: serverTimestamp()
+          });
+          refreshMaterials();
+        } catch (dbErr) {
+          console.warn('[TextureUpload] Firestore write skipped:', dbErr);
+        }
+      }
+    } catch (err: any) {
+      console.error('[TextureUpload] Upload failed:', err);
+      alert(err?.message || 'Failed to process texture image.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
   };
 
   const handleAddTag = () => {
@@ -1093,9 +1200,9 @@ export default function RightPanelStack() {
           >
             <div className="space-y-4">
               <div className="grid grid-cols-5 gap-2">
-                {COLORS.map((color) => (
+                {COLORS.map((color, idx) => (
                   <div 
-                    key={color} 
+                    key={`palette-preset-${color}-${idx}`} 
                     onClick={() => {
                       setActiveMaterial(color);
                       setActivePBR({ roughness: 0.5, metalness: 0, opacity: 1 });
@@ -1110,7 +1217,7 @@ export default function RightPanelStack() {
                 ))}
                 {customMaterials.filter(m => m.type === 'color').map((m, i) => (
                   <div 
-                    key={i} 
+                    key={m.id || `custom-col-${m.value}-${i}`} 
                     onClick={() => {
                       setActiveMaterial(m.value);
                       if (m.pbr) setActivePBR(m.pbr);
@@ -1137,7 +1244,7 @@ export default function RightPanelStack() {
                   <div className="grid grid-cols-4 gap-2">
                     {customMaterials.filter(m => m.type === 'texture').map((m, i) => (
                       <div 
-                        key={i}
+                        key={m.id || `custom-tex-${i}`}
                         onClick={() => {
                           setActiveMaterial(m.value);
                           if (m.pbr) setActivePBR(m.pbr);
@@ -2472,8 +2579,8 @@ export default function RightPanelStack() {
                       <Crown size={12} className="text-amber-500" />
                     </div>
                   </div>
-                  {collaborators.map((collab: any) => (
-                    <div key={collab.id || collab.uid} className="flex items-center justify-between p-1.5 hover:bg-gray-50 rounded transition-all group">
+                  {collaborators.map((collab: any, idx: number) => (
+                    <div key={collab.id || collab.uid || `collab-${idx}`} className="flex items-center justify-between p-1.5 hover:bg-gray-50 rounded transition-all group">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500 border border-gray-200 overflow-hidden">
                           {collab.photoURL ? <img src={collab.photoURL} alt="" /> : (collab.displayName?.[0] || collab.email?.[0])}
@@ -2776,7 +2883,7 @@ export default function RightPanelStack() {
                   <div className="grid grid-cols-2 gap-4">
                     {premadeMaterials.map((mat: any, i: number) => (
                       <div 
-                        key={i}
+                        key={mat.id || `premade-${mat.name || i}-${i}`}
                         onClick={() => {
                           setActiveMaterial(mat.texture || mat.color);
                           if (mat.color) setNewColor(mat.color);

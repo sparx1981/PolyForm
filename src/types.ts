@@ -22,6 +22,26 @@ export interface TerrainData {
   shadingMode?: 'default' | 'slope' | 'elevation' | 'aspect' | 'contours';
   contourInterval?: number;
   zones?: Array<{ id: string; name: string; color: string; polygon: [number, number][] }>;
+  textureUrl?: string;
+  textureScale?: number;
+}
+
+const KNOWN_TEXTURE_IDS = new Set([
+  'lush_grass', 'manicured_turf', 'alpine_rock', 'forest_mulch', 'desert_sand', 
+  'cobblestone', 'crushed_gravel', 'fresh_snow', 'weathered_asphalt', 'terracotta_clay',
+  'river_gravel', 'field_soil', 'flagstone_pavers', 'mossy_forest', 'cracked_earth'
+]);
+
+export function isTextureUrl(val?: any): boolean {
+  if (!val || typeof val !== 'string') return false;
+  return val.startsWith('data:image') || 
+         val.startsWith('blob:') || 
+         val.startsWith('http://') || 
+         val.startsWith('https://') || 
+         val.startsWith('/') ||
+         val.startsWith('data:application') ||
+         KNOWN_TEXTURE_IDS.has(val) ||
+         /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(val);
 }
 
 export interface Shape {
@@ -53,6 +73,8 @@ export interface Shape {
   faceIndex?: number;
   customBounds?: { minU: number; maxU: number; minV: number; maxV: number };
   isRingSection?: boolean;
+  plantSpeciesId?: string;
+  plantVariation?: string;
 }
 
 export interface Tag {
@@ -137,6 +159,7 @@ export interface SceneNote {
 }
 
 export interface Collaborator {
+  id?: string;
   uid: string;
   email: string;
   displayName?: string;
@@ -407,10 +430,14 @@ export interface AppState {
   quotaLockdownTime: number;
   isQuotaLocked: () => boolean;
   // Architecture & Landscapes Toolbars & Edge Lines
+  isBasicToolbarEnabled: boolean;
+  setIsBasicToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   isArchitectureToolbarEnabled: boolean;
   setIsArchitectureToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   isLandscapesToolbarEnabled: boolean;
   setIsLandscapesToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  layoutMode: 'classic' | 'unified';
+  setLayoutMode: (mode: 'classic' | 'unified' | ((prev: 'classic' | 'unified') => 'classic' | 'unified')) => void;
   landscapeSculptSettings: {
     mode: 'push' | 'pull' | 'smooth' | 'flatten' | 'pinch';
     radius: number;
@@ -435,6 +462,13 @@ export interface AppState {
   setEdgeLinesThickness: (thickness: number) => void;
   showAllDimensions: boolean;
   setShowAllDimensions: (show: boolean | ((prev: boolean) => boolean)) => void;
+  // Plant Library & Species Selection
+  activePlantSpecies: string;
+  setActivePlantSpecies: (speciesId: string) => void;
+  activePlantVariation: string;
+  setActivePlantVariation: (variation: string) => void;
+  activePlantScale: number;
+  setActivePlantScale: (scale: number) => void;
 }
 
 export interface DiagLogEntry {
@@ -473,3 +507,6 @@ export interface SavedModel {
   password?: string;
   hasPassword?: boolean;
 }
+
+export * from './lib/PolyformInferenceEngine';
+

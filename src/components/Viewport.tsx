@@ -46,8 +46,11 @@ import {
   createBenchGeometry,
   createRockGeometry
 } from '../lib/landscapeGeometry';
+import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
+import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
-import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation } from '../types';
+import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl } from '../types';
+import { getLandscapeCanvas, LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers } from 'lucide-react';
@@ -70,29 +73,155 @@ const _polyformNoteZIndexRange: [number, number] = [1000, 2000];
 const _polyformTextureCache = new Map<string, THREE.Texture>();
 const _polyformTextureLoader = new THREE.TextureLoader();
 _polyformTextureLoader.setCrossOrigin('anonymous');
-function getCachedTexture(url: string): THREE.Texture {
-  let tex = _polyformTextureCache.get(url);
-  if (!tex) {
-    tex = _polyformTextureLoader.load(
-      url,
-      (loaded) => {
-        // Confirms the image actually decoded successfully; if this never fires the
-        // surface will stay blank/black even though a Texture object exists.
-        loaded.needsUpdate = true;
-      },
-      undefined,
-      (err) => {
-        // Uploaded/URL textures were rendering as solid black with no visible error -
-        // most likely a failed image load (CORS, expired/invalid Storage URL, or a
-        // network hiccup) leaving the GPU texture empty. Log it clearly instead of
-        // failing silently so this is diagnosable from the console.
-        console.error('[PolyForm] Failed to load texture, surface may appear black:', url, err);
-      }
-    );
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.needsUpdate = true;
-    _polyformTextureCache.set(url, tex);
+
+function createFallbackTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(0, 0, 32, 32);
+    ctx.fillRect(32, 32, 32, 32);
   }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function getCachedTexture(url: string): THREE.Texture {
+  if (!url) return createFallbackTexture();
+  let tex = _polyformTextureCache.get(url);
+  if (tex) {
+    if (tex.wrapS !== THREE.RepeatWrapping || tex.wrapT !== THREE.RepeatWrapping) {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.needsUpdate = true;
+    }
+    return tex;
+  }
+
+  // 1. Direct canvas lookup for landscape presets or generated canvases
+  const knownCanvas = getLandscapeCanvas(url);
+  if (knownCanvas) {
+    const canvasTex = new THREE.CanvasTexture(knownCanvas);
+    canvasTex.wrapS = THREE.RepeatWrapping;
+    canvasTex.wrapT = THREE.RepeatWrapping;
+    canvasTex.colorSpace = THREE.SRGBColorSpace;
+    canvasTex.generateMipmaps = true;
+    canvasTex.needsUpdate = true;
+    _polyformTextureCache.set(url, canvasTex);
+    return canvasTex;
+  }
+
+  // 2. Direct preset check by ID
+  const preset = LANDSCAPE_TEXTURES.find(t => t.id === url);
+  if (preset) {
+    const dataUrl = preset.generate();
+    const genCanvas = getLandscapeCanvas(preset.id);
+    if (genCanvas) {
+      const canvasTex = new THREE.CanvasTexture(genCanvas);
+      canvasTex.wrapS = THREE.RepeatWrapping;
+      canvasTex.wrapT = THREE.RepeatWrapping;
+      canvasTex.colorSpace = THREE.SRGBColorSpace;
+      canvasTex.generateMipmaps = true;
+      canvasTex.needsUpdate = true;
+      _polyformTextureCache.set(url, canvasTex);
+      _polyformTextureCache.set(dataUrl, canvasTex);
+      return canvasTex;
+    }
+  }
+
+  // 3. Direct Image Element loading for data: and blob: URLs to bypass CORS/iframe restrictions
+  if (url.startsWith('data:image') || url.startsWith('blob:')) {
+    const liveCanvas = document.createElement('canvas');
+    liveCanvas.width = 512;
+    liveCanvas.height = 512;
+    const ctx = liveCanvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#3a6644';
+      ctx.fillRect(0, 0, 512, 512);
+    }
+    const canvasTex = new THREE.CanvasTexture(liveCanvas);
+    canvasTex.wrapS = THREE.RepeatWrapping;
+    canvasTex.wrapT = THREE.RepeatWrapping;
+    canvasTex.colorSpace = THREE.SRGBColorSpace;
+    canvasTex.generateMipmaps = true;
+    canvasTex.needsUpdate = true;
+    _polyformTextureCache.set(url, canvasTex);
+
+    const img = new Image();
+    img.onload = () => {
+      if (ctx) {
+        liveCanvas.width = img.naturalWidth || 512;
+        liveCanvas.height = img.naturalHeight || 512;
+        ctx.drawImage(img, 0, 0);
+      }
+      canvasTex.needsUpdate = true;
+      window.dispatchEvent(new CustomEvent('polyform-texture-loaded', { detail: { url } }));
+    };
+    img.onerror = (err) => {
+      console.warn('[PolyForm] Error decoding procedural data URL texture:', err);
+    };
+    img.src = url;
+    if (img.complete && img.naturalWidth > 0) {
+      if (ctx) {
+        liveCanvas.width = img.naturalWidth;
+        liveCanvas.height = img.naturalHeight;
+        ctx.drawImage(img, 0, 0);
+      }
+      canvasTex.needsUpdate = true;
+    }
+    return canvasTex;
+  }
+
+  // 4. External HTTP/HTTPS URLs with crossOrigin support and fallback
+  tex = _polyformTextureLoader.load(
+    url,
+    (loaded) => {
+      loaded.wrapS = THREE.RepeatWrapping;
+      loaded.wrapT = THREE.RepeatWrapping;
+      loaded.colorSpace = THREE.SRGBColorSpace;
+      loaded.generateMipmaps = true;
+      loaded.needsUpdate = true;
+      window.dispatchEvent(new CustomEvent('polyform-texture-loaded', { detail: { url } }));
+    },
+    undefined,
+    (err) => {
+      console.warn('[PolyForm] Texture URL unreachable or expired, applying fallback texture:', typeof url === 'string' ? url.slice(0, 100) : url, err);
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#f1f5f9';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(0, 0, 32, 32);
+        ctx.fillRect(32, 32, 32, 32);
+      }
+      if (tex) {
+        tex.image = canvas;
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.generateMipmaps = true;
+        tex.needsUpdate = true;
+      }
+    }
+  );
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  _polyformTextureCache.set(url, tex);
   return tex;
 }
 
@@ -656,9 +785,9 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
   const geometry = useMemo(() => {
     switch (shape.type) {
       case 'tree':
-        return createTreeGeometry();
+        return createTreeGeometry(shape.plantSpeciesId || 'english_oak');
       case 'bush':
-        return createBushGeometry();
+        return createBushGeometry(shape.plantSpeciesId || 'boxwood_hedge_bush');
       case 'fence':
         return createFenceGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.4, Array.isArray(shape.args) ? shape.args[1] : 1.1);
       case 'railing':
@@ -672,7 +801,7 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
       default:
         return new THREE.BoxGeometry(1, 1, 1);
     }
-  }, [shape.type, shape.args]);
+  }, [shape.type, shape.args, shape.plantSpeciesId]);
 
   useEffect(() => {
     return () => {
@@ -1087,7 +1216,10 @@ function Scene() {
     landscapeSculptSettings,
     setLandscapeSculptSettings,
     landscapeRoadSettings,
-    setLandscapeRoadSettings
+    setLandscapeRoadSettings,
+    activePlantSpecies,
+    activePlantVariation,
+    activePlantScale
   } = useApp();
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
@@ -1437,7 +1569,9 @@ function Scene() {
   const [drawingStep, setDrawingStep] = useState<0 | 1 | 2>(0); // 0: idle, 1: base, 2: height
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
-  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center' } | null>(null);
+  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
+  const [trackingGuide, setTrackingGuide] = useState<{ source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null>(null);
+  const awakenedRefPointsRef = useRef<Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; time: number; screenPos: { x: number; y: number } }>>([]);
   const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
@@ -1456,6 +1590,11 @@ function Scene() {
   const [wallCandidatePos, setWallCandidatePos] = useState<THREE.Vector3 | null>(null);
   const [wallHoveredVertex, setWallHoveredVertex] = useState<number | null>(null);
   const wallDragStartRef = useRef<{ point: THREE.Vector3; time: number } | null>(null);
+
+  const [fenceVertices, setFenceVertices] = useState<THREE.Vector3[]>([]);
+  const [fencePlane, setFencePlane] = useState<THREE.Plane | null>(null);
+  const [fenceCandidatePos, setFenceCandidatePos] = useState<THREE.Vector3 | null>(null);
+  const [fenceHoveredVertex, setFenceHoveredVertex] = useState<number | null>(null);
 
   const [previewShape, setPreviewShape] = useState<{ 
     type: Shape['type'], 
@@ -1620,6 +1759,18 @@ function Scene() {
       setPolyNormal(null);
       setPolyCandidatePos(null);
     }
+    if (activeTool !== 'wall') {
+      setWallVertices([]);
+      setWallPlane(null);
+      setWallCandidatePos(null);
+      setWallHoveredVertex(null);
+    }
+    if (activeTool !== 'fence' && activeTool !== 'railing') {
+      setFenceVertices([]);
+      setFencePlane(null);
+      setFenceCandidatePos(null);
+      setFenceHoveredVertex(null);
+    }
   }, [activeTool]);
 
   const finalizeRectangleInput = () => {
@@ -1762,6 +1913,50 @@ function Scene() {
     return newShape;
   }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction]);
 
+  const finalizeFenceChain = useCallback(() => {
+    setFenceVertices([]);
+    setFencePlane(null);
+    setFenceCandidatePos(null);
+    setFenceHoveredVertex(null);
+    setMeasurements('');
+  }, [setMeasurements]);
+
+  const createFenceRailingSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, tool: 'fence' | 'railing') => {
+    const dist = pA.distanceTo(pB);
+    if (dist < 0.1) return null;
+
+    const center = pA.clone().lerp(pB, 0.5);
+    const height = tool === 'fence' ? 1.1 : 1.0;
+
+    const dir = new THREE.Vector3().subVectors(pB, pA);
+    const angle = Math.atan2(dir.z, dir.x);
+    const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+
+    const defaultColor = tool === 'fence' ? '#854d0e' : '#475569';
+    const color = (activeMaterial && activeMaterial !== '#ffffff' && activeMaterial !== '#8b5a2b' && activeMaterial !== '#38bdf8') ? activeMaterial : defaultColor;
+
+    const count = shapes.filter(s => s.type === tool).length + 1;
+    const name = tool === 'fence' ? `Fence Section ${count} (${formatValue(dist, unit, 1)})` : `Railing Section ${count} (${formatValue(dist, unit, 1)})`;
+
+    const newShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      name,
+      type: tool,
+      position: [center.x, center.y, center.z],
+      quaternion: [quat.x, quat.y, quat.z, quat.w],
+      args: [dist, height],
+      color,
+      roughness: activePBR.roughness ?? 0.7,
+      metalness: activePBR.metalness ?? 0.1,
+      opacity: activePBR.opacity ?? 1
+    };
+
+    addShape(newShape);
+    commitHistory();
+    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    return newShape;
+  }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction, unit]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isDeveloperConsoleOpen) return;
@@ -1794,6 +1989,12 @@ function Scene() {
               finalizeWallChain();
             }
             return;
+          } else if ((activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0) {
+            setFenceVertices(prev => prev.slice(0, -1));
+            if (fenceVertices.length <= 1) {
+              finalizeFenceChain();
+            }
+            return;
           } else if (activeTool === 'poly' && polyVertices.length > 0) {
             setPolyVertices(prev => prev.slice(0, -1));
             if (polyVertices.length === 1) {
@@ -1817,6 +2018,9 @@ function Scene() {
         if (activeTool === 'wall' && wallVertices.length > 0) {
           diagLog('TOOL', 'Wall drawing cancelled', { vertexCount: wallVertices.length });
         }
+        if ((activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0) {
+          diagLog('TOOL', `${activeTool} drawing cancelled`, { vertexCount: fenceVertices.length });
+        }
         if (activeTool === 'poly' && polyVertices.length > 0) {
           diagLog('TOOL', 'Poly drawing cancelled', { vertexCount: polyVertices.length });
         }
@@ -1830,6 +2034,8 @@ function Scene() {
         setAxisLock(null);
         setFaceEditMode(null);
         setSnapIndicator(null);
+        setTrackingGuide(null);
+        awakenedRefPointsRef.current = [];
         setTypedLength('');
         setLastDrawTarget(null);
         setSelectedSurface(null);
@@ -1842,6 +2048,10 @@ function Scene() {
         setWallPlane(null);
         setWallCandidatePos(null);
         setWallHoveredVertex(null);
+        setFenceVertices([]);
+        setFencePlane(null);
+        setFenceCandidatePos(null);
+        setFenceHoveredVertex(null);
         wallDragStartRef.current = null;
         setArcStart(null);
         setArcEnd(null);
@@ -1855,6 +2065,11 @@ function Scene() {
         if (activeTool === 'wall' && wallVertices.length > 0) {
           e.preventDefault();
           finalizeWallChain();
+          return;
+        }
+        if ((activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0) {
+          e.preventDefault();
+          finalizeFenceChain();
           return;
         }
         if (activeTool === 'line' && drawingStart && drawingNormal && typedLength.trim() && lastDrawTarget) {
@@ -2064,7 +2279,7 @@ function Scene() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, rectangleInputState.active, finalizeRectangleInput]);
+  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, fenceVertices.length, finalizeFenceChain, rectangleInputState.active, finalizeRectangleInput]);
 
   const [pointerDownInfo, setPointerDownInfo] = useState<{ time: number, pos: THREE.Vector3 } | null>(null);
 
@@ -2181,6 +2396,66 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'fence' || activeTool === 'railing') {
+      e.stopPropagation();
+
+      // If clicking first vertex -> close loop & finalize
+      if (fenceHoveredVertex === 0 && fenceVertices.length >= 2) {
+        const prev = fenceVertices[fenceVertices.length - 1];
+        createFenceRailingSegment(prev, fenceVertices[0], activeTool);
+        finalizeFenceChain();
+        setMeasurements(`Closed ${activeTool} path loop.`);
+        return;
+      }
+
+      // If double-click -> finalize
+      if (e.nativeEvent.detail === 2) {
+        finalizeFenceChain();
+        return;
+      }
+
+      let pointToPlace = fenceCandidatePos?.clone();
+
+      if (fenceVertices.length === 0) {
+        // First vertex determines plane
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+
+        let normal = new THREE.Vector3(0, 1, 0);
+        let p = new THREE.Vector3();
+
+        if (shapeIntersect && shapeIntersect.face) {
+          normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
+          p = shapeIntersect.point.clone();
+        } else {
+          const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          if (!raycaster.ray.intersectPlane(ground, p)) {
+            p = e.point.clone();
+          }
+        }
+
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p);
+        setFencePlane(plane);
+        setFenceVertices([p]);
+        diagLog("TOOL", `${activeTool} started at point`, { pos: [p.x, p.y, p.z] });
+        setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
+      } else {
+        if (!pointToPlace) pointToPlace = e.point.clone();
+        const prev = fenceVertices[fenceVertices.length - 1];
+        if (prev.distanceTo(pointToPlace) >= 0.15) {
+          createFenceRailingSegment(prev, pointToPlace, activeTool);
+          const nextVerts = [...fenceVertices, pointToPlace];
+          setFenceVertices(nextVerts);
+          diagLog("TOOL", `${activeTool} segment placed`, { 
+            from: [prev.x, prev.y, prev.z], 
+            to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] 
+          });
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'} Path: ${nextVerts.length} points placed · Click next point · Double-click/Enter to finish.`);
+        }
+      }
+      return;
+    }
+
     if (placingLightId) {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
@@ -2262,37 +2537,55 @@ function Scene() {
     if (activeTool === 'arc') {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
-      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+      const shapeIntersect = intersects.find(i => (i.object.userData?.isShape || i.object.userData?.id) && i.object !== e.object);
+      let point: THREE.Vector3;
+      if (shapeIntersect) {
+        point = shapeIntersect.point.clone();
+      } else if (e.point) {
+        point = e.point.clone();
+      } else {
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+        raycaster.ray.intersectPlane(groundPlane, groundHit);
+        point = groundHit;
+      }
+
       if (arcStep === 0) {
         setArcStart(point);
         setArcEnd(point);
         setArcStep(1);
-        setMeasurements('Click end point.');
+        setMeasurements(`Arc Start: (${point.x.toFixed(2)}, ${point.z.toFixed(2)}) — Click to set chord endpoint.`);
       } else if (arcStep === 1) {
         setArcEnd(point);
         setArcBulge(point);
         setArcStep(2);
-        setMeasurements('Click to set arc bulge.');
+        setMeasurements('Click or drag to adjust arc curvature / bulge.');
       } else if (arcStep === 2 && arcStart && arcEnd) {
-        const arcPts = computeArcPoints(arcStart, arcEnd, point);
-        if (arcPts) {
-          addShape({
-            id: Math.random().toString(36).substr(2, 9),
-            type: 'arc',
-            position: [0, 0, 0],
-            args: {
-              start: [arcStart.x, arcStart.y, arcStart.z],
-              end: [arcEnd.x, arcEnd.y, arcEnd.z],
-              through: [point.x, point.y, point.z],
-              points: arcPts.map(p => [p.x, p.y, p.z]),
-            },
-            color: activeMaterial,
-          } as Shape);
-          setMeasurements('Arc created.');
-        } else {
-          setMeasurements('Points are in a line - could not fit an arc. Try again.');
+        let arcPts = computeArcPoints(arcStart, arcEnd, point);
+        if (!arcPts || arcPts.length < 2) {
+          // Linear fallback if perfectly collinear
+          arcPts = [arcStart.clone(), point.clone(), arcEnd.clone()];
         }
+        const newArcId = Math.random().toString(36).substr(2, 9);
+        const newArcShape: Shape = {
+          id: newArcId,
+          name: `Arc Line ${shapes.filter(s => s.type === 'arc').length + 1}`,
+          type: 'arc',
+          position: [0, 0, 0],
+          quaternion: [0, 0, 0, 1],
+          args: {
+            start: [arcStart.x, arcStart.y, arcStart.z],
+            end: [arcEnd.x, arcEnd.y, arcEnd.z],
+            through: [point.x, point.y, point.z],
+            points: arcPts.map(p => [p.x, p.y, p.z]),
+          },
+          color: activeMaterial || '#22c55e',
+        } as Shape;
+        addShape(newArcShape);
+        setSelectedId(newArcId);
+        setSelectedIds([newArcId]);
+        commitHistory();
+        setMeasurements(`Arc created (${formatValue(arcStart.distanceTo(arcEnd), unit, 2)} chord).`);
         setArcStart(null);
         setArcEnd(null);
         setArcBulge(null);
@@ -2419,7 +2712,7 @@ function Scene() {
       return;
     }
 
-    if (['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
+    if (['tree', 'bush', 'lamp', 'bench', 'rock'].includes(activeTool)) {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
@@ -2453,21 +2746,28 @@ function Scene() {
         rock: 'Landscape Boulder'
       };
 
+      const species = (activeTool === 'tree' || activeTool === 'bush') 
+        ? PLANT_SPECIES_CATALOG.find(s => s.id === activePlantSpecies)
+        : null;
+
       const newShape: Shape = {
         id: Math.random().toString(36).substr(2, 9),
-        name: nameMap[activeTool] || 'Landscape Feature',
+        name: species ? species.name : (nameMap[activeTool] || 'Landscape Feature'),
         type: activeTool as any,
         position: [hitPoint.x, hitPoint.y, hitPoint.z],
         quaternion: [0, 0, 0, 1],
+        scale: (activeTool === 'tree' || activeTool === 'bush') ? [activePlantScale, activePlantScale, activePlantScale] : [1, 1, 1],
         args: [1, 1, 1],
-        color: colorMap[activeTool] || '#2d6a4f',
+        color: species ? (species.foliageColor || colorMap[activeTool]) : (colorMap[activeTool] || '#2d6a4f'),
         roughness: 0.7,
-        metalness: 0.1
+        metalness: 0.1,
+        plantSpeciesId: (activeTool === 'tree' || activeTool === 'bush') ? activePlantSpecies : undefined,
+        plantVariation: (activeTool === 'tree' || activeTool === 'bush') ? activePlantVariation : undefined
       };
 
       addShape(newShape);
       commitHistory();
-      setMeasurements(`Placed ${nameMap[activeTool]} at [${hitPoint.x.toFixed(1)}, ${hitPoint.y.toFixed(1)}, ${hitPoint.z.toFixed(1)}]`);
+      setMeasurements(`Placed ${newShape.name} at [${hitPoint.x.toFixed(1)}, ${hitPoint.y.toFixed(1)}, ${hitPoint.z.toFixed(1)}]`);
       return;
     }
 
@@ -2480,27 +2780,45 @@ function Scene() {
         return;
       }
 
+      // Check if snapped to an indicator or candidate first
+      let startPoint: THREE.Vector3 | null = null;
+      let startNormal: THREE.Vector3 | null = null;
+      let startOnId: string | null = null;
+
+      if (snapIndicator) {
+        startPoint = new THREE.Vector3(...snapIndicator.point);
+      }
+
       // Check for mesh intersection first
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
       
       if (shapeIntersect && shapeIntersect.face) {
         const normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
-        setDrawingStart(shapeIntersect.point.clone());
-        setDrawingNormal(normal);
-        setDrawingOnId(shapeIntersect.object.userData.id);
-        setDrawingStep(1);
+        startNormal = normal;
+        startOnId = shapeIntersect.object.userData.id;
+        if (!startPoint) {
+          startPoint = shapeIntersect.point.clone();
+        }
       } else {
         // Fallback to ground plane
         const ray = raycaster.ray;
         const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
         const target = new THREE.Vector3();
         if (ray.intersectPlane(groundPlane, target)) {
-          setDrawingStart(target.clone());
-          setDrawingNormal(new THREE.Vector3(0, 1, 0));
-          setDrawingOnId(null);
-          setDrawingStep(1);
+          if (!startPoint) {
+            startPoint = target.clone();
+          }
+          startNormal = new THREE.Vector3(0, 1, 0);
         }
+      }
+
+      if (startPoint && startNormal) {
+        setDrawingStart(startPoint);
+        setDrawingNormal(startNormal);
+        setDrawingOnId(startOnId);
+        setDrawingStep(1);
+        setTrackingGuide(null);
       }
     }
   };
@@ -2526,17 +2844,18 @@ function Scene() {
     }
     if (activeTool === 'arc' && arcStep === 1 && arcStart) {
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
-      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+      const shapeIntersect = intersects.find(i => i.object.userData?.isShape || i.object.userData?.id);
+      const point = shapeIntersect ? shapeIntersect.point.clone() : (e.point ? e.point.clone() : new THREE.Vector3());
       setArcEnd(point);
-      setMeasurements(`Distance: ${formatValue(arcStart.distanceTo(point), unit, 2)}`);
+      setMeasurements(`Arc Chord: ${formatValue(arcStart.distanceTo(point), unit, 2)} (Click to set endpoint)`);
     }
 
     if (activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd) {
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
-      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
+      const shapeIntersect = intersects.find(i => i.object.userData?.isShape || i.object.userData?.id);
+      const point = shapeIntersect ? shapeIntersect.point.clone() : (e.point ? e.point.clone() : new THREE.Vector3());
       setArcBulge(point);
+      setMeasurements(`Arc Curvature: Adjust bulge & click to place`);
     }
 
     if (activeTool === 'offset') {
@@ -2738,6 +3057,52 @@ function Scene() {
       }
     }
 
+    if (activeTool === 'fence' || activeTool === 'railing') {
+      const plane = fencePlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const target = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(plane, target)) {
+        let finalPos = target.clone();
+
+        // 1. Check start vertex snap to close fence loop
+        let isClosingLoop = false;
+        if (fenceVertices.length >= 2) {
+          const d = target.distanceTo(fenceVertices[0]);
+          if (d < 0.65) {
+            finalPos = fenceVertices[0].clone();
+            setFenceHoveredVertex(0);
+            isClosingLoop = true;
+          } else {
+            setFenceHoveredVertex(null);
+          }
+        } else {
+          setFenceHoveredVertex(null);
+        }
+
+        // 2. Axis snapping if not closing loop
+        if (!isClosingLoop && fenceVertices.length > 0 && !e.shiftKey) {
+          const lastVertex = fenceVertices[fenceVertices.length - 1];
+          const dx = Math.abs(finalPos.x - lastVertex.x);
+          const dz = Math.abs(finalPos.z - lastVertex.z);
+          const snapThreshold = 0.35;
+          if (dx < snapThreshold) {
+            finalPos.x = lastVertex.x;
+          } else if (dz < snapThreshold) {
+            finalPos.z = lastVertex.z;
+          }
+        }
+
+        setFenceCandidatePos(finalPos);
+
+        if (fenceVertices.length > 0) {
+          const lastVertex = fenceVertices[fenceVertices.length - 1];
+          const dist = lastVertex.distanceTo(finalPos);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'}: Section ${formatValue(dist, unit, 2)} (${fenceVertices.length} placed) · Click next point · Double-click/Enter to finish`);
+        } else {
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'}: Click terrain or ground to start drawing path`);
+        }
+      }
+    }
+
     if (activeTool === 'door' || activeTool === 'window') {
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
@@ -2840,116 +3205,203 @@ function Scene() {
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(drawingNormal, drawingStart);
       const target = new THREE.Vector3();
       
-      if (drawingStep === 1 && ray.intersectPlane(plane, target)) {
-        // --- Inference locking: endpoint/midpoint snapping + axis lock ---
-        let snapHit: { point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center' } | null = null;
-        if (!axisLock) {
-          const snapThresholdWorld = 0.35;
-          let bestDist = snapThresholdWorld;
-          shapes.forEach(sh => {
-            if (sh.type === 'measurement') {
-              if (sh.args && Array.isArray(sh.args.start) && Array.isArray(sh.args.end)) {
-                const mStart = new THREE.Vector3(sh.args.start[0], sh.args.start[1], sh.args.start[2]);
-                const mEnd = new THREE.Vector3(sh.args.end[0], sh.args.end[1], sh.args.end[2]);
-                const mMid = mStart.clone().lerp(mEnd, 0.5);
-                const mCandidates: [THREE.Vector3, 'endpoint' | 'midpoint'][] = [[mStart, 'endpoint'], [mEnd, 'endpoint'], [mMid, 'midpoint']];
-                mCandidates.forEach(([p, t]) => {
-                  const d = target.distanceTo(p);
-                  if (d < bestDist) {
-                    bestDist = d;
-                    snapHit = { point: p.clone(), type: t };
-                  }
-                });
-              }
-              return;
-            }
-            const obj = scene.getObjectByName(sh.id);
-            if (!obj) return;
-            const box = new THREE.Box3().setFromObject(obj);
-            if (!isFinite(box.min.x) || !isFinite(box.max.x)) return;
-            const xs = [box.min.x, box.max.x], ys = [box.min.y, box.max.y], zs = [box.min.z, box.max.z];
-            const corners: THREE.Vector3[] = [];
-            xs.forEach(x => ys.forEach(y => zs.forEach(z => corners.push(new THREE.Vector3(x, y, z)))));
-            corners.forEach(c => {
-              const d = target.distanceTo(c);
-              if (d < bestDist) {
-                bestDist = d;
-                snapHit = { point: c.clone(), type: 'endpoint' };
-              }
-            });
-            for (let ci = 0; ci < 8; ci++) {
-              for (let cj = ci + 1; cj < 8; cj++) {
-                const a = corners[ci], b = corners[cj];
-                const diffs = [a.x !== b.x, a.y !== b.y, a.z !== b.z].filter(Boolean).length;
-                if (diffs === 1) {
-                  const mid = a.clone().lerp(b, 0.5);
-                  const d = target.distanceTo(mid);
-                  if (d < bestDist) {
-                    bestDist = d;
-                    snapHit = { point: mid, type: 'midpoint' };
-                  }
-                }
-              }
-            }
-            const faceCenters: THREE.Vector3[] = [
-              new THREE.Vector3(box.min.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
-              new THREE.Vector3(box.max.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
-              new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2),
-              new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2),
-              new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z),
-              new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z),
-            ];
-            faceCenters.forEach(c => {
-              const d = target.distanceTo(c);
-              if (d < bestDist) {
-                bestDist = d;
-                snapHit = { point: c.clone(), type: 'center' };
-              }
-            });
-          });
-                    // Hover-to-lock: sustain a snap through a brief dwell so precise clicks land exactly on the point
-          const now = performance.now();
-          const sameAsPrev = inferenceLockRef.current && snapHit ? inferenceLockRef.current.point.distanceTo(snapHit.point) < 0.05 : false;
-          if (snapHit && sameAsPrev) {
-            // still hovering the same candidate - dwell timer keeps running
-          } else if (snapHit) {
-            inferenceLockRef.current = { point: snapHit.point.clone(), type: snapHit.type, since: now, locked: false };
-          } else if (inferenceLockRef.current && !inferenceLockRef.current.locked) {
-            inferenceLockRef.current = null;
-          }
-          if (inferenceLockRef.current) {
-            if (!inferenceLockRef.current.locked && now - inferenceLockRef.current.since >= 350) {
-              inferenceLockRef.current.locked = true;
-            }
-            if (inferenceLockRef.current.locked) {
-              const releaseThreshold = 1.1;
-              if (target.distanceTo(inferenceLockRef.current.point) < releaseThreshold) {
-                snapHit = { point: inferenceLockRef.current.point, type: inferenceLockRef.current.type };
-              } else {
-                inferenceLockRef.current = null;
-              }
-            }
-          }
-          if (snapHit) target.copy((snapHit as { point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center' }).point);
-        }
-        if (axisLock) {
-          const axisVec = axisLock === 'x' ? new THREE.Vector3(1, 0, 0) : axisLock === 'y' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
-          const delta = target.clone().sub(drawingStart);
-          const projLength = delta.dot(axisVec);
-          target.copy(drawingStart.clone().add(axisVec.multiplyScalar(projLength)));
-          snapHit = null;
-        }
-        setSnapIndicator(snapHit ? { point: [(snapHit as any).point.x, (snapHit as any).point.y, (snapHit as any).point.z], type: (snapHit as any).type } : null);
-        setLastDrawTarget(target.clone());
+      const denom = ray.direction.dot(plane.normal);
+      const hasValidPlaneHit = Math.abs(denom) > 1e-4;
+      const planeT = hasValidPlaneHit ? -plane.distanceToPoint(ray.origin) / denom : -1;
 
-        // Step 1: Base Dimensions
+      if (drawingStep === 1 && hasValidPlaneHit && planeT > 0 && planeT < 300) {
+        target.copy(ray.origin).addScaledVector(ray.direction, planeT);
+
+        // Screen-space coordinates for pixel-precise inference
+        const rect = gl.domElement.getBoundingClientRect();
+        const mouseScreenX = ((mouse.x + 1) / 2) * rect.width;
+        const mouseScreenY = ((-mouse.y + 1) / 2) * rect.height;
+
+        const projectToScreen = (p: THREE.Vector3) => {
+          const v = p.clone().project(camera);
+          const inFront = v.z < 1.0;
+          return {
+            x: ((v.x + 1) / 2) * rect.width,
+            y: ((-v.y + 1) / 2) * rect.height,
+            inFront
+          };
+        };
+
+        // Coordinate basis on drawing plane
         const up = new THREE.Vector3(0, 1, 0);
         if (Math.abs(drawingNormal.dot(up)) > 0.99) {
           up.set(0, 0, 1);
         }
         const tangent = new THREE.Vector3().crossVectors(drawingNormal, up).normalize();
         const bitangent = new THREE.Vector3().crossVectors(drawingNormal, tangent).normalize();
-        
+
+        // Collect geometric candidate points
+        const candidates: Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; screenDist: number }> = [];
+        shapes.forEach(sh => {
+          if (sh.type === 'measurement') {
+            if (sh.args && Array.isArray(sh.args.start) && Array.isArray(sh.args.end)) {
+              const mStart = new THREE.Vector3(sh.args.start[0], sh.args.start[1], sh.args.start[2]);
+              const mEnd = new THREE.Vector3(sh.args.end[0], sh.args.end[1], sh.args.end[2]);
+              const mMid = mStart.clone().lerp(mEnd, 0.5);
+              [
+                { p: mStart, t: 'endpoint' as const },
+                { p: mEnd, t: 'endpoint' as const },
+                { p: mMid, t: 'midpoint' as const }
+              ].forEach(({ p, t }) => {
+                const pr = projectToScreen(p);
+                if (pr.inFront) {
+                  const sd = Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY);
+                  candidates.push({ point: p.clone(), type: t, screenDist: sd });
+                }
+              });
+            }
+            return;
+          }
+          const obj = scene.getObjectByName(sh.id);
+          if (!obj) return;
+          const box = new THREE.Box3().setFromObject(obj);
+          if (!isFinite(box.min.x) || !isFinite(box.max.x)) return;
+          const xs = [box.min.x, box.max.x], ys = [box.min.y, box.max.y], zs = [box.min.z, box.max.z];
+          const corners: THREE.Vector3[] = [];
+          xs.forEach(x => ys.forEach(y => zs.forEach(z => corners.push(new THREE.Vector3(x, y, z)))));
+          corners.forEach(c => {
+            const pr = projectToScreen(c);
+            if (pr.inFront) {
+              candidates.push({ point: c.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
+            }
+          });
+          for (let ci = 0; ci < 8; ci++) {
+            for (let cj = ci + 1; cj < 8; cj++) {
+              const a = corners[ci], b = corners[cj];
+              const diffs = [a.x !== b.x, a.y !== b.y, a.z !== b.z].filter(Boolean).length;
+              if (diffs === 1) {
+                const mid = a.clone().lerp(b, 0.5);
+                const pr = projectToScreen(mid);
+                if (pr.inFront) {
+                  candidates.push({ point: mid, type: 'midpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
+                }
+              }
+            }
+          }
+          const faceCenters: THREE.Vector3[] = [
+            new THREE.Vector3(box.min.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
+            new THREE.Vector3(box.max.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
+            new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2),
+            new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2),
+            new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z),
+            new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z),
+          ];
+          faceCenters.forEach(fc => {
+            const pr = projectToScreen(fc);
+            if (pr.inFront) {
+              candidates.push({ point: fc, type: 'center', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
+            }
+          });
+        });
+
+        // Evaluate snap target
+        candidates.sort((a, b) => a.screenDist - b.screenDist);
+        const snapRadiusPx = 18.0;
+        const bestCandidate = candidates.length > 0 && candidates[0].screenDist <= snapRadiusPx ? candidates[0] : null;
+
+        // Awaken reference points when hovered
+        if (bestCandidate) {
+          const existingIdx = awakenedRefPointsRef.current.findIndex(p => p.point.distanceTo(bestCandidate.point) < 0.05);
+          if (existingIdx >= 0) {
+            awakenedRefPointsRef.current[existingIdx].time = performance.now();
+          } else {
+            awakenedRefPointsRef.current.push({
+              point: bestCandidate.point.clone(),
+              type: bestCandidate.type,
+              time: performance.now(),
+              screenPos: { x: mouseScreenX, y: mouseScreenY }
+            });
+            if (awakenedRefPointsRef.current.length > 2) {
+              awakenedRefPointsRef.current.shift();
+            }
+          }
+        }
+
+        let currentGuide: { source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null = null;
+        let snapHit: { point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null = null;
+
+        if (bestCandidate && !axisLock) {
+          // Direct Snap to candidate point projected onto the drawing plane
+          const projectedToPlane = new THREE.Vector3();
+          plane.projectPoint(bestCandidate.point, projectedToPlane);
+          target.copy(projectedToPlane);
+          snapHit = {
+            point: bestCandidate.point.clone(),
+            type: bestCandidate.type,
+            tooltip: bestCandidate.type === 'endpoint' ? 'Endpoint' : bestCandidate.type === 'midpoint' ? 'Midpoint' : 'Center'
+          };
+        } else if (!axisLock && awakenedRefPointsRef.current.length > 0) {
+          // Cardinal alignment inference tracking rays from awakened reference points
+          let bestAlignmentDist = 14.0;
+          let alignedTarget: THREE.Vector3 | null = null;
+
+          for (const ref of awakenedRefPointsRef.current) {
+            const Q = ref.point;
+            const Q_plane = new THREE.Vector3();
+            plane.projectPoint(Q, Q_plane);
+
+            const diffQ = target.clone().sub(Q_plane);
+            const distTangent = diffQ.dot(tangent);
+            const distBitangent = diffQ.dot(bitangent);
+
+            // Ray 1: Along Tangent through Q (Red Axis on ground)
+            const ptOnRay1 = Q_plane.clone().addScaledVector(tangent, distTangent);
+            const pr1 = projectToScreen(ptOnRay1);
+            if (pr1.inFront) {
+              const d1 = Math.hypot(pr1.x - mouseScreenX, pr1.y - mouseScreenY);
+              if (d1 < bestAlignmentDist) {
+                bestAlignmentDist = d1;
+                alignedTarget = ptOnRay1;
+                currentGuide = {
+                  source: [Q.x, Q.y, Q.z],
+                  target: [ptOnRay1.x, ptOnRay1.y, ptOnRay1.z],
+                  color: '#ef4444',
+                  label: 'From Point on Red Axis'
+                };
+              }
+            }
+
+            // Ray 2: Along Bitangent through Q (Green Axis)
+            const ptOnRay2 = Q_plane.clone().addScaledVector(bitangent, distBitangent);
+            const pr2 = projectToScreen(ptOnRay2);
+            if (pr2.inFront) {
+              const d2 = Math.hypot(pr2.x - mouseScreenX, pr2.y - mouseScreenY);
+              if (d2 < bestAlignmentDist) {
+                bestAlignmentDist = d2;
+                alignedTarget = ptOnRay2;
+                currentGuide = {
+                  source: [Q.x, Q.y, Q.z],
+                  target: [ptOnRay2.x, ptOnRay2.y, ptOnRay2.z],
+                  color: '#22c55e',
+                  label: 'From Point on Green Axis'
+                };
+              }
+            }
+          }
+
+          if (alignedTarget) {
+            target.copy(alignedTarget);
+          }
+        }
+
+        if (axisLock) {
+          const axisVec = axisLock === 'x' ? new THREE.Vector3(1, 0, 0) : axisLock === 'y' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+          const delta = target.clone().sub(drawingStart);
+          const projLength = delta.dot(axisVec);
+          target.copy(drawingStart.clone().addScaledVector(axisVec, projLength));
+          snapHit = null;
+        }
+
+        setSnapIndicator(snapHit ? { point: [snapHit.point.x, snapHit.point.y, snapHit.point.z], type: snapHit.type, tooltip: snapHit.tooltip } : null);
+        setTrackingGuide(currentGuide);
+        setLastDrawTarget(target.clone());
+
+        // Step 1: Base Dimensions
         const diff = new THREE.Vector3().subVectors(target, drawingStart);
         const xDist = diff.dot(tangent);
         const yDist = diff.dot(bitangent);
@@ -3563,6 +4015,8 @@ function Scene() {
       setDrawingOnId(null);
       setPreviewShape(null);
       setDrawingStep(0);
+      setTrackingGuide(null);
+      awakenedRefPointsRef.current = [];
     }
 
     if (pushPullState) {
@@ -4182,7 +4636,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
@@ -4676,7 +5130,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -4772,10 +5226,10 @@ function Scene() {
       ))}
 
       {/* Collaboration cursors */}
-      {showCollaboratorCursors && collaborators.filter(c => c.uid !== user?.uid && c.cursorPosition).map(collab => {
+      {showCollaboratorCursors && collaborators.filter(c => c.uid !== user?.uid && c.cursorPosition).map((collab, idx) => {
         const color = getCollabColor(collab.email);
         return (
-          <group key={collab.uid} position={[collab.cursorPosition!.x, collab.cursorPosition!.y, collab.cursorPosition!.z]}>
+          <group key={`cursor-${collab.uid || collab.id || idx}`} position={[collab.cursorPosition!.x, collab.cursorPosition!.y, collab.cursorPosition!.z]}>
             <Html>
               <div className="relative flex flex-col items-start pointer-events-none select-none" style={{ transform: 'translate(-4px, -4px)' }}>
                 {/* Custom Triangle Cursor */}
@@ -4797,7 +5251,7 @@ function Scene() {
       })}
 
       {/* Collaborative Ghosts */}
-      {collaborators.filter(c => c.uid !== user?.uid && c.activeTransform).map(collab => {
+      {collaborators.filter(c => c.uid !== user?.uid && c.activeTransform).map((collab, idx) => {
         const trans = collab.activeTransform!;
         const shape = shapes.find(s => s.id === trans.id);
         if (!shape) return null;
@@ -4807,7 +5261,7 @@ function Scene() {
         const scale: [number, number, number] = Array.isArray(trans.scale) ? trans.scale as [number, number, number] : [1, 1, 1];
 
         return (
-          <group key={collab.uid} position={pos} quaternion={new THREE.Quaternion(...quat)} scale={scale}>
+          <group key={`ghost-${collab.uid || collab.id || idx}`} position={pos} quaternion={new THREE.Quaternion(...quat)} scale={scale}>
              <mesh>
                 {(shape.type === 'box' || shape.type === 'rect') ? (
                   <boxGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 1, 1]) as any} />
@@ -5012,19 +5466,36 @@ function Scene() {
           const aargs: any = shape.args || {};
           const apts: [number, number, number][] = aargs.points || [];
           if (apts.length < 2) return null;
-          const isSel = selectedId === shape.id;
+          const isSel = selectedId === shape.id || selectedIds.includes(shape.id);
           let totalLen = 0;
           for (let i = 1; i < apts.length; i++) {
             totalLen += Math.hypot(apts[i][0] - apts[i - 1][0], apts[i][1] - apts[i - 1][1], apts[i][2] - apts[i - 1][2]);
           }
           const midPt = apts[Math.floor(apts.length / 2)] || apts[0];
+          const arcColor = isSel ? '#0063A3' : (shape.color || '#22c55e');
           return (
-            <group key={shape.id}>
+            <group 
+              key={shape.id}
+              onClick={(e: any) => {
+                e.stopPropagation();
+                setSelectedId(shape.id);
+                setSelectedIds([shape.id]);
+              }}
+            >
               <Line
                 points={apts}
-                color={isSel ? '#ffffff' : (shape.color || '#4ade80')}
-                lineWidth={isSel ? 3 : 2}
+                color={arcColor}
+                lineWidth={isSel ? 5 : 3.5}
               />
+              {/* Endpoint visual anchors */}
+              <mesh position={apts[0]}>
+                <sphereGeometry args={[0.04, 16, 16]} />
+                <meshBasicMaterial color={isSel ? '#38bdf8' : arcColor} />
+              </mesh>
+              <mesh position={apts[apts.length - 1]}>
+                <sphereGeometry args={[0.04, 16, 16]} />
+                <meshBasicMaterial color={isSel ? '#38bdf8' : arcColor} />
+              </mesh>
               {(showAllDimensions || isSel) && (
                 <Html position={midPt} center occlude={false}>
                   <div
@@ -5058,6 +5529,18 @@ function Scene() {
               const point = e.point.clone();
               setTapeEnd(point);
               setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
+              return;
+            }
+            if (activeTool === 'arc' && arcStep === 1 && arcStart) {
+              const point = e.point.clone();
+              setArcEnd(point);
+              setMeasurements(`Arc Chord: ${formatValue(arcStart.distanceTo(point), unit, 2)} (Click to set endpoint)`);
+              return;
+            }
+            if (activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd) {
+              const point = e.point.clone();
+              setArcBulge(point);
+              setMeasurements(`Arc Curvature: Adjust bulge & click to place`);
               return;
             }
             if (activeTool === 'deform' && e.buttons === 1) {
@@ -5156,11 +5639,12 @@ function Scene() {
         const materialElements = shape.type === 'box' && shape.surfaceMaterials && !shape.bevelAmount ? (
           [0, 2, 4, 6, 8, 10].map((idx) => {
             const mat = shape.surfaceMaterials?.[idx] || shape.color;
-            return (mat.startsWith('http') || mat.startsWith('data:')) ? (
+            return isTextureUrl(mat) ? (
               <meshStandardMaterial 
                 key={idx}
                 attach={`material-${idx/2}`}
                 map={getCachedTexture(mat)} 
+                color="#ffffff"
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
                 transparent={shape.opacity !== undefined && shape.opacity < 1}
@@ -5183,12 +5667,13 @@ function Scene() {
             );
           })
         ) : (
-          (shape.color.startsWith('http') || shape.color.startsWith('data:')) ? (
+          isTextureUrl(shape.color) ? (
             <meshStandardMaterial 
               map={getCachedTexture(shape.color)} 
+              color="#ffffff"
               roughness={shape.roughness ?? 0.5}
               metalness={shape.metalness ?? 0}
-              transparent={true}
+              transparent={shape.opacity !== undefined && shape.opacity < 1}
               opacity={shape.opacity ?? 1}
               emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
               emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
@@ -5222,6 +5707,21 @@ function Scene() {
             <meshBasicMaterial color="#ef4444" wireframe transparent opacity={0.5} />
           </mesh>
         );
+
+        if ((shape.type === 'tree' || shape.type === 'bush') && shape.plantSpeciesId) {
+          const plantSpecies = PLANT_SPECIES_CATALOG.find(s => s.id === shape.plantSpeciesId);
+          if (plantSpecies?.modelType === 'fbx' || plantSpecies?.modelType === 'usd') {
+            return (
+              <PlantModelMesh
+                key={shape.id}
+                shape={shape}
+                selectedId={selectedId}
+                meshProps={meshProps}
+                selectionHighlight={selectionHighlight}
+              />
+            );
+          }
+        }
 
         if ((shape.type === 'box' || shape.type === 'rect') && shape.bevelAmount) {
           return (
@@ -5337,11 +5837,12 @@ function Scene() {
           ) : shape.type === 'box' && shape.surfaceMaterials ? (
             [0, 2, 4, 6, 8, 10].map((idx) => {
               const mat = shape.surfaceMaterials?.[idx] || shape.color;
-              return (mat.startsWith('http') || mat.startsWith('data:')) ? (
+              return isTextureUrl(mat) ? (
                 <meshStandardMaterial 
                   key={idx}
                   attach={`material-${idx/2}`}
                   map={getCachedTexture(mat)} 
+                  color="#ffffff"
                   roughness={shape.roughness ?? 0.5}
                   metalness={shape.metalness ?? 0}
                   transparent={shape.opacity !== undefined && shape.opacity < 1}
@@ -5366,30 +5867,44 @@ function Scene() {
               );
             })
           ) : (
-            (shape.color.startsWith('http') || shape.color.startsWith('data:')) ? (
-              <meshStandardMaterial 
-                map={getCachedTexture(shape.color)} 
-                roughness={shape.roughness ?? 0.5}
-                metalness={shape.metalness ?? 0}
-                transparent={true}
-                opacity={shape.opacity ?? 1}
-                side={(shape.type === 'poly' || shape.type === 'terrain') ? THREE.DoubleSide : THREE.FrontSide}
-                emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
-                emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
-              />
-            ) : (
-              <meshStandardMaterial 
-                color={shape.type === 'terrain' && shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default' ? '#ffffff' : shape.color} 
-                vertexColors={shape.type === 'terrain' && !!shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default'}
-                roughness={shape.roughness ?? 0.5}
-                metalness={shape.metalness ?? 0}
-                transparent={shape.opacity !== undefined && shape.opacity < 1}
-                opacity={shape.opacity ?? 1}
-                side={(shape.type === 'poly' || shape.type === 'terrain' || (shape.type === 'custom' && shape.args?.isRoad)) ? THREE.DoubleSide : THREE.FrontSide}
-                emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
-                emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
-              />
-            )
+            (() => {
+              const isTerrainHeatmap = shape.type === 'terrain' && !!shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default';
+              const resolvedTexUrl = !isTerrainHeatmap ? (
+                (shape.type === 'terrain')
+                  ? (isTextureUrl(shape.terrainData?.textureUrl) ? shape.terrainData!.textureUrl! : (isTextureUrl(shape.color) ? shape.color : (shape.terrainData?.textureUrl || 'lush_grass')))
+                  : (isTextureUrl(shape.color) ? shape.color : '')
+              ) : '';
+
+              if (resolvedTexUrl) {
+                return (
+                  <meshStandardMaterial 
+                    map={getCachedTexture(resolvedTexUrl)} 
+                    color="#ffffff"
+                    roughness={shape.roughness ?? 0.8}
+                    metalness={shape.metalness ?? 0.05}
+                    transparent={shape.opacity !== undefined && shape.opacity < 1}
+                    opacity={shape.opacity ?? 1}
+                    side={(shape.type === 'poly' || shape.type === 'terrain' || (shape.type === 'custom' && shape.args?.isRoad)) ? THREE.DoubleSide : THREE.FrontSide}
+                    emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
+                    emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
+                  />
+                );
+              }
+
+              return (
+                <meshStandardMaterial 
+                  color={isTerrainHeatmap ? '#ffffff' : (shape.color || '#ffffff')} 
+                  vertexColors={isTerrainHeatmap}
+                  roughness={shape.roughness ?? 0.8}
+                  metalness={shape.metalness ?? 0.05}
+                  transparent={shape.opacity !== undefined && shape.opacity < 1}
+                  opacity={shape.opacity ?? 1}
+                  side={(shape.type === 'poly' || shape.type === 'terrain' || (shape.type === 'custom' && shape.args?.isRoad)) ? THREE.DoubleSide : THREE.FrontSide}
+                  emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
+                  emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
+                />
+              );
+            })()
           )}
           {selectionHighlight}
           {subtractHighlight}
@@ -5582,11 +6097,33 @@ function Scene() {
                 snapIndicator.type === 'endpoint' ? 'bg-green-400 rotate-45 border border-green-600' : snapIndicator.type === 'midpoint' ? 'bg-cyan-400 rounded-full border border-cyan-600' : 'bg-fuchsia-400 rounded-full border border-fuchsia-600 ring-2 ring-fuchsia-200'
               )}
             />
-            <div className="bg-black/80 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap">
-              {snapIndicator.type === 'endpoint' ? 'Endpoint' : snapIndicator.type === 'midpoint' ? 'Midpoint' : 'Center'}
+            <div className="bg-black/80 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap shadow border border-white/20">
+              {snapIndicator.tooltip || (snapIndicator.type === 'endpoint' ? 'Endpoint' : snapIndicator.type === 'midpoint' ? 'Midpoint' : 'Center')}
             </div>
           </div>
         </Html>
+      )}
+
+      {/* Inference Tracking Guide line */}
+      {trackingGuide && (
+        <group>
+          <Line
+            points={[trackingGuide.source, trackingGuide.target]}
+            color={trackingGuide.color}
+            lineWidth={1.5}
+            dashed
+            dashScale={10}
+            transparent
+            opacity={0.85}
+          />
+          {trackingGuide.label && (
+            <Html position={trackingGuide.target} center occlude={false} zIndexRange={[50, 60]}>
+              <div className="bg-black/85 text-white text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap -translate-y-4 pointer-events-none border border-white/20 shadow-md">
+                {trackingGuide.label}
+              </div>
+            </Html>
+          )}
+        </group>
       )}
 
       {/* Inference Locking: axis-lock guide line */}
@@ -5641,21 +6178,58 @@ function Scene() {
         <group>
           <Line
             points={[[arcStart.x, arcStart.y, arcStart.z], [arcEnd.x, arcEnd.y, arcEnd.z]]}
-            color='#4ade80'
-            lineWidth={2}
+            color='#38bdf8'
+            lineWidth={3}
           />
+          <mesh position={[arcStart.x, arcStart.y, arcStart.z]}>
+            <sphereGeometry args={[0.06, 16, 16]} />
+            <meshBasicMaterial color="#38bdf8" />
+          </mesh>
+          <mesh position={[arcEnd.x, arcEnd.y, arcEnd.z]}>
+            <sphereGeometry args={[0.06, 16, 16]} />
+            <meshBasicMaterial color="#38bdf8" />
+          </mesh>
+          <Html position={[(arcStart.x + arcEnd.x) / 2, (arcStart.y + arcEnd.y) / 2 + 0.2, (arcStart.z + arcEnd.z) / 2]} center>
+            <div className="bg-black/80 text-cyan-300 font-mono text-[10px] px-1.5 py-0.5 rounded shadow pointer-events-none whitespace-nowrap">
+              Chord: {formatValue(arcStart.distanceTo(arcEnd), unit, 2)}
+            </div>
+          </Html>
         </group>
       )}
 
       {activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd && arcBulge && (() => {
-        const previewPts = computeArcPoints(arcStart, arcEnd, arcBulge);
-        if (!previewPts) return null;
+        let previewPts = computeArcPoints(arcStart, arcEnd, arcBulge);
+        if (!previewPts || previewPts.length < 2) {
+          previewPts = [arcStart, arcBulge, arcEnd];
+        }
         return (
-          <Line
-            points={previewPts.map(p => [p.x, p.y, p.z])}
-            color='#4ade80'
-            lineWidth={2}
-          />
+          <group>
+            <Line
+              points={previewPts.map(p => [p.x, p.y, p.z])}
+              color='#22c55e'
+              lineWidth={3.5}
+            />
+            {/* Guide line to bulge control point */}
+            <Line
+              points={[[arcStart.x, arcStart.y, arcStart.z], [arcBulge.x, arcBulge.y, arcBulge.z], [arcEnd.x, arcEnd.y, arcEnd.z]]}
+              color='#eab308'
+              lineWidth={1}
+              dashed
+              dashScale={10}
+            />
+            <mesh position={[arcStart.x, arcStart.y, arcStart.z]}>
+              <sphereGeometry args={[0.06, 16, 16]} />
+              <meshBasicMaterial color="#22c55e" />
+            </mesh>
+            <mesh position={[arcEnd.x, arcEnd.y, arcEnd.z]}>
+              <sphereGeometry args={[0.06, 16, 16]} />
+              <meshBasicMaterial color="#22c55e" />
+            </mesh>
+            <mesh position={[arcBulge.x, arcBulge.y, arcBulge.z]}>
+              <sphereGeometry args={[0.06, 16, 16]} />
+              <meshBasicMaterial color="#eab308" />
+            </mesh>
+          </group>
         );
       })()}
 
@@ -5823,6 +6397,74 @@ function Scene() {
             <mesh key={i} position={[v.x, v.y + 0.05, v.z]}>
               <cylinderGeometry args={[i === 0 && wallHoveredVertex === 0 ? 0.12 : 0.06, i === 0 && wallHoveredVertex === 0 ? 0.12 : 0.06, 0.1, 16]} />
               <meshBasicMaterial color={i === 0 && wallHoveredVertex === 0 ? "#FFD700" : (i === 0 ? "#22c55e" : "#3b82f6")} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {/* Fence / Railing Path Drawing Preview */}
+      {(activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0 && (
+        <group>
+          {/* Active 3D Segment Preview */}
+          {fenceCandidatePos && (() => {
+            const lastV = fenceVertices[fenceVertices.length - 1];
+            const dist = lastV.distanceTo(fenceCandidatePos);
+            if (dist < 0.08) return null;
+            const height = activeTool === 'fence' ? 1.1 : 1.0;
+            const center = lastV.clone().lerp(fenceCandidatePos, 0.5);
+            const dir = new THREE.Vector3().subVectors(fenceCandidatePos, lastV);
+            const angle = Math.atan2(dir.z, dir.x);
+            const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+
+            return (
+              <group>
+                <mesh position={[center.x, center.y, center.z]} quaternion={quat}>
+                  {activeTool === 'fence' ? (
+                    <primitive object={createFenceGeometry(dist, height)} attach="geometry" />
+                  ) : (
+                    <primitive object={createRailingGeometry(dist, height)} attach="geometry" />
+                  )}
+                  <meshStandardMaterial 
+                    color={activeTool === 'fence' ? '#854d0e' : '#475569'} 
+                    roughness={0.7} 
+                    metalness={0.1}
+                    transparent 
+                    opacity={0.65} 
+                  />
+                </mesh>
+                {/* Baseline Guide */}
+                <Line
+                  points={[
+                    [lastV.x, lastV.y + 0.02, lastV.z],
+                    [fenceCandidatePos.x, fenceCandidatePos.y + 0.02, fenceCandidatePos.z]
+                  ]}
+                  color={fenceHoveredVertex === 0 ? "#FFD700" : (activeTool === 'fence' ? "#854d0e" : "#475569")}
+                  lineWidth={3}
+                />
+              </group>
+            );
+          })()}
+
+          {/* Ghost Closing Line when snapping to first vertex */}
+          {fenceVertices.length >= 2 && fenceCandidatePos && (
+            <Line
+              points={[
+                [fenceCandidatePos.x, fenceCandidatePos.y + 0.02, fenceCandidatePos.z],
+                [fenceVertices[0].x, fenceVertices[0].y + 0.02, fenceVertices[0].z]
+              ]}
+              color={fenceHoveredVertex === 0 ? "#FFD700" : "#94a3b8"}
+              lineWidth={fenceHoveredVertex === 0 ? 4 : 1.5}
+              dashed={fenceHoveredVertex !== 0}
+              dashSize={0.15}
+              gapSize={0.08}
+            />
+          )}
+
+          {/* Placed Waypoints */}
+          {fenceVertices.map((v, i) => (
+            <mesh key={i} position={[v.x, v.y + 0.04, v.z]}>
+              <cylinderGeometry args={[i === 0 && fenceHoveredVertex === 0 ? 0.12 : 0.06, i === 0 && fenceHoveredVertex === 0 ? 0.12 : 0.06, 0.08, 16]} />
+              <meshBasicMaterial color={i === 0 && fenceHoveredVertex === 0 ? "#FFD700" : (i === 0 ? "#22c55e" : (activeTool === 'fence' ? "#854d0e" : "#475569"))} />
             </mesh>
           ))}
         </group>
@@ -6654,6 +7296,16 @@ function TerrainGeometry({ terrainData }: { terrainData?: any }) {
     pos.needsUpdate = true;
     geo.computeVertexNormals();
 
+    // If texture repeating scale is provided, adjust the UV coordinates
+    const uvAttr = geo.attributes.uv;
+    const texScale = terrainData.textureScale !== undefined ? terrainData.textureScale : 8;
+    if (uvAttr && texScale > 0) {
+      for (let i = 0; i < uvAttr.count; i++) {
+        uvAttr.setXY(i, uvAttr.getX(i) * texScale, uvAttr.getY(i) * texScale);
+      }
+      uvAttr.needsUpdate = true;
+    }
+
     // Generate vertex colors if elevation, slope, or contour shading is requested
     if (shadingMode && shadingMode !== 'default') {
       const colors: number[] = [];
@@ -6713,7 +7365,7 @@ function TerrainGeometry({ terrainData }: { terrainData?: any }) {
     };
   }, [geometry]);
 
-  return <primitive key={terrainData ? `${terrainData.gridX}-${terrainData.gridY}-${terrainData.shadingMode}` : 'default'} object={geometry} attach="geometry" />;
+  return <primitive object={geometry} attach="geometry" />;
 }
 
 export default function Viewport() {

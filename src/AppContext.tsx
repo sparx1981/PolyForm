@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight } from './types';
+import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl } from './types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
@@ -291,6 +291,25 @@ console.log("Created rectangle:", myRect.id);`);
   const [subtractCutterId, setSubtractCutterId] = useState<string | null>(null);
   const [subtractTargetId, setSubtractTargetId] = useState<string | null>(null);
 
+  // Basic Toolbar (Enabled by default, persisted across sessions)
+  const [isBasicToolbarEnabled, setIsBasicToolbarEnabledState] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_basic_toolbar');
+      if (stored !== null) return stored === 'true';
+    } catch (e) {}
+    return true;
+  });
+
+  const setIsBasicToolbarEnabled = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsBasicToolbarEnabledState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_basic_toolbar', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   // Architecture Toolbar (Disabled by default, persisted across sessions)
   const [isArchitectureToolbarEnabled, setIsArchitectureToolbarEnabledState] = useState<boolean>(() => {
     try {
@@ -329,6 +348,25 @@ console.log("Created rectangle:", myRect.id);`);
     });
   };
 
+  // Toolbar Layout Mode ('classic' | 'unified', default 'classic')
+  const [layoutMode, setLayoutModeState] = useState<'classic' | 'unified'>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_layout_mode');
+      if (stored === 'classic' || stored === 'unified') return stored;
+    } catch (e) {}
+    return 'classic';
+  });
+
+  const setLayoutMode = (val: 'classic' | 'unified' | ((prev: 'classic' | 'unified') => 'classic' | 'unified')) => {
+    setLayoutModeState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_layout_mode', next);
+      } catch (e) {}
+      return next;
+    });
+  };
+
   const [landscapeSculptSettings, setLandscapeSculptSettings] = useState<{
     mode: 'push' | 'pull' | 'smooth' | 'flatten' | 'pinch';
     radius: number;
@@ -353,6 +391,11 @@ console.log("Created rectangle:", myRect.id);`);
     curbHeight: 0.15
   });
 
+  // Plant & Vegetation Selection
+  const [activePlantSpecies, setActivePlantSpecies] = useState<string>('ribbon_grass');
+  const [activePlantVariation, setActivePlantVariation] = useState<string>('VarA');
+  const [activePlantScale, setActivePlantScale] = useState<number>(1.0);
+
   // Persistence for user settings
   useEffect(() => {
     if (user?.uid) {
@@ -369,6 +412,7 @@ console.log("Created rectangle:", myRect.id);`);
             defaultCameraTarget,
             isArchitectureToolbarEnabled,
             isLandscapesToolbarEnabled,
+            layoutMode,
             updatedAt: Date.now()
           }, { merge: true });
         } catch (error: any) {
@@ -380,7 +424,7 @@ console.log("Created rectangle:", myRect.id);`);
       const timeout = setTimeout(saveSettings, 30000); // 30s debounce for settings
       return () => clearTimeout(timeout);
     }
-  }, [theme, unit, gridEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, user?.uid]);
+  }, [theme, unit, gridEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, layoutMode, user?.uid]);
 
   // Load user settings
   const lastSettingsLoad = useRef<number>(0);
@@ -407,6 +451,9 @@ console.log("Created rectangle:", myRect.id);`);
           }
           if (data.isLandscapesToolbarEnabled !== undefined) {
             setIsLandscapesToolbarEnabled(Boolean(data.isLandscapesToolbarEnabled));
+          }
+          if (data.layoutMode === 'classic' || data.layoutMode === 'unified') {
+            setLayoutMode(data.layoutMode);
           }
         }
       } catch (error: any) {
@@ -814,14 +861,27 @@ console.log("Created rectangle:", myRect.id);`);
   };
 
   const updateShapeColor = (id: string, color: string, pbr?: { roughness: number, metalness: number, opacity: number }) => {
-    handleSetShapes(prev => prev.map(s => s.id === id ? { 
-      ...s, 
-      color, 
-      surfaceMaterials: {},
-      roughness: pbr?.roughness ?? s.roughness,
-      metalness: pbr?.metalness ?? s.metalness,
-      opacity: pbr?.opacity ?? s.opacity
-    } : s));
+    handleSetShapes(prev => prev.map(s => {
+      if (s.id === id) {
+        const updated: Shape = {
+          ...s,
+          color,
+          surfaceMaterials: {},
+          roughness: pbr?.roughness ?? s.roughness,
+          metalness: pbr?.metalness ?? s.metalness,
+          opacity: pbr?.opacity ?? s.opacity
+        };
+        if (s.type === 'terrain' && s.terrainData) {
+          updated.terrainData = {
+            ...s.terrainData,
+            textureUrl: isTextureUrl(color) ? color : undefined,
+            shadingMode: 'default'
+          };
+        }
+        return updated;
+      }
+      return s;
+    }));
     recordAction(`const obj = sdk.getObjectByName("${id}");\nif (obj) sdk.applyColor(obj, "${color}");`);
   };
 
@@ -1134,14 +1194,25 @@ console.log("Created rectangle:", myRect.id);`);
       isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
       // Architecture & Landscapes Toolbars
+      isBasicToolbarEnabled,
+      setIsBasicToolbarEnabled,
       isArchitectureToolbarEnabled,
       setIsArchitectureToolbarEnabled,
       isLandscapesToolbarEnabled,
       setIsLandscapesToolbarEnabled,
+      layoutMode,
+      setLayoutMode,
       landscapeSculptSettings,
       setLandscapeSculptSettings,
       landscapeRoadSettings,
       setLandscapeRoadSettings,
+      // Plant Library Selection
+      activePlantSpecies,
+      setActivePlantSpecies,
+      activePlantVariation,
+      setActivePlantVariation,
+      activePlantScale,
+      setActivePlantScale,
       contactFrictionEnabled,
       setContactFrictionEnabled,
       isAIGenerateOpen,

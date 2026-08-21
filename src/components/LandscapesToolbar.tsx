@@ -24,9 +24,12 @@ import {
   SlidersHorizontal,
   Lamp,
   Armchair,
-  Disc
+  Disc,
+  Image as ImageIcon
 } from 'lucide-react';
 import { ToolType, Shape, TerrainData } from '../types';
+import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
+import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 
 interface LandscapeToolButtonProps {
   tool: ToolType;
@@ -40,13 +43,16 @@ interface LandscapeToolButtonProps {
 }
 
 function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, badge, hotkey }: LandscapeToolButtonProps) {
-  const { bannerColor, theme } = useApp();
+  const { bannerColor, theme, toolbarVisibility } = useApp();
+
+  if (toolbarVisibility && toolbarVisibility[tool] === false) return null;
+
   return (
     <button
       id={`landscape-tool-${tool}`}
       onClick={onClick}
       className={cn(
-        "toolbar-btn relative group flex items-center justify-center transition-all",
+        "toolbar-btn relative group hover:z-50 flex items-center justify-center transition-all",
         active && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
         theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
       )}
@@ -63,7 +69,7 @@ function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, bad
       </div>
 
       {/* Standard Floating Tooltip matching Basic and Architecture toolbars */}
-      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl border border-gray-700 transition-opacity">
+      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[100] shadow-xl border border-gray-700 transition-opacity">
         <div className="font-semibold flex items-center gap-1.5">
           <span>{label}</span>
           {hotkey && <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">({hotkey})</span>}
@@ -85,18 +91,33 @@ export default function LandscapesToolbar() {
     setShapes, 
     commitHistory, 
     setConsoleOutput, 
+    selectedId,
+    selectedIds,
+    setActiveMaterial,
+    setActivePBR,
+    setCustomMaterials,
     landscapeSculptSettings, 
     setLandscapeSculptSettings, 
     landscapeRoadSettings, 
-    setLandscapeRoadSettings 
+    setLandscapeRoadSettings,
+    activePlantSpecies,
+    setActivePlantSpecies,
+    activePlantVariation,
+    setActivePlantVariation,
+    activePlantScale,
+    setActivePlantScale
   } = useApp();
 
-  const [activeCategory, setActiveCategory] = useState<'create' | 'sculpt' | 'road' | 'style' | null>(null);
+  const [activeCategory, setActiveCategory] = useState<'create' | 'sculpt' | 'road' | 'style' | 'plant' | null>(null);
   const [plotWidth, setPlotWidth] = useState<number>(20);
   const [plotDepth, setPlotDepth] = useState<number>(20);
   const [plotResolution, setPlotResolution] = useState<number>(32);
   const [plotRoughness, setPlotRoughness] = useState<number>(1.2);
-  const [shadingMode, setShadingMode] = useState<'default' | 'slope' | 'elevation' | 'aspect' | 'contours'>('elevation');
+  const [shadingMode, setShadingMode] = useState<'default' | 'slope' | 'elevation' | 'aspect' | 'contours'>('default');
+  const [styleSubTab, setStyleSubTab] = useState<'realistic' | 'analysis'>('realistic');
+  const [selectedTextureId, setSelectedTextureId] = useState<string>('lush_grass');
+  const [textureRepeatScale, setTextureRepeatScale] = useState<number>(8);
+  const [textureCategoryFilter, setTextureCategoryFilter] = useState<'all' | 'vegetation' | 'stone' | 'ground' | 'paved' | 'snow'>('all');
 
   // Conflict Resolution State for Terrain Creation
   const [conflictModal, setConflictModal] = useState<{
@@ -144,13 +165,18 @@ export default function LandscapesToolbar() {
       }
     }
 
+    const activePreset = LANDSCAPE_TEXTURES.find(t => t.id === selectedTextureId) || LANDSCAPE_TEXTURES[0];
+    const initialTexture = activePreset.generate();
+
     const terrainData: TerrainData = {
       gridX: grid,
       gridY: grid,
       width,
       depth,
       heights,
-      shadingMode
+      shadingMode: shadingMode || 'default',
+      textureUrl: initialTexture,
+      textureScale: textureRepeatScale || 8
     };
 
     if (replaceId) {
@@ -159,6 +185,9 @@ export default function LandscapesToolbar() {
           return {
             ...s,
             terrainData,
+            color: initialTexture,
+            roughness: activePreset.roughness,
+            metalness: activePreset.metalness,
             args: [width, depth, grid]
           };
         }
@@ -174,12 +203,12 @@ export default function LandscapesToolbar() {
         quaternion: [0, 0, 0, 1],
         args: [width, depth, grid],
         terrainData,
-        color: '#34d399',
-        roughness: 0.8,
-        metalness: 0.1
+        color: initialTexture,
+        roughness: activePreset.roughness,
+        metalness: activePreset.metalness
       };
       addShape(newShape);
-      setConsoleOutput(prev => [...prev, `[Landscapes] Created new terrain canvas ${width}m × ${depth}m (${grid}×${grid} resolution).`]);
+      setConsoleOutput(prev => [...prev, `[Landscapes] Created new terrain canvas ${width}m × ${depth}m with "${activePreset.name}" texture.`]);
     }
 
     commitHistory();
@@ -219,6 +248,124 @@ export default function LandscapesToolbar() {
       return;
     }
     setConsoleOutput(prev => [...prev, '[Landscapes] Embedded building footprints and graded retaining boundaries seamlessly into terrain mesh.']);
+  };
+
+  // Apply realistic / photorealistic texture to terrain or selected landscape elements
+  const applyLandscapeTexture = (preset: LandscapeTexturePreset, customRepeat?: number) => {
+    const repeat = customRepeat ?? textureRepeatScale;
+    setSelectedTextureId(preset.id);
+    const textureUrl = preset.generate();
+
+    // 1. Equip active material and PBR settings so paint bucket / future drawn objects use this texture
+    if (setActiveMaterial) setActiveMaterial(textureUrl);
+    if (setActivePBR) {
+      setActivePBR({
+        roughness: preset.roughness,
+        metalness: preset.metalness,
+        opacity: 1
+      });
+    }
+
+    // 2. Add to custom materials library if not already present
+    if (setCustomMaterials) {
+      setCustomMaterials(prev => {
+        if (prev.some(m => m.value === textureUrl || m.id === preset.id)) return prev;
+        return [...prev, {
+          id: preset.id,
+          name: preset.name,
+          type: 'texture',
+          value: textureUrl,
+          pbr: { roughness: preset.roughness, metalness: preset.metalness, opacity: 1 }
+        }];
+      });
+    }
+
+    // 3. Apply to currently selected shapes if any are selected
+    const targetIds = (selectedIds && selectedIds.length > 0) ? selectedIds : (selectedId ? [selectedId] : []);
+    if (targetIds.length > 0) {
+      setShapes(prev => prev.map(s => {
+        if (targetIds.includes(s.id)) {
+          if (s.type === 'terrain' && s.terrainData) {
+            return {
+              ...s,
+              color: textureUrl,
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              terrainData: {
+                ...s.terrainData,
+                shadingMode: 'default',
+                textureUrl,
+                textureScale: repeat
+              }
+            };
+          }
+          return {
+            ...s,
+            color: textureUrl,
+            roughness: preset.roughness,
+            metalness: preset.metalness
+          };
+        }
+        return s;
+      }));
+      setConsoleOutput(prev => [...prev, `[Landscapes] Applied "${preset.name}" texture (${repeat}× repeat) to selected object(s).`]);
+      commitHistory();
+      return;
+    }
+
+    // 4. Otherwise, apply to existing terrain mesh
+    const existingTerrain = shapes.find(s => s.type === 'terrain');
+    if (existingTerrain && existingTerrain.terrainData) {
+      setShapes(prev => prev.map(s => {
+        if (s.type === 'terrain' && s.terrainData) {
+          return {
+            ...s,
+            color: textureUrl,
+            roughness: preset.roughness,
+            metalness: preset.metalness,
+            terrainData: {
+              ...s.terrainData,
+              shadingMode: 'default',
+              textureUrl,
+              textureScale: repeat
+            }
+          };
+        }
+        return s;
+      }));
+      setConsoleOutput(prev => [...prev, `[Landscapes] Applied photorealistic "${preset.name}" texture (${repeat}× tiling, PBR roughness ${preset.roughness}) to terrain.`]);
+      commitHistory();
+    } else {
+      // Auto-create a standard terrain canvas with this texture if none exists yet
+      const grid = 32;
+      const width = 20;
+      const depth = 20;
+      const heights = new Array(grid * grid).fill(0);
+      const newTerrain: Shape = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: `Terrain Canvas (${preset.name})`,
+        type: 'terrain',
+        position: [0, 0, 0],
+        quaternion: [0, 0, 0, 1],
+        args: [width, depth, grid],
+        terrainData: {
+          gridX: grid,
+          gridY: grid,
+          width,
+          depth,
+          heights,
+          shadingMode: 'default',
+          textureUrl,
+          textureScale: repeat
+        },
+        color: textureUrl,
+        roughness: preset.roughness,
+        metalness: preset.metalness
+      };
+      addShape(newTerrain);
+      setConsoleOutput(prev => [...prev, `[Landscapes] Created terrain canvas with photorealistic "${preset.name}" texture.`]);
+      commitHistory();
+    }
   };
 
   return (
@@ -345,52 +492,60 @@ export default function LandscapesToolbar() {
       <LandscapeToolButton
         tool="tree"
         label="Plant Tree"
-        subtitle="Place 3D architectural trees with natural canopy"
+        subtitle="Place 3D architectural trees with natural canopy & species selection"
         icon={<Trees size={19} />}
         active={activeTool === 'tree'}
         onClick={() => {
           setActiveTool('tree');
-          setActiveCategory(null);
-          setConsoleOutput(prev => [...prev, '[Landscapes] Tree Placement active: click terrain or ground to place tree.']);
+          setActiveCategory(prev => prev === 'plant' && activeTool === 'tree' ? null : 'plant');
+          const defaultTree = PLANT_SPECIES_CATALOG.find(s => s.category === 'tree');
+          if (defaultTree && !PLANT_SPECIES_CATALOG.find(s => s.id === activePlantSpecies && s.category === 'tree')) {
+            setActivePlantSpecies(defaultTree.id);
+          }
+          setConsoleOutput(prev => [...prev, '[Landscapes] Tree Placement active: select species and click terrain or ground to place.']);
         }}
       />
 
       <LandscapeToolButton
         tool="bush"
         label="Plant Bush / Shrub"
-        subtitle="Place garden bushes and vegetation foliage clusters"
+        subtitle="Place garden bushes, grasses (Ribbon Grass FBX), and foliage clusters"
         icon={<Sprout size={19} />}
         active={activeTool === 'bush'}
         onClick={() => {
           setActiveTool('bush');
-          setActiveCategory(null);
-          setConsoleOutput(prev => [...prev, '[Landscapes] Bush Placement active: click terrain to place shrub.']);
+          setActiveCategory(prev => prev === 'plant' && activeTool === 'bush' ? null : 'plant');
+          const defaultBush = PLANT_SPECIES_CATALOG.find(s => s.id === 'ribbon_grass') || PLANT_SPECIES_CATALOG.find(s => s.category === 'bush');
+          if (defaultBush && !PLANT_SPECIES_CATALOG.find(s => s.id === activePlantSpecies && s.category === 'bush')) {
+            setActivePlantSpecies(defaultBush.id);
+          }
+          setConsoleOutput(prev => [...prev, '[Landscapes] Bush Placement active: select plant species and click terrain to place.']);
         }}
       />
 
       <LandscapeToolButton
         tool="fence"
         label="Post & Rail Fence"
-        subtitle="Place perimeter fencing sections (2.4m × 1.1m)"
+        subtitle="Draw path-following perimeter fencing (click points, Enter to finish)"
         icon={<Fence size={19} />}
         active={activeTool === 'fence'}
         onClick={() => {
           setActiveTool('fence');
           setActiveCategory(null);
-          setConsoleOutput(prev => [...prev, '[Landscapes] Fence Tool active: click to place fence section.']);
+          setConsoleOutput(prev => [...prev, '[Landscapes] Fence Tool active: click along path to place fence sections, click start point or press Enter to finish.']);
         }}
       />
 
       <LandscapeToolButton
         tool="railing"
         label="Safety Railing"
-        subtitle="Place modern deck & terrace guardrails (2.0m × 1.0m)"
+        subtitle="Draw path-following guardrails (click points, Enter to finish)"
         icon={<SlidersHorizontal size={19} />}
         active={activeTool === 'railing'}
         onClick={() => {
           setActiveTool('railing');
           setActiveCategory(null);
-          setConsoleOutput(prev => [...prev, '[Landscapes] Railing Tool active: click to place guardrail section.']);
+          setConsoleOutput(prev => [...prev, '[Landscapes] Railing Tool active: click along path to place guardrails, click start point or press Enter to finish.']);
         }}
       />
 
@@ -435,7 +590,7 @@ export default function LandscapesToolbar() {
 
       {/* Popout Context Configuration Panel */}
       {activeCategory && (
-        <div className={`absolute left-full ml-2 top-0 w-72 p-3.5 rounded-xl border backdrop-blur-md shadow-2xl z-50 text-xs ${
+        <div className={`absolute left-full ml-2 top-0 ${activeCategory === 'style' || activeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl z-50 text-xs ${
           theme === 'dark' ? 'bg-gray-900/95 border-gray-700 text-gray-200' : 'bg-white/95 border-gray-200 text-gray-800'
         }`}>
           <div className="flex items-center justify-between font-bold pb-2 mb-2 border-b border-gray-200 dark:border-gray-800">
@@ -444,7 +599,8 @@ export default function LandscapesToolbar() {
               {activeCategory === 'create' && 'Plot Canvas Settings'}
               {activeCategory === 'sculpt' && 'Sculpting Controls'}
               {activeCategory === 'road' && 'Path & Road Settings'}
-              {activeCategory === 'style' && 'Shading & Texture Modes'}
+              {activeCategory === 'style' && 'Landscape Textures & Shading'}
+              {activeCategory === 'plant' && (activeTool === 'tree' ? 'Tree Species Library' : 'Bushes & Flora Library')}
             </span>
             <button 
               onClick={() => setActiveCategory(null)}
@@ -670,33 +826,298 @@ export default function LandscapesToolbar() {
           )}
 
           {activeCategory === 'style' && (
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase font-bold text-gray-400">Terrain Shading Mode</label>
-              {(['elevation', 'slope', 'aspect', 'contours', 'default'] as const).map(mode => (
+            <div className="space-y-3">
+              {/* Sub-tab switcher */}
+              <div className="flex bg-gray-100 dark:bg-gray-800/80 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
                 <button
-                  key={mode}
+                  type="button"
                   onClick={() => {
-                    setShadingMode(mode);
+                    setStyleSubTab('realistic');
+                    setShadingMode('default');
                     setShapes(prev => prev.map(s => {
                       if (s.type === 'terrain' && s.terrainData) {
                         return {
                           ...s,
-                          terrainData: { ...s.terrainData, shadingMode: mode }
+                          terrainData: {
+                            ...s.terrainData,
+                            shadingMode: 'default'
+                          }
                         };
                       }
                       return s;
                     }));
                   }}
-                  className={`w-full py-1.5 px-2.5 text-left capitalize rounded flex items-center justify-between border ${
-                    shadingMode === mode 
-                      ? 'bg-trimble-blue/15 border-trimble-blue text-trimble-blue dark:text-blue-400 font-bold' 
-                      : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
+                  className={cn(
+                    "flex-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5",
+                    styleSubTab === 'realistic'
+                      ? "bg-white dark:bg-gray-700 text-trimble-blue dark:text-blue-400 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  )}
                 >
-                  <span>{mode} Analysis Map</span>
-                  {shadingMode === mode && <Check size={13} className="text-trimble-blue" />}
+                  <ImageIcon size={12} />
+                  <span>Photo-Realistic</span>
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setStyleSubTab('analysis')}
+                  className={cn(
+                    "flex-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5",
+                    styleSubTab === 'analysis'
+                      ? "bg-white dark:bg-gray-700 text-trimble-blue dark:text-blue-400 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  )}
+                >
+                  <Palette size={12} />
+                  <span>Analysis Heatmaps</span>
+                </button>
+              </div>
+
+              {styleSubTab === 'realistic' && (
+                <div className="space-y-2.5">
+                  {/* Category Filter Pills */}
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                    {(['all', 'vegetation', 'stone', 'ground', 'paved', 'snow'] as const).map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setTextureCategoryFilter(cat)}
+                        className={cn(
+                          "text-[9px] uppercase font-bold px-2 py-0.5 rounded-full whitespace-nowrap transition-colors border",
+                          textureCategoryFilter === cat
+                            ? "bg-trimble-blue text-white border-trimble-blue"
+                            : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Textures Grid */}
+                  <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                    {LANDSCAPE_TEXTURES
+                      .filter(t => textureCategoryFilter === 'all' || t.category === textureCategoryFilter)
+                      .map(preset => {
+                        const isSelected = selectedTextureId === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => applyLandscapeTexture(preset)}
+                            className={cn(
+                              "p-1.5 rounded-lg border text-left flex flex-col gap-1 transition-all group relative overflow-hidden",
+                              isSelected
+                                ? "bg-trimble-blue/10 border-trimble-blue ring-1 ring-trimble-blue shadow-sm"
+                                : "border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                            )}
+                          >
+                            <div className="w-full h-12 rounded overflow-hidden relative shadow-inner border border-black/10 flex items-center justify-center">
+                              {/* Procedural Texture Preview Canvas/Image */}
+                              <img 
+                                src={preset.generate()} 
+                                alt={preset.name} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              />
+                              {isSelected && (
+                                <div className="absolute top-1 right-1 bg-trimble-blue text-white rounded-full p-0.5 shadow">
+                                  <Check size={10} />
+                                </div>
+                              )}
+                              <span className="absolute bottom-1 left-1 text-[8px] font-bold px-1 py-0.2 rounded bg-black/60 text-white backdrop-blur-xs capitalize">
+                                {preset.category}
+                              </span>
+                            </div>
+
+                            <div>
+                              <div className="font-semibold text-[10px] truncate text-gray-900 dark:text-gray-100">
+                                {preset.name}
+                              </div>
+                              <div className="text-[8px] text-gray-500 dark:text-gray-400 line-clamp-1">
+                                {preset.description}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+
+                  {/* Tiling Repeat Slider */}
+                  <div className="pt-1 border-t border-gray-200 dark:border-gray-800">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-bold text-gray-400 uppercase">Texture Tiling Scale</span>
+                      <span className="font-mono text-trimble-blue font-semibold">{textureRepeatScale}× repeat</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="range"
+                        min={1}
+                        max={24}
+                        step={1}
+                        value={textureRepeatScale}
+                        onChange={e => {
+                          const val = Number(e.target.value);
+                          setTextureRepeatScale(val);
+                          const activePreset = LANDSCAPE_TEXTURES.find(t => t.id === selectedTextureId);
+                          if (activePreset) {
+                            applyLandscapeTexture(activePreset, val);
+                          }
+                        }}
+                        className="w-full accent-trimble-blue"
+                      />
+                    </div>
+                    <div className="flex justify-between text-[8px] text-gray-400 mt-0.5">
+                      <span>1× (Stretched)</span>
+                      <span>8× (Standard)</span>
+                      <span>24× (Dense)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {styleSubTab === 'analysis' && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Color Analysis Gradients</label>
+                  {(['elevation', 'slope', 'aspect', 'contours', 'default'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => {
+                        setShadingMode(mode);
+                        setShapes(prev => prev.map(s => {
+                          if (s.type === 'terrain' && s.terrainData) {
+                            return {
+                              ...s,
+                              terrainData: { ...s.terrainData, shadingMode: mode }
+                            };
+                          }
+                          return s;
+                        }));
+                      }}
+                      className={`w-full py-1.5 px-2.5 text-left capitalize rounded-lg flex items-center justify-between border transition-colors ${
+                        shadingMode === mode 
+                          ? 'bg-trimble-blue/15 border-trimble-blue text-trimble-blue dark:text-blue-400 font-bold' 
+                          : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3.5 h-3.5 rounded-full border border-black/20 ${
+                          mode === 'elevation' ? 'bg-gradient-to-t from-green-600 via-amber-700 to-white' :
+                          mode === 'slope' ? 'bg-gradient-to-r from-green-500 via-amber-600 to-red-700' :
+                          mode === 'contours' ? 'bg-gradient-to-b from-yellow-400 to-green-800' :
+                          mode === 'aspect' ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500' : 'bg-emerald-500'
+                        }`} />
+                        <span>{mode} Analysis Map</span>
+                      </div>
+                      {shadingMode === mode && <Check size={13} className="text-trimble-blue" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeCategory === 'plant' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium">
+                <span>{activeTool === 'tree' ? 'Available Tree Species' : 'Bushes, Grasses & Flora'}</span>
+                <span className="text-[10px] bg-trimble-blue/15 text-trimble-blue px-2 py-0.5 rounded-full font-bold">
+                  {PLANT_SPECIES_CATALOG.filter(s => activeTool === 'tree' ? s.category === 'tree' : s.category !== 'tree').length} Species
+                </span>
+              </div>
+
+              {/* Plant Species Grid */}
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {PLANT_SPECIES_CATALOG
+                  .filter(s => activeTool === 'tree' ? s.category === 'tree' : s.category !== 'tree')
+                  .map(species => {
+                    const isSelected = activePlantSpecies === species.id;
+                    return (
+                      <button
+                        key={species.id}
+                        onClick={() => {
+                          setActivePlantSpecies(species.id);
+                          if (species.variations && species.variations.length > 0) {
+                            setActivePlantVariation(species.variations[0]);
+                          }
+                          setConsoleOutput(prev => [...prev, `[Landscapes] Selected ${species.name}. Click terrain/ground to plant.`]);
+                        }}
+                        className={`w-full p-2 rounded-lg border text-left flex items-start gap-2.5 transition-all ${
+                          isSelected
+                            ? 'bg-trimble-blue/15 border-trimble-blue text-trimble-blue dark:text-blue-400 font-semibold shadow-sm'
+                            : 'border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800/80 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        <div 
+                          className="w-7 h-7 rounded-md shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-inner mt-0.5"
+                          style={{ backgroundColor: species.thumbnailColor || species.foliageColor }}
+                        >
+                          {species.modelType === 'fbx' ? '3D' : '🌿'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-xs truncate">{species.name}</span>
+                            {isSelected && <Check size={13} className="text-trimble-blue shrink-0 ml-1" />}
+                          </div>
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400 italic truncate">
+                            {species.scientificName || `${species.defaultHeight}m H × ${species.defaultSpread}m W`}
+                          </div>
+                          <div className="text-[10px] text-gray-400 dark:text-gray-500 line-clamp-1 mt-0.5">
+                            {species.description}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+
+              {/* Variations selector if active plant has variations (like Ribbon Grass VarA-VarF) */}
+              {(() => {
+                const current = PLANT_SPECIES_CATALOG.find(s => s.id === activePlantSpecies);
+                if (!current?.variations || current.variations.length === 0) return null;
+                return (
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
+                      Botanical Variation (Organic Clustering)
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {current.variations.map(variation => (
+                        <button
+                          key={variation}
+                          onClick={() => setActivePlantVariation(variation)}
+                          className={`py-1 px-2 text-[11px] rounded border font-medium transition-all ${
+                            activePlantVariation === variation
+                              ? 'bg-trimble-blue text-white border-trimble-blue font-bold shadow-sm'
+                              : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          {variation}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Plant Scale Slider */}
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] uppercase font-bold text-gray-400">Scale / Growth Size</span>
+                  <span className="text-[11px] font-mono font-bold text-trimble-blue">{activePlantScale.toFixed(2)}×</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.4"
+                  max="2.5"
+                  step="0.05"
+                  value={activePlantScale}
+                  onChange={(e) => setActivePlantScale(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                />
+                <div className="flex justify-between text-[9px] text-gray-400 mt-1">
+                  <span>0.4× (Sapling)</span>
+                  <span>1.0× (Standard)</span>
+                  <span>2.5× (Mature)</span>
+                </div>
+              </div>
             </div>
           )}
         </div>

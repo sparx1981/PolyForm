@@ -16,6 +16,7 @@ import TopBar from './components/TopBar';
 import LeftToolbar from './components/LeftToolbar';
 import ArchitectureToolbar from './components/ArchitectureToolbar';
 import LandscapesToolbar from './components/LandscapesToolbar';
+import UnifiedToolRail from './components/UnifiedToolRail';
 import RightPanelStack from './components/RightPanelStack';
 import StatusBar from './components/StatusBar';
 import Viewport from './components/Viewport';
@@ -57,7 +58,8 @@ function AppContent() {
       isToolModifierDocked,
       quotaLockdownTime,
       isQuotaLocked,
-      totalReads
+      totalReads,
+      layoutMode
     } = useApp();
   
     const quotaLocked = isQuotaLocked();
@@ -243,9 +245,15 @@ function AppContent() {
       </AnimatePresence>
 
       <main className="flex-1 flex overflow-hidden relative">
-        <LeftToolbar />
-        <ArchitectureToolbar />
-        <LandscapesToolbar />
+        {layoutMode === 'unified' ? (
+          <UnifiedToolRail />
+        ) : (
+          <>
+            <LeftToolbar layoutMode={layoutMode} />
+            <ArchitectureToolbar />
+            <LandscapesToolbar />
+          </>
+        )}
         <Viewport />
         
         {!isToolModifierDocked && <ToolModifierPalette />}
