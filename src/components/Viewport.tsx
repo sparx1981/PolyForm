@@ -56,6 +56,7 @@ import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers } from 'lucide-react';
 import StyleLibraryModal from './StyleLibraryModal';
 import { KernelGeometry } from './KernelGeometry';
+import { useLineBinding } from '../tools/lineToolBinding';
 
 // Module-level texture cache: avoids re-creating (and re-downloading) a THREE.Texture
 // on every render when a material/light uses an image URL as its map. Previously each
@@ -1222,8 +1223,12 @@ function Scene() {
     activePlantVariation,
     activePlantScale,
     kernelHost,
-    kernelRevision
+    kernelRevision,
+    bumpKernel
   } = useApp();
+
+  // Routes the line tool's drag into the geometry kernel. §4.1
+  const lineBinding = useLineBinding(kernelHost, bumpKernel);
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
   const [sculptCursorPos, setSculptCursorPos] = useState<THREE.Vector3 | null>(null);
@@ -3957,7 +3962,28 @@ function Scene() {
         return;
       }
 
-      if (previewShape) {
+      if (previewShape && previewShape.type === 'line') {
+        // A line is now a real EDGE in the geometry kernel, not a thin
+        // cylinder Shape. That is what lets four lines in a closed loop
+        // derive a surface, and a fifth across it split that surface in two.
+        //
+        // Reconstruct the endpoints from the preview: its position is the
+        // midpoint, its quaternion the direction, args[2] the length.
+        const lq = new THREE.Quaternion(
+          previewShape.quaternion[0], previewShape.quaternion[1],
+          previewShape.quaternion[2], previewShape.quaternion[3]
+        );
+        const ldir = new THREE.Vector3(0, 1, 0).applyQuaternion(lq);
+        const lmid = new THREE.Vector3(
+          previewShape.position[0], previewShape.position[1], previewShape.position[2]
+        );
+        const llen = Array.isArray(previewShape.args) ? (previewShape.args[2] as number) : 0;
+        const half = llen / 2;
+        lineBinding.commitDrag(
+          lmid.clone().addScaledVector(ldir, -half),
+          lmid.clone().addScaledVector(ldir, half)
+        );
+      } else if (previewShape) {
         addShape({
           id: Math.random().toString(36).substr(2, 9),
           type: previewShape.type,
