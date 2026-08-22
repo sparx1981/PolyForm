@@ -306,3 +306,50 @@ describe('determinism', () => {
     expect(run()).toBe(run());
   });
 });
+
+describe('host up axis (§6.4)', () => {
+  it('orients a Y-up ground face upward', () => {
+    // three.js is Y-up by default. Hardcoding Z here means the horizontal
+    // rule never fires for a ground-plane face in most host applications,
+    // and orientation silently falls through to the camera heuristic —
+    // making it depend on where the user happened to be looking.
+    const n = orientNormal(
+      { point: vec3(0,0,0), normal: vec3(0,-1,0) },
+      { upAxis: vec3(0,1,0), tolerance: T.COPLANARITY_TOLERANCE },
+    );
+    expect(n.y).toBeGreaterThan(0);
+  });
+
+  it('still defaults to Z-up when no axis is given', () => {
+    const n = orientNormal(
+      { point: vec3(0,0,0), normal: vec3(0,0,-1) },
+      { tolerance: T.COPLANARITY_TOLERANCE },
+    );
+    expect(n.z).toBeGreaterThan(0);
+  });
+
+  it('does not fire the horizontal rule for a wall', () => {
+    // A vertical face under Y-up must fall through to the later rules, not
+    // be forced upward.
+    const n = orientNormal(
+      { point: vec3(0,0,0), normal: vec3(0,0,1) },
+      { upAxis: vec3(0,1,0), cameraDirection: vec3(0,0,-1), tolerance: T.COPLANARITY_TOLERANCE },
+    );
+    expect(n.z).toBeGreaterThan(0);   // camera-facing, not up
+  });
+
+  it('derives a Y-up ground square facing up, end to end', () => {
+    const graph = createGraph();
+    const c: InsertContext = { graph, tolerances: T, index: createEdgeIndex(graph, 1) };
+    const touched = new Set<EdgeId>();
+    // Ground plane in a Y-up world: y = 0, spanning X and Z.
+    const pts = [vec3(0,0,0), vec3(4,0,0), vec3(4,0,4), vec3(0,0,4)];
+    for (let i = 0; i < 4; i++) {
+      for (const t of insertEdge(c, pts[i]!, pts[(i+1)%4]!).touched) touched.add(t);
+    }
+    derive(graph, touched, { tolerances: T, upAxis: vec3(0,1,0) });
+    expect(graph.faces.size).toBe(1);
+    const face = [...graph.faces.values()][0]!;
+    expect(face.plane.normal.y).toBeGreaterThan(0.99);
+  });
+});

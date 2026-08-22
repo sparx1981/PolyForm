@@ -48,6 +48,8 @@ export interface SessionOptions {
   readonly tolerances?: Tolerances;
   /** Fixed camera keeps orientation reproducible. Omit for headless. §6.4 */
   readonly cameraDirection?: Vec3;
+  /** Host up axis. three.js defaults to Y-up; the kernel defaults to Z. §6.4 */
+  readonly upAxis?: Vec3;
   readonly cellSize?: number;
 }
 
@@ -64,6 +66,7 @@ export class KernelSession {
   readonly tolerances: Tolerances;
   private readonly index: SpatialIndex<EdgeId>;
   private readonly cameraDirection: Vec3 | undefined;
+  private readonly upAxis: Vec3 | undefined;
   private touched = new Set<EdgeId>();
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
@@ -73,6 +76,7 @@ export class KernelSession {
     this.tolerances = opts.tolerances ?? DEFAULT_TOLERANCES;
     this.index = createEdgeIndex(this.graph, opts.cellSize ?? 1);
     this.cameraDirection = opts.cameraDirection;
+    this.upAxis = opts.upAxis;
   }
 
   private get ctx(): InsertContext {
@@ -80,9 +84,11 @@ export class KernelSession {
   }
 
   private get deriveOpts() {
-    return this.cameraDirection
-      ? { tolerances: this.tolerances, cameraDirection: this.cameraDirection }
-      : { tolerances: this.tolerances };
+    return {
+      tolerances: this.tolerances,
+      ...(this.cameraDirection ? { cameraDirection: this.cameraDirection } : {}),
+      ...(this.upAxis ? { upAxis: this.upAxis } : {}),
+    };
   }
 
   /**

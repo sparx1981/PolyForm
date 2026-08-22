@@ -42,7 +42,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const bumpKernel = useCallback(() => setKernelRevision((r) => r + 1), []);
   const kernelHostRef = useRef<KernelArcHost | null>(null);
   if (!kernelHostRef.current) {
-    kernelHostRef.current = new KernelArcHost({ onChange: () => bumpKernel() });
+    kernelHostRef.current = new KernelArcHost({
+      // PolyForm is Y-up (three.js default), so tell the kernel. Without it,
+      // §6.4's "horizontal faces point up" rule never fires for a ground-plane
+      // face and orientation falls through to the camera heuristic.
+      upAxis: { x: 0, y: 1, z: 0 },
+      onChange: () => bumpKernel(),
+    });
   }
   const kernelHost = kernelHostRef.current;
 
@@ -63,10 +69,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // ?kernel-test draws a 4x4 square and reports the derived face count, so
     // the kernel can be verified without pasting anything into the console.
     if (params.has('kernel-test')) {
+      // On the GROUND plane: y = 0, spanning X and Z. Drawing at z = 0
+      // spanning X and Y would stand the square up as a wall in a Y-up world.
       const p0 = { x: 0, y: 0, z: 0 };
       const p1 = { x: 4, y: 0, z: 0 };
-      const p2 = { x: 4, y: 4, z: 0 };
-      const p3 = { x: 0, y: 4, z: 0 };
+      const p2 = { x: 4, y: 0, z: 4 };
+      const p3 = { x: 0, y: 0, z: 4 };
       for (const [a, b] of [[p0, p1], [p1, p2], [p2, p3], [p3, p0]] as const) {
         kernelHost.commitSegment(a, b);
       }

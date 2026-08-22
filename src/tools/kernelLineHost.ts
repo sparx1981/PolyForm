@@ -19,6 +19,8 @@ import type { CommitOutcome, LineToolHost } from './lineTool';
 export interface KernelHostOptions {
   readonly tolerances?: Tolerances;
   readonly cameraDirection?: Vec3;
+  /** Host up axis. three.js defaults to Y-up; the kernel defaults to Z. §6.4 */
+  readonly upAxis?: Vec3;
   readonly cellSize?: number;
   /** Called after every successful commit, so the renderer can invalidate. */
   readonly onChange?: (result: DeriveResult) => void;
@@ -32,6 +34,7 @@ export class KernelLineHost implements LineToolHost {
   protected undoStack: Snapshot[] = [];
   protected redoStack: Snapshot[] = [];
   private readonly cameraDirection: Vec3 | undefined;
+  private readonly upAxis: Vec3 | undefined;
   protected readonly onChange: ((r: DeriveResult) => void) | undefined;
 
   constructor(opts: KernelHostOptions = {}, graph?: Graph) {
@@ -39,6 +42,7 @@ export class KernelLineHost implements LineToolHost {
     this.tolerances = opts.tolerances ?? DEFAULT_TOLERANCES;
     this.index = createEdgeIndex(this.graph, opts.cellSize ?? 1);
     this.cameraDirection = opts.cameraDirection;
+    this.upAxis = opts.upAxis;
     this.onChange = opts.onChange;
   }
 
@@ -47,9 +51,11 @@ export class KernelLineHost implements LineToolHost {
   }
 
   protected get deriveOpts() {
-    return this.cameraDirection
-      ? { tolerances: this.tolerances, cameraDirection: this.cameraDirection }
-      : { tolerances: this.tolerances };
+    return {
+      tolerances: this.tolerances,
+      ...(this.cameraDirection ? { cameraDirection: this.cameraDirection } : {}),
+      ...(this.upAxis ? { upAxis: this.upAxis } : {}),
+    };
   }
 
   /** Records an undo entry and clears redo. Shared with subclasses. */

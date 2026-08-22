@@ -42,6 +42,16 @@ export interface DeriveOptions {
    * reproducible; the deterministic rules run first regardless. §6.4
    */
   readonly cameraDirection?: Vec3;
+  /**
+   * Which way is up in the host application. §6.4's "horizontal faces point
+   * up" rule needs this, and hardcoding it is a bug: three.js defaults to
+   * Y-up, so a Z-up assumption means the rule never fires for a ground-plane
+   * face and orientation falls through to the camera heuristic — which makes
+   * it depend on where the user happened to be looking.
+   *
+   * Defaults to Z-up.
+   */
+  readonly upAxis?: Vec3;
 }
 
 export interface DeriveResult {
@@ -127,6 +137,8 @@ export function orientNormal(
     neighbourNormal?: Vec3 | null;
     snapshotNormal?: Vec3 | null;
     cameraDirection?: Vec3 | null;
+    /** Defaults to Z-up when omitted. */
+    upAxis?: Vec3 | null;
     tolerance: number;
   },
 ): Vec3 {
@@ -143,8 +155,12 @@ export function orientNormal(
   }
   // 3. Horizontal planes face up. A rectangle on the ground has an
   //    unambiguous right answer and users notice when it comes out face-down.
-  if (Math.abs(Math.abs(n.z) - 1) <= Math.max(opts.tolerance, 1e-6)) {
-    return n.z >= 0 ? n : flip(n);
+  //    "Up" is host-defined: three.js is Y-up by default, so assuming Z here
+  //    would silently skip this rule in most applications.
+  const up = opts.upAxis ?? { x: 0, y: 0, z: 1 };
+  const alignment = dot(n, up);
+  if (Math.abs(Math.abs(alignment) - 1) <= Math.max(opts.tolerance, 1e-6)) {
+    return alignment >= 0 ? n : flip(n);
   }
   // 4. Camera-facing.
   if (opts.cameraDirection) {
@@ -303,6 +319,7 @@ export function deriveRegion(
     const oriented = orientNormal(ringPlane, {
       snapshotNormal: plan.match?.frontNormal ?? null,
       cameraDirection: opts.cameraDirection ?? null,
+      upAxis: opts.upAxis ?? null,
       tolerance: opts.tolerances.COPLANARITY_TOLERANCE,
     });
     const facePlane: Plane = { point: plane.point, normal: oriented };
