@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl } from './types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
+import { KernelArcHost } from './tools/kernelArcHost';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -34,6 +35,25 @@ const cleanData = (obj: any): any => {
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  // --- Geometry kernel -----------------------------------------------------
+  // Coexists with Shape[]: the kernel owns DRAWN geometry (lines, arcs,
+  // rectangles, polygons), Shape[] keeps primitives, plants and terrain.
+  const [kernelRevision, setKernelRevision] = useState(0);
+  const bumpKernel = useCallback(() => setKernelRevision((r) => r + 1), []);
+  const kernelHostRef = useRef<KernelArcHost | null>(null);
+  if (!kernelHostRef.current) {
+    kernelHostRef.current = new KernelArcHost({ onChange: () => bumpKernel() });
+  }
+  const kernelHost = kernelHostRef.current;
+
+  // Dev-only handle so the kernel can be driven from the browser console.
+  // Guarded by import.meta.env.DEV so it never reaches a production build.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__polyform = { kernelHost, bumpKernel };
+    }
+  }, [kernelHost, bumpKernel]);
+
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [measurements, setMeasurements] = useState('');
   const [activeMaterial, setActiveMaterial] = useState('#ffffff');
@@ -1231,7 +1251,10 @@ console.log("Created rectangle:", myRect.id);`);
       quotaLockdownTime,
       isQuotaLocked: checkQuota,
       totalReads,
-      incrementReads
+      incrementReads,
+      kernelHost,
+      kernelRevision,
+      bumpKernel
     }}>
       {children}
     </AppContext.Provider>

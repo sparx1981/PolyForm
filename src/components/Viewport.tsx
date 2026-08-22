@@ -55,6 +55,7 @@ import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers } from 'lucide-react';
 import StyleLibraryModal from './StyleLibraryModal';
+import { KernelGeometry } from './KernelGeometry';
 
 // Module-level texture cache: avoids re-creating (and re-downloading) a THREE.Texture
 // on every render when a material/light uses an image URL as its map. Previously each
@@ -1219,7 +1220,9 @@ function Scene() {
     setLandscapeRoadSettings,
     activePlantSpecies,
     activePlantVariation,
-    activePlantScale
+    activePlantScale,
+    kernelHost,
+    kernelRevision
   } = useApp();
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
@@ -5424,6 +5427,16 @@ function Scene() {
           </div>
         </Html>
       )}
+
+      {/*
+        Kernel-derived geometry, rendered ALONGSIDE the Shape[] primitives
+        below. The kernel owns drawn geometry (lines, arcs, rectangles,
+        polygons); Shape[] keeps primitives, plants and terrain.
+
+        `revision` is the invalidation signal and is not optional: the kernel
+        Graph is mutated in place, so React's identity check on it never fires.
+      */}
+      <KernelGeometry graph={kernelHost.graph} revision={kernelRevision} />
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;

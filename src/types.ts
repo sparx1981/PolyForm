@@ -1,3 +1,5 @@
+import type { KernelArcHost } from './tools/kernelArcHost';
+
 export type ToolType = 
   | 'select' | 'lasso' | 'eraser' | 'paint' | 'component'
   | 'line' | 'poly' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
@@ -469,6 +471,19 @@ export interface AppState {
   setActivePlantVariation: (variation: string) => void;
   activePlantScale: number;
   setActivePlantScale: (scale: number) => void;
+
+  // --- Geometry kernel (coexists with Shape[]; see docs/) ---
+  // The kernel owns DRAWN geometry: lines, arcs, rectangles, polygons.
+  // Shape[] keeps primitives, plants and terrain. A given object lives in
+  // exactly one of the two.
+  kernelHost: KernelArcHost;
+  /**
+   * Bumped on every kernel mutation. The kernel Graph is mutated IN PLACE,
+   * so React's identity check on it never fires; without this the screen
+   * silently stops matching the model.
+   */
+  kernelRevision: number;
+  bumpKernel: () => void;
 }
 
 export interface DiagLogEntry {
