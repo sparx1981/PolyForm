@@ -46,11 +46,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
   const kernelHost = kernelHostRef.current;
 
-  // Dev-only handle so the kernel can be driven from the browser console.
-  // Guarded by import.meta.env.DEV so it never reaches a production build.
+  // Console handle for driving the kernel by hand.
+  //
+  // Enabled in dev, OR on any build when ?kernel-dev is in the URL. The
+  // published build sets import.meta.env.DEV to false, so a DEV-only guard
+  // makes this unreachable exactly where it is most needed — on the deployed
+  // app. The query-string opt-in keeps it off by default without hiding it.
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      (window as unknown as Record<string, unknown>).__polyform = { kernelHost, bumpKernel };
+    const params = new URLSearchParams(window.location.search);
+    const enabled = import.meta.env.DEV || params.has('kernel-dev') || params.has('kernel-test');
+    if (!enabled) return;
+
+    (window as unknown as Record<string, unknown>).__polyform = { kernelHost, bumpKernel };
+    console.info('[PolyForm] kernel handle ready: window.__polyform');
+
+    // ?kernel-test draws a 4x4 square and reports the derived face count, so
+    // the kernel can be verified without pasting anything into the console.
+    if (params.has('kernel-test')) {
+      const p0 = { x: 0, y: 0, z: 0 };
+      const p1 = { x: 4, y: 0, z: 0 };
+      const p2 = { x: 4, y: 4, z: 0 };
+      const p3 = { x: 0, y: 4, z: 0 };
+      for (const [a, b] of [[p0, p1], [p1, p2], [p2, p3], [p3, p0]] as const) {
+        kernelHost.commitSegment(a, b);
+      }
+      bumpKernel();
+      const faces = kernelHost.graph.faces.size;
+      const edges = kernelHost.graph.edges.size;
+      const ok = faces === 1 && edges === 4;
+      console.info(
+        `[PolyForm] kernel self-test: ${faces} face(s), ${edges} edge(s) — ` +
+          `expected 1 and 4. ${ok ? 'PASS' : 'FAIL'}`,
+      );
     }
   }, [kernelHost, bumpKernel]);
 
