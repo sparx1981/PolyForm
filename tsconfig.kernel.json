@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "types": []
+  },
+  "include": [
+    "src/lib/geometry/**/*.ts",
+    "src/tools/**/*.ts"
+  ],
+  "exclude": [
+    "src/lib/vendor/**"
+  ]
+}
