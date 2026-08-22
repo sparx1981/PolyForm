@@ -40,6 +40,31 @@ export enum InferenceType {
   ON_FACE = 8        // Priority 8 (Lowest)
 }
 
+/**
+ * Snap precedence. Lower wins.
+ *
+ * Deliberately NOT the enum's numeric order. The enum values are identifiers,
+ * compared elsewhere in the app and potentially persisted, so they stay put;
+ * precedence is a separate concern and lives here.
+ *
+ * Order follows the geometry spec: Endpoint, Intersection, Midpoint, Centre,
+ * On Edge, On Face. The substantive change is that INTERSECTION now outranks
+ * CURVE_CENTER and MIDPOINT.
+ */
+export const INFERENCE_PRIORITY: Record<InferenceType, number> = {
+  [InferenceType.ENDPOINT]: 1,
+  [InferenceType.INTERSECTION]: 2,
+  [InferenceType.MIDPOINT]: 3,
+  [InferenceType.CURVE_CENTER]: 4,
+  [InferenceType.FACE_CENTROID]: 5,
+  [InferenceType.GUIDE_POINT]: 6,
+  [InferenceType.ON_EDGE]: 7,
+  [InferenceType.ON_FACE]: 8,
+};
+
+export const inferencePriority = (t: InferenceType): number =>
+  INFERENCE_PRIORITY[t] ?? Number.MAX_SAFE_INTEGER;
+
 export enum LockMode {
   UNLOCKED = 'UNLOCKED',
   LOCKED_VECTOR = 'LOCKED_VECTOR', // Line/Axis lock (Arrow keys, Shift on edge/axis)
@@ -713,15 +738,18 @@ export class PolyformInferenceEngine {
     if (inSnapCandidates.length > 0) {
       // Sort in-snap candidates by: 1) Priority ascending (1 is highest), 2) Screen distance ascending
       inSnapCandidates.sort((a, b) => {
-        if (a.type !== b.type) return a.type - b.type;
-        return a.screenDistance - b.screenDistance;
+        const pa = inferencePriority(a.type);
+        const pb = inferencePriority(b.type);
+        if (pa !== pb) return pa - pb;
+        if (a.screenDistance !== b.screenDistance) return a.screenDistance - b.screenDistance;
+        return (a.sourceEntityId ?? '').localeCompare(b.sourceEntityId ?? '');
       });
 
       const bestInSnap = inSnapCandidates[0];
 
       if (currentRetained) {
         // Priority check: lower enum numeric value = higher priority
-        if (bestInSnap.type < currentRetained.type) {
+        if (inferencePriority(bestInSnap.type) < inferencePriority(currentRetained.type)) {
           strictlyHigherCandidate = bestInSnap;
         }
       } else {
