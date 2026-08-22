@@ -18,8 +18,8 @@ import * as THREE from 'three';
 // <mesh>, <group> and <lineSegments> type-check. Without an import from the
 // package the intrinsics are not registered.
 import type { ThreeEvent } from '@react-three/fiber';
-import type { EdgeId, FaceId, Graph } from '@/lib/geometry/types';
-import { tessellateGraph, mergeBuffers, edgeBuffer } from '@/lib/geometry/tessellate';
+import type { EdgeId, FaceId, Graph } from '../lib/geometry/types';
+import { tessellateGraph, mergeBuffers, edgeBuffer } from '../lib/geometry/tessellate';
 
 export interface KernelGeometryProps {
   graph: Graph;
