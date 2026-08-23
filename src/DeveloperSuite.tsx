@@ -425,7 +425,7 @@ function DeveloperConsole({ sdkProps }: { sdkProps: any }) {
 
       {/* Editor */}
       <div className="flex-1 relative flex flex-col">
-        <div className="h-8 px-4 flex items-center justify-between bg-[#252526] border-b border-gray-800 text-white">
+        <div className="h-8 px-4 flex items-center justify-between bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100">
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Editor</span>
           <div className="flex items-center gap-2">
             <button 

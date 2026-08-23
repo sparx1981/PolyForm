@@ -59,6 +59,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [selectedFaceIds, setSelectedFaceIds] = useState<number[]>([]);
 
   /**
+   * Mirror the theme onto <html>.
+   *
+   * The `dark` class previously sat on a div inside App, so Tailwind's `dark:`
+   * variants resolved from it — but modals and overlays that render outside
+   * that subtree did not inherit it. The result was two theming systems
+   * disagreeing inside one dialog: a container styled from the `theme`
+   * variable rendering light, while its text used `dark:text-white` and
+   * rendered white on white. That is the invisible style names in the door
+   * and window pickers.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') root.classList.add('dark');
+    else root.classList.remove('dark');
+  }, [theme]);
+
+  /**
    * Swaps the kernel graph's contents in place.
    *
    * The host holds one Graph object and the spatial index is built against

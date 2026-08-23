@@ -369,11 +369,11 @@ export default function StyleLibraryModal({
                 </p>
 
                 <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-1.5">
-                  <span className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-trimble-blue/10 text-trimble-blue">
                     {style.category}
                   </span>
                   {style.features.map((feat, idx) => (
-                    <span key={idx} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                    <span key={idx} className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300">
                       {feat}
                     </span>
                   ))}
