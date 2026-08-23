@@ -25,24 +25,46 @@ import { dot, normalize, tryNormalize } from './math';
  * opposite direction would never be recognised as coplanar and would never
  * merge. §6.5
  */
+/**
+ * Angular quantisation step for plane bucketing, as a unit-normal component.
+ * ~0.02 corresponds to roughly one degree. Generous on purpose — see below.
+ */
+export const PLANE_ANGULAR_STEP = 0.02;
+
 export function planeKey(plane: Plane, tolerance: number): PlaneKey {
   let n = normalize(plane.normal, 'planeKey normal');
 
-  // Canonical sign: first component of meaningful magnitude must be positive.
-  const eps = 1e-9;
-  const sign =
-    Math.abs(n.x) > eps ? Math.sign(n.x)
-      : Math.abs(n.y) > eps ? Math.sign(n.y)
-        : Math.abs(n.z) > eps ? Math.sign(n.z)
-          : 1;
+  // Canonical sign, chosen from the LARGEST component.
+  //
+  // Picking the first component above some epsilon is unstable: on a normal
+  // that is nearly axis-aligned, that component is a tiny number whose sign
+  // flips with rounding, so two fits of the same surface canonicalise in
+  // opposite directions and land in different buckets. A loop tilted by a
+  // fraction of a degree then fragments and derives no face.
+  //
+  // The dominant component is far from zero, so its sign is stable.
+  const ax = Math.abs(n.x);
+  const ay = Math.abs(n.y);
+  const az = Math.abs(n.z);
+  const dominant = ax >= ay && ax >= az ? n.x : ay >= az ? n.y : n.z;
+  const sign = dominant < 0 ? -1 : 1;
   if (sign < 0) n = { x: -n.x, y: -n.y, z: -n.z };
 
   const offset = dot(n, plane.point) * (sign < 0 ? -1 : 1);
 
-  // Angular quantisation for the normal, spatial for the offset. Rounding the
-  // normal at the same scale as the offset would make near-parallel planes at
-  // opposite ends of a large model disagree.
-  const angularStep = Math.max(tolerance, 1e-9);
+  // The normal needs an ANGULAR step; the offset needs a spatial one. Using
+  // the distance tolerance for both is wrong and was a real bug: normals
+  // differing by more than 0.001 in any component landed in different
+  // buckets, so a loop tilted by a fraction of a degree — well inside
+  // COPLANARITY_TOLERANCE — fragmented across several "planes" and derived no
+  // face at all.
+  //
+  // Bucketing is a grouping heuristic, not a correctness test. It should be
+  // GENEROUS: derivation verifies each ring's coplanarity exactly (§6.2), so
+  // a bucket that is too coarse costs a little wasted work, while one that is
+  // too fine silently loses faces. PLANE_ANGULAR_STEP of 0.02 groups normals
+  // within roughly one degree.
+  const angularStep = PLANE_ANGULAR_STEP;
   const q = (v: number, step: number) => {
     const r = Math.round(v / step);
     // -0 and 0 must produce the same key.
@@ -52,7 +74,7 @@ export function planeKey(plane: Plane, tolerance: number): PlaneKey {
   const nx = q(n.x, angularStep);
   const ny = q(n.y, angularStep);
   const nz = q(n.z, angularStep);
-  const no = q(offset, Math.max(tolerance, 1e-9));
+  const no = q(offset, Math.max(tolerance * 10, 1e-9));
 
   return `${nx}:${ny}:${nz}:${no}` as PlaneKey;
 }

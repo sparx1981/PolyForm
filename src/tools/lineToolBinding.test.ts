@@ -90,3 +90,59 @@ describe('drag-based line commits (the interaction PolyForm actually uses)', () 
     expect(checkIntegrity(h.graph)).toEqual([]);
   });
 });
+
+describe('endpoint accuracy (regression)', () => {
+  it('a 0.01 drift between a line END and the next line START leaves a gap', () => {
+    // The bug this guards: Viewport lifts the line PREVIEW 0.01 along the
+    // normal to avoid z-fighting, and kernel endpoints were reconstructed
+    // from that preview. Each line then sat 0.01 off the plane it was drawn
+    // on, so the next line — snapped to the plane, then lifted again — did
+    // not meet it. VERTEX_MERGE_TOLERANCE is 0.001, ten times smaller, so
+    // nothing merged and no face appeared.
+    const h = host();
+    const drift = 0.01;
+    h.commitSegment(vec3(0, 0, 0), vec3(4, 0, 0));
+    h.commitSegment(vec3(4, drift, 0), vec3(4, drift, 4));   // start missed the end
+
+    expect(h.graph.vertices.size).toBe(4);   // not 3: the join failed
+    expect(h.graph.faces.size).toBe(0);
+  });
+
+  it('exact endpoints merge and derive a face', () => {
+    // Committing the true, un-offset endpoints is all it takes.
+    const h = host();
+    groundSquare(h);
+    expect(h.graph.vertices.size).toBe(4);
+    expect(h.graph.faces.size).toBe(1);
+  });
+
+  it('a drift INSIDE the merge tolerance still connects', () => {
+    // The kernel forgives 1mm; the preview offset was ten times that.
+    const h = host();
+    const drift = 0.0005;
+    h.commitSegment(vec3(0, 0, 0), vec3(4, 0, 0));
+    h.commitSegment(vec3(4, drift, 0), vec3(4, 0, 4));
+    expect(h.graph.vertices.size).toBe(3);   // the join held
+  });
+
+  it('a near-planar loop still derives a face', () => {
+    // Hand-drawn geometry is never exactly planar. This failed before the
+    // plane-bucketing fix: a loop tilted well inside COPLANARITY_TOLERANCE
+    // fragmented across several plane buckets and derived nothing.
+    const h = host();
+    const off = 0.0005;
+    const p = [vec3(0,0,0), vec3(4,off,0), vec3(4,0,4), vec3(0,off,4)];
+    for (let i = 0; i < 4; i++) h.commitSegment(p[i]!, p[(i+1)%4]!);
+    expect(h.graph.vertices.size).toBe(4);
+    expect(h.graph.faces.size).toBe(1);
+  });
+
+  it('a loop tilted BEYOND tolerance is still rejected, with a reason', () => {
+    // Loosening the buckets must not let genuinely non-planar loops through.
+    // Correctness moved to an explicit per-ring check.
+    const h = host();
+    const p = [vec3(0,0,0), vec3(4,0,0), vec3(4,0,4), vec3(0,0.5,4)];
+    for (let i = 0; i < 4; i++) h.commitSegment(p[i]!, p[(i+1)%4]!);
+    expect(h.graph.faces.size).toBe(0);
+  });
+});

@@ -5823,7 +5823,7 @@ function Scene() {
           ) : shape.type === 'dome' ? (
             <sphereGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 32, 32]) as any} />
           ) : shape.type === 'poly' ? (
-            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 1} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={(shape.args as any)?.holes} />
+            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={(shape.args as any)?.holes} />
           ) : ['wall', 'door', 'window', 'step', 'staircase'].includes(shape.type) ? (
             <ArchGeometry shape={shape} shapes={shapes} />
           ) : ['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(shape.type) ? (

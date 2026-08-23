@@ -28,7 +28,7 @@ import {
   loopEdgeIds, loopPoints, removeFace,
 } from './topology';
 import {
-  add, bestFitPlane, cross, dot, normalize, planeBasis, projectToBasis,
+  add, bestFitPlane, coplanarity, cross, dot, normalize, planeBasis, projectToBasis,
   scale, sub, tryNormalize, distance,
 } from './math';
 import { interiorPointWithHoles, pointInPolygonWithHoles, signedArea } from './polygon';
@@ -314,6 +314,26 @@ export function deriveRegion(
     const plan = plans[i]!;
     if (plan.realised !== null) continue; // already carried forward, id intact
     if (!plan.keep) continue; // an untouched cycle that carried no face: the void
+
+    // Verify coplanarity EXACTLY, per ring.
+    //
+    // Plane bucketing (§6.5) groups candidates generously and is not a
+    // correctness test; relying on its granularity to reject non-planar loops
+    // meant a bucket tight enough to be correct was also tight enough to
+    // fragment legitimate near-planar geometry. The check belongs here.
+    const ringPoints = plan.ring.vertices.map((v) => getVertex(g, v).position);
+    const planarity = coplanarity(ringPoints, opts.tolerances.COPLANARITY_TOLERANCE);
+    if (!planarity.coplanar) {
+      diagnostics.push({
+        kind: 'near-coplanar',
+        message:
+          `These edges are ${planarity.deviation.toExponential(2)} from lying on ` +
+          `one plane (tolerance ${opts.tolerances.COPLANARITY_TOLERANCE.toExponential(1)}), ` +
+          `so no surface was created.`,
+        edges: [...plan.edgeSet].sort((a, b) => a - b),
+      });
+      continue;
+    }
 
     const ringPlane: Plane = { point: plane.point, normal: plane.normal };
     const oriented = orientNormal(ringPlane, {
