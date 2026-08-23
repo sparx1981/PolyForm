@@ -132,22 +132,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isAIQueryOpen, setIsAIQueryOpen] = useState(false);
   const [user, setUser] = useState<any | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  /**
-   * Mirror the theme onto <html>.
-   *
-   * The `dark` class previously sat on a div inside App, so Tailwind's `dark:`
-   * variants resolved from it — but modals and overlays that render outside
-   * that subtree did not inherit it. The result was two theming systems
-   * disagreeing inside one dialog: a container styled from the `theme`
-   * variable rendering light, while its text used `dark:text-white` and
-   * rendered white on white. That is the invisible style names in the door
-   * and window pickers.
-   */
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') root.classList.add('dark');
-    else root.classList.remove('dark');
-  }, [theme]);
+  /*
+    NOTE: the theme is deliberately NOT mirrored onto <html>.
+
+    Doing so switches on Tailwind's `dark:` variants globally, and PolyForm's
+    chrome is only partly dark-aware — the toolbars and panels carry a handful
+    of `dark:` rules while most of their colour is hardcoded light. The result
+    is dark dialogs floating in a light application, which reads as broken
+    rather than as a dark theme.
+
+    Components that need to respond to the theme should read the `theme`
+    value from this context, as StyleLibraryModal does. Turning on the global
+    variant is a decision for whenever the chrome is genuinely dark-ready.
+  */
   const [openMaterialsSignal, setOpenMaterialsSignal] = useState(0);
   const [bannerColor, setBannerColor] = useState('#0063A3');
   const [customMaterials, setCustomMaterials] = useState<any[]>([]);

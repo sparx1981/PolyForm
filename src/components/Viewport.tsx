@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
 import { 
   useHelper, 
@@ -5498,8 +5499,18 @@ function Scene() {
       )}
 
       {placingNotePos && (
-        <Html fullscreen zIndexRange={_polyformNoteZIndexRange} portal={_polyformBodyPortalRef}>
-          <div className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+        /*
+          Rendered straight into <body> with a React portal rather than through
+          drei's <Html>. This is a DOM dialog; it was never scene content, and
+          routing it through the 3D layer meant its size and position depended
+          on canvas measurement, transform state and drei's own portal
+          handling. A portal removes all of that from the picture.
+        */
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+            style={{ zIndex: 1000 }}
+          >
             <div
               role="dialog"
               aria-modal="true"
@@ -5602,8 +5613,9 @@ function Scene() {
                 </div>
               </footer>
             </div>
-          </div>
-        </Html>
+          </div>,
+          document.body
+        )
       )}
 
       {/*

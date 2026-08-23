@@ -358,13 +358,13 @@ export default function StyleLibraryModal({
                   <StyleDiagram style={style} />
                 </div>
 
-                <h3 className="mt-3 font-semibold text-sm leading-snug text-gray-900 dark:text-white">
+                <h3 className={cn("mt-3 font-semibold text-sm leading-snug", theme === 'dark' ? "text-white" : "text-gray-900")}>
                   {style.name}
                 </h3>
 
                 {/* Two lines, reserved whether or not the copy fills them, so
                     cards stay the same height and the grid keeps its rhythm. */}
-                <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400 line-clamp-2 min-h-[2.5rem]">
+                <p className={cn("mt-1 text-xs leading-relaxed line-clamp-2 min-h-[2.5rem]", theme === 'dark' ? "text-gray-400" : "text-gray-600")}>
                   {style.description}
                 </p>
 
@@ -373,7 +373,7 @@ export default function StyleLibraryModal({
                     {style.category}
                   </span>
                   {style.features.map((feat, idx) => (
-                    <span key={idx} className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300">
+                    <span key={idx} className={cn("text-[11px] px-2 py-0.5 rounded-full", theme === 'dark' ? "bg-gray-800/80 text-gray-300" : "bg-gray-100 text-gray-700")}>
                       {feat}
                     </span>
                   ))}
