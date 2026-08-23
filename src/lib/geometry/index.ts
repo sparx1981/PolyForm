@@ -20,6 +20,7 @@ export * from './context';
 export * from './insert';
 export * from './cycles';
 export * from './derive';
+export * from './pushpull';
 export * from './curve';
 export * from './tessellate';
 export * from './diagnostics';

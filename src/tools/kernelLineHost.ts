@@ -82,6 +82,20 @@ export class KernelLineHost implements LineToolHost {
    * Also clears history: undoing into a previous document's geometry would be
    * worse than having no history at all.
    */
+  /** For operations that drive the kernel directly, such as push/pull. */
+  get spatialIndex(): SpatialIndex<EdgeId> {
+    return this.index;
+  }
+
+  get deriveOptions() {
+    return this.deriveOpts;
+  }
+
+  /** Records an undo entry for an externally applied change. */
+  recordUndo(before: Snapshot): void {
+    this.pushUndo(before);
+  }
+
   reindex(): void {
     this.rebuildIndex();
     this.undoStack = [];

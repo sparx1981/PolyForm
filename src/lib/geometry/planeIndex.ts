@@ -50,7 +50,11 @@ export function planeKey(plane: Plane, tolerance: number): PlaneKey {
   const sign = dominant < 0 ? -1 : 1;
   if (sign < 0) n = { x: -n.x, y: -n.y, z: -n.z };
 
-  const offset = dot(n, plane.point) * (sign < 0 ? -1 : 1);
+  // `n` has ALREADY been flipped above, so dot(n, point) is the canonical
+  // offset. Negating again here undoes the canonicalisation, and two fits of
+  // the same plane with opposite raw normals then hash to different buckets —
+  // which splits a box face's edges apart and derives nothing.
+  const offset = dot(n, plane.point);
 
   // The normal needs an ANGULAR step; the offset needs a spatial one. Using
   // the distance tolerance for both is wrong and was a real bug: normals

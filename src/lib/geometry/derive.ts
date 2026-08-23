@@ -256,7 +256,24 @@ export function deriveRegion(
     if (!e) continue;
     for (const use of e.uses) {
       const loop = g.loops.get(use.loop);
-      if (loop) affectedFaces.add(loop.face);
+      if (!loop) continue;
+      const other = g.faces.get(loop.face);
+      if (!other) continue;
+
+      // Only faces on THIS plane are ours to rebuild.
+      //
+      // An edge belongs to as many planes as it has faces, so a box edge is
+      // in two regions. Without this filter, deriving one face's plane
+      // deletes the face on the other — each region undoing the last, and a
+      // six-sided box ending up with one face.
+      const n = tryNormalize(other.plane.normal);
+      if (!n) continue;
+      const parallel = Math.abs(Math.abs(dot(n, plane.normal)) - 1) <= opts.tolerances.COPLANARITY_TOLERANCE;
+      const sameOffset =
+        Math.abs(dot(n, other.plane.point) - dot(n, plane.point)) <= opts.tolerances.COPLANARITY_TOLERANCE;
+      if (!parallel || !sameOffset) continue;
+
+      affectedFaces.add(loop.face);
     }
   }
 
@@ -443,27 +460,57 @@ export function regionsFor(
 ): Map<string, Set<EdgeId>> {
   const byPlane = new Map<string, Set<EdgeId>>();
 
-  for (const eid of [...edges].sort((a, b) => a - b)) {
-    const e = g.edges.get(eid);
-    if (!e) continue;
-    // An edge alone does not determine a plane; use its neighbourhood.
-    const pts: Vec3[] = edgePoints(g, e);
-    for (const vid of [e.v0, e.v1]) {
-      for (const other of getVertex(g, vid).edges) {
-        const oe = g.edges.get(other);
-        if (!oe || oe.id === eid) continue;
-        pts.push(...edgePoints(g, oe));
-      }
-    }
-    const plane = bestFitPlane(pts);
-    const key = plane ? planeKey(plane, tolerances.COPLANARITY_TOLERANCE) : `edge:${eid}`;
+  const put = (key: string, eid: EdgeId) => {
     let set = byPlane.get(key);
     if (!set) {
       set = new Set();
       byPlane.set(key, set);
     }
     set.add(eid);
+  };
+
+  for (const eid of [...edges].sort((a, b) => a - b)) {
+    const e = g.edges.get(eid);
+    if (!e) continue;
+
+    const [p0, p1] = edgePoints(g, e);
+    const dir = tryNormalize(sub(p1, p0));
+    if (!dir) continue;
+
+    // An edge lies on as many planes as it has faces (§6.5). Fitting ONE
+    // plane from its whole neighbourhood only works when that neighbourhood
+    // is flat: on a box, an edge's neighbours span two perpendicular faces
+    // and the fit is meaningless, so every edge lands in its own bucket and
+    // nothing derives.
+    //
+    // Each ADJACENT edge defines a plane together with this one. Registering
+    // the edge in every such bucket puts a box edge in both of its faces'
+    // buckets, and each face's edges meet in one region.
+    let found = 0;
+    for (const vid of [e.v0, e.v1]) {
+      for (const otherId of getVertex(g, vid).edges) {
+        if (otherId === eid) continue;
+        const other = g.edges.get(otherId);
+        if (!other) continue;
+        const [q0, q1] = edgePoints(g, other);
+        const odir = tryNormalize(sub(q1, q0));
+        if (!odir) continue;
+
+        const normal = tryNormalize(cross(dir, odir));
+        if (!normal) continue; // colinear: no plane of their own
+
+        const plane = { point: p0, normal };
+        put(planeKey(plane, tolerances.COPLANARITY_TOLERANCE), eid);
+        found++;
+      }
+    }
+
+    // A lone edge, or one whose neighbours are all colinear with it, bounds
+    // nothing. Keep it in its own bucket so it is reported as stray rather
+    // than silently dropped.
+    if (found === 0) put(`edge:${eid}`, eid);
   }
+
   return byPlane;
 }
 
