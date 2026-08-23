@@ -33,7 +33,7 @@ import {
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
-import { faceSummaries, toggleFaceHidden, deleteFace } from '../tools/kernelSelection';
+import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges } from '../tools/kernelSelection';
 import { ToolModifierPalette } from './ToolModifierPalette';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator } from '../types';
@@ -1225,12 +1225,12 @@ export default function RightPanelStack() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteFace(kernelHost.graph, row.id);
+                          deleteFaceAndEdges(kernelHost.graph, row.id);
                           setSelectedFaceIds(prev => prev.filter(f => f !== row.id));
                           bumpKernel();
                         }}
                         className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
-                        title="Delete surface (edges remain, so redrawing one restores it)"
+                        title="Delete surface and its edges"
                       ><Trash2 size={13} /></button>
                     </div>
                   ))}

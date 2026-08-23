@@ -59,7 +59,7 @@ import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, deleteFace } from '../tools/kernelSelection';
+import { paintFace, deleteFaceAndEdges } from '../tools/kernelSelection';
 import type { FaceId } from '../lib/geometry/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
@@ -1265,8 +1265,11 @@ function Scene() {
       return;
     }
     if (activeTool === 'eraser') {
-      // Leaves the edges behind, so redrawing one heals the surface. §7.4
-      if (deleteFace(kernelHost.graph, faceId)) bumpKernel();
+      // Removes the face AND every edge used only by it, so nothing is left
+      // behind. Edges shared with a neighbouring face are kept, or that
+      // neighbour would be destroyed too.
+      deleteFaceAndEdges(kernelHost.graph, faceId);
+      bumpKernel();
       setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
       return;
     }
