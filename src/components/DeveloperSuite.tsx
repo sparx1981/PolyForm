@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { LAYER } from './ui/Surface';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Upload, Plus, AlertCircle, Globe, User, Users, Settings, Circle as CircleIcon, Square as SquareIcon, Box as BoxIcon, Triangle as TriangleIcon, Cone as ConeIcon, Pyramid as PyramidIcon, Torus as TorusIcon, CircleDot, MousePointer2, Eraser, PaintBucket, Move, ArrowUpFromLine, RotateCw, Maximize, CornerUpRight, Orbit, Hand, ZoomIn, Sparkles, Search, MoreHorizontal, Video, Image, Palette, Layers, Box, PenLine, Radio, Zap, Disc, Hexagon, FileCode, FileText, Scissors } from 'lucide-react';
 import Editor from '@monaco-editor/react';
@@ -499,40 +500,48 @@ function DeveloperConsole({ sdkProps }: { sdkProps: any }) {
       {/* Save Modal */}
       <AnimatePresence>
         {isSaveModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" style={{ zIndex: LAYER.nested }}>
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 p-6"
+              className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
             >
-              <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Save to Library</h3>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase">Script Name</label>
+              <header className="px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">Save to library</h2>
+                <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                  Saved scripts are available from the library in every model.
+                </p>
+              </header>
+              <div className="px-6 py-5">
+                <div>
+                  <label htmlFor="polyform-script-name" className="block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                    Script name
+                  </label>
                   <input 
+                    id="polyform-script-name"
                     type="text"
                     value={newScriptName}
                     onChange={(e) => setNewScriptName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-trimble-blue text-gray-900 dark:text-white"
+                    className="mt-1 w-full h-9 px-3 rounded-lg text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
                     autoFocus
                   />
                 </div>
-                <div className="flex gap-3 pt-2">
+              </div>
+                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30">
                   <button 
                     onClick={() => setIsSaveModalOpen(false)}
-                    className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl text-sm font-bold text-gray-700 dark:text-white transition-colors"
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={confirmSaveToLibrary}
-                    className="flex-1 py-2 bg-trimble-blue text-white hover:bg-trimble-blue/90 rounded-xl text-sm font-bold transition-colors shadow-lg shadow-trimble-blue/20"
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg bg-trimble-blue text-white text-sm font-medium hover:bg-trimble-blue/90 transition-colors shadow-sm shadow-trimble-blue/20 outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
                   >
                     Save Script
                   </button>
                 </div>
-              </div>
             </motion.div>
           </div>
         )}
@@ -727,7 +736,9 @@ function DeveloperLibrary() {
                       onClick={() => togglePublic(script.id)}
                       className={cn(
                         "p-1.5 rounded-lg transition-colors",
-                        script.isPublic ? "text-green-500 bg-green-500/10" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        script.isPublic
+                          ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+                          : "text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
                       )}
                       title={script.isPublic ? "Make Private" : "Make Public"}
                     >
@@ -755,7 +766,7 @@ function DeveloperLibrary() {
                     )}
                     <button 
                       onClick={() => deleteScript(script.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      className="p-1.5 text-red-400/80 dark:text-red-400/70 hover:text-red-700 dark:hover:text-red-300 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

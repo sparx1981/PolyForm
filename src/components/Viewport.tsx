@@ -58,6 +58,7 @@ import StyleLibraryModal from './StyleLibraryModal';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
+import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
 import { paintFace, deleteFaceAndEdges } from '../tools/kernelSelection';
 import type { FaceId } from '../lib/geometry/types';
@@ -1266,8 +1267,8 @@ function Scene() {
     }
     if (activeTool === 'eraser') {
       // Removes the face AND every edge used only by it, so nothing is left
-      // behind. Edges shared with a neighbouring face are kept, or that
-      // neighbour would be destroyed too.
+      // behind. Edges shared with a neighbour are kept, or that neighbour
+      // would be destroyed too.
       deleteFaceAndEdges(kernelHost.graph, faceId);
       bumpKernel();
       setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
@@ -5498,85 +5499,104 @@ function Scene() {
 
       {placingNotePos && (
         <Html fullscreen zIndexRange={_polyformNoteZIndexRange} portal={_polyformBodyPortalRef}>
-          <div className="fixed inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[4px]">
-            <div 
-              className="bg-white/95 dark:bg-gray-800/95 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-[560px] max-w-[92vw] space-y-5 animate-in zoom-in-95 duration-200" 
+          <div className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="New design note"
+              className="w-full max-w-lg flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
               onPointerDown={e => e.stopPropagation()}
               style={{ pointerEvents: 'auto' }}
             >
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-trimble-blue/10 flex items-center justify-center">
-                    <StickyNote size={20} className="text-trimble-blue" />
+              {/*
+                Same header shape as every other dialog: icon, title, one line
+                of supporting copy. The previous version shouted in uppercase
+                black weight with a 10px italic subtitle, which matched nothing
+                else in the app and put the subtitle under 4.5:1.
+              */}
+              <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="shrink-0 w-10 h-10 rounded-xl bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
+                    <StickyNote size={18} />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide leading-none">New Design Note</h4>
-                    <p className="text-[10px] text-gray-400 mt-1 font-medium italic">Describe your design intent or leave a comment for collaborators</p>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">New design note</h2>
+                    <p className="mt-0.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+                      Describe your intent, or leave a comment for collaborators.
+                    </p>
                   </div>
                 </div>
-                <div className="text-[10px] text-trimble-blue font-bold px-3 py-1 bg-trimble-blue/10 rounded-full border border-trimble-blue/20 shadow-sm transition-all hover:bg-trimble-blue/20">
-                  COORD: {placingNotePos.x.toFixed(2)}, {placingNotePos.y.toFixed(2)}, {placingNotePos.z.toFixed(2)}
-                </div>
-              </div>
-              <textarea
-                autoFocus
-                ref={noteTextareaRef}
-                defaultValue=""
-                placeholder="Type your note here..."
-                className="w-full h-28 p-4 text-sm bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-trimble-blue/20 focus:border-trimble-blue outline-none text-gray-900 dark:text-white resize-none transition-all placeholder:text-gray-400 font-medium"
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    const _noteText = (noteTextareaRef.current?.value || '').trim();
-                    if (_noteText) {
-                      const newNote: SceneNote = {
-                        id: Math.random().toString(36).substr(2, 9),
-                        text: _noteText,
-                        position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
-                        authorUid: user?.uid || 'anonymous',
-                        authorName: user?.displayName || 'Anonymous',
-                        createdAt: Date.now(),
-                        completed: false
-                      };
-                      setNotes(prev => [...prev, newNote]);
-                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                {/* Read-only metadata, so it no longer pretends to be a button. */}
+                <span className="shrink-0 text-[11px] font-medium tabular-nums px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                  {placingNotePos.x.toFixed(2)}, {placingNotePos.y.toFixed(2)}, {placingNotePos.z.toFixed(2)}
+                </span>
+              </header>
+
+              <div className="px-6 py-5">
+                <label htmlFor="polyform-note-text" className="sr-only">Note text</label>
+                <textarea
+                  id="polyform-note-text"
+                  autoFocus
+                  ref={noteTextareaRef}
+                  defaultValue=""
+                  placeholder="What should someone know about this part of the model?"
+                  className="w-full h-28 p-3 text-sm rounded-xl resize-none transition-colors bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      const _noteText = (noteTextareaRef.current?.value || '').trim();
+                      if (_noteText) {
+                        const newNote: SceneNote = {
+                          id: Math.random().toString(36).substr(2, 9),
+                          text: _noteText,
+                          position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
+                          authorUid: user?.uid || 'anonymous',
+                          authorName: user?.displayName || 'Anonymous',
+                          createdAt: Date.now(),
+                          completed: false
+                        };
+                        setNotes(prev => [...prev, newNote]);
+                        recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                      }
+                      setPlacingNotePos(null);
                     }
-                    setPlacingNotePos(null);
-                  }
-                  if (e.key === 'Escape') setPlacingNotePos(null);
-                }}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPlacingNotePos(null)}
-                  className="flex-1 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    const _noteText = (noteTextareaRef.current?.value || '').trim();
-                    if (_noteText) {
-                      const newNote: SceneNote = {
-                        id: Math.random().toString(36).substr(2, 9),
-                        text: _noteText,
-                        position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
-                        authorUid: user?.uid || 'anonymous',
-                        authorName: user?.displayName || 'Anonymous',
-                        createdAt: Date.now(),
-                        completed: false
-                      };
-                      setNotes(prev => [...prev, newNote]);
-                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
-                    }
-                    setPlacingNotePos(null);
+                    if (e.key === 'Escape') setPlacingNotePos(null);
                   }}
-                  className="flex-1 py-2 text-xs font-bold bg-trimble-blue text-white hover:bg-trimble-blue/90 rounded-lg shadow-md transition-colors"
-                >
-                  Place Note
-                </button>
+                />
               </div>
-              <p className="text-[10px] text-gray-400 italic">Press Enter to save, Esc to cancel.</p>
+
+              {/* Right-aligned, confirming action last — the convention users
+                  arrive with. Previously two equal full-width buttons. */}
+              <footer className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Enter to save · Esc to cancel
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={() => setPlacingNotePos(null)}>Cancel</Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      const _noteText = (noteTextareaRef.current?.value || '').trim();
+                      if (_noteText) {
+                        const newNote: SceneNote = {
+                          id: Math.random().toString(36).substr(2, 9),
+                          text: _noteText,
+                          position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
+                          authorUid: user?.uid || 'anonymous',
+                          authorName: user?.displayName || 'Anonymous',
+                          createdAt: Date.now(),
+                          completed: false
+                        };
+                        setNotes(prev => [...prev, newNote]);
+                        recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                      }
+                      setPlacingNotePos(null);
+                    }}
+                  >
+                    Place note
+                  </Button>
+                </div>
+              </footer>
             </div>
           </div>
         </Html>
@@ -8497,7 +8517,7 @@ export default function Viewport() {
 
       {activeTool === 'move' && !selectedId && (
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 pointer-events-none">
-          <div className="bg-black/80 text-white px-4 py-2 rounded-full text-xs font-medium animate-bounce">
+          <div className="bg-slate-950/85 text-white px-4 py-2 rounded-full text-xs font-medium shadow-lg shadow-slate-950/20 animate-in fade-in slide-in-from-bottom-2 duration-300">
             Click an object to move it
           </div>
         </div>
