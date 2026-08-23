@@ -57,6 +57,12 @@ import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers
 import StyleLibraryModal from './StyleLibraryModal';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
+import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
+
+/** Tools whose START point should snap to kernel geometry on hover. §4.2 */
+const KERNEL_SNAP_TOOLS: string[] = [
+  'line', 'arc', 'rectangle', 'circle', 'poly', 'triangle', 'measurement',
+];
 
 // Module-level texture cache: avoids re-creating (and re-downloading) a THREE.Texture
 // on every render when a material/light uses an image URL as its map. Previously each
@@ -1229,6 +1235,9 @@ function Scene() {
 
   // Routes the line tool's drag into the geometry kernel. §4.1
   const lineBinding = useLineBinding(kernelHost, bumpKernel);
+  // Exact, un-offset endpoints of the line being previewed. See where this is
+  // written for why the preview's own transform cannot be used.
+  const kernelLineEndsRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3 } | null>(null);
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
   const [sculptCursorPos, setSculptCursorPos] = useState<THREE.Vector3 | null>(null);
@@ -3208,6 +3217,56 @@ function Scene() {
       return;
     }
 
+    // ---- Hover snapping, BEFORE a drag begins ----
+    //
+    // The snap pass below lives inside `if (drawingStart && drawingNormal)`,
+    // so it only ran while a line was being dragged. The END of a line
+    // therefore snapped and its START never did: at pointer-down there was no
+    // drawingStart, so no candidates were computed and snapIndicator was null.
+    //
+    // That is why a rectangle is easy — each line starts where you can see the
+    // last one — while joining two parallel lines is fiddly at both ends.
+    if (!drawingStart && KERNEL_SNAP_TOOLS.includes(activeTool)) {
+      const hoverRect = gl.domElement.getBoundingClientRect();
+      const hoverMouseX = ((mouse.x + 1) / 2) * hoverRect.width;
+      const hoverMouseY = ((-mouse.y + 1) / 2) * hoverRect.height;
+      const hoverSnapRadiusPx = 18.0;
+
+      let bestPoint: THREE.Vector3 | null = null;
+      let bestType: 'endpoint' | 'midpoint' | 'center' = 'endpoint';
+      let bestDist = hoverSnapRadiusPx;
+
+      for (const kp of collectKernelSnapPoints(kernelHost.graph)) {
+        const v = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
+        const projected = v.clone().project(camera);
+        if (projected.z >= 1.0) continue;
+        const sx = ((projected.x + 1) / 2) * hoverRect.width;
+        const sy = ((-projected.y + 1) / 2) * hoverRect.height;
+        const d = Math.hypot(sx - hoverMouseX, sy - hoverMouseY);
+        // Endpoints win ties, so a corner beats the midpoint of an edge
+        // passing through it. Matches the precedence in §4.2.
+        const better =
+          d < bestDist - 0.001 ||
+          (Math.abs(d - bestDist) <= 0.001 && kp.kind === 'endpoint' && bestType !== 'endpoint');
+        if (better) {
+          bestDist = d;
+          bestPoint = v;
+          bestType = kp.kind;
+        }
+      }
+
+      setSnapIndicator(
+        bestPoint
+          ? {
+              point: [bestPoint.x, bestPoint.y, bestPoint.z],
+              type: bestType,
+              tooltip:
+                bestType === 'endpoint' ? 'Endpoint' : bestType === 'midpoint' ? 'Midpoint' : 'Center',
+            }
+          : null,
+      );
+    }
+
     if (drawingStart && drawingNormal) {
       const ray = raycaster.ray;
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(drawingNormal, drawingStart);
@@ -3306,6 +3365,20 @@ function Scene() {
             }
           });
         });
+
+        // Kernel geometry is a separate representation from `shapes`, so the
+        // pass above cannot see it. Feed its points into the SAME candidate
+        // list rather than adding a second snapping mechanism. §4.2
+        for (const kp of collectKernelSnapPoints(kernelHost.graph)) {
+          const kv = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
+          const pr = projectToScreen(kv);
+          if (!pr.inFront) continue;
+          candidates.push({
+            point: kv,
+            type: kp.kind,
+            screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY),
+          });
+        }
 
         // Evaluate snap target
         candidates.sort((a, b) => a.screenDist - b.screenDist);
@@ -3455,6 +3528,13 @@ function Scene() {
           setMeasurements(`Side: ${formatValue(radius, unit, 1)}`);
         } else if (activeTool === 'line') {
           const dist = drawingStart.distanceTo(target);
+          // Record the TRUE endpoints before the preview is built. The preview
+          // is lifted 0.01 along the normal to avoid z-fighting, so
+          // reconstructing endpoints from it puts every edge 0.01 off the
+          // plane — and the next line, snapped to that displaced vertex and
+          // lifted again, compounds the error. That is why lines looked joined
+          // but left a gap.
+          kernelLineEndsRef.current = { from: drawingStart.clone(), to: target.clone() };
           const pos = drawingStart.clone().lerp(target, 0.5).add(drawingNormal.clone().multiplyScalar(0.01));
           const dir = new THREE.Vector3().subVectors(target, drawingStart).normalize();
           const quatLine = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
@@ -3967,22 +4047,11 @@ function Scene() {
         // cylinder Shape. That is what lets four lines in a closed loop
         // derive a surface, and a fifth across it split that surface in two.
         //
-        // Reconstruct the endpoints from the preview: its position is the
-        // midpoint, its quaternion the direction, args[2] the length.
-        const lq = new THREE.Quaternion(
-          previewShape.quaternion[0], previewShape.quaternion[1],
-          previewShape.quaternion[2], previewShape.quaternion[3]
-        );
-        const ldir = new THREE.Vector3(0, 1, 0).applyQuaternion(lq);
-        const lmid = new THREE.Vector3(
-          previewShape.position[0], previewShape.position[1], previewShape.position[2]
-        );
-        const llen = Array.isArray(previewShape.args) ? (previewShape.args[2] as number) : 0;
-        const half = llen / 2;
-        lineBinding.commitDrag(
-          lmid.clone().addScaledVector(ldir, -half),
-          lmid.clone().addScaledVector(ldir, half)
-        );
+        // Use the endpoints captured during preview, NOT the preview's own
+        // transform, which is offset for z-fighting.
+        const ends = kernelLineEndsRef.current;
+        if (ends) lineBinding.commitDrag(ends.from, ends.to);
+        kernelLineEndsRef.current = null;
       } else if (previewShape) {
         addShape({
           id: Math.random().toString(36).substr(2, 9),
