@@ -1,39 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Info, 
-  Layers, 
-  Palette, 
-  Clapperboard, 
-  Sun, 
-  BoxSelect,
-  ChevronRight,
-  ChevronDown,
-  ListTree,
-  PenTool,
-  Plus,
-  Upload,
-  X,
-  Settings2,
-  Search,
-  Users,
-  MessageSquare,
-  StickyNote,
-  Send,
-  CheckCircle2,
-  Circle as CircleIcon,
-  Crown,
-  Sparkles,
-  Eye,
-  EyeOff,  Trash2,
-  Settings,
-  Wand2,
-  KeyRound,
-  ImageOff
-} from 'lucide-react';
+import { Box, BoxSelect, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Crown, Eye, EyeOff, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
-import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges } from '../tools/kernelSelection';
+import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups } from '../tools/kernelSelection';
 import { ToolModifierPalette } from './ToolModifierPalette';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator } from '../types';
@@ -701,6 +671,24 @@ export default function RightPanelStack() {
     () => faceSummaries(kernelHost.graph),
     [kernelHost, kernelRevision],
   );
+
+  /**
+   * Faces grouped into connected solids.
+   *
+   * A flat list is fine for a handful of surfaces and unreadable at a
+   * hundred: after two push/pulls there is no way to tell which six rows are
+   * one box. Faces joined along an edge belong to the same object, so the
+   * grouping comes straight from the topology and cannot go stale.
+   */
+  const kernelGroups = React.useMemo(
+    () => faceGroups(kernelHost.graph),
+    [kernelHost, kernelRevision],
+  );
+  const kernelRowById = React.useMemo(
+    () => new Map(kernelFaceRows.map(r => [r.id, r])),
+    [kernelFaceRows],
+  );
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const selectedLight = customLights.find(l => l.id === selectedLightId);
   
   // Local state for editing in real-time
@@ -1199,41 +1187,82 @@ export default function RightPanelStack() {
                 <BoxSelect size={12} />
                 <span>Model Root</span>
               </div>{shapes.map(shape => (<div key={shape.id} onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }} className={cn("flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group", selectedId === shape.id && "bg-trimble-blue/10 text-trimble-blue", shape.hidden && "opacity-40")}><div className="w-2 h-2 rounded-full" style={{ backgroundColor: shape.color }} /><span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span><button onClick={(e) => { e.stopPropagation(); setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, hidden: !s.hidden } : s)); }} className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0" title={shape.hidden ? "Show" : "Hide"}>{shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button><button onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0" title="Delete"><Trash2 size={13} /></button></div>))}
-              {kernelFaceRows.length > 0 && (
+              {kernelGroups.length > 0 && (
                 <>
                   <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-wide text-gray-400">
-                    Surfaces
+                    Geometry
                   </div>
-                  {kernelFaceRows.map(row => (
-                    <div
-                      key={`kf-${row.id}`}
-                      onClick={() => { setSelectedId(null); setSelectedIds([]); setSelectedFaceIds([row.id]); }}
-                      className={cn(
-                        "flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group",
-                        selectedFaceIds.includes(row.id) && "bg-trimble-blue/10 text-trimble-blue",
-                        row.hidden && "opacity-40"
-                      )}
-                      title={`Area ${row.area.toFixed(2)}${row.holes ? ` · ${row.holes} hole(s)` : ''}`}
-                    >
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: row.color || '#d8d4cc' }} />
-                      <span className="flex-1 truncate">{row.label}</span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleFaceHidden(kernelHost.graph, row.id); bumpKernel(); }}
-                        className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
-                        title={row.hidden ? "Show" : "Hide"}
-                      >{row.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteFaceAndEdges(kernelHost.graph, row.id);
-                          setSelectedFaceIds(prev => prev.filter(f => f !== row.id));
-                          bumpKernel();
-                        }}
-                        className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
-                        title="Delete surface and its edges"
-                      ><Trash2 size={13} /></button>
-                    </div>
-                  ))}
+                  {kernelGroups.map(group => {
+                    const collapsed = collapsedGroups.has(group.id);
+                    const rows = group.faces.map(f => kernelRowById.get(f)).filter(Boolean) as typeof kernelFaceRows;
+                    const allSelected = group.faces.every(f => selectedFaceIds.includes(f));
+                    // A single loose surface needs no group wrapper — it would
+                    // be a heading over one row.
+                    const single = group.faces.length === 1;
+                    return (
+                      <div key={group.id}>
+                        {!single && (
+                          <div
+                            onClick={() => { setSelectedId(null); setSelectedIds([]); setSelectedFaceIds(group.faces); }}
+                            className={cn(
+                              "flex items-center gap-1.5 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group",
+                              allSelected && "bg-trimble-blue/10 text-trimble-blue"
+                            )}
+                            title={`${group.faces.length} surfaces · area ${group.area.toFixed(2)}`}
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCollapsedGroups(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
+                                  return next;
+                                });
+                              }}
+                              className="p-0.5 -ml-1 shrink-0 text-gray-400 hover:text-gray-700"
+                              title={collapsed ? "Expand" : "Collapse"}
+                            >
+                              <ChevronRight size={12} className={cn("transition-transform", !collapsed && "rotate-90")} />
+                            </button>
+                            <Box size={13} className="shrink-0 text-gray-400" />
+                            <span className="flex-1 truncate font-medium">{group.label}</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{group.faces.length}</span>
+                          </div>
+                        )}
+                        {(!collapsed || single) && rows.map(row => (
+                          <div
+                            key={`kf-${row.id}`}
+                            onClick={() => { setSelectedId(null); setSelectedIds([]); setSelectedFaceIds([row.id]); }}
+                            className={cn(
+                              "flex items-center gap-2 py-1 rounded cursor-pointer hover:bg-gray-100 group",
+                              single ? "px-4" : "pl-10 pr-4",
+                              selectedFaceIds.includes(row.id) && "bg-trimble-blue/10 text-trimble-blue",
+                              row.hidden && "opacity-40"
+                            )}
+                            title={`Area ${row.area.toFixed(2)}${row.holes ? ` · ${row.holes} hole(s)` : ''}`}
+                          >
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: row.color || '#d8d4cc' }} />
+                            <span className="flex-1 truncate">{row.label}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleFaceHidden(kernelHost.graph, row.id); bumpKernel(); }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              title={row.hidden ? "Show" : "Hide"}
+                            >{row.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteFaceAndEdges(kernelHost.graph, row.id);
+                                setSelectedFaceIds(prev => prev.filter(f => f !== row.id));
+                                bumpKernel();
+                              }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                              title="Delete surface and its edges"
+                            ><Trash2 size={13} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
                 </>
               )}
 
@@ -2761,14 +2790,16 @@ export default function RightPanelStack() {
                           onClick={() => setNotes(prev => prev.map(n => n.id === note.id ? { ...n, completed: !n.completed, completedAt: !n.completed ? Date.now() : undefined, completedBy: !n.completed ? user?.displayName : undefined } : n))}
                           className={cn(
                             "p-1 rounded transition-colors",
-                            note.completed ? "text-green-500 hover:bg-green-50" : "text-gray-300 hover:text-green-500 hover:bg-green-50"
+                            note.completed
+                              ? "text-emerald-600 bg-emerald-50"
+                              : "text-emerald-600/50 hover:text-emerald-700"
                           )}
                         >
                           <CheckCircle2 size={14} />
                         </button>
                         <button 
                           onClick={() => setNotes(prev => prev.filter(n => n.id !== note.id))}
-                          className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                          className="p-1 text-red-400/70 hover:text-red-700 rounded transition-colors"
                         >
                           <X size={14} />
                         </button>

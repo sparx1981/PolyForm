@@ -197,3 +197,96 @@ export function facesByMaterial(g: Graph): Map<string, FaceId[]> {
 }
 
 export { DEFAULT_LABEL_COLOR };
+
+// ---------------------------------------------------------------------------
+// Grouping
+// ---------------------------------------------------------------------------
+
+export interface FaceGroup {
+  readonly id: string;
+  readonly label: string;
+  readonly faces: FaceId[];
+  /** Total net area of the group. */
+  readonly area: number;
+  /** True when every edge in the group is used by exactly two faces. */
+  readonly closed: boolean;
+}
+
+/**
+ * Groups faces into connected solids by shared edges.
+ *
+ * A flat list is fine for a handful of surfaces and useless at a hundred:
+ * after two push/pulls the Outliner is twelve rows with nothing to say which
+ * belong together. Faces joined along an edge are part of the same object, so
+ * the grouping is already in the topology — it does not need storing, and it
+ * cannot go stale.
+ *
+ * `closed` distinguishes a solid from loose surfaces: in a closed shell every
+ * edge has exactly two faces. That is the difference between "Solid" and
+ * "Surfaces" in the list.
+ */
+export function faceGroups(g: Graph): FaceGroup[] {
+  // Union-find over faces, joined wherever they share an edge.
+  const parent = new Map<FaceId, FaceId>();
+  const find = (x: FaceId): FaceId => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    let c = x;
+    while (c !== r) {
+      const n = parent.get(c)!;
+      parent.set(c, r);
+      c = n;
+    }
+    return r;
+  };
+  const union = (a: FaceId, b: FaceId) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra > rb ? ra : rb, ra > rb ? rb : ra);
+  };
+
+  for (const id of g.faces.keys()) parent.set(id, id);
+
+  for (const e of g.edges.values()) {
+    const faces: FaceId[] = [];
+    for (const use of e.uses) {
+      const loop = g.loops.get(use.loop);
+      if (loop && g.faces.has(loop.face)) faces.push(loop.face);
+    }
+    for (let i = 1; i < faces.length; i++) union(faces[0]!, faces[i]!);
+  }
+
+  const buckets = new Map<FaceId, FaceId[]>();
+  for (const id of [...g.faces.keys()].sort((a, b) => a - b)) {
+    const root = find(id);
+    const list = buckets.get(root);
+    if (list) list.push(id);
+    else buckets.set(root, [id]);
+  }
+
+  return [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([root, faces]) => {
+      const faceSet = new Set(faces);
+      let closed = faces.length >= 4;
+      if (closed) {
+        for (const e of g.edges.values()) {
+          const owners = e.uses
+            .map((u) => g.loops.get(u.loop)?.face)
+            .filter((f): f is FaceId => f !== undefined && faceSet.has(f));
+          if (owners.length === 0) continue;
+          if (owners.length !== 2) {
+            closed = false;
+            break;
+          }
+        }
+      }
+      return {
+        id: `g${root}`,
+        label: closed ? `Solid ${root}` : faces.length > 1 ? `Surfaces ${root}` : `Surface ${root}`,
+        faces,
+        area: faces.reduce((sum, f) => sum + faceArea(g, f), 0),
+        closed,
+      };
+    });
+}

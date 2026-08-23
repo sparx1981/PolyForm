@@ -62,6 +62,7 @@ import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
 import { paintFace, deleteFaceAndEdges } from '../tools/kernelSelection';
+import { createPushPullBinding } from '../tools/kernelPushPull';
 import type { FaceId } from '../lib/geometry/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
@@ -1245,6 +1246,12 @@ function Scene() {
   // Exact, un-offset endpoints of the line being previewed. See where this is
   // written for why the preview's own transform cannot be used.
   const kernelLineEndsRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3 } | null>(null);
+  /**
+   * True corners of the shape being previewed, captured before the preview's
+   * z-fighting offset is applied — same reason as the line tool's endpoints.
+   */
+  const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
+  const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
 
   // FaceId is a branded number; selection is stored as plain numbers in
   // AppState so it stays serialisable. Convert at this one boundary.
@@ -1261,7 +1268,8 @@ function Scene() {
    * different representations, and a selection spanning both would have to be
    * understood by every consumer of either.
    */
-  const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean }) => {
+
+  const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
     if (activeTool === 'paint') {
       if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
       return;
@@ -1432,6 +1440,63 @@ function Scene() {
   const hasReachedFrictionRef = useRef<boolean>(false);
   const lastValidPosRef = useRef<THREE.Vector3 | null>(null);
   const { raycaster, mouse, camera, scene, gl } = useThree();
+
+  /**
+   * Push/pull starts on PRESS, not click.
+   *
+   * onClick fires on release, so beginning there started the drag after the
+   * gesture had already ended: the face never moved, and the session stayed
+   * open until some later pointer-up committed it against a stale distance.
+   * That is the "nothing happens, then a later action resolves it".
+   *
+   * The completing pointer-up is bound to the WINDOW, because a drag that
+   * starts on a face is routinely released somewhere else — a handler on the
+   * face itself would simply never fire.
+   */
+  const handleKernelFacePointerDown = useCallback((faceId: FaceId, event: { point?: THREE.Vector3 }) => {
+    if (activeTool !== 'pushpull') return;
+    const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
+    if (!grab) return;
+
+    pushPullRef.current.begin(faceId, { x: grab.x, y: grab.y, z: grab.z });
+    setMeasurements('Drag to push or pull, then release.');
+
+    // Track the drag on the WINDOW, not the canvas.
+    //
+    // The canvas pointer-move logic hangs off a large invisible ground plane.
+    // The moment geometry is raised, the cursor is over the geometry and the
+    // plane stops receiving moves — so the distance never updated, and the
+    // commit applied zero. That is why push/pull did nothing on a fresh
+    // surface. A window listener sees the whole drag wherever it goes.
+    const ndc = new THREE.Vector2();
+    const dragRay = new THREE.Raycaster();
+
+    const onMove = (ev: PointerEvent) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      ndc.set(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      // A private raycaster: reusing the shared one would disturb hover and
+      // selection mid-drag.
+      dragRay.setFromCamera(ndc, camera);
+      const dist = pushPullRef.current.update({
+        origin: { x: dragRay.ray.origin.x, y: dragRay.ray.origin.y, z: dragRay.ray.origin.z },
+        direction: { x: dragRay.ray.direction.x, y: dragRay.ray.direction.y, z: dragRay.ray.direction.z },
+      });
+      if (dist !== null) setMeasurements(formatValue(Math.abs(dist), unit, 2));
+    };
+
+    const finish = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      pushPullRef.current.commit();
+      setMeasurements('');
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', finish, { once: true });
+  }, [activeTool, kernelHost, setMeasurements, camera, gl, unit]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);
@@ -3536,6 +3601,15 @@ function Scene() {
         const quatArray: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
 
         if (activeTool === 'rectangle') {
+          // A rectangle is four edges. Capturing the corners here lets it be
+          // committed to the kernel instead of as a flat Shape, which is what
+          // makes it splittable and push/pullable like any drawn surface.
+          kernelRingRef.current = [
+            drawingStart.clone(),
+            drawingStart.clone().addScaledVector(tangent, xDist),
+            drawingStart.clone().addScaledVector(tangent, xDist).addScaledVector(bitangent, yDist),
+            drawingStart.clone().addScaledVector(bitangent, yDist),
+          ];
           const centerX = drawingStart.clone().add(tangent.clone().multiplyScalar(xDist / 2)).add(bitangent.clone().multiplyScalar(yDist / 2));
           centerX.add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
@@ -3547,6 +3621,14 @@ function Scene() {
           setMeasurements(`${formatValue(Math.abs(xDist), unit, 1)} x ${formatValue(Math.abs(yDist), unit, 1)}`);
         } else if (activeTool === 'circle') {
           const radius = drawingStart.distanceTo(target);
+          // A circle is a closed ring of straight edges — the same
+          // tessellation the arc tool uses. 32 segments matches the preview.
+          kernelRingRef.current = Array.from({ length: 32 }, (_, i) => {
+            const a = (i / 32) * Math.PI * 2;
+            return drawingStart.clone()
+              .addScaledVector(tangent, Math.sin(a) * radius)
+              .addScaledVector(zAxis, Math.cos(a) * radius);
+          });
           const pos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'circle',
@@ -3557,6 +3639,21 @@ function Scene() {
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
         } else if (activeTool === 'triangle') {
           const radius = drawingStart.distanceTo(target);
+          // Match the PREVIEW exactly, or the committed triangle is a
+          // different triangle. Two details decide it:
+          //   * the preview's basis is makeBasis(tangent, normal, zAxis) with
+          //     zAxis = cross(tangent, normal) — the opposite handedness to
+          //     `bitangent`, which is cross(normal, tangent). Using bitangent
+          //     mirrors the shape.
+          //   * three's CylinderGeometry places vertices at
+          //     x = r*sin(theta), z = r*cos(theta) — sin on X, cos on Z, not
+          //     the other way round.
+          kernelRingRef.current = [0, 1, 2].map(i => {
+            const a = (i / 3) * Math.PI * 2;
+            return drawingStart.clone()
+              .addScaledVector(tangent, Math.sin(a) * radius)
+              .addScaledVector(zAxis, Math.cos(a) * radius);
+          });
           const pos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'triangle',
@@ -4013,6 +4110,7 @@ function Scene() {
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+
     if (e?.stopPropagation) e.stopPropagation();
     if (pointerUpHandledRef.current) return;
     pointerUpHandledRef.current = true;
@@ -4113,6 +4211,23 @@ function Scene() {
 
         lineBinding.commitDrag(lineFrom, lineTo);
         kernelLineEndsRef.current = null;
+      } else if (
+        previewShape &&
+        ['rect', 'circle', 'triangle'].includes(previewShape.type) &&
+        kernelRingRef.current
+      ) {
+        // Emit the ring as EDGES and let derivation build the face. The
+        // rectangle then behaves exactly like one drawn with four lines: it
+        // can be split, push/pulled, painted and healed.
+        const ring = kernelRingRef.current;
+        kernelRingRef.current = null;
+        let ok = ring.length >= 3;
+        for (let i = 0; ok && i < ring.length; i++) {
+          if (!lineBinding.commitDrag(ring[i]!, ring[(i + 1) % ring.length]!)) {
+            // A zero-width drag: nothing worth committing.
+            if (i === 0) ok = false;
+          }
+        }
       } else if (previewShape) {
         addShape({
           id: Math.random().toString(36).substr(2, 9),
@@ -5631,6 +5746,7 @@ function Scene() {
         revision={kernelRevision}
         selectedFaces={kernelSelectedSet}
         onFaceClick={handleKernelFaceClick}
+        onFacePointerDown={handleKernelFacePointerDown}
       />
 
       {shapes.map((shape) => {

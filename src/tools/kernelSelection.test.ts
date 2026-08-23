@@ -3,8 +3,10 @@ import { KernelArcHost } from './kernelArcHost';
 import {
   faceSummaries, faceArea, paintFace, paintFaces, renameFace,
   setFaceHidden, toggleFaceHidden, deleteFace, deleteFaceAndEdges,
-  clearFaceMaterial, facesByMaterial,
+  clearFaceMaterial, facesByMaterial, faceGroups,
 } from './kernelSelection';
+import { pushPull } from '../lib/geometry/pushpull';
+import { derive } from '../lib/geometry/derive';
 import { vec3 } from '../lib/geometry/math';
 import { checkIntegrity } from '../lib/geometry/topology';
 import type { FaceId } from '../lib/geometry/types';
@@ -194,5 +196,52 @@ describe('render grouping', () => {
     const a = [...facesByMaterial(h.graph).keys()];
     const b = [...facesByMaterial(h.graph).keys()];
     expect(a).toEqual(b);
+  });
+});
+
+describe('grouping into solids', () => {
+  it('a lone square is one group', () => {
+    const h = host(); square(h);
+    const groups = faceGroups(h.graph);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.faces).toHaveLength(1);
+    expect(groups[0]!.closed).toBe(false);
+  });
+
+  it('two unrelated squares are two groups', () => {
+    // The reason grouping exists: a flat list cannot say which surfaces
+    // belong together, and after a few push/pulls that is unreadable.
+    const h = host();
+    square(h, 4);
+    const far = [vec3(20,0,0), vec3(24,0,0), vec3(24,0,4), vec3(20,0,4)];
+    for (let i = 0; i < 4; i++) h.commitSegment(far[i]!, far[(i+1)%4]!);
+    expect(faceGroups(h.graph)).toHaveLength(2);
+  });
+
+  it('a split surface stays ONE group — the halves share an edge', () => {
+    const h = host(); square(h, 4);
+    h.commitSegment(vec3(0,0,0), vec3(4,0,4));
+    const groups = faceGroups(h.graph);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.faces).toHaveLength(2);
+  });
+
+  it('an extruded box is one group, and reports as closed', () => {
+    const h = host(); square(h, 4);
+    const ctx = { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex };
+    const r = pushPull(ctx, [...h.graph.faces.keys()][0]!, 2, { tolerances: h.tolerances });
+    derive(h.graph, r.touched, h.deriveOptions);
+
+    const groups = faceGroups(h.graph);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.faces).toHaveLength(6);
+    expect(groups[0]!.closed).toBe(true);
+    expect(groups[0]!.label).toMatch(/^Solid /);
+    expect(groups[0]!.area).toBeCloseTo(64, 6);
+  });
+
+  it('is deterministically ordered', () => {
+    const h = host(); square(h, 4);
+    expect(faceGroups(h.graph).map(g => g.id)).toEqual(faceGroups(h.graph).map(g => g.id));
   });
 });

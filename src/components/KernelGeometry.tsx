@@ -28,6 +28,13 @@ export interface KernelGeometryProps {
   revision?: number;
   selectedFaces?: ReadonlySet<FaceId>;
   onFaceClick?: (faceId: FaceId, event: ThreeEvent<MouseEvent>) => void;
+  /**
+   * Fires on pointer DOWN, for tools that drag.
+   *
+   * `onFaceClick` fires on release, which is too late to start a drag: the
+   * gesture is already over. Push/pull needs the press.
+   */
+  onFacePointerDown?: (faceId: FaceId, event: ThreeEvent<PointerEvent>) => void;
   onEdgeClick?: (edgeId: EdgeId, event: ThreeEvent<MouseEvent>) => void;
   showEdges?: boolean;
   edgeColor?: string;
@@ -47,6 +54,7 @@ export function KernelGeometry({
   revision = 0,
   selectedFaces,
   onFaceClick,
+  onFacePointerDown,
   onEdgeClick,
   showEdges = true,
   edgeColor = DEFAULT_EDGE,
@@ -124,6 +132,15 @@ export function KernelGeometry({
           geometry={g.geometry}
           castShadow
           receiveShadow
+          onPointerDown={(event) => {
+            if (!onFacePointerDown) return;
+            const triangle = event.faceIndex;
+            if (triangle === undefined || triangle === null) return;
+            const faceId = g.faceOfTriangle[triangle];
+            if (faceId === undefined) return;
+            event.stopPropagation();
+            onFacePointerDown(faceId, event);
+          }}
           onClick={(event) => {
             if (!onFaceClick) return;
             const triangle = event.faceIndex;
