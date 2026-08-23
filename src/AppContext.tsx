@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl } from './types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
+import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -56,6 +57,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Shape ids (strings), these are FaceIds (numbers) in the kernel graph, and
   // conflating them would make every consumer guess which it is holding.
   const [selectedFaceIds, setSelectedFaceIds] = useState<number[]>([]);
+
+  /**
+   * Swaps the kernel graph's contents in place.
+   *
+   * The host holds one Graph object and the spatial index is built against
+   * it, so the object identity must survive; only its contents change. Pass
+   * null to empty it.
+   */
+  const replaceKernelGraph = useCallback((data: unknown) => {
+    const next = deserializeGraph(data as never);
+    const g = kernelHostRef.current!.graph;
+    g.vertices = next.vertices;
+    g.edges = next.edges;
+    g.loops = next.loops;
+    g.faces = next.faces;
+    g.curves = next.curves;
+    g.components = next.components;
+    g.nextId = next.nextId;
+    kernelHostRef.current!.reindex();
+    setSelectedFaceIds([]);
+    setKernelRevision(r => r + 1);
+  }, []);
 
   // Console handle for driving the kernel by hand.
   //
@@ -580,6 +603,12 @@ console.log("Created rectangle:", myRect.id);`);
         };
         lastStateHash.current = JSON.stringify(newState);
 
+        // Replace the kernel graph wholesale, and ALWAYS — including when the
+        // document has none. Skipping the empty case is what leaks the
+        // previous model's geometry into this one, because the provider (and
+        // so the graph) survives a document switch.
+        replaceKernelGraph(data.kernel ?? null);
+
         if (data.shapes) setShapes(data.shapes);
         if (data.tags) setTags(data.tags);
         if (data.scenes) setScenes(data.scenes);
@@ -662,7 +691,10 @@ console.log("Created rectangle:", myRect.id);`);
     }
 
     // Check if state actually changed
-    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights };
+    // kernelRevision stands in for the graph itself: the graph is mutated in
+    // place, so hashing it by reference would never change and a
+    // geometry-only edit would never be saved.
+    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision };
     const currentStateHash = JSON.stringify(currentState);
     
     if (currentStateHash === lastStateHash.current) {
@@ -687,6 +719,11 @@ console.log("Created rectangle:", myRect.id);`);
           animations,
           notes,
           customLights,
+          // Drawn geometry lives in the kernel graph, not in shapes. Without
+          // this it is never persisted, and because the provider does not
+          // unmount when you switch documents it also leaks between them:
+          // the previous model's surfaces appear in the next one.
+          kernel: serializeGraph(kernelHost.graph),
           updatedAt: serverTimestamp() 
         });
         
@@ -952,6 +989,7 @@ console.log("Created rectangle:", myRect.id);`);
 
   const clearShapes = () => {
     setShapes([]);
+    replaceKernelGraph(null);
     setCurrentModelId(null);
     setCurrentModelName(null);
     setSyncStatus('unsaved');

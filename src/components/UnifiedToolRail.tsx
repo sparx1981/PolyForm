@@ -1402,7 +1402,7 @@ export default function UnifiedToolRail() {
                         step={5} 
                         value={plotWidth} 
                         onChange={e => setPlotWidth(Math.max(5, Number(e.target.value)))}
-                        className="w-full px-2 py-1 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono"
+                        className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono text-gray-900 dark:text-gray-100 tabular-nums outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
                       />
                       <span className="text-[10px] text-gray-400">m</span>
                     </div>
@@ -1417,7 +1417,7 @@ export default function UnifiedToolRail() {
                         step={5} 
                         value={plotDepth} 
                         onChange={e => setPlotDepth(Math.max(5, Number(e.target.value)))}
-                        className="w-full px-2 py-1 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono"
+                        className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono text-gray-900 dark:text-gray-100 tabular-nums outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
                       />
                       <span className="text-[10px] text-gray-400">m</span>
                     </div>

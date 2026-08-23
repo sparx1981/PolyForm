@@ -339,52 +339,63 @@ export default function StyleLibraryModal({
               <div
                 key={style.id}
                 onClick={() => handleSelectStyle(style)}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectStyle(style); }
+                }}
                 className={cn(
                   "group relative flex flex-col rounded-xl border p-4 cursor-pointer transition-all duration-200",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900",
                   isSelected
                     ? "border-trimble-blue ring-2 ring-trimble-blue/20 bg-trimble-blue/[0.03] shadow-md"
                     : "border-gray-200 dark:border-gray-800 hover:border-trimble-blue/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/40"
                 )}
               >
-                {/* Badges */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                    {style.category}
-                  </span>
-                  {isCurrent && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
-                      Active
-                    </span>
-                  )}
-                </div>
-
-                {/* SVG Visual Diagram */}
-                <div className="my-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 flex items-center justify-center">
+                {/* The drawing leads: it is what the eye compares. */}
+                <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3 flex items-center justify-center">
                   <StyleDiagram style={style} />
                 </div>
 
-                {/* Title & Description */}
-                <h3 className="font-bold text-sm text-gray-900 dark:text-white mt-1">
+                <h3 className="mt-3 font-semibold text-sm leading-snug text-gray-900 dark:text-white">
                   {style.name}
                 </h3>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 mt-1 flex-1">
+
+                {/* Two lines, reserved whether or not the copy fills them, so
+                    cards stay the same height and the grid keeps its rhythm. */}
+                <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400 line-clamp-2 min-h-[2.5rem]">
                   {style.description}
                 </p>
 
-                {/* Features List */}
-                <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-1">
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-1.5">
+                  <span className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800">
+                    {style.category}
+                  </span>
                   {style.features.map((feat, idx) => (
-                    <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500">
+                    <span key={idx} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                       {feat}
                     </span>
                   ))}
                 </div>
 
-                {/* Selection Check Indicator */}
+                {/*
+                  One mark for one state. Selection was previously carried by a
+                  ring, a tinted background, a check badge AND a separate
+                  "Active" pill, which left the user reading four signals for
+                  the same fact and no signal for the difference between "the
+                  style already applied" and "the style I just clicked".
+                  The check is selection; the label below names the applied one.
+                */}
                 {isSelected && (
-                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-trimble-blue text-white flex items-center justify-center shadow">
+                  <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-trimble-blue text-white flex items-center justify-center shadow-sm shadow-trimble-blue/30">
                     <Check size={12} strokeWidth={3} />
                   </div>
+                )}
+                {isCurrent && !isSelected && (
+                  <span className="absolute top-3 right-3 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                    Applied
+                  </span>
                 )}
               </div>
             );

@@ -74,6 +74,21 @@ export class KernelLineHost implements LineToolHost {
   }
 
   /**
+   * Rebuilds derived state after the graph's CONTENTS are replaced wholesale,
+   * as happens when a document is loaded. The Graph object identity survives —
+   * the index and every consumer hold a reference to it — so only its
+   * contents change, and the index must be rebuilt against them.
+   *
+   * Also clears history: undoing into a previous document's geometry would be
+   * worse than having no history at all.
+   */
+  reindex(): void {
+    this.rebuildIndex();
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+
+  /**
    * One segment, one transaction, one undo entry.
    *
    * Validation rejects geometry that CANNOT EXIST. It must not reject an edit
