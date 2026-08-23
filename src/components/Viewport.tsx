@@ -5504,7 +5504,11 @@ function Scene() {
               role="dialog"
               aria-modal="true"
               aria-label="New design note"
-              className="w-full max-w-lg flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
+              // Explicit width, not w-full. This panel lives inside drei's
+              // <Html fullscreen>, whose container has no definite width, so a
+              // percentage width resolves to zero and the dialog collapses to
+              // a sliver — which is the "square and a line" this replaced.
+              className="w-[560px] max-w-[92vw] flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
               onPointerDown={e => e.stopPropagation()}
               style={{ pointerEvents: 'auto' }}
             >
