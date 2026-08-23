@@ -484,6 +484,9 @@ export interface AppState {
    */
   kernelRevision: number;
   bumpKernel: () => void;
+  /** Selected kernel faces. Separate from selectedIds, which holds Shape ids. */
+  selectedFaceIds: number[];
+  setSelectedFaceIds: (ids: number[] | ((prev: number[]) => number[])) => void;
 }
 
 export interface DiagLogEntry {

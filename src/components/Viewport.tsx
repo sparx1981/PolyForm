@@ -58,6 +58,9 @@ import StyleLibraryModal from './StyleLibraryModal';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
+import { rankSnap } from '../tools/tuning';
+import { paintFace, deleteFace } from '../tools/kernelSelection';
+import type { FaceId } from '../lib/geometry/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
 const KERNEL_SNAP_TOOLS: string[] = [
@@ -1230,7 +1233,9 @@ function Scene() {
     activePlantScale,
     kernelHost,
     kernelRevision,
-    bumpKernel
+    bumpKernel,
+    selectedFaceIds,
+    setSelectedFaceIds
   } = useApp();
 
   // Routes the line tool's drag into the geometry kernel. §4.1
@@ -1238,6 +1243,41 @@ function Scene() {
   // Exact, un-offset endpoints of the line being previewed. See where this is
   // written for why the preview's own transform cannot be used.
   const kernelLineEndsRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3 } | null>(null);
+
+  // FaceId is a branded number; selection is stored as plain numbers in
+  // AppState so it stays serialisable. Convert at this one boundary.
+  const kernelSelectedSet = useMemo(
+    () => new Set(selectedFaceIds as FaceId[]),
+    [selectedFaceIds],
+  );
+
+  /**
+   * Clicking a kernel face. Routes by active tool, mirroring what the same
+   * tools already do to Shapes.
+   *
+   * Selecting a face clears the Shape selection and vice versa: they are
+   * different representations, and a selection spanning both would have to be
+   * understood by every consumer of either.
+   */
+  const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean }) => {
+    if (activeTool === 'paint') {
+      if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
+      return;
+    }
+    if (activeTool === 'eraser') {
+      // Leaves the edges behind, so redrawing one heals the surface. §7.4
+      if (deleteFace(kernelHost.graph, faceId)) bumpKernel();
+      setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
+      return;
+    }
+    setSelectedId(null);
+    setSelectedIds([]);
+    setSelectedFaceIds(prev =>
+      event.shiftKey
+        ? (prev.includes(faceId) ? prev.filter(f => f !== faceId) : [...prev, faceId])
+        : [faceId],
+    );
+  }, [activeTool, activeMaterial, kernelHost, bumpKernel, setSelectedFaceIds, setSelectedId, setSelectedIds]);
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
   const [sculptCursorPos, setSculptCursorPos] = useState<THREE.Vector3 | null>(null);
@@ -3230,11 +3270,12 @@ function Scene() {
       const hoverRect = gl.domElement.getBoundingClientRect();
       const hoverMouseX = ((mouse.x + 1) / 2) * hoverRect.width;
       const hoverMouseY = ((-mouse.y + 1) / 2) * hoverRect.height;
-      const hoverSnapRadiusPx = 18.0;
-
+      // Per-kind radii, not one radius for everything. Every edge contributes
+      // a midpoint and every face a centre, so a single generous radius makes
+      // the cursor nearly always inside SOMETHING and snapping feels twitchy.
       let bestPoint: THREE.Vector3 | null = null;
       let bestType: 'endpoint' | 'midpoint' | 'center' = 'endpoint';
-      let bestDist = hoverSnapRadiusPx;
+      let bestRank = Infinity;
 
       for (const kp of collectKernelSnapPoints(kernelHost.graph)) {
         const v = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
@@ -3242,14 +3283,9 @@ function Scene() {
         if (projected.z >= 1.0) continue;
         const sx = ((projected.x + 1) / 2) * hoverRect.width;
         const sy = ((-projected.y + 1) / 2) * hoverRect.height;
-        const d = Math.hypot(sx - hoverMouseX, sy - hoverMouseY);
-        // Endpoints win ties, so a corner beats the midpoint of an edge
-        // passing through it. Matches the precedence in §4.2.
-        const better =
-          d < bestDist - 0.001 ||
-          (Math.abs(d - bestDist) <= 0.001 && kp.kind === 'endpoint' && bestType !== 'endpoint');
-        if (better) {
-          bestDist = d;
+        const rank = rankSnap(kp.kind, Math.hypot(sx - hoverMouseX, sy - hoverMouseY));
+        if (rank < bestRank) {
+          bestRank = rank;
           bestPoint = v;
           bestType = kp.kind;
         }
@@ -3373,11 +3409,9 @@ function Scene() {
           const kv = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
           const pr = projectToScreen(kv);
           if (!pr.inFront) continue;
-          candidates.push({
-            point: kv,
-            type: kp.kind,
-            screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY),
-          });
+          const rank = rankSnap(kp.kind, Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY));
+          if (!Number.isFinite(rank)) continue;
+          candidates.push({ point: kv, type: kp.kind, screenDist: rank });
         }
 
         // Evaluate snap target
@@ -4049,8 +4083,30 @@ function Scene() {
         //
         // Use the endpoints captured during preview, NOT the preview's own
         // transform, which is offset for z-fighting.
-        const ends = kernelLineEndsRef.current;
-        if (ends) lineBinding.commitDrag(ends.from, ends.to);
+        // The capture only happens inside the preview branch, which needs a
+        // valid plane hit in range. If the ray grazed the plane the ref is
+        // null — and silently skipping there is why lines occasionally failed
+        // to appear. Fall back to the preview transform with the z-fighting
+        // lift removed: slightly less exact, but a line drawn always lands.
+        let lineFrom = kernelLineEndsRef.current?.from ?? null;
+        let lineTo = kernelLineEndsRef.current?.to ?? null;
+
+        if (!lineFrom || !lineTo) {
+          const lq = new THREE.Quaternion(
+            previewShape.quaternion[0], previewShape.quaternion[1],
+            previewShape.quaternion[2], previewShape.quaternion[3]
+          );
+          const ldir = new THREE.Vector3(0, 1, 0).applyQuaternion(lq);
+          const lmid = new THREE.Vector3(
+            previewShape.position[0], previewShape.position[1], previewShape.position[2]
+          );
+          if (drawingNormal) lmid.addScaledVector(drawingNormal, -0.01);
+          const llen = Array.isArray(previewShape.args) ? (previewShape.args[2] as number) : 0;
+          lineFrom = lmid.clone().addScaledVector(ldir, -llen / 2);
+          lineTo = lmid.clone().addScaledVector(ldir, llen / 2);
+        }
+
+        lineBinding.commitDrag(lineFrom, lineTo);
         kernelLineEndsRef.current = null;
       } else if (previewShape) {
         addShape({
@@ -5531,7 +5587,12 @@ function Scene() {
         `revision` is the invalidation signal and is not optional: the kernel
         Graph is mutated in place, so React's identity check on it never fires.
       */}
-      <KernelGeometry graph={kernelHost.graph} revision={kernelRevision} />
+      <KernelGeometry
+        graph={kernelHost.graph}
+        revision={kernelRevision}
+        selectedFaces={kernelSelectedSet}
+        onFaceClick={handleKernelFaceClick}
+      />
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;

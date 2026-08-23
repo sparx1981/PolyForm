@@ -52,6 +52,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
   const kernelHost = kernelHostRef.current;
 
+  // Kernel face selection. Deliberately separate from selectedIds: those are
+  // Shape ids (strings), these are FaceIds (numbers) in the kernel graph, and
+  // conflating them would make every consumer guess which it is holding.
+  const [selectedFaceIds, setSelectedFaceIds] = useState<number[]>([]);
+
   // Console handle for driving the kernel by hand.
   //
   // Enabled in dev, OR on any build when ?kernel-dev is in the URL. The
@@ -1289,7 +1294,9 @@ console.log("Created rectangle:", myRect.id);`);
       incrementReads,
       kernelHost,
       kernelRevision,
-      bumpKernel
+      bumpKernel,
+      selectedFaceIds,
+      setSelectedFaceIds
     }}>
       {children}
     </AppContext.Provider>

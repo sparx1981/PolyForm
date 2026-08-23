@@ -33,6 +33,7 @@ import {
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
+import { faceSummaries, toggleFaceHidden, deleteFace } from '../tools/kernelSelection';
 import { ToolModifierPalette } from './ToolModifierPalette';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator } from '../types';
@@ -206,7 +207,12 @@ export default function RightPanelStack() {
     setActiveMaterial, 
     activePBR,
     setActivePBR,
-    shapes, 
+    shapes,
+    kernelHost,
+    kernelRevision,
+    bumpKernel,
+    selectedFaceIds,
+    setSelectedFaceIds, 
     setShapes,
     removeShape,
     selectedId, 
@@ -688,6 +694,13 @@ export default function RightPanelStack() {
   };
 
   const selectedShape = shapes.find(s => s.id === selectedId);
+
+  // Kernel faces are a separate representation from Shape[], so the Outliner
+  // lists them in their own section rather than pretending they are Shapes.
+  const kernelFaceRows = React.useMemo(
+    () => faceSummaries(kernelHost.graph),
+    [kernelHost, kernelRevision],
+  );
   const selectedLight = customLights.find(l => l.id === selectedLightId);
   
   // Local state for editing in real-time
@@ -1186,6 +1199,44 @@ export default function RightPanelStack() {
                 <BoxSelect size={12} />
                 <span>Model Root</span>
               </div>{shapes.map(shape => (<div key={shape.id} onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }} className={cn("flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group", selectedId === shape.id && "bg-trimble-blue/10 text-trimble-blue", shape.hidden && "opacity-40")}><div className="w-2 h-2 rounded-full" style={{ backgroundColor: shape.color }} /><span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span><button onClick={(e) => { e.stopPropagation(); setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, hidden: !s.hidden } : s)); }} className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0" title={shape.hidden ? "Show" : "Hide"}>{shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button><button onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0" title="Delete"><Trash2 size={13} /></button></div>))}
+              {kernelFaceRows.length > 0 && (
+                <>
+                  <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-wide text-gray-400">
+                    Surfaces
+                  </div>
+                  {kernelFaceRows.map(row => (
+                    <div
+                      key={`kf-${row.id}`}
+                      onClick={() => { setSelectedId(null); setSelectedIds([]); setSelectedFaceIds([row.id]); }}
+                      className={cn(
+                        "flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group",
+                        selectedFaceIds.includes(row.id) && "bg-trimble-blue/10 text-trimble-blue",
+                        row.hidden && "opacity-40"
+                      )}
+                      title={`Area ${row.area.toFixed(2)}${row.holes ? ` · ${row.holes} hole(s)` : ''}`}
+                    >
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: row.color || '#d8d4cc' }} />
+                      <span className="flex-1 truncate">{row.label}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleFaceHidden(kernelHost.graph, row.id); bumpKernel(); }}
+                        className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                        title={row.hidden ? "Show" : "Hide"}
+                      >{row.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteFace(kernelHost.graph, row.id);
+                          setSelectedFaceIds(prev => prev.filter(f => f !== row.id));
+                          bumpKernel();
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                        title="Delete surface (edges remain, so redrawing one restores it)"
+                      ><Trash2 size={13} /></button>
+                    </div>
+                  ))}
+                </>
+              )}
+
             </div>
           </Panel>
         )}
