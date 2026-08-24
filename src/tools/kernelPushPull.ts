@@ -7,6 +7,7 @@
  */
 
 import type { FaceId, Vec3 } from '../lib/geometry/types';
+import { loopPoints } from '../lib/geometry/topology';
 import { pushPull, pushPullDistanceFromRay } from '../lib/geometry/pushpull';
 import { derive } from '../lib/geometry/derive';
 import { snapshot, restore } from '../lib/geometry/heal';
@@ -17,6 +18,16 @@ export interface PushPullSession {
   readonly grabPoint: Vec3;
   /** Distance shown to the user right now. */
   distance: number;
+  /**
+   * Boundary rings of the face, captured at the start of the drag.
+   *
+   * The preview is drawn from these rather than read from the graph each
+   * frame: the graph does not change until release, so re-reading it would
+   * return the same points at the cost of a lookup per frame — and it keeps
+   * the preview honest if the face is somehow altered mid-drag.
+   */
+  readonly rings: Vec3[][];
+  readonly normal: Vec3;
 }
 
 export interface PushPullBinding {
@@ -53,7 +64,10 @@ export function createPushPullBinding(
     },
 
     begin(faceId, grabPoint) {
-      session = { faceId, grabPoint, distance: 0 };
+      const face = host.graph.faces.get(faceId);
+      if (!face) return;
+      const rings = [face.outerLoop, ...face.innerLoops].map((lid) => loopPoints(host.graph, lid));
+      session = { faceId, grabPoint, distance: 0, rings, normal: face.plane.normal };
     },
 
     update(ray) {

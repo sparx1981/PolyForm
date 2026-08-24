@@ -63,6 +63,7 @@ import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
 import { paintFace, deleteFaceAndEdges } from '../tools/kernelSelection';
 import { createPushPullBinding } from '../tools/kernelPushPull';
+import { PushPullPreview } from './PushPullPreview';
 import type { FaceId } from '../lib/geometry/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
@@ -1252,6 +1253,14 @@ function Scene() {
    */
   const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
+  /**
+   * Live extrusion preview. Held in state, not a ref, because it has to
+   * re-render on every pointer move — the whole point is that the user can
+   * see the result before committing.
+   */
+  const [pushPullPreview, setPushPullPreview] = useState<
+    { rings: { x: number; y: number; z: number }[][]; normal: { x: number; y: number; z: number }; distance: number } | null
+  >(null);
 
   // FaceId is a branded number; selection is stored as plain numbers in
   // AppState so it stays serialisable. Convert at this one boundary.
@@ -1484,13 +1493,18 @@ function Scene() {
         origin: { x: dragRay.ray.origin.x, y: dragRay.ray.origin.y, z: dragRay.ray.origin.z },
         direction: { x: dragRay.ray.direction.x, y: dragRay.ray.direction.y, z: dragRay.ray.direction.z },
       });
-      if (dist !== null) setMeasurements(formatValue(Math.abs(dist), unit, 2));
+      if (dist !== null) {
+        setMeasurements(formatValue(Math.abs(dist), unit, 2));
+        const live = pushPullRef.current.session;
+        if (live) setPushPullPreview({ rings: live.rings, normal: live.normal, distance: dist });
+      }
     };
 
     const finish = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', finish);
       pushPullRef.current.commit();
+      setPushPullPreview(null);
       setMeasurements('');
     };
 
@@ -5748,6 +5762,14 @@ function Scene() {
         onFaceClick={handleKernelFaceClick}
         onFacePointerDown={handleKernelFacePointerDown}
       />
+
+      {pushPullPreview && (
+        <PushPullPreview
+          rings={pushPullPreview.rings}
+          normal={pushPullPreview.normal}
+          distance={pushPullPreview.distance}
+        />
+      )}
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;
