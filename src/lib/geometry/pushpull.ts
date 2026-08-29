@@ -22,7 +22,7 @@
  */
 
 import type { EdgeId, FaceId, Graph, Tolerances, Vec3, VertexId } from './types';
-import { getVertex, loopEdgeIds, loopPoints } from './topology';
+import { getVertex, loopEdgeIds, loopPoints, removeFace } from './topology';
 import { add, distance, dot, normalize, scale, sub } from './math';
 import { insertEdge, type InsertContext } from './insert';
 import { derive, flipFaceOrientation, reconcileOrientation } from './derive';
@@ -129,6 +129,20 @@ export function pushPull(
   const material = face.attributes.materialFront;
   const wasShared = shared;
 
+  /**
+   * Cap edges for each of the face's HOLES, tracked separately from the
+   * outer boundary's own cap.
+   *
+   * A hole's boundary needs its own ring of edges at the far end too — that
+   * is what gives the far cap face a matching hole rather than a solid
+   * fill. But a closed ring of edges is, by the kernel's own core rule
+   * (§6: a closed planar cycle IS a face), always derived into one — so
+   * this same ring that correctly punches a hole in the far cap also comes
+   * out as a brand-new, separate face plugging it. That phantom lid is
+   * identified and removed below, once derivation has run.
+   */
+  const innerCapEdgeSets: Set<EdgeId>[] = [];
+
   // The original face is KEPT, and becomes the base of the solid.
   //
   // My first attempt deleted it for a free face, on the reasoning that
@@ -142,18 +156,27 @@ export function pushPull(
   // leaves the original in place as an internal divider. Detecting that case
   // needs solid classification, which the kernel does not have yet.
 
-  for (const loop of loops) {
+  for (let li = 0; li < loops.length; li++) {
+    const loop = loops[li]!;
     const pts = loop.points;
     const n = pts.length;
     if (n < 3) continue;
+    // loops[0] is always the outer boundary (see how `loops` is built,
+    // above); anything after it is one of the face's holes.
+    const isInnerLoop = li > 0;
 
     // The cap at the far end.
+    const capEdges = new Set<EdgeId>();
     for (let i = 0; i < n; i++) {
       const a = add(pts[i]!, offset);
       const b = add(pts[(i + 1) % n]!, offset);
       if (distance(a, b) < opts.tolerances.MIN_EDGE_LENGTH) continue;
-      for (const t of insertEdge(ctx, a, b).touched) touched.add(t);
+      for (const t of insertEdge(ctx, a, b).touched) {
+        touched.add(t);
+        capEdges.add(t);
+      }
     }
+    if (isInnerLoop) innerCapEdgeSets.push(capEdges);
 
     // The side walls: one rung per boundary vertex, joining the two rings.
     for (let i = 0; i < n; i++) {
@@ -193,6 +216,37 @@ export function pushPull(
   // set is then a harmless no-op: preserve-or-create matches these faces by
   // hash and carries them forward wholesale, orientation included.
   derive(g, touched, { tolerances: opts.tolerances });
+
+  // Remove any phantom lid: a face with no hole of its own, whose ENTIRE
+  // outer boundary exactly matches one hole's cap ring. Left in place, it
+  // silently caps off what should be an open shaft through the solid.
+  //
+  // `removeFace` (not a full delete) leaves its edges behind — that ring is
+  // still needed as the far cap's hole boundary; only the solid face
+  // filling it is unwanted. This is the same "open hole with nothing behind
+  // it" pattern used anywhere else in the kernel: the ring stays, the face
+  // over it goes.
+  for (const capEdges of innerCapEdgeSets) {
+    if (capEdges.size === 0) continue;
+    for (const [fid, candidate] of [...g.faces]) {
+      if (candidate.innerLoops.length > 0) continue; // only a plain face can BE the lid
+      const outerEdges = loopEdgeIds(g, candidate.outerLoop);
+      if (outerEdges.length !== capEdges.size) continue;
+      if (outerEdges.every((e) => capEdges.has(e))) {
+        removeFace(g, fid);
+        // Strip these edges from what gets RETURNED, not just what was used
+        // internally. derive() always walks every edge in the graph — the
+        // `touched` set only decides whether an unmatched cycle gets
+        // rebuilt, not which regions are examined. Leaving these edges
+        // marked touched for the CALLER's own follow-up derive() call
+        // (kernelPushPull.ts always makes one) would find no face here
+        // any more, conclude "unmatched but touched, so build one", and
+        // silently recreate the exact lid just removed.
+        for (const e of capEdges) touched.delete(e);
+        break;
+      }
+    }
+  }
 
   const opFaces = new Set<FaceId>();
   for (const loop of g.loops.values()) {

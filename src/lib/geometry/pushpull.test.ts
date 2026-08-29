@@ -3,6 +3,7 @@ import { createGraph, checkIntegrity, loopPoints } from './topology';
 import { createEdgeIndex, insertEdge, type InsertContext } from './insert';
 import { derive } from './derive';
 import { pushPull, isFaceFree, pushPullDistanceFromRay, coplanarNeighbours } from './pushpull';
+import { insertFaceOffset } from './faceOffset';
 import { vec3, planeBasis, projectToBasis, distance } from './math';
 import { signedArea } from './polygon';
 import { DEFAULT_TOLERANCES as T } from './types';
@@ -153,6 +154,72 @@ describe('extruding a face with a hole', () => {
     const walls = [...s.graph.faces.values()].filter(f => Math.abs(f.plane.normal.y) < 0.01);
     expect(walls.length).toBe(8);
     expect(checkIntegrity(s.graph)).toEqual([]);
+
+    // The far cap must ALSO have a hole — and nothing may be sitting behind
+    // it. A face at the far end with no hole of its own, positioned exactly
+    // where the shaft's opening is, would be a phantom lid silently
+    // plugging what should stay open.
+    const holedFaces = [...s.graph.faces.values()].filter(f => f.innerLoops.length > 0);
+    expect(holedFaces).toHaveLength(2); // the original base + the new far cap
+    const phantomLid = [...s.graph.faces.values()].find(
+      f => f.innerLoops.length === 0 &&
+        Math.abs(f.plane.normal.y) > 0.99 &&
+        Math.abs(f.plane.point.y - 2) < 1e-6,
+    );
+    expect(phantomLid).toBeUndefined();
+  });
+
+  it('regression: a phantom lid must not survive the CALLER\'s own follow-up derive', () => {
+    // The bug this guards: the far cap's hole boundary is a closed ring of
+    // edges, and by the kernel's own core rule a closed planar cycle IS a
+    // face — so that ring was ALSO derived into a standalone "lid" plugging
+    // the shaft. Deleting it inside pushPull alone was not enough: derive()
+    // always re-examines every edge in the graph on every call, and
+    // kernelPushPull.ts's binding ALWAYS derives again immediately after
+    // pushPull returns. If the lid's edges were still marked "touched" for
+    // THAT second call, it found no face there any more, concluded
+    // "unmatched but touched, so build one", and silently recreated the
+    // exact lid just removed.
+    const s = scene();
+    groundSquare(s, 4);
+    const id = [...s.graph.faces.keys()][0]!;
+
+    const offset = insertFaceOffset(s.ctx, id, -1);
+    expect(offset.ok).toBe(true);
+    for (const t of offset.touched) s.touched.add(t);
+    s.run();
+
+    const frame = [...s.graph.faces.values()].find(f => f.innerLoops.length === 1)!;
+    const innerFace = [...s.graph.faces.values()].find(f => f.innerLoops.length === 0)!;
+
+    const r = pushPull(s.ctx, frame.id, 2, PP);
+    expect(r.ok).toBe(true);
+
+    // Mimic the caller EXACTLY: kernelPushPull.ts derives again over
+    // whatever pushPull() returns, immediately after.
+    for (const t of r.touched) s.touched.add(t);
+    s.run();
+
+    const totalHoled = [...s.graph.faces.values()].filter(f => f.innerLoops.length > 0).length;
+    expect(totalHoled).toBe(2); // original base + far cap, each with a hole
+
+    const phantomLid = [...s.graph.faces.values()].find(
+      f => f.innerLoops.length === 0 &&
+        Math.abs(f.plane.normal.y) > 0.99 &&
+        Math.abs(f.plane.point.y - 2) < 1e-6,
+    );
+    expect(phantomLid).toBeUndefined();
+
+    // The pre-existing inner surface (from the offset) must survive
+    // untouched — only the NEW phantom at the far end should ever be
+    // removed.
+    expect(s.graph.faces.has(innerFace.id)).toBe(true);
+    expect(checkIntegrity(s.graph)).toEqual([]);
+
+    // Stable under a THIRD, unrelated derive call too, not just lucky once.
+    derive(s.graph, new Set(), OPTS);
+    expect([...s.graph.faces.values()].filter(f => f.innerLoops.length === 0 &&
+      Math.abs(f.plane.normal.y) > 0.99 && Math.abs(f.plane.point.y - 2) < 1e-6)).toHaveLength(0);
   });
 });
 

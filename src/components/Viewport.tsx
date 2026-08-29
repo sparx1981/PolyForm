@@ -61,7 +61,7 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, deleteFaceAndEdges, groupContaining } from '../tools/kernelSelection';
+import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining } from '../tools/kernelSelection';
 import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
@@ -1294,7 +1294,18 @@ function Scene() {
 
   const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
     if (activeTool === 'paint') {
-      if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
+      // Matches select-tool semantics: a plain click acts on the whole
+      // object (paints every face of the group the clicked one belongs
+      // to), and shift-click narrows to just the one surface — the same
+      // relationship as "click selects the group, double-click drills into
+      // one face," just using shift as the modifier since paint has no
+      // natural "double-click" gesture of its own.
+      if (event.shiftKey) {
+        if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
+      } else {
+        const group = groupContaining(kernelHost.graph, faceId);
+        if (paintFaces(kernelHost.graph, group, activeMaterial) > 0) bumpKernel();
+      }
       return;
     }
     if (activeTool === 'eraser') {
@@ -2295,6 +2306,27 @@ function Scene() {
         if (e.key === 'Backspace' && typedLength.length > 0) {
           e.preventDefault();
           setTypedLength(prev => prev.slice(0, -1));
+          return;
+        }
+      }
+
+      // Delete the current selection. Placed after the numeric-length
+      // Backspace handling above, and gated on nothing being actively
+      // drawn — Backspace's OTHER job (erasing a typed length mid-gesture)
+      // takes priority and returns before this is ever reached.
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !drawingStart) {
+        if (kernelSelectedSet.size > 0) {
+          e.preventDefault();
+          deleteGroupFacesAndEdges(kernelHost.graph, [...kernelSelectedSet]);
+          setSelectedFaceIds([]);
+          bumpKernel();
+          return;
+        }
+        if (selectedId) {
+          e.preventDefault();
+          removeShape(selectedId);
+          setSelectedId(null);
+          setSelectedIds([]);
           return;
         }
       }

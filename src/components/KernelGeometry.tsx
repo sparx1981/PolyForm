@@ -183,6 +183,19 @@ export function KernelGeometry({
             opacity={opacity}
             roughness={0.85}
             metalness={0}
+            // Pushes this face's DEPTH VALUES back slightly (not its actual
+            // position) so any line geometry sitting exactly on the same
+            // plane — the boundary between two coplanar faces, most
+            // visibly the ring an offset creates — reliably wins the
+            // per-pixel depth test instead of the two fighting for it.
+            // Without this, whichever one happened to round to the nearer
+            // depth on a given pixel was essentially random: the two new
+            // faces an offset produces existed and were fully selectable,
+            // but the edge between them could vanish depending on camera
+            // angle and floating-point luck.
+            polygonOffset
+            polygonOffsetFactor={1}
+            polygonOffsetUnits={1}
           />
         </mesh>
       ))}
