@@ -1332,10 +1332,20 @@ export default function UnifiedToolRail() {
                                   : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-200"
                             )}
                             style={active && bannerColor ? { backgroundColor: bannerColor } : undefined}
-                            title={tool.label}
                           >
                             {tool.icon}
 
+                            {/*
+                              No native title attribute: it renders at the
+                              OS/browser-chrome level, outside any CSS
+                              stacking context, so it cannot be reordered or
+                              suppressed relative to this custom tooltip —
+                              they simply compete for the same space with no
+                              way to referee it. That mismatch is also why
+                              the native one showed with the BROWSER'S own
+                              default styling (pale background, dark text)
+                              rather than this app's intended dark tooltip.
+                            */}
                             {/* Floating Rich Tooltip */}
                             <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-gray-700 transition-opacity">
                               <div className="font-semibold flex items-center gap-1.5">

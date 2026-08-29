@@ -57,8 +57,13 @@ function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, bad
         theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
       )}
       style={active ? { borderColor: bannerColor, color: bannerColor } : undefined}
-      title={label}
     >
+      {/*
+        No native title attribute (see the equivalent ToolButton/ArchToolButton
+        comments): it renders at the OS/browser-chrome level, outside any CSS
+        stacking context, so it cannot be reordered or suppressed relative to
+        this component's own custom tooltip below.
+      */}
       <div className="relative flex items-center justify-center">
         {icon}
         {badge && (
