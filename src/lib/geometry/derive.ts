@@ -269,8 +269,24 @@ export function deriveRegion(
       const n = tryNormalize(other.plane.normal);
       if (!n) continue;
       const parallel = Math.abs(Math.abs(dot(n, plane.normal)) - 1) <= opts.tolerances.COPLANARITY_TOLERANCE;
+
+      // The OFFSET check must use the candidate's CURRENT boundary, not its
+      // cached plane.point. That cache is exactly what goes stale the
+      // moment anything moves this face's vertices (translate, scale,
+      // rotate, offset) without changing which edges bound it: the edge set
+      // — and so the face's identity — is unchanged, but the point on the
+      // old cached plane no longer describes where the face actually is.
+      //
+      // Comparing against it was rejecting a face as "a different, unrelated
+      // plane" purely because it had just moved — so it never entered
+      // `affectedFaces`, never got snapshotted, and survived untouched
+      // alongside a freshly derived duplicate built from the same edges.
+      // Reading a live vertex instead means this check reflects the
+      // geometry as it is right now.
+      const currentPoint = loopPoints(g, other.outerLoop)[0];
+      if (!currentPoint) continue;
       const sameOffset =
-        Math.abs(dot(n, other.plane.point) - dot(n, plane.point)) <= opts.tolerances.COPLANARITY_TOLERANCE;
+        Math.abs(dot(n, currentPoint) - dot(n, plane.point)) <= opts.tolerances.COPLANARITY_TOLERANCE;
       if (!parallel || !sameOffset) continue;
 
       affectedFaces.add(loop.face);
@@ -437,6 +453,129 @@ export function deriveRegion(
   }
 
   return { created, preserved, deleted, diagnostics };
+}
+
+// ---------------------------------------------------------------------------
+// Orientation reconciliation across a related set of faces
+// ---------------------------------------------------------------------------
+
+/** The EdgeUse of a given edge within a given face's loops, if any. */
+function findUseOfEdgeInFace(g: Graph, faceId: FaceId, edgeId: EdgeId) {
+  const f = g.faces.get(faceId);
+  if (!f) return null;
+  for (const lid of [f.outerLoop, ...f.innerLoops]) {
+    const loop = g.loops.get(lid);
+    if (!loop) continue;
+    const use = loop.uses.find((u) => u.edge === edgeId);
+    if (use) return use;
+  }
+  return null;
+}
+
+/**
+ * Reverses a loop's traversal direction in place: edge order reversed, each
+ * use's `reversed` flag flipped, and the edge's own copy of that use updated
+ * to match. Reversing the array without this second step would leave the
+ * edge and the loop disagreeing about which use is whose.
+ */
+function reverseLoopInPlace(g: Graph, loopId: number): void {
+  const loop = g.loops.get(loopId as never);
+  if (!loop) return;
+  loop.uses = loop.uses
+    .slice()
+    .reverse()
+    .map((u) => ({ ...u, reversed: !u.reversed }));
+  for (const use of loop.uses) {
+    const e = g.edges.get(use.edge);
+    if (!e) continue;
+    const idx = e.uses.findIndex((x) => x.loop === loopId);
+    if (idx >= 0) e.uses[idx] = use;
+  }
+}
+
+/**
+ * Properly flips a face: reverses its outer and inner loops AND negates its
+ * stored normal, recomputing the basis to match.
+ *
+ * Negating `plane.normal` alone is not sufficient — the winding invariant
+ * (§6.4: outer CCW, inner CW, as measured from the front) is defined against
+ * the LOOP's own traversal, so the loop must flip too, or the stored normal
+ * and the geometry it describes disagree.
+ */
+export function flipFaceOrientation(g: Graph, faceId: FaceId): void {
+  const f = g.faces.get(faceId);
+  if (!f) return;
+  reverseLoopInPlace(g, f.outerLoop as unknown as number);
+  for (const lid of f.innerLoops) reverseLoopInPlace(g, lid as unknown as number);
+  f.plane = { point: f.plane.point, normal: scale(f.plane.normal, -1) };
+  f.basis = planeBasis(f.plane);
+  f.attributes.orientationLocked = true;
+}
+
+/**
+ * Propagates a known-correct orientation across a connected set of faces via
+ * BFS over shared MANIFOLD edges.
+ *
+ * For a properly, consistently oriented 2-manifold shell, two faces sharing
+ * an edge must traverse it in OPPOSITE directions — walk from A to B along
+ * the edge, and the correctly oriented B walks from B to A. If two adjacent
+ * faces in the set traverse the shared edge the SAME way, one of them is
+ * wrong and gets flipped.
+ *
+ * This exists because brand-new faces derived in the same pass — the walls
+ * and cap of a fresh extrusion — have no already-oriented neighbour to check
+ * consistency against when each is first derived (they are on different
+ * planes, processed one at a time), so the generic per-plane heuristics in
+ * `orientNormal` fall through to camera-facing or canonical-sign, which have
+ * no notion that these faces together form one solid. Seeding from a face
+ * whose direction is known by construction (not guessed) and propagating
+ * fixes the whole set in one pass, deterministically and independent of
+ * traversal order — it is a two-colouring problem with a unique solution
+ * once the seed is fixed.
+ */
+export function reconcileOrientation(
+  g: Graph,
+  seed: FaceId,
+  group: Iterable<FaceId>,
+): void {
+  const groupSet = new Set(group);
+  groupSet.add(seed);
+  const visited = new Set<FaceId>([seed]);
+  const queue: FaceId[] = [seed];
+
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    const curFace = g.faces.get(cur);
+    if (!curFace) continue;
+
+    const edges = new Set<EdgeId>();
+    for (const lid of [curFace.outerLoop, ...curFace.innerLoops]) {
+      const loop = g.loops.get(lid);
+      if (!loop) continue;
+      for (const u of loop.uses) edges.add(u.edge);
+    }
+
+    for (const eid of [...edges].sort((a, b) => a - b)) {
+      const e = g.edges.get(eid);
+      if (!e) continue;
+      for (const use of e.uses) {
+        const loop = g.loops.get(use.loop);
+        if (!loop) continue;
+        const neighbour = loop.face;
+        if (neighbour === cur || !groupSet.has(neighbour) || visited.has(neighbour)) continue;
+
+        const curUse = findUseOfEdgeInFace(g, cur, eid);
+        const nbrUse = findUseOfEdgeInFace(g, neighbour, eid);
+        if (curUse && nbrUse && curUse.reversed === nbrUse.reversed) {
+          // Same direction across a shared edge: inconsistent. Flip.
+          flipFaceOrientation(g, neighbour);
+        }
+
+        visited.add(neighbour);
+        queue.push(neighbour);
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

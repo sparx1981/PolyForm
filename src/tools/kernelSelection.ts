@@ -199,6 +199,80 @@ export function facesByMaterial(g: Graph): Map<string, FaceId[]> {
 export { DEFAULT_LABEL_COLOR };
 
 // ---------------------------------------------------------------------------
+// Shape classification — a heuristic, not a solid-recognition engine
+// ---------------------------------------------------------------------------
+
+/** Vertex count of a face's OUTER boundary. For classification only. */
+function outerVertexCount(g: Graph, faceId: FaceId): number {
+  const f = g.faces.get(faceId);
+  if (!f) return 0;
+  return loopPoints(g, f.outerLoop).length;
+}
+
+/**
+ * Guesses a human name for a CLOSED group of faces, from vertex and face
+ * counts alone — not measured geometry.
+ *
+ * This is deliberately a heuristic, not real solid recognition: six quad
+ * faces are called a "Box" whether or not they are actually rectangular or
+ * their corners are perpendicular. Getting that right needs genuine solid
+ * classification, which the kernel does not have. What this DOES get right
+ * is the case that actually motivated it — push/pulling a rectangle, circle
+ * or triangle should read as "Box", "Cylinder" or "Triangular Prism", not a
+ * generic "Solid N" that gives no sense of what a hundred-surface model
+ * actually contains.
+ *
+ * Returns null when nothing recognisable matches, so the caller falls back
+ * to the generic numbered label. A face with a hole never matches — a box
+ * with a shaft through it is not a simple box any more, and pretending
+ * otherwise would be a confident wrong answer.
+ */
+function classifyClosedGroup(g: Graph, faces: readonly FaceId[]): string | null {
+  if (faces.some((id) => (g.faces.get(id)?.innerLoops.length ?? 0) > 0)) return null;
+
+  const counts = faces.map((id) => outerVertexCount(g, id));
+  if (counts.some((n) => n < 3)) return null;
+
+  if (faces.length === 6 && counts.every((n) => n === 4)) return 'Box';
+
+  if (faces.length === 5) {
+    const tris = counts.filter((n) => n === 3).length;
+    const quads = counts.filter((n) => n === 4).length;
+    if (tris === 2 && quads === 3) return 'Triangular Prism';
+  }
+
+  // Two matching many-sided caps plus one quad wall per side of the cap:
+  // exactly what push/pulling an N-segment circle produces. But this
+  // combinatorial signature is IDENTICAL for any regular N-gon extruded —
+  // a pentagon prism has 2 pentagon caps and 5 quad walls, matching the
+  // same shape as a "cylinder" with 5 segments. There is no way to tell
+  // them apart from topology alone; the threshold below only calls it a
+  // Cylinder once N is large enough that a low-poly prism reading is
+  // implausible, matching the loose-face Circle threshold below.
+  const caps = counts.filter((n) => n > 4);
+  if (caps.length === 2 && caps[0] === caps[1] && caps[0]! >= 8) {
+    const sides = caps[0]!;
+    const quads = counts.filter((n) => n === 4).length;
+    if (quads === sides && faces.length === sides + 2) return 'Cylinder';
+  }
+
+  return null;
+}
+
+/** Same idea, for a single loose (unextruded) face. */
+function classifyLooseFace(g: Graph, faceId: FaceId): string | null {
+  const f = g.faces.get(faceId);
+  if (!f || f.innerLoops.length > 0) return null;
+  const n = outerVertexCount(g, faceId);
+  if (n === 3) return 'Triangle';
+  if (n === 4) return 'Rectangle';
+  // Our circle tool tessellates at 32 segments; a lower threshold risks
+  // mislabelling a hand-drawn pentagon or hexagon as a circle.
+  if (n >= 8) return 'Circle';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Grouping
 // ---------------------------------------------------------------------------
 
@@ -283,10 +357,58 @@ export function faceGroups(g: Graph): FaceGroup[] {
       }
       return {
         id: `g${root}`,
-        label: closed ? `Solid ${root}` : faces.length > 1 ? `Surfaces ${root}` : `Surface ${root}`,
+        label:
+          (closed ? classifyClosedGroup(g, faces) : faces.length === 1 ? classifyLooseFace(g, faces[0]!) : null) ??
+          (closed ? `Solid ${root}` : faces.length > 1 ? `Surfaces ${root}` : `Surface ${root}`),
         faces,
         area: faces.reduce((sum, f) => sum + faceArea(g, f), 0),
         closed,
       };
     });
+}
+
+/**
+ * Every face belonging to the same connected solid as `faceId`.
+ *
+ * This is the piece "click selects the group, double-click selects the
+ * face" needs: resolving a single clicked face to the whole object it's
+ * part of, via the same connectivity `faceGroups` already computes. A face
+ * with no neighbours resolves to itself — a lone surface IS its own group.
+ */
+export function groupContaining(g: Graph, faceId: FaceId): FaceId[] {
+  for (const group of faceGroups(g)) {
+    if (group.faces.includes(faceId)) return group.faces;
+  }
+  return [faceId];
+}
+
+// ---------------------------------------------------------------------------
+// Group-level hide and delete
+// ---------------------------------------------------------------------------
+
+/** Hides or shows every face in a group at once. Returns how many changed. */
+export function setGroupHidden(g: Graph, faces: Iterable<FaceId>, hidden: boolean): number {
+  let n = 0;
+  for (const id of faces) if (setFaceHidden(g, id, hidden)) n++;
+  return n;
+}
+
+/**
+ * Deletes every face in a group, and every edge exclusive to it.
+ *
+ * Looping `deleteFaceAndEdges` over the group is safe regardless of order:
+ * an edge shared between two faces BOTH in this group survives until the
+ * second of the two is processed, at which point its use count reaches zero
+ * and it is removed there. An edge shared with a face OUTSIDE the group
+ * never reaches zero, so it survives — the same "don't destroy a neighbour"
+ * guarantee `deleteFaceAndEdges` already gives one face at a time, just
+ * applied to the whole group in one call.
+ */
+export function deleteGroupFacesAndEdges(
+  g: Graph,
+  faces: Iterable<FaceId>,
+): { edgesRemoved: number } {
+  let edgesRemoved = 0;
+  for (const id of faces) edgesRemoved += deleteFaceAndEdges(g, id).edgesRemoved;
+  return { edgesRemoved };
 }

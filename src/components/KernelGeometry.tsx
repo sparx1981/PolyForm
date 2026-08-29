@@ -33,8 +33,17 @@ export interface KernelGeometryProps {
    *
    * `onFaceClick` fires on release, which is too late to start a drag: the
    * gesture is already over. Push/pull needs the press.
+   *
+   * Returns whether it actually consumed the press. Only push/pull wants
+   * one; every other tool (drawing a rectangle on a wall, for instance)
+   * needs the SAME press to keep travelling down to the invisible ground
+   * plane where Viewport's own pointer-down logic lives. Stopping
+   * propagation unconditionally here — regardless of what the handler did
+   * with it — silently swallowed every one of those presses: nothing beneath
+   * a kernel face could ever be reached by a click starting on it, because
+   * the event never left this mesh.
    */
-  onFacePointerDown?: (faceId: FaceId, event: ThreeEvent<PointerEvent>) => void;
+  onFacePointerDown?: (faceId: FaceId, event: ThreeEvent<PointerEvent>) => boolean | void;
   onEdgeClick?: (edgeId: EdgeId, event: ThreeEvent<MouseEvent>) => void;
   showEdges?: boolean;
   edgeColor?: string;
@@ -132,14 +141,18 @@ export function KernelGeometry({
           geometry={g.geometry}
           castShadow
           receiveShadow
+          userData={{ isKernelGeometry: true, faceOfTriangle: g.faceOfTriangle }}
           onPointerDown={(event) => {
             if (!onFacePointerDown) return;
             const triangle = event.faceIndex;
             if (triangle === undefined || triangle === null) return;
             const faceId = g.faceOfTriangle[triangle];
             if (faceId === undefined) return;
-            event.stopPropagation();
-            onFacePointerDown(faceId, event);
+            // Only claim the press if the handler actually wants it. See the
+            // prop's doc comment: stopping unconditionally here is what
+            // silently broke every OTHER tool's ability to start on a
+            // kernel face at all.
+            if (onFacePointerDown(faceId, event)) event.stopPropagation();
           }}
           onClick={(event) => {
             if (!onFaceClick) return;

@@ -3,7 +3,7 @@ import { Box, BoxSelect, CheckCircle2, ChevronDown, ChevronRight, Circle as Circ
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
-import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups } from '../tools/kernelSelection';
+import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
 import { ToolModifierPalette } from './ToolModifierPalette';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator } from '../types';
@@ -1227,6 +1227,36 @@ export default function RightPanelStack() {
                             <Box size={13} className="shrink-0 text-gray-400" />
                             <span className="flex-1 truncate font-medium">{group.label}</span>
                             <span className="text-[10px] text-gray-400 shrink-0">{group.faces.length}</span>
+                            {/*
+                              Hide/delete at the GROUP level, not just per
+                              surface — a six-face box previously had no way
+                              to hide or delete it as one thing; you had to
+                              find and act on every individual wall.
+                            */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const anyVisible = rows.some(r => !r.hidden);
+                                setGroupHidden(kernelHost.graph, group.faces, anyVisible);
+                                bumpKernel();
+                              }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              title={rows.some(r => !r.hidden) ? "Hide group" : "Show group"}
+                            >
+                              {rows.every(r => r.hidden) ? <EyeOff size={13} /> : <Eye size={13} />}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteGroupFacesAndEdges(kernelHost.graph, group.faces);
+                                setSelectedFaceIds(prev => prev.filter(f => !group.faces.includes(f)));
+                                bumpKernel();
+                              }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                              title={`Delete ${group.label.toLowerCase()} and its edges`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         )}
                         {(!collapsed || single) && rows.map(row => (

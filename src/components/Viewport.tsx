@@ -61,10 +61,13 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, deleteFaceAndEdges } from '../tools/kernelSelection';
+import { paintFace, deleteFaceAndEdges, groupContaining } from '../tools/kernelSelection';
 import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
-import type { FaceId } from '../lib/geometry/types';
+import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
+import { GroupTransformPreview } from './GroupTransformPreview';
+import { boundsOfFaces } from '../lib/geometry/grouptransform';
+import type { FaceId, Mat4 } from '../lib/geometry/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
 const KERNEL_SNAP_TOOLS: string[] = [
@@ -1278,6 +1281,11 @@ function Scene() {
    * understood by every consumer of either.
    */
 
+  /** Tracks the last kernel-face click, so a second click on the SAME face
+   *  within the window reads as a double-click rather than two singles. */
+  const lastKernelClickRef = useRef<{ faceId: FaceId; time: number } | null>(null);
+  const DOUBLE_CLICK_MS = 350;
+
   const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
     if (activeTool === 'paint') {
       if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
@@ -1292,14 +1300,120 @@ function Scene() {
       setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
       return;
     }
+
     setSelectedId(null);
     setSelectedIds([]);
-    setSelectedFaceIds(prev =>
-      event.shiftKey
-        ? (prev.includes(faceId) ? prev.filter(f => f !== faceId) : [...prev, faceId])
-        : [faceId],
-    );
+
+    if (event.shiftKey) {
+      // Shift-click adds or removes exactly the clicked face, group logic
+      // aside -- a user building a custom multi-face selection is choosing
+      // deliberately, face by face.
+      setSelectedFaceIds(prev =>
+        prev.includes(faceId) ? prev.filter(f => f !== faceId) : [...prev, faceId],
+      );
+      lastKernelClickRef.current = null;
+      return;
+    }
+
+    const now = Date.now();
+    const last = lastKernelClickRef.current;
+    const isDoubleClick = !!last && last.faceId === faceId && now - last.time < DOUBLE_CLICK_MS;
+
+    if (isDoubleClick) {
+      // Second click on the SAME face: drill down to just that surface.
+      setSelectedFaceIds([faceId]);
+      lastKernelClickRef.current = null;
+    } else {
+      // A plain click selects the whole connected object -- pushing/pulling
+      // a rectangle into a box and then clicking one wall should select the
+      // box, not one of its six faces; that is what most users mean by
+      // "click on it." Drilling into one face is what double-click is for.
+      setSelectedFaceIds(groupContaining(kernelHost.graph, faceId));
+      lastKernelClickRef.current = { faceId, time: now };
+    }
   }, [activeTool, activeMaterial, kernelHost, bumpKernel, setSelectedFaceIds, setSelectedId, setSelectedIds]);
+
+  // ---- Move/scale/rotate for a kernel face-group selection ----
+  //
+  // The existing TransformControls wiring above drives exactly one Shape's
+  // position/quaternion/scale and writes the result back on release --
+  // there is no way to hand it "these six faces" and have it mean anything
+  // (grouptransform.ts's own doc comment goes into why). This attaches the
+  // SAME gizmo to an invisible dummy pivot object instead, and translates
+  // its movement into calls on the group-transform binding, which applies
+  // the result to the kernel graph on release.
+  const groupPivotRef = useRef<THREE.Object3D>(null);
+  const [groupPivotReady, setGroupPivotReady] = useState(false);
+  const groupTransformActiveRef = useRef(false);
+  const groupTransformStartRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  const groupTransformBindingRef = useRef(createGroupTransformBinding(kernelHost, bumpKernel));
+  const [groupTransformPreview, setGroupTransformPreview] = useState<
+    { faces: FaceId[]; matrix: Mat4 } | null
+  >(null);
+
+  // Keeps the dummy pivot synced to the selection's current bounds center
+  // whenever the model or selection changes -- but never mid-drag, where
+  // fighting TransformControls would fling the gizmo out from under the
+  // user's cursor.
+  useEffect(() => {
+    if (groupTransformActiveRef.current) return;
+    if (kernelSelectedSet.size === 0 || !groupPivotRef.current) return;
+    const b = boundsOfFaces(kernelHost.graph, [...kernelSelectedSet]);
+    if (!b) return;
+    groupPivotRef.current.position.set(b.center.x, b.center.y, b.center.z);
+    groupPivotRef.current.quaternion.identity();
+    groupPivotRef.current.scale.set(1, 1, 1);
+  }, [kernelSelectedSet, kernelRevision, kernelHost]);
+
+  const handleGroupTransformBegin = useCallback(() => {
+    if (kernelSelectedSet.size === 0 || !groupPivotRef.current) return;
+    groupTransformActiveRef.current = true;
+    groupTransformStartRef.current = {
+      x: groupPivotRef.current.position.x,
+      y: groupPivotRef.current.position.y,
+      z: groupPivotRef.current.position.z,
+    };
+    groupTransformBindingRef.current.begin([...kernelSelectedSet]);
+  }, [kernelSelectedSet]);
+
+  const handleGroupTransformChange = useCallback(() => {
+    const pivot = groupPivotRef.current;
+    const binding = groupTransformBindingRef.current;
+    if (!pivot || !binding.active) return;
+
+    if (activeTool === 'move') {
+      const start = groupTransformStartRef.current;
+      if (!start) return;
+      binding.updateTranslate({
+        x: pivot.position.x - start.x,
+        y: pivot.position.y - start.y,
+        z: pivot.position.z - start.z,
+      });
+    } else if (activeTool === 'scale') {
+      // The pivot's scale was reset to (1,1,1) at begin, so its current
+      // scale IS this drag's factor.
+      binding.updateScale({ x: pivot.scale.x, y: pivot.scale.y, z: pivot.scale.z });
+    } else if (activeTool === 'rotate') {
+      // The pivot's rotation was reset to identity at begin, so its current
+      // quaternion IS this drag's rotation. Extracted to axis+angle since
+      // that is what rotateFaces expects.
+      const q = pivot.quaternion;
+      const w = Math.min(1, Math.max(-1, q.w));
+      const angle = 2 * Math.acos(w);
+      const s = Math.sqrt(1 - w * w);
+      const axis = s < 1e-6 ? { x: 1, y: 0, z: 0 } : { x: q.x / s, y: q.y / s, z: q.z / s };
+      binding.updateRotate(axis, angle);
+    }
+
+    const session = binding.session;
+    if (session) setGroupTransformPreview({ faces: session.faces, matrix: session.matrix });
+  }, [activeTool]);
+
+  const handleGroupTransformEnd = useCallback(() => {
+    groupTransformActiveRef.current = false;
+    groupTransformBindingRef.current.commit();
+    setGroupTransformPreview(null);
+  }, []);
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
   const [sculptCursorPos, setSculptCursorPos] = useState<THREE.Vector3 | null>(null);
@@ -1463,9 +1577,15 @@ function Scene() {
    * face itself would simply never fire.
    */
   const handleKernelFacePointerDown = useCallback((faceId: FaceId, event: { point?: THREE.Vector3 }) => {
-    if (activeTool !== 'pushpull') return;
+    // Return value tells KernelGeometry whether to stop propagation. Only
+    // push/pull claims the press; every other tool needs it to keep
+    // travelling down to the invisible ground plane where drawing-tool
+    // starts (rectangle, circle, line, triangle...) are actually handled —
+    // stopping unconditionally here was why none of them could start on a
+    // kernel wall at all.
+    if (activeTool !== 'pushpull') return false;
     const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
-    if (!grab) return;
+    if (!grab) return false;
 
     pushPullRef.current.begin(faceId, { x: grab.x, y: grab.y, z: grab.z });
     setMeasurements('Drag to push or pull, then release.');
@@ -1510,6 +1630,7 @@ function Scene() {
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', finish, { once: true });
+    return true;
   }, [activeTool, kernelHost, setMeasurements, camera, gl, unit]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
@@ -2930,16 +3051,41 @@ function Scene() {
         startPoint = new THREE.Vector3(...snapIndicator.point);
       }
 
-      // Check for mesh intersection first
+      // Check for mesh intersection first.
+      //
+      // Picks whichever relevant hit is NEAREST along the ray, not "a Shape
+      // always wins if one exists anywhere on the ray" — the previous
+      // version only ever looked for `userData.isShape`, so it silently
+      // ignored kernel-rendered geometry entirely and fell through to the
+      // ground-plane fallback whenever the nearest thing hit was a kernel
+      // wall. `intersectObjects` already returns hits nearest-first.
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
-      
-      if (shapeIntersect && shapeIntersect.face) {
-        const normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
+      const relevantIntersect = intersects.find(
+        i => i.object.userData.isShape || i.object.userData.isKernelGeometry,
+      );
+
+      if (relevantIntersect?.face && relevantIntersect.object.userData.isShape) {
+        const normal = relevantIntersect.face.normal.clone().applyQuaternion(relevantIntersect.object.quaternion).normalize();
         startNormal = normal;
-        startOnId = shapeIntersect.object.userData.id;
+        startOnId = relevantIntersect.object.userData.id;
         if (!startPoint) {
-          startPoint = shapeIntersect.point.clone();
+          startPoint = relevantIntersect.point.clone();
+        }
+      } else if (
+        relevantIntersect?.object.userData.isKernelGeometry &&
+        typeof relevantIntersect.faceIndex === 'number'
+      ) {
+        const faceOfTriangle: number[] | undefined = relevantIntersect.object.userData.faceOfTriangle;
+        const kernelFaceId = faceOfTriangle?.[relevantIntersect.faceIndex];
+        const kernelFace = kernelFaceId !== undefined ? kernelHost.graph.faces.get(kernelFaceId as never) : null;
+        if (kernelFace) {
+          // The kernel's own stored normal, already correctly oriented —
+          // no quaternion transform needed, since KernelGeometry mounts
+          // with no transform of its own.
+          startNormal = new THREE.Vector3(kernelFace.plane.normal.x, kernelFace.plane.normal.y, kernelFace.plane.normal.z);
+          if (!startPoint) {
+            startPoint = relevantIntersect.point.clone();
+          }
         }
       } else {
         // Fallback to ground plane
@@ -6273,6 +6419,42 @@ function Scene() {
         </mesh>
       );
     })}
+
+      {/*
+        Invisible dummy the group-transform gizmo below is attached to.
+        Mounted unconditionally (not just while transforming) so the
+        callback ref can populate groupPivotRef before TransformControls
+        ever needs it -- attaching TransformControls to a null object on
+        its very first render is the failure this avoids.
+      */}
+      <object3D
+        ref={(node) => {
+          groupPivotRef.current = node;
+          if (node && !groupPivotReady) setGroupPivotReady(true);
+        }}
+      />
+      {kernelSelectedSet.size > 0 && isTransforming && groupPivotReady && groupPivotRef.current && (
+        <TransformControls
+          object={groupPivotRef.current}
+          mode={activeTool === 'move' ? 'translate' : (activeTool === 'rotate' ? 'rotate' : 'scale')}
+          showX={!axisLock || axisLock === 'x'}
+          showY={!axisLock || axisLock === 'y'}
+          showZ={!axisLock || axisLock === 'z'}
+          onMouseDown={handleGroupTransformBegin}
+          onMouseUp={handleGroupTransformEnd}
+          onObjectChange={handleGroupTransformChange}
+          translationSnap={unit === 'm' ? 0.01 : 1}
+          rotationSnap={Math.PI / 24}
+          scaleSnap={0.01}
+        />
+      )}
+      {groupTransformPreview && (
+        <GroupTransformPreview
+          graph={kernelHost.graph}
+          faces={groupTransformPreview.faces}
+          matrix={groupTransformPreview.matrix}
+        />
+      )}
 
       {selectedId && isTransforming && (
         <>

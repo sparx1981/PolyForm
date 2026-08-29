@@ -25,6 +25,7 @@ import type { EdgeId, FaceId, Graph, Tolerances, Vec3, VertexId } from './types'
 import { getVertex, loopEdgeIds, loopPoints } from './topology';
 import { add, distance, dot, normalize, scale, sub } from './math';
 import { insertEdge, type InsertContext } from './insert';
+import { derive, flipFaceOrientation, reconcileOrientation } from './derive';
 
 export interface PushPullOptions {
   readonly tolerances: Tolerances;
@@ -102,6 +103,10 @@ export function pushPull(
   const face = g.faces.get(id);
   if (!face) return fail('face not found');
 
+  // The face's ORIGINAL vertices are the ones flipVertex order operates on
+  // below; capture the id up front so the flip survives derivation.
+  const baseFaceId = id;
+
   if (Math.abs(dist) < opts.tolerances.MIN_EDGE_LENGTH) {
     // Not an error worth surfacing: a push/pull of nothing is a click, and a
     // click that moved a fraction of a millimetre is a slip.
@@ -169,6 +174,54 @@ export function pushPull(
   }
 
   void material;
+
+  // Derive the extrusion's OWN geometry now, inside pushPull, rather than
+  // leaving that to the caller.
+  //
+  // Walls and the cap are brand-new faces, each on its own plane, derived one
+  // plane at a time. Neighbour-consistency (orientNormal's first rule) needs
+  // an ALREADY-ORIENTED adjacent face to check against — but the adjacent
+  // wall may not exist yet when this one is derived. With no usable
+  // neighbour, no snapshot, and a vertical plane (so the horizontal-up rule
+  // doesn't apply), orientation falls to camera-facing or canonical-sign,
+  // which have no idea two faces are opposite sides of the same solid. That
+  // is how two walls of a box ended up with the same normal.
+  //
+  // Deriving here — before returning, rather than trusting the caller's own
+  // derive() to sort it out — is what lets this function reconcile the
+  // result. The caller's subsequent derive() call over the same `touched`
+  // set is then a harmless no-op: preserve-or-create matches these faces by
+  // hash and carries them forward wholesale, orientation included.
+  derive(g, touched, { tolerances: opts.tolerances });
+
+  const opFaces = new Set<FaceId>();
+  for (const loop of g.loops.values()) {
+    for (const use of loop.uses) {
+      if (touched.has(use.edge)) opFaces.add(loop.face);
+    }
+  }
+
+  const base = g.faces.get(baseFaceId);
+  if (base && opFaces.has(baseFaceId)) {
+    // The base's correct direction is known exactly, not guessed: it must
+    // point AWAY from the extrusion. It kept its pre-extrusion orientation
+    // through derivation — preserve-or-create correctly carries an untouched
+    // face's attributes forward wholesale, orientation included — but the
+    // solid's outward direction at the base is the OPPOSITE of what it was
+    // as a standalone face: a ground square points up; as a floor it must
+    // point down.
+    if (dot(base.plane.normal, offset) > 0) {
+      flipFaceOrientation(g, baseFaceId);
+    }
+
+    // Propagate that known-correct direction across every face this
+    // operation touched, via BFS over shared manifold edges. This is what
+    // fixes the walls and cap: each is checked for consistency against its
+    // already-visited neighbour, not against a generic heuristic that has no
+    // notion they belong to one solid.
+    reconcileOrientation(g, baseFaceId, opFaces);
+  }
+
   return { ok: true, touched, wasShared, distance: dist };
 }
 
