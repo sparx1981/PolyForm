@@ -21,6 +21,7 @@ export * from './insert';
 export * from './cycles';
 export * from './derive';
 export * from './pushpull';
+export * from './faceOffset';
 export * from './curve';
 export * from './tessellate';
 export * from './diagnostics';

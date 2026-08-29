@@ -64,9 +64,8 @@ import { rankSnap } from '../tools/tuning';
 import { paintFace, deleteFaceAndEdges, groupContaining } from '../tools/kernelSelection';
 import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
-import { createOffsetBinding } from '../tools/kernelOffset';
-import { OffsetPreview } from './OffsetPreview';
-import { pushPullDistanceFromRay } from '../lib/geometry/pushpull';
+import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
+import { FaceOffsetPreview } from './FaceOffsetPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
@@ -1259,9 +1258,9 @@ function Scene() {
    */
   const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
-  const offsetRef = useRef(createOffsetBinding(kernelHost, bumpKernel));
-  const [offsetPreview, setOffsetPreview] = useState<
-    { faces: FaceId[]; distance: number } | null
+  const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
+  const [faceOffsetPreview, setFaceOffsetPreview] = useState<
+    { faceId: FaceId; distance: number } | null
   >(null);
   /**
    * Live extrusion preview. Held in state, not a ref, because it has to
@@ -1591,13 +1590,16 @@ function Scene() {
     // stopping unconditionally here was why none of them could start on a
     // kernel wall at all.
     if (activeTool === 'offset') {
-      const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
-      if (!grab) return false;
-      const grabPoint = { x: grab.x, y: grab.y, z: grab.z };
-      const group = groupContaining(kernelHost.graph, faceId);
-
-      offsetRef.current.begin(group);
-      setMeasurements('Drag to grow or shrink, then release.');
+      // Reshapes the CLICKED FACE'S OWN boundary by inserting a new offset
+      // ring INSIDE (or around) it, leaving the original untouched — this
+      // is what splits the face into an outer frame and an inner shape,
+      // both independently selectable, matching the app's original Offset
+      // tool exactly. A previous version of this wiring instead inflated
+      // the whole 3D solid uniformly (no split, no second surface) — that
+      // was the wrong operation under the right name; see faceOffset.ts's
+      // own doc comment for the full story.
+      if (!faceOffsetRef.current.begin(faceId)) return false;
+      setMeasurements('Move the cursor to reshape, then release.');
 
       const ndc = new THREE.Vector2();
       const dragRay = new THREE.Raycaster();
@@ -1609,29 +1611,29 @@ function Scene() {
           -((ev.clientY - rect.top) / rect.height) * 2 + 1,
         );
         dragRay.setFromCamera(ndc, camera);
-        // The clicked face's normal is only the REFERENCE axis for reading
-        // the drag as a single scalar — the operation itself still applies
-        // to every face in the group, each along its own normal.
-        const dist = pushPullDistanceFromRay(
-          kernelHost.graph, faceId,
-          {
-            origin: { x: dragRay.ray.origin.x, y: dragRay.ray.origin.y, z: dragRay.ray.origin.z },
-            direction: { x: dragRay.ray.direction.x, y: dragRay.ray.direction.y, z: dragRay.ray.direction.z },
-          },
-          grabPoint,
+        const f = kernelHost.graph.faces.get(faceId);
+        if (!f) return;
+        const plane = new THREE.Plane(
+          new THREE.Vector3(f.plane.normal.x, f.plane.normal.y, f.plane.normal.z),
+          -(f.plane.normal.x * f.plane.point.x + f.plane.normal.y * f.plane.point.y + f.plane.normal.z * f.plane.point.z),
         );
-        if (dist !== null) {
-          offsetRef.current.update(dist);
-          setMeasurements(formatValue(Math.abs(dist), unit, 2));
-          setOffsetPreview({ faces: group, distance: dist });
-        }
+        const hit = new THREE.Vector3();
+        if (!dragRay.ray.intersectPlane(plane, hit)) return;
+
+        const cursor2D = faceOffsetRef.current.projectToSessionPlane({ x: hit.x, y: hit.y, z: hit.z });
+        if (!cursor2D) return;
+        const dist = faceOffsetRef.current.update(cursor2D);
+        setMeasurements(
+          `${formatValue(Math.abs(dist), unit, 2)} ${dist < 0 ? '(inward)' : '(outward)'} — release to confirm.`,
+        );
+        setFaceOffsetPreview({ faceId, distance: dist });
       };
 
       const finish = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', finish);
-        offsetRef.current.commit();
-        setOffsetPreview(null);
+        faceOffsetRef.current.commit();
+        setFaceOffsetPreview(null);
         setMeasurements('');
       };
 
@@ -5970,11 +5972,11 @@ function Scene() {
         edgeLineWidth={edgeLinesThickness}
       />
 
-      {offsetPreview && (
-        <OffsetPreview
+      {faceOffsetPreview && (
+        <FaceOffsetPreview
           graph={kernelHost.graph}
-          faces={offsetPreview.faces}
-          distance={offsetPreview.distance}
+          faceId={faceOffsetPreview.faceId}
+          distance={faceOffsetPreview.distance}
         />
       )}
 
