@@ -45,8 +45,17 @@ export interface KernelGeometryProps {
    */
   onFacePointerDown?: (faceId: FaceId, event: ThreeEvent<PointerEvent>) => boolean | void;
   onEdgeClick?: (edgeId: EdgeId, event: ThreeEvent<MouseEvent>) => void;
+  /**
+   * These four mirror the app's own edge-line settings exactly
+   * (edgeLinesEnabled/Color/Opacity/Thickness in AppContext) — Shape edges
+   * already read them; kernel edges rendered their own hardcoded look
+   * regardless, which is why the settings panel had no visible effect on
+   * anything kernel-derived.
+   */
   showEdges?: boolean;
   edgeColor?: string;
+  edgeOpacity?: number;
+  edgeLineWidth?: number;
   /** Fallback for faces with no material of their own. */
   defaultColor?: string;
   selectedColor?: string;
@@ -67,6 +76,8 @@ export function KernelGeometry({
   onEdgeClick,
   showEdges = true,
   edgeColor = DEFAULT_EDGE,
+  edgeOpacity = 1,
+  edgeLineWidth = 1,
   defaultColor = DEFAULT_FACE,
   selectedColor = DEFAULT_SELECTED,
   opacity = 1,
@@ -187,11 +198,27 @@ export function KernelGeometry({
 
       {showEdges && (
         <>
+          {/*
+            `linewidth` on a raw lineBasicMaterial is mostly ignored by
+            WebGL regardless of platform — a three.js limitation, not
+            something specific to kernel edges. Passed through for parity
+            with the Shape-edge rendering anyway, which has the same ceiling.
+          */}
           <lineSegments geometry={lineGeometry} frustumCulled={false}>
-            <lineBasicMaterial color={edgeColor} transparent opacity={0.55} />
+            <lineBasicMaterial
+              color={edgeColor}
+              transparent
+              opacity={edgeOpacity * 0.55}
+              linewidth={edgeLineWidth}
+            />
           </lineSegments>
           <lineSegments geometry={boundaryGeometry} frustumCulled={false}>
-            <lineBasicMaterial color={edgeColor} />
+            <lineBasicMaterial
+              color={edgeColor}
+              transparent={edgeOpacity < 1}
+              opacity={edgeOpacity}
+              linewidth={edgeLineWidth}
+            />
           </lineSegments>
         </>
       )}

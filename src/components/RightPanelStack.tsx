@@ -688,7 +688,11 @@ export default function RightPanelStack() {
     () => new Map(kernelFaceRows.map(r => [r.id, r])),
     [kernelFaceRows],
   );
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
+  // Opt-IN expand, not opt-in collapse: a group the user has never touched
+  // is never in this set, so it reads as collapsed by default without
+  // needing to know about it in advance — including groups created later,
+  // as the user keeps drawing.
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set());
   const selectedLight = customLights.find(l => l.id === selectedLightId);
   
   // Local state for editing in real-time
@@ -1193,7 +1197,7 @@ export default function RightPanelStack() {
                     Geometry
                   </div>
                   {kernelGroups.map(group => {
-                    const collapsed = collapsedGroups.has(group.id);
+                    const collapsed = !expandedGroups.has(group.id);
                     const rows = group.faces.map(f => kernelRowById.get(f)).filter(Boolean) as typeof kernelFaceRows;
                     const allSelected = group.faces.every(f => selectedFaceIds.includes(f));
                     // A single loose surface needs no group wrapper — it would
@@ -1213,7 +1217,7 @@ export default function RightPanelStack() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setCollapsedGroups(prev => {
+                                setExpandedGroups(prev => {
                                   const next = new Set(prev);
                                   if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
                                   return next;
@@ -1272,7 +1276,20 @@ export default function RightPanelStack() {
                             title={`Area ${row.area.toFixed(2)}${row.holes ? ` · ${row.holes} hole(s)` : ''}`}
                           >
                             <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: row.color || '#d8d4cc' }} />
-                            <span className="flex-1 truncate">{row.label}</span>
+                            {/*
+                              A single-face group's header is skipped above
+                              (a heading over one row would be redundant),
+                              so this is the only place its name can come
+                              from. `group.label` carries the shape
+                              classification ("Rectangle", "Circle",
+                              "Triangle"); `row.label` does not — it falls
+                              back to a generic "Surface N" whenever the
+                              face has no user-given name. Using row.label
+                              unconditionally here was why a lone rectangle
+                              or circle showed as "Surface" instead of its
+                              real name.
+                            */}
+                            <span className="flex-1 truncate">{single ? group.label : row.label}</span>
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleFaceHidden(kernelHost.graph, row.id); bumpKernel(); }}
                               className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"

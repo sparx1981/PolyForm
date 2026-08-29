@@ -64,6 +64,9 @@ import { rankSnap } from '../tools/tuning';
 import { paintFace, deleteFaceAndEdges, groupContaining } from '../tools/kernelSelection';
 import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
+import { createOffsetBinding } from '../tools/kernelOffset';
+import { OffsetPreview } from './OffsetPreview';
+import { pushPullDistanceFromRay } from '../lib/geometry/pushpull';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
@@ -1256,6 +1259,10 @@ function Scene() {
    */
   const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
+  const offsetRef = useRef(createOffsetBinding(kernelHost, bumpKernel));
+  const [offsetPreview, setOffsetPreview] = useState<
+    { faces: FaceId[]; distance: number } | null
+  >(null);
   /**
    * Live extrusion preview. Held in state, not a ref, because it has to
    * re-render on every pointer move — the whole point is that the user can
@@ -1583,6 +1590,56 @@ function Scene() {
     // starts (rectangle, circle, line, triangle...) are actually handled —
     // stopping unconditionally here was why none of them could start on a
     // kernel wall at all.
+    if (activeTool === 'offset') {
+      const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
+      if (!grab) return false;
+      const grabPoint = { x: grab.x, y: grab.y, z: grab.z };
+      const group = groupContaining(kernelHost.graph, faceId);
+
+      offsetRef.current.begin(group);
+      setMeasurements('Drag to grow or shrink, then release.');
+
+      const ndc = new THREE.Vector2();
+      const dragRay = new THREE.Raycaster();
+
+      const onMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect();
+        ndc.set(
+          ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+          -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        dragRay.setFromCamera(ndc, camera);
+        // The clicked face's normal is only the REFERENCE axis for reading
+        // the drag as a single scalar — the operation itself still applies
+        // to every face in the group, each along its own normal.
+        const dist = pushPullDistanceFromRay(
+          kernelHost.graph, faceId,
+          {
+            origin: { x: dragRay.ray.origin.x, y: dragRay.ray.origin.y, z: dragRay.ray.origin.z },
+            direction: { x: dragRay.ray.direction.x, y: dragRay.ray.direction.y, z: dragRay.ray.direction.z },
+          },
+          grabPoint,
+        );
+        if (dist !== null) {
+          offsetRef.current.update(dist);
+          setMeasurements(formatValue(Math.abs(dist), unit, 2));
+          setOffsetPreview({ faces: group, distance: dist });
+        }
+      };
+
+      const finish = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', finish);
+        offsetRef.current.commit();
+        setOffsetPreview(null);
+        setMeasurements('');
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', finish, { once: true });
+      return true;
+    }
+
     if (activeTool !== 'pushpull') return false;
     const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
     if (!grab) return false;
@@ -5907,7 +5964,19 @@ function Scene() {
         selectedFaces={kernelSelectedSet}
         onFaceClick={handleKernelFaceClick}
         onFacePointerDown={handleKernelFacePointerDown}
+        showEdges={edgeLinesEnabled}
+        edgeColor={edgeLinesColor}
+        edgeOpacity={edgeLinesOpacity}
+        edgeLineWidth={edgeLinesThickness}
       />
+
+      {offsetPreview && (
+        <OffsetPreview
+          graph={kernelHost.graph}
+          faces={offsetPreview.faces}
+          distance={offsetPreview.distance}
+        />
+      )}
 
       {pushPullPreview && (
         <PushPullPreview
