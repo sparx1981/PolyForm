@@ -11,7 +11,7 @@
  * bumps the render revision afterwards.
  */
 
-import type { FaceId, Graph, Vec3 } from '../lib/geometry/types';
+import type { EdgeId, FaceId, Graph, Vec3 } from '../lib/geometry/types';
 import { loopPoints, removeFace } from '../lib/geometry/topology';
 import { planeBasis, projectToBasis } from '../lib/geometry/math';
 import { signedArea } from '../lib/geometry/polygon';
@@ -299,8 +299,54 @@ export interface FaceGroup {
  * edge has exactly two faces. That is the difference between "Solid" and
  * "Surfaces" in the list.
  */
+/**
+ * The real invariant: a face using an edge as one of its HOLES must never
+ * connect to anything else through that specific edge — a hole means
+ * nothing structurally continues there, for whichever faces are on the
+ * other side of it. Other faces sharing the SAME edge via their own OUTER
+ * loops are unaffected and still union with each other normally.
+ *
+ * An earlier version of this excluded a specific (frame, panel) PAIR
+ * instead. That was too narrow: once the panel is push/pulled, each new
+ * wall of the resulting small box sits on one of those same boundary
+ * edges — so that edge now has a THIRD use (the wall's own outer loop),
+ * and excluding only the frame-panel pair left frame free to union with
+ * the WALL directly, which — since the wall is already connected to the
+ * rest of that little box — silently reconnected the frame to the whole
+ * thing anyway. Blocking the hole-loop's OWN participation in any union,
+ * regardless of which other face is on the other end, closes that gap.
+ *
+ * This is what makes a flat panel drawn to exactly fill a hole — a window
+ * outline on a wall, or the inner shape an offset produces — read as its
+ * OWN standalone object in the Outliner, not nested inside the surface it
+ * sits in, and stay that way once the panel is push/pulled into its own
+ * small solid.
+ *
+ * A face split by a line into two pieces is unaffected: the shared edge
+ * there is used by both pieces via their own OUTER loops, with no hole
+ * involved at all, so it unions exactly as before.
+ */
+function facesThatMayUnionViaEdge(g: Graph, edgeId: EdgeId): FaceId[] {
+  const e = g.edges.get(edgeId);
+  if (!e) return [];
+  const out: FaceId[] = [];
+  for (const use of e.uses) {
+    const loop = g.loops.get(use.loop);
+    if (!loop || !g.faces.has(loop.face)) continue;
+    const face = g.faces.get(loop.face)!;
+    // Only an OUTER-loop use may participate. A face referencing this edge
+    // through one of its innerLoops (a hole) contributes nothing here — a
+    // hole is precisely the absence of a structural connection.
+    if (loop.id === face.outerLoop) out.push(loop.face);
+  }
+  return out;
+}
+
 export function faceGroups(g: Graph): FaceGroup[] {
-  // Union-find over faces, joined wherever they share an edge.
+  // Union-find over faces, joined wherever they share an edge THROUGH THEIR
+  // OUTER BOUNDARIES. A face using that same edge as one of its holes never
+  // participates — see facesThatMayUnionViaEdge's own doc comment for why
+  // that has to be the actual invariant, not merely excluding one pair.
   const parent = new Map<FaceId, FaceId>();
   const find = (x: FaceId): FaceId => {
     let r = x;
@@ -321,12 +367,8 @@ export function faceGroups(g: Graph): FaceGroup[] {
 
   for (const id of g.faces.keys()) parent.set(id, id);
 
-  for (const e of g.edges.values()) {
-    const faces: FaceId[] = [];
-    for (const use of e.uses) {
-      const loop = g.loops.get(use.loop);
-      if (loop && g.faces.has(loop.face)) faces.push(loop.face);
-    }
+  for (const eid of g.edges.keys()) {
+    const faces = facesThatMayUnionViaEdge(g, eid);
     for (let i = 1; i < faces.length; i++) union(faces[0]!, faces[i]!);
   }
 

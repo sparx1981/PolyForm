@@ -6,6 +6,8 @@ import {
   clearFaceMaterial, facesByMaterial, faceGroups, groupContaining,
   setGroupHidden, deleteGroupFacesAndEdges,
 } from './kernelSelection';
+import { insertFaceOffset } from '../lib/geometry/faceOffset';
+import { planeBasis } from '../lib/geometry/math';
 import { pushPull } from '../lib/geometry/pushpull';
 import { derive } from '../lib/geometry/derive';
 import { vec3 } from '../lib/geometry/math';
@@ -496,5 +498,110 @@ describe('group-level hide and delete', () => {
     expect(h.graph.faces.size).toBe(1); // the other half of the split survives
     expect(h.graph.edges.size).toBeLessThan(before);
     expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+});
+
+describe('grouping excludes a panel that exactly fills a hole', () => {
+  it('an offset panel is its OWN group, separate from the frame it sits in', () => {
+    // The bug this guards: drawing a window outline on a wall (or offsetting
+    // a face, which produces the same hole+panel structure) made the new
+    // panel nest inside the SAME Outliner group as the surface it sits in,
+    // since they share the hole's boundary edges. It should read as its own
+    // standalone object until actually joined into a solid.
+    const h = host(); square(h, 4);
+    const id = only(h);
+    const r = insertFaceOffset(
+      { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex }, id, -1,
+    );
+    derive(h.graph, r.touched, h.deriveOptions);
+
+    const groups = faceGroups(h.graph);
+    expect(groups).toHaveLength(2);
+    expect(groups.every(g => g.faces.length === 1)).toBe(true);
+  });
+
+  it('a window drawn on a box wall is its own group, not nested in the box', () => {
+    // The exact scenario reported: draw a rectangle on a vertical wall of an
+    // already-extruded box. The new rectangle shares the wall's new hole
+    // boundary, but should not join the box's group.
+    const h = host();
+    square(h, 4);
+    const r0 = pushPull(
+      { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex }, only(h), 2, { tolerances: h.tolerances },
+    );
+    derive(h.graph, r0.touched, h.deriveOptions);
+
+    const wall = [...h.graph.faces.values()].find(f => Math.abs(f.plane.normal.y) < 0.5)!;
+    // A small window rectangle, well inside the wall's own boundary.
+    const basis = planeBasis(wall.plane);
+    const corners2D = [vec3(-1, 0.5, 0), vec3(1, 0.5, 0), vec3(1, 1.5, 0), vec3(-1, 1.5, 0)]
+      .map(p => ({ x: p.x, y: p.y })); // placeholder; real geometry below uses 3D directly
+    void corners2D; void basis;
+
+    // Build the window directly in 3D, offset inward from the wall's own
+    // boundary along whichever two axes span it (the wall spans x in
+    // [0,4], y in [0,2] at z=0 or z=4 for THIS box).
+    const wp = wall.plane.point;
+    const onZ0 = Math.abs(wp.z) < 0.01;
+    const z = onZ0 ? 0 : 4;
+    const win = [
+      vec3(1, 0.5, z), vec3(3, 0.5, z), vec3(3, 1.5, z), vec3(1, 1.5, z),
+    ];
+    for (let i = 0; i < 4; i++) h.commitSegment(win[i]!, win[(i+1)%4]!);
+
+    const groups = faceGroups(h.graph);
+    const boxGroup = groups.find(g => g.faces.length > 1)!;
+    const windowGroup = groups.find(g => g.faces.length === 1 &&
+      g.faces.some(fid => h.graph.faces.get(fid)!.innerLoops.length === 0 &&
+        Math.abs(h.graph.faces.get(fid)!.plane.point.z - z) < 0.01 &&
+        Math.abs(h.graph.faces.get(fid)!.plane.point.x - 2) < 0.01));
+    expect(boxGroup).toBeDefined();
+    expect(windowGroup).toBeDefined();
+    expect(boxGroup!.faces).not.toEqual(expect.arrayContaining(windowGroup!.faces));
+  });
+
+  it('once the panel is push/pulled, it becomes its own solid group', () => {
+    const h = host(); square(h, 4);
+    const id = only(h);
+    const r = insertFaceOffset(
+      { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex }, id, -1,
+    );
+    derive(h.graph, r.touched, h.deriveOptions);
+
+    const inner = [...h.graph.faces.values()].find(f => f.innerLoops.length === 0)!;
+    const pp = pushPull(
+      { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex }, inner.id, 1, { tolerances: h.tolerances },
+    );
+    derive(h.graph, pp.touched, h.deriveOptions);
+
+    const groups = faceGroups(h.graph);
+    // The extruded panel (now a small box: 6 faces) forms its own group,
+    // still separate from the frame — via its OWN new (non-coplanar) walls,
+    // not the excluded hole edge.
+    const panelGroup = groups.find(g => g.faces.length === 6);
+    expect(panelGroup).toBeDefined();
+    const frameGroup = groups.find(g => g.faces.some(fid => h.graph.faces.get(fid)!.innerLoops.length > 0));
+    expect(frameGroup).toBeDefined();
+    expect(panelGroup!.faces).not.toEqual(expect.arrayContaining(frameGroup!.faces));
+  });
+
+  it('does NOT affect a face split by a line — that still stays one group', () => {
+    // The distinguishing case this fix must not break: a shared edge that
+    // is only a PARTIAL boundary segment of each piece (not one piece's
+    // ENTIRE outer loop matching the other's hole) still unions normally.
+    const h = host(); square(h, 4);
+    h.commitSegment(vec3(0,0,0), vec3(4,0,4));
+    const groups = faceGroups(h.graph);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.faces).toHaveLength(2);
+  });
+
+  it('does not affect a normal box with no holes at all', () => {
+    const h = host(); square(h, 4);
+    const r = pushPull(
+      { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex }, only(h), 2, { tolerances: h.tolerances },
+    );
+    derive(h.graph, r.touched, h.deriveOptions);
+    expect(faceGroups(h.graph)).toHaveLength(1);
   });
 });
