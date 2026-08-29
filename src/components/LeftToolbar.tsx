@@ -65,7 +65,6 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
         "toolbar-btn relative group hover:z-50",
         isActive && "toolbar-btn-active"
       )}
-      title={label}
     >
       {icon}
       <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
@@ -232,11 +231,13 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       >
         <button 
           onClick={() => setIsAIQueryOpen(true)}
-          className="toolbar-btn mb-2 transition-colors"
+          className="toolbar-btn mb-2 transition-colors group relative"
           style={{ color: bannerColor }}
-          title="AI Model Query"
         >
           <Sparkles size={20} />
+          <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+            AI Model Query
+          </div>
         </button>
 
         <AnimatePresence>
@@ -246,7 +247,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-50",
+                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
                 theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
               )}
             >
@@ -300,12 +301,26 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
         <button 
           onClick={() => setActiveTool('line')}
           className={cn(
-            "toolbar-btn transition-colors",
+            "toolbar-btn transition-colors group relative",
             (activeTool === 'line' || activeTool === 'poly' || activeTool === 'arc') && "toolbar-btn-active"
           )}
-          title="Line, Poly & Arc Tools"
         >
           {activeTool === 'poly' ? <Pentagon size={20} /> : activeTool === 'arc' ? <Spline size={20} /> : <PenLine size={20} />}
+          {/*
+            No native title here (see ToolButton's own comment): the group
+            icon and its flyout are both visible at once whenever this
+            tool group is hovered, so a browser-native tooltip and this
+            popover ended up overlapping — a native tooltip renders at the
+            OS/browser-chrome level and simply cannot be reordered or
+            suppressed by any CSS z-index. This custom tooltip is a normal
+            page element instead, so it participates in the SAME stacking
+            order as the flyout beside it and never fights it for space.
+          */}
+          {!isLinePopoutOpen && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+              Line, Poly & Arc Tools
+            </div>
+          )}
         </button>
 
         <AnimatePresence>
@@ -315,7 +330,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-50",
+                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
                 theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
               )}
             >
@@ -365,12 +380,16 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       >
         <button 
           className={cn(
-            "toolbar-btn transition-colors",
+            "toolbar-btn transition-colors group relative",
             is3DActive && "toolbar-btn-active"
           )}
-          title="3D Primitives"
         >
           <Cone size={20} />
+          {!is3DPopoutOpen && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+              3D Primitives
+            </div>
+          )}
         </button>
 
         <AnimatePresence>
@@ -380,7 +399,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-50",
+                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
                 theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
               )}
             >
@@ -447,12 +466,16 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
         <button 
           onClick={() => setActiveTool('bevel')}
           className={cn(
-            "toolbar-btn transition-colors",
+            "toolbar-btn transition-colors group relative",
             activeTool === 'bevel' && "toolbar-btn-active"
           )}
-          title="Bevel Tool"
         >
           <CornerUpRight size={20} />
+          {!isBevelPopoutOpen && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+              Bevel Tool
+            </div>
+          )}
         </button>
 
         <AnimatePresence>
@@ -462,7 +485,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-50",
+                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
                 theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
               )}
             >
@@ -504,12 +527,16 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
         <button 
           onClick={() => setActiveTool('tape')}
           className={cn(
-            "toolbar-btn transition-colors",
+            "toolbar-btn transition-colors group relative",
             activeTool === 'tape' && "toolbar-btn-active"
           )}
-          title="Measure Tool"
         >
           <Ruler size={20} />
+          {!isMeasurePopoutOpen && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+              Measure Tool
+            </div>
+          )}
         </button>
 
         <AnimatePresence>
@@ -519,7 +546,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[190px] z-50",
+                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[190px] z-[150]",
                 theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
               )}
             >
@@ -568,10 +595,9 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           "toolbar-btn relative group transition-colors",
           isWorldViewActive && "bg-trimble-blue/10"
         )}
-        title="WorldView Geolocation"
       >
         <Globe size={20} className={isWorldViewActive ? "text-trimble-blue" : "text-gray-500"} />
-        <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-modus-2">
+        <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
           WorldView Geolocation
         </div>
       </button>
@@ -587,10 +613,9 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
                 key={scriptId}
                 onClick={() => runPinnedScript(scriptId)}
                 className="toolbar-btn relative group text-trimble-blue"
-                title={script.name}
               >
                 <Code size={20} />
-                <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-modus-2">
+                <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
                   {script.name}
                 </div>
               </button>

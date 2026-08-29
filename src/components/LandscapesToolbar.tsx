@@ -590,7 +590,7 @@ export default function LandscapesToolbar() {
 
       {/* Popout Context Configuration Panel */}
       {activeCategory && (
-        <div className={`absolute left-full ml-2 top-0 ${activeCategory === 'style' || activeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl z-50 text-xs ${
+        <div className={`absolute left-full ml-2 top-0 ${activeCategory === 'style' || activeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl z-[150] text-xs ${
           theme === 'dark' ? 'bg-gray-900/95 border-gray-700 text-gray-200' : 'bg-white/95 border-gray-200 text-gray-800'
         }`}>
           <div className="flex items-center justify-between font-bold pb-2 mb-2 border-b border-gray-200 dark:border-gray-800">

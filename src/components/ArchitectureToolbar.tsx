@@ -71,7 +71,7 @@ export default function ArchitectureToolbar() {
       id="architecture-toolbar"
       aria-label="Basic Architecture Toolbar"
       className={cn(
-        "w-12 border-r flex flex-col items-center py-2 gap-1 z-30 hover:z-50 transition-colors duration-300 select-none shadow-sm relative",
+        "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
         theme === 'dark' ? "bg-gray-850 border-gray-700" : "bg-slate-50/90 border-gray-200"
       )}
     >
