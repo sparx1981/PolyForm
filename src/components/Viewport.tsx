@@ -6599,9 +6599,10 @@ function Scene() {
       )}
 
       {previewShape && (
-        <mesh 
+        <mesh
           position={previewShape.position}
           quaternion={new THREE.Quaternion(...previewShape.quaternion)}
+          renderOrder={5}
         >
           {previewShape.type === 'circle' || previewShape.type === 'line' || previewShape.type === 'triangle' ? (
             <cylinderGeometry args={previewShape.args} />
@@ -6618,14 +6619,28 @@ function Scene() {
           ) : (
             <boxGeometry args={previewShape.args} />
           )}
+          {/*
+            depthTest disabled deliberately: this preview relied only on a
+            small (0.005 unit) manual offset along the drawing normal to sit
+            in front of whatever surface it is drawn on. That was enough
+            when every surface rendered at its exact depth, but kernel faces
+            now carry their own polygonOffset (needed so a coplanar edge
+            line reliably wins its OWN depth fight — see KernelGeometry).
+            The two small offsets could come out comparably sized depending
+            on view angle and distance, so which one "won" per pixel became
+            inconsistent — occasional flicker while drawing on a kernel
+            surface, worst on vertical faces viewed at a shallow angle. A
+            live preview has no reason to ever lose a depth fight against
+            the thing it is being drawn onto.
+          */}
           {previewShape.type === 'door' || previewShape.type === 'window' ? (
             <>
-              <meshBasicMaterial attach="material-0" color="#ffffff" transparent opacity={0.7} />
-              <meshBasicMaterial attach="material-1" color="#bae6fd" transparent opacity={0.25} />
-              <meshBasicMaterial attach="material-2" color="#cbd5e1" transparent opacity={0.7} />
+              <meshBasicMaterial attach="material-0" color="#ffffff" transparent opacity={0.7} depthTest={false} />
+              <meshBasicMaterial attach="material-1" color="#bae6fd" transparent opacity={0.25} depthTest={false} />
+              <meshBasicMaterial attach="material-2" color="#cbd5e1" transparent opacity={0.7} depthTest={false} />
             </>
           ) : (
-            <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} />
+            <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} depthTest={false} />
           )}
         </mesh>
       )}
@@ -8866,7 +8881,7 @@ export default function Viewport() {
           
           {isPerspectiveOpen && (
             <div className={cn(
-              "absolute top-full left-0 mt-1 w-32 rounded border shadow-lg overflow-hidden z-[60]",
+              "absolute top-full left-0 mt-1 w-32 rounded border shadow-lg overflow-hidden z-[150]",
               theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
             )}>
               {['Plan', 'Front Elevation', 'Rear Elevation', 'Left Elevation', 'Right Elevation'].map((view) => (

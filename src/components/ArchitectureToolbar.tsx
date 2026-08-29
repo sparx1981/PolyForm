@@ -44,7 +44,7 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonP
       {icon}
       
       {/* Tooltip */}
-      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[100] shadow-xl border border-gray-700 transition-opacity">
+      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-gray-700 transition-opacity">
         <div className="font-semibold flex items-center gap-1.5">
           <span>{label}</span>
           {hotkey && <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">({hotkey})</span>}

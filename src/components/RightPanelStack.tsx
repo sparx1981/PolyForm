@@ -1065,7 +1065,7 @@ export default function RightPanelStack() {
                     </button>
                     {isMatPickerOpen && (
                       <div className={cn(
-                        "absolute top-full left-0 right-0 mt-1 p-2 rounded-lg border shadow-xl grid grid-cols-5 gap-1.5 z-[60]",
+                        "absolute top-full left-0 right-0 mt-1 p-2 rounded-lg border shadow-xl grid grid-cols-5 gap-1.5 z-[150]",
                         theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
                       )}>
                         {COLORS.map(c => (

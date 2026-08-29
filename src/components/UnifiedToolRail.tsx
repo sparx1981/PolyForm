@@ -1337,7 +1337,7 @@ export default function UnifiedToolRail() {
                             {tool.icon}
 
                             {/* Floating Rich Tooltip */}
-                            <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[100] shadow-xl border border-gray-700 transition-opacity">
+                            <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-gray-700 transition-opacity">
                               <div className="font-semibold flex items-center gap-1.5">
                                 <span>{tool.label}</span>
                                 {tool.hotkey && (

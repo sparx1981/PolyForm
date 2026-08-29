@@ -23,6 +23,19 @@ import { cn } from '../../lib/utils';
 export const LAYER = {
   /** Inline panels attached to the toolbars. */
   panel: 100,
+  /**
+   * Tooltips and expanding icon menus anchored to a toolbar icon — a
+   * hover label, a submenu, a colour-picker flyout. Always above every
+   * toolbar's own body, regardless of which toolbar it belongs to or its
+   * position in the DOM.
+   *
+   * These previously used whatever raw z-index literal seemed big enough
+   * at the time — some tooltips at 100, some flyouts at 60 — so a flyout
+   * from one toolbar could render behind an adjacent toolbar's tooltip,
+   * or vice versa, depending on DOM order. One shared value here is what
+   * actually guarantees "always in front," not a bigger-sounding number.
+   */
+  flyout: 150,
   /** Standard dialogs. */
   modal: 200,
   /** A dialog raised BY a dialog — confirmations, pickers. */

@@ -68,7 +68,7 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
       title={label}
     >
       {icon}
-      <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[100] shadow-modus-2">
+      <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
         {label}
       </div>
     </button>
