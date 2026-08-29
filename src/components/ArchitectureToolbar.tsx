@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { 
   Building2, 
   DoorOpen, 
@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
 import { cn } from '../lib/utils';
+import { FlyoutPortal } from './ui/FlyoutPortal';
 
 interface ArchToolButtonProps {
   tool: ToolType;
@@ -26,37 +27,50 @@ interface ArchToolButtonProps {
 function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonProps) {
   const { activeTool, setActiveTool, bannerColor, theme, toolbarVisibility } = useApp();
   const isActive = activeTool === tool;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
 
   if (toolbarVisibility[tool] === false) return null;
 
   return (
     <button
+      ref={buttonRef}
       id={`arch-tool-${tool}`}
       onClick={() => setActiveTool(tool)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={cn(
-        "toolbar-btn relative group hover:z-50 flex items-center justify-center transition-all",
+        "toolbar-btn relative flex items-center justify-center transition-all",
         isActive && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
         theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
       )}
       style={isActive ? { borderColor: bannerColor, color: bannerColor } : undefined}
     >
       {icon}
-      
+
       {/*
         No native title attribute (see the equivalent ToolButton/UnifiedToolRail
         comments): it renders at the OS/browser-chrome level, outside any CSS
         stacking context, so it cannot be reordered or suppressed relative to
         this custom tooltip — they simply compete for the same space with no
         way to referee it.
+
+        Portaled to document.body: this toolbar is a SIBLING of LeftToolbar
+        and LandscapesToolbar in App.tsx, and a child's z-index can never
+        escape a losing tie between its own parent's container and a
+        sibling toolbar's — see FlyoutPortal's own doc comment.
       */}
-      {/* Tooltip */}
-      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-gray-700 transition-opacity">
-        <div className="font-semibold flex items-center gap-1.5">
-          <span>{label}</span>
-          {hotkey && <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">({hotkey})</span>}
-        </div>
-        <div className="text-[10px] text-gray-400 font-normal">{subtitle}</div>
-      </div>
+      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+        {hovered && (
+          <div className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none">
+            <div className="font-semibold flex items-center gap-1.5">
+              <span>{label}</span>
+              {hotkey && <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">({hotkey})</span>}
+            </div>
+            <div className="text-[10px] text-gray-400 font-normal">{subtitle}</div>
+          </div>
+        )}
+      </FlyoutPortal>
     </button>
   );
 }

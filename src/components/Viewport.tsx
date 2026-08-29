@@ -65,6 +65,7 @@ import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, gr
 import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
+import { createChamferBinding } from '../tools/kernelChamfer';
 import { FaceOffsetPreview } from './FaceOffsetPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
@@ -1259,6 +1260,7 @@ function Scene() {
   const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
   const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
+  const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
   const [faceOffsetPreview, setFaceOffsetPreview] = useState<
     { faceId: FaceId; distance: number } | null
   >(null);
@@ -1600,6 +1602,65 @@ function Scene() {
     // starts (rectangle, circle, line, triangle...) are actually handled —
     // stopping unconditionally here was why none of them could start on a
     // kernel wall at all.
+    if (activeTool === 'bevel') {
+      // Chamfers the whole solid the clicked face belongs to — the same
+      // click-selects-the-group resolution used everywhere else, since a
+      // uniform chamfer is inherently a whole-solid operation, not a
+      // single-face one.
+      if (activeBevelType === 'radius') {
+        // Rounded edges need an entirely different construction (arc
+        // tessellation between adjacent faces at every edge, not a single
+        // flat bevel quad) — deliberately not attempted yet. Saying so
+        // plainly here beats a silent no-op that looks like a bug.
+        setMeasurements('Rounded edges are not supported for these objects yet — try Chamfer.');
+        window.setTimeout(() => setMeasurements(''), 2500);
+        return false;
+      }
+
+      const group = groupContaining(kernelHost.graph, faceId);
+      if (!chamferRef.current.begin(group)) {
+        setMeasurements('This surface is not part of a solid that can be chamfered.');
+        window.setTimeout(() => setMeasurements(''), 2500);
+        return false;
+      }
+      setMeasurements('Move the cursor to set the chamfer amount, then release.');
+
+      let dragStartClientX = 0;
+      let dragStarted = false;
+
+      const onMove = (ev: PointerEvent) => {
+        if (!dragStarted) {
+          dragStartClientX = ev.clientX;
+          dragStarted = true;
+          return;
+        }
+        const deltaPx = ev.clientX - dragStartClientX;
+        // Same screen-space-drag feel as the existing Shape-based bevel
+        // tool, scaled to a sane default range rather than the old
+        // per-shape maxRadius (chamfer here applies to a whole solid, not
+        // one shape's own bounds).
+        const amount = Math.max(0, deltaPx * 0.002);
+        chamferRef.current.update(amount);
+        setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
+      };
+
+      const finish = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', finish);
+        const result = chamferRef.current.commit();
+        if (!result.ok) {
+          setMeasurements(result.reason ? `Chamfer failed: ${result.reason}` : 'Chamfer failed.');
+          window.setTimeout(() => setMeasurements(''), 3000);
+        } else {
+          setMeasurements('');
+        }
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', finish, { once: true });
+      return true;
+    }
+
     if (activeTool === 'offset') {
       // Reshapes the CLICKED FACE'S OWN boundary by inserting a new offset
       // ring INSIDE (or around) it, leaving the original untouched — this
@@ -1701,7 +1762,7 @@ function Scene() {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', finish, { once: true });
     return true;
-  }, [activeTool, kernelHost, setMeasurements, camera, gl, unit]);
+  }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);

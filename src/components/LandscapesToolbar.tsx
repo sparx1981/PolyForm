@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
+import { FlyoutPortal } from './ui/FlyoutPortal';
 import { 
   Mountain, 
   Layers, 
@@ -44,15 +45,20 @@ interface LandscapeToolButtonProps {
 
 function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, badge, hotkey }: LandscapeToolButtonProps) {
   const { bannerColor, theme, toolbarVisibility } = useApp();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
 
   if (toolbarVisibility && toolbarVisibility[tool] === false) return null;
 
   return (
     <button
+      ref={buttonRef}
       id={`landscape-tool-${tool}`}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={cn(
-        "toolbar-btn relative group hover:z-50 flex items-center justify-center transition-all",
+        "toolbar-btn relative flex items-center justify-center transition-all",
         active && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
         theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
       )}
@@ -73,14 +79,24 @@ function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, bad
         )}
       </div>
 
-      {/* Standard Floating Tooltip matching Basic and Architecture toolbars */}
-      <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-gray-700 transition-opacity">
-        <div className="font-semibold flex items-center gap-1.5">
-          <span>{label}</span>
-          {hotkey && <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">({hotkey})</span>}
-        </div>
-        {subtitle && <div className="text-[10px] text-gray-400 font-normal mt-0.5">{subtitle}</div>}
-      </div>
+      {/*
+        Standard Floating Tooltip matching Basic and Architecture toolbars.
+        Portaled to document.body: this toolbar is a SIBLING of LeftToolbar
+        and ArchitectureToolbar in App.tsx, and a child's z-index can never
+        escape a losing tie between its own parent's container and a
+        sibling toolbar's — see FlyoutPortal's own doc comment.
+      */}
+      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+        {hovered && (
+          <div className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none">
+            <div className="font-semibold flex items-center gap-1.5">
+              <span>{label}</span>
+              {hotkey && <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">({hotkey})</span>}
+            </div>
+            {subtitle && <div className="text-[10px] text-gray-400 font-normal mt-0.5">{subtitle}</div>}
+          </div>
+        )}
+      </FlyoutPortal>
     </button>
   );
 }

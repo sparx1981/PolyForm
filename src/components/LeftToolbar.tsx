@@ -36,7 +36,8 @@ import {
   ToggleLeft,
   ToggleRight
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { FlyoutPortal } from './ui/FlyoutPortal';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
@@ -52,24 +53,33 @@ interface ToolButtonProps {
 function ToolButton({ tool, icon, label }: ToolButtonProps) {
   const { activeTool, setActiveTool, toolbarVisibility, setOpenMaterialsSignal } = useApp();
   const isActive = activeTool === tool;
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
 
   if (toolbarVisibility[tool] === false) return null;
 
   return (
     <button
+      ref={buttonRef}
       onClick={() => {
         setActiveTool(tool);
         if (tool === 'paint') setOpenMaterialsSignal((s: number) => s + 1);
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={cn(
-        "toolbar-btn relative group hover:z-50",
+        "toolbar-btn relative",
         isActive && "toolbar-btn-active"
       )}
     >
       {icon}
-      <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
-        {label}
-      </div>
+      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+        {hovered && (
+          <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            {label}
+          </div>
+        )}
+      </FlyoutPortal>
     </button>
   );
 }
@@ -108,10 +118,15 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
   } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAIPopoutOpen, setIsAIPopoutOpen] = useState(false);
+  const aiGroupRef = useRef<HTMLDivElement>(null);
   const [is3DPopoutOpen, setIs3DPopoutOpen] = useState(false);
+  const threeDGroupRef = useRef<HTMLDivElement>(null);
   const [isLinePopoutOpen, setIsLinePopoutOpen] = useState(false);
+  const lineGroupRef = useRef<HTMLDivElement>(null);
   const [isBevelPopoutOpen, setIsBevelPopoutOpen] = useState(false);
+  const bevelGroupRef = useRef<HTMLDivElement>(null);
   const [isMeasurePopoutOpen, setIsMeasurePopoutOpen] = useState(false);
+  const measureGroupRef = useRef<HTMLDivElement>(null);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hover3DTimeout, setHover3DTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hoverLineTimeout, setHoverLineTimeout] = useState<NodeJS.Timeout|null>(null);
@@ -226,64 +241,74 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
     )}>
       <div 
         className="relative"
+        ref={aiGroupRef}
         onMouseEnter={handleAIEnter}
         onMouseLeave={handleAILeave}
       >
         <button 
           onClick={() => setIsAIQueryOpen(true)}
-          className="toolbar-btn mb-2 transition-colors group relative"
+          className="toolbar-btn mb-2 transition-colors relative"
           style={{ color: bannerColor }}
         >
           <Sparkles size={20} />
-          <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
-            AI Model Query
-          </div>
         </button>
 
-        <AnimatePresence>
-          {isAIPopoutOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
-                theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-              )}
-            >
-              <button 
-                onClick={() => setIsAIQueryOpen(true)}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
-                )}
-              >
-                <Sparkles size={16} style={{ color: bannerColor }} />
-                <span>AI Query</span>
-              </button>
-              <button 
-                onClick={() => setIsAIRendererOpen(true)}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
-                )}
-              >
-                <Search size={16} style={{ color: bannerColor }} />
-                <span>AI Renderer</span>
-              </button>
-              <button 
-                onClick={() => setIsAIGenerateOpen(true)}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
-                )}
-              >
-                <Wand2 size={16} style={{ color: bannerColor }} />
-                <span>AI Generate</span>
-              </button>
-            </motion.div>
+        <FlyoutPortal anchorRef={aiGroupRef} open={!isAIPopoutOpen}>
+          {!isAIPopoutOpen && (
+            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+              AI Model Query
+            </div>
           )}
-        </AnimatePresence>
+        </FlyoutPortal>
+
+        <FlyoutPortal anchorRef={aiGroupRef} open={isAIPopoutOpen}>
+          <div onMouseEnter={handleAIEnter} onMouseLeave={handleAILeave}>
+            <AnimatePresence>
+              {isAIPopoutOpen && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className={cn(
+                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px]",
+                    theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                  )}
+                >
+                  <button 
+                    onClick={() => setIsAIQueryOpen(true)}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
+                    )}
+                  >
+                    <Sparkles size={16} style={{ color: bannerColor }} />
+                    <span>AI Query</span>
+                  </button>
+                  <button 
+                    onClick={() => setIsAIRendererOpen(true)}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
+                    )}
+                  >
+                    <Search size={16} style={{ color: bannerColor }} />
+                    <span>AI Renderer</span>
+                  </button>
+                  <button 
+                    onClick={() => setIsAIGenerateOpen(true)}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
+                    )}
+                  >
+                    <Wand2 size={16} style={{ color: bannerColor }} />
+                    <span>AI Generate</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </FlyoutPortal>
       </div>
       
       <ToolButton tool="select" icon={<MousePointer2 size={20} />} label="Select (Space)" />
@@ -295,78 +320,93 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       
       <div 
         className="relative"
+        ref={lineGroupRef}
         onMouseEnter={handleLineEnter}
         onMouseLeave={handleLineLeave}
       >
         <button 
           onClick={() => setActiveTool('line')}
           className={cn(
-            "toolbar-btn transition-colors group relative",
+            "toolbar-btn transition-colors relative",
             (activeTool === 'line' || activeTool === 'poly' || activeTool === 'arc') && "toolbar-btn-active"
           )}
         >
           {activeTool === 'poly' ? <Pentagon size={20} /> : activeTool === 'arc' ? <Spline size={20} /> : <PenLine size={20} />}
-          {/*
-            No native title here (see ToolButton's own comment): the group
-            icon and its flyout are both visible at once whenever this
-            tool group is hovered, so a browser-native tooltip and this
-            popover ended up overlapping — a native tooltip renders at the
-            OS/browser-chrome level and simply cannot be reordered or
-            suppressed by any CSS z-index. This custom tooltip is a normal
-            page element instead, so it participates in the SAME stacking
-            order as the flyout beside it and never fights it for space.
-          */}
+        </button>
+
+        {/*
+          No native title here (see ToolButton's own comment): the group
+          icon and its flyout are both visible at once whenever this
+          tool group is hovered, so a browser-native tooltip and this
+          popover ended up overlapping — a native tooltip renders at the
+          OS/browser-chrome level and simply cannot be reordered or
+          suppressed by any CSS z-index. This custom tooltip is a normal
+          page element instead, so it participates in the SAME stacking
+          order as the flyout beside it and never fights it for space.
+
+          Both this tooltip and the flyout below are portaled: LeftToolbar,
+          ArchitectureToolbar and LandscapesToolbar are SIBLINGS in
+          App.tsx, so a z-index on either only ever wins ties within its
+          OWN toolbar's stacking context — it can still lose outright to a
+          sibling toolbar that happens to render later in the DOM. Portaling
+          to document.body sidesteps that entirely.
+        */}
+        <FlyoutPortal anchorRef={lineGroupRef} open={!isLinePopoutOpen}>
           {!isLinePopoutOpen && (
-            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Line, Poly & Arc Tools
             </div>
           )}
-        </button>
+        </FlyoutPortal>
 
-        <AnimatePresence>
-          {isLinePopoutOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
-                theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+        <FlyoutPortal anchorRef={lineGroupRef} open={isLinePopoutOpen}>
+          <div onMouseEnter={handleLineEnter} onMouseLeave={handleLineLeave}>
+            <AnimatePresence>
+              {isLinePopoutOpen && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className={cn(
+                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px]",
+                    theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                  )}
+                >
+                  <button 
+                    onClick={() => setActiveTool('line')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'line' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <PenLine size={16} />
+                    <span>Line Tool (L)</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTool('poly')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'poly' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Pentagon size={16} />
+                    <span>Poly Tool</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTool('arc')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'arc' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Spline size={16} />
+                    <span>Arc Tool</span>
+                  </button>
+                </motion.div>
               )}
-            >
-              <button 
-                onClick={() => setActiveTool('line')}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  activeTool === 'line' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
-                )}
-              >
-                <PenLine size={16} />
-                <span>Line Tool (L)</span>
-              </button>
-              <button 
-                onClick={() => setActiveTool('poly')}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  activeTool === 'poly' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
-                )}
-              >
-                <Pentagon size={16} />
-                <span>Poly Tool</span>
-              </button>
-              <button
-                onClick={() => setActiveTool('arc')}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  activeTool === 'arc' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
-                )}
-              >
-                <Spline size={16} />
-                <span>Arc Tool</span>
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </AnimatePresence>
+          </div>
+        </FlyoutPortal>
       </div>
 
       <ToolButton tool="rectangle" icon={<Square size={20} />} label="Rectangle (R)" />
@@ -375,34 +415,40 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
 
       <div 
         className="relative"
+        ref={threeDGroupRef}
         onMouseEnter={handle3DEnter}
         onMouseLeave={handle3DLeave}
       >
         <button 
           className={cn(
-            "toolbar-btn transition-colors group relative",
+            "toolbar-btn transition-colors relative",
             is3DActive && "toolbar-btn-active"
           )}
         >
           <Cone size={20} />
+        </button>
+
+        <FlyoutPortal anchorRef={threeDGroupRef} open={!is3DPopoutOpen}>
           {!is3DPopoutOpen && (
-            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               3D Primitives
             </div>
           )}
-        </button>
+        </FlyoutPortal>
 
-        <AnimatePresence>
-          {is3DPopoutOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
-                theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-              )}
-            >
+        <FlyoutPortal anchorRef={threeDGroupRef} open={is3DPopoutOpen}>
+          <div onMouseEnter={handle3DEnter} onMouseLeave={handle3DLeave}>
+            <AnimatePresence>
+              {is3DPopoutOpen && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className={cn(
+                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px]",
+                    theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                  )}
+                >
               <button 
                 onClick={() => setActiveTool('sphere')}
                 className={cn(
@@ -451,67 +497,77 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
                 )}
               >
                 <CircleDot size={16} />
-                <span>Dome</span>
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    <span>Dome</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </FlyoutPortal>
       </div>
 
       <div 
         className="relative"
+        ref={bevelGroupRef}
         onMouseEnter={handleBevelEnter}
         onMouseLeave={handleBevelLeave}
       >
         <button 
           onClick={() => setActiveTool('bevel')}
           className={cn(
-            "toolbar-btn transition-colors group relative",
+            "toolbar-btn transition-colors relative",
             activeTool === 'bevel' && "toolbar-btn-active"
           )}
         >
           <CornerUpRight size={20} />
+        </button>
+
+        <FlyoutPortal anchorRef={bevelGroupRef} open={!isBevelPopoutOpen}>
           {!isBevelPopoutOpen && (
-            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Bevel Tool
             </div>
           )}
-        </button>
+        </FlyoutPortal>
 
-        <AnimatePresence>
-          {isBevelPopoutOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px] z-[150]",
-                theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+        <FlyoutPortal anchorRef={bevelGroupRef} open={isBevelPopoutOpen}>
+          <div onMouseEnter={handleBevelEnter} onMouseLeave={handleBevelLeave}>
+            <AnimatePresence>
+              {isBevelPopoutOpen && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className={cn(
+                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px]",
+                    theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                  )}
+                >
+                  <button 
+                    onClick={() => { setActiveTool('bevel'); setActiveBevelType('radius'); }}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      (activeTool === 'bevel' && activeBevelType === 'radius') ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Circle size={16} />
+                    <span>Radius (Fillet)</span>
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTool('bevel'); setActiveBevelType('chamfer'); }}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      (activeTool === 'bevel' && activeBevelType === 'chamfer') ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Square size={16} />
+                    <span>Chamfer</span>
+                  </button>
+                </motion.div>
               )}
-            >
-              <button 
-                onClick={() => { setActiveTool('bevel'); setActiveBevelType('radius'); }}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  (activeTool === 'bevel' && activeBevelType === 'radius') ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
-                )}
-              >
-                <Circle size={16} />
-                <span>Radius (Fillet)</span>
-              </button>
-              <button 
-                onClick={() => { setActiveTool('bevel'); setActiveBevelType('chamfer'); }}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  (activeTool === 'bevel' && activeBevelType === 'chamfer') ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
-                )}
-              >
-                <Square size={16} />
-                <span>Chamfer</span>
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </AnimatePresence>
+          </div>
+        </FlyoutPortal>
       </div>
       
       <div className="w-8 h-px bg-gray-200 my-1" />
@@ -521,58 +577,66 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       <ToolButton tool="subtract" icon={<Scissors size={20} />} label="Subtract Tool - 1st click on the object to keep, 2nd click on object to subtract" />
       <div 
         className="relative"
+        ref={measureGroupRef}
         onMouseEnter={handleMeasureEnter}
         onMouseLeave={handleMeasureLeave}
       >
         <button 
           onClick={() => setActiveTool('tape')}
           className={cn(
-            "toolbar-btn transition-colors group relative",
+            "toolbar-btn transition-colors relative",
             activeTool === 'tape' && "toolbar-btn-active"
           )}
         >
           <Ruler size={20} />
+        </button>
+
+        <FlyoutPortal anchorRef={measureGroupRef} open={!isMeasurePopoutOpen}>
           {!isMeasurePopoutOpen && (
-            <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
+            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Measure Tool
             </div>
           )}
-        </button>
+        </FlyoutPortal>
 
-        <AnimatePresence>
-          {isMeasurePopoutOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className={cn(
-                "absolute left-full top-0 ml-2 border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[190px] z-[150]",
-                theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+        <FlyoutPortal anchorRef={measureGroupRef} open={isMeasurePopoutOpen}>
+          <div onMouseEnter={handleMeasureEnter} onMouseLeave={handleMeasureLeave}>
+            <AnimatePresence>
+              {isMeasurePopoutOpen && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className={cn(
+                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[190px]",
+                    theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                  )}
+                >
+                  <button 
+                    onClick={() => setActiveTool('tape')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'tape' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Ruler size={16} />
+                    <span>Measuring Tape</span>
+                  </button>
+                  <button 
+                    onClick={() => setShowAllDimensions(!showAllDimensions)}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      showAllDimensions ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    {showAllDimensions ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                    <span>Show All Dimensions</span>
+                  </button>
+                </motion.div>
               )}
-            >
-              <button 
-                onClick={() => setActiveTool('tape')}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  activeTool === 'tape' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
-                )}
-              >
-                <Ruler size={16} />
-                <span>Measuring Tape</span>
-              </button>
-              <button 
-                onClick={() => setShowAllDimensions(!showAllDimensions)}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  showAllDimensions ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
-                )}
-              >
-                {showAllDimensions ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                <span>Show All Dimensions</span>
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </AnimatePresence>
+          </div>
+        </FlyoutPortal>
       </div>
       
       <div className="w-8 h-px bg-gray-200 my-1" />
@@ -589,18 +653,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       
       <div className="w-8 h-px bg-gray-200 my-1" />
 
-      <button
-        onClick={() => setIsWorldViewOpen(true)}
-        className={cn(
-          "toolbar-btn relative group transition-colors",
-          isWorldViewActive && "bg-trimble-blue/10"
-        )}
-      >
-        <Globe size={20} className={isWorldViewActive ? "text-trimble-blue" : "text-gray-500"} />
-        <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
-          WorldView Geolocation
-        </div>
-      </button>
+      <WorldViewToolButton />
 
       {pinnedScripts.length > 0 && (
         <>
@@ -609,20 +662,74 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
             const script = developerScripts.find(s => s.id === scriptId);
             if (!script) return null;
             return (
-              <button
+              <PinnedScriptButton
                 key={scriptId}
+                name={script.name}
                 onClick={() => runPinnedScript(scriptId)}
-                className="toolbar-btn relative group text-trimble-blue"
-              >
-                <Code size={20} />
-                <div className="absolute left-full ml-2 px-2 py-1 bg-trimble-gray text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-modus-2">
-                  {script.name}
-                </div>
-              </button>
+              />
             );
           })}
         </>
       )}
     </aside>
+  );
+}
+
+/**
+ * Both of these previously relied on `group-hover` CSS the same way
+ * ToolButton originally did, with the same fix: portaled to document.body,
+ * since this toolbar is a SIBLING of ArchitectureToolbar and
+ * LandscapesToolbar in App.tsx, and a child's z-index can never escape a
+ * losing tie between its own parent and a sibling toolbar's container.
+ */
+function WorldViewToolButton() {
+  const { setIsWorldViewOpen, isWorldViewActive } = useApp();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <button
+      ref={buttonRef}
+      onClick={() => setIsWorldViewOpen(true)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "toolbar-btn relative transition-colors",
+        isWorldViewActive && "bg-trimble-blue/10"
+      )}
+    >
+      <Globe size={20} className={isWorldViewActive ? "text-trimble-blue" : "text-gray-500"} />
+      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+        {hovered && (
+          <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            WorldView Geolocation
+          </div>
+        )}
+      </FlyoutPortal>
+    </button>
+  );
+}
+
+function PinnedScriptButton({ name, onClick }: { name: string; onClick: () => void }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <button
+      ref={buttonRef}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="toolbar-btn relative text-trimble-blue"
+    >
+      <Code size={20} />
+      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+        {hovered && (
+          <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            {name}
+          </div>
+        )}
+      </FlyoutPortal>
+    </button>
   );
 }
