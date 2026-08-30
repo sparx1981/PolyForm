@@ -66,6 +66,7 @@ import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
 import { createChamferBinding } from '../tools/kernelChamfer';
+import { createFilletBinding } from '../tools/kernelFillet';
 import { FaceOffsetPreview } from './FaceOffsetPreview';
 import { ChamferPreview } from './ChamferPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
@@ -1264,6 +1265,7 @@ function Scene() {
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
   const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
   const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
+  const filletRef = useRef(createFilletBinding(kernelHost, bumpKernel));
   const [chamferPreview, setChamferPreview] = useState<{ faces: FaceId[]; amount: number } | null>(null);
   /**
    * A dedicated, impossible-to-miss banner for things like "Radius isn't
@@ -1674,17 +1676,60 @@ function Scene() {
     }
 
     if (activeTool === 'bevel') {
-      // Chamfers the whole solid the clicked face belongs to — the same
-      // click-selects-the-group resolution used everywhere else, since a
-      // uniform chamfer is inherently a whole-solid operation, not a
-      // single-face one.
+      // Fillets or chamfers the whole solid the clicked face belongs to —
+      // the same click-selects-the-group resolution used everywhere else,
+      // since either operation is inherently whole-solid, not per-face.
       if (activeBevelType === 'radius') {
-        // Rounded edges need an entirely different construction (arc
-        // tessellation between adjacent faces at every edge, not a single
-        // flat bevel quad) — deliberately not attempted yet. Saying so
-        // plainly here beats a silent no-op that looks like a bug.
-        showToast('Rounded edges are not supported for these objects yet — try Chamfer.');
-        return false;
+        const group = groupContaining(kernelHost.graph, faceId);
+        const begun = filletRef.current.begin(group);
+        if (!begun.ok) {
+          showToast(
+            begun.reason
+              ? `This surface can't be rounded: ${begun.reason}`
+              : "This surface is not part of a solid that can be rounded.",
+          );
+          return false;
+        }
+        setMeasurements('Move the cursor to set the radius, then release.');
+
+        let dragStartClientX = 0;
+        let dragStarted = false;
+
+        const onMove = (ev: PointerEvent) => {
+          if (!dragStarted) {
+            dragStartClientX = ev.clientX;
+            dragStarted = true;
+            return;
+          }
+          const deltaPx = ev.clientX - dragStartClientX;
+          // Same screen-space-drag feel as chamfer's own equivalent drag.
+          const amount = Math.max(0, deltaPx * 0.002);
+          filletRef.current.update(amount);
+          setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
+          // Reuses ChamferPreview's own wireframe-of-shrunk-faces
+          // approach: filletSolid's face-shrinking step is IDENTICAL
+          // math to chamferSolid's (both call the same 2D mitre inset),
+          // so the same preview component works correctly here too —
+          // it only ever draws the flat, shrunk-face boundary, not the
+          // curved corners, which is a fair approximation of "how much
+          // material this removes" for either operation.
+          setChamferPreview({ faces: group, amount });
+        };
+
+        const finish = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', finish);
+          setChamferPreview(null);
+          const result = filletRef.current.commit();
+          if (!result.ok) {
+            showToast(result.reason ? `Rounding failed: ${result.reason}` : 'Rounding failed.');
+          }
+          setMeasurements('');
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', finish, { once: true });
+        return true;
       }
 
       const group = groupContaining(kernelHost.graph, faceId);
