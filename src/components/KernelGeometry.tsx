@@ -21,6 +21,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import type { EdgeId, FaceId, Graph } from '../lib/geometry/types';
 import { tessellateFace, tessellateGraph, mergeBuffers, edgeBuffer } from '../lib/geometry/tessellate';
 import { facesByMaterial } from '../tools/kernelSelection';
+import { ThickLineSegments } from './ThickLineSegments';
 
 export interface KernelGeometryProps {
   graph: Graph;
@@ -111,7 +112,7 @@ export function KernelGeometry({
     return out;
   }, [graph, revision]);
 
-  const { lineGeometry, edgeOfSegment, boundaryGeometry } = useMemo(() => {
+  const { linePositions, edgeOfSegment, boundaryPositions } = useMemo(() => {
     const data = tessellateGraph(graph);
     const hiddenFaces = new Set(
       [...graph.faces.values()].filter((f) => f.attributes.hidden).map((f) => f.id),
@@ -128,18 +129,14 @@ export function KernelGeometry({
     });
 
     const { position, edgeOfSegment: segMap } = edgeBuffer(visible);
-    const lineGeo = new THREE.BufferGeometry();
-    lineGeo.setAttribute('position', new THREE.BufferAttribute(position, 3));
 
     const heavy = visible.filter((e) => e.classification !== 'manifold');
     const heavyPos = new Float32Array(heavy.length * 6);
     heavy.forEach((e, i) => {
       heavyPos.set([e.a.x, e.a.y, e.a.z, e.b.x, e.b.y, e.b.z], i * 6);
     });
-    const boundaryGeo = new THREE.BufferGeometry();
-    boundaryGeo.setAttribute('position', new THREE.BufferAttribute(heavyPos, 3));
 
-    return { lineGeometry: lineGeo, edgeOfSegment: segMap, boundaryGeometry: boundaryGeo };
+    return { linePositions: position, edgeOfSegment: segMap, boundaryPositions: heavyPos };
   }, [graph, revision]);
 
   const hasSelection = (selectedFaces?.size ?? 0) > 0;
@@ -212,27 +209,24 @@ export function KernelGeometry({
       {showEdges && (
         <>
           {/*
-            `linewidth` on a raw lineBasicMaterial is mostly ignored by
-            WebGL regardless of platform — a three.js limitation, not
-            something specific to kernel edges. Passed through for parity
-            with the Shape-edge rendering anyway, which has the same ceiling.
+            Real thickness, not the old lineBasicMaterial ceiling — see
+            ThickLineSegments.tsx's own doc comment for why. The manifold
+            pass renders slightly fainter (0.55x) than the boundary pass,
+            matching the previous visual convention of de-emphasizing
+            ordinary interior edges relative to silhouette/boundary ones.
           */}
-          <lineSegments geometry={lineGeometry} frustumCulled={false}>
-            <lineBasicMaterial
-              color={edgeColor}
-              transparent
-              opacity={edgeOpacity * 0.55}
-              linewidth={edgeLineWidth}
-            />
-          </lineSegments>
-          <lineSegments geometry={boundaryGeometry} frustumCulled={false}>
-            <lineBasicMaterial
-              color={edgeColor}
-              transparent={edgeOpacity < 1}
-              opacity={edgeOpacity}
-              linewidth={edgeLineWidth}
-            />
-          </lineSegments>
+          <ThickLineSegments
+            positions={linePositions}
+            color={edgeColor}
+            opacity={edgeOpacity * 0.55}
+            linewidth={edgeLineWidth}
+          />
+          <ThickLineSegments
+            positions={boundaryPositions}
+            color={edgeColor}
+            opacity={edgeOpacity}
+            linewidth={edgeLineWidth}
+          />
         </>
       )}
 

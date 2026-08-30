@@ -68,7 +68,7 @@ export interface ChamferResult {
 // ---------------------------------------------------------------------------
 
 /** Newell's method: robust for a near-planar polygon, not just a perfect one. */
-function computeNormal(points: readonly Vec3[]): Vec3 | null {
+export function computeNormal(points: readonly Vec3[]): Vec3 | null {
   let nx = 0;
   let ny = 0;
   let nz = 0;
@@ -86,7 +86,7 @@ function computeNormal(points: readonly Vec3[]): Vec3 | null {
 }
 
 /** Linear scan is fine here: a handful of points per new face, never a hot path. */
-function findVertexAt(g: Graph, pos: Vec3, tol: number): VertexId | null {
+export function findVertexAt(g: Graph, pos: Vec3, tol: number): VertexId | null {
   for (const [id, v] of g.vertices) {
     if (distance(v.position, pos) < tol) return id;
   }
@@ -99,7 +99,7 @@ function findVertexAt(g: Graph, pos: Vec3, tol: number): VertexId | null {
  * (e.g. the average of the adjacent original faces' normals) used only to
  * pick the correct winding, not stored anywhere.
  */
-function createDirectFace(
+export function createDirectFace(
   ctx: InsertContext,
   points: readonly Vec3[],
   outwardHint: Vec3,
