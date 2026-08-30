@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
 import { 
   useHelper, 
@@ -60,8 +61,17 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, deleteFaceAndEdges } from '../tools/kernelSelection';
-import type { FaceId } from '../lib/geometry/types';
+import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining } from '../tools/kernelSelection';
+import { createPushPullBinding } from '../tools/kernelPushPull';
+import { PushPullPreview } from './PushPullPreview';
+import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
+import { createChamferBinding } from '../tools/kernelChamfer';
+import { FaceOffsetPreview } from './FaceOffsetPreview';
+import { ChamferPreview } from './ChamferPreview';
+import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
+import { GroupTransformPreview } from './GroupTransformPreview';
+import { boundsOfFaces } from '../lib/geometry/grouptransform';
+import type { FaceId, Mat4 } from '../lib/geometry/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
 const KERNEL_SNAP_TOOLS: string[] = [
@@ -1123,6 +1133,8 @@ function Scene() {
     updateShapeColor,
     updateShapeDimensions,
     setMeasurements,
+    setViewportToast,
+    setPlacingNotePos,
     unit,
     theme,
     setRightPanelVisible,
@@ -1244,6 +1256,47 @@ function Scene() {
   // Exact, un-offset endpoints of the line being previewed. See where this is
   // written for why the preview's own transform cannot be used.
   const kernelLineEndsRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3 } | null>(null);
+  /**
+   * True corners of the shape being previewed, captured before the preview's
+   * z-fighting offset is applied — same reason as the line tool's endpoints.
+   */
+  const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
+  const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
+  const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
+  const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
+  const [chamferPreview, setChamferPreview] = useState<{ faces: FaceId[]; amount: number } | null>(null);
+  /**
+   * A dedicated, impossible-to-miss banner for things like "Radius isn't
+   * supported yet" — separate from `measurements`, which the status bar
+   * shows only as a small, easy-to-miss monospace readout in its corner.
+   * That is fine for a live drag amount, but a message the user actively
+   * needs to notice (an unsupported tool, a failed operation) deserves its
+   * own clearly visible space rather than competing for attention with a
+   * number that updates constantly during ordinary use.
+   *
+   * The state itself and its render both live OUTSIDE this component now
+   * (in AppContext, rendered from the outer Viewport() function) — see
+   * AppContext.tsx's own doc comment on `viewportToast` for why: this
+   * component, Scene(), is rendered by react-three-fiber's own reconciler,
+   * not react-dom's, and a plain <div> created from within it — even via
+   * createPortal — is rejected outright as "not part of the THREE
+   * namespace." That was a real, reproduced crash, not a hypothetical one.
+   */
+  const showToast = useCallback((message: string, durationMs = 3000) => {
+    setViewportToast(message);
+    window.setTimeout(() => setViewportToast((current: string | null) => (current === message ? null : current)), durationMs);
+  }, [setViewportToast]);
+  const [faceOffsetPreview, setFaceOffsetPreview] = useState<
+    { faceId: FaceId; distance: number } | null
+  >(null);
+  /**
+   * Live extrusion preview. Held in state, not a ref, because it has to
+   * re-render on every pointer move — the whole point is that the user can
+   * see the result before committing.
+   */
+  const [pushPullPreview, setPushPullPreview] = useState<
+    { rings: { x: number; y: number; z: number }[][]; normal: { x: number; y: number; z: number }; distance: number } | null
+  >(null);
 
   // FaceId is a branded number; selection is stored as plain numbers in
   // AppState so it stays serialisable. Convert at this one boundary.
@@ -1260,9 +1313,26 @@ function Scene() {
    * different representations, and a selection spanning both would have to be
    * understood by every consumer of either.
    */
-  const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean }) => {
+
+  /** Tracks the last kernel-face click, so a second click on the SAME face
+   *  within the window reads as a double-click rather than two singles. */
+  const lastKernelClickRef = useRef<{ faceId: FaceId; time: number } | null>(null);
+  const DOUBLE_CLICK_MS = 350;
+
+  const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
     if (activeTool === 'paint') {
-      if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
+      // Matches select-tool semantics: a plain click acts on the whole
+      // object (paints every face of the group the clicked one belongs
+      // to), and shift-click narrows to just the one surface — the same
+      // relationship as "click selects the group, double-click drills into
+      // one face," just using shift as the modifier since paint has no
+      // natural "double-click" gesture of its own.
+      if (event.shiftKey) {
+        if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
+      } else {
+        const group = groupContaining(kernelHost.graph, faceId);
+        if (paintFaces(kernelHost.graph, group, activeMaterial) > 0) bumpKernel();
+      }
       return;
     }
     if (activeTool === 'eraser') {
@@ -1274,14 +1344,120 @@ function Scene() {
       setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
       return;
     }
+
     setSelectedId(null);
     setSelectedIds([]);
-    setSelectedFaceIds(prev =>
-      event.shiftKey
-        ? (prev.includes(faceId) ? prev.filter(f => f !== faceId) : [...prev, faceId])
-        : [faceId],
-    );
+
+    if (event.shiftKey) {
+      // Shift-click adds or removes exactly the clicked face, group logic
+      // aside -- a user building a custom multi-face selection is choosing
+      // deliberately, face by face.
+      setSelectedFaceIds(prev =>
+        prev.includes(faceId) ? prev.filter(f => f !== faceId) : [...prev, faceId],
+      );
+      lastKernelClickRef.current = null;
+      return;
+    }
+
+    const now = Date.now();
+    const last = lastKernelClickRef.current;
+    const isDoubleClick = !!last && last.faceId === faceId && now - last.time < DOUBLE_CLICK_MS;
+
+    if (isDoubleClick) {
+      // Second click on the SAME face: drill down to just that surface.
+      setSelectedFaceIds([faceId]);
+      lastKernelClickRef.current = null;
+    } else {
+      // A plain click selects the whole connected object -- pushing/pulling
+      // a rectangle into a box and then clicking one wall should select the
+      // box, not one of its six faces; that is what most users mean by
+      // "click on it." Drilling into one face is what double-click is for.
+      setSelectedFaceIds(groupContaining(kernelHost.graph, faceId));
+      lastKernelClickRef.current = { faceId, time: now };
+    }
   }, [activeTool, activeMaterial, kernelHost, bumpKernel, setSelectedFaceIds, setSelectedId, setSelectedIds]);
+
+  // ---- Move/scale/rotate for a kernel face-group selection ----
+  //
+  // The existing TransformControls wiring above drives exactly one Shape's
+  // position/quaternion/scale and writes the result back on release --
+  // there is no way to hand it "these six faces" and have it mean anything
+  // (grouptransform.ts's own doc comment goes into why). This attaches the
+  // SAME gizmo to an invisible dummy pivot object instead, and translates
+  // its movement into calls on the group-transform binding, which applies
+  // the result to the kernel graph on release.
+  const groupPivotRef = useRef<THREE.Object3D>(null);
+  const [groupPivotReady, setGroupPivotReady] = useState(false);
+  const groupTransformActiveRef = useRef(false);
+  const groupTransformStartRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  const groupTransformBindingRef = useRef(createGroupTransformBinding(kernelHost, bumpKernel));
+  const [groupTransformPreview, setGroupTransformPreview] = useState<
+    { faces: FaceId[]; matrix: Mat4 } | null
+  >(null);
+
+  // Keeps the dummy pivot synced to the selection's current bounds center
+  // whenever the model or selection changes -- but never mid-drag, where
+  // fighting TransformControls would fling the gizmo out from under the
+  // user's cursor.
+  useEffect(() => {
+    if (groupTransformActiveRef.current) return;
+    if (kernelSelectedSet.size === 0 || !groupPivotRef.current) return;
+    const b = boundsOfFaces(kernelHost.graph, [...kernelSelectedSet]);
+    if (!b) return;
+    groupPivotRef.current.position.set(b.center.x, b.center.y, b.center.z);
+    groupPivotRef.current.quaternion.identity();
+    groupPivotRef.current.scale.set(1, 1, 1);
+  }, [kernelSelectedSet, kernelRevision, kernelHost]);
+
+  const handleGroupTransformBegin = useCallback(() => {
+    if (kernelSelectedSet.size === 0 || !groupPivotRef.current) return;
+    groupTransformActiveRef.current = true;
+    groupTransformStartRef.current = {
+      x: groupPivotRef.current.position.x,
+      y: groupPivotRef.current.position.y,
+      z: groupPivotRef.current.position.z,
+    };
+    groupTransformBindingRef.current.begin([...kernelSelectedSet]);
+  }, [kernelSelectedSet]);
+
+  const handleGroupTransformChange = useCallback(() => {
+    const pivot = groupPivotRef.current;
+    const binding = groupTransformBindingRef.current;
+    if (!pivot || !binding.active) return;
+
+    if (activeTool === 'move') {
+      const start = groupTransformStartRef.current;
+      if (!start) return;
+      binding.updateTranslate({
+        x: pivot.position.x - start.x,
+        y: pivot.position.y - start.y,
+        z: pivot.position.z - start.z,
+      });
+    } else if (activeTool === 'scale') {
+      // The pivot's scale was reset to (1,1,1) at begin, so its current
+      // scale IS this drag's factor.
+      binding.updateScale({ x: pivot.scale.x, y: pivot.scale.y, z: pivot.scale.z });
+    } else if (activeTool === 'rotate') {
+      // The pivot's rotation was reset to identity at begin, so its current
+      // quaternion IS this drag's rotation. Extracted to axis+angle since
+      // that is what rotateFaces expects.
+      const q = pivot.quaternion;
+      const w = Math.min(1, Math.max(-1, q.w));
+      const angle = 2 * Math.acos(w);
+      const s = Math.sqrt(1 - w * w);
+      const axis = s < 1e-6 ? { x: 1, y: 0, z: 0 } : { x: q.x / s, y: q.y / s, z: q.z / s };
+      binding.updateRotate(axis, angle);
+    }
+
+    const session = binding.session;
+    if (session) setGroupTransformPreview({ faces: session.faces, matrix: session.matrix });
+  }, [activeTool]);
+
+  const handleGroupTransformEnd = useCallback(() => {
+    groupTransformActiveRef.current = false;
+    groupTransformBindingRef.current.commit();
+    setGroupTransformPreview(null);
+  }, []);
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
   const [sculptCursorPos, setSculptCursorPos] = useState<THREE.Vector3 | null>(null);
@@ -1431,6 +1607,222 @@ function Scene() {
   const hasReachedFrictionRef = useRef<boolean>(false);
   const lastValidPosRef = useRef<THREE.Vector3 | null>(null);
   const { raycaster, mouse, camera, scene, gl } = useThree();
+
+  /**
+   * Push/pull starts on PRESS, not click.
+   *
+   * onClick fires on release, so beginning there started the drag after the
+   * gesture had already ended: the face never moved, and the session stayed
+   * open until some later pointer-up committed it against a stale distance.
+   * That is the "nothing happens, then a later action resolves it".
+   *
+   * The completing pointer-up is bound to the WINDOW, because a drag that
+   * starts on a face is routinely released somewhere else — a handler on the
+   * face itself would simply never fire.
+   */
+  const handleKernelFacePointerDown = useCallback((faceId: FaceId, event: { point?: THREE.Vector3 }) => {
+    // Return value tells KernelGeometry whether to stop propagation. Only
+    // push/pull claims the press; every other tool needs it to keep
+    // travelling down to the invisible ground plane where drawing-tool
+    // starts (rectangle, circle, line, triangle...) are actually handled —
+    // stopping unconditionally here was why none of them could start on a
+    // kernel wall at all.
+    //
+    // The whole body is wrapped in try/catch deliberately: this fires from
+    // R3F's own pointer-event dispatch on a <mesh>, not a regular React DOM
+    // event — and React's error boundaries only ever catch errors thrown
+    // during RENDER, never inside an event handler. An uncaught throw here
+    // would previously propagate straight out with nothing to catch it,
+    // which is consistent with a "white screen" report having no visible
+    // fallback UI at all. Whatever the underlying cause turns out to be,
+    // this ensures a future one can never take down the whole app the same
+    // way — it surfaces as a toast instead.
+    try {
+    if (activeTool === 'note') {
+      // Mirrors the identical Shape-mesh case in handleMeshPointerDown —
+      // this one covers a click landing on KERNEL geometry instead, which
+      // is a completely separate click path (KernelGeometry's own
+      // onFacePointerDown, not a Shape mesh's onPointerDown). Without
+      // this, placing a note on kernel-derived geometry (anything drawn
+      // then pushed/pulled) silently did nothing at all: the click never
+      // reached the Shape-only code that used to be the only place this
+      // tool was handled.
+      if (!event.point) return false;
+      setPlacingNotePos(event.point.clone());
+      return true;
+    }
+
+    if (activeTool === 'bevel') {
+      // Chamfers the whole solid the clicked face belongs to — the same
+      // click-selects-the-group resolution used everywhere else, since a
+      // uniform chamfer is inherently a whole-solid operation, not a
+      // single-face one.
+      if (activeBevelType === 'radius') {
+        // Rounded edges need an entirely different construction (arc
+        // tessellation between adjacent faces at every edge, not a single
+        // flat bevel quad) — deliberately not attempted yet. Saying so
+        // plainly here beats a silent no-op that looks like a bug.
+        showToast('Rounded edges are not supported for these objects yet — try Chamfer.');
+        return false;
+      }
+
+      const group = groupContaining(kernelHost.graph, faceId);
+      const begun = chamferRef.current.begin(group);
+      if (!begun.ok) {
+        showToast(
+          begun.reason
+            ? `This surface can't be chamfered: ${begun.reason}`
+            : "This surface is not part of a solid that can be chamfered.",
+        );
+        return false;
+      }
+      setMeasurements('Move the cursor to set the chamfer amount, then release.');
+
+      let dragStartClientX = 0;
+      let dragStarted = false;
+
+      const onMove = (ev: PointerEvent) => {
+        if (!dragStarted) {
+          dragStartClientX = ev.clientX;
+          dragStarted = true;
+          return;
+        }
+        const deltaPx = ev.clientX - dragStartClientX;
+        // Same screen-space-drag feel as the existing Shape-based bevel
+        // tool, scaled to a sane default range rather than the old
+        // per-shape maxRadius (chamfer here applies to a whole solid, not
+        // one shape's own bounds).
+        const amount = Math.max(0, deltaPx * 0.002);
+        chamferRef.current.update(amount);
+        setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
+        setChamferPreview({ faces: group, amount });
+      };
+
+      const finish = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', finish);
+        setChamferPreview(null);
+        const result = chamferRef.current.commit();
+        if (!result.ok) {
+          showToast(result.reason ? `Chamfer failed: ${result.reason}` : 'Chamfer failed.');
+        }
+        setMeasurements('');
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', finish, { once: true });
+      return true;
+    }
+
+    if (activeTool === 'offset') {
+      // Reshapes the CLICKED FACE'S OWN boundary by inserting a new offset
+      // ring INSIDE (or around) it, leaving the original untouched — this
+      // is what splits the face into an outer frame and an inner shape,
+      // both independently selectable, matching the app's original Offset
+      // tool exactly. A previous version of this wiring instead inflated
+      // the whole 3D solid uniformly (no split, no second surface) — that
+      // was the wrong operation under the right name; see faceOffset.ts's
+      // own doc comment for the full story.
+      if (!faceOffsetRef.current.begin(faceId)) return false;
+      setMeasurements('Move the cursor to reshape, then release.');
+
+      const ndc = new THREE.Vector2();
+      const dragRay = new THREE.Raycaster();
+
+      const onMove = (ev: PointerEvent) => {
+        const rect = gl.domElement.getBoundingClientRect();
+        ndc.set(
+          ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+          -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        dragRay.setFromCamera(ndc, camera);
+        const f = kernelHost.graph.faces.get(faceId);
+        if (!f) return;
+        const plane = new THREE.Plane(
+          new THREE.Vector3(f.plane.normal.x, f.plane.normal.y, f.plane.normal.z),
+          -(f.plane.normal.x * f.plane.point.x + f.plane.normal.y * f.plane.point.y + f.plane.normal.z * f.plane.point.z),
+        );
+        const hit = new THREE.Vector3();
+        if (!dragRay.ray.intersectPlane(plane, hit)) return;
+
+        const cursor2D = faceOffsetRef.current.projectToSessionPlane({ x: hit.x, y: hit.y, z: hit.z });
+        if (!cursor2D) return;
+        const dist = faceOffsetRef.current.update(cursor2D);
+        setMeasurements(
+          `${formatValue(Math.abs(dist), unit, 2)} ${dist < 0 ? '(inward)' : '(outward)'} — release to confirm.`,
+        );
+        setFaceOffsetPreview({ faceId, distance: dist });
+      };
+
+      const finish = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', finish);
+        faceOffsetRef.current.commit();
+        setFaceOffsetPreview(null);
+        setMeasurements('');
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', finish, { once: true });
+      return true;
+    }
+
+    if (activeTool !== 'pushpull') return false;
+    const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
+    if (!grab) return false;
+
+    pushPullRef.current.begin(faceId, { x: grab.x, y: grab.y, z: grab.z });
+    setMeasurements('Drag to push or pull, then release.');
+
+    // Track the drag on the WINDOW, not the canvas.
+    //
+    // The canvas pointer-move logic hangs off a large invisible ground plane.
+    // The moment geometry is raised, the cursor is over the geometry and the
+    // plane stops receiving moves — so the distance never updated, and the
+    // commit applied zero. That is why push/pull did nothing on a fresh
+    // surface. A window listener sees the whole drag wherever it goes.
+    const ndc = new THREE.Vector2();
+    const dragRay = new THREE.Raycaster();
+
+    const onMove = (ev: PointerEvent) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      ndc.set(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      // A private raycaster: reusing the shared one would disturb hover and
+      // selection mid-drag.
+      dragRay.setFromCamera(ndc, camera);
+      const dist = pushPullRef.current.update({
+        origin: { x: dragRay.ray.origin.x, y: dragRay.ray.origin.y, z: dragRay.ray.origin.z },
+        direction: { x: dragRay.ray.direction.x, y: dragRay.ray.direction.y, z: dragRay.ray.direction.z },
+      });
+      if (dist !== null) {
+        setMeasurements(formatValue(Math.abs(dist), unit, 2));
+        const live = pushPullRef.current.session;
+        if (live) setPushPullPreview({ rings: live.rings, normal: live.normal, distance: dist });
+      }
+    };
+
+    const finish = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      pushPullRef.current.commit();
+      setPushPullPreview(null);
+      setMeasurements('');
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', finish, { once: true });
+    return true;
+    } catch (err) {
+      console.error('[handleKernelFacePointerDown] uncaught error:', err);
+      showToast(
+        err instanceof Error ? `Something went wrong: ${err.message}` : 'Something went wrong with that action.',
+      );
+      return false;
+    }
+  }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast, setPlacingNotePos]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);
@@ -1637,8 +2029,9 @@ function Scene() {
   const [typedLength, setTypedLength] = useState<string>('');
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
-  const [placingNotePos, setPlacingNotePos] = useState<THREE.Vector3 | null>(null);
-  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // placingNotePos/setPlacingNotePos now come from context (see
+  // AppContext.tsx's own doc comment) — Scene() still SETS this on click
+  // (below), but no longer renders the dialog itself or owns its state.
   const [polyVertices, setPolyVertices] = useState<THREE.Vector3[]>([]);
   const [polyPlane, setPolyPlane] = useState<THREE.Plane | null>(null);
   const [polyNormal, setPolyNormal] = useState<THREE.Vector3 | null>(null);
@@ -2035,6 +2428,27 @@ function Scene() {
         if (e.key === 'Backspace' && typedLength.length > 0) {
           e.preventDefault();
           setTypedLength(prev => prev.slice(0, -1));
+          return;
+        }
+      }
+
+      // Delete the current selection. Placed after the numeric-length
+      // Backspace handling above, and gated on nothing being actively
+      // drawn — Backspace's OTHER job (erasing a typed length mid-gesture)
+      // takes priority and returns before this is ever reached.
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !drawingStart) {
+        if (kernelSelectedSet.size > 0) {
+          e.preventDefault();
+          deleteGroupFacesAndEdges(kernelHost.graph, [...kernelSelectedSet]);
+          setSelectedFaceIds([]);
+          bumpKernel();
+          return;
+        }
+        if (selectedId) {
+          e.preventDefault();
+          removeShape(selectedId);
+          setSelectedId(null);
+          setSelectedIds([]);
           return;
         }
       }
@@ -2850,16 +3264,41 @@ function Scene() {
         startPoint = new THREE.Vector3(...snapIndicator.point);
       }
 
-      // Check for mesh intersection first
+      // Check for mesh intersection first.
+      //
+      // Picks whichever relevant hit is NEAREST along the ray, not "a Shape
+      // always wins if one exists anywhere on the ray" — the previous
+      // version only ever looked for `userData.isShape`, so it silently
+      // ignored kernel-rendered geometry entirely and fell through to the
+      // ground-plane fallback whenever the nearest thing hit was a kernel
+      // wall. `intersectObjects` already returns hits nearest-first.
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
-      
-      if (shapeIntersect && shapeIntersect.face) {
-        const normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
+      const relevantIntersect = intersects.find(
+        i => i.object.userData.isShape || i.object.userData.isKernelGeometry,
+      );
+
+      if (relevantIntersect?.face && relevantIntersect.object.userData.isShape) {
+        const normal = relevantIntersect.face.normal.clone().applyQuaternion(relevantIntersect.object.quaternion).normalize();
         startNormal = normal;
-        startOnId = shapeIntersect.object.userData.id;
+        startOnId = relevantIntersect.object.userData.id;
         if (!startPoint) {
-          startPoint = shapeIntersect.point.clone();
+          startPoint = relevantIntersect.point.clone();
+        }
+      } else if (
+        relevantIntersect?.object.userData.isKernelGeometry &&
+        typeof relevantIntersect.faceIndex === 'number'
+      ) {
+        const faceOfTriangle: number[] | undefined = relevantIntersect.object.userData.faceOfTriangle;
+        const kernelFaceId = faceOfTriangle?.[relevantIntersect.faceIndex];
+        const kernelFace = kernelFaceId !== undefined ? kernelHost.graph.faces.get(kernelFaceId as never) : null;
+        if (kernelFace) {
+          // The kernel's own stored normal, already correctly oriented —
+          // no quaternion transform needed, since KernelGeometry mounts
+          // with no transform of its own.
+          startNormal = new THREE.Vector3(kernelFace.plane.normal.x, kernelFace.plane.normal.y, kernelFace.plane.normal.z);
+          if (!startPoint) {
+            startPoint = relevantIntersect.point.clone();
+          }
         }
       } else {
         // Fallback to ground plane
@@ -3535,6 +3974,15 @@ function Scene() {
         const quatArray: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
 
         if (activeTool === 'rectangle') {
+          // A rectangle is four edges. Capturing the corners here lets it be
+          // committed to the kernel instead of as a flat Shape, which is what
+          // makes it splittable and push/pullable like any drawn surface.
+          kernelRingRef.current = [
+            drawingStart.clone(),
+            drawingStart.clone().addScaledVector(tangent, xDist),
+            drawingStart.clone().addScaledVector(tangent, xDist).addScaledVector(bitangent, yDist),
+            drawingStart.clone().addScaledVector(bitangent, yDist),
+          ];
           const centerX = drawingStart.clone().add(tangent.clone().multiplyScalar(xDist / 2)).add(bitangent.clone().multiplyScalar(yDist / 2));
           centerX.add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
@@ -3546,6 +3994,14 @@ function Scene() {
           setMeasurements(`${formatValue(Math.abs(xDist), unit, 1)} x ${formatValue(Math.abs(yDist), unit, 1)}`);
         } else if (activeTool === 'circle') {
           const radius = drawingStart.distanceTo(target);
+          // A circle is a closed ring of straight edges — the same
+          // tessellation the arc tool uses. 32 segments matches the preview.
+          kernelRingRef.current = Array.from({ length: 32 }, (_, i) => {
+            const a = (i / 32) * Math.PI * 2;
+            return drawingStart.clone()
+              .addScaledVector(tangent, Math.sin(a) * radius)
+              .addScaledVector(zAxis, Math.cos(a) * radius);
+          });
           const pos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'circle',
@@ -3556,6 +4012,21 @@ function Scene() {
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
         } else if (activeTool === 'triangle') {
           const radius = drawingStart.distanceTo(target);
+          // Match the PREVIEW exactly, or the committed triangle is a
+          // different triangle. Two details decide it:
+          //   * the preview's basis is makeBasis(tangent, normal, zAxis) with
+          //     zAxis = cross(tangent, normal) — the opposite handedness to
+          //     `bitangent`, which is cross(normal, tangent). Using bitangent
+          //     mirrors the shape.
+          //   * three's CylinderGeometry places vertices at
+          //     x = r*sin(theta), z = r*cos(theta) — sin on X, cos on Z, not
+          //     the other way round.
+          kernelRingRef.current = [0, 1, 2].map(i => {
+            const a = (i / 3) * Math.PI * 2;
+            return drawingStart.clone()
+              .addScaledVector(tangent, Math.sin(a) * radius)
+              .addScaledVector(zAxis, Math.cos(a) * radius);
+          });
           const pos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'triangle',
@@ -4012,6 +4483,7 @@ function Scene() {
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+
     if (e?.stopPropagation) e.stopPropagation();
     if (pointerUpHandledRef.current) return;
     pointerUpHandledRef.current = true;
@@ -4112,6 +4584,23 @@ function Scene() {
 
         lineBinding.commitDrag(lineFrom, lineTo);
         kernelLineEndsRef.current = null;
+      } else if (
+        previewShape &&
+        ['rect', 'circle', 'triangle'].includes(previewShape.type) &&
+        kernelRingRef.current
+      ) {
+        // Emit the ring as EDGES and let derivation build the face. The
+        // rectangle then behaves exactly like one drawn with four lines: it
+        // can be split, push/pulled, painted and healed.
+        const ring = kernelRingRef.current;
+        kernelRingRef.current = null;
+        let ok = ring.length >= 3;
+        for (let i = 0; ok && i < ring.length; i++) {
+          if (!lineBinding.commitDrag(ring[i]!, ring[(i + 1) % ring.length]!)) {
+            // A zero-width drag: nothing worth committing.
+            if (i === 0) ok = false;
+          }
+        }
       } else if (previewShape) {
         addShape({
           id: Math.random().toString(36).substr(2, 9),
@@ -5497,114 +5986,22 @@ function Scene() {
         <RenderMapTexture lat={worldViewLocation.lat} lng={worldViewLocation.lng} />
       )}
 
-      {placingNotePos && (
-        <Html fullscreen zIndexRange={_polyformNoteZIndexRange} portal={_polyformBodyPortalRef}>
-          <div className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="New design note"
-              // Explicit width, not w-full. This panel lives inside drei's
-              // <Html fullscreen>, whose container has no definite width, so a
-              // percentage width resolves to zero and the dialog collapses to
-              // a sliver — which is the "square and a line" this replaced.
-              className="w-[560px] max-w-[92vw] flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
-              onPointerDown={e => e.stopPropagation()}
-              style={{ pointerEvents: 'auto' }}
-            >
-              {/*
-                Same header shape as every other dialog: icon, title, one line
-                of supporting copy. The previous version shouted in uppercase
-                black weight with a 10px italic subtitle, which matched nothing
-                else in the app and put the subtitle under 4.5:1.
-              */}
-              <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="shrink-0 w-10 h-10 rounded-xl bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
-                    <StickyNote size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">New design note</h2>
-                    <p className="mt-0.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
-                      Describe your intent, or leave a comment for collaborators.
-                    </p>
-                  </div>
-                </div>
-                {/* Read-only metadata, so it no longer pretends to be a button. */}
-                <span className="shrink-0 text-[11px] font-medium tabular-nums px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                  {placingNotePos.x.toFixed(2)}, {placingNotePos.y.toFixed(2)}, {placingNotePos.z.toFixed(2)}
-                </span>
-              </header>
+      {/*
+        Toast render moved to the outer Viewport() function — see
+        showToast's own doc comment above for why this can't render here.
+      */}
 
-              <div className="px-6 py-5">
-                <label htmlFor="polyform-note-text" className="sr-only">Note text</label>
-                <textarea
-                  id="polyform-note-text"
-                  autoFocus
-                  ref={noteTextareaRef}
-                  defaultValue=""
-                  placeholder="What should someone know about this part of the model?"
-                  className="w-full h-28 p-3 text-sm rounded-xl resize-none transition-colors bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      const _noteText = (noteTextareaRef.current?.value || '').trim();
-                      if (_noteText) {
-                        const newNote: SceneNote = {
-                          id: Math.random().toString(36).substr(2, 9),
-                          text: _noteText,
-                          position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
-                          authorUid: user?.uid || 'anonymous',
-                          authorName: user?.displayName || 'Anonymous',
-                          createdAt: Date.now(),
-                          completed: false
-                        };
-                        setNotes(prev => [...prev, newNote]);
-                        recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
-                      }
-                      setPlacingNotePos(null);
-                    }
-                    if (e.key === 'Escape') setPlacingNotePos(null);
-                  }}
-                />
-              </div>
-
-              {/* Right-aligned, confirming action last — the convention users
-                  arrive with. Previously two equal full-width buttons. */}
-              <footer className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Enter to save · Esc to cancel
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" onClick={() => setPlacingNotePos(null)}>Cancel</Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      const _noteText = (noteTextareaRef.current?.value || '').trim();
-                      if (_noteText) {
-                        const newNote: SceneNote = {
-                          id: Math.random().toString(36).substr(2, 9),
-                          text: _noteText,
-                          position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
-                          authorUid: user?.uid || 'anonymous',
-                          authorName: user?.displayName || 'Anonymous',
-                          createdAt: Date.now(),
-                          completed: false
-                        };
-                        setNotes(prev => [...prev, newNote]);
-                        recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
-                      }
-                      setPlacingNotePos(null);
-                    }}
-                  >
-                    Place note
-                  </Button>
-                </div>
-              </footer>
-            </div>
-          </div>
-        </Html>
-      )}
+      {/*
+        New Note dialog moved to the outer Viewport() function — the SAME
+        fix as viewportToast, for the SAME reason: this used to be a
+        createPortal call right here, inside Scene(), which react-three-
+        fiber renders with its own custom reconciler, not react-dom's. A
+        plain <div> created that way is rejected outright as "not part of
+        the THREE namespace" -- a real, reproduced crash, not a
+        hypothetical one. placingNotePos is still SET here (a few lines
+        up, from the actual 3D click), but the dialog itself now renders
+        from Viewport(), which react-dom actually renders.
+      */}
 
       {/*
         Kernel-derived geometry, rendered ALONGSIDE the Shape[] primitives
@@ -5619,7 +6016,36 @@ function Scene() {
         revision={kernelRevision}
         selectedFaces={kernelSelectedSet}
         onFaceClick={handleKernelFaceClick}
+        onFacePointerDown={handleKernelFacePointerDown}
+        showEdges={edgeLinesEnabled}
+        edgeColor={edgeLinesColor}
+        edgeOpacity={edgeLinesOpacity}
+        edgeLineWidth={edgeLinesThickness}
       />
+
+      {faceOffsetPreview && (
+        <FaceOffsetPreview
+          graph={kernelHost.graph}
+          faceId={faceOffsetPreview.faceId}
+          distance={faceOffsetPreview.distance}
+        />
+      )}
+
+      {chamferPreview && (
+        <ChamferPreview
+          graph={kernelHost.graph}
+          faces={chamferPreview.faces}
+          amount={chamferPreview.amount}
+        />
+      )}
+
+      {pushPullPreview && (
+        <PushPullPreview
+          rings={pushPullPreview.rings}
+          normal={pushPullPreview.normal}
+          distance={pushPullPreview.distance}
+        />
+      )}
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;
@@ -6124,6 +6550,42 @@ function Scene() {
       );
     })}
 
+      {/*
+        Invisible dummy the group-transform gizmo below is attached to.
+        Mounted unconditionally (not just while transforming) so the
+        callback ref can populate groupPivotRef before TransformControls
+        ever needs it -- attaching TransformControls to a null object on
+        its very first render is the failure this avoids.
+      */}
+      <object3D
+        ref={(node) => {
+          groupPivotRef.current = node;
+          if (node && !groupPivotReady) setGroupPivotReady(true);
+        }}
+      />
+      {kernelSelectedSet.size > 0 && isTransforming && groupPivotReady && groupPivotRef.current && (
+        <TransformControls
+          object={groupPivotRef.current}
+          mode={activeTool === 'move' ? 'translate' : (activeTool === 'rotate' ? 'rotate' : 'scale')}
+          showX={!axisLock || axisLock === 'x'}
+          showY={!axisLock || axisLock === 'y'}
+          showZ={!axisLock || axisLock === 'z'}
+          onMouseDown={handleGroupTransformBegin}
+          onMouseUp={handleGroupTransformEnd}
+          onObjectChange={handleGroupTransformChange}
+          translationSnap={unit === 'm' ? 0.01 : 1}
+          rotationSnap={Math.PI / 24}
+          scaleSnap={0.01}
+        />
+      )}
+      {groupTransformPreview && (
+        <GroupTransformPreview
+          graph={kernelHost.graph}
+          faces={groupTransformPreview.faces}
+          matrix={groupTransformPreview.matrix}
+        />
+      )}
+
       {selectedId && isTransforming && (
         <>
           <TransformControls 
@@ -6164,9 +6626,10 @@ function Scene() {
       )}
 
       {previewShape && (
-        <mesh 
+        <mesh
           position={previewShape.position}
           quaternion={new THREE.Quaternion(...previewShape.quaternion)}
+          renderOrder={5}
         >
           {previewShape.type === 'circle' || previewShape.type === 'line' || previewShape.type === 'triangle' ? (
             <cylinderGeometry args={previewShape.args} />
@@ -6183,14 +6646,28 @@ function Scene() {
           ) : (
             <boxGeometry args={previewShape.args} />
           )}
+          {/*
+            depthTest disabled deliberately: this preview relied only on a
+            small (0.005 unit) manual offset along the drawing normal to sit
+            in front of whatever surface it is drawn on. That was enough
+            when every surface rendered at its exact depth, but kernel faces
+            now carry their own polygonOffset (needed so a coplanar edge
+            line reliably wins its OWN depth fight — see KernelGeometry).
+            The two small offsets could come out comparably sized depending
+            on view angle and distance, so which one "won" per pixel became
+            inconsistent — occasional flicker while drawing on a kernel
+            surface, worst on vertical faces viewed at a shallow angle. A
+            live preview has no reason to ever lose a depth fight against
+            the thing it is being drawn onto.
+          */}
           {previewShape.type === 'door' || previewShape.type === 'window' ? (
             <>
-              <meshBasicMaterial attach="material-0" color="#ffffff" transparent opacity={0.7} />
-              <meshBasicMaterial attach="material-1" color="#bae6fd" transparent opacity={0.25} />
-              <meshBasicMaterial attach="material-2" color="#cbd5e1" transparent opacity={0.7} />
+              <meshBasicMaterial attach="material-0" color="#ffffff" transparent opacity={0.7} depthTest={false} />
+              <meshBasicMaterial attach="material-1" color="#bae6fd" transparent opacity={0.25} depthTest={false} />
+              <meshBasicMaterial attach="material-2" color="#cbd5e1" transparent opacity={0.7} depthTest={false} />
             </>
           ) : (
-            <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} />
+            <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} depthTest={false} />
           )}
         </mesh>
       )}
@@ -7578,6 +8055,11 @@ export default function Viewport() {
     addShape,
     commitHistory,
     setMeasurements,
+    viewportToast,
+    placingNotePos,
+    setPlacingNotePos,
+    setNotes,
+    user,
     skybox, 
     activeTagId, 
     shapes, 
@@ -7601,6 +8083,9 @@ export default function Viewport() {
     showCollaboratorCursors,
     unit
   } = useApp();
+  // Local to Viewport() now, alongside the dialog itself (moved from
+  // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
+  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [styleLibraryTargetId, setStyleLibraryTargetId] = useState<string | null>(null);
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
   const [quadView, setQuadView] = useState(false);
@@ -7745,6 +8230,127 @@ export default function Viewport() {
       "flex-1 relative overflow-hidden transition-colors duration-300",
       theme === 'dark' ? "bg-gray-900" : "bg-[#f8f9fa]"
     )}>
+      {/*
+        Rendered directly here (no portal needed) precisely because this
+        div IS already inside react-dom's own tree — see showToast's doc
+        comment in Scene() for why the SAME render used to crash the whole
+        app when it lived inside Scene() instead. position:fixed escapes
+        this div's own overflow-hidden regardless, since nothing here sets
+        a CSS transform that would otherwise contain it.
+      */}
+      {viewportToast && (
+        <div
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-xl border border-gray-700 max-w-md text-center">
+            {viewportToast}
+          </div>
+        </div>
+      )}
+
+      {placingNotePos && (
+        // Rendered directly here — no portal needed, since this whole
+        // function IS already inside react-dom's own tree. See
+        // AppContext.tsx's own doc comment on `placingNotePos` for why
+        // this can no longer live inside Scene().
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+          style={{ zIndex: 1000 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="New design note"
+            className="w-[560px] max-w-[92vw] flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
+            onPointerDown={e => e.stopPropagation()}
+            style={{ pointerEvents: 'auto' }}
+          >
+            <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
+                  <StickyNote size={18} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">New design note</h2>
+                  <p className="mt-0.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+                    Describe your intent, or leave a comment for collaborators.
+                  </p>
+                </div>
+              </div>
+              <span className="shrink-0 text-[11px] font-medium tabular-nums px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                {placingNotePos.x.toFixed(2)}, {placingNotePos.y.toFixed(2)}, {placingNotePos.z.toFixed(2)}
+              </span>
+            </header>
+
+            <div className="px-6 py-5">
+              <label htmlFor="polyform-note-text" className="sr-only">Note text</label>
+              <textarea
+                id="polyform-note-text"
+                autoFocus
+                ref={noteTextareaRef}
+                defaultValue=""
+                placeholder="What should someone know about this part of the model?"
+                className="w-full h-28 p-3 text-sm rounded-xl resize-none transition-colors bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const _noteText = (noteTextareaRef.current?.value || '').trim();
+                    if (_noteText) {
+                      const newNote: SceneNote = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        text: _noteText,
+                        position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
+                        authorUid: user?.uid || 'anonymous',
+                        authorName: user?.displayName || 'Anonymous',
+                        createdAt: Date.now(),
+                        completed: false
+                      };
+                      setNotes(prev => [...prev, newNote]);
+                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                    }
+                    setPlacingNotePos(null);
+                  }
+                  if (e.key === 'Escape') setPlacingNotePos(null);
+                }}
+              />
+            </div>
+
+            <footer className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Enter to save · Esc to cancel
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={() => setPlacingNotePos(null)}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const _noteText = (noteTextareaRef.current?.value || '').trim();
+                    if (_noteText) {
+                      const newNote: SceneNote = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        text: _noteText,
+                        position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
+                        authorUid: user?.uid || 'anonymous',
+                        authorName: user?.displayName || 'Anonymous',
+                        createdAt: Date.now(),
+                        completed: false
+                      };
+                      setNotes(prev => [...prev, newNote]);
+                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                    }
+                    setPlacingNotePos(null);
+                  }}
+                >
+                  Place note
+                </Button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      )}
+
       {quadView ? (
         <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-black/30 z-0">
           {panelViews.map((view, idx) => (
@@ -8431,7 +9037,7 @@ export default function Viewport() {
           
           {isPerspectiveOpen && (
             <div className={cn(
-              "absolute top-full left-0 mt-1 w-32 rounded border shadow-lg overflow-hidden z-[60]",
+              "absolute top-full left-0 mt-1 w-32 rounded border shadow-lg overflow-hidden z-[150]",
               theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
             )}>
               {['Plan', 'Front Elevation', 'Rear Elevation', 'Left Elevation', 'Right Elevation'].map((view) => (
