@@ -36,8 +36,18 @@ import {
   ToggleLeft,
   ToggleRight
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useRef, useState, createContext, useContext } from 'react';
 import { FlyoutPortal } from './ui/FlyoutPortal';
+
+/**
+ * Which side tooltips/flyouts open toward — 'right' for the original
+ * vertical (left-docked) layout, 'bottom' once this toolbar is docked to
+ * the top or bottom edge instead. A context rather than a prop threaded
+ * through every ToolButton call site (there are 16+ of them) — the value
+ * is the same for every button in this toolbar at any given moment, so
+ * there is nothing per-call-site to actually customize.
+ */
+const FlyoutSideContext = createContext<'right' | 'bottom'>('right');
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
@@ -55,6 +65,7 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
   const isActive = activeTool === tool;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
 
   if (toolbarVisibility[tool] === false) return null;
 
@@ -73,7 +84,7 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
       )}
     >
       {icon}
-      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+      <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
           <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
             {label}
@@ -86,9 +97,17 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
 
 interface LeftToolbarProps {
   layoutMode?: 'classic' | 'unified';
+  /** Which edge this toolbar is currently docked to — governs whether it
+   *  renders as its original vertical column or a horizontal strip, and
+   *  which side its tooltips/flyouts open toward. Defaults to 'left',
+   *  matching how this toolbar has always looked, so every OTHER caller
+   *  (unified layout, anywhere dock doesn't apply) is unaffected. */
+  dock?: 'left' | 'top' | 'bottom';
 }
 
-export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
+export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarProps = {}) {
+  const horizontal = dock !== 'left';
+  const flyoutSide: 'right' | 'bottom' = horizontal ? 'bottom' : 'right';
   const { 
     isBasicToolbarEnabled,
     setIsAIRendererOpen, 
@@ -250,8 +269,11 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
   if (!isBasicToolbarEnabled) return null;
 
   return (
+    <FlyoutSideContext.Provider value={flyoutSide}>
     <aside className={cn(
-      "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300",
+      horizontal
+        ? cn("h-12 flex flex-row items-center px-2 gap-1 z-40 transition-colors duration-300", dock === 'top' ? "border-b" : "border-t")
+        : "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300",
       theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
     )}>
       <div 
@@ -262,13 +284,13 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       >
         <button 
           onClick={() => setIsAIQueryOpen(true)}
-          className="toolbar-btn mb-2 transition-colors relative"
+          className={cn("toolbar-btn transition-colors relative", horizontal ? "mr-2" : "mb-2")}
           style={{ color: bannerColor }}
         >
           <Sparkles size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={aiGroupRef} open={aiGroupHovered && !isAIPopoutOpen}>
+        <FlyoutPortal anchorRef={aiGroupRef} open={aiGroupHovered && !isAIPopoutOpen} side={flyoutSide}>
           {aiGroupHovered && !isAIPopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               AI Model Query
@@ -276,7 +298,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           )}
         </FlyoutPortal>
 
-        <FlyoutPortal anchorRef={aiGroupRef} open={isAIPopoutOpen}>
+        <FlyoutPortal anchorRef={aiGroupRef} open={isAIPopoutOpen} side={flyoutSide}>
           <div onMouseEnter={handleAIEnter} onMouseLeave={handleAILeave}>
             <AnimatePresence>
               {isAIPopoutOpen && (
@@ -331,7 +353,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       <ToolButton tool="paint" icon={<PaintBucket size={20} />} label="Paint Bucket (B) - click: face/sub-face, Shift+click: whole object" />
       <ToolButton tool="component" icon={<Box size={20} />} label="Make Component (G)" />
       
-      <div className="w-8 h-px bg-gray-200 my-1" />
+      <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
       
       <div 
         className="relative"
@@ -366,7 +388,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           sibling toolbar that happens to render later in the DOM. Portaling
           to document.body sidesteps that entirely.
         */}
-        <FlyoutPortal anchorRef={lineGroupRef} open={lineGroupHovered && !isLinePopoutOpen}>
+        <FlyoutPortal anchorRef={lineGroupRef} open={lineGroupHovered && !isLinePopoutOpen} side={flyoutSide}>
           {lineGroupHovered && !isLinePopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Line, Poly & Arc Tools
@@ -374,7 +396,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           )}
         </FlyoutPortal>
 
-        <FlyoutPortal anchorRef={lineGroupRef} open={isLinePopoutOpen}>
+        <FlyoutPortal anchorRef={lineGroupRef} open={isLinePopoutOpen} side={flyoutSide}>
           <div onMouseEnter={handleLineEnter} onMouseLeave={handleLineLeave}>
             <AnimatePresence>
               {isLinePopoutOpen && (
@@ -443,7 +465,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           <Cone size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={threeDGroupRef} open={threeDGroupHovered && !is3DPopoutOpen}>
+        <FlyoutPortal anchorRef={threeDGroupRef} open={threeDGroupHovered && !is3DPopoutOpen} side={flyoutSide}>
           {threeDGroupHovered && !is3DPopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               3D Primitives
@@ -451,7 +473,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           )}
         </FlyoutPortal>
 
-        <FlyoutPortal anchorRef={threeDGroupRef} open={is3DPopoutOpen}>
+        <FlyoutPortal anchorRef={threeDGroupRef} open={is3DPopoutOpen} side={flyoutSide}>
           <div onMouseEnter={handle3DEnter} onMouseLeave={handle3DLeave}>
             <AnimatePresence>
               {is3DPopoutOpen && (
@@ -537,7 +559,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           <CornerUpRight size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={bevelGroupRef} open={bevelGroupHovered && !isBevelPopoutOpen}>
+        <FlyoutPortal anchorRef={bevelGroupRef} open={bevelGroupHovered && !isBevelPopoutOpen} side={flyoutSide}>
           {bevelGroupHovered && !isBevelPopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Bevel Tool
@@ -545,7 +567,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           )}
         </FlyoutPortal>
 
-        <FlyoutPortal anchorRef={bevelGroupRef} open={isBevelPopoutOpen}>
+        <FlyoutPortal anchorRef={bevelGroupRef} open={isBevelPopoutOpen} side={flyoutSide}>
           <div onMouseEnter={handleBevelEnter} onMouseLeave={handleBevelLeave}>
             <AnimatePresence>
               {isBevelPopoutOpen && (
@@ -585,7 +607,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
         </FlyoutPortal>
       </div>
       
-      <div className="w-8 h-px bg-gray-200 my-1" />
+      <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
       
       <ToolButton tool="pushpull" icon={<ArrowUpFromLine size={20} />} label="Push/Pull (P)" />
       <ToolButton tool="offset" icon={<Layers size={20} />} label="Offset" />
@@ -606,7 +628,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           <Ruler size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={measureGroupRef} open={measureGroupHovered && !isMeasurePopoutOpen}>
+        <FlyoutPortal anchorRef={measureGroupRef} open={measureGroupHovered && !isMeasurePopoutOpen} side={flyoutSide}>
           {measureGroupHovered && !isMeasurePopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Measure Tool
@@ -614,7 +636,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           )}
         </FlyoutPortal>
 
-        <FlyoutPortal anchorRef={measureGroupRef} open={isMeasurePopoutOpen}>
+        <FlyoutPortal anchorRef={measureGroupRef} open={isMeasurePopoutOpen} side={flyoutSide}>
           <div onMouseEnter={handleMeasureEnter} onMouseLeave={handleMeasureLeave}>
             <AnimatePresence>
               {isMeasurePopoutOpen && (
@@ -654,25 +676,25 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
         </FlyoutPortal>
       </div>
       
-      <div className="w-8 h-px bg-gray-200 my-1" />
+      <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
       
       <ToolButton tool="move" icon={<Move size={20} />} label="Move (M / G)" />
       <ToolButton tool="rotate" icon={<RotateCw size={20} />} label="Rotate (Q)" />
       <ToolButton tool="scale" icon={<Maximize size={20} />} label="Scale (S)" />
       
-      <div className="w-8 h-px bg-gray-200 my-1" />
+      <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
       
       <ToolButton tool="orbit" icon={<Orbit size={20} />} label="Orbit (O)" />
       <ToolButton tool="pan" icon={<Hand size={20} />} label="Pan (H)" />
       <ToolButton tool="zoom" icon={<ZoomIn size={20} />} label="Zoom (Z)" />
       
-      <div className="w-8 h-px bg-gray-200 my-1" />
+      <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
 
       <WorldViewToolButton />
 
       {pinnedScripts.length > 0 && (
         <>
-          <div className="w-8 h-px bg-gray-200 my-1" />
+          <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
           {pinnedScripts.map(scriptId => {
             const script = developerScripts.find(s => s.id === scriptId);
             if (!script) return null;
@@ -687,6 +709,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
         </>
       )}
     </aside>
+    </FlyoutSideContext.Provider>
   );
 }
 
@@ -701,6 +724,7 @@ function WorldViewToolButton() {
   const { setIsWorldViewOpen, isWorldViewActive } = useApp();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
 
   return (
     <button
@@ -714,7 +738,7 @@ function WorldViewToolButton() {
       )}
     >
       <Globe size={20} className={isWorldViewActive ? "text-trimble-blue" : "text-gray-500"} />
-      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+      <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
           <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
             WorldView Geolocation
@@ -728,6 +752,7 @@ function WorldViewToolButton() {
 function PinnedScriptButton({ name, onClick }: { name: string; onClick: () => void }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
 
   return (
     <button
@@ -738,7 +763,7 @@ function PinnedScriptButton({ name, onClick }: { name: string; onClick: () => vo
       className="toolbar-btn relative text-trimble-blue"
     >
       <Code size={20} />
-      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+      <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
           <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
             {name}

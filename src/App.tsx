@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
-import { AppProvider, useApp, type ToolbarKey } from './AppContext';
+import { AppProvider, useApp, type ToolbarKey, type DockZone } from './AppContext';
 import { handleFirestoreError, OperationType } from './firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { cn } from './lib/utils';
@@ -36,42 +36,56 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
 
 /**
- * Lets a classic-layout toolbar be dragged to swap position with a
- * sibling — the same interaction as dragging a toolbar in Word or Excel
- * to reposition it, just constrained to reordering these three rather
- * than docking to arbitrary screen edges. Uses native HTML5 drag-and-drop
- * (no new dependency needed for reordering three fixed items) and only
- * the small grip handle at the top is itself draggable, so it never
+ * Lets a classic-layout toolbar be dragged to reposition — either among
+ * its current dock-mates (reorder), or onto a different edge of the
+ * window entirely (re-dock to top/bottom/left) — the same two moves a
+ * desktop app like Word or Excel supports when you drag a toolbar. Uses
+ * native HTML5 drag-and-drop (no new dependency needed for three fixed
+ * items) and only the small grip handle is itself draggable, so it never
  * competes with the many ordinary buttons inside the toolbar below it.
+ *
+ * Orientation follows the dock: a left-docked toolbar keeps its original
+ * vertical column with a horizontal grip bar on top; a top/bottom-docked
+ * one becomes a horizontal strip with a vertical grip bar on its leading
+ * edge — matching how a real docked toolbar changes shape when you move
+ * it to a different edge, not just its position.
  */
 function DraggableToolbarSlot({
   toolbarKey,
+  dock,
   draggedKey,
   setDraggedKey,
   dragOverKey,
   setDragOverKey,
   toolbarOrder,
   setToolbarOrder,
+  toolbarDocks,
+  setToolbarDocks,
   theme,
   children,
 }: {
   toolbarKey: ToolbarKey;
+  dock: DockZone;
   draggedKey: ToolbarKey | null;
   setDraggedKey: (k: ToolbarKey | null) => void;
   dragOverKey: ToolbarKey | null;
   setDragOverKey: (k: ToolbarKey | null) => void;
   toolbarOrder: ToolbarKey[];
   setToolbarOrder: (next: ToolbarKey[] | ((prev: ToolbarKey[]) => ToolbarKey[])) => void;
+  toolbarDocks: Record<ToolbarKey, DockZone>;
+  setToolbarDocks: (next: Record<ToolbarKey, DockZone> | ((prev: Record<ToolbarKey, DockZone>) => Record<ToolbarKey, DockZone>)) => void;
   theme: string;
   children: ReactNode;
 }) {
   const isDragging = draggedKey === toolbarKey;
   const isDragOver = dragOverKey === toolbarKey && draggedKey !== null && draggedKey !== toolbarKey;
+  const horizontal = dock !== 'left';
 
   return (
     <div
       className={cn(
-        "flex flex-col h-full shrink-0 transition-opacity",
+        horizontal ? "flex flex-row w-full shrink-0" : "flex flex-col h-full shrink-0",
+        "transition-opacity",
         isDragging && "opacity-40",
       )}
       onDragOver={(e) => {
@@ -84,7 +98,12 @@ function DraggableToolbarSlot({
       }}
       onDrop={(e) => {
         e.preventDefault();
+        e.stopPropagation(); // dropped on a specific toolbar, not empty dock space
         if (!draggedKey || draggedKey === toolbarKey) return;
+        // Re-dock to match whichever toolbar it was dropped onto, THEN
+        // reorder relative to it — dropping toolbar A onto toolbar B
+        // means "put A right where B is," in both zone and position.
+        setToolbarDocks((prev) => ({ ...prev, [draggedKey]: dock }));
         setToolbarOrder((prev) => {
           const next = prev.filter((k) => k !== draggedKey);
           const targetIndex = next.indexOf(toolbarKey);
@@ -105,20 +124,80 @@ function DraggableToolbarSlot({
           setDraggedKey(null);
           setDragOverKey(null);
         }}
-        title="Drag to reorder"
+        title="Drag to reorder or move to another edge"
         className={cn(
-          "w-full h-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing border-b transition-colors shrink-0",
+          "flex items-center justify-center cursor-grab active:cursor-grabbing transition-colors shrink-0",
+          horizontal ? "h-full w-3.5 border-r" : "w-full h-3.5 border-b",
           isDragOver && "bg-trimble-blue/20",
           theme === 'dark'
             ? "bg-gray-850 border-gray-700 hover:bg-gray-800 text-gray-600"
             : "bg-slate-50 border-gray-200 hover:bg-gray-100 text-gray-400",
         )}
       >
-        <GripHorizontal size={12} />
+        <GripHorizontal size={12} className={horizontal ? "rotate-90" : undefined} />
       </div>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 min-w-0">
         {children}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A dock edge itself, as a drop target — dropping a toolbar somewhere in
+ * this strip that ISN'T directly on another toolbar (open space, or an
+ * empty edge with nothing docked there yet) re-docks it here without
+ * necessarily reordering it relative to anything, since there may be
+ * nothing to order it relative to.
+ */
+function DockZoneContainer({
+  zone,
+  draggedKey,
+  setDraggedKey,
+  toolbarDocks,
+  setToolbarDocks,
+  theme,
+  children,
+}: {
+  zone: DockZone;
+  draggedKey: ToolbarKey | null;
+  setDraggedKey: (k: ToolbarKey | null) => void;
+  toolbarDocks: Record<ToolbarKey, DockZone>;
+  setToolbarDocks: (next: Record<ToolbarKey, DockZone> | ((prev: Record<ToolbarKey, DockZone>) => Record<ToolbarKey, DockZone>)) => void;
+  theme: string;
+  children: ReactNode;
+}) {
+  const [isOver, setIsOver] = useState(false);
+  const isEmpty = Object.values(toolbarDocks).filter((d) => d === zone).length === 0;
+  const horizontal = zone !== 'left';
+
+  return (
+    <div
+      className={cn(
+        horizontal ? "flex flex-row w-full shrink-0" : "flex flex-col h-full shrink-0",
+        draggedKey && isOver && "bg-trimble-blue/10",
+        // An empty zone is otherwise invisible (zero size) and impossible
+        // to drop onto — give it a thin, visible drop strip only while
+        // something is actually being dragged, matching how most docking
+        // UIs reveal an empty dock target only on demand.
+        draggedKey && isEmpty && (horizontal ? "min-h-[10px]" : "min-w-[10px]"),
+        draggedKey && isEmpty && (theme === 'dark' ? "bg-gray-800/40" : "bg-gray-100/60"),
+      )}
+      onDragOver={(e) => {
+        if (!draggedKey) return;
+        e.preventDefault();
+        setIsOver(true);
+      }}
+      onDragLeave={() => setIsOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsOver(false);
+        if (!draggedKey) return;
+        setToolbarDocks((prev) => ({ ...prev, [draggedKey]: zone }));
+        setDraggedKey(null);
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -149,17 +228,31 @@ function AppContent() {
       totalReads,
       layoutMode,
       toolbarOrder,
-      setToolbarOrder
+      setToolbarOrder,
+      toolbarDocks,
+      setToolbarDocks
     } = useApp();
   
     const quotaLocked = isQuotaLocked();
     const [draggedToolbarKey, setDraggedToolbarKey] = useState<ToolbarKey | null>(null);
     const [dragOverToolbarKey, setDragOverToolbarKey] = useState<ToolbarKey | null>(null);
-    const TOOLBAR_COMPONENTS: Record<ToolbarKey, ReactNode> = {
-      left: <LeftToolbar layoutMode={layoutMode} />,
-      architecture: <ArchitectureToolbar />,
-      landscapes: <LandscapesToolbar />,
+    // A function, not a static map: each toolbar needs to know which edge
+    // it's CURRENTLY rendered against (its `dock` prop), so it can render
+    // as a horizontal strip instead of its original vertical column —
+    // and that can be different every time this is called, since the
+    // same toolbar might render in the top strip, the left column, or
+    // the bottom strip depending on where the user last dragged it.
+    const renderToolbar = (key: ToolbarKey, dock: DockZone): ReactNode => {
+      switch (key) {
+        case 'left': return <LeftToolbar layoutMode={layoutMode} dock={dock} />;
+        case 'architecture': return <ArchitectureToolbar />;
+        case 'landscapes': return <LandscapesToolbar />;
+      }
     };
+    // toolbarOrder governs relative order everywhere; filtering it per
+    // zone keeps that one order meaningful within each dock rather than
+    // needing a separate order per zone.
+    const toolbarsInZone = (zone: DockZone) => toolbarOrder.filter((k) => toolbarDocks[k] === zone);
     const remainingSeconds = Math.max(0, Math.ceil((quotaLockdownTime - Date.now()) / 1000));
     const remainingMinutes = Math.floor(remainingSeconds / 60);
     const remainingSecs = remainingSeconds % 60;
@@ -341,26 +434,100 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      <main className="flex-1 flex overflow-hidden relative">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
         {layoutMode === 'unified' ? (
-          <UnifiedToolRail />
+          <div className="flex-1 flex overflow-hidden">
+            <UnifiedToolRail />
+            <Viewport />
+          </div>
         ) : (
           <>
-            {toolbarOrder.map((key) => (
-              <DraggableToolbarSlot
-                key={key}
-                toolbarKey={key}
+            <DockZoneContainer
+              zone="top"
+              draggedKey={draggedToolbarKey}
+              setDraggedKey={setDraggedToolbarKey}
+              toolbarDocks={toolbarDocks}
+              setToolbarDocks={setToolbarDocks}
+              theme={theme}
+            >
+              {toolbarsInZone('top').map((key) => (
+                <DraggableToolbarSlot
+                  key={key}
+                  toolbarKey={key}
+                  dock="top"
+                  draggedKey={draggedToolbarKey}
+                  setDraggedKey={setDraggedToolbarKey}
+                  dragOverKey={dragOverToolbarKey}
+                  setDragOverKey={setDragOverToolbarKey}
+                  toolbarOrder={toolbarOrder}
+                  setToolbarOrder={setToolbarOrder}
+                  toolbarDocks={toolbarDocks}
+                  setToolbarDocks={setToolbarDocks}
+                  theme={theme}
+                >
+                  {renderToolbar(key, 'top')}
+                </DraggableToolbarSlot>
+              ))}
+            </DockZoneContainer>
+
+            <div className="flex-1 flex overflow-hidden">
+              <DockZoneContainer
+                zone="left"
                 draggedKey={draggedToolbarKey}
                 setDraggedKey={setDraggedToolbarKey}
-                dragOverKey={dragOverToolbarKey}
-                setDragOverKey={setDragOverToolbarKey}
-                toolbarOrder={toolbarOrder}
-                setToolbarOrder={setToolbarOrder}
+                toolbarDocks={toolbarDocks}
+                setToolbarDocks={setToolbarDocks}
                 theme={theme}
               >
-                {TOOLBAR_COMPONENTS[key]}
-              </DraggableToolbarSlot>
-            ))}
+                {toolbarsInZone('left').map((key) => (
+                  <DraggableToolbarSlot
+                    key={key}
+                    toolbarKey={key}
+                    dock="left"
+                    draggedKey={draggedToolbarKey}
+                    setDraggedKey={setDraggedToolbarKey}
+                    dragOverKey={dragOverToolbarKey}
+                    setDragOverKey={setDragOverToolbarKey}
+                    toolbarOrder={toolbarOrder}
+                    setToolbarOrder={setToolbarOrder}
+                    toolbarDocks={toolbarDocks}
+                    setToolbarDocks={setToolbarDocks}
+                    theme={theme}
+                  >
+                    {renderToolbar(key, 'left')}
+                  </DraggableToolbarSlot>
+                ))}
+              </DockZoneContainer>
+              <Viewport />
+            </div>
+
+            <DockZoneContainer
+              zone="bottom"
+              draggedKey={draggedToolbarKey}
+              setDraggedKey={setDraggedToolbarKey}
+              toolbarDocks={toolbarDocks}
+              setToolbarDocks={setToolbarDocks}
+              theme={theme}
+            >
+              {toolbarsInZone('bottom').map((key) => (
+                <DraggableToolbarSlot
+                  key={key}
+                  toolbarKey={key}
+                  dock="bottom"
+                  draggedKey={draggedToolbarKey}
+                  setDraggedKey={setDraggedToolbarKey}
+                  dragOverKey={dragOverToolbarKey}
+                  setDragOverKey={setDragOverToolbarKey}
+                  toolbarOrder={toolbarOrder}
+                  setToolbarOrder={setToolbarOrder}
+                  toolbarDocks={toolbarDocks}
+                  setToolbarDocks={setToolbarDocks}
+                  theme={theme}
+                >
+                  {renderToolbar(key, 'bottom')}
+                </DraggableToolbarSlot>
+              ))}
+            </DockZoneContainer>
           </>
         )}
         <Viewport />

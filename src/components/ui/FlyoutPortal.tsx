@@ -29,13 +29,21 @@ export interface FlyoutPortalProps {
   anchorRef: RefObject<HTMLElement | null>;
   open: boolean;
   children: ReactNode;
-  /** Gap between the anchor's right edge and the flyout, in px. */
+  /** Gap between the anchor and the flyout, in px. */
   offset?: number;
   /** z-index for the portaled wrapper. Matches LAYER.flyout in Surface.tsx. */
   zIndex?: number;
+  /**
+   * Which side of the anchor the flyout opens toward. 'right' (the
+   * original, and default, behaviour) suits a vertical toolbar docked to
+   * the left edge of the window; 'bottom' suits a horizontal toolbar
+   * docked to the top or bottom edge, where a flyout to the right would
+   * either run off-screen or read as the wrong direction entirely.
+   */
+  side?: 'right' | 'bottom';
 }
 
-export function FlyoutPortal({ anchorRef, open, children, offset = 8, zIndex = 150 }: FlyoutPortalProps) {
+export function FlyoutPortal({ anchorRef, open, children, offset = 8, zIndex = 150, side = 'right' }: FlyoutPortalProps) {
   const [rect, setRect] = useState<{ top: number; left: number } | null>(null);
   // Once true, stays true for the component's lifetime. `children` is
   // expected to be an AnimatePresence wrapping a conditionally-rendered
@@ -54,7 +62,11 @@ export function FlyoutPortal({ anchorRef, open, children, offset = 8, zIndex = 1
     if (!el) return;
     const update = () => {
       const r = el.getBoundingClientRect();
-      setRect({ top: r.top, left: r.right + offset });
+      setRect(
+        side === 'bottom'
+          ? { top: r.bottom + offset, left: r.left }
+          : { top: r.top, left: r.right + offset },
+      );
     };
     update();
     window.addEventListener('resize', update);
@@ -63,7 +75,7 @@ export function FlyoutPortal({ anchorRef, open, children, offset = 8, zIndex = 1
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open, anchorRef, offset]);
+  }, [open, anchorRef, offset, side]);
 
   if (!everOpened || !rect) return null;
 

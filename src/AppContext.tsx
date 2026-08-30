@@ -36,6 +36,7 @@ const cleanData = (obj: any): any => {
 };
 
 export type ToolbarKey = 'left' | 'architecture' | 'landscapes';
+export type DockZone = 'left' | 'top' | 'bottom';
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   // --- Geometry kernel -----------------------------------------------------
@@ -521,6 +522,52 @@ console.log("Created rectangle:", myRect.id);`);
       const next = typeof val === 'function' ? val(prev) : val;
       try {
         localStorage.setItem('polyform_toolbar_order', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  /**
+   * Which EDGE of the window each classic-layout toolbar is docked to —
+   * dragging one all the way to the top or bottom of the window re-docks
+   * it there as a horizontal strip, the same way dragging a toolbar to a
+   * different edge in Word or Excel re-docks it, rather than just
+   * reordering it among its current neighbours. Defaults to 'left' for
+   * all three, matching how they've always looked. `toolbarOrder` above
+   * still governs relative order WITHIN whichever dock a toolbar ends up
+   * in — the two pieces of state are independent by design, so moving a
+   * toolbar to a new edge doesn't need to also decide a new order for it.
+   */
+  const DEFAULT_TOOLBAR_DOCKS: Record<ToolbarKey, DockZone> = {
+    left: 'left',
+    architecture: 'left',
+    landscapes: 'left',
+  };
+  const [toolbarDocks, setToolbarDocksState] = useState<Record<ToolbarKey, DockZone>>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_toolbar_docks');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (
+          parsed && typeof parsed === 'object' &&
+          (['left', 'architecture', 'landscapes'] as ToolbarKey[]).every(
+            (k) => parsed[k] === 'left' || parsed[k] === 'top' || parsed[k] === 'bottom',
+          )
+        ) {
+          return parsed as Record<ToolbarKey, DockZone>;
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_TOOLBAR_DOCKS;
+  });
+
+  const setToolbarDocks = (
+    val: Record<ToolbarKey, DockZone> | ((prev: Record<ToolbarKey, DockZone>) => Record<ToolbarKey, DockZone>),
+  ) => {
+    setToolbarDocksState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_toolbar_docks', JSON.stringify(next));
       } catch (e) {}
       return next;
     });
@@ -1382,6 +1429,8 @@ console.log("Created rectangle:", myRect.id);`);
       setLayoutMode,
       toolbarOrder,
       setToolbarOrder,
+      toolbarDocks,
+      setToolbarDocks,
       landscapeSculptSettings,
       setLandscapeSculptSettings,
       landscapeRoadSettings,
