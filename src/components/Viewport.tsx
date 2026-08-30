@@ -1618,6 +1618,17 @@ function Scene() {
     // starts (rectangle, circle, line, triangle...) are actually handled —
     // stopping unconditionally here was why none of them could start on a
     // kernel wall at all.
+    //
+    // The whole body is wrapped in try/catch deliberately: this fires from
+    // R3F's own pointer-event dispatch on a <mesh>, not a regular React DOM
+    // event — and React's error boundaries only ever catch errors thrown
+    // during RENDER, never inside an event handler. An uncaught throw here
+    // would previously propagate straight out with nothing to catch it,
+    // which is consistent with a "white screen" report having no visible
+    // fallback UI at all. Whatever the underlying cause turns out to be,
+    // this ensures a future one can never take down the whole app the same
+    // way — it surfaces as a toast instead.
+    try {
     if (activeTool === 'bevel') {
       // Chamfers the whole solid the clicked face belongs to — the same
       // click-selects-the-group resolution used everywhere else, since a
@@ -1781,6 +1792,13 @@ function Scene() {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', finish, { once: true });
     return true;
+    } catch (err) {
+      console.error('[handleKernelFacePointerDown] uncaught error:', err);
+      showToast(
+        err instanceof Error ? `Something went wrong: ${err.message}` : 'Something went wrong with that action.',
+      );
+      return false;
+    }
   }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
