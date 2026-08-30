@@ -444,85 +444,69 @@ function AppContent() {
       </AnimatePresence>
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {layoutMode === 'unified' ? (
-          <div className="flex-1 flex overflow-hidden">
-            <UnifiedToolRail />
-            <Viewport />
-          </div>
-        ) : (
-          <>
-            <DockZoneContainer
-              zone="top"
-              draggedKey={draggedToolbarKey}
-              setDraggedKey={setDraggedToolbarKey}
-              toolbarDocks={toolbarDocks}
-              setToolbarDocks={setToolbarDocks}
-              theme={theme}
-            >
-              {toolbarsInZone('top').map((key) => (
-                <DraggableToolbarSlot
-                  key={key}
-                  toolbarKey={key}
-                  dock="top"
-                  draggedKey={draggedToolbarKey}
-                  setDraggedKey={setDraggedToolbarKey}
-                  dragOverKey={dragOverToolbarKey}
-                  setDragOverKey={setDragOverToolbarKey}
-                  toolbarOrder={toolbarOrder}
-                  setToolbarOrder={setToolbarOrder}
-                  toolbarDocks={toolbarDocks}
-                  setToolbarDocks={setToolbarDocks}
-                  theme={theme}
-                >
-                  {renderToolbar(key, 'top')}
-                </DraggableToolbarSlot>
-              ))}
-            </DockZoneContainer>
-
-            <div className="flex-1 flex overflow-hidden">
-              <DockZoneContainer
-                zone="left"
+        {layoutMode === 'classic' && (
+          <DockZoneContainer
+            zone="top"
+            draggedKey={draggedToolbarKey}
+            setDraggedKey={setDraggedToolbarKey}
+            toolbarDocks={toolbarDocks}
+            setToolbarDocks={setToolbarDocks}
+            theme={theme}
+          >
+            {toolbarsInZone('top').map((key) => (
+              <DraggableToolbarSlot
+                key={key}
+                toolbarKey={key}
+                dock="top"
                 draggedKey={draggedToolbarKey}
                 setDraggedKey={setDraggedToolbarKey}
+                dragOverKey={dragOverToolbarKey}
+                setDragOverKey={setDragOverToolbarKey}
+                toolbarOrder={toolbarOrder}
+                setToolbarOrder={setToolbarOrder}
                 toolbarDocks={toolbarDocks}
                 setToolbarDocks={setToolbarDocks}
                 theme={theme}
               >
-                {toolbarsInZone('left').map((key) => (
-                  <DraggableToolbarSlot
-                    key={key}
-                    toolbarKey={key}
-                    dock="left"
-                    draggedKey={draggedToolbarKey}
-                    setDraggedKey={setDraggedToolbarKey}
-                    dragOverKey={dragOverToolbarKey}
-                    setDragOverKey={setDragOverToolbarKey}
-                    toolbarOrder={toolbarOrder}
-                    setToolbarOrder={setToolbarOrder}
-                    toolbarDocks={toolbarDocks}
-                    setToolbarDocks={setToolbarDocks}
-                    theme={theme}
-                  >
-                    {renderToolbar(key, 'left')}
-                  </DraggableToolbarSlot>
-                ))}
-              </DockZoneContainer>
-              <Viewport />
-            </div>
+                {renderToolbar(key, 'top')}
+              </DraggableToolbarSlot>
+            ))}
+          </DockZoneContainer>
+        )}
 
+        {/*
+          Viewport, ToolModifierPalette and the right panel are ALL shared
+          between both layout modes — they used to be direct siblings in a
+          single-row <main>, which is what made them "just appear on the
+          right" for free. Restructuring <main> into a column (for the
+          top/bottom dock strips) meant they needed an explicit shared row
+          wrapper instead, or they would stack vertically below everything
+          rather than sit beside the viewport — confirmed as the actual
+          cause of the right panel appearing on the left, twice now: once
+          when this restructuring first happened, and a second time when a
+          later round was accidentally built from a stale clone that
+          predated this exact fix, silently reintroducing the bug this
+          comment is now guarding against. If this needs touching again,
+          count how many times the Viewport component is actually
+          rendered in this file first — it must always be exactly one.
+        */}
+        <div className="flex-1 flex overflow-hidden">
+          {layoutMode === 'unified' ? (
+            <UnifiedToolRail />
+          ) : (
             <DockZoneContainer
-              zone="bottom"
+              zone="left"
               draggedKey={draggedToolbarKey}
               setDraggedKey={setDraggedToolbarKey}
               toolbarDocks={toolbarDocks}
               setToolbarDocks={setToolbarDocks}
               theme={theme}
             >
-              {toolbarsInZone('bottom').map((key) => (
+              {toolbarsInZone('left').map((key) => (
                 <DraggableToolbarSlot
                   key={key}
                   toolbarKey={key}
-                  dock="bottom"
+                  dock="left"
                   draggedKey={draggedToolbarKey}
                   setDraggedKey={setDraggedToolbarKey}
                   dragOverKey={dragOverToolbarKey}
@@ -533,56 +517,87 @@ function AppContent() {
                   setToolbarDocks={setToolbarDocks}
                   theme={theme}
                 >
-                  {renderToolbar(key, 'bottom')}
+                  {renderToolbar(key, 'left')}
                 </DraggableToolbarSlot>
               ))}
             </DockZoneContainer>
-          </>
+          )}
+
+          <Viewport />
+
+          {!isToolModifierDocked && <ToolModifierPalette />}
+
+          {/* Right Panel Toggle Button - Always visible and obvious */}
+          <button
+            onClick={() => setRightPanelVisible(!rightPanelVisible)}
+            className={`absolute top-4 z-30 p-2.5 rounded-lg shadow-xl border transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 ${
+              rightPanelVisible ? 'right-[300px]' : 'right-4'
+            } ${
+              theme === 'dark' 
+                ? 'bg-gray-800 text-gray-200 border-gray-700 hover:bg-gray-700' 
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+            title={rightPanelVisible ? "Collapse Panel" : "Expand Panel"}
+          >
+            {rightPanelVisible ? (
+              <>
+                <PanelRightClose size={18} />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Collapse</span>
+              </>
+            ) : (
+              <>
+                <PanelRightOpen size={18} />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Tools & Info</span>
+              </>
+            )}
+          </button>
+
+          <AnimatePresence>
+            {rightPanelVisible && (
+              <motion.div
+                initial={{ x: 300, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 300, opacity: 0 }}
+                transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                className="h-full relative z-40"
+              >
+                <ErrorBoundary>
+                  <RightPanelStack />
+                </ErrorBoundary>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {layoutMode === 'classic' && (
+          <DockZoneContainer
+            zone="bottom"
+            draggedKey={draggedToolbarKey}
+            setDraggedKey={setDraggedToolbarKey}
+            toolbarDocks={toolbarDocks}
+            setToolbarDocks={setToolbarDocks}
+            theme={theme}
+          >
+            {toolbarsInZone('bottom').map((key) => (
+              <DraggableToolbarSlot
+                key={key}
+                toolbarKey={key}
+                dock="bottom"
+                draggedKey={draggedToolbarKey}
+                setDraggedKey={setDraggedToolbarKey}
+                dragOverKey={dragOverToolbarKey}
+                setDragOverKey={setDragOverToolbarKey}
+                toolbarOrder={toolbarOrder}
+                setToolbarOrder={setToolbarOrder}
+                toolbarDocks={toolbarDocks}
+                setToolbarDocks={setToolbarDocks}
+                theme={theme}
+              >
+                {renderToolbar(key, 'bottom')}
+              </DraggableToolbarSlot>
+            ))}
+          </DockZoneContainer>
         )}
-        <Viewport />
-        
-        {!isToolModifierDocked && <ToolModifierPalette />}
-
-        {/* Right Panel Toggle Button - Always visible and obvious */}
-        <button
-          onClick={() => setRightPanelVisible(!rightPanelVisible)}
-          className={`absolute top-4 z-30 p-2.5 rounded-lg shadow-xl border transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 ${
-            rightPanelVisible ? 'right-[300px]' : 'right-4'
-          } ${
-            theme === 'dark' 
-              ? 'bg-gray-800 text-gray-200 border-gray-700 hover:bg-gray-700' 
-              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-          }`}
-          title={rightPanelVisible ? "Collapse Panel" : "Expand Panel"}
-        >
-          {rightPanelVisible ? (
-            <>
-              <PanelRightClose size={18} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Collapse</span>
-            </>
-          ) : (
-            <>
-              <PanelRightOpen size={18} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Tools & Info</span>
-            </>
-          )}
-        </button>
-
-        <AnimatePresence>
-          {rightPanelVisible && (
-            <motion.div
-              initial={{ x: 300, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 300, opacity: 0 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="h-full relative z-40"
-            >
-              <ErrorBoundary>
-                <RightPanelStack />
-              </ErrorBoundary>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </main>
 
       <StatusBar />
