@@ -133,6 +133,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * renders, sidesteps that entirely.
    */
   const [viewportToast, setViewportToast] = useState<string | null>(null);
+  /**
+   * Where a new note gets its position from is a genuine 3D interaction
+   * (a raycast hit point from a click), which only Scene() can produce —
+   * but the dialog that lets the user actually type and confirm the note
+   * is plain 2D UI. Lives in context for the same reason `viewportToast`
+   * does: the dialog used to be a createPortal call from inside Scene()
+   * itself (react-three-fiber's own reconciler, not react-dom's), which is
+   * a real, reproduced crash — "Div is not part of the THREE namespace" —
+   * not a hypothetical one. Scene() sets this on click; the outer,
+   * react-dom-rendered Viewport() function renders the actual dialog.
+   */
+  const [placingNotePos, setPlacingNotePos] = useState<THREE.Vector3 | null>(null);
   const [activeMaterial, setActiveMaterial] = useState('#ffffff');
   const [activePBR, setActivePBR] = useState({ roughness: 0.5, metalness: 0, opacity: 1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1106,6 +1118,8 @@ console.log("Created rectangle:", myRect.id);`);
       setMeasurements,
       viewportToast,
       setViewportToast,
+      placingNotePos,
+      setPlacingNotePos,
       activeMaterial,
       setActiveMaterial,
       activePBR,

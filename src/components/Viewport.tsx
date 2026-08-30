@@ -1134,6 +1134,7 @@ function Scene() {
     updateShapeDimensions,
     setMeasurements,
     setViewportToast,
+    setPlacingNotePos,
     unit,
     theme,
     setRightPanelVisible,
@@ -2014,8 +2015,9 @@ function Scene() {
   const [typedLength, setTypedLength] = useState<string>('');
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
-  const [placingNotePos, setPlacingNotePos] = useState<THREE.Vector3 | null>(null);
-  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // placingNotePos/setPlacingNotePos now come from context (see
+  // AppContext.tsx's own doc comment) — Scene() still SETS this on click
+  // (below), but no longer renders the dialog itself or owns its state.
   const [polyVertices, setPolyVertices] = useState<THREE.Vector3[]>([]);
   const [polyPlane, setPolyPlane] = useState<THREE.Plane | null>(null);
   const [polyNormal, setPolyNormal] = useState<THREE.Vector3 | null>(null);
@@ -5975,125 +5977,17 @@ function Scene() {
         showToast's own doc comment above for why this can't render here.
       */}
 
-      {placingNotePos && (
-        /*
-          Rendered straight into <body> with a React portal rather than through
-          drei's <Html>. This is a DOM dialog; it was never scene content, and
-          routing it through the 3D layer meant its size and position depended
-          on canvas measurement, transform state and drei's own portal
-          handling. A portal removes all of that from the picture.
-        */
-        createPortal(
-          <div
-            className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
-            style={{ zIndex: 1000 }}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="New design note"
-              // Explicit width, not w-full. This panel lives inside drei's
-              // <Html fullscreen>, whose container has no definite width, so a
-              // percentage width resolves to zero and the dialog collapses to
-              // a sliver — which is the "square and a line" this replaced.
-              className="w-[560px] max-w-[92vw] flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
-              onPointerDown={e => e.stopPropagation()}
-              style={{ pointerEvents: 'auto' }}
-            >
-              {/*
-                Same header shape as every other dialog: icon, title, one line
-                of supporting copy. The previous version shouted in uppercase
-                black weight with a 10px italic subtitle, which matched nothing
-                else in the app and put the subtitle under 4.5:1.
-              */}
-              <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="shrink-0 w-10 h-10 rounded-xl bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
-                    <StickyNote size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">New design note</h2>
-                    <p className="mt-0.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
-                      Describe your intent, or leave a comment for collaborators.
-                    </p>
-                  </div>
-                </div>
-                {/* Read-only metadata, so it no longer pretends to be a button. */}
-                <span className="shrink-0 text-[11px] font-medium tabular-nums px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                  {placingNotePos.x.toFixed(2)}, {placingNotePos.y.toFixed(2)}, {placingNotePos.z.toFixed(2)}
-                </span>
-              </header>
-
-              <div className="px-6 py-5">
-                <label htmlFor="polyform-note-text" className="sr-only">Note text</label>
-                <textarea
-                  id="polyform-note-text"
-                  autoFocus
-                  ref={noteTextareaRef}
-                  defaultValue=""
-                  placeholder="What should someone know about this part of the model?"
-                  className="w-full h-28 p-3 text-sm rounded-xl resize-none transition-colors bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      const _noteText = (noteTextareaRef.current?.value || '').trim();
-                      if (_noteText) {
-                        const newNote: SceneNote = {
-                          id: Math.random().toString(36).substr(2, 9),
-                          text: _noteText,
-                          position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
-                          authorUid: user?.uid || 'anonymous',
-                          authorName: user?.displayName || 'Anonymous',
-                          createdAt: Date.now(),
-                          completed: false
-                        };
-                        setNotes(prev => [...prev, newNote]);
-                        recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
-                      }
-                      setPlacingNotePos(null);
-                    }
-                    if (e.key === 'Escape') setPlacingNotePos(null);
-                  }}
-                />
-              </div>
-
-              {/* Right-aligned, confirming action last — the convention users
-                  arrive with. Previously two equal full-width buttons. */}
-              <footer className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Enter to save · Esc to cancel
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" onClick={() => setPlacingNotePos(null)}>Cancel</Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      const _noteText = (noteTextareaRef.current?.value || '').trim();
-                      if (_noteText) {
-                        const newNote: SceneNote = {
-                          id: Math.random().toString(36).substr(2, 9),
-                          text: _noteText,
-                          position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
-                          authorUid: user?.uid || 'anonymous',
-                          authorName: user?.displayName || 'Anonymous',
-                          createdAt: Date.now(),
-                          completed: false
-                        };
-                        setNotes(prev => [...prev, newNote]);
-                        recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
-                      }
-                      setPlacingNotePos(null);
-                    }}
-                  >
-                    Place note
-                  </Button>
-                </div>
-              </footer>
-            </div>
-          </div>,
-          document.body
-        )
-      )}
+      {/*
+        New Note dialog moved to the outer Viewport() function — the SAME
+        fix as viewportToast, for the SAME reason: this used to be a
+        createPortal call right here, inside Scene(), which react-three-
+        fiber renders with its own custom reconciler, not react-dom's. A
+        plain <div> created that way is rejected outright as "not part of
+        the THREE namespace" -- a real, reproduced crash, not a
+        hypothetical one. placingNotePos is still SET here (a few lines
+        up, from the actual 3D click), but the dialog itself now renders
+        from Viewport(), which react-dom actually renders.
+      */}
 
       {/*
         Kernel-derived geometry, rendered ALONGSIDE the Shape[] primitives
@@ -8148,6 +8042,10 @@ export default function Viewport() {
     commitHistory,
     setMeasurements,
     viewportToast,
+    placingNotePos,
+    setPlacingNotePos,
+    setNotes,
+    user,
     skybox, 
     activeTagId, 
     shapes, 
@@ -8171,6 +8069,9 @@ export default function Viewport() {
     showCollaboratorCursors,
     unit
   } = useApp();
+  // Local to Viewport() now, alongside the dialog itself (moved from
+  // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
+  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [styleLibraryTargetId, setStyleLibraryTargetId] = useState<string | null>(null);
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
   const [quadView, setQuadView] = useState(false);
@@ -8334,6 +8235,108 @@ export default function Viewport() {
           </div>
         </div>
       )}
+
+      {placingNotePos && (
+        // Rendered directly here — no portal needed, since this whole
+        // function IS already inside react-dom's own tree. See
+        // AppContext.tsx's own doc comment on `placingNotePos` for why
+        // this can no longer live inside Scene().
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+          style={{ zIndex: 1000 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="New design note"
+            className="w-[560px] max-w-[92vw] flex flex-col rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.35)] overflow-hidden"
+            onPointerDown={e => e.stopPropagation()}
+            style={{ pointerEvents: 'auto' }}
+          >
+            <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
+                  <StickyNote size={18} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">New design note</h2>
+                  <p className="mt-0.5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+                    Describe your intent, or leave a comment for collaborators.
+                  </p>
+                </div>
+              </div>
+              <span className="shrink-0 text-[11px] font-medium tabular-nums px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                {placingNotePos.x.toFixed(2)}, {placingNotePos.y.toFixed(2)}, {placingNotePos.z.toFixed(2)}
+              </span>
+            </header>
+
+            <div className="px-6 py-5">
+              <label htmlFor="polyform-note-text" className="sr-only">Note text</label>
+              <textarea
+                id="polyform-note-text"
+                autoFocus
+                ref={noteTextareaRef}
+                defaultValue=""
+                placeholder="What should someone know about this part of the model?"
+                className="w-full h-28 p-3 text-sm rounded-xl resize-none transition-colors bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const _noteText = (noteTextareaRef.current?.value || '').trim();
+                    if (_noteText) {
+                      const newNote: SceneNote = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        text: _noteText,
+                        position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
+                        authorUid: user?.uid || 'anonymous',
+                        authorName: user?.displayName || 'Anonymous',
+                        createdAt: Date.now(),
+                        completed: false
+                      };
+                      setNotes(prev => [...prev, newNote]);
+                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                    }
+                    setPlacingNotePos(null);
+                  }
+                  if (e.key === 'Escape') setPlacingNotePos(null);
+                }}
+              />
+            </div>
+
+            <footer className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Enter to save · Esc to cancel
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={() => setPlacingNotePos(null)}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const _noteText = (noteTextareaRef.current?.value || '').trim();
+                    if (_noteText) {
+                      const newNote: SceneNote = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        text: _noteText,
+                        position: { x: placingNotePos.x, y: placingNotePos.y, z: placingNotePos.z },
+                        authorUid: user?.uid || 'anonymous',
+                        authorName: user?.displayName || 'Anonymous',
+                        createdAt: Date.now(),
+                        completed: false
+                      };
+                      setNotes(prev => [...prev, newNote]);
+                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                    }
+                    setPlacingNotePos(null);
+                  }}
+                >
+                  Place note
+                </Button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      )}
+
       {quadView ? (
         <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-black/30 z-0">
           {panelViews.map((view, idx) => (
