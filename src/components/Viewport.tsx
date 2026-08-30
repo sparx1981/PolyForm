@@ -1133,6 +1133,7 @@ function Scene() {
     updateShapeColor,
     updateShapeDimensions,
     setMeasurements,
+    setViewportToast,
     unit,
     theme,
     setRightPanelVisible,
@@ -1271,12 +1272,19 @@ function Scene() {
    * needs to notice (an unsupported tool, a failed operation) deserves its
    * own clearly visible space rather than competing for attention with a
    * number that updates constantly during ordinary use.
+   *
+   * The state itself and its render both live OUTSIDE this component now
+   * (in AppContext, rendered from the outer Viewport() function) — see
+   * AppContext.tsx's own doc comment on `viewportToast` for why: this
+   * component, Scene(), is rendered by react-three-fiber's own reconciler,
+   * not react-dom's, and a plain <div> created from within it — even via
+   * createPortal — is rejected outright as "not part of the THREE
+   * namespace." That was a real, reproduced crash, not a hypothetical one.
    */
-  const [viewportToast, setViewportToast] = useState<string | null>(null);
   const showToast = useCallback((message: string, durationMs = 3000) => {
     setViewportToast(message);
-    window.setTimeout(() => setViewportToast((current) => (current === message ? null : current)), durationMs);
-  }, []);
+    window.setTimeout(() => setViewportToast((current: string | null) => (current === message ? null : current)), durationMs);
+  }, [setViewportToast]);
   const [faceOffsetPreview, setFaceOffsetPreview] = useState<
     { faceId: FaceId; distance: number } | null
   >(null);
@@ -5962,18 +5970,10 @@ function Scene() {
         <RenderMapTexture lat={worldViewLocation.lat} lng={worldViewLocation.lng} />
       )}
 
-      {viewportToast && createPortal(
-        <div
-          className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-xl border border-gray-700 max-w-md text-center">
-            {viewportToast}
-          </div>
-        </div>,
-        document.body,
-      )}
+      {/*
+        Toast render moved to the outer Viewport() function — see
+        showToast's own doc comment above for why this can't render here.
+      */}
 
       {placingNotePos && (
         /*
@@ -8147,6 +8147,7 @@ export default function Viewport() {
     addShape,
     commitHistory,
     setMeasurements,
+    viewportToast,
     skybox, 
     activeTagId, 
     shapes, 
@@ -8314,6 +8315,25 @@ export default function Viewport() {
       "flex-1 relative overflow-hidden transition-colors duration-300",
       theme === 'dark' ? "bg-gray-900" : "bg-[#f8f9fa]"
     )}>
+      {/*
+        Rendered directly here (no portal needed) precisely because this
+        div IS already inside react-dom's own tree — see showToast's doc
+        comment in Scene() for why the SAME render used to crash the whole
+        app when it lived inside Scene() instead. position:fixed escapes
+        this div's own overflow-hidden regardless, since nothing here sets
+        a CSS transform that would otherwise contain it.
+      */}
+      {viewportToast && (
+        <div
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-xl border border-gray-700 max-w-md text-center">
+            {viewportToast}
+          </div>
+        </div>
+      )}
       {quadView ? (
         <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-black/30 z-0">
           {panelViews.map((view, idx) => (

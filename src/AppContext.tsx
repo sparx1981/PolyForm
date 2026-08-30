@@ -120,6 +120,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [measurements, setMeasurements] = useState('');
+  /**
+   * A dedicated, hard-to-miss banner for things the user actively needs to
+   * notice (an unsupported tool, a failed operation) — separate from
+   * `measurements`, which is only ever a small, easy-to-miss status-bar
+   * readout. Lives in context (not local Viewport/Scene state) and gets
+   * rendered from OUTSIDE the R3F <Canvas> specifically: Scene() is
+   * rendered by react-three-fiber's own custom reconciler, not react-dom's
+   * — a plain <div> (even via createPortal) created from within it is not
+   * a THREE object and R3F's reconciler rejects it outright. Rendering the
+   * toast from the outer Viewport() component, which react-dom itself
+   * renders, sidesteps that entirely.
+   */
+  const [viewportToast, setViewportToast] = useState<string | null>(null);
   const [activeMaterial, setActiveMaterial] = useState('#ffffff');
   const [activePBR, setActivePBR] = useState({ roughness: 0.5, metalness: 0, opacity: 1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1091,6 +1104,8 @@ console.log("Created rectangle:", myRect.id);`);
       setActiveTool, 
       measurements, 
       setMeasurements,
+      viewportToast,
+      setViewportToast,
       activeMaterial,
       setActiveMaterial,
       activePBR,
