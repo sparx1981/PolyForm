@@ -119,14 +119,19 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAIPopoutOpen, setIsAIPopoutOpen] = useState(false);
   const aiGroupRef = useRef<HTMLDivElement>(null);
+  const [aiGroupHovered, setAiGroupHovered] = useState(false);
   const [is3DPopoutOpen, setIs3DPopoutOpen] = useState(false);
   const threeDGroupRef = useRef<HTMLDivElement>(null);
+  const [threeDGroupHovered, setThreeDGroupHovered] = useState(false);
   const [isLinePopoutOpen, setIsLinePopoutOpen] = useState(false);
   const lineGroupRef = useRef<HTMLDivElement>(null);
+  const [lineGroupHovered, setLineGroupHovered] = useState(false);
   const [isBevelPopoutOpen, setIsBevelPopoutOpen] = useState(false);
   const bevelGroupRef = useRef<HTMLDivElement>(null);
+  const [bevelGroupHovered, setBevelGroupHovered] = useState(false);
   const [isMeasurePopoutOpen, setIsMeasurePopoutOpen] = useState(false);
   const measureGroupRef = useRef<HTMLDivElement>(null);
+  const [measureGroupHovered, setMeasureGroupHovered] = useState(false);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hover3DTimeout, setHover3DTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hoverLineTimeout, setHoverLineTimeout] = useState<NodeJS.Timeout|null>(null);
@@ -173,6 +178,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
   const handleAIEnter = () => {
     if (hoverTimeout) clearTimeout(hoverTimeout);
     setIsAIPopoutOpen(true);
+    setAiGroupHovered(true);
   };
 
   const handleAILeave = () => {
@@ -180,11 +186,13 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       setIsAIPopoutOpen(false);
     }, 300);
     setHoverTimeout(timeout);
+    setAiGroupHovered(false);
   };
 
   const handle3DEnter = () => {
     if (hover3DTimeout) clearTimeout(hover3DTimeout);
     setIs3DPopoutOpen(true);
+    setThreeDGroupHovered(true);
   };
 
   const handle3DLeave = () => {
@@ -192,11 +200,13 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       setIs3DPopoutOpen(false);
     }, 300);
     setHover3DTimeout(timeout);
+    setThreeDGroupHovered(false);
   };
 
   const handleBevelEnter = () => {
     if (hoverBevelTimeout) clearTimeout(hoverBevelTimeout);
     setIsBevelPopoutOpen(true);
+    setBevelGroupHovered(true);
   };
 
   const handleBevelLeave = () => {
@@ -204,11 +214,13 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       setIsBevelPopoutOpen(false);
     }, 300);
     setHoverBevelTimeout(timeout);
+    setBevelGroupHovered(false);
   };
 
   const handleMeasureEnter = () => {
     if (hoverMeasureTimeout) clearTimeout(hoverMeasureTimeout);
     setIsMeasurePopoutOpen(true);
+    setMeasureGroupHovered(true);
   };
 
   const handleMeasureLeave = () => {
@@ -216,11 +228,13 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       setIsMeasurePopoutOpen(false);
     }, 300);
     setHoverMeasureTimeout(timeout);
+    setMeasureGroupHovered(false);
   };
 
   const handleLineEnter = () => {
     if (hoverLineTimeout) clearTimeout(hoverLineTimeout);
     setIsLinePopoutOpen(true);
+    setLineGroupHovered(true);
   };
 
   const handleLineLeave = () => {
@@ -228,6 +242,7 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
       setIsLinePopoutOpen(false);
     }, 300);
     setHoverLineTimeout(timeout);
+    setLineGroupHovered(false);
   };
 
   const is3DActive = ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool);
@@ -253,8 +268,8 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           <Sparkles size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={aiGroupRef} open={!isAIPopoutOpen}>
-          {!isAIPopoutOpen && (
+        <FlyoutPortal anchorRef={aiGroupRef} open={aiGroupHovered && !isAIPopoutOpen}>
+          {aiGroupHovered && !isAIPopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               AI Model Query
             </div>
@@ -351,8 +366,8 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           sibling toolbar that happens to render later in the DOM. Portaling
           to document.body sidesteps that entirely.
         */}
-        <FlyoutPortal anchorRef={lineGroupRef} open={!isLinePopoutOpen}>
-          {!isLinePopoutOpen && (
+        <FlyoutPortal anchorRef={lineGroupRef} open={lineGroupHovered && !isLinePopoutOpen}>
+          {lineGroupHovered && !isLinePopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Line, Poly & Arc Tools
             </div>
@@ -428,8 +443,8 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           <Cone size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={threeDGroupRef} open={!is3DPopoutOpen}>
-          {!is3DPopoutOpen && (
+        <FlyoutPortal anchorRef={threeDGroupRef} open={threeDGroupHovered && !is3DPopoutOpen}>
+          {threeDGroupHovered && !is3DPopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               3D Primitives
             </div>
@@ -522,8 +537,8 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           <CornerUpRight size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={bevelGroupRef} open={!isBevelPopoutOpen}>
-          {!isBevelPopoutOpen && (
+        <FlyoutPortal anchorRef={bevelGroupRef} open={bevelGroupHovered && !isBevelPopoutOpen}>
+          {bevelGroupHovered && !isBevelPopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Bevel Tool
             </div>
@@ -591,8 +606,8 @@ export default function LeftToolbar({ layoutMode }: LeftToolbarProps = {}) {
           <Ruler size={20} />
         </button>
 
-        <FlyoutPortal anchorRef={measureGroupRef} open={!isMeasurePopoutOpen}>
-          {!isMeasurePopoutOpen && (
+        <FlyoutPortal anchorRef={measureGroupRef} open={measureGroupHovered && !isMeasurePopoutOpen}>
+          {measureGroupHovered && !isMeasurePopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Measure Tool
             </div>
