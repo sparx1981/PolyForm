@@ -61,7 +61,7 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining } from '../tools/kernelSelection';
+import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden } from '../tools/kernelSelection';
 import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
@@ -1318,6 +1318,27 @@ function Scene() {
    *  within the window reads as a double-click rather than two singles. */
   const lastKernelClickRef = useRef<{ faceId: FaceId; time: number } | null>(null);
   const DOUBLE_CLICK_MS = 350;
+
+  /**
+   * Right-click on a kernel face — resolves to its whole group (same
+   * click-selects-the-group semantics used everywhere else for kernel
+   * objects) and opens the SAME context-menu UI Shapes already use, just
+   * with a `'kernel'` type and its own small set of options. The menu
+   * itself already lives safely in the outer Viewport() function — see
+   * its own render further down — so this only needs to set the SAME
+   * shared `contextMenu` context state Shapes already use.
+   */
+  const handleKernelFaceContextMenu = useCallback((faceId: FaceId, event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
+    event.nativeEvent?.preventDefault();
+    const clientX = event.nativeEvent?.clientX ?? 0;
+    const clientY = event.nativeEvent?.clientY ?? 0;
+    const group = groupContaining(kernelHost.graph, faceId);
+    setSelectedFaceIds(group);
+    setSelectedId(null);
+    setSelectedIds([]);
+    setContextMenu({ x: clientX, y: clientY, type: 'kernel', data: group });
+  }, [kernelHost, setContextMenu, setSelectedFaceIds, setSelectedId, setSelectedIds]);
 
   const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
     if (activeTool === 'paint') {
@@ -6017,6 +6038,7 @@ function Scene() {
         selectedFaces={kernelSelectedSet}
         onFaceClick={handleKernelFaceClick}
         onFacePointerDown={handleKernelFacePointerDown}
+        onFaceContextMenu={handleKernelFaceContextMenu}
         showEdges={edgeLinesEnabled}
         edgeColor={edgeLinesColor}
         edgeOpacity={edgeLinesOpacity}
@@ -8060,6 +8082,9 @@ export default function Viewport() {
     setPlacingNotePos,
     setNotes,
     user,
+    kernelHost,
+    bumpKernel,
+    setSelectedFaceIds,
     skybox, 
     activeTagId, 
     shapes, 
@@ -8890,6 +8915,58 @@ export default function Viewport() {
                 onClick={handleDeleteSurface}
                 className={cn(
                   "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors text-red-500",
+                  theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                )}
+              >
+                Delete
+              </button>
+            </>
+          ) : contextMenu.type === 'kernel' ? (
+            <>
+              {/*
+                Kernel groups don't have names, tags, or per-object
+                metadata the way Shapes do yet, so this stays deliberately
+                small: the operations already exist and are already
+                tested (paintFaces, setGroupHidden,
+                deleteGroupFacesAndEdges) — this just gives them a
+                right-click entry point, rather than inventing new ones.
+                Un-hiding a hidden kernel group happens via the Outliner's
+                existing group-level visibility toggle, matching how that
+                already works for Shapes.
+              */}
+              <button
+                onClick={() => {
+                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial) > 0) bumpKernel();
+                  setContextMenu(null);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+                  theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                )}
+              >
+                Allocate Material
+              </button>
+              <button
+                onClick={() => {
+                  if (setGroupHidden(kernelHost.graph, contextMenu.data, true) > 0) bumpKernel();
+                  setContextMenu(null);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+                  theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                )}
+              >
+                Hide
+              </button>
+              <button
+                onClick={() => {
+                  deleteGroupFacesAndEdges(kernelHost.graph, contextMenu.data);
+                  bumpKernel();
+                  setSelectedFaceIds([]);
+                  setContextMenu(null);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors text-red-600 dark:text-red-400",
                   theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
                 )}
               >

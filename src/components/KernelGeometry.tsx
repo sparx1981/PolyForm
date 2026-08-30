@@ -45,6 +45,8 @@ export interface KernelGeometryProps {
    * the event never left this mesh.
    */
   onFacePointerDown?: (faceId: FaceId, event: ThreeEvent<PointerEvent>) => boolean | void;
+  /** Fires on right-click / long-press-equivalent, for a context menu. */
+  onFaceContextMenu?: (faceId: FaceId, event: ThreeEvent<MouseEvent>) => void;
   onEdgeClick?: (edgeId: EdgeId, event: ThreeEvent<MouseEvent>) => void;
   /**
    * These four mirror the app's own edge-line settings exactly
@@ -74,6 +76,7 @@ export function KernelGeometry({
   selectedFaces,
   onFaceClick,
   onFacePointerDown,
+  onFaceContextMenu,
   onEdgeClick,
   showEdges = true,
   edgeColor = DEFAULT_EDGE,
@@ -171,6 +174,15 @@ export function KernelGeometry({
             if (faceId === undefined) return;
             event.stopPropagation();
             onFaceClick(faceId, event);
+          }}
+          onContextMenu={(event) => {
+            if (!onFaceContextMenu) return;
+            const triangle = event.faceIndex;
+            if (triangle === undefined || triangle === null) return;
+            const faceId = g.faceOfTriangle[triangle];
+            if (faceId === undefined) return;
+            event.stopPropagation();
+            onFaceContextMenu(faceId, event);
           }}
         >
           <meshStandardMaterial
