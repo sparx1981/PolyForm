@@ -91,7 +91,10 @@ export function validateBox(
   for (const fid of faceIds) {
     const f = g.faces.get(fid);
     if (!f) return { ok: false, reason: `face ${fid} not found` };
-    if (f.innerLoops.length > 0) return { ok: false, reason: 'a face with a hole is not supported' };
+    // A face with a hole is fine — see chamfer.ts's own identical
+    // reasoning: the hole is interior to the face, never touches the
+    // edges being rounded, and carries over unchanged onto the shrunk
+    // boundary face.
 
     const order = loopVertexIds(g, f.outerLoop);
     if (order.length !== 4) {
@@ -186,8 +189,8 @@ export function filletSolid(
 
   const touched = new Set<EdgeId>();
   const newFaceIds: FaceId[] = [];
-  const addDirectFace = (points: Vec3[], hint: Vec3) => {
-    const created = createDirectFace(ctx, points, hint, touched);
+  const addDirectFace = (points: Vec3[], hint: Vec3, holes?: readonly (readonly Vec3[])[]) => {
+    const created = createDirectFace(ctx, points, hint, touched, holes);
     if (created !== null) newFaceIds.push(created);
   };
 
@@ -200,12 +203,18 @@ export function filletSolid(
     vertexCentre.set(vid, sub(v, scale(sumN, radius)));
   }
 
-  // 1. Each face's own shrunk boundary (identical to chamfer's).
+  // 1. Each face's own shrunk boundary (identical to chamfer's). Any
+  // hole carries over completely unchanged — see chamfer.ts's identical
+  // reasoning and createDirectFace's own doc comment on its `holes`
+  // parameter.
   for (const fid of faceIds) {
     const f = g.faces.get(fid)!;
     const order = loopVertexIds(g, f.outerLoop);
     const map = insetPoint.get(fid)!;
-    addDirectFace(order.map((vid) => map.get(vid)!), originalNormal.get(fid)!);
+    const holes = f.innerLoops.map((loopId) =>
+      loopVertexIds(g, loopId).map((vid) => getVertex(g, vid).position),
+    );
+    addDirectFace(order.map((vid) => map.get(vid)!), originalNormal.get(fid)!, holes);
   }
 
   // 2. A trimmed, curved strip per original edge.

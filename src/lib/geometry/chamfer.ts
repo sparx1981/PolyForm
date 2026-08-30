@@ -104,6 +104,18 @@ export function createDirectFace(
   points: readonly Vec3[],
   outwardHint: Vec3,
   touched: Set<EdgeId>,
+  /**
+   * Optional hole boundaries to carry over UNCHANGED onto the new face.
+   * Chamfer/fillet only ever reshape a face's OUTER boundary (that's
+   * where it meets the edges actually being rounded) — a hole cut into
+   * the middle of a face doesn't touch those edges at all, so it stays
+   * exactly where it was, not shrunk or moved. Each entry is one hole's
+   * own closed point loop, in the SAME winding convention the original
+   * face's hole loop used (reversed relative to the outer loop, per this
+   * kernel's own B-rep convention) — callers are responsible for getting
+   * that winding right; this function does not re-derive it.
+   */
+  holes?: readonly (readonly Vec3[])[],
 ): FaceId | null {
   const g = ctx.graph;
   let ordered = points;
@@ -149,6 +161,14 @@ export function createDirectFace(
   // of this one — the same class of bug fixed in push/pull and offset
   // earlier this session, here from a different cause (a placeholder
   // instead of a stale cache).
+  //
+  // NOTE this hash covers the OUTER loop's edges only, same as before
+  // holes were supported — a hole's own edges are not folded in. This is
+  // a narrower version of the SAME accepted limitation chamferLocked
+  // already documents (protection holds as long as nothing is
+  // specifically touching these edges); a hole's edges being touched
+  // later would fall under that identical, already-documented boundary,
+  // not a new one.
   const hash = edgeSetHash(edgeIds) as unknown as Face['hash'];
 
   // Same placeholder-then-patch sequencing derive() itself uses: a Face
@@ -165,6 +185,27 @@ export function createDirectFace(
   });
   const loop = addLoop(g, face.id, edgeIds, 'outer', startVertex);
   face.outerLoop = loop.id;
+
+  if (holes) {
+    for (const holePoints of holes) {
+      if (holePoints.length < 3) return null;
+      const holeEdgeIds: EdgeId[] = [];
+      const hn = holePoints.length;
+      for (let i = 0; i < hn; i++) {
+        const a = holePoints[i]!;
+        const b = holePoints[(i + 1) % hn]!;
+        if (distance(a, b) < ctx.tolerances.MIN_EDGE_LENGTH) return null;
+        const result = insertEdge(ctx, a, b);
+        for (const t of result.touched) touched.add(t);
+        if (result.edges.length === 0) return null;
+        holeEdgeIds.push(...result.edges);
+      }
+      const holeStartVertex = findVertexAt(g, holePoints[0]!, ctx.tolerances.VERTEX_MERGE_TOLERANCE);
+      if (holeStartVertex === null) return null;
+      const holeLoop = addLoop(g, face.id, holeEdgeIds, 'inner', holeStartVertex);
+      face.innerLoops.push(holeLoop.id);
+    }
+  }
 
   return face.id;
 }
@@ -184,7 +225,11 @@ export function validateSolid(
   for (const fid of faceIds) {
     const f = g.faces.get(fid);
     if (!f) return { ok: false, reason: `face ${fid} not found` };
-    if (f.innerLoops.length > 0) return { ok: false, reason: 'a face with a hole is not supported yet' };
+    // A face with a hole is fine: the hole is interior to the face and
+    // doesn't touch any of the edges actually being chamfered, so it
+    // carries over unchanged onto the shrunk boundary face — see
+    // createDirectFace's own doc comment on its `holes` parameter, and
+    // the step that builds each face's shrunk boundary below.
 
     for (const eid of loopEdgeIds(g, f.outerLoop)) {
       const e = g.edges.get(eid);
@@ -272,13 +317,18 @@ export function chamferSolid(
   const touched = new Set<EdgeId>();
   const newFaceIds: FaceId[] = [];
 
-  // 1. Each face's own shrunk boundary — the face itself, chamfered.
+  // 1. Each face's own shrunk boundary — the face itself, chamfered. Any
+  // hole carries over completely unchanged: it's interior to the face
+  // and doesn't touch the edges actually being chamfered.
   for (const fid of faceIds) {
     const f = g.faces.get(fid)!;
     const order = loopVertexIds(g, f.outerLoop);
     const map = insetPoint.get(fid)!;
     const points = order.map((vid) => map.get(vid)!);
-    const created = createDirectFace(ctx, points, originalNormal.get(fid)!, touched);
+    const holes = f.innerLoops.map((loopId) =>
+      loopVertexIds(g, loopId).map((vid) => getVertex(g, vid).position),
+    );
+    const created = createDirectFace(ctx, points, originalNormal.get(fid)!, touched, holes);
     if (created !== null) newFaceIds.push(created);
   }
 

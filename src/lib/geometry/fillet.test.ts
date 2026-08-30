@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGraph, checkIntegrity, loopVertexIds, getVertex } from './topology';
+import { createGraph, checkIntegrity, loopVertexIds, getVertex, addVertex, addEdge, addLoop } from './topology';
 import { createEdgeIndex, insertEdge, type InsertContext } from './insert';
 import { derive } from './derive';
 import { pushPull } from './pushpull';
@@ -137,24 +137,42 @@ describe('filletSolid — eligibility and refusals', () => {
     expect(s.graph.faces.size).toBe(before);
   });
 
-  it('refuses a face with a hole, leaving the graph untouched', () => {
-    const s = scene();
-    square(s, 8, 8);
+  it('accepts a face with a hole, carrying the hole over unchanged', () => {
+    // Same reasoning, and the same reason for building the hole this
+    // specific way, as chamfer.test.ts's identical test: drawing a
+    // smaller square inside a bigger one before pushing/pulling exposes
+    // a genuine, PRE-EXISTING kernel bug — derive() re-processing a
+    // pushed/pulled face-with-a-hole creates a spurious extra "plug"
+    // face capping the hole — unrelated to fillet/chamfer and not this
+    // test's responsibility. filletSolid itself never calls derive()
+    // (direct construction throughout), so adding the hole directly to
+    // an already-finished box's face isolates its own correctness from
+    // that separate, outstanding problem.
+    const s = scene(); box(s, 8, 8, 2);
+    const face = [...s.graph.faces.values()].find((f) => f.plane.normal.y < -0.5)!;
+
     const inner = [vec3(2, 0, 2), vec3(4, 0, 2), vec3(4, 0, 4), vec3(2, 0, 4)];
-    const touched = new Set<EdgeId>();
-    for (let i = 0; i < 4; i++) {
-      for (const t of insertEdge(s.ctx, inner[i]!, inner[(i + 1) % 4]!).touched) touched.add(t);
-    }
-    derive(s.graph, new Set([...s.graph.edges.keys()]), OPTS);
-    const outer = [...s.graph.faces.values()].find((f) => f.innerLoops.length === 1)!;
-    const r = pushPull(s.ctx, outer.id, 2, { tolerances: T });
-    derive(s.graph, r.touched, OPTS);
-    const before = s.graph.faces.size;
+    const vids = inner.map((pt) => addVertex(s.graph, pt).id);
+    const holeEdgeIds = vids.map((_, i) => addEdge(s.graph, vids[i]!, vids[(i + 1) % 4]!).id);
+    const holeLoop = addLoop(s.graph, face.id, holeEdgeIds, 'inner', vids[0]!);
+    face.innerLoops.push(holeLoop.id);
+    expect(checkIntegrity(s.graph)).toEqual([]);
 
     const result = filletSolid(s.ctx, [...s.graph.faces.keys()], 0.3, 4);
-    expect(result.ok).toBe(false);
-    expect(s.graph.faces.size).toBe(before);
+    expect(result.ok).toBe(true);
     expect(checkIntegrity(s.graph)).toEqual([]);
+
+    const shrunkWithHole = [...s.graph.faces.values()].find((f) => f.innerLoops.length === 1);
+    expect(shrunkWithHole).toBeDefined();
+    const holePoints = loopVertexIds(s.graph, shrunkWithHole!.innerLoops[0]!).map(
+      (vid) => getVertex(s.graph, vid).position,
+    );
+    expect(holePoints).toHaveLength(4);
+    const xs = holePoints.map((p) => p.x), zs = holePoints.map((p) => p.z);
+    expect(Math.min(...xs)).toBeCloseTo(2, 5);
+    expect(Math.max(...xs)).toBeCloseTo(4, 5);
+    expect(Math.min(...zs)).toBeCloseTo(2, 5);
+    expect(Math.max(...zs)).toBeCloseTo(4, 5);
   });
 
   it('refuses a non-positive radius, leaving the graph untouched', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGraph, checkIntegrity, loopVertexIds, getVertex } from './topology';
+import { createGraph, checkIntegrity, loopVertexIds, getVertex, addVertex, addEdge, addLoop } from './topology';
 import { createEdgeIndex, insertEdge, type InsertContext } from './insert';
 import { derive } from './derive';
 import { pushPull } from './pushpull';
@@ -225,21 +225,55 @@ describe('chamferSolid — triangular prism and cylinder', () => {
 });
 
 describe('chamferSolid — eligibility and refusals', () => {
-  it('refuses a face with a hole', () => {
-    const s = scene();
-    const p = [vec3(0, 0, 0), vec3(8, 0, 0), vec3(8, 0, 8), vec3(0, 0, 8)];
-    for (let i = 0; i < 4; i++) s.draw(p[i]!, p[(i + 1) % 4]!);
+  it('accepts a face with a hole, carrying the hole over unchanged', () => {
+    // A face with a hole USED to be rejected outright — the hole is
+    // interior to the face and never touches the edges actually being
+    // chamfered, so there's no real reason it should block the whole
+    // solid.
+    //
+    // The hole here is added DIRECTLY to an already-finished box's face
+    // (addEdge/addLoop, bypassing insertEdge/derive() and pushPull
+    // entirely for this step) rather than drawn as a smaller square
+    // inside a bigger one before pushing/pulling it into a solid. That
+    // is a deliberate choice, not a shortcut: the "obvious" drawing
+    // order exposed a genuine, PRE-EXISTING kernel bug, unrelated to
+    // chamfer — derive() re-processing a pushed/pulled face-with-a-hole
+    // creates a spurious extra "plug" face capping the hole instead of
+    // leaving it open into the tunnel walls below, confirmed
+    // independently of any of this session's own chamfer/fillet code.
+    // That bug blocks the normal drawing workflow for this feature and
+    // needs its own dedicated investigation — it is not something this
+    // test, or the hole-support code it verifies, is responsible for.
+    // chamferSolid itself never calls derive() (direct construction
+    // throughout), so building the hole this way isolates its own
+    // correctness from that separate, outstanding problem entirely.
+    const s = scene(); box(s, 8, 2);
+    const face = [...s.graph.faces.values()].find((f) => f.plane.normal.y < -0.5)!;
+
     const inner = [vec3(2, 0, 2), vec3(4, 0, 2), vec3(4, 0, 4), vec3(2, 0, 4)];
-    for (let i = 0; i < 4; i++) s.draw(inner[i]!, inner[(i + 1) % 4]!);
-    s.run();
-    const outer = [...s.graph.faces.values()].find((f) => f.innerLoops.length === 1)!;
-    const r = pushPull(s.ctx, outer.id, 2, { tolerances: T });
-    for (const t of r.touched) s.touched.add(t);
-    s.run();
+    const vids = inner.map((pt) => addVertex(s.graph, pt).id);
+    const holeEdgeIds = vids.map((_, i) => addEdge(s.graph, vids[i]!, vids[(i + 1) % 4]!).id);
+    const holeLoop = addLoop(s.graph, face.id, holeEdgeIds, 'inner', vids[0]!);
+    face.innerLoops.push(holeLoop.id);
+    expect(checkIntegrity(s.graph)).toEqual([]);
 
     const result = chamferSolid(s.ctx, [...s.graph.faces.keys()], 0.3);
-    expect(result.ok).toBe(false);
-    expect(result.reason).toMatch(/hole/);
+    expect(result.ok).toBe(true);
+    expect(checkIntegrity(s.graph)).toEqual([]);
+
+    const shrunkWithHole = [...s.graph.faces.values()].find((f) => f.innerLoops.length === 1);
+    expect(shrunkWithHole).toBeDefined();
+    const holePoints = loopVertexIds(s.graph, shrunkWithHole!.innerLoops[0]!).map(
+      (vid) => getVertex(s.graph, vid).position,
+    );
+    expect(holePoints).toHaveLength(4);
+    // The hole's own bounding box should exactly match the original
+    // (2,0,2)-(4,0,4) square — unmoved, unshrunk, unrotated.
+    const xs = holePoints.map((p) => p.x), zs = holePoints.map((p) => p.z);
+    expect(Math.min(...xs)).toBeCloseTo(2, 5);
+    expect(Math.max(...xs)).toBeCloseTo(4, 5);
+    expect(Math.min(...zs)).toBeCloseTo(2, 5);
+    expect(Math.max(...zs)).toBeCloseTo(4, 5);
   });
 
   it('refuses a set of loose, unconnected faces (not a closed solid)', () => {
