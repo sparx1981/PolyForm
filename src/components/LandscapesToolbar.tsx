@@ -1,7 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
 import { FlyoutPortal } from './ui/FlyoutPortal';
+
+/** Same pattern as LeftToolbar's/ArchitectureToolbar's own FlyoutSideContext
+ *  — a context rather than threading a `side` prop through every
+ *  LandscapeToolButton call site. */
+const FlyoutSideContext = createContext<'right' | 'bottom'>('right');
 import { 
   Mountain, 
   Layers, 
@@ -47,6 +52,7 @@ function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, bad
   const { bannerColor, theme, toolbarVisibility } = useApp();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
 
   if (toolbarVisibility && toolbarVisibility[tool] === false) return null;
 
@@ -86,7 +92,7 @@ function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, bad
         escape a losing tie between its own parent's container and a
         sibling toolbar's — see FlyoutPortal's own doc comment.
       */}
-      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+      <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
           <div className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none">
             <div className="font-semibold flex items-center gap-1.5">
@@ -101,7 +107,16 @@ function LandscapeToolButton({ tool, label, icon, active, onClick, subtitle, bad
   );
 }
 
-export default function LandscapesToolbar() {
+interface LandscapesToolbarProps {
+  /** Which edge this toolbar is currently docked to — see LeftToolbar's
+   *  own doc comment on the identical prop for the full rationale.
+   *  Defaults to 'left', matching how this toolbar has always looked. */
+  dock?: 'left' | 'top' | 'bottom';
+}
+
+export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarProps = {}) {
+  const horizontal = dock !== 'left';
+  const flyoutSide: 'right' | 'bottom' = horizontal ? 'bottom' : 'right';
   const { 
     isLandscapesToolbarEnabled, 
     activeTool, 
@@ -391,12 +406,15 @@ export default function LandscapesToolbar() {
   };
 
   return (
+    <FlyoutSideContext.Provider value={flyoutSide}>
     <aside 
       id="landscapes-toolbar"
       ref={landscapesToolbarRef}
       aria-label="Landscapes Toolbar"
       className={cn(
-        "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
+        horizontal
+          ? cn("h-12 flex flex-row items-center px-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative", dock === 'top' ? "border-b" : "border-t")
+          : "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
         theme === 'dark' ? "bg-gray-850 border-gray-700" : "bg-slate-50/90 border-gray-200"
       )}
     >
@@ -437,7 +455,7 @@ export default function LandscapesToolbar() {
         }}
       />
 
-      <div className="w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5" />
+      <div className={horizontal ? "h-6 w-px bg-gray-200 dark:bg-gray-700 mx-0.5" : "w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5"} />
 
       {/* Category: Brushes & Sculpting */}
       <LandscapeToolButton
@@ -465,7 +483,7 @@ export default function LandscapesToolbar() {
         }}
       />
 
-      <div className="w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5" />
+      <div className={horizontal ? "h-6 w-px bg-gray-200 dark:bg-gray-700 mx-0.5" : "w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5"} />
 
       {/* Category: Draw & Vector Modification */}
       <LandscapeToolButton
@@ -494,7 +512,7 @@ export default function LandscapesToolbar() {
         }}
       />
 
-      <div className="w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5" />
+      <div className={horizontal ? "h-6 w-px bg-gray-200 dark:bg-gray-700 mx-0.5" : "w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5"} />
 
       {/* Category: Style & Shading */}
       <LandscapeToolButton
@@ -509,7 +527,7 @@ export default function LandscapesToolbar() {
         }}
       />
 
-      <div className="w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5" />
+      <div className={horizontal ? "h-6 w-px bg-gray-200 dark:bg-gray-700 mx-0.5" : "w-6 h-px bg-gray-200 dark:bg-gray-700 my-0.5"} />
 
       {/* Category: Site & Landscape Features */}
       <LandscapeToolButton
@@ -623,7 +641,7 @@ export default function LandscapesToolbar() {
         button, since that is what `absolute left-full top-0` was
         originally positioned against.
       */}
-      <FlyoutPortal anchorRef={landscapesToolbarRef} open={!!activeCategory}>
+      <FlyoutPortal anchorRef={landscapesToolbarRef} open={!!activeCategory} side={flyoutSide}>
       {activeCategory && (
         <div className={`${activeCategory === 'style' || activeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl text-xs ${
           theme === 'dark' ? 'bg-gray-900/95 border-gray-700 text-gray-200' : 'bg-white/95 border-gray-200 text-gray-800'
@@ -1204,5 +1222,6 @@ export default function LandscapesToolbar() {
         </div>
       )}
     </aside>
+    </FlyoutSideContext.Provider>
   );
 }

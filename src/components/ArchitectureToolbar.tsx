@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, createContext, useContext } from 'react';
 import { 
   Building2, 
   DoorOpen, 
@@ -16,6 +16,10 @@ import { ToolType } from '../types';
 import { cn } from '../lib/utils';
 import { FlyoutPortal } from './ui/FlyoutPortal';
 
+/** Same pattern as LeftToolbar's own FlyoutSideContext — a context rather
+ *  than threading a `side` prop through every ArchToolButton call site. */
+const FlyoutSideContext = createContext<'right' | 'bottom'>('right');
+
 interface ArchToolButtonProps {
   tool: ToolType;
   icon: React.ReactNode;
@@ -29,6 +33,7 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonP
   const isActive = activeTool === tool;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
 
   if (toolbarVisibility[tool] === false) return null;
 
@@ -60,7 +65,7 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonP
         escape a losing tie between its own parent's container and a
         sibling toolbar's — see FlyoutPortal's own doc comment.
       */}
-      <FlyoutPortal anchorRef={buttonRef} open={hovered}>
+      <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
           <div className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none">
             <div className="font-semibold flex items-center gap-1.5">
@@ -75,7 +80,16 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey }: ArchToolButtonP
   );
 }
 
-export default function ArchitectureToolbar() {
+interface ArchitectureToolbarProps {
+  /** Which edge this toolbar is currently docked to — see LeftToolbar's
+   *  own doc comment on the identical prop for the full rationale.
+   *  Defaults to 'left', matching how this toolbar has always looked. */
+  dock?: 'left' | 'top' | 'bottom';
+}
+
+export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolbarProps = {}) {
+  const horizontal = dock !== 'left';
+  const flyoutSide: 'right' | 'bottom' = horizontal ? 'bottom' : 'right';
   const { 
     isArchitectureToolbarEnabled, 
     theme, 
@@ -87,11 +101,14 @@ export default function ArchitectureToolbar() {
   if (!isArchitectureToolbarEnabled) return null;
 
   return (
+    <FlyoutSideContext.Provider value={flyoutSide}>
     <aside 
       id="architecture-toolbar"
       aria-label="Basic Architecture Toolbar"
       className={cn(
-        "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
+        horizontal
+          ? cn("h-12 flex flex-row items-center px-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative", dock === 'top' ? "border-b" : "border-t")
+          : "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
         theme === 'dark' ? "bg-gray-850 border-gray-700" : "bg-slate-50/90 border-gray-200"
       )}
     >
@@ -131,5 +148,6 @@ export default function ArchitectureToolbar() {
         subtitle="12-step architectural staircase flight (Rise 2.16m, Run 3.6m)"
       />
     </aside>
+    </FlyoutSideContext.Provider>
   );
 }

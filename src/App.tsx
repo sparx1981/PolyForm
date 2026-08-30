@@ -174,7 +174,16 @@ function DockZoneContainer({
   return (
     <div
       className={cn(
-        horizontal ? "flex flex-row w-full shrink-0" : "flex flex-col h-full shrink-0",
+        // The container arranges MULTIPLE docked toolbars PERPENDICULAR
+        // to each toolbar's own orientation: several vertical-column
+        // toolbars on the left need to sit side by side (a row), while
+        // several horizontal-strip toolbars on top/bottom need to stack
+        // (a column) so each is its own visible row — the opposite of
+        // what was here before, which is why only one left-docked
+        // toolbar was ever visible (the rest stacked vertically,
+        // overflowing past the viewport) while multiple top/bottom-docked
+        // ones got crammed into a single row instead of stacking.
+        horizontal ? "flex flex-col w-full shrink-0" : "flex flex-row h-full shrink-0",
         draggedKey && isOver && "bg-trimble-blue/10",
         // An empty zone is otherwise invisible (zero size) and impossible
         // to drop onto — give it a thin, visible drop strip only while
@@ -245,8 +254,8 @@ function AppContent() {
     const renderToolbar = (key: ToolbarKey, dock: DockZone): ReactNode => {
       switch (key) {
         case 'left': return <LeftToolbar layoutMode={layoutMode} dock={dock} />;
-        case 'architecture': return <ArchitectureToolbar />;
-        case 'landscapes': return <LandscapesToolbar />;
+        case 'architecture': return <ArchitectureToolbar dock={dock} />;
+        case 'landscapes': return <LandscapesToolbar dock={dock} />;
       }
     };
     // toolbarOrder governs relative order everywhere; filtering it per
