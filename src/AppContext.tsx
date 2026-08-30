@@ -35,6 +35,8 @@ const cleanData = (obj: any): any => {
   return obj;
 };
 
+export type ToolbarKey = 'left' | 'architecture' | 'landscapes';
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   // --- Geometry kernel -----------------------------------------------------
   // Coexists with Shape[]: the kernel owns DRAWN geometry (lines, arcs,
@@ -211,7 +213,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     components: false,
     styles: false
   });
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'surface' | 'multi' | 'light' | 'kernel', data?: any } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'surface' | 'multi' | 'light', data?: any } | null>(null);
   const [history, setHistory] = useState<Shape[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline' | 'unsaved'>('unsaved');
@@ -484,6 +486,41 @@ console.log("Created rectangle:", myRect.id);`);
       const next = typeof val === 'function' ? val(prev) : val;
       try {
         localStorage.setItem('polyform_layout_mode', next);
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  /**
+   * Which order the three classic-layout toolbars (Basic, Architecture,
+   * Landscapes) render in, left to right — user-reorderable by dragging,
+   * the same way a desktop app like Word or Excel lets you drag a
+   * toolbar to reposition it. Persisted the same way layoutMode is.
+   */
+  const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes'];
+  const [toolbarOrder, setToolbarOrderState] = useState<ToolbarKey[]>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_toolbar_order');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (
+          Array.isArray(parsed) &&
+          parsed.length === 3 &&
+          new Set(parsed).size === 3 &&
+          parsed.every((k) => DEFAULT_TOOLBAR_ORDER.includes(k))
+        ) {
+          return parsed as ToolbarKey[];
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_TOOLBAR_ORDER;
+  });
+
+  const setToolbarOrder = (val: ToolbarKey[] | ((prev: ToolbarKey[]) => ToolbarKey[])) => {
+    setToolbarOrderState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_toolbar_order', JSON.stringify(next));
       } catch (e) {}
       return next;
     });
@@ -1343,6 +1380,8 @@ console.log("Created rectangle:", myRect.id);`);
       setIsLandscapesToolbarEnabled,
       layoutMode,
       setLayoutMode,
+      toolbarOrder,
+      setToolbarOrder,
       landscapeSculptSettings,
       setLandscapeSculptSettings,
       landscapeRoadSettings,

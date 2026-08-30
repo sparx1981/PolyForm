@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
-import { AppProvider, useApp } from './AppContext';
+import { AppProvider, useApp, type ToolbarKey } from './AppContext';
 import { handleFirestoreError, OperationType } from './firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { cn } from './lib/utils';
-import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle } from 'lucide-react';
+import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle, GripHorizontal } from 'lucide-react';
 import TopBar from './components/TopBar';
 import LeftToolbar from './components/LeftToolbar';
 import ArchitectureToolbar from './components/ArchitectureToolbar';
@@ -34,6 +34,94 @@ import { CodeRecorder } from './components/CodeRecorder';
 import { ToolModifierPalette } from './components/ToolModifierPalette';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
+
+/**
+ * Lets a classic-layout toolbar be dragged to swap position with a
+ * sibling — the same interaction as dragging a toolbar in Word or Excel
+ * to reposition it, just constrained to reordering these three rather
+ * than docking to arbitrary screen edges. Uses native HTML5 drag-and-drop
+ * (no new dependency needed for reordering three fixed items) and only
+ * the small grip handle at the top is itself draggable, so it never
+ * competes with the many ordinary buttons inside the toolbar below it.
+ */
+function DraggableToolbarSlot({
+  toolbarKey,
+  draggedKey,
+  setDraggedKey,
+  dragOverKey,
+  setDragOverKey,
+  toolbarOrder,
+  setToolbarOrder,
+  theme,
+  children,
+}: {
+  toolbarKey: ToolbarKey;
+  draggedKey: ToolbarKey | null;
+  setDraggedKey: (k: ToolbarKey | null) => void;
+  dragOverKey: ToolbarKey | null;
+  setDragOverKey: (k: ToolbarKey | null) => void;
+  toolbarOrder: ToolbarKey[];
+  setToolbarOrder: (next: ToolbarKey[] | ((prev: ToolbarKey[]) => ToolbarKey[])) => void;
+  theme: string;
+  children: ReactNode;
+}) {
+  const isDragging = draggedKey === toolbarKey;
+  const isDragOver = dragOverKey === toolbarKey && draggedKey !== null && draggedKey !== toolbarKey;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col h-full shrink-0 transition-opacity",
+        isDragging && "opacity-40",
+      )}
+      onDragOver={(e) => {
+        if (!draggedKey || draggedKey === toolbarKey) return;
+        e.preventDefault();
+        setDragOverKey(toolbarKey);
+      }}
+      onDragLeave={() => {
+        if (dragOverKey === toolbarKey) setDragOverKey(null);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (!draggedKey || draggedKey === toolbarKey) return;
+        setToolbarOrder((prev) => {
+          const next = prev.filter((k) => k !== draggedKey);
+          const targetIndex = next.indexOf(toolbarKey);
+          next.splice(targetIndex, 0, draggedKey);
+          return next;
+        });
+        setDraggedKey(null);
+        setDragOverKey(null);
+      }}
+    >
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          setDraggedKey(toolbarKey);
+        }}
+        onDragEnd={() => {
+          setDraggedKey(null);
+          setDragOverKey(null);
+        }}
+        title="Drag to reorder"
+        className={cn(
+          "w-full h-3.5 flex items-center justify-center cursor-grab active:cursor-grabbing border-b transition-colors shrink-0",
+          isDragOver && "bg-trimble-blue/20",
+          theme === 'dark'
+            ? "bg-gray-850 border-gray-700 hover:bg-gray-800 text-gray-600"
+            : "bg-slate-50 border-gray-200 hover:bg-gray-100 text-gray-400",
+        )}
+      >
+        <GripHorizontal size={12} />
+      </div>
+      <div className="flex-1 min-h-0">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function AppContent() {
     const { 
@@ -59,10 +147,19 @@ function AppContent() {
       quotaLockdownTime,
       isQuotaLocked,
       totalReads,
-      layoutMode
+      layoutMode,
+      toolbarOrder,
+      setToolbarOrder
     } = useApp();
   
     const quotaLocked = isQuotaLocked();
+    const [draggedToolbarKey, setDraggedToolbarKey] = useState<ToolbarKey | null>(null);
+    const [dragOverToolbarKey, setDragOverToolbarKey] = useState<ToolbarKey | null>(null);
+    const TOOLBAR_COMPONENTS: Record<ToolbarKey, ReactNode> = {
+      left: <LeftToolbar layoutMode={layoutMode} />,
+      architecture: <ArchitectureToolbar />,
+      landscapes: <LandscapesToolbar />,
+    };
     const remainingSeconds = Math.max(0, Math.ceil((quotaLockdownTime - Date.now()) / 1000));
     const remainingMinutes = Math.floor(remainingSeconds / 60);
     const remainingSecs = remainingSeconds % 60;
@@ -249,9 +346,21 @@ function AppContent() {
           <UnifiedToolRail />
         ) : (
           <>
-            <LeftToolbar layoutMode={layoutMode} />
-            <ArchitectureToolbar />
-            <LandscapesToolbar />
+            {toolbarOrder.map((key) => (
+              <DraggableToolbarSlot
+                key={key}
+                toolbarKey={key}
+                draggedKey={draggedToolbarKey}
+                setDraggedKey={setDraggedToolbarKey}
+                dragOverKey={dragOverToolbarKey}
+                setDragOverKey={setDragOverToolbarKey}
+                toolbarOrder={toolbarOrder}
+                setToolbarOrder={setToolbarOrder}
+                theme={theme}
+              >
+                {TOOLBAR_COMPONENTS[key]}
+              </DraggableToolbarSlot>
+            ))}
           </>
         )}
         <Viewport />
