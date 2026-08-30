@@ -129,6 +129,7 @@ export default function LandscapesToolbar() {
     setActivePlantScale
   } = useApp();
 
+  const landscapesToolbarRef = useRef<HTMLElement>(null);
   const [activeCategory, setActiveCategory] = useState<'create' | 'sculpt' | 'road' | 'style' | 'plant' | null>(null);
   const [plotWidth, setPlotWidth] = useState<number>(20);
   const [plotDepth, setPlotDepth] = useState<number>(20);
@@ -392,6 +393,7 @@ export default function LandscapesToolbar() {
   return (
     <aside 
       id="landscapes-toolbar"
+      ref={landscapesToolbarRef}
       aria-label="Landscapes Toolbar"
       className={cn(
         "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
@@ -610,8 +612,20 @@ export default function LandscapesToolbar() {
       />
 
       {/* Popout Context Configuration Panel */}
+      {/*
+        Portaled to document.body: this toolbar is a SIBLING of LeftToolbar
+        and ArchitectureToolbar in App.tsx, and a child's z-index can never
+        escape a losing tie between its own parent's container and a
+        sibling toolbar's — the exact bug that made every LeftToolbar
+        tooltip and flyout randomly render behind other toolbars earlier
+        this session, now fixed the same way here. Anchored to the WHOLE
+        toolbar's own container (landscapesToolbarRef), not a single
+        button, since that is what `absolute left-full top-0` was
+        originally positioned against.
+      */}
+      <FlyoutPortal anchorRef={landscapesToolbarRef} open={!!activeCategory}>
       {activeCategory && (
-        <div className={`absolute left-full ml-2 top-0 ${activeCategory === 'style' || activeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl z-[150] text-xs ${
+        <div className={`${activeCategory === 'style' || activeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl text-xs ${
           theme === 'dark' ? 'bg-gray-900/95 border-gray-700 text-gray-200' : 'bg-white/95 border-gray-200 text-gray-800'
         }`}>
           <div className="flex items-center justify-between font-bold pb-2 mb-2 border-b border-gray-200 dark:border-gray-800">
@@ -1143,6 +1157,7 @@ export default function LandscapesToolbar() {
           )}
         </div>
       )}
+      </FlyoutPortal>
 
       {/* Conflict Resolution Modal for Terrain Creation */}
       {conflictModal?.isOpen && (
