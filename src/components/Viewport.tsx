@@ -1638,6 +1638,20 @@ function Scene() {
     // this ensures a future one can never take down the whole app the same
     // way — it surfaces as a toast instead.
     try {
+    if (activeTool === 'note') {
+      // Mirrors the identical Shape-mesh case in handleMeshPointerDown —
+      // this one covers a click landing on KERNEL geometry instead, which
+      // is a completely separate click path (KernelGeometry's own
+      // onFacePointerDown, not a Shape mesh's onPointerDown). Without
+      // this, placing a note on kernel-derived geometry (anything drawn
+      // then pushed/pulled) silently did nothing at all: the click never
+      // reached the Shape-only code that used to be the only place this
+      // tool was handled.
+      if (!event.point) return false;
+      setPlacingNotePos(event.point.clone());
+      return true;
+    }
+
     if (activeTool === 'bevel') {
       // Chamfers the whole solid the clicked face belongs to — the same
       // click-selects-the-group resolution used everywhere else, since a
@@ -1808,7 +1822,7 @@ function Scene() {
       );
       return false;
     }
-  }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast]);
+  }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast, setPlacingNotePos]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);
