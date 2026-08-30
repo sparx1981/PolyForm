@@ -61,7 +61,8 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden } from '../tools/kernelSelection';
+import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups } from '../tools/kernelSelection';
+import { loopVertexIds, getVertex } from '../lib/geometry/topology';
 import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
@@ -6817,6 +6818,49 @@ function Scene() {
           <Html
             key={`dim-${shape.id}`}
             position={[shape.position[0], shape.position[1] + 0.6, shape.position[2]]}
+            center
+            occlude={false}
+          >
+            <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap pointer-events-none shadow-lg border border-cyan-500/40">
+              {label}
+            </div>
+          </Html>
+        );
+      })}
+
+      {/*
+        Show All Dimensions for kernel groups — the identical Shape-only
+        gap as the note tool and the context menu had earlier this
+        session: this whole feature only ever considered the legacy
+        `shapes` array. Kernel geometry has no fixed "type" or "args" the
+        way a Shape does (it's an arbitrary user-drawn graph, not a
+        parametric primitive), so there's no per-type label to look up —
+        the closest equivalent is each group's own bounding-box extent,
+        computed directly from its vertex positions.
+      */}
+      {showAllDimensions && faceGroups(kernelHost.graph).map((group) => {
+        if (group.faces.length === 0) return null;
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        for (const fid of group.faces) {
+          const f = kernelHost.graph.faces.get(fid);
+          if (!f) continue;
+          for (const vid of loopVertexIds(kernelHost.graph, f.outerLoop)) {
+            const p = getVertex(kernelHost.graph, vid).position;
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+            if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+          }
+        }
+        if (!isFinite(minX)) return null;
+        const w = maxX - minX, h = maxY - minY, d = maxZ - minZ;
+        const label = `${formatValue(w, unit, 2)} × ${formatValue(d, unit, 2)} × ${formatValue(h, unit, 2)}`;
+        const cx = (minX + maxX) / 2, cy = maxY + 0.3, cz = (minZ + maxZ) / 2;
+
+        return (
+          <Html
+            key={`kernel-dim-${group.id}`}
+            position={[cx, cy, cz]}
             center
             occlude={false}
           >
