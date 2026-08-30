@@ -28,7 +28,7 @@ describe('chamfer drag lifecycle', () => {
     let bumps = 0;
     const h = host(); box(h, 4, 2);
     const b = createChamferBinding(h, () => { bumps++; });
-    expect(b.begin([...h.graph.faces.keys()])).toBe(true);
+    expect(b.begin([...h.graph.faces.keys()]).ok).toBe(true);
     b.update(0.3);
     const result = b.commit();
     expect(result.ok).toBe(true);
@@ -74,7 +74,7 @@ describe('chamfer binding — eligibility and refusals', () => {
   it('refuses to begin on too few faces', () => {
     const h = host(); square(h, 4);
     const b = createChamferBinding(h, () => {});
-    expect(b.begin([...h.graph.faces.keys()])).toBe(false);
+    expect(b.begin([...h.graph.faces.keys()]).ok).toBe(false);
     expect(b.active).toBe(false);
   });
 

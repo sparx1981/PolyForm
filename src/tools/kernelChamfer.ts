@@ -18,7 +18,7 @@
  */
 
 import type { FaceId } from '../lib/geometry/types';
-import { chamferSolid } from '../lib/geometry/chamfer';
+import { chamferSolid, validateSolid } from '../lib/geometry/chamfer';
 import { snapshot, restore } from '../lib/geometry/heal';
 import type { KernelArcHost } from './kernelArcHost';
 
@@ -28,7 +28,10 @@ export interface ChamferSession {
 }
 
 export interface ChamferBinding {
-  begin: (faces: FaceId[]) => boolean;
+  /** Validates eligibility immediately, so a live preview never starts on a
+   *  selection that could never chamfer — and so the caller can show the
+   *  SPECIFIC reason (not a hole, not closed, etc.), not a generic failure. */
+  begin: (faces: FaceId[]) => { ok: boolean; reason?: string };
   update: (distance: number) => void;
   /** Applies the chamfer. Returns false (with a reason) if nothing was committed. */
   commit: () => { ok: boolean; reason?: string };
@@ -52,9 +55,10 @@ export function createChamferBinding(
     },
 
     begin(faces) {
-      if (faces.length < 4) return false;
+      const validated = validateSolid(host.graph, faces);
+      if (!validated.ok) return { ok: false, reason: validated.reason };
       session = { faces: [...faces], distance: 0 };
-      return true;
+      return { ok: true };
     },
 
     update(distance) {

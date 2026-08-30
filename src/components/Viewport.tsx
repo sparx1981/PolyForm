@@ -67,6 +67,7 @@ import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
 import { createChamferBinding } from '../tools/kernelChamfer';
 import { FaceOffsetPreview } from './FaceOffsetPreview';
+import { ChamferPreview } from './ChamferPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
@@ -1261,6 +1262,21 @@ function Scene() {
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
   const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
   const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
+  const [chamferPreview, setChamferPreview] = useState<{ faces: FaceId[]; amount: number } | null>(null);
+  /**
+   * A dedicated, impossible-to-miss banner for things like "Radius isn't
+   * supported yet" — separate from `measurements`, which the status bar
+   * shows only as a small, easy-to-miss monospace readout in its corner.
+   * That is fine for a live drag amount, but a message the user actively
+   * needs to notice (an unsupported tool, a failed operation) deserves its
+   * own clearly visible space rather than competing for attention with a
+   * number that updates constantly during ordinary use.
+   */
+  const [viewportToast, setViewportToast] = useState<string | null>(null);
+  const showToast = useCallback((message: string, durationMs = 3000) => {
+    setViewportToast(message);
+    window.setTimeout(() => setViewportToast((current) => (current === message ? null : current)), durationMs);
+  }, []);
   const [faceOffsetPreview, setFaceOffsetPreview] = useState<
     { faceId: FaceId; distance: number } | null
   >(null);
@@ -1612,15 +1628,18 @@ function Scene() {
         // tessellation between adjacent faces at every edge, not a single
         // flat bevel quad) — deliberately not attempted yet. Saying so
         // plainly here beats a silent no-op that looks like a bug.
-        setMeasurements('Rounded edges are not supported for these objects yet — try Chamfer.');
-        window.setTimeout(() => setMeasurements(''), 2500);
+        showToast('Rounded edges are not supported for these objects yet — try Chamfer.');
         return false;
       }
 
       const group = groupContaining(kernelHost.graph, faceId);
-      if (!chamferRef.current.begin(group)) {
-        setMeasurements('This surface is not part of a solid that can be chamfered.');
-        window.setTimeout(() => setMeasurements(''), 2500);
+      const begun = chamferRef.current.begin(group);
+      if (!begun.ok) {
+        showToast(
+          begun.reason
+            ? `This surface can't be chamfered: ${begun.reason}`
+            : "This surface is not part of a solid that can be chamfered.",
+        );
         return false;
       }
       setMeasurements('Move the cursor to set the chamfer amount, then release.');
@@ -1642,18 +1661,18 @@ function Scene() {
         const amount = Math.max(0, deltaPx * 0.002);
         chamferRef.current.update(amount);
         setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
+        setChamferPreview({ faces: group, amount });
       };
 
       const finish = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', finish);
+        setChamferPreview(null);
         const result = chamferRef.current.commit();
         if (!result.ok) {
-          setMeasurements(result.reason ? `Chamfer failed: ${result.reason}` : 'Chamfer failed.');
-          window.setTimeout(() => setMeasurements(''), 3000);
-        } else {
-          setMeasurements('');
+          showToast(result.reason ? `Chamfer failed: ${result.reason}` : 'Chamfer failed.');
         }
+        setMeasurements('');
       };
 
       window.addEventListener('pointermove', onMove);
@@ -1762,7 +1781,7 @@ function Scene() {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', finish, { once: true });
     return true;
-  }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit]);
+  }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);
@@ -5925,6 +5944,19 @@ function Scene() {
         <RenderMapTexture lat={worldViewLocation.lat} lng={worldViewLocation.lng} />
       )}
 
+      {viewportToast && createPortal(
+        <div
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-xl border border-gray-700 max-w-md text-center">
+            {viewportToast}
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {placingNotePos && (
         /*
           Rendered straight into <body> with a React portal rather than through
@@ -6070,6 +6102,14 @@ function Scene() {
           graph={kernelHost.graph}
           faceId={faceOffsetPreview.faceId}
           distance={faceOffsetPreview.distance}
+        />
+      )}
+
+      {chamferPreview && (
+        <ChamferPreview
+          graph={kernelHost.graph}
+          faces={chamferPreview.faces}
+          amount={chamferPreview.amount}
         />
       )}
 

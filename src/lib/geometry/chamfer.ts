@@ -134,6 +134,11 @@ function createDirectFace(
   const basis = planeBasis(plane);
   const attributes = defaultAttributes();
   attributes.uv = makeUVBasis(plane);
+  // See derive()'s own doc comment on the `chamferLocked` exclusion: this
+  // is what keeps an unrelated later derive() call from re-examining (and
+  // potentially mis-bucketing) this face's edges at all, as long as
+  // nothing is specifically trying to touch them.
+  attributes.custom = { chamferLocked: true };
 
   // A proper hash, not a placeholder: derive() identifies an existing face
   // by hashing its cycle's edge set (§6.3), and any LATER derive() call —
@@ -168,7 +173,7 @@ function createDirectFace(
 // Validation
 // ---------------------------------------------------------------------------
 
-function validateSolid(
+export function validateSolid(
   g: Graph,
   faceIds: readonly FaceId[],
 ): { ok: true; vertexFaces: Map<VertexId, FaceId[]> } | { ok: false; reason: string } {
@@ -218,6 +223,34 @@ function validateSolid(
   return { ok: true, vertexFaces: out };
 }
 
+/**
+ * Computes each face's own shrunk-inward inset points, without mutating the
+ * graph — the read-only half of what `chamferSolid` does, exposed so a live
+ * preview can show the same math mid-drag without running the full,
+ * mutating construction on every frame.
+ */
+export function computeChamferInsets(
+  g: Graph,
+  faceIds: readonly FaceId[],
+  amount: number,
+): { originalNormal: Map<FaceId, Vec3>; insetPoint: Map<FaceId, Map<VertexId, Vec3>> } {
+  const originalNormal = new Map<FaceId, Vec3>();
+  const insetPoint = new Map<FaceId, Map<VertexId, Vec3>>();
+  for (const fid of faceIds) {
+    const f = g.faces.get(fid);
+    if (!f) continue;
+    originalNormal.set(fid, f.plane.normal);
+    const basis = planeBasis(f.plane);
+    const order = loopVertexIds(g, f.outerLoop);
+    const points2D = order.map((vid) => projectToBasis(getVertex(g, vid).position, basis));
+    const inset2D = offsetPolygon2D(points2D, -amount);
+    const map = new Map<VertexId, Vec3>();
+    order.forEach((vid, i) => map.set(vid, unprojectFromBasis(inset2D[i]!, basis)));
+    insetPoint.set(fid, map);
+  }
+  return { originalNormal, insetPoint };
+}
+
 // ---------------------------------------------------------------------------
 // The operation
 // ---------------------------------------------------------------------------
@@ -234,19 +267,7 @@ export function chamferSolid(
   if (!validated.ok) return { ok: false, reason: validated.reason, touched: new Set() };
   const { vertexFaces } = validated;
 
-  const originalNormal = new Map<FaceId, Vec3>();
-  const insetPoint = new Map<FaceId, Map<VertexId, Vec3>>();
-  for (const fid of faceIds) {
-    const f = g.faces.get(fid)!;
-    originalNormal.set(fid, f.plane.normal);
-    const basis = planeBasis(f.plane);
-    const order = loopVertexIds(g, f.outerLoop);
-    const points2D = order.map((vid) => projectToBasis(getVertex(g, vid).position, basis));
-    const inset2D = offsetPolygon2D(points2D, -amount);
-    const map = new Map<VertexId, Vec3>();
-    order.forEach((vid, i) => map.set(vid, unprojectFromBasis(inset2D[i]!, basis)));
-    insetPoint.set(fid, map);
-  }
+  const { originalNormal, insetPoint } = computeChamferInsets(g, faceIds, amount);
 
   const touched = new Set<EdgeId>();
   const newFaceIds: FaceId[] = [];
