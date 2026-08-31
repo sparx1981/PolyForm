@@ -9,7 +9,7 @@
 import type { EdgeId, Graph, Tolerances, Vec3 } from '../lib/geometry/types';
 import { DEFAULT_TOLERANCES } from '../lib/geometry/types';
 import { createGraph } from '../lib/geometry/topology';
-import { createEdgeIndex, insertEdge, type InsertContext } from '../lib/geometry/insert';
+import { createEdgeIndex, insertEdge, insertIsolatedEdge, type InsertContext } from '../lib/geometry/insert';
 import { derive, type DeriveResult } from '../lib/geometry/derive';
 import { snapshot, restore, type Snapshot } from '../lib/geometry/heal';
 import { SpatialIndex } from '../lib/geometry/spatialIndex';
@@ -121,6 +121,44 @@ export class KernelLineHost implements LineToolHost {
 
     try {
       const inserted = insertEdge(this.ctx, from, to);
+      edges = inserted.edges;
+      wasOverdraw = inserted.wasOverdraw;
+      result = derive(this.graph, inserted.touched, this.deriveOpts);
+    } catch (err) {
+      restore(this.graph, before);
+      this.rebuildIndex();
+      return {
+        ok: false, edges: [], wasOverdraw: false,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    this.pushUndo(before);
+    this.notify(result);
+    return { ok: true, edges, wasOverdraw };
+  }
+
+  /**
+   * The same one-segment, one-transaction, one-undo-entry shape as
+   * commitSegment, but using insertIsolatedEdge instead of insertEdge —
+   * see that function's own doc comment for the full reasoning. Used by
+   * Rectangle/Circle/Triangle (a single shape drawn as one gesture),
+   * never by the Line/Arc tool, which keeps the original sticky
+   * behaviour: those tools ARE the deliberate "connect into/divide an
+   * existing surface" action.
+   */
+  commitIsolatedSegment(from: Vec3, to: Vec3): CommitOutcome {
+    if (distance(from, to) < this.tolerances.MIN_EDGE_LENGTH) {
+      return { ok: false, edges: [], wasOverdraw: false, reason: 'zero-length segment' };
+    }
+
+    const before = snapshot(this.graph);
+    let result: DeriveResult;
+    let edges: readonly EdgeId[];
+    let wasOverdraw: boolean;
+
+    try {
+      const inserted = insertIsolatedEdge(this.ctx, from, to);
       edges = inserted.edges;
       wasOverdraw = inserted.wasOverdraw;
       result = derive(this.graph, inserted.touched, this.deriveOpts);

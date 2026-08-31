@@ -369,6 +369,109 @@ export function insertEdge(ctx: InsertContext, p0: Vec3, p1: Vec3): InsertResult
   return { edges, touched, createdVertices, wasOverdraw: false };
 }
 
+/**
+ * Inserts a CLOSED RING of edges (a rectangle, circle, triangle, or any
+ * other shape drawn as a single, complete boundary) as new, topologically
+ * ISOLATED geometry — deliberately not the same crossing-and-splitting
+ * behaviour `insertEdge` gives every other edge in this kernel.
+ *
+ * The two are meant to differ, not by oversight: `insertEdge` treats
+ * crossing an existing edge as the user asking to connect into it — the
+ * Line/Arc tool's whole reason for existing is to divide a surface or
+ * extend into one. A rectangle, circle, or triangle drawn as a single
+ * gesture is a different kind of action: the user drew a whole new
+ * shape, not a cut into an existing one. Splitting it into whatever
+ * unrelated geometry it happens to cross — silently producing extra
+ * faces the user never asked for, exactly the "shapes are no longer the
+ * drawn rectangles" regression this function exists to fix — was never
+ * the intended behaviour for these tools, even though they used
+ * `insertEdge` for a long time.
+ *
+ * What's KEPT, deliberately: each corner of the ring still resolves
+ * through `resolveVertex`, so snapping the ring's own corner onto an
+ * existing vertex (or splitting an edge it lands exactly on top of) still
+ * works — that's the user explicitly connecting this new shape to
+ * something, the same as any other deliberate snap, not an incidental
+ * crossing partway along an edge.
+ *
+ * What's SKIPPED, deliberately: Phase 1a's mid-span crossing detection
+ * against unrelated edges (segmentIntersection3D — see insertEdge's own
+ * comment), and Phase 1b's colinear-overlap handling. Both exist so that
+ * drawing a new edge over or through EXISTING geometry ties into it —
+ * exactly the behaviour a brand-new, independent shape should not have.
+ */
+/**
+ * Resolves a point to a vertex for insertIsolatedEdge — snapping ONLY onto
+ * an already-existing vertex within tolerance, never onto the interior of
+ * an existing edge.
+ *
+ * This is deliberately narrower than resolveVertex (R1), not a copy of it.
+ * resolveVertex ALSO splits an edge it lands on the interior of — which is
+ * itself a form of the sticky, crossing-related behaviour insertIsolatedEdge
+ * exists to avoid. Two shapes of similar size and overlapping placement
+ * (e.g. two circles of the same radius) routinely put some of one shape's
+ * own corner points close enough to the OTHER shape's boundary to trigger
+ * that split — reconnecting the two despite no genuine, deliberate
+ * shared-vertex snap ever happening. Confirmed directly: two overlapping
+ * circles, pushed/pulled with insertIsolatedEdge everywhere else, still
+ * produced a spurious lens-shaped face at their overlap, because one
+ * circle's own vertex landed on the other's edge interior and split it.
+ *
+ * A vertex-only snap still lets the user deliberately connect two shapes
+ * (share a corner, or an entire edge, on purpose) — that's still a real,
+ * pre-existing point to land on. It's specifically the "you happened to
+ * cross partway along my edge" case that no longer counts as a connection.
+ */
+function resolveVertexOnly(
+  ctx: InsertContext,
+  point: Vec3,
+  created: VertexId[],
+): VertexId {
+  const { graph: g, tolerances: tol } = ctx;
+
+  let best: VertexId | null = null;
+  let bestDist = tol.VERTEX_MERGE_TOLERANCE;
+  for (const [id, v] of g.vertices) {
+    const d = distance(v.position, point);
+    if (d <= bestDist) {
+      if (best === null || d < bestDist || id < best) {
+        best = id;
+        bestDist = d;
+      }
+    }
+  }
+  if (best !== null) return best;
+
+  const v = addVertex(g, point, 'user');
+  created.push(v.id);
+  return v.id;
+}
+
+export function insertIsolatedEdge(ctx: InsertContext, p0: Vec3, p1: Vec3): InsertResult {
+  const { graph: g, tolerances: tol } = ctx;
+  const touched = new Set<EdgeId>();
+  const createdVertices: VertexId[] = [];
+
+  if (distance(p0, p1) < tol.MIN_EDGE_LENGTH) {
+    return { edges: [], touched, createdVertices, wasOverdraw: false };
+  }
+
+  const from = resolveVertexOnly(ctx, p0, createdVertices);
+  const to = resolveVertexOnly(ctx, p1, createdVertices);
+  if (from === to) return { edges: [], touched, createdVertices, wasOverdraw: false };
+
+  const existing = findEdgeBetween(g, from, to);
+  if (existing) {
+    touched.add(existing.id);
+    return { edges: [existing.id], touched, createdVertices, wasOverdraw: true };
+  }
+
+  const fresh = addEdge(g, from, to);
+  reindex(ctx, fresh.id);
+  touched.add(fresh.id);
+  return { edges: [fresh.id], touched, createdVertices, wasOverdraw: false };
+}
+
 /** Adjacency function for the plane index, sourced from the topology store. */
 export const adjacencyFor = (g: Graph) => (edge: EdgeId): readonly EdgeId[] =>
   adjacentEdges(g, edge);

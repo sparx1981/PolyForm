@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createGraph, checkIntegrity, loopPoints } from './topology';
-import { createEdgeIndex, insertEdge, type InsertContext } from './insert';
+import { createEdgeIndex, insertEdge, insertIsolatedEdge, type InsertContext } from './insert';
 import { derive } from './derive';
 import { pushPull, isFaceFree, pushPullDistanceFromRay, coplanarNeighbours } from './pushpull';
 import { insertFaceOffset } from './faceOffset';
@@ -296,5 +296,83 @@ describe('determinism', () => {
       return `${s.graph.vertices.size}/${s.graph.edges.size}/${s.graph.faces.size}/${totalArea(s.graph).toFixed(6)}`;
     };
     expect(build()).toBe(build());
+  });
+});
+
+describe('pushPull — insertFn option (isolated extrusion)', () => {
+  function circlePoints(cx: number, cz: number, r: number, n: number) {
+    return Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * Math.PI * 2;
+      return vec3(cx + Math.sin(a) * r, 0, cz + Math.cos(a) * r);
+    });
+  }
+
+  it('two overlapping extruded circles stay independent when insertFn is insertIsolatedEdge', () => {
+    // The specific regression this option exists to fix: the flat-drawing
+    // fix (insertIsolatedEdge for Rectangle/Circle/Triangle) alone was not
+    // enough — pushPull's OWN new geometry (the far cap, the side walls)
+    // still used the sticky insertEdge by default, so a second, extruded
+    // shape still visibly lost a wedge where it crossed the first one in
+    // 3D space, even though its flat starting boundary had been correctly
+    // kept independent. Deliberately non-coincidental centres/radii here:
+    // circles sharing a radius and an exact offset can produce a genuine,
+    // mathematically-exact shared vertex at one specific angle, which is a
+    // real coincidence worth a comment elsewhere, not something to build a
+    // regression test around.
+    const graph = createGraph();
+    const ctx: InsertContext = { graph, tolerances: T, index: createEdgeIndex(graph, 1) };
+    const OPTS = { tolerances: T, upAxis: vec3(0, 1, 0) };
+
+    const a = circlePoints(2, 2, 2, 16);
+    const touched1 = new Set<EdgeId>();
+    for (let i = 0; i < a.length; i++) {
+      for (const t of insertIsolatedEdge(ctx, a[i]!, a[(i + 1) % a.length]!).touched) touched1.add(t);
+    }
+    derive(graph, touched1, OPTS);
+    const faceA = [...graph.faces.keys()][0]!;
+    const r1 = pushPull(ctx, faceA, 2, { tolerances: T, insertFn: insertIsolatedEdge });
+    derive(graph, r1.touched, OPTS);
+
+    const facesBefore = new Set(graph.faces.keys());
+    const b = circlePoints(4.3, 3.7, 1.6, 16);
+    const touched2 = new Set<EdgeId>();
+    for (let i = 0; i < b.length; i++) {
+      for (const t of insertIsolatedEdge(ctx, b[i]!, b[(i + 1) % b.length]!).touched) touched2.add(t);
+    }
+    derive(graph, touched2, OPTS);
+    const faceB = [...graph.faces.keys()].find((fid) => !facesBefore.has(fid))!;
+    const r2 = pushPull(ctx, faceB, 2, { tolerances: T, insertFn: insertIsolatedEdge });
+    expect(r2.ok).toBe(true);
+    derive(graph, r2.touched, OPTS);
+
+    expect(checkIntegrity(graph)).toEqual([]);
+    // 2 cylinders x (2 caps @ 16 sides + 16 quad walls) = 4 + 32 = 36.
+    expect(graph.faces.size).toBe(36);
+    const sideCounts: Record<number, number> = {};
+    for (const f of graph.faces.values()) {
+      const n = graph.loops.get(f.outerLoop)!.uses.length;
+      sideCounts[n] = (sideCounts[n] ?? 0) + 1;
+    }
+    // The key assertion: no partial/merged faces of any other side count —
+    // specifically no spurious lens-shaped face at the overlap.
+    expect(sideCounts).toEqual({ 4: 32, 16: 4 });
+  });
+
+  it('defaults to the ordinary sticky insertEdge when insertFn is omitted', () => {
+    // The default must stay exactly what it always was — pushPull is core,
+    // heavily-used code, and this option must be strictly additive.
+    const graph = createGraph();
+    const ctx: InsertContext = { graph, tolerances: T, index: createEdgeIndex(graph, 1) };
+    const OPTS = { tolerances: T, upAxis: vec3(0, 1, 0) };
+    const p = [vec3(0, 0, 0), vec3(4, 0, 0), vec3(4, 0, 4), vec3(0, 0, 4)];
+    const touched = new Set<EdgeId>();
+    for (let i = 0; i < 4; i++) for (const t of insertEdge(ctx, p[i]!, p[(i + 1) % 4]!).touched) touched.add(t);
+    derive(graph, touched, OPTS);
+    const face = [...graph.faces.keys()][0]!;
+    const r = pushPull(ctx, face, 2, { tolerances: T }); // no insertFn
+    expect(r.ok).toBe(true);
+    derive(graph, r.touched, OPTS);
+    expect(graph.faces.size).toBe(6);
+    expect(checkIntegrity(graph)).toEqual([]);
   });
 });

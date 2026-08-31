@@ -24,7 +24,7 @@
 import type { EdgeId, FaceId, Graph, Tolerances, Vec3, VertexId } from './types';
 import { getVertex, loopEdgeIds, loopPoints, removeFace } from './topology';
 import { add, distance, dot, normalize, scale, sub } from './math';
-import { insertEdge, type InsertContext } from './insert';
+import { insertEdge, insertIsolatedEdge, type InsertContext, type InsertResult } from './insert';
 import { derive, flipFaceOrientation, reconcileOrientation } from './derive';
 
 export interface PushPullOptions {
@@ -34,6 +34,25 @@ export interface PushPullOptions {
    * to move. Default true — it is what "push/pull" means to a user.
    */
   readonly moveWhenFree?: boolean;
+  /**
+   * Which edge-insertion function builds this extrusion's new geometry
+   * (the far cap, and the side walls connecting it to the base ring).
+   * Defaults to the ordinary, sticky `insertEdge` — the ONLY correct
+   * choice for extruding a face drawn the normal way, where a wall that
+   * happens to reach an existing surface should connect into it.
+   *
+   * Pass `insertIsolatedEdge` instead when extruding a shape that was
+   * itself drawn as an isolated, independent object (see that function's
+   * own doc comment) — otherwise the new geometry this produces (the far
+   * cap, the side walls) would still use the sticky path and split
+   * against whatever unrelated solid it happens to cross in 3D space,
+   * even though the flat shape it started from was correctly kept
+   * independent. That mismatch — the ORIGINAL boundary staying isolated
+   * while the EXTRUDED walls silently go back to sticky — is what caused
+   * a second, overlapping cylinder to visibly get a wedge cut out of it
+   * where it crossed the first one, even after the flat-drawing fix.
+   */
+  readonly insertFn?: (ctx: InsertContext, p0: Vec3, p1: Vec3) => InsertResult;
 }
 
 export interface PushPullResult {
@@ -117,6 +136,7 @@ export function pushPull(
   const offset = scale(normal, dist);
   const shared = !isFaceFree(g, id);
   const touched = new Set<EdgeId>();
+  const insert = opts.insertFn ?? insertEdge;
 
   // Snapshot the boundary BEFORE anything changes: the loops are about to be
   // rebuilt by derivation, and reading them afterwards would read the result.
@@ -171,7 +191,7 @@ export function pushPull(
       const a = add(pts[i]!, offset);
       const b = add(pts[(i + 1) % n]!, offset);
       if (distance(a, b) < opts.tolerances.MIN_EDGE_LENGTH) continue;
-      for (const t of insertEdge(ctx, a, b).touched) {
+      for (const t of insert(ctx, a, b).touched) {
         touched.add(t);
         capEdges.add(t);
       }
@@ -182,7 +202,7 @@ export function pushPull(
     for (let i = 0; i < n; i++) {
       const base = pts[i]!;
       const top = add(base, offset);
-      for (const t of insertEdge(ctx, base, top).touched) touched.add(t);
+      for (const t of insert(ctx, base, top).touched) touched.add(t);
     }
 
     // Re-touch the base ring. The edges already exist, so this creates
@@ -192,7 +212,7 @@ export function pushPull(
       const a = pts[i]!;
       const b = pts[(i + 1) % n]!;
       if (distance(a, b) < opts.tolerances.MIN_EDGE_LENGTH) continue;
-      for (const t of insertEdge(ctx, a, b).touched) touched.add(t);
+      for (const t of insert(ctx, a, b).touched) touched.add(t);
     }
   }
 

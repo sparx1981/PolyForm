@@ -44,6 +44,13 @@ export interface LineBinding {
    * interrupting the gesture to announce a slip is worse than absorbing it.
    */
   commitDrag: (from: Vector3Like, to: Vector3Like) => boolean;
+  /**
+   * The same shape as commitDrag, but for a single side of a whole shape
+   * drawn as one gesture (Rectangle/Circle/Triangle) — see
+   * commitIsolatedSegment's own doc comment on kernelHost for why this is
+   * a genuinely different operation from commitDrag, not just an alias.
+   */
+  commitIsolatedDrag: (from: Vector3Like, to: Vector3Like) => boolean;
   /** The chained state machine, for a future click-click mode. §4.1 */
   tool: LineTool;
   state: LineToolState;
@@ -69,6 +76,15 @@ export function useLineBinding(
     [kernelHost, bumpKernel],
   );
 
+  const commitIsolatedDrag = useCallback(
+    (from: Vector3Like, to: Vector3Like): boolean => {
+      const result = kernelHost.commitIsolatedSegment(toVec3(from), toVec3(to));
+      if (result.ok) bumpKernel();
+      return result.ok;
+    },
+    [kernelHost, bumpKernel],
+  );
+
   const undo = useCallback(() => {
     const ok = kernelHost.undo();
     if (ok) bumpKernel();
@@ -81,5 +97,5 @@ export function useLineBinding(
     return ok;
   }, [kernelHost, bumpKernel]);
 
-  return { commitDrag, tool, state: tool.current, undo, redo };
+  return { commitDrag, commitIsolatedDrag, tool, state: tool.current, undo, redo };
 }

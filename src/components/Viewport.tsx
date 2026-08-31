@@ -4656,14 +4656,24 @@ function Scene() {
         ['rect', 'circle', 'triangle'].includes(previewShape.type) &&
         kernelRingRef.current
       ) {
-        // Emit the ring as EDGES and let derivation build the face. The
-        // rectangle then behaves exactly like one drawn with four lines: it
-        // can be split, push/pulled, painted and healed.
+        // Emit the ring as ISOLATED edges — deliberately NOT the same
+        // sticky insertEdge path a line drawn with the Line tool uses.
+        // Rectangle/Circle/Triangle draw a single, complete shape as one
+        // gesture; the shape still snaps onto an existing vertex the
+        // user deliberately targets, but it no longer splits (or gets
+        // split by) unrelated geometry it merely happens to cross —
+        // that used to turn two overlapping rectangles into three
+        // faces (two L-shaped remainders plus a shared sliver) instead
+        // of leaving both rectangles intact and independently
+        // selectable. See insertIsolatedEdge's own doc comment for the
+        // full reasoning, and why the Line/Arc tool keeps the original
+        // behaviour instead — dividing a surface is what THAT tool is
+        // for.
         const ring = kernelRingRef.current;
         kernelRingRef.current = null;
         let ok = ring.length >= 3;
         for (let i = 0; ok && i < ring.length; i++) {
-          if (!lineBinding.commitDrag(ring[i]!, ring[(i + 1) % ring.length]!)) {
+          if (!lineBinding.commitIsolatedDrag(ring[i]!, ring[(i + 1) % ring.length]!)) {
             // A zero-width drag: nothing worth committing.
             if (i === 0) ok = false;
           }
