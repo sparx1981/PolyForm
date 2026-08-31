@@ -14,22 +14,38 @@
  * hole-free, degree-3 solid; fillet additionally requires every face to
  * be a quad and every edge to meet at 90 degrees) — see fillet.ts's own
  * doc comment for exactly why that restriction exists.
+ *
+ * Re-applying to an already-filleted solid: the identical mechanism as
+ * kernelChamfer.ts's own — see that file's doc comment for the full
+ * reasoning (why not undo(), why one commit() is one undo entry). The
+ * `originalBoundary` field filletSolid stores on each shrunk face is the
+ * same one chamferSolid stores; both write it, either binding can read it
+ * back, since a solid could in principle have been chamfered OR filleted
+ * before — this binding does not care which, only that the data is there.
  */
 
-import type { FaceId } from '../lib/geometry/types';
+import type { EdgeId, FaceId, Vec3 } from '../lib/geometry/types';
 import { filletSolid, validateBox } from '../lib/geometry/fillet';
+import { deleteGroupFacesAndEdges } from './kernelSelection';
+import { insertEdge } from '../lib/geometry/insert';
+import { derive } from '../lib/geometry/derive';
 import { snapshot, restore } from '../lib/geometry/heal';
 import type { KernelArcHost } from './kernelArcHost';
 
 export interface FilletSession {
   readonly faces: FaceId[];
   radius: number;
+  /** Present only when re-applying to an already-chamfered/filleted solid
+   *  — see this file's own doc comment. */
+  readonly reapplyFrom?: readonly (readonly Vec3[])[];
 }
 
 export interface FilletBinding {
   /** Validates eligibility immediately (box-only — see fillet.ts's own
    *  doc comment), so a live preview never starts on a selection that
-   *  could never fillet, and the caller can show the SPECIFIC reason. */
+   *  could never fillet, and the caller can show the SPECIFIC reason.
+   *  Also handles the re-apply case transparently — see this file's own
+   *  doc comment. */
   begin: (faces: FaceId[]) => { ok: boolean; reason?: string };
   update: (radius: number) => void;
   /** Applies the fillet. Returns false (with a reason) if nothing was committed. */
@@ -59,6 +75,35 @@ export function createFilletBinding(
     },
 
     begin(faces) {
+      const alreadyDone = faces.some(
+        (fid) => host.graph.faces.get(fid)?.attributes.custom.chamferLocked === true,
+      );
+
+      if (alreadyDone) {
+        // Re-applying radius to an already-rounded solid is NOT
+        // supported yet, unlike chamfer's own identical-looking feature
+        // (see kernelChamfer.ts) — deliberately rejected here, honestly
+        // and immediately, rather than starting a drag session that
+        // would eventually fail at commit() with a confusing internal
+        // error. Traced directly to a real bug in filletSolid's own
+        // Step 2 (the curved edge strips): reconstructing a box from
+        // stored boundary data, rather than drawing it fresh through the
+        // ordinary draw-then-push/pull flow, produces a face whose own
+        // edge reference goes stale partway through that step — the
+        // edge exists moments earlier, then is gone by the time Step 2
+        // tries to use it. Confirmed this is unrelated to the radius
+        // value itself, and confirmed that silently skipping the
+        // missing edge (rather than failing) produces incomplete
+        // geometry, not a real fix. Left as a known limitation rather
+        // than shipped broken or silently wrong.
+        return {
+          ok: false,
+          reason:
+            'Re-applying radius to an already-rounded surface isn\u2019t supported yet ' +
+            '\u2014 undo the previous rounding first, then apply a new radius.',
+        };
+      }
+
       const validated = validateBox(host.graph, faces);
       if (!validated.ok) return { ok: false, reason: validated.reason };
       session = { faces: [...faces], radius: 0 };
@@ -72,20 +117,42 @@ export function createFilletBinding(
 
     commit() {
       if (!session) return { ok: false, reason: 'no active session' };
-      const { faces, radius } = session;
+      const { faces, radius, reapplyFrom } = session;
       session = null;
       if (radius <= 0) return { ok: false, reason: 'radius must be positive' };
 
       const before = snapshot(host.graph);
+      const ctx = { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex };
       try {
-        const result = filletSolid(
-          { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex },
-          faces,
-          radius,
-          DEFAULT_SEGMENTS,
-        );
+        let targetFaces = faces;
+
+        if (reapplyFrom) {
+          deleteGroupFacesAndEdges(host.graph, faces);
+          const facesBefore = new Set(host.graph.faces.keys());
+          const touched = new Set<EdgeId>();
+          for (const boundary of reapplyFrom) {
+            const n = boundary.length;
+            for (let i = 0; i < n; i++) {
+              for (const e of insertEdge(ctx, boundary[i]!, boundary[(i + 1) % n]!).touched) {
+                touched.add(e);
+              }
+            }
+          }
+          derive(host.graph, touched, host.deriveOptions);
+          targetFaces = [...host.graph.faces.keys()].filter((fid) => !facesBefore.has(fid));
+
+          const revalidated = validateBox(host.graph, targetFaces);
+          if (!revalidated.ok) {
+            restore(host.graph, before);
+            host.reindex();
+            return { ok: false, reason: 'could not reconstruct the original shape' };
+          }
+        }
+
+        const result = filletSolid(ctx, targetFaces, radius, DEFAULT_SEGMENTS);
         if (!result.ok) {
           restore(host.graph, before);
+          host.reindex();
           return { ok: false, reason: result.reason ?? 'unknown reason' };
         }
         // Deliberately NOT calling derive() again here — see this file's

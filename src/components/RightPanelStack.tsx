@@ -212,6 +212,10 @@ export default function RightPanelStack() {
     setEdgeLinesThickness,
     lightPosition,
     setLightPosition,
+    sunOrbitCenter,
+    setSunOrbitCenter,
+    pickingSunCenter,
+    setPickingSunCenter,
     animateSun,
     setAnimateSun,
     sunSpeed,
@@ -1800,6 +1804,20 @@ export default function RightPanelStack() {
                       onChange={(e) => setLightPosition([lightPosition[0], lightPosition[1], parseFloat(e.target.value)])}
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
                     />
+                  </div>
+                  <button
+                    onClick={() => setPickingSunCenter(true)}
+                    className={cn(
+                      "w-full text-[10px] font-bold uppercase tracking-wider py-1.5 rounded border transition-colors flex items-center justify-center gap-1.5",
+                      pickingSunCenter
+                        ? "bg-trimble-blue text-white border-trimble-blue"
+                        : (theme === 'dark' ? "border-gray-700 hover:bg-gray-700 text-gray-300" : "border-gray-200 hover:bg-gray-50 text-gray-600")
+                    )}
+                  >
+                    {pickingSunCenter ? 'Click anywhere in the viewport…' : 'Pick Sun Centre'}
+                  </button>
+                  <div className="text-[9px] text-gray-400 text-center -mt-1">
+                    Orbit centre: {sunOrbitCenter[0].toFixed(1)}, {sunOrbitCenter[2].toFixed(1)}
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">

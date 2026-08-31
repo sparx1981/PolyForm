@@ -127,3 +127,45 @@ describe('fillet binding — lifecycle', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe('fillet — re-applying to an already-rounded solid is refused, honestly', () => {
+  // Unlike chamfer's own identical-looking feature (see
+  // kernelChamfer.test.ts), fillet does NOT support re-applying yet — a
+  // real bug in filletSolid's own curved-edge-strip construction when
+  // run on reconstructed (rather than freshly-drawn) geometry, found and
+  // documented directly in kernelFillet.ts's own begin() comment. This
+  // is deliberately refused up front, with a clear reason, rather than
+  // left to fail confusingly mid-commit — these tests confirm exactly
+  // that refusal, not a working feature.
+
+  it('clicking radius again on an already-rounded solid is refused with a clear reason', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createFilletBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    expect(b.commit().ok).toBe(true);
+    const expectedFaceCount = 6 + 12 * 6 + 8 * 6 * 6; // DEFAULT_SEGMENTS = 6
+    expect(h.graph.faces.size).toBe(expectedFaceCount);
+
+    const filletedFaces = [...h.graph.faces.keys()];
+    const begun = b.begin(filletedFaces);
+    expect(begun.ok).toBe(false);
+    expect(begun.reason).toMatch(/isn.t supported yet/i);
+    expect(b.active).toBe(false);
+  });
+
+  it('the refusal leaves the existing filleted solid completely untouched', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createFilletBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    b.commit();
+    const expectedFaceCount = 6 + 12 * 6 + 8 * 6 * 6;
+    const depthBefore = h.undoDepth;
+
+    b.begin([...h.graph.faces.keys()]);
+    expect(h.graph.faces.size).toBe(expectedFaceCount);
+    expect(h.undoDepth).toBe(depthBefore);
+    expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+});

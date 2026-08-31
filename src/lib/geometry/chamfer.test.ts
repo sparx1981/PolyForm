@@ -3,7 +3,7 @@ import { createGraph, checkIntegrity, loopVertexIds, getVertex, addVertex, addEd
 import { createEdgeIndex, insertEdge, type InsertContext } from './insert';
 import { derive } from './derive';
 import { pushPull } from './pushpull';
-import { chamferSolid } from './chamfer';
+import { chamferSolid, computeChamferInsets, computeChamferInsetsFromBoundaries } from './chamfer';
 import { vec3 } from './math';
 import { DEFAULT_TOLERANCES as T } from './types';
 import type { EdgeId, FaceId } from './types';
@@ -339,5 +339,50 @@ describe('chamferSolid — geometry sanity', () => {
       return Math.min(...positions.map(p => Math.hypot(p.x - corner.x, p.y - corner.y, p.z - corner.z)));
     };
     expect(distanceFromCorner(0.5)).toBeGreaterThan(distanceFromCorner(0.1));
+  });
+});
+
+describe('computeChamferInsetsFromBoundaries', () => {
+  it('produces the same shrunk boundary as computeChamferInsets, for the identical face', () => {
+    // The core claim this function exists to satisfy: previewing a
+    // re-apply from raw stored boundary points must match what a normal
+    // chamfer of that same face, read from the graph, would show —
+    // otherwise the preview and the real operation disagree, which is
+    // the actual bug this was built to fix.
+    const s = scene(); box(s, 4, 2);
+    const faceId = [...s.graph.faces.keys()][0]!;
+    const face = s.graph.faces.get(faceId)!;
+    const order = loopVertexIds(s.graph, face.outerLoop);
+    const points = order.map((vid) => getVertex(s.graph, vid).position);
+
+    const graphBased = computeChamferInsets(s.graph, [faceId], 0.3);
+    const graphInset = order.map((vid) => graphBased.insetPoint.get(faceId)!.get(vid)!);
+
+    const fromBoundaries = computeChamferInsetsFromBoundaries([points], 0.3);
+    expect(fromBoundaries).toHaveLength(1);
+    expect(fromBoundaries[0]).toHaveLength(order.length);
+
+    for (let i = 0; i < order.length; i++) {
+      expect(fromBoundaries[0]![i]!.x).toBeCloseTo(graphInset[i]!.x, 5);
+      expect(fromBoundaries[0]![i]!.y).toBeCloseTo(graphInset[i]!.y, 5);
+      expect(fromBoundaries[0]![i]!.z).toBeCloseTo(graphInset[i]!.z, 5);
+    }
+  });
+
+  it('returns an empty array for a degenerate boundary (fewer than 3 usable points)', () => {
+    const result = computeChamferInsetsFromBoundaries([[vec3(0, 0, 0), vec3(0, 0, 0)]], 0.3);
+    expect(result[0]).toEqual([]);
+  });
+
+  it('handles multiple boundaries independently', () => {
+    const s = scene(); box(s, 4, 2);
+    const faceIds = [...s.graph.faces.keys()].slice(0, 2);
+    const boundaries = faceIds.map((fid) => {
+      const f = s.graph.faces.get(fid)!;
+      return loopVertexIds(s.graph, f.outerLoop).map((vid) => getVertex(s.graph, vid).position);
+    });
+    const result = computeChamferInsetsFromBoundaries(boundaries, 0.3);
+    expect(result).toHaveLength(2);
+    for (const inset of result) expect(inset.length).toBeGreaterThan(0);
   });
 });

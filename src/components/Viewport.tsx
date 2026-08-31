@@ -75,7 +75,7 @@ import { ChamferPreview } from './ChamferPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
-import type { FaceId, Mat4 } from '../lib/geometry/types';
+import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
 const KERNEL_SNAP_TOOLS: string[] = [
@@ -1147,6 +1147,10 @@ function Scene() {
     showLightsource,
     lightPosition,
     setLightPosition,
+    sunOrbitCenter,
+    pickingSunCenter,
+    setPickingSunCenter,
+    setSunOrbitCenter,
     isWorldViewActive,
     worldViewLocation,
     worldViewAltitude,
@@ -1269,7 +1273,7 @@ function Scene() {
   const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
   const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
   const filletRef = useRef(createFilletBinding(kernelHost, bumpKernel));
-  const [chamferPreview, setChamferPreview] = useState<{ faces: FaceId[]; amount: number } | null>(null);
+  const [chamferPreview, setChamferPreview] = useState<{ faces: FaceId[]; amount: number; boundaries?: Vec3[][] } | null>(null);
   /**
    * A dedicated, impossible-to-miss banner for things like "Radius isn't
    * supported yet" — separate from `measurements`, which the status bar
@@ -1664,6 +1668,15 @@ function Scene() {
     // this ensures a future one can never take down the whole app the same
     // way — it surfaces as a toast instead.
     try {
+    if (pickingSunCenter) {
+      // Same reasoning as the identical check in handleMeshPointerDown —
+      // this covers a click landing on KERNEL geometry instead, a
+      // separate click path from a Shape mesh's onPointerDown.
+      if (!event.point) return false;
+      setSunOrbitCenter([event.point.x, sunOrbitCenter[1], event.point.z]);
+      setPickingSunCenter(false);
+      return true;
+    }
     if (activeTool === 'note') {
       // Mirrors the identical Shape-mesh case in handleMeshPointerDown —
       // this one covers a click landing on KERNEL geometry instead, which
@@ -1764,7 +1777,19 @@ function Scene() {
         const amount = Math.max(0, deltaPx * 0.002);
         chamferRef.current.update(amount);
         setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
-        setChamferPreview({ faces: group, amount });
+        // When re-applying to an already-chamfered solid, the session
+        // carries the ORIGINAL boundary chamferSolid will actually
+        // reconstruct and re-shrink — the preview must be built from
+        // THAT, not from `group` (the current, already-shrunk faces),
+        // or it shows an entirely different, much smaller shrink than
+        // what commit() will produce. See ChamferPreview's own doc
+        // comment on its `boundaries` prop for the full reasoning.
+        const reapplyFrom = chamferRef.current.session?.reapplyFrom;
+        setChamferPreview(
+          reapplyFrom
+            ? { faces: group, amount, boundaries: reapplyFrom as Vec3[][] }
+            : { faces: group, amount },
+        );
       };
 
       const finish = () => {
@@ -2053,12 +2078,22 @@ function Scene() {
 
   useFrame((state) => {
     if (!animateSun) { sunAnimRef.current = null; } if (animateSun) {
-      if (!sunAnimRef.current) { sunAnimRef.current = { radius: Math.sqrt(lightPosition[0] * lightPosition[0] + lightPosition[2] * lightPosition[2]) || 10, angle: Math.atan2(lightPosition[2], lightPosition[0]) }; } sunAnimRef.current.angle += state.clock.getDelta() * sunSpeed * 0.5;
+      // Orbit relative to sunOrbitCenter, not the origin — see
+      // AppContext's own comment on that state for why. radius/angle are
+      // computed relative to the centre, and the resulting position is
+      // offset back by that same centre, so picking a new centre
+      // re-centres the whole orbit around it instead of always circling
+      // [0,0,0].
+      if (!sunAnimRef.current) {
+        const dx = lightPosition[0] - sunOrbitCenter[0];
+        const dz = lightPosition[2] - sunOrbitCenter[2];
+        sunAnimRef.current = { radius: Math.sqrt(dx * dx + dz * dz) || 10, angle: Math.atan2(dz, dx) };
+      } sunAnimRef.current.angle += state.clock.getDelta() * sunSpeed * 0.5;
       const radius = sunAnimRef.current.radius; const time = sunAnimRef.current.angle;
       setLightPosition([
-        Math.cos(time) * radius,
+        sunOrbitCenter[0] + Math.cos(time) * radius,
         lightPosition[1],
-        Math.sin(time) * radius
+        sunOrbitCenter[2] + Math.sin(time) * radius
       ]);
     }
 
@@ -5114,6 +5149,16 @@ function Scene() {
       return;
     }
 
+    if (pickingSunCenter) {
+      // Same click-to-place priority as placingLightId/placingAnimationId
+      // just above — a one-off pick takes over whatever the click would
+      // otherwise have done, the same way those do.
+      e.stopPropagation();
+      setSunOrbitCenter([e.point.x, sunOrbitCenter[1], e.point.z]);
+      setPickingSunCenter(false);
+      return;
+    }
+
     if (activeTool === 'note') {
       e.stopPropagation();
       setPlacingNotePos(e.point.clone());
@@ -6138,6 +6183,7 @@ function Scene() {
           graph={kernelHost.graph}
           faces={chamferPreview.faces}
           amount={chamferPreview.amount}
+          boundaries={chamferPreview.boundaries}
         />
       )}
 

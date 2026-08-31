@@ -189,9 +189,10 @@ export function filletSolid(
 
   const touched = new Set<EdgeId>();
   const newFaceIds: FaceId[] = [];
-  const addDirectFace = (points: Vec3[], hint: Vec3, holes?: readonly (readonly Vec3[])[]) => {
+  const addDirectFace = (points: Vec3[], hint: Vec3, holes?: readonly (readonly Vec3[])[]): FaceId | null => {
     const created = createDirectFace(ctx, points, hint, touched, holes);
     if (created !== null) newFaceIds.push(created);
+    return created;
   };
 
   // Per-vertex centre O = V - radius*(sum of the three face normals) —
@@ -214,7 +215,13 @@ export function filletSolid(
     const holes = f.innerLoops.map((loopId) =>
       loopVertexIds(g, loopId).map((vid) => getVertex(g, vid).position),
     );
-    addDirectFace(order.map((vid) => map.get(vid)!), originalNormal.get(fid)!, holes);
+    const created = addDirectFace(order.map((vid) => map.get(vid)!), originalNormal.get(fid)!, holes);
+    if (created !== null) {
+      // Same reasoning as chamfer.ts's identical step — see its own doc
+      // comment on `originalBoundary` for the full explanation.
+      g.faces.get(created)!.attributes.custom.originalBoundary =
+        order.map((vid) => getVertex(g, vid).position);
+    }
   }
 
   // 2. A trimmed, curved strip per original edge.

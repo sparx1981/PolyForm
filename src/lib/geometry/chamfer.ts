@@ -274,6 +274,20 @@ export function validateSolid(
  * preview can show the same math mid-drag without running the full,
  * mutating construction on every frame.
  */
+/** The reusable core of computeChamferInsets — the 2D-mitre shrink math
+ *  for ONE face's own raw boundary points, independent of whether those
+ *  points currently exist as a real face in the graph. Both
+ *  computeChamferInsets (graph-based) and
+ *  computeChamferInsetsFromBoundaries (raw stored data, for previewing a
+ *  re-apply) share this. */
+function insetFacePoints(points: readonly Vec3[], normal: Vec3, amount: number): Vec3[] {
+  const plane: Plane = { point: points[0]!, normal };
+  const basis = planeBasis(plane);
+  const points2D = points.map((p) => projectToBasis(p, basis));
+  const inset2D = offsetPolygon2D(points2D, -amount);
+  return inset2D.map((p) => unprojectFromBasis(p, basis));
+}
+
 export function computeChamferInsets(
   g: Graph,
   faceIds: readonly FaceId[],
@@ -285,15 +299,41 @@ export function computeChamferInsets(
     const f = g.faces.get(fid);
     if (!f) continue;
     originalNormal.set(fid, f.plane.normal);
-    const basis = planeBasis(f.plane);
     const order = loopVertexIds(g, f.outerLoop);
-    const points2D = order.map((vid) => projectToBasis(getVertex(g, vid).position, basis));
-    const inset2D = offsetPolygon2D(points2D, -amount);
+    const points = order.map((vid) => getVertex(g, vid).position);
+    const inset = insetFacePoints(points, f.plane.normal, amount);
     const map = new Map<VertexId, Vec3>();
-    order.forEach((vid, i) => map.set(vid, unprojectFromBasis(inset2D[i]!, basis)));
+    order.forEach((vid, i) => map.set(vid, inset[i]!));
     insetPoint.set(fid, map);
   }
   return { originalNormal, insetPoint };
+}
+
+/**
+ * The same shrink-inward preview math as computeChamferInsets, but for
+ * boundaries that are NOT currently represented as real faces in the
+ * graph — specifically, the original (pre-shrink) boundary a chamfer
+ * session stores when re-applying to an already-chamfered solid (see
+ * kernelChamfer.ts's own `reapplyFrom` field on ChamferSession).
+ *
+ * This exists because a live preview built on the CURRENT, already-
+ * chamfered faces (via the ordinary computeChamferInsets) would compute
+ * an inset of the wrong boundary entirely — the small, already-shrunk
+ * faces, not the original sharp solid re-applying will actually
+ * reconstruct and re-chamfer. That mismatch is confirmed as the actual
+ * cause of a re-apply's live preview showing almost no visible change,
+ * even though the eventual committed result is correct: the preview and
+ * the real operation were computing two different things.
+ */
+export function computeChamferInsetsFromBoundaries(
+  boundaries: readonly (readonly Vec3[])[],
+  amount: number,
+): Vec3[][] {
+  return boundaries.map((points) => {
+    const normal = computeNormal(points);
+    if (!normal) return [];
+    return insetFacePoints(points, normal, amount);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -329,7 +369,18 @@ export function chamferSolid(
       loopVertexIds(g, loopId).map((vid) => getVertex(g, vid).position),
     );
     const created = createDirectFace(ctx, points, originalNormal.get(fid)!, touched, holes);
-    if (created !== null) newFaceIds.push(created);
+    if (created !== null) {
+      newFaceIds.push(created);
+      // The ORIGINAL (pre-shrink) boundary, stored on the new shrunk face
+      // itself — not on the edge-strip/corner-patch faces, which don't
+      // correspond to any single original face. This is what lets a
+      // later "re-apply chamfer with a different amount" reconstruct the
+      // sharp box directly, rather than needing to undo (which risks
+      // touching unrelated later edits) or re-locate the face spatially
+      // after an undo. See kernelChamfer.ts's own use of this field.
+      g.faces.get(created)!.attributes.custom.originalBoundary =
+        order.map((vid) => getVertex(g, vid).position);
+    }
   }
 
   // 2. One quad per original edge, bridging the two faces that used to meet

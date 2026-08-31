@@ -140,3 +140,111 @@ describe('chamfer binding — lifecycle', () => {
     expect(h.graph.faces.size).toBe(26);
   });
 });
+
+describe('chamfer — re-apply to an already-chamfered solid', () => {
+  it('clicking chamfer again on a chamferLocked solid succeeds with a new amount', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createChamferBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    expect(b.commit().ok).toBe(true);
+    expect(h.graph.faces.size).toBe(26); // 6 + 12 + 8
+
+    // Re-select the (now chamfered) solid and click again with a
+    // DIFFERENT amount. Ordinary validateSolid would reject this
+    // outright — it's no longer a plain box.
+    const chamferedFaces = [...h.graph.faces.keys()];
+    const begun = b.begin(chamferedFaces);
+    expect(begun.ok).toBe(true);
+    b.update(0.6);
+    const result = b.commit();
+    expect(result.ok).toBe(true);
+    expect(h.graph.faces.size).toBe(26); // same shape, different amount
+    expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+
+  it('re-applying is exactly one undo entry, not two', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createChamferBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    b.commit();
+    const depthAfterFirst = h.undoDepth;
+
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.6);
+    b.commit();
+    expect(h.undoDepth).toBe(depthAfterFirst + 1);
+
+    // Undo returns to the FIRST chamfered state (0.3), not an
+    // intermediate sharp box the user never asked to see.
+    h.undo();
+    expect(h.graph.faces.size).toBe(26);
+    // Undo again should reach the original sharp box.
+    h.undo();
+    expect(h.graph.faces.size).toBe(6);
+  });
+
+  it('dragging the re-applied amount down to zero returns to the original sharp box', () => {
+    // The actual fix this section exists to verify: 0 is no longer
+    // treated as an invalid amount when re-applying — it's how the user
+    // returns an already-chamfered solid to its original, unrounded
+    // shape. A non-re-apply chamfer still requires a positive amount;
+    // see the next test for that.
+    const h = host(); box(h, 4, 2);
+    const b = createChamferBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    b.commit();
+    expect(h.graph.faces.size).toBe(26);
+
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0);
+    const result = b.commit();
+    expect(result.ok).toBe(true);
+    expect(h.graph.faces.size).toBe(6); // back to the plain, sharp box
+    expect(checkIntegrity(h.graph)).toEqual([]);
+    for (const f of h.graph.faces.values()) {
+      expect(f.attributes.custom.chamferLocked).toBeUndefined();
+    }
+  });
+
+  it('an ordinary (non-re-apply) chamfer still requires a positive amount', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createChamferBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0); // invalid — there is no sharp shape to "return to" yet
+    const result = b.commit();
+    expect(result.ok).toBe(false);
+    expect(h.graph.faces.size).toBe(6); // untouched
+    expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+
+  it('re-applying survives an unrelated edit made after the original chamfer', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createChamferBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    b.commit();
+
+    // An unrelated edit, far away — this is exactly the scenario undo()
+    // would risk unwinding if re-apply were built on it instead of
+    // reconstructing from stored boundaries directly.
+    h.commitSegment(vec3(20,0,0), vec3(24,0,0));
+    h.commitSegment(vec3(24,0,0), vec3(24,0,4));
+    h.commitSegment(vec3(24,0,4), vec3(20,0,4));
+    h.commitSegment(vec3(20,0,4), vec3(20,0,0));
+    const facesAfterUnrelatedEdit = h.graph.faces.size;
+
+    const chamferedFaces = [...h.graph.faces.keys()].filter(
+      (fid) => h.graph.faces.get(fid)!.attributes.custom.chamferLocked === true,
+    );
+    b.begin(chamferedFaces);
+    b.update(0.6);
+    const result = b.commit();
+    expect(result.ok).toBe(true);
+    // The unrelated square should still be there, untouched.
+    expect(h.graph.faces.size).toBe(facesAfterUnrelatedEdit - 26 + 26); // net same count, re-chamfered
+    expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+});

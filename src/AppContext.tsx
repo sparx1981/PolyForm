@@ -191,6 +191,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [edgeLinesOpacity, setEdgeLinesOpacity] = useState<number>(1);
   const [edgeLinesThickness, setEdgeLinesThickness] = useState<number>(2);
   const [lightPosition, setLightPosition] = useState<[number, number, number]>([5, 5, 5]);
+  // The point the sun orbits around when animateSun is on — defaults to
+  // the origin (the design space's own centre), same as it always
+  // implicitly did before this existed.
+  const [sunOrbitCenter, setSunOrbitCenter] = useState<[number, number, number]>([0, 0, 0]);
+  // True for the single click after "Pick Sun Centre" is pressed — the
+  // next click anywhere in the viewport (a Shape, a kernel face, or the
+  // ground plane) sets sunOrbitCenter to that point and clears this back
+  // to false. Mirrors placingNotePos's own click-to-place pattern (see
+  // that state's own doc comment) rather than introducing a new
+  // activeTool value — this is a one-off pick, not an ongoing drawing
+  // mode, so it doesn't belong in that type union.
+  const [pickingSunCenter, setPickingSunCenter] = useState(false);
   const [animateSun, setAnimateSun] = useState(false);
   const [sunSpeed, setSunSpeed] = useState(1.0);
   const [sunIntensity, setSunIntensity] = useState(1.0);
@@ -1273,6 +1285,10 @@ console.log("Created rectangle:", myRect.id);`);
       setEdgeLinesThickness,
       lightPosition,
       setLightPosition: handleSetLightPosition,
+      sunOrbitCenter,
+      setSunOrbitCenter,
+      pickingSunCenter,
+      setPickingSunCenter,
       animateSun,
       setAnimateSun: handleSetAnimateSun,
       sunSpeed,
