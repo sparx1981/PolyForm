@@ -62,6 +62,8 @@ import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
 import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
+import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
+import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
 import { createPushPullBinding, ISOLATED_SHAPE_KEY } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
@@ -1268,7 +1270,6 @@ function Scene() {
   const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
   const filletRef = useRef(createFilletBinding(kernelHost, bumpKernel));
   const [chamferPreview, setChamferPreview] = useState<{ faces: FaceId[]; amount: number } | null>(null);
-  const [objectInfoTarget, setObjectInfoTarget] = useState<ObjectInfoSummary | null>(null);
   /**
    * A dedicated, impossible-to-miss banner for things like "Radius isn't
    * supported yet" — separate from `measurements`, which the status bar
@@ -1341,7 +1342,7 @@ function Scene() {
     setSelectedFaceIds(group);
     setSelectedId(null);
     setSelectedIds([]);
-    setContextMenu({ x: clientX, y: clientY, type: 'kernel', data: group });
+    setContextMenu({ x: clientX, y: clientY, type: 'kernel', data: group, faceId });
   }, [kernelHost, setContextMenu, setSelectedFaceIds, setSelectedId, setSelectedIds]);
 
   const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
@@ -8234,6 +8235,22 @@ export default function Viewport() {
   // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [styleLibraryTargetId, setStyleLibraryTargetId] = useState<string | null>(null);
+  // objectInfoTarget lives HERE, in the outer Viewport() component, not in
+  // Scene(): the button that sets it (the kernel context menu's "View
+  // Object Information") and the modal that displays it are BOTH rendered
+  // from Viewport()'s own return — a state declared inside the separate
+  // Scene() function is invisible here, a plain JS scoping fact, not a
+  // React quirk. Getting this backwards is exactly what crashed the app
+  // outright ("objectInfoTarget is not defined") rather than merely
+  // rendering wrong — a ReferenceError, not a warning, because the two
+  // are genuinely different functions with no shared scope at all.
+  const [objectInfoTarget, setObjectInfoTarget] = useState<ObjectInfoSummary | null>(null);
+  // Same scoping rule as objectInfoTarget just above (see its own comment):
+  // this lives in Viewport(), not Scene(), because the modal that reads it
+  // is rendered from here.
+  const [divideSurfaceTarget, setDivideSurfaceTarget] = useState<FaceId | null>(null);
+  const [divideColumns, setDivideColumns] = useState(2);
+  const [divideRows, setDivideRows] = useState(2);
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
   const [quadView, setQuadView] = useState(false);
   const [panelViews, setPanelViews] = useState<Array<'perspective' | 'top' | 'front' | 'right'>>(['perspective', 'top', 'front', 'right']);
@@ -9118,6 +9135,22 @@ export default function Viewport() {
               >
                 View Object Information
               </button>
+              {contextMenu.faceId !== undefined && isSimpleRectangularFace(kernelHost.graph, contextMenu.faceId) && (
+                <button
+                  onClick={() => {
+                    setDivideSurfaceTarget(contextMenu.faceId);
+                    setDivideColumns(2);
+                    setDivideRows(2);
+                    setContextMenu(null);
+                  }}
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+                    theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                  )}
+                >
+                  Divide Surface
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (setGroupHidden(kernelHost.graph, contextMenu.data, true) > 0) bumpKernel();
@@ -9313,6 +9346,78 @@ export default function Viewport() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {divideSurfaceTarget !== null && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40"
+          onClick={() => setDivideSurfaceTarget(null)}
+        >
+          <div
+            className={cn(
+              "rounded-lg shadow-2xl border p-5 min-w-[260px]",
+              theme === 'dark' ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-800"
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-bold mb-3">Divide Surface</h3>
+            <div className="space-y-3 mb-4">
+              <label className="flex items-center justify-between text-xs">
+                <span>Columns</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={divideColumns}
+                  onChange={(e) => setDivideColumns(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className={cn(
+                    "w-16 px-2 py-1 rounded border text-xs text-right",
+                    theme === 'dark' ? "bg-gray-900 border-gray-700" : "bg-white border-gray-300"
+                  )}
+                />
+              </label>
+              <label className="flex items-center justify-between text-xs">
+                <span>Rows</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={divideRows}
+                  onChange={(e) => setDivideRows(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className={cn(
+                    "w-16 px-2 py-1 rounded border text-xs text-right",
+                    theme === 'dark' ? "bg-gray-900 border-gray-700" : "bg-white border-gray-300"
+                  )}
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDivideSurfaceTarget(null)}
+                className={cn(
+                  "px-3 py-1.5 text-xs rounded",
+                  theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                )}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const ctx = { graph: kernelHost.graph, tolerances: kernelHost.tolerances, index: kernelHost.spatialIndex };
+                  const result = divideRectangularFace(ctx, divideSurfaceTarget, divideColumns, divideRows);
+                  if (result.ok) {
+                    derive(kernelHost.graph, result.touched, kernelHost.deriveOptions);
+                    bumpKernel();
+                  } else {
+                    setMeasurements(result.reason ? `Could not divide: ${result.reason}` : 'Could not divide surface.');
+                  }
+                  setDivideSurfaceTarget(null);
+                }}
+                className="px-3 py-1.5 text-xs rounded bg-trimble-blue text-white hover:opacity-90"
+              >
+                Divide
+              </button>
             </div>
           </div>
         </div>

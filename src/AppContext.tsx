@@ -214,7 +214,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     components: false,
     styles: false
   });
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'surface' | 'multi' | 'light', data?: any } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'surface' | 'multi' | 'light' | 'kernel', data?: any, faceId?: any } | null>(null);
   const [history, setHistory] = useState<Shape[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline' | 'unsaved'>('unsaved');
