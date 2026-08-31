@@ -12,9 +12,11 @@
  */
 
 import type { EdgeId, FaceId, Graph, Vec3 } from '../lib/geometry/types';
-import { loopPoints, removeFace } from '../lib/geometry/topology';
-import { planeBasis, projectToBasis } from '../lib/geometry/math';
+import { loopPoints, removeFace, loopEdgeIds, loopVertexIds, getVertex } from '../lib/geometry/topology';
+import { add, planeBasis, projectToBasis } from '../lib/geometry/math';
 import { signedArea } from '../lib/geometry/polygon';
+import { insertIsolatedEdge, type InsertContext } from '../lib/geometry/insert';
+import { derive, type DeriveOptions } from '../lib/geometry/derive';
 
 /** One row in the Outliner. */
 export interface FaceSummary {
@@ -453,4 +455,140 @@ export function deleteGroupFacesAndEdges(
   let edgesRemoved = 0;
   for (const id of faces) edgesRemoved += deleteFaceAndEdges(g, id).edgesRemoved;
   return { edgesRemoved };
+}
+
+/**
+ * Duplicates every face of a group at a fixed offset, as new, independent
+ * geometry — a real copy the user can then move, edit, or delete on its
+ * own, not a reference back to the original.
+ *
+ * Built on insertIsolatedEdge, the same construction Rectangle/Circle/
+ * Triangle use (see that function's own doc comment) and for the same
+ * reason: a duplicate is a brand-new, independent shape, not a deliberate
+ * connection into whatever the offset happens to land on. Every resulting
+ * face is marked the same way those tools mark theirs, so pushing/pulling
+ * the duplicate later stays consistent with how it was created — see
+ * kernelPushPull.ts's own use of this marker for why that consistency
+ * matters.
+ *
+ * Each original face is derived on its own, one at a time, rather than
+ * batching every face's edges into one shared derive() call. That is
+ * slower for a large group, but it is what makes mapping each new face
+ * back to the ORIGINAL face's own material reliable: a single derive()
+ * call over many faces' edges at once gives no natural way to tell which
+ * resulting face came from which original.
+ *
+ * The offset is the caller's responsibility, not computed here — this
+ * keeps the function simple and testable, and lets the caller decide the
+ * placement logic (e.g. clear of the group's own bounding box, so the
+ * duplicate never lands overlapping the original it was copied from).
+ */
+export function duplicateGroup(
+  ctx: InsertContext,
+  faces: readonly FaceId[],
+  offset: Vec3,
+  deriveOpts: DeriveOptions,
+): { newFaceIds: FaceId[] } {
+  const g = ctx.graph;
+  const newFaceIds: FaceId[] = [];
+
+  for (const fid of faces) {
+    const f = g.faces.get(fid);
+    if (!f) continue;
+    const material = f.attributes.materialFront;
+
+    const order = loopPoints(g, f.outerLoop).map((p) => add(p, offset));
+    const holes = f.innerLoops.map((loopId) => loopPoints(g, loopId).map((p) => add(p, offset)));
+
+    const touched = new Set<EdgeId>();
+    const faceIdsBefore = new Set(g.faces.keys());
+
+    const n = order.length;
+    for (let i = 0; i < n; i++) {
+      for (const t of insertIsolatedEdge(ctx, order[i]!, order[(i + 1) % n]!).touched) touched.add(t);
+    }
+    for (const holePts of holes) {
+      const hn = holePts.length;
+      for (let i = 0; i < hn; i++) {
+        for (const t of insertIsolatedEdge(ctx, holePts[i]!, holePts[(i + 1) % hn]!).touched) touched.add(t);
+      }
+    }
+    derive(g, touched, deriveOpts);
+
+    for (const [newFid, newFace] of g.faces) {
+      if (faceIdsBefore.has(newFid)) continue;
+      newFace.attributes.custom.isolatedShape = true;
+      if (material) newFace.attributes.materialFront = material;
+      newFaceIds.push(newFid);
+    }
+  }
+
+  return { newFaceIds };
+}
+
+export interface ObjectInfoSummary {
+  readonly faceCount: number;
+  readonly edgeCount: number;
+  readonly vertexCount: number;
+  /** Bounding box extents, in the same units as the model itself. */
+  readonly width: number;
+  readonly height: number;
+  readonly depth: number;
+  /** Every distinct material used across the group's faces, in first-seen
+   *  order. Empty when no face has a material set. */
+  readonly materials: string[];
+  /** Total surface area across every face — NOT a solid's volume; this
+   *  kernel has no volume computation, and a group is not guaranteed to
+   *  be a closed, watertight solid in the first place. */
+  readonly surfaceArea: number;
+}
+
+/**
+ * A read-only summary of a group's own geometry, for a "View Object
+ * Information" panel. Deliberately just facts read directly off the
+ * graph — no per-object name, tag, or other metadata, because kernel
+ * groups don't have any yet (see duplicateGroup's own doc comment on the
+ * same point, and the context menu's).
+ */
+export function objectInfoSummary(g: Graph, faces: readonly FaceId[]): ObjectInfoSummary {
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  const edgeIds = new Set<EdgeId>();
+  const vertexIds = new Set<number>();
+  const materials: string[] = [];
+  const seenMaterials = new Set<string>();
+  let surfaceArea = 0;
+  let faceCount = 0;
+
+  for (const fid of faces) {
+    const f = g.faces.get(fid);
+    if (!f) continue;
+    faceCount++;
+    surfaceArea += faceArea(g, fid);
+    if (f.attributes.materialFront && !seenMaterials.has(f.attributes.materialFront)) {
+      seenMaterials.add(f.attributes.materialFront);
+      materials.push(f.attributes.materialFront);
+    }
+    for (const loopId of [f.outerLoop, ...f.innerLoops]) {
+      for (const eid of loopEdgeIds(g, loopId)) edgeIds.add(eid);
+      for (const vid of loopVertexIds(g, loopId)) {
+        vertexIds.add(vid);
+        const p = getVertex(g, vid).position;
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+      }
+    }
+  }
+
+  return {
+    faceCount,
+    edgeCount: edgeIds.size,
+    vertexCount: vertexIds.size,
+    width: isFinite(minX) ? maxX - minX : 0,
+    height: isFinite(minY) ? maxY - minY : 0,
+    depth: isFinite(minZ) ? maxZ - minZ : 0,
+    materials,
+    surfaceArea,
+  };
 }

@@ -23,7 +23,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import type { Vec3 } from '../lib/geometry/types';
+import type { EdgeId, Vec3 } from '../lib/geometry/types';
 import { LineTool, type LineToolState } from './lineTool';
 import type { KernelArcHost } from './kernelArcHost';
 
@@ -34,6 +34,18 @@ export interface Vector3Like {
 }
 
 const toVec3 = (v: Vector3Like): Vec3 => ({ x: v.x, y: v.y, z: v.z });
+
+export interface IsolatedDragResult {
+  readonly ok: boolean;
+  /**
+   * The edges this specific segment touched or created. Exposed so a
+   * caller building a whole ring (Rectangle/Circle/Triangle) can find the
+   * resulting face once the ring closes — e.g. to mark it as an isolated
+   * shape for push/pull's own insertFn option, so extruding it later
+   * doesn't fall back to the ordinary sticky path.
+   */
+  readonly edges: readonly EdgeId[];
+}
 
 export interface LineBinding {
   /**
@@ -50,7 +62,7 @@ export interface LineBinding {
    * commitIsolatedSegment's own doc comment on kernelHost for why this is
    * a genuinely different operation from commitDrag, not just an alias.
    */
-  commitIsolatedDrag: (from: Vector3Like, to: Vector3Like) => boolean;
+  commitIsolatedDrag: (from: Vector3Like, to: Vector3Like) => IsolatedDragResult;
   /** The chained state machine, for a future click-click mode. §4.1 */
   tool: LineTool;
   state: LineToolState;
@@ -77,10 +89,10 @@ export function useLineBinding(
   );
 
   const commitIsolatedDrag = useCallback(
-    (from: Vector3Like, to: Vector3Like): boolean => {
+    (from: Vector3Like, to: Vector3Like): IsolatedDragResult => {
       const result = kernelHost.commitIsolatedSegment(toVec3(from), toVec3(to));
       if (result.ok) bumpKernel();
-      return result.ok;
+      return { ok: result.ok, edges: result.edges };
     },
     [kernelHost, bumpKernel],
   );

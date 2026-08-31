@@ -61,9 +61,9 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups } from '../tools/kernelSelection';
-import { loopVertexIds, getVertex } from '../lib/geometry/topology';
-import { createPushPullBinding } from '../tools/kernelPushPull';
+import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
+import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
+import { createPushPullBinding, ISOLATED_SHAPE_KEY } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
 import { createChamferBinding } from '../tools/kernelChamfer';
@@ -1268,6 +1268,7 @@ function Scene() {
   const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
   const filletRef = useRef(createFilletBinding(kernelHost, bumpKernel));
   const [chamferPreview, setChamferPreview] = useState<{ faces: FaceId[]; amount: number } | null>(null);
+  const [objectInfoTarget, setObjectInfoTarget] = useState<ObjectInfoSummary | null>(null);
   /**
    * A dedicated, impossible-to-miss banner for things like "Radius isn't
    * supported yet" — separate from `measurements`, which the status bar
@@ -4671,11 +4672,33 @@ function Scene() {
         // for.
         const ring = kernelRingRef.current;
         kernelRingRef.current = null;
+        // Captured before the loop so the marking step below can tell a
+        // genuinely NEW face apart from a pre-existing one this ring
+        // merely happened to share its closing edge with (a deliberate
+        // snap onto an existing shape) — only the former should be
+        // marked. Marking a pre-existing, differently-drawn face here
+        // would silently change ITS OWN push/pull behaviour too, which
+        // the user never asked for.
+        const faceIdsBefore = new Set(kernelHost.graph.faces.keys());
         let ok = ring.length >= 3;
         for (let i = 0; ok && i < ring.length; i++) {
-          if (!lineBinding.commitIsolatedDrag(ring[i]!, ring[(i + 1) % ring.length]!)) {
+          const result = lineBinding.commitIsolatedDrag(ring[i]!, ring[(i + 1) % ring.length]!);
+          if (!result.ok) {
             // A zero-width drag: nothing worth committing.
             if (i === 0) ok = false;
+          }
+        }
+        // Mark every genuinely new face as an isolated shape, so
+        // push/pull's own insertFn option (see kernelPushPull.ts) keeps
+        // it consistent with how it was drawn once it's extruded —
+        // otherwise the new geometry an extrusion creates (the far cap,
+        // the side walls) would fall back to the ordinary sticky path
+        // and undo this fix the moment the shape is pushed/pulled, which
+        // is exactly what was still happening before this marker
+        // existed.
+        if (ok) {
+          for (const [fid, face] of kernelHost.graph.faces) {
+            if (!faceIdsBefore.has(fid)) face.attributes.custom[ISOLATED_SHAPE_KEY] = true;
           }
         }
       } else if (previewShape) {
@@ -9047,6 +9070,56 @@ export default function Viewport() {
               </button>
               <button
                 onClick={() => {
+                  // Offset clear of the group's own bounding box, so the
+                  // duplicate never lands overlapping (or accidentally
+                  // snapping onto) the shape it was copied from —
+                  // duplicateGroup's own doc comment on its `offset`
+                  // parameter is explicit that this placement decision is
+                  // deliberately the caller's, not something it computes
+                  // itself.
+                  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                  for (const fid of contextMenu.data) {
+                    const f = kernelHost.graph.faces.get(fid);
+                    if (!f) continue;
+                    for (const p of loopPoints(kernelHost.graph, f.outerLoop)) {
+                      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                      if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+                    }
+                  }
+                  const width = isFinite(minX) ? (maxX - minX) : 1;
+                  const offset = { x: width + 1, y: 0, z: 0 };
+                  const result = duplicateGroup(
+                    { graph: kernelHost.graph, tolerances: kernelHost.tolerances, index: kernelHost.spatialIndex },
+                    contextMenu.data,
+                    offset,
+                    kernelHost.deriveOptions,
+                  );
+                  bumpKernel();
+                  setSelectedFaceIds(result.newFaceIds);
+                  setContextMenu(null);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+                  theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                )}
+              >
+                Duplicate
+              </button>
+              <button
+                onClick={() => {
+                  const summary = objectInfoSummary(kernelHost.graph, contextMenu.data);
+                  setObjectInfoTarget(summary);
+                  setContextMenu(null);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+                  theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                )}
+              >
+                View Object Information
+              </button>
+              <button
+                onClick={() => {
                   if (setGroupHidden(kernelHost.graph, contextMenu.data, true) > 0) bumpKernel();
                   setContextMenu(null);
                 }}
@@ -9194,7 +9267,57 @@ export default function Viewport() {
           )}
         </div>
       )}
-      
+
+      {objectInfoTarget && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40"
+          onClick={() => setObjectInfoTarget(null)}
+        >
+          <div
+            className={cn(
+              "rounded-lg shadow-2xl border p-5 min-w-[280px] max-w-[360px]",
+              theme === 'dark' ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-800"
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold">Object Information</h3>
+              <button
+                onClick={() => setObjectInfoTarget(null)}
+                className={cn(
+                  "text-xs px-2 py-0.5 rounded",
+                  theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                )}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex justify-between"><span className="opacity-70">Faces</span><span>{objectInfoTarget.faceCount}</span></div>
+              <div className="flex justify-between"><span className="opacity-70">Edges</span><span>{objectInfoTarget.edgeCount}</span></div>
+              <div className="flex justify-between"><span className="opacity-70">Vertices</span><span>{objectInfoTarget.vertexCount}</span></div>
+              <div className="flex justify-between"><span className="opacity-70">Dimensions</span><span>{formatValue(objectInfoTarget.width, unit, 2)} × {formatValue(objectInfoTarget.depth, unit, 2)} × {formatValue(objectInfoTarget.height, unit, 2)}</span></div>
+              <div className="flex justify-between"><span className="opacity-70">Surface area</span><span>{objectInfoTarget.surfaceArea.toFixed(2)} {unit}²</span></div>
+              {objectInfoTarget.materials.length > 0 && (
+                <div className="pt-1">
+                  <div className="opacity-70 mb-1">Materials</div>
+                  <div className="flex flex-wrap gap-1">
+                    {objectInfoTarget.materials.map((m) => (
+                      <span
+                        key={m}
+                        className="inline-block w-4 h-4 rounded border border-gray-400"
+                        style={{ backgroundColor: m }}
+                        title={m}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="absolute top-4 left-4 flex flex-row items-start gap-2 pointer-events-auto">
         <div 
           className="relative"

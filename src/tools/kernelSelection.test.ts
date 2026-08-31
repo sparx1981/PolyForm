@@ -4,7 +4,7 @@ import {
   faceSummaries, faceArea, paintFace, paintFaces, renameFace,
   setFaceHidden, toggleFaceHidden, deleteFace, deleteFaceAndEdges,
   clearFaceMaterial, facesByMaterial, faceGroups, groupContaining,
-  setGroupHidden, deleteGroupFacesAndEdges,
+  setGroupHidden, deleteGroupFacesAndEdges, duplicateGroup, objectInfoSummary,
 } from './kernelSelection';
 import { insertFaceOffset } from '../lib/geometry/faceOffset';
 import { planeBasis } from '../lib/geometry/math';
@@ -12,6 +12,7 @@ import { pushPull } from '../lib/geometry/pushpull';
 import { derive } from '../lib/geometry/derive';
 import { vec3 } from '../lib/geometry/math';
 import { checkIntegrity } from '../lib/geometry/topology';
+import { addVertex, addEdge, addLoop } from '../lib/geometry/topology';
 import type { FaceId } from '../lib/geometry/types';
 
 const host = () => new KernelArcHost({ cameraDirection: vec3(0,0,-1), upAxis: vec3(0,1,0) });
@@ -603,5 +604,145 @@ describe('grouping excludes a panel that exactly fills a hole', () => {
     );
     derive(h.graph, r.touched, h.deriveOptions);
     expect(faceGroups(h.graph)).toHaveLength(1);
+  });
+});
+
+describe('duplicateGroup', () => {
+  function box(h: KernelArcHost, n = 4, height = 2) {
+    square(h, n);
+    const baseId = [...h.graph.faces.keys()][0]!;
+    const r = pushPull(
+      { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex },
+      baseId, height, { tolerances: h.tolerances },
+    );
+    derive(h.graph, r.touched, h.deriveOptions);
+  }
+
+  it('duplicates a box as new, independent geometry, leaving the original untouched', () => {
+    const h = host();
+    box(h, 4, 2);
+    paintFaces(h.graph, [...h.graph.faces.keys()], '#ff0000');
+    const originalFaceIds = new Set(h.graph.faces.keys());
+
+    const ctx = { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex };
+    const result = duplicateGroup(ctx, [...originalFaceIds], vec3(20, 0, 0), h.deriveOptions);
+
+    expect(result.newFaceIds).toHaveLength(6);
+    expect(h.graph.faces.size).toBe(12); // original 6 + duplicate 6
+    expect(checkIntegrity(h.graph)).toEqual([]);
+
+    // Original is completely untouched.
+    for (const fid of originalFaceIds) {
+      expect(h.graph.faces.has(fid)).toBe(true);
+    }
+
+    // The duplicate is a real, separate group in the Outliner's own sense.
+    expect(faceGroups(h.graph)).toHaveLength(2);
+
+    // Material carried over correctly.
+    for (const fid of result.newFaceIds) {
+      const f = h.graph.faces.get(fid)!;
+      expect(f.attributes.materialFront).toBe('#ff0000');
+      expect(f.attributes.custom.isolatedShape).toBe(true);
+    }
+  });
+
+  it('the duplicate can be moved/edited independently of the original (via groupContaining)', () => {
+    const h = host();
+    box(h, 4, 2);
+    const originalGroup = groupContaining(h.graph, [...h.graph.faces.keys()][0]!);
+
+    const ctx = { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex };
+    const result = duplicateGroup(ctx, originalGroup, vec3(20, 0, 0), h.deriveOptions);
+
+    const duplicateGroupIds = groupContaining(h.graph, result.newFaceIds[0]!);
+    expect(duplicateGroupIds.sort()).toEqual([...result.newFaceIds].sort());
+    // The duplicate's own group must not include any original face.
+    for (const fid of originalGroup) {
+      expect(duplicateGroupIds).not.toContain(fid);
+    }
+  });
+
+  it('preserves a hole when duplicating a face that has one', () => {
+    const h = host();
+    box(h, 8, 2);
+    const face = [...h.graph.faces.values()].find((f) => f.plane.normal.y < -0.5)!;
+    // Add a genuine hole directly, the same safe way chamfer/fillet's own
+    // hole tests do (see those test files' own doc comments for why).
+    const inner = [vec3(2, 0, 2), vec3(4, 0, 2), vec3(4, 0, 4), vec3(2, 0, 4)];
+    const vids = inner.map((p) => addVertex(h.graph, p).id);
+    const holeEdgeIds = vids.map((_, i) => addEdge(h.graph, vids[i]!, vids[(i + 1) % 4]!).id);
+    const holeLoop = addLoop(h.graph, face.id, holeEdgeIds, 'inner', vids[0]!);
+    face.innerLoops.push(holeLoop.id);
+    expect(checkIntegrity(h.graph)).toEqual([]);
+
+    const ctx = { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex };
+    const result = duplicateGroup(ctx, [...h.graph.faces.keys()], vec3(20, 0, 0), h.deriveOptions);
+
+    const dupWithHole = result.newFaceIds
+      .map((fid) => h.graph.faces.get(fid)!)
+      .find((f) => f.innerLoops.length === 1);
+    expect(dupWithHole).toBeDefined();
+    expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+
+  it('skips a face id that no longer exists, without throwing', () => {
+    const h = host();
+    box(h, 4, 2);
+    const ctx = { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex };
+    const bogus = 99999 as FaceId;
+    const result = duplicateGroup(ctx, [bogus], vec3(20, 0, 0), h.deriveOptions);
+    expect(result.newFaceIds).toHaveLength(0);
+  });
+});
+
+describe('objectInfoSummary', () => {
+  function box(h: KernelArcHost, n = 4, height = 2) {
+    square(h, n);
+    const baseId = [...h.graph.faces.keys()][0]!;
+    const r = pushPull(
+      { graph: h.graph, tolerances: h.tolerances, index: h.spatialIndex },
+      baseId, height, { tolerances: h.tolerances },
+    );
+    derive(h.graph, r.touched, h.deriveOptions);
+  }
+
+  it('reports correct face/edge/vertex counts and bounding box for a simple box', () => {
+    const h = host();
+    box(h, 4, 2);
+    const summary = objectInfoSummary(h.graph, [...h.graph.faces.keys()]);
+    expect(summary.faceCount).toBe(6);
+    expect(summary.edgeCount).toBe(12);
+    expect(summary.vertexCount).toBe(8);
+    expect(summary.width).toBeCloseTo(4, 5);
+    expect(summary.height).toBeCloseTo(2, 5);
+    expect(summary.depth).toBeCloseTo(4, 5);
+  });
+
+  it('reports every distinct material used, in first-seen order, with no duplicates', () => {
+    const h = host();
+    box(h, 4, 2);
+    const faceIds = [...h.graph.faces.keys()];
+    paintFace(h.graph, faceIds[0]!, '#ff0000');
+    paintFace(h.graph, faceIds[1]!, '#00ff00');
+    paintFace(h.graph, faceIds[2]!, '#ff0000'); // repeats the first colour
+    const summary = objectInfoSummary(h.graph, faceIds);
+    expect(summary.materials).toEqual(['#ff0000', '#00ff00']);
+  });
+
+  it('reports zero/empty for a face id that does not exist, without throwing', () => {
+    const h = host();
+    const summary = objectInfoSummary(h.graph, [99999 as FaceId]);
+    expect(summary.faceCount).toBe(0);
+    expect(summary.width).toBe(0);
+    expect(summary.materials).toEqual([]);
+  });
+
+  it('surface area is the sum of each face\'s own area, not a solid volume', () => {
+    const h = host();
+    box(h, 4, 2);
+    const summary = objectInfoSummary(h.graph, [...h.graph.faces.keys()]);
+    // 2 caps @ 4x4=16 each + 4 walls @ 4x2=8 each = 32 + 32 = 64.
+    expect(summary.surfaceArea).toBeCloseTo(64, 5);
   });
 });

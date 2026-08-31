@@ -120,3 +120,70 @@ describe('drag lifecycle', () => {
     expect(h.graph.faces.size).toBe(6);
   });
 });
+
+describe('push/pull on an isolated-shape face', () => {
+  function circlePoints(cx: number, cz: number, r: number, n: number) {
+    return Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * Math.PI * 2;
+      return vec3(cx + Math.sin(a) * r, 0, cz + Math.cos(a) * r);
+    });
+  }
+
+  it('extruding a face marked isolatedShape keeps a second overlapping shape intact', () => {
+    // The end-to-end version of the fix: a face carrying the same marker
+    // Viewport.tsx sets on a Rectangle/Circle/Triangle's own face, pushed
+    // through the REAL binding a user's drag actually goes through — not
+    // just the underlying pushPull() function directly. Confirms the
+    // marker is actually read and acted on here, not merely plumbed
+    // through and unused.
+    const h = host();
+
+    const a = circlePoints(2, 2, 2, 16);
+    for (let i = 0; i < a.length; i++) h.commitIsolatedSegment(a[i]!, a[(i + 1) % a.length]!);
+    const faceAId = only(h);
+    const faceA = h.graph.faces.get(faceAId)!;
+    faceA.attributes.custom.isolatedShape = true;
+
+    const ppA = createPushPullBinding(h, () => {});
+    ppA.begin(faceAId, vec3(2, 0, 2));
+    ppA.update(rayAt(2));
+    expect(ppA.commit()).toBe(true);
+
+    const facesBeforeB = new Set(h.graph.faces.keys());
+    const b = circlePoints(4.3, 3.7, 1.6, 16);
+    for (let i = 0; i < b.length; i++) h.commitIsolatedSegment(b[i]!, b[(i + 1) % b.length]!);
+    const faceB = [...h.graph.faces.values()].find((f) => !facesBeforeB.has(f.id))!;
+    faceB.attributes.custom.isolatedShape = true;
+
+    const ppB = createPushPullBinding(h, () => {});
+    ppB.begin(faceB.id, vec3(4.3, 0, 3.7));
+    ppB.update(rayAt(2));
+    expect(ppB.commit()).toBe(true);
+
+    expect(checkIntegrity(h.graph)).toEqual([]);
+    expect(h.graph.faces.size).toBe(36); // 2 cylinders x (2 caps @ 16 sides + 16 quad walls)
+    const sideCounts: Record<number, number> = {};
+    for (const f of h.graph.faces.values()) {
+      const n = h.graph.loops.get(f.outerLoop)!.uses.length;
+      sideCounts[n] = (sideCounts[n] ?? 0) + 1;
+    }
+    expect(sideCounts).toEqual({ 4: 32, 16: 4 });
+  });
+
+  it('a face WITHOUT the marker still extrudes with the ordinary sticky behaviour', () => {
+    // The default-unchanged half of the same check: an ordinary face
+    // (drawn with commitSegment, no marker at all) must still behave
+    // exactly as it always has.
+    const h = host();
+    square(h);
+    const face = h.graph.faces.get(only(h))!;
+    expect(face.attributes.custom.isolatedShape).toBeUndefined();
+
+    const pp = createPushPullBinding(h, () => {});
+    pp.begin(face.id, vec3(2, 0, 2));
+    pp.update(rayAt(2));
+    expect(pp.commit()).toBe(true);
+    expect(h.graph.faces.size).toBe(6);
+    expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+});
