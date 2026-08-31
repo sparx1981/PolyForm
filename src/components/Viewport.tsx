@@ -5862,7 +5862,17 @@ function Scene() {
             <meshBasicMaterial color="yellow" />
           </mesh>
           <line>
-            <bufferGeometry attach="geometry" setFromPoints={[new THREE.Vector3(0,0,0), new THREE.Vector3().subVectors(new THREE.Vector3(0,0,0), new THREE.Vector3(...lightPosition)).normalize().multiplyScalar(2)]} />
+            {/*
+              Points toward sunOrbitCenter, not the hardcoded origin this
+              used to subtract against — the sun's own orbit was already
+              fixed to revolve around sunOrbitCenter (see the useFrame
+              block above), but this line's own direction was never
+              updated to match, so picking a new centre correctly moved
+              the sun but left this visual indicator still aimed at
+              [0,0,0] regardless — confirmed as the actual cause of "the
+              light source line doesn't get updated."
+            */}
+            <bufferGeometry attach="geometry" setFromPoints={[new THREE.Vector3(0,0,0), new THREE.Vector3(sunOrbitCenter[0], sunOrbitCenter[1], sunOrbitCenter[2]).sub(new THREE.Vector3(...lightPosition)).normalize().multiplyScalar(2)]} />
             <lineBasicMaterial attach="material" color="yellow" />
           </line>
         </group>
