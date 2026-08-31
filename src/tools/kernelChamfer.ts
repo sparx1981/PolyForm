@@ -36,7 +36,7 @@
  */
 
 import type { EdgeId, FaceId, Vec3 } from '../lib/geometry/types';
-import { chamferSolid, validateSolid } from '../lib/geometry/chamfer';
+import { chamferSolid, validateSolid, computeSafeMaxAmount } from '../lib/geometry/chamfer';
 import { deleteGroupFacesAndEdges } from './kernelSelection';
 import { insertEdge } from '../lib/geometry/insert';
 import { derive } from '../lib/geometry/derive';
@@ -163,7 +163,21 @@ export function createChamferBinding(
           }
         }
 
-        const result = chamferSolid(ctx, targetFaces, distance);
+        // Clamped to the safe maximum for THESE actual faces (the
+        // reconstructed sharp box, if re-applying — targetFaces already
+        // reflects that), not the amount the drag alone would compute.
+        // Past this point, the face-shrink math produces a
+        // geometrically inverted result rather than failing outright —
+        // see computeSafeMaxAmount's own doc comment for the full
+        // mechanism this was confirmed to prevent. A small margin (0.95x)
+        // keeps the clamp strictly below the exact theoretical boundary:
+        // AT that boundary itself, confirmed directly, some faces become
+        // exactly zero-area and are silently dropped rather than
+        // inverted — a different, but still undesirable, degenerate
+        // result. The margin keeps every face visibly present.
+        const safeMax = computeSafeMaxAmount(host.graph, targetFaces) * 0.95;
+        const clampedDistance = Math.min(distance, safeMax);
+        const result = chamferSolid(ctx, targetFaces, clampedDistance);
         if (!result.ok) {
           restore(host.graph, before);
           host.reindex();

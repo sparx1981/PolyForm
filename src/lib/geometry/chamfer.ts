@@ -451,3 +451,43 @@ export function chamferSolid(
 
   return { ok: true, touched };
 }
+
+/**
+ * The largest chamfer/fillet amount that will not geometrically invert any
+ * face in this group — half the shortest edge length across every face
+ * involved.
+ *
+ * Confirmed directly, not assumed: past this threshold, a face's own 2D
+ * mitre inset (offsetPolygon2D) does not fail or produce a degenerate,
+ * zero-area result — it produces a geometrically INVERTED one instead. A
+ * rectangular face insetting past half its own shorter dimension has its
+ * two opposite edges cross over each other; the mitre-intersection math
+ * still finds a well-formed, non-self-intersecting quad on the other
+ * side of that crossing, so it passes every existing validity check
+ * (integrity, winding, face count) while being a mirrored, "turned
+ * inside-out" version of the shape the user actually asked for. That is
+ * the reported deconstruction, not a crash or an obviously broken
+ * result — which is exactly why it went unnoticed until specifically
+ * traced.
+ *
+ * Shared by both chamferSolid's own callers and filletSolid's: the
+ * underlying face-shrink math (and its failure mode) is identical
+ * between the two operations — see fillet.ts's own doc comment on reusing
+ * chamfer's construction for the same reason.
+ */
+export function computeSafeMaxAmount(g: Graph, faceIds: readonly FaceId[]): number {
+  let shortest = Infinity;
+  for (const fid of faceIds) {
+    const f = g.faces.get(fid);
+    if (!f) continue;
+    const order = loopVertexIds(g, f.outerLoop);
+    const n = order.length;
+    for (let i = 0; i < n; i++) {
+      const a = getVertex(g, order[i]!).position;
+      const b = getVertex(g, order[(i + 1) % n]!).position;
+      const len = distance(a, b);
+      if (len > 1e-9 && len < shortest) shortest = len;
+    }
+  }
+  return isFinite(shortest) ? shortest / 2 : Infinity;
+}

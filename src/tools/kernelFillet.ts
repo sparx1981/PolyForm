@@ -26,6 +26,7 @@
 
 import type { EdgeId, FaceId, Vec3 } from '../lib/geometry/types';
 import { filletSolid, validateBox } from '../lib/geometry/fillet';
+import { computeSafeMaxAmount } from '../lib/geometry/chamfer';
 import { deleteGroupFacesAndEdges } from './kernelSelection';
 import { insertEdge } from '../lib/geometry/insert';
 import { derive } from '../lib/geometry/derive';
@@ -149,7 +150,13 @@ export function createFilletBinding(
           }
         }
 
-        const result = filletSolid(ctx, targetFaces, radius, DEFAULT_SEGMENTS);
+        // Same clamp, and the same reasoning, as kernelChamfer.ts's
+        // identical fix — see computeSafeMaxAmount's own doc comment
+        // for the full mechanism (and why fillet shares chamfer's own
+        // face-shrink math, and therefore its identical failure mode).
+        const safeMax = computeSafeMaxAmount(host.graph, targetFaces) * 0.95;
+        const clampedRadius = Math.min(radius, safeMax);
+        const result = filletSolid(ctx, targetFaces, clampedRadius, DEFAULT_SEGMENTS);
         if (!result.ok) {
           restore(host.graph, before);
           host.reindex();

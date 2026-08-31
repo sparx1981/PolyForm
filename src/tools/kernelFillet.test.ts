@@ -4,7 +4,7 @@ import { createFilletBinding } from './kernelFillet';
 import { pushPull } from '../lib/geometry/pushpull';
 import { derive } from '../lib/geometry/derive';
 import { vec3 } from '../lib/geometry/math';
-import { checkIntegrity } from '../lib/geometry/topology';
+import { checkIntegrity, loopVertexIds, getVertex } from '../lib/geometry/topology';
 
 const host = () => new KernelArcHost({ cameraDirection: vec3(0,0,-1), upAxis: vec3(0,1,0) });
 const square = (h: KernelArcHost, n = 4) => {
@@ -167,5 +167,24 @@ describe('fillet — re-applying to an already-rounded solid is refused, honestl
     expect(h.graph.faces.size).toBe(expectedFaceCount);
     expect(h.undoDepth).toBe(depthBefore);
     expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+});
+
+describe('fillet — clamped to the safe maximum, never inverts a face', () => {
+  it('an over-large radius is clamped, not left to invert the shape', () => {
+    const h = host(); box(h, 4, 2); // shortest edge is 2, safe max is 1
+    const b = createFilletBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(5); // wildly over the safe max of 1
+    const result = b.commit();
+    expect(result.ok).toBe(true);
+    expect(checkIntegrity(h.graph)).toEqual([]);
+
+    const sideFace = [...h.graph.faces.values()].find((f) => Math.abs(f.plane.normal.x) > 0.9)!;
+    expect(sideFace).toBeDefined();
+    const pts = loopVertexIds(h.graph, sideFace.outerLoop).map((vid) => getVertex(h.graph, vid).position);
+    const ys = pts.map((p) => p.y);
+    expect(Math.min(...ys)).toBeCloseTo(0.95, 5);
+    expect(Math.max(...ys)).toBeCloseTo(1.05, 5);
   });
 });

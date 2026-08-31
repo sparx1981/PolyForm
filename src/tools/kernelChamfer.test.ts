@@ -4,7 +4,7 @@ import { createChamferBinding } from './kernelChamfer';
 import { pushPull } from '../lib/geometry/pushpull';
 import { derive } from '../lib/geometry/derive';
 import { vec3 } from '../lib/geometry/math';
-import { checkIntegrity } from '../lib/geometry/topology';
+import { checkIntegrity, loopVertexIds, getVertex } from '../lib/geometry/topology';
 import type { EdgeId } from '../lib/geometry/types';
 
 const host = () => new KernelArcHost({ cameraDirection: vec3(0,0,-1), upAxis: vec3(0,1,0) });
@@ -245,6 +245,45 @@ describe('chamfer — re-apply to an already-chamfered solid', () => {
     expect(result.ok).toBe(true);
     // The unrelated square should still be there, untouched.
     expect(h.graph.faces.size).toBe(facesAfterUnrelatedEdit - 26 + 26); // net same count, re-chamfered
+    expect(checkIntegrity(h.graph)).toEqual([]);
+  });
+});
+
+describe('chamfer — clamped to the safe maximum, never inverts a face', () => {
+  it('an amount well past the safe max is clamped, not left to invert the shape', () => {
+    const h = host(); box(h, 4, 2); // shortest edge is 2, safe max is 1
+    const b = createChamferBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(5); // wildly over the safe max of 1
+    const result = b.commit();
+    expect(result.ok).toBe(true);
+    expect(checkIntegrity(h.graph)).toEqual([]);
+
+    // A side face's own Y-extent must still span the ordinary, non-
+    // inverted range up to the clamp point (95% of safeMax=1) — not the
+    // mirrored range an unclamped amount=5 would have produced, and not
+    // absent entirely (which is what landing exactly at the unmargined
+    // safeMax would cause — see kernelChamfer.ts's own comment on why
+    // the 0.95 margin is there).
+    const sideFace = [...h.graph.faces.values()].find((f) => Math.abs(f.plane.normal.x) > 0.9)!;
+    expect(sideFace).toBeDefined();
+    const pts = loopVertexIds(h.graph, sideFace.outerLoop).map((vid) => getVertex(h.graph, vid).position);
+    const ys = pts.map((p) => p.y);
+    expect(Math.min(...ys)).toBeCloseTo(0.95, 5);
+    expect(Math.max(...ys)).toBeCloseTo(1.05, 5);
+  });
+
+  it('clamping also applies correctly when re-applying to an already-chamfered solid', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createChamferBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    b.commit();
+
+    b.begin([...h.graph.faces.keys()]);
+    b.update(10); // wildly over the safe max, on the re-apply path
+    const result = b.commit();
+    expect(result.ok).toBe(true);
     expect(checkIntegrity(h.graph)).toEqual([]);
   });
 });

@@ -3,7 +3,7 @@ import { createGraph, checkIntegrity, loopVertexIds, getVertex, addVertex, addEd
 import { createEdgeIndex, insertEdge, type InsertContext } from './insert';
 import { derive } from './derive';
 import { pushPull } from './pushpull';
-import { chamferSolid, computeChamferInsets, computeChamferInsetsFromBoundaries } from './chamfer';
+import { chamferSolid, computeChamferInsets, computeChamferInsetsFromBoundaries, computeSafeMaxAmount } from './chamfer';
 import { vec3 } from './math';
 import { DEFAULT_TOLERANCES as T } from './types';
 import type { EdgeId, FaceId } from './types';
@@ -384,5 +384,59 @@ describe('computeChamferInsetsFromBoundaries', () => {
     const result = computeChamferInsetsFromBoundaries(boundaries, 0.3);
     expect(result).toHaveLength(2);
     for (const inset of result) expect(inset.length).toBeGreaterThan(0);
+  });
+});
+
+describe('computeSafeMaxAmount', () => {
+  it('returns half the shortest edge for a 4x4x2 box (the height)', () => {
+    const s = scene(); box(s, 4, 2);
+    const safeMax = computeSafeMaxAmount(s.graph, [...s.graph.faces.keys()]);
+    expect(safeMax).toBeCloseTo(1, 5);
+  });
+
+  it('returns half the shortest edge for a non-cube box', () => {
+    const s = scene(); box(s, 10, 3);
+    const safeMax = computeSafeMaxAmount(s.graph, [...s.graph.faces.keys()]);
+    // shortest edge is the height (3), so safe max is 1.5
+    expect(safeMax).toBeCloseTo(1.5, 5);
+  });
+
+  it('an amount at the safe max produces a degenerate (but non-inverted) result', () => {
+    // Confirms the boundary case directly, matching what was found by
+    // empirical probing before this function was written: AT the exact
+    // safe max, the face-shrink math produces a valid (if minimal/edge-
+    // case) result — the actual inversion only begins strictly past it.
+    const s = scene(); box(s, 4, 2);
+    const safeMax = computeSafeMaxAmount(s.graph, [...s.graph.faces.keys()]);
+    const result = chamferSolid(s.ctx, [...s.graph.faces.keys()], safeMax);
+    expect(result.ok).toBe(true);
+    expect(checkIntegrity(s.graph)).toEqual([]);
+  });
+
+  it('an amount past the safe max inverts a face — confirms the actual bug this exists to prevent', () => {
+    const s = scene(); box(s, 4, 2);
+    const safeMax = computeSafeMaxAmount(s.graph, [...s.graph.faces.keys()]);
+    const result = chamferSolid(s.ctx, [...s.graph.faces.keys()], safeMax * 1.5);
+    expect(result.ok).toBe(true); // succeeds "cleanly" — this IS the bug
+    // A side face's own Y-extent should span [0, 2] narrowing inward from
+    // both ends by the same amount — if inverted, the resulting interval
+    // is reversed (this reproduces the exact side-face points found
+    // during investigation: min > raw-max before taking abs, i.e. the
+    // face is mirrored rather than simply shrunk).
+    const sideFace = [...s.graph.faces.values()].find(
+      (f) => Math.abs(f.plane.normal.x) > 0.9,
+    )!;
+    const pts = loopVertexIds(s.graph, sideFace.outerLoop).map(
+      (vid) => getVertex(s.graph, vid).position,
+    );
+    const ys = pts.map((p) => p.y);
+    const rawMin = 0 + safeMax * 1.5; // where "min" WOULD be if not inverted
+    const rawMax = 2 - safeMax * 1.5; // where "max" WOULD be if not inverted
+    // If genuinely inverted, rawMin > rawMax, and the actual points span
+    // [rawMax, rawMin] (the physically-correct absolute range) rather than
+    // the intended [rawMin, rawMax] — confirming the face is mirrored.
+    expect(rawMin).toBeGreaterThan(rawMax);
+    expect(Math.min(...ys)).toBeCloseTo(rawMax, 5);
+    expect(Math.max(...ys)).toBeCloseTo(rawMin, 5);
   });
 });
