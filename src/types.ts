@@ -69,7 +69,10 @@ export interface Shape {
   bevelSegments?: number;
   geometryData?: any; // For custom/CSG meshes
   hostWallId?: string; // For door/window shapes hosted on a wall
-  archStyle?: string; // Style identifier for architectural doors and windows
+  archStyle?: string; // Style identifier for architectural doors, windows, and stairs
+  stairStyle?: 'straight' | 'l-shape' | 'u-shape' | 'c-shape' | 'winder' | 'spiral' | 'curved' | 'bifurcated' | string;
+  stairStructure?: 'closed' | 'open' | 'floating' | 'mono-stringer';
+  railingMode?: 'none' | 'left' | 'right' | 'both';
   parentShapeId?: string;
   parentDepth?: number;
   faceIndex?: number;
@@ -471,6 +474,18 @@ export interface AppState {
   setActivePlantVariation: (variation: string) => void;
   activePlantScale: number;
   setActivePlantScale: (scale: number) => void;
+
+  // Architecture & Wall Tool Engine
+  wallToolSettings: import('./tools/inference/types').WallToolSettings;
+  setWallToolSettings: (settings: import('./tools/inference/types').WallToolSettings | ((prev: import('./tools/inference/types').WallToolSettings) => import('./tools/inference/types').WallToolSettings)) => void;
+  wallJustification: import('./tools/inference/types').WallJustification;
+  setWallJustification: (j: import('./tools/inference/types').WallJustification | ((prev: import('./tools/inference/types').WallJustification) => import('./tools/inference/types').WallJustification)) => void;
+  activeStory: number;
+  setActiveStory: (story: number | ((prev: number) => number)) => void;
+  roofModalTargetIds: string[] | null;
+  setRoofModalTargetIds: (ids: string[] | null) => void;
+  storyPromptTargetIds: string[] | null;
+  setStoryPromptTargetIds: (ids: string[] | null) => void;
 
   // --- Geometry kernel (coexists with Shape[]; see docs/) ---
   // The kernel owns DRAWN geometry: lines, arcs, rectangles, polygons.

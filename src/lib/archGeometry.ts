@@ -26,11 +26,10 @@ export function createWallWithOpeningsGeometry(
   length = 3.0,
   height = 2.8,
   thickness = 0.2,
-  openings: WallOpening[] = []
+  openings: WallOpening[] = [],
+  style?: string
 ): THREE.BufferGeometry {
-  if (!openings || openings.length === 0) {
-    return new THREE.BoxGeometry(length, height, thickness);
-  }
+  let baseGeom: THREE.BufferGeometry;
 
   const halfL = length / 2;
   const halfH = height / 2;
@@ -43,87 +42,284 @@ export function createWallWithOpeningsGeometry(
   }
 
   const intervals: ValidInterval[] = [];
-  for (const op of openings) {
-    const w = Math.max(0.1, op.width);
-    const h = Math.max(0.1, op.height);
-    const xMin = Math.max(-halfL, op.localX - w / 2);
-    const xMax = Math.min(halfL, op.localX + w / 2);
-    const yMin = Math.max(-halfH, op.localY - h / 2);
-    const yMax = Math.min(halfH, op.localY + h / 2);
+  if (openings && openings.length > 0) {
+    for (const op of openings) {
+      const w = Math.max(0.1, op.width);
+      const h = Math.max(0.1, op.height);
+      const xMin = Math.max(-halfL, op.localX - w / 2);
+      const xMax = Math.min(halfL, op.localX + w / 2);
+      const yMin = Math.max(-halfH, op.localY - h / 2);
+      const yMax = Math.min(halfH, op.localY + h / 2);
 
-    if (xMax > xMin + 0.02 && yMax > yMin + 0.02) {
-      intervals.push({ xMin, xMax, yMin, yMax });
+      if (xMax > xMin + 0.02 && yMax > yMin + 0.02) {
+        intervals.push({ xMin, xMax, yMin, yMax });
+      }
     }
   }
 
   if (intervals.length === 0) {
-    return new THREE.BoxGeometry(length, height, thickness);
-  }
+    baseGeom = new THREE.BoxGeometry(length, height, thickness);
+  } else {
+    intervals.sort((a, b) => a.xMin - b.xMin);
 
-  intervals.sort((a, b) => a.xMin - b.xMin);
+    const mergedIntervals: ValidInterval[] = [];
+    let current = { ...intervals[0] };
 
-  const mergedIntervals: ValidInterval[] = [];
-  let current = { ...intervals[0] };
+    for (let i = 1; i < intervals.length; i++) {
+      const next = intervals[i];
+      if (next.xMin <= current.xMax + 0.01) {
+        current.xMax = Math.max(current.xMax, next.xMax);
+        current.yMin = Math.min(current.yMin, next.yMin);
+        current.yMax = Math.max(current.yMax, next.yMax);
+      } else {
+        mergedIntervals.push(current);
+        current = { ...next };
+      }
+    }
+    mergedIntervals.push(current);
 
-  for (let i = 1; i < intervals.length; i++) {
-    const next = intervals[i];
-    if (next.xMin <= current.xMax + 0.01) {
-      current.xMax = Math.max(current.xMax, next.xMax);
-      current.yMin = Math.min(current.yMin, next.yMin);
-      current.yMax = Math.max(current.yMax, next.yMax);
-    } else {
-      mergedIntervals.push(current);
-      current = { ...next };
+    const subBoxes: THREE.BufferGeometry[] = [];
+    let currentX = -halfL;
+
+    for (const seg of mergedIntervals) {
+      // 1. Solid wall block to the left of this opening segment
+      const leftWidth = seg.xMin - currentX;
+      if (leftWidth > 0.01) {
+        const leftGeom = new THREE.BoxGeometry(leftWidth, height, thickness);
+        leftGeom.translate(currentX + leftWidth / 2, 0, 0);
+        subBoxes.push(leftGeom);
+      }
+
+      const segWidth = seg.xMax - seg.xMin;
+
+      // 2. Wall section below opening (e.g. for windows or raised doors)
+      const bottomH = seg.yMin - (-halfH);
+      if (bottomH > 0.01) {
+        const botGeom = new THREE.BoxGeometry(segWidth, bottomH, thickness);
+        botGeom.translate(seg.xMin + segWidth / 2, -halfH + bottomH / 2, 0);
+        subBoxes.push(botGeom);
+      }
+
+      // 3. Wall section above opening (lintel/header above door or window)
+      const topH = halfH - seg.yMax;
+      if (topH > 0.01) {
+        const topGeom = new THREE.BoxGeometry(segWidth, topH, thickness);
+        topGeom.translate(seg.xMin + segWidth / 2, halfH - topH / 2, 0);
+        subBoxes.push(topGeom);
+      }
+
+      currentX = seg.xMax;
+    }
+
+    // 4. Solid wall block to the right of the last opening segment
+    const rightWidth = halfL - currentX;
+    if (rightWidth > 0.01) {
+      const rightGeom = new THREE.BoxGeometry(rightWidth, height, thickness);
+      rightGeom.translate(currentX + rightWidth / 2, 0, 0);
+      subBoxes.push(rightGeom);
+    }
+
+    try {
+      const merged = BufferGeometryUtils.mergeGeometries(subBoxes, false);
+      baseGeom = merged || new THREE.BoxGeometry(length, height, thickness);
+    } catch (e) {
+      baseGeom = new THREE.BoxGeometry(length, height, thickness);
     }
   }
-  mergedIntervals.push(current);
 
-  const subBoxes: THREE.BufferGeometry[] = [];
-  let currentX = -halfL;
-
-  for (const seg of mergedIntervals) {
-    // 1. Solid wall block to the left of this opening segment
-    const leftWidth = seg.xMin - currentX;
-    if (leftWidth > 0.01) {
-      const leftGeom = new THREE.BoxGeometry(leftWidth, height, thickness);
-      leftGeom.translate(currentX + leftWidth / 2, 0, 0);
-      subBoxes.push(leftGeom);
-    }
-
-    const segWidth = seg.xMax - seg.xMin;
-
-    // 2. Wall section below opening (e.g. for windows or raised doors)
-    const bottomH = seg.yMin - (-halfH);
-    if (bottomH > 0.01) {
-      const botGeom = new THREE.BoxGeometry(segWidth, bottomH, thickness);
-      botGeom.translate(seg.xMin + segWidth / 2, -halfH + bottomH / 2, 0);
-      subBoxes.push(botGeom);
-    }
-
-    // 3. Wall section above opening (lintel/header above door or window)
-    const topH = halfH - seg.yMax;
-    if (topH > 0.01) {
-      const topGeom = new THREE.BoxGeometry(segWidth, topH, thickness);
-      topGeom.translate(seg.xMin + segWidth / 2, halfH - topH / 2, 0);
-      subBoxes.push(topGeom);
-    }
-
-    currentX = seg.xMax;
+  // If no cladding style or default flush render, return base wall geometry
+  if (!style || style === 'smooth-render' || style === 'flush') {
+    return baseGeom;
   }
 
-  // 4. Solid wall block to the right of the last opening segment
-  const rightWidth = halfL - currentX;
-  if (rightWidth > 0.01) {
-    const rightGeom = new THREE.BoxGeometry(rightWidth, height, thickness);
-    rightGeom.translate(currentX + rightWidth / 2, 0, 0);
-    subBoxes.push(rightGeom);
+  // Generate 3D Cladding Battens / Boards / Grooves on exterior and facade faces
+  const claddingGeoms: THREE.BufferGeometry[] = [baseGeom];
+  const zOffsets = [
+    { z: thickness / 2 + 0.010, rotSign: 1 },
+    { z: -thickness / 2 - 0.010, rotSign: -1 }
+  ];
+
+  for (const { z: faceZ, rotSign } of zOffsets) {
+    if (style === 'feather-edge' || style === 'standard-overlap') {
+      // Horizontal overlapping boards (150mm height, 25mm overlap)
+      const boardH = 0.15;
+      const overlap = 0.025;
+      const stepY = boardH - overlap;
+      const numBoards = Math.ceil(height / stepY);
+
+      for (let i = 0; i < numBoards; i++) {
+        const y = -halfH + i * stepY + boardH / 2;
+        if (y - boardH / 2 > halfH) break;
+
+        const rowOpenings = intervals
+          .filter(op => y + boardH / 2 > op.yMin && y - boardH / 2 < op.yMax)
+          .sort((a, b) => a.xMin - b.xMin);
+
+        let cursorX = -halfL;
+        for (const op of rowOpenings) {
+          if (op.xMin > cursorX + 0.02) {
+            const segW = op.xMin - cursorX;
+            const boardGeom = new THREE.BoxGeometry(segW, boardH, 0.022);
+            if (style === 'feather-edge') {
+              boardGeom.rotateX(0.08 * rotSign);
+            }
+            boardGeom.translate(cursorX + segW / 2, y, faceZ);
+            claddingGeoms.push(boardGeom);
+          }
+          cursorX = Math.max(cursorX, op.xMax);
+        }
+        if (cursorX < halfL - 0.02) {
+          const segW = halfL - cursorX;
+          const boardGeom = new THREE.BoxGeometry(segW, boardH, 0.022);
+          if (style === 'feather-edge') {
+            boardGeom.rotateX(0.08 * rotSign);
+          }
+          boardGeom.translate(cursorX + segW / 2, y, faceZ);
+          claddingGeoms.push(boardGeom);
+        }
+      }
+    } else if (style === 'tongue-groove' || style === 'shiplap' || style === 'loglap') {
+      // Horizontal interlocking boards (125mm height with bevel V-joint or loglap curve)
+      const boardH = 0.125;
+      const numBoards = Math.ceil(height / boardH);
+
+      for (let i = 0; i < numBoards; i++) {
+        const y = -halfH + i * boardH + boardH / 2;
+        if (y - boardH / 2 > halfH) break;
+
+        const rowOpenings = intervals
+          .filter(op => y + boardH / 2 > op.yMin && y - boardH / 2 < op.yMax)
+          .sort((a, b) => a.xMin - b.xMin);
+
+        let cursorX = -halfL;
+        for (const op of rowOpenings) {
+          if (op.xMin > cursorX + 0.02) {
+            const segW = op.xMin - cursorX;
+            const boardThick = style === 'loglap' ? 0.030 : 0.022;
+            const boardGeom = new THREE.BoxGeometry(segW, boardH - 0.008, boardThick);
+            boardGeom.translate(cursorX + segW / 2, y, faceZ);
+            claddingGeoms.push(boardGeom);
+          }
+          cursorX = Math.max(cursorX, op.xMax);
+        }
+        if (cursorX < halfL - 0.02) {
+          const segW = halfL - cursorX;
+          const boardThick = style === 'loglap' ? 0.030 : 0.022;
+          const boardGeom = new THREE.BoxGeometry(segW, boardH - 0.008, boardThick);
+          boardGeom.translate(cursorX + segW / 2, y, faceZ);
+          claddingGeoms.push(boardGeom);
+        }
+      }
+    } else if (style === 'shadow-gap' || style === 'rainscreen') {
+      // Modern horizontal open-joint slats with deep shadow reveals
+      const slatH = 0.085;
+      const gap = 0.015;
+      const stepY = slatH + gap;
+      const numSlats = Math.ceil(height / stepY);
+
+      for (let i = 0; i < numSlats; i++) {
+        const y = -halfH + i * stepY + slatH / 2;
+        if (y - slatH / 2 > halfH) break;
+
+        const rowOpenings = intervals
+          .filter(op => y + slatH / 2 > op.yMin && y - slatH / 2 < op.yMax)
+          .sort((a, b) => a.xMin - b.xMin);
+
+        let cursorX = -halfL;
+        for (const op of rowOpenings) {
+          if (op.xMin > cursorX + 0.02) {
+            const segW = op.xMin - cursorX;
+            const slatGeom = new THREE.BoxGeometry(segW, slatH, 0.024);
+            slatGeom.translate(cursorX + segW / 2, y, faceZ + 0.005 * rotSign);
+            claddingGeoms.push(slatGeom);
+          }
+          cursorX = Math.max(cursorX, op.xMax);
+        }
+        if (cursorX < halfL - 0.02) {
+          const segW = halfL - cursorX;
+          const slatGeom = new THREE.BoxGeometry(segW, slatH, 0.024);
+          slatGeom.translate(cursorX + segW / 2, y, faceZ + 0.005 * rotSign);
+          claddingGeoms.push(slatGeom);
+        }
+      }
+    } else if (style === 'board-on-board') {
+      // Vertical alternating board-on-board (Yorkshire boarding)
+      const boardW = 0.140;
+      const boardSpacing = 0.180;
+      const numCols = Math.ceil(length / boardSpacing);
+
+      // Layer 1: Backing vertical boards & Layer 2: Projecting capping battens
+      for (let i = 0; i < numCols; i++) {
+        const x = -halfL + i * boardSpacing + boardW / 2;
+        if (x - boardW / 2 > halfL) break;
+
+        const colOpenings = intervals
+          .filter(op => x + boardW / 2 > op.xMin && x - boardW / 2 < op.xMax)
+          .sort((a, b) => a.yMin - b.yMin);
+
+        let cursorY = -halfH;
+        for (const op of colOpenings) {
+          if (op.yMin > cursorY + 0.02) {
+            const segH = op.yMin - cursorY;
+            const vGeom = new THREE.BoxGeometry(boardW, segH, 0.020);
+            vGeom.translate(x, cursorY + segH / 2, faceZ);
+            claddingGeoms.push(vGeom);
+
+            const capGeom = new THREE.BoxGeometry(0.08, segH, 0.025);
+            capGeom.translate(x + boardSpacing / 2, cursorY + segH / 2, faceZ + 0.012 * rotSign);
+            claddingGeoms.push(capGeom);
+          }
+          cursorY = Math.max(cursorY, op.yMax);
+        }
+        if (cursorY < halfH - 0.02) {
+          const segH = halfH - cursorY;
+          const vGeom = new THREE.BoxGeometry(boardW, segH, 0.020);
+          vGeom.translate(x, cursorY + segH / 2, faceZ);
+          claddingGeoms.push(vGeom);
+
+          const capGeom = new THREE.BoxGeometry(0.08, segH, 0.025);
+          capGeom.translate(x + boardSpacing / 2, cursorY + segH / 2, faceZ + 0.012 * rotSign);
+          claddingGeoms.push(capGeom);
+        }
+      }
+    } else if (style === 'brick-running' || style === 'ashlar-stone') {
+      // Masonry courses with prominent relief bands
+      const courseH = style === 'brick-running' ? 0.075 : 0.225;
+      const numCourses = Math.ceil(height / courseH);
+
+      for (let i = 0; i < numCourses; i++) {
+        const y = -halfH + i * courseH + courseH / 2;
+        if (y - courseH / 2 > halfH) break;
+
+        const rowOpenings = intervals
+          .filter(op => y + courseH / 2 > op.yMin && y - courseH / 2 < op.yMax)
+          .sort((a, b) => a.xMin - b.xMin);
+
+        let cursorX = -halfL;
+        for (const op of rowOpenings) {
+          if (op.xMin > cursorX + 0.02) {
+            const segW = op.xMin - cursorX;
+            const brickGeom = new THREE.BoxGeometry(segW, courseH - 0.008, 0.016);
+            brickGeom.translate(cursorX + segW / 2, y, faceZ);
+            claddingGeoms.push(brickGeom);
+          }
+          cursorX = Math.max(cursorX, op.xMax);
+        }
+        if (cursorX < halfL - 0.02) {
+          const segW = halfL - cursorX;
+          const brickGeom = new THREE.BoxGeometry(segW, courseH - 0.008, 0.016);
+          brickGeom.translate(cursorX + segW / 2, y, faceZ);
+          claddingGeoms.push(brickGeom);
+        }
+      }
+    }
   }
 
   try {
-    const merged = BufferGeometryUtils.mergeGeometries(subBoxes, false);
-    return merged || new THREE.BoxGeometry(length, height, thickness);
+    const finalMerged = BufferGeometryUtils.mergeGeometries(claddingGeoms, false);
+    return finalMerged || baseGeom;
   } catch (e) {
-    return new THREE.BoxGeometry(length, height, thickness);
+    return baseGeom;
   }
 }
 
@@ -779,34 +975,24 @@ export function createStepGeometry(width = 1.0, height = 0.18, depth = 0.30): TH
   }
 }
 
+import { createArchitecturalStaircaseGeometry, StaircaseOptions } from './archStairGenerator';
+
 /**
- * Creates an architectural multi-step Staircase geometry.
+ * Creates an architectural multi-step Staircase geometry with support for layouts, structures, and railings.
  */
-export function createStaircaseGeometry(width = 1.0, totalHeight = 2.16, totalLength = 3.6, numSteps = 12): THREE.BufferGeometry {
-  const geometries: THREE.BufferGeometry[] = [];
-  const count = Math.max(2, Math.min(30, numSteps || 12));
-  const stepHeight = totalHeight / count;
-  const stepDepth = totalLength / count;
-
-  for (let i = 0; i < count; i++) {
-    const stepH = (i + 1) * stepHeight;
-    const stepZ = (i - count / 2 + 0.5) * stepDepth;
-    const stepY = -totalHeight / 2 + stepH / 2;
-
-    const stepGeom = new THREE.BoxGeometry(width, stepH, stepDepth);
-    stepGeom.translate(0, stepY, stepZ);
-    geometries.push(stepGeom);
-
-    // Tread nosing lip
-    const nosing = new THREE.BoxGeometry(width + 0.02, 0.03, stepDepth + 0.02);
-    nosing.translate(0, -totalHeight / 2 + (i + 1) * stepHeight - 0.015, stepZ);
-    geometries.push(nosing);
-  }
-
-  try {
-    const merged = BufferGeometryUtils.mergeGeometries(geometries, false);
-    return merged || new THREE.BoxGeometry(width, totalHeight, totalLength);
-  } catch (e) {
-    return new THREE.BoxGeometry(width, totalHeight, totalLength);
-  }
+export function createStaircaseGeometry(
+  width = 1.0,
+  totalHeight = 2.16,
+  totalLength = 3.6,
+  numSteps = 12,
+  options?: StaircaseOptions
+): THREE.BufferGeometry {
+  return createArchitecturalStaircaseGeometry({
+    width,
+    height: totalHeight,
+    length: totalLength,
+    numSteps,
+    ...options
+  });
 }
+

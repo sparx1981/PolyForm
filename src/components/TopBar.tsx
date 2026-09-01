@@ -770,35 +770,116 @@ export default function TopBar() {
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Default Camera Position</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Default Zoom Level & Framing</label>
                 <button 
-                  onClick={() => setDefaultCameraPosition([80, 80, 80])}
+                  onClick={() => {
+                    const defaultPos: [number, number, number] = [14, 12, 16];
+                    setDefaultCameraPosition(defaultPos);
+                    window.dispatchEvent(new CustomEvent('set-camera', { 
+                      detail: { position: defaultPos, target: defaultCameraTarget || [0, 0, 0] } 
+                    }));
+                  }}
                   className="text-[10px] text-trimble-blue font-bold hover:underline"
                 >
-                  Revert Camera
+                  Reset to 1.0x (10m × 10m)
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {(['X', 'Y', 'Z'] as const).map((axis, i) => (
-                  <div key={axis} className="flex flex-col">
-                    <span className="text-[10px] text-gray-400 font-mono mb-1">{axis}</span>
-                    <input 
-                      type="number" 
-                      step="0.1"
-                      value={defaultCameraPosition[i]}
-                      onChange={(e) => {
-                        const newPos = [...defaultCameraPosition] as [number, number, number];
-                        newPos[i] = parseFloat(e.target.value) || 0;
-                        setDefaultCameraPosition(newPos);
+
+              {/* Preset Zoom Level Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  {
+                    id: 'detail',
+                    label: '0.5x Scale (Detail)',
+                    targetSize: '2m – 5m objects',
+                    pos: [7, 6, 8] as [number, number, number],
+                    goodFor: 'Good for furniture, doors, windows, staircases, cabinetry, and fine joinery'
+                  },
+                  {
+                    id: 'standard',
+                    label: '1.0x Scale (Standard Default)',
+                    targetSize: '10m × 10m objects',
+                    pos: [14, 12, 16] as [number, number, number],
+                    goodFor: 'Optimal for 10m × 10m rooms, single-story structures, timber frames, and architectural layouts'
+                  },
+                  {
+                    id: 'building',
+                    label: '2.0x Scale (Medium Building)',
+                    targetSize: '20m – 30m objects',
+                    pos: [28, 24, 32] as [number, number, number],
+                    goodFor: 'Good for multi-room residences, duplexes, commercial suites, and full floor plans'
+                  },
+                  {
+                    id: 'site',
+                    label: '5.0x Scale (Site / Masterplan)',
+                    targetSize: '50m – 100m+ objects',
+                    pos: [65, 55, 75] as [number, number, number],
+                    goodFor: 'Good for large site plots, subdivisions, landscaping terrain, and urban massing models'
+                  }
+                ].map((preset) => {
+                  const isCurrent = Math.abs(defaultCameraPosition[0] - preset.pos[0]) < 2 &&
+                                   Math.abs(defaultCameraPosition[1] - preset.pos[1]) < 2 &&
+                                   Math.abs(defaultCameraPosition[2] - preset.pos[2]) < 2;
+
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setDefaultCameraPosition(preset.pos);
+                        window.dispatchEvent(new CustomEvent('set-camera', { 
+                          detail: { position: preset.pos, target: defaultCameraTarget || [0, 0, 0] } 
+                        }));
                       }}
-                      className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-trimble-blue outline-none"
-                    />
-                  </div>
-                ))}
+                      className={cn(
+                        "text-left p-2.5 rounded-lg border transition-all flex flex-col justify-between",
+                        isCurrent
+                          ? "bg-trimble-blue/10 border-trimble-blue text-gray-900 dark:text-white shadow-sm ring-1 ring-trimble-blue/30"
+                          : "bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-trimble-blue/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="text-xs font-bold">{preset.label}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-gray-600 dark:text-gray-300">
+                          {preset.targetSize}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                        {preset.goodFor}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Coordinates */}
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1.5">Custom Camera Position (X, Y, Z meters)</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['X', 'Y', 'Z'] as const).map((axis, i) => (
+                    <div key={axis} className="flex flex-col">
+                      <span className="text-[10px] text-gray-400 font-mono mb-1">{axis}</span>
+                      <input 
+                        type="number" 
+                        step="0.5"
+                        value={defaultCameraPosition[i]}
+                        onChange={(e) => {
+                          const newPos = [...defaultCameraPosition] as [number, number, number];
+                          newPos[i] = parseFloat(e.target.value) || 0;
+                          setDefaultCameraPosition(newPos);
+                          window.dispatchEvent(new CustomEvent('set-camera', { 
+                            detail: { position: newPos, target: defaultCameraTarget || [0, 0, 0] } 
+                          }));
+                        }}
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-trimble-blue outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <p className="text-[10px] text-gray-400 italic">These settings define the starting view for new models and perspective resets.</p>
+            <p className="text-[10px] text-gray-400 italic">These settings define the starting view and framing for new models and perspective resets.</p>
           </div>
 
           <div className="space-y-3">

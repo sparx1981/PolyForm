@@ -78,6 +78,11 @@ import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
+import { buildRoomAssembly } from '../lib/archRoomAssembly';
+import { InferenceEngine } from '../tools/inference/InferenceEngine';
+import { WallJustification } from '../tools/inference/types';
+import { buildRoofShapeForRoom, buildNextFloorLevel } from '../lib/archRoofGenerator';
+import { applyStairwellHolesToSlabs } from '../lib/archStairwell';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
 const KERNEL_SNAP_TOOLS: string[] = [
@@ -777,7 +782,7 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
           }
         }
 
-        return createWallWithOpeningsGeometry(wallLength, wallHeight, wallThick, openings);
+        return createWallWithOpeningsGeometry(wallLength, wallHeight, wallThick, openings, shape.wallStyle || shape.archStyle);
       }
       case 'door': {
         const dWidth = args[0] || 0.9;
@@ -794,11 +799,35 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
       case 'step':
         return createStepGeometry(args[0] || 1.0, args[1] || 0.18, args[2] || 0.30);
       case 'staircase':
-        return createStaircaseGeometry(args[0] || 1.0, args[1] || 2.16, args[2] || 3.6, args[3] || 12);
+        return createStaircaseGeometry(
+          args[0] || 1.0, 
+          args[1] || 2.16, 
+          args[2] || 3.6, 
+          args[3] || 14,
+          {
+            stairStyle: shape.stairStyle || shape.archStyle || 'straight',
+            stairStructure: shape.stairStructure || 'closed',
+            railingMode: shape.railingMode || 'both'
+          }
+        );
       default:
         return new THREE.BoxGeometry(1, 1, 1);
     }
-  }, [shape.type, shape.position, shape.quaternion, shape.archStyle, args[0], args[1], args[2], args[3], openingsHash]);
+  }, [
+    shape.type, 
+    shape.position, 
+    shape.quaternion, 
+    shape.archStyle, 
+    shape.wallStyle,
+    shape.stairStyle, 
+    shape.stairStructure, 
+    shape.railingMode, 
+    args[0], 
+    args[1], 
+    args[2], 
+    args[3], 
+    openingsHash
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1260,7 +1289,13 @@ function Scene() {
     kernelRevision,
     bumpKernel,
     selectedFaceIds,
-    setSelectedFaceIds
+    setSelectedFaceIds,
+    wallToolSettings,
+    setWallToolSettings,
+    wallJustification,
+    setWallJustification,
+    activeStory,
+    setActiveStory
   } = useApp();
 
   // Shared by every click path that can complete a "Pick Sun Centre"
@@ -2361,6 +2396,7 @@ function Scene() {
   const [wallCandidatePos, setWallCandidatePos] = useState<THREE.Vector3 | null>(null);
   const [wallHoveredVertex, setWallHoveredVertex] = useState<number | null>(null);
   const wallDragStartRef = useRef<{ point: THREE.Vector3; time: number } | null>(null);
+  const lastWallClickTimeRef = useRef<number>(0);
 
   const [fenceVertices, setFenceVertices] = useState<THREE.Vector3[]>([]);
   const [fencePlane, setFencePlane] = useState<THREE.Plane | null>(null);
@@ -2371,8 +2407,12 @@ function Scene() {
     type: Shape['type'], 
     position: [number, number, number], 
     quaternion: [number, number, number, number],
-    args: any 
+    args: any,
+    stairStyle?: string,
+    stairStructure?: string,
+    railingMode?: string
   } | null>(null);
+  const [stairRotationAngle, setStairRotationAngle] = useState<number>(0);
   
   // Push/Pull state
   const [pushPullState, setPushPullState] = useState<{
@@ -2650,27 +2690,43 @@ function Scene() {
     setWallPlane(null);
     setWallCandidatePos(null);
     setWallHoveredVertex(null);
+    setSnapIndicator(null);
+    setTrackingGuide(null);
     setMeasurements('');
     wallDragStartRef.current = null;
   }, [setMeasurements]);
 
-  const createWallSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, wallHeight = 2.8, wallThickness = 0.2) => {
+  const createWallSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, wallHeight?: number, wallThickness?: number, justification?: WallJustification) => {
     const dist = pA.distanceTo(pB);
     if (dist < 0.1) return null;
 
-    const center = pA.clone().lerp(pB, 0.5);
-    center.y = Math.max(pA.y, pB.y) + wallHeight / 2;
+    const actualHeight = wallHeight ?? (wallToolSettings?.height || 2.8);
+    const actualThickness = wallThickness ?? (wallToolSettings?.thickness || 0.2);
+    const actualJustification = justification ?? (wallJustification || 'exterior');
 
     const dir = new THREE.Vector3().subVectors(pB, pA);
     const angle = Math.atan2(dir.z, dir.x);
     const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+
+    // Calculate justification offset (perpendicular to wall vector)
+    const normal = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+    let offsetScalar = 0;
+    if (actualJustification === 'exterior') {
+      offsetScalar = actualThickness / 2;
+    } else if (actualJustification === 'interior') {
+      offsetScalar = -actualThickness / 2;
+    }
+
+    const center = pA.clone().lerp(pB, 0.5);
+    center.add(normal.clone().multiplyScalar(offsetScalar));
+    center.y = Math.max(pA.y, pB.y) + actualHeight / 2;
 
     const newShape: Shape = {
       id: Math.random().toString(36).substr(2, 9),
       type: 'wall',
       position: [center.x, center.y, center.z],
       quaternion: [quat.x, quat.y, quat.z, quat.w],
-      args: [dist, wallHeight, wallThickness],
+      args: [dist, actualHeight, actualThickness],
       color: activeMaterial || '#e2e8f0',
       roughness: activePBR.roughness,
       metalness: activePBR.metalness,
@@ -2680,9 +2736,75 @@ function Scene() {
 
     addShape(newShape);
     commitHistory();
-    recordAction(`sdk.createWall({ length: ${dist.toFixed(2)}, height: ${wallHeight.toFixed(2)}, thickness: ${wallThickness.toFixed(2)}, position: [${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}] });`);
+    recordAction(`sdk.createWall({ length: ${dist.toFixed(2)}, height: ${actualHeight.toFixed(2)}, thickness: ${actualThickness.toFixed(2)}, position: [${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}] });`);
     return newShape;
-  }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction]);
+  }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction, wallToolSettings, wallJustification]);
+
+  const closeWallLoopAndAssembleRoom = useCallback(() => {
+    if (wallVertices.length < 2) return;
+    
+    // Sanitize wall vertices: ensure we don't have duplicate near-identical points at the end
+    let cleanVertices = [...wallVertices];
+    if (cleanVertices.length >= 3) {
+      const last = cleanVertices[cleanVertices.length - 1];
+      if (last.distanceTo(cleanVertices[0]) < 0.25) {
+        cleanVertices.pop();
+      }
+    }
+    
+    if (cleanVertices.length >= 2) {
+      const prev = cleanVertices[cleanVertices.length - 1];
+      if (prev.distanceTo(cleanVertices[0]) >= 0.15) {
+        createWallSegment(prev, cleanVertices[0]);
+      }
+    }
+
+    // Automatically assemble room floor slab and terrain integration
+    const terrainShape = shapes.find(s => s.type === 'terrain') || null;
+    const loopVectors = cleanVertices.length >= 3 ? [...cleanVertices] : [...wallVertices];
+    const assembly = buildRoomAssembly(
+      loopVectors,
+      terrainShape,
+      wallToolSettings,
+      {
+        wallHeight: wallToolSettings?.height || 2.8,
+        wallThickness: wallToolSettings?.thickness || 0.2,
+        justification: wallJustification,
+        story: activeStory || 1
+      }
+    );
+
+    if (assembly.slabShape) {
+      addShape(assembly.slabShape);
+    }
+    if (assembly.foundationShape) {
+      addShape(assembly.foundationShape);
+    }
+    if (assembly.updatedTerrainData && assembly.modifiedTerrainShapeId) {
+      setShapes(prevShapes => prevShapes.map(s => s.id === assembly.modifiedTerrainShapeId ? { ...s, terrainData: assembly.updatedTerrainData! } : s));
+    }
+
+    commitHistory();
+    finalizeWallChain();
+    setMeasurements('Watertight Room Created: Monolithic floor slab & terrain excavation assembled.');
+  }, [wallVertices, createWallSegment, shapes, wallToolSettings, wallJustification, activeStory, addShape, setShapes, commitHistory, finalizeWallChain, setMeasurements]);
+
+  // Listen for external close room requests from toolbar/palette
+  useEffect(() => {
+    const handleCloseRoomEvent = () => {
+      if (activeTool === 'wall') {
+        if (wallVertices.length >= 2) {
+          closeWallLoopAndAssembleRoom();
+        } else {
+          finalizeWallChain();
+        }
+      }
+    };
+    window.addEventListener('polyform:close-wall-room', handleCloseRoomEvent);
+    return () => {
+      window.removeEventListener('polyform:close-wall-room', handleCloseRoomEvent);
+    };
+  }, [activeTool, wallVertices, closeWallLoopAndAssembleRoom, finalizeWallChain]);
 
   const finalizeFenceChain = useCallback(() => {
     setFenceVertices([]);
@@ -3030,6 +3152,16 @@ function Scene() {
       }
 
       // Tool Shortcuts
+      if (activeTool === 'wall' && (key === 'c' || e.key === 'Enter')) {
+        e.preventDefault();
+        if (wallVertices.length >= 2) {
+          closeWallLoopAndAssembleRoom();
+        } else {
+          finalizeWallChain();
+        }
+        return;
+      }
+
       if (key === ' ') {
         e.preventDefault();
         setActiveTool('select');
@@ -3039,7 +3171,7 @@ function Scene() {
         setActiveTool('paint');
       } else if (key === 'r') {
         setActiveTool('rectangle');
-      } else if (key === 'c') {
+      } else if (key === 'c' && activeTool !== 'wall') {
         setActiveTool('circle');
       } else if (key === 'l') {
         setActiveTool('line');
@@ -3063,6 +3195,67 @@ function Scene() {
         setActiveTool('deform');
       } else if (key === 'x') {
         setActiveTool('subtract');
+      } else if (key === 'w') {
+        setActiveTool('wall');
+      }
+
+      // Staircase & Step Tool specific in-flight rotation shortcuts
+      if (activeTool === 'staircase' || activeTool === 'step') {
+        if (e.key === 'ArrowLeft' || e.key === 'Left' || e.key === '[') {
+          e.preventDefault();
+          const step = e.shiftKey ? Math.PI / 12 : Math.PI / 2; // 15° with shift, 90° by default
+          setStairRotationAngle(prev => {
+            const next = (prev + step) % (Math.PI * 2);
+            const deg = Math.round(((next * 180) / Math.PI) % 360);
+            const normDeg = deg < 0 ? deg + 360 : deg;
+            setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            return next;
+          });
+          return;
+        } else if (e.key === 'ArrowRight' || e.key === 'Right' || e.key === ']' || key === 'r') {
+          e.preventDefault();
+          const step = e.shiftKey ? Math.PI / 12 : Math.PI / 2; // 15° with shift, 90° by default
+          setStairRotationAngle(prev => {
+            const next = (prev - step + Math.PI * 2) % (Math.PI * 2);
+            const deg = Math.round(((next * 180) / Math.PI) % 360);
+            const normDeg = deg < 0 ? deg + 360 : deg;
+            setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            return next;
+          });
+          return;
+        }
+      }
+
+      // Wall Tool specific in-flight shortcuts
+      if (activeTool === 'wall') {
+        if (e.key === 'Tab' || key === 'j') {
+          e.preventDefault();
+          const cycle: WallJustification[] = ['exterior', 'center', 'interior'];
+          const current = wallJustification || 'exterior';
+          const nextIdx = (cycle.indexOf(current) + 1) % cycle.length;
+          const nextJust = cycle[nextIdx];
+          setWallJustification(nextJust);
+          setWallToolSettings(prev => ({ ...prev, justification: nextJust }));
+          setMeasurements(`Wall Justification set to: ${nextJust.toUpperCase()} · Thickness: ${((wallToolSettings?.thickness || 0.2) * 1000).toFixed(0)}mm`);
+        } else if (key === 't') {
+          e.preventDefault();
+          const currT = wallToolSettings?.thickness || 0.20;
+          let nextT = 0.20;
+          if (Math.abs(currT - 0.10) < 0.02) nextT = 0.20;
+          else if (Math.abs(currT - 0.20) < 0.02) nextT = 0.30;
+          else nextT = 0.10;
+          setWallToolSettings(prev => ({ ...prev, thickness: nextT }));
+          setMeasurements(`Wall Thickness set to: ${(nextT * 1000).toFixed(0)}mm · Justification: ${(wallJustification || 'exterior').toUpperCase()}`);
+        } else if (key === 'h') {
+          e.preventDefault();
+          const currH = wallToolSettings?.height || 2.80;
+          let nextH = 2.80;
+          if (Math.abs(currH - 2.40) < 0.05) nextH = 2.80;
+          else if (Math.abs(currH - 2.80) < 0.05) nextH = 3.20;
+          else nextH = 2.40;
+          setWallToolSettings(prev => ({ ...prev, height: nextH }));
+          setMeasurements(`Wall Height set to: ${nextH.toFixed(2)}m · Thickness: ${((wallToolSettings?.thickness || 0.2) * 1000).toFixed(0)}mm`);
+        }
       }
     };
 
@@ -3071,7 +3264,7 @@ function Scene() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, fenceVertices.length, finalizeFenceChain, rectangleInputState.active, finalizeRectangleInput]);
+  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, fenceVertices.length, finalizeFenceChain, rectangleInputState.active, finalizeRectangleInput, wallJustification, wallToolSettings, setWallJustification, setWallToolSettings, closeWallLoopAndAssembleRoom, setMeasurements]);
 
   const [pointerDownInfo, setPointerDownInfo] = useState<{ time: number, pos: THREE.Vector3 } | null>(null);
 
@@ -3137,48 +3330,48 @@ function Scene() {
     }
 
     if (activeTool === 'wall') {
+      // ONLY ignore non-primary (e.g. right click) mouse buttons
+      if (e.nativeEvent && (e.nativeEvent as MouseEvent).button !== undefined && (e.nativeEvent as MouseEvent).button !== 0) {
+        return;
+      }
       e.stopPropagation();
+
+      const now = Date.now();
+      if (now - lastWallClickTimeRef.current < 120) {
+        return;
+      }
+      lastWallClickTimeRef.current = now;
       
-      // If clicking first vertex -> close loop & finalize
-      if (wallHoveredVertex === 0 && wallVertices.length >= 2) {
-        const prev = wallVertices[wallVertices.length - 1];
-        createWallSegment(prev, wallVertices[0]);
-        finalizeWallChain();
+      let pointToPlace = wallCandidatePos?.clone();
+      const startV = wallVertices[0] || new THREE.Vector3(9999, 9999, 9999);
+      const distToStart = (pointToPlace || e.point).distanceTo(startV);
+      const isStartClicked = wallVertices.length >= 2 && (wallHoveredVertex === 0 || distToStart < 0.75 || (wallCandidatePos && wallCandidatePos.distanceTo(startV) < 0.5));
+
+      // If clicking first vertex -> close loop & finalize & assemble room
+      if (isStartClicked) {
+        closeWallLoopAndAssembleRoom();
         return;
       }
 
-      let pointToPlace = wallCandidatePos?.clone();
-
       if (wallVertices.length === 0) {
-        // First vertex determines plane
-        const intersects = raycaster.intersectObjects(scene.children, true);
-        const shapeIntersect = intersects.find(i => i.object.userData.isShape);
-
-        let normal = new THREE.Vector3(0, 1, 0);
-        let p = new THREE.Vector3();
-
-        if (shapeIntersect && shapeIntersect.face) {
-          normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
-          p = shapeIntersect.point.clone();
-        } else {
+        let p = pointToPlace ? pointToPlace.clone() : e.point.clone();
+        if (!pointToPlace) {
           const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
           if (!raycaster.ray.intersectPlane(ground, p)) {
             p = e.point.clone();
           }
         }
 
-        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), p);
         setWallPlane(plane);
         setWallVertices([p]);
-        wallDragStartRef.current = { point: p.clone(), time: Date.now() };
         diagLog("TOOL", "Wall started at point", { pos: [p.x, p.y, p.z] });
       } else {
         if (!pointToPlace) pointToPlace = e.point.clone();
         const prev = wallVertices[wallVertices.length - 1];
-        if (prev.distanceTo(pointToPlace) >= 0.15) {
+        if (prev.distanceTo(pointToPlace) >= 0.10) {
           createWallSegment(prev, pointToPlace);
           setWallVertices(prevVerts => [...prevVerts, pointToPlace]);
-          wallDragStartRef.current = { point: pointToPlace.clone(), time: Date.now() };
           diagLog("TOOL", "Wall segment placed", { 
             from: [prev.x, prev.y, prev.z], 
             to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] 
@@ -3504,6 +3697,37 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'staircase' || activeTool === 'step') {
+      e.stopPropagation();
+      if (previewShape && (previewShape.type === 'staircase' || previewShape.type === 'step')) {
+        const isStaircase = activeTool === 'staircase';
+        const newShape: Shape = {
+          id: Math.random().toString(36).substr(2, 9),
+          name: isStaircase ? 'Staircase Flight' : 'Step',
+          type: activeTool,
+          position: previewShape.position,
+          quaternion: previewShape.quaternion,
+          args: previewShape.args || (isStaircase ? [1.0, 2.16, 3.6, 12] : [1.0, 0.18, 0.30]),
+          color: activeMaterial || '#cbd5e1',
+          roughness: activePBR.roughness ?? 0.6,
+          metalness: activePBR.metalness ?? 0.05,
+          stairStyle: (previewShape as any).stairStyle || 'straight',
+          stairStructure: (previewShape as any).stairStructure || 'closed',
+          railingMode: (previewShape as any).railingMode || 'both',
+          tags: ['architecture', activeTool],
+        };
+
+        const updatedShapes = applyStairwellHolesToSlabs([...shapes, newShape]);
+        setShapes(updatedShapes);
+        commitHistory();
+        setPreviewShape(null);
+        setActiveTool('select');
+        setMeasurements(`${isStaircase ? 'Staircase' : 'Step'} placed. Right-click on stairs to Change Style.`);
+        recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+      }
+      return;
+    }
+
     if (['tree', 'bush', 'lamp', 'bench', 'rock'].includes(activeTool)) {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
@@ -3563,7 +3787,7 @@ function Scene() {
       return;
     }
 
-    if (['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'step', 'staircase'].includes(activeTool)) {
+    if (['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
       e.stopPropagation();
       
       if (drawingStep === 2) {
@@ -3777,17 +4001,25 @@ function Scene() {
         // 1. Check start vertex snap to close wall loop
         let isClosingLoop = false;
         if (wallVertices.length >= 2) {
-          const d = target.distanceTo(wallVertices[0]);
-          if (d < 0.65) {
-            finalPos = wallVertices[0].clone();
-            setWallHoveredVertex(0);
-            isClosingLoop = true;
-          } else {
-            setWallHoveredVertex(null);
-          }
-        } else {
-          setWallHoveredVertex(null);
-        }
+           const d = target.distanceTo(wallVertices[0]);
+           const startNdc = wallVertices[0].clone().project(camera);
+           const pointerNdc = (e as any).pointer;
+           const ndcDist = pointerNdc ? Math.hypot(startNdc.x - pointerNdc.x, startNdc.y - pointerNdc.y) : 999;
+          
+           if (d < 0.75 || (pointerNdc && startNdc.z < 1 && ndcDist < 0.08)) {
+             finalPos = wallVertices[0].clone();
+             setWallHoveredVertex(0);
+             isClosingLoop = true;
+             // Suppress redundant black snap badge & tracking label to prevent UI clutter
+             setSnapIndicator(null);
+             const lastV = wallVertices[wallVertices.length - 1];
+             setTrackingGuide({ source: [lastV.x, lastV.y, lastV.z], target: [wallVertices[0].x, wallVertices[0].y, wallVertices[0].z], color: '#0063A3' });
+           } else {
+             setWallHoveredVertex(null);
+           }
+         } else {
+           setWallHoveredVertex(null);
+         }
 
         // 2. Default to 90-degree orthogonal angles, allow free angle if Shift is held down
         if (!e.shiftKey && wallVertices.length > 0 && !isClosingLoop) {
@@ -3834,6 +4066,35 @@ function Scene() {
               }
             }
             finalPos = bestCand;
+
+            // 2b. Check inference alignment with start node (wallVertices[0])
+            let alignedWithStart = false;
+            if (Math.abs(target.x - wallVertices[0].x) < 0.40) {
+              finalPos.x = wallVertices[0].x;
+              alignedWithStart = true;
+              setTrackingGuide({ source: [wallVertices[0].x, wallVertices[0].y, wallVertices[0].z], target: [finalPos.x, finalPos.y, finalPos.z], color: '#06b6d4', label: 'Aligned with Start (X)' });
+            } else if (Math.abs(target.z - wallVertices[0].z) < 0.40) {
+              finalPos.z = wallVertices[0].z;
+              alignedWithStart = true;
+              setTrackingGuide({ source: [wallVertices[0].x, wallVertices[0].y, wallVertices[0].z], target: [finalPos.x, finalPos.y, finalPos.z], color: '#06b6d4', label: 'Aligned with Start (Z)' });
+            }
+
+            // 2c. Check midpoint snapping on placed wall segments
+            let midpointSnapped = false;
+            for (let sIdx = 0; sIdx < wallVertices.length - 1; sIdx++) {
+              const segMid = wallVertices[sIdx].clone().lerp(wallVertices[sIdx + 1], 0.5);
+              if (target.distanceTo(segMid) < 0.45) {
+                finalPos = segMid.clone();
+                midpointSnapped = true;
+                setSnapIndicator({ point: [segMid.x, segMid.y + 0.1, segMid.z], type: 'midpoint', tooltip: 'Wall Midpoint' });
+                break;
+              }
+            }
+
+            if (!alignedWithStart && !midpointSnapped) {
+              setSnapIndicator(null);
+              setTrackingGuide(null);
+            }
           } else {
             // First wall segment: lock strictly along dominant World X or Z axis
             if (Math.abs(dx) >= Math.abs(dz)) {
@@ -3843,6 +4104,8 @@ function Scene() {
               finalPos.x = lastVertex.x;
               finalPos.z = target.z;
             }
+            setSnapIndicator(null);
+            setTrackingGuide(null);
           }
         } else if (!e.shiftKey && wallVertices.length === 0) {
           // Snap to other shapes' origins when initiating first wall point
@@ -3856,20 +4119,36 @@ function Scene() {
               bestDist = d;
             }
           });
-          if (snapTarget) finalPos = snapTarget;
+          if (snapTarget) {
+            finalPos = snapTarget;
+            setSnapIndicator({ point: [snapTarget.x, snapTarget.y + 0.1, snapTarget.z], type: 'endpoint', tooltip: 'Shape Origin' });
+          } else {
+            setSnapIndicator(null);
+          }
+          setTrackingGuide(null);
+        } else if (e.shiftKey) {
+          setSnapIndicator(null);
+          setTrackingGuide(null);
         }
 
         setWallCandidatePos(finalPos);
 
-        if (wallVertices.length > 0) {
+        if (isClosingLoop) {
+          setMeasurements('🟢 Snap to Start Node · Click, press C, or press Enter to Close Room Loop & Assemble Floor Slab');
+        } else if (wallVertices.length > 0) {
           const lastVertex = wallVertices[wallVertices.length - 1];
           const dist = lastVertex.distanceTo(finalPos);
           const angleMode = e.shiftKey ? 'Free Angle' : '90° Locked';
+          const tMm = ((wallToolSettings?.thickness || 0.2) * 1000).toFixed(0);
+          const hM = (wallToolSettings?.height || 2.8).toFixed(2);
+          const justStr = (wallJustification || 'exterior').toUpperCase();
           if (dist >= 0.05) {
-            setMeasurements(`Wall: Length ${formatValue(dist, unit, 2)} × Height 2.80m × Thickness 0.20m (${angleMode} · ${e.shiftKey ? 'Release Shift for 90° lock' : 'Hold Shift for free angles'} · Double-click/Esc to finish)`);
+            setMeasurements(`Wall: ${formatValue(dist, unit, 2)} × ${hM}m H × ${tMm}mm T · [${justStr}] (${angleMode} · Tab/J: Justify · T: Thickness · H: Height · C: Close · Esc: Cancel)`);
           }
         } else {
-          setMeasurements(`Wall: Click or Drag to start drawing wall (90° default · Hold Shift for free angles)`);
+          const tMm = ((wallToolSettings?.thickness || 0.2) * 1000).toFixed(0);
+          const justStr = (wallJustification || 'exterior').toUpperCase();
+          setMeasurements(`Wall: Click or Drag to start · ${tMm}mm T · [${justStr}] (Tab/J: Justify · T: Thickness · H: Height)`);
         }
       }
     }
@@ -4013,6 +4292,69 @@ function Scene() {
           args: [width, height, depth]
         });
         setMeasurements(`Click on a wall to insert ${activeTool} and cut opening.`);
+      }
+      return;
+    }
+
+    if (activeTool === 'staircase' || activeTool === 'step') {
+      const ray = raycaster.ray;
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => 
+        !i.object.userData.isHelper &&
+        !i.object.userData.isPreview &&
+        !i.object.userData.isGizmo &&
+        (i.object.userData.isShape || 
+         i.object.userData.isKernelGeometry || 
+         ((i.object as any).isMesh && i.object.name !== 'previewMesh'))
+      );
+
+      let hitPoint: THREE.Vector3 | null = null;
+      let surfaceElevation = 0;
+
+      if (shapeIntersect) {
+        hitPoint = shapeIntersect.point.clone();
+        surfaceElevation = shapeIntersect.point.y;
+      } else {
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+        if (ray.intersectPlane(groundPlane, groundHit)) {
+          hitPoint = groundHit;
+          surfaceElevation = 0;
+        }
+      }
+
+      if (hitPoint) {
+        if (snapIndicator) {
+          hitPoint = new THREE.Vector3(...snapIndicator.point);
+          surfaceElevation = snapIndicator.point[1];
+        }
+
+        const isStaircase = activeTool === 'staircase';
+        const width = 1.0;
+        const height = isStaircase ? 2.16 : 0.18;
+        const length = isStaircase ? 3.60 : 0.30;
+        const stairPos = new THREE.Vector3(hitPoint.x, surfaceElevation + height / 2, hitPoint.z);
+
+        const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), stairRotationAngle);
+        const quatArray: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
+
+        setPreviewShape({
+          type: activeTool,
+          position: [stairPos.x, stairPos.y, stairPos.z],
+          quaternion: quatArray,
+          args: isStaircase ? [width, height, length, 12] : [width, height, length],
+          stairStyle: 'straight',
+          stairStructure: 'closed',
+          railingMode: 'both',
+        } as any);
+
+        const deg = Math.round(((stairRotationAngle * 180) / Math.PI) % 360);
+        const normDeg = deg < 0 ? deg + 360 : deg;
+        if (isStaircase) {
+          setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+        } else {
+          setMeasurements(`Step: 1.00m × 0.30m (Rise 0.18m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+        }
       }
       return;
     }
@@ -4816,23 +5158,7 @@ function Scene() {
     // closure's pushPullState would still read as null/stale here without this.
     const pushPullState = pushPullStateRef.current;
 
-    if (activeTool === 'wall' && wallDragStartRef.current) {
-      const dragInfo = wallDragStartRef.current;
-      const currPos = wallCandidatePos ? wallCandidatePos.clone() : e.point.clone();
-      const dragDist = dragInfo.point.distanceTo(currPos);
-      const dragTime = Date.now() - dragInfo.time;
-
-      if (dragDist >= 0.35 && dragTime > 60) {
-        if (wallVertices.length <= 1) {
-          createWallSegment(dragInfo.point, currPos);
-          setWallVertices([currPos]);
-          setWallPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -currPos.y));
-        } else {
-          const lastVertex = wallVertices[wallVertices.length - 2];
-          createWallSegment(lastVertex, currPos);
-          setWallVertices(prev => [...prev.slice(0, -1), currPos]);
-        }
-      }
+    if (activeTool === 'wall') {
       wallDragStartRef.current = null;
     }
 
@@ -6419,6 +6745,7 @@ function Scene() {
 
       {(drawingStart || pushPullState || isSculptingDragRef.current || (activeTool === 'wall' && wallVertices.length > 0) || (activeTool === 'poly' && polyVertices.length > 0) || ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length > 0)) && (
         <mesh 
+          onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onDoubleClick={(e) => {
@@ -7125,7 +7452,7 @@ function Scene() {
                     metalness={shape.metalness ?? 0.05}
                     transparent={shape.opacity !== undefined && shape.opacity < 1}
                     opacity={shape.opacity ?? 1}
-                    side={(shape.type === 'poly' || shape.type === 'terrain' || (shape.type === 'custom' && shape.args?.isRoad)) ? THREE.DoubleSide : THREE.FrontSide}
+                    side={(shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
                     emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                     emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
                   />
@@ -7140,7 +7467,7 @@ function Scene() {
                   metalness={shape.metalness ?? 0.05}
                   transparent={shape.opacity !== undefined && shape.opacity < 1}
                   opacity={shape.opacity ?? 1}
-                  side={(shape.type === 'poly' || shape.type === 'terrain' || (shape.type === 'custom' && shape.args?.isRoad)) ? THREE.DoubleSide : THREE.FrontSide}
+                  side={(shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
                   emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                   emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
                 />
@@ -7249,6 +7576,7 @@ function Scene() {
           position={previewShape.position}
           quaternion={new THREE.Quaternion(...previewShape.quaternion)}
           renderOrder={5}
+          raycast={() => null}
         >
           {previewShape.type === 'circle' || previewShape.type === 'line' || previewShape.type === 'triangle' ? (
             <cylinderGeometry args={previewShape.args} />
@@ -7285,6 +7613,14 @@ function Scene() {
               <meshBasicMaterial attach="material-1" color="#bae6fd" transparent opacity={0.25} depthTest={false} />
               <meshBasicMaterial attach="material-2" color="#cbd5e1" transparent opacity={0.7} depthTest={false} />
             </>
+          ) : previewShape.type === 'staircase' || previewShape.type === 'step' ? (
+            <meshBasicMaterial 
+              color="#0284c7" 
+              transparent 
+              opacity={0.65} 
+              side={THREE.DoubleSide} 
+              depthTest={false} 
+            />
           ) : (
             <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} depthTest={false} />
           )}
@@ -7717,13 +8053,24 @@ function Scene() {
             const lastV = wallVertices[wallVertices.length - 1];
             const dist = lastV.distanceTo(wallCandidatePos);
             if (dist < 0.05) return null;
-            const wallH = 2.8;
-            const wallT = 0.2;
-            const center = lastV.clone().lerp(wallCandidatePos, 0.5);
-            center.y = Math.max(lastV.y, wallCandidatePos.y) + wallH / 2;
+            const wallH = wallToolSettings?.height || 2.8;
+            const wallT = wallToolSettings?.thickness || 0.2;
             const dir = new THREE.Vector3().subVectors(wallCandidatePos, lastV);
             const angle = Math.atan2(dir.z, dir.x);
             const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+
+            // Compute justification offset
+            const normal = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+            let offsetScalar = 0;
+            if (wallJustification === 'exterior') {
+              offsetScalar = wallT / 2;
+            } else if (wallJustification === 'interior') {
+              offsetScalar = -wallT / 2;
+            }
+
+            const center = lastV.clone().lerp(wallCandidatePos, 0.5);
+            center.add(normal.clone().multiplyScalar(offsetScalar));
+            center.y = Math.max(lastV.y, wallCandidatePos.y) + wallH / 2;
 
             return (
               <group>
@@ -7732,7 +8079,7 @@ function Scene() {
                   <meshStandardMaterial 
                     color={activeMaterial || '#3b82f6'} 
                     roughness={activePBR.roughness} 
-                    metalness={activePBR.metalness}
+                    metalness={activePBR.metalness} 
                     transparent 
                     opacity={0.65} 
                   />
@@ -7743,7 +8090,7 @@ function Scene() {
                     [lastV.x, lastV.y + 0.02, lastV.z],
                     [wallCandidatePos.x, wallCandidatePos.y + 0.02, wallCandidatePos.z]
                   ]}
-                  color={wallHoveredVertex === 0 ? "#FFD700" : "#3b82f6"}
+                  color={wallHoveredVertex === 0 ? "#22c55e" : "#3b82f6"}
                   lineWidth={3}
                 />
               </group>
@@ -7757,7 +8104,7 @@ function Scene() {
                 [wallCandidatePos.x, wallCandidatePos.y + 0.02, wallCandidatePos.z],
                 [wallVertices[0].x, wallVertices[0].y + 0.02, wallVertices[0].z]
               ]}
-              color={wallHoveredVertex === 0 ? "#FFD700" : "#94a3b8"}
+              color={wallHoveredVertex === 0 ? "#22c55e" : "#94a3b8"}
               lineWidth={wallHoveredVertex === 0 ? 4 : 1.5}
               dashed={wallHoveredVertex !== 0}
               dashSize={0.15}
@@ -7765,11 +8112,46 @@ function Scene() {
             />
           )}
 
+          {/* Start Node Beacon Ring & Badge when ready to close loop */}
+          {wallVertices.length >= 2 && (
+            <group position={[wallVertices[0].x, wallVertices[0].y, wallVertices[0].z]}>
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+                <ringGeometry args={[0.2, 0.38, 32]} />
+                <meshBasicMaterial 
+                  color={wallHoveredVertex === 0 ? "#0063A3" : "#0284c7"} 
+                  side={THREE.DoubleSide} 
+                  transparent 
+                  opacity={wallHoveredVertex === 0 ? 0.95 : 0.45} 
+                />
+              </mesh>
+              {wallHoveredVertex === 0 && (
+                <Html position={[0, 0.45, 0]} center occlude={false}>
+                  <div 
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      closeWallLoopAndAssembleRoom();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeWallLoopAndAssembleRoom();
+                    }}
+                    className="px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xl flex items-center gap-1.5 border border-sky-300 ring-2 ring-sky-200 cursor-pointer whitespace-nowrap transition-all transform hover:scale-105 bg-trimble-blue text-white select-none"
+                    title="Click to Close Room & Assemble Floor Slab (or press C / Enter)"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                    <span>Close Room</span>
+                    <span className="opacity-85 font-mono text-[9px] bg-white/20 px-1 py-0.2 rounded">C / ↵</span>
+                  </div>
+                </Html>
+              )}
+            </group>
+          )}
+
           {/* Corner Node Markers */}
           {wallVertices.map((v, i) => (
             <mesh key={i} position={[v.x, v.y + 0.05, v.z]}>
-              <cylinderGeometry args={[i === 0 && wallHoveredVertex === 0 ? 0.12 : 0.06, i === 0 && wallHoveredVertex === 0 ? 0.12 : 0.06, 0.1, 16]} />
-              <meshBasicMaterial color={i === 0 && wallHoveredVertex === 0 ? "#FFD700" : (i === 0 ? "#22c55e" : "#3b82f6")} />
+              <cylinderGeometry args={[i === 0 ? 0.10 : 0.06, i === 0 ? 0.10 : 0.06, 0.1, 16]} />
+              <meshBasicMaterial color={i === 0 ? (wallHoveredVertex === 0 ? "#22c55e" : "#f59e0b") : "#3b82f6"} />
             </mesh>
           ))}
         </group>
@@ -8628,8 +9010,25 @@ function CustomGeometry({ shape }: { shape: Shape }) {
       return geo;
     }
 
-    // 2. Custom JSON BufferGeometry
+    // 2. Custom JSON BufferGeometry or Raw Positions/Normals
     if (shape.geometryData) {
+      if (Array.isArray(shape.geometryData.positions) && shape.geometryData.positions.length > 0) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(shape.geometryData.positions, 3));
+        if (Array.isArray(shape.geometryData.normals) && shape.geometryData.normals.length > 0) {
+          geo.setAttribute('normal', new THREE.Float32BufferAttribute(shape.geometryData.normals, 3));
+        } else {
+          geo.computeVertexNormals();
+        }
+        if (Array.isArray(shape.geometryData.uvs) && shape.geometryData.uvs.length > 0) {
+          geo.setAttribute('uv', new THREE.Float32BufferAttribute(shape.geometryData.uvs, 2));
+        }
+        if (Array.isArray(shape.geometryData.indices) && shape.geometryData.indices.length > 0) {
+          geo.setIndex(shape.geometryData.indices);
+        }
+        return geo;
+      }
+
       try {
         const loader = new THREE.BufferGeometryLoader();
         return loader.parse(shape.geometryData);
@@ -8784,7 +9183,16 @@ export default function Viewport() {
     defaultCameraTarget,
     setSelectedIds,
     showCollaboratorCursors,
-    unit
+    unit,
+    wallToolSettings,
+    setWallToolSettings,
+    wallJustification,
+    setWallJustification,
+    activeStory,
+    setActiveStory,
+    isToolModifierDocked,
+    setIsToolModifierDocked,
+    setActiveTool
   } = useApp();
   // Local to Viewport() now, alongside the dialog itself (moved from
   // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
@@ -8901,12 +9309,12 @@ export default function Viewport() {
   useEffect(() => {
     const handleReset = () => {
       window.dispatchEvent(new CustomEvent('set-camera', { 
-        detail: { position: [80, 80, 80], target: [0, 0, 0] } 
+        detail: { position: defaultCameraPosition, target: defaultCameraTarget } 
       }));
     };
     window.addEventListener('reset-camera', handleReset);
     return () => window.removeEventListener('reset-camera', handleReset);
-  }, []);
+  }, [defaultCameraPosition, defaultCameraTarget]);
 
   const duplicateObject = (id: string) => {
     const shape = shapes.find(s => s.id === id);
@@ -9568,7 +9976,7 @@ export default function Viewport() {
               </div>
               {(() => {
                 const shape = shapes.find(sh => sh.id === contextMenu.data.shapeId);
-                if (shape && (shape.type === 'door' || shape.type === 'window')) {
+                if (shape && (shape.type === 'door' || shape.type === 'window' || shape.type === 'staircase' || shape.type === 'step' || shape.type === 'wall')) {
                   return (
                     <button 
                       onClick={() => {
@@ -9738,7 +10146,7 @@ export default function Viewport() {
               {(() => {
                 if (Array.isArray(contextMenu.data) && contextMenu.data.length === 1) {
                   const singleShape = shapes.find(s => s.id === contextMenu.data[0]);
-                  if (singleShape && (singleShape.type === 'door' || singleShape.type === 'window')) {
+                  if (singleShape && (singleShape.type === 'door' || singleShape.type === 'window' || singleShape.type === 'staircase' || singleShape.type === 'step' || singleShape.type === 'wall')) {
                     return (
                       <button 
                         onClick={() => {
@@ -10143,13 +10551,13 @@ export default function Viewport() {
         </div>
       )}
 
-      {/* Style Library Modal for Doors and Windows */}
+      {/* Style Library Modal for Doors, Windows, and Staircases */}
       <StyleLibraryModal 
         isOpen={!!styleLibraryTargetId}
         targetShape={shapes.find(s => s.id === styleLibraryTargetId) || null}
         onClose={() => setStyleLibraryTargetId(null)}
         theme={theme}
-        onApplyStyle={(styleId, dims) => {
+        onApplyStyle={(styleId, dims, extraOptions) => {
           if (!styleLibraryTargetId) return;
           setShapes(prev => prev.map(s => {
             if (s.id === styleLibraryTargetId) {
@@ -10157,6 +10565,10 @@ export default function Viewport() {
               return {
                 ...s,
                 archStyle: styleId,
+                stairStyle: styleId,
+                wallStyle: styleId,
+                stairStructure: extraOptions?.stairStructure || s.stairStructure,
+                railingMode: extraOptions?.railingMode || s.railingMode,
                 args: updatedArgs
               };
             }

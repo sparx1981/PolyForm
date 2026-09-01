@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, BoxSelect, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Crown, Eye, EyeOff, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
+import { Box, BoxSelect, Building2, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
@@ -301,7 +301,13 @@ export default function RightPanelStack() {
     }
   }, [fogSettings.enabled, fogSettings.animate, setFogSettings]);
   
-  const [openPanels, setOpenPanels] = useState<string[]>([]);
+  const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers']);
+
+  useEffect(() => {
+    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit'].includes(activeTool)) {
+      setOpenPanels(prev => prev.includes('toolModifiers') ? prev : [...prev, 'toolModifiers']);
+    }
+  }, [activeTool]);
 
   useEffect(() => {
     if (openMaterialsSignal > 0) {
@@ -697,6 +703,10 @@ export default function RightPanelStack() {
   // needing to know about it in advance — including groups created later,
   // as the user keeps drawing.
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set());
+  const [expandedOutlinerLevels, setExpandedOutlinerLevels] = React.useState<Set<string>>(new Set(['level-1', 'level-2', 'level-3', 'level-4']));
+  const [expandedOutlinerRoofs, setExpandedOutlinerRoofs] = React.useState<Set<string>>(new Set(['all-roofs']));
+  const [expandedOutlinerTimber, setExpandedOutlinerTimber] = React.useState<boolean>(true);
+  const [expandedTimberSubgroups, setExpandedTimberSubgroups] = React.useState<Set<string>>(new Set(['walls', 'floors', 'roofs']));
   const selectedLight = customLights.find(l => l.id === selectedLightId);
   
   // Local state for editing in real-time
@@ -756,7 +766,10 @@ export default function RightPanelStack() {
     'move', 
     'bevel', 
     'deform', 
-    'orbit'
+    'orbit',
+    'wall',
+    'fence',
+    'railing'
   ].includes(activeTool);
 
   return (
@@ -1194,7 +1207,696 @@ export default function RightPanelStack() {
               <div className="flex items-center gap-2 py-1 px-2 bg-trimble-blue/10 rounded text-trimble-blue">
                 <BoxSelect size={12} />
                 <span>Model Root</span>
-              </div>{shapes.map(shape => (<div key={shape.id} onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }} className={cn("flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group", selectedId === shape.id && "bg-trimble-blue/10 text-trimble-blue", shape.hidden && "opacity-40")}><div className="w-2 h-2 rounded-full" style={{ backgroundColor: shape.color }} /><span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span><button onClick={(e) => { e.stopPropagation(); setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, hidden: !s.hidden } : s)); }} className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0" title={shape.hidden ? "Show" : "Hide"}>{shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button><button onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0" title="Delete"><Trash2 size={13} /></button></div>))}
+              </div>
+              
+              {/* Hierarchical Outliner Section */}
+              {(() => {
+                // 1. Group walls by Story/Level
+                const wallShapes = shapes.filter(s => s.type === 'wall' || s.tags?.includes('wall-assembly'));
+                const wallIds = new Set(wallShapes.map(w => w.id));
+
+                // Determine levels present
+                const levelGroupsMap = new Map<number, { levelNum: number; walls: typeof shapes; slabs: typeof shapes }>();
+                
+                wallShapes.forEach(wall => {
+                  let levelNum = 1;
+                  const storyTag = wall.tags?.find(t => t.startsWith('story-') || t.startsWith('level-'));
+                  if (storyTag) {
+                    const match = storyTag.match(/\d+/);
+                    if (match) levelNum = parseInt(match[0], 10);
+                  } else {
+                    const h = Array.isArray(wall.args) ? (wall.args[1] || 2.8) : 2.8;
+                    const baseY = wall.position[1] - (h / 2);
+                    levelNum = Math.max(1, Math.floor((baseY + 0.4) / 2.8) + 1);
+                  }
+
+                  if (!levelGroupsMap.has(levelNum)) {
+                    levelGroupsMap.set(levelNum, { levelNum, walls: [], slabs: [] });
+                  }
+                  levelGroupsMap.get(levelNum)!.walls.push(wall);
+                });
+
+                // Story Floor Slabs
+                const slabShapes = shapes.filter(s => (s.tags?.includes('floor-slab') || s.name?.toLowerCase().includes('floor slab')));
+                const slabIds = new Set<string>();
+                slabShapes.forEach(slab => {
+                  let slabLevel = 1;
+                  const storyTag = slab.tags?.find(t => t.startsWith('story-') || t.startsWith('level-'));
+                  if (storyTag) {
+                    const match = storyTag.match(/\d+/);
+                    if (match) slabLevel = parseInt(match[0], 10);
+                  } else {
+                    slabLevel = Math.max(1, Math.floor((slab.position[1] + 0.2) / 2.8) + 1);
+                  }
+                  if (levelGroupsMap.has(slabLevel)) {
+                    levelGroupsMap.get(slabLevel)!.slabs.push(slab);
+                    slabIds.add(slab.id);
+                  }
+                });
+
+                const sortedLevels = Array.from(levelGroupsMap.values()).sort((a, b) => a.levelNum - b.levelNum);
+
+                // 2. Identify Roofs and their child components (Fascias)
+                const roofShapes = shapes.filter(s => 
+                  (s.tags?.includes('roof-structure') || (!s.parentShapeId && (s.name?.toLowerCase().includes('roof') || s.name?.toLowerCase().includes('gable') || s.name?.toLowerCase().includes('hip'))))
+                  && !s.tags?.includes('roof-fascia') && !s.tags?.includes('timber-frame')
+                );
+                const roofIds = new Set(roofShapes.map(r => r.id));
+
+                // Child shapes parented to roofs or with roof-fascia tag
+                const roofChildren = shapes.filter(s => s.parentShapeId && roofIds.has(s.parentShapeId));
+                const roofChildIds = new Set(roofChildren.map(c => c.id));
+
+                // 3. Identify Timber Framing shapes
+                const timberShapes = shapes.filter(s => s.tags?.includes('timber-frame') || s.tags?.includes('timber-framing') || s.name?.startsWith('Timber '));
+                const timberIds = new Set(timberShapes.map(t => t.id));
+
+                // 4. Other standalone shapes
+                const handledIds = new Set([...wallIds, ...slabIds, ...roofIds, ...roofChildIds, ...timberIds]);
+                const otherShapes = shapes.filter(s => !handledIds.has(s.id));
+
+                return (
+                  <>
+                    {/* 1. LEVELS & WALLS GROUPED BY LEVEL */}
+                    {sortedLevels.length > 0 && (
+                      <div className="space-y-1 mt-1">
+                        <div className="px-2 pt-2 pb-0.5 text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-gray-500 flex items-center justify-between">
+                          <span>Levels & Architectural Walls</span>
+                          <span className="text-[9px] font-mono text-gray-400">{wallShapes.length} walls</span>
+                        </div>
+
+                        {sortedLevels.map(({ levelNum, walls, slabs }) => {
+                          const levelKey = `level-${levelNum}`;
+                          const isLevelExpanded = expandedOutlinerLevels.has(levelKey);
+                          const levelAllShapes = [...walls, ...slabs];
+                          const levelShapeIds = levelAllShapes.map(s => s.id);
+                          const allSelected = levelShapeIds.length > 0 && levelShapeIds.every(id => selectedIds.includes(id));
+                          const allHidden = levelAllShapes.every(s => s.hidden);
+                          const anyVisible = levelAllShapes.some(s => !s.hidden);
+
+                          return (
+                            <div key={levelKey} className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-800/80 bg-gray-50/40 dark:bg-gray-800/20">
+                              {/* Level Group Header */}
+                              <div
+                                onClick={() => {
+                                  setSelectedId(null);
+                                  setSelectedIds(levelShapeIds);
+                                }}
+                                className={cn(
+                                  "flex items-center gap-1.5 py-1.5 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group select-none",
+                                  allSelected && "bg-trimble-blue/10 text-trimble-blue font-semibold"
+                                )}
+                                title={`Level ${levelNum} — ${walls.length} wall(s), ${slabs.length} slab(s)`}
+                              >
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedOutlinerLevels(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(levelKey)) next.delete(levelKey);
+                                      else next.add(levelKey);
+                                      return next;
+                                    });
+                                  }}
+                                  className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                                  title={isLevelExpanded ? "Collapse Level" : "Expand Level"}
+                                >
+                                  <ChevronRight size={13} className={cn("transition-transform duration-200", isLevelExpanded && "rotate-90")} />
+                                </button>
+
+                                <Layers size={13} className="text-trimble-blue shrink-0" />
+                                <span className="flex-1 truncate text-xs font-semibold text-gray-700 dark:text-gray-200">
+                                  Level {levelNum} {levelNum === 1 ? '(Ground)' : `(Story ${levelNum})`}
+                                </span>
+
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 bg-gray-200/60 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 rounded shrink-0">
+                                  {walls.length} w
+                                </span>
+
+                                {/* Level-wide Hide/Show Toggle */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShapes(prev => prev.map(s => levelShapeIds.includes(s.id) ? { ...s, hidden: anyVisible } : s));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0 transition-opacity"
+                                  title={allHidden ? `Show Level ${levelNum}` : `Hide Level ${levelNum}`}
+                                >
+                                  {allHidden ? <EyeOff size={13} className="text-gray-400" /> : <Eye size={13} />}
+                                </button>
+
+                                {/* Level-wide Delete */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    levelShapeIds.forEach(id => removeShape(id));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0 transition-opacity"
+                                  title={`Delete Level ${levelNum} (${walls.length} walls)`}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+
+                              {/* Level Children (Walls & Slabs) */}
+                              {isLevelExpanded && (
+                                <div className="pl-5 pr-1 py-1 space-y-0.5 border-t border-gray-100 dark:border-gray-800">
+                                  {/* Walls List */}
+                                  {walls.map((wall, wIdx) => {
+                                    const isSelected = selectedId === wall.id || selectedIds.includes(wall.id);
+                                    const lengthM = Array.isArray(wall.args) ? wall.args[0] : 0;
+                                    const heightM = Array.isArray(wall.args) ? wall.args[1] : 0;
+                                    const dimLabel = lengthM ? `${lengthM.toFixed(1)}m × ${heightM.toFixed(1)}m` : '';
+
+                                    return (
+                                      <div
+                                        key={wall.id}
+                                        onClick={() => {
+                                          setSelectedId(wall.id);
+                                          setSelectedIds([wall.id]);
+                                        }}
+                                        className={cn(
+                                          "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
+                                          isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                          wall.hidden && "opacity-40"
+                                        )}
+                                        title={`${wall.name || `Wall ${wIdx + 1}`} (${dimLabel})`}
+                                      >
+                                        <Building2 size={11} className="text-gray-400 dark:text-gray-500 shrink-0" />
+                                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: wall.color || '#f1f5f9' }} />
+                                        <span className="flex-1 truncate">
+                                          {wall.name || `Wall ${wIdx + 1}`}
+                                        </span>
+                                        {dimLabel && (
+                                          <span className="text-[9px] font-mono text-gray-400 shrink-0">
+                                            {dimLabel}
+                                          </span>
+                                        )}
+
+                                        {/* Individual Wall Hide/Show */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShapes(prev => prev.map(s => s.id === wall.id ? { ...s, hidden: !s.hidden } : s));
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          title={wall.hidden ? "Show Wall" : "Hide Wall"}
+                                        >
+                                          {wall.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                                        </button>
+
+                                        {/* Individual Wall Delete */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeShape(wall.id);
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                          title="Delete Wall"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+
+                                  {/* Slabs List */}
+                                  {slabs.map(slab => {
+                                    const isSelected = selectedId === slab.id || selectedIds.includes(slab.id);
+                                    return (
+                                      <div
+                                        key={slab.id}
+                                        onClick={() => {
+                                          setSelectedId(slab.id);
+                                          setSelectedIds([slab.id]);
+                                        }}
+                                        className={cn(
+                                          "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
+                                          isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                          slab.hidden && "opacity-40"
+                                        )}
+                                      >
+                                        <Box size={11} className="text-gray-400 shrink-0" />
+                                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: slab.color || '#cbd5e1' }} />
+                                        <span className="flex-1 truncate">{slab.name || 'Floor Slab'}</span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShapes(prev => prev.map(s => s.id === slab.id ? { ...s, hidden: !s.hidden } : s));
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          title={slab.hidden ? "Show" : "Hide"}
+                                        >
+                                          {slab.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeShape(slab.id);
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                          title="Delete"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 2. ROOFS & NESTED FASCIAS */}
+                    {roofShapes.length > 0 && (
+                      <div className="space-y-1 mt-1.5">
+                        <div className="px-2 pt-2 pb-0.5 text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-gray-500 flex items-center justify-between">
+                          <span>Roofs & Fascia Assemblies</span>
+                          <span className="text-[9px] font-mono text-gray-400">{roofShapes.length} roof</span>
+                        </div>
+
+                        {roofShapes.map(roof => {
+                          const isRoofExpanded = expandedOutlinerRoofs.has(roof.id) || expandedOutlinerRoofs.has('all-roofs');
+                          const isSelected = selectedId === roof.id || selectedIds.includes(roof.id);
+                          const children = shapes.filter(s => s.parentShapeId === roof.id || (s.tags?.includes('roof-fascia') && !s.parentShapeId && s.id !== roof.id));
+                          const allRoofShapeIds = [roof.id, ...children.map(c => c.id)];
+                          const anyVisible = [roof, ...children].some(s => !s.hidden);
+                          const allHidden = [roof, ...children].every(s => s.hidden);
+
+                          const getChildBadge = (child: Shape) => {
+                            if (child.tags?.includes('roof-slopes') || child.name?.toLowerCase().includes('slope') || child.name?.toLowerCase().includes('tile')) {
+                              return { label: 'Roof Pitch', bg: 'bg-red-500/10 text-red-600 dark:text-red-400' };
+                            }
+                            if (child.tags?.includes('roof-pediment') || child.name?.toLowerCase().includes('pediment') || child.name?.toLowerCase().includes('infill')) {
+                              return { label: 'Gable Infill', bg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' };
+                            }
+                            if (child.tags?.includes('roof-ridge-cap') || child.name?.toLowerCase().includes('ridge')) {
+                              return { label: 'Ridge Cap', bg: 'bg-slate-500/10 text-slate-600 dark:text-slate-400' };
+                            }
+                            if (child.tags?.includes('roof-soffit') || child.name?.toLowerCase().includes('soffit')) {
+                              return { label: 'Soffit', bg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' };
+                            }
+                            return { label: 'Fascia Trim', bg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' };
+                          };
+
+                          return (
+                            <div key={roof.id} className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-800/80 bg-gray-50/40 dark:bg-gray-800/20">
+                              {/* Roof Parent Item */}
+                              <div
+                                onClick={() => {
+                                  setSelectedId(roof.id);
+                                  setSelectedIds([roof.id]);
+                                }}
+                                className={cn(
+                                  "flex items-center gap-1.5 py-1.5 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group select-none text-xs",
+                                  isSelected && "bg-trimble-blue/10 text-trimble-blue font-semibold",
+                                  roof.hidden && "opacity-40"
+                                )}
+                                title={roof.name}
+                              >
+                                {children.length > 0 ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedOutlinerRoofs(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(roof.id)) {
+                                          next.delete(roof.id);
+                                          next.delete('all-roofs');
+                                        } else {
+                                          next.add(roof.id);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                                    title={isRoofExpanded ? "Collapse Roof Parts" : "Expand Roof Parts"}
+                                  >
+                                    <ChevronRight size={13} className={cn("transition-transform duration-200", isRoofExpanded && "rotate-90")} />
+                                  </button>
+                                ) : (
+                                  <div className="w-4" />
+                                )}
+
+                                <Home size={13} className="text-amber-700 dark:text-amber-500 shrink-0" />
+                                <div className="w-2 h-2 rounded-full shrink-0 border border-black/20" style={{ backgroundColor: roof.color || '#991b1b' }} />
+                                <span className="flex-1 truncate font-medium">{roof.name || 'Roof Assembly'}</span>
+
+                                {children.length > 0 && (
+                                  <span className="text-[9px] font-mono px-1 py-0.2 bg-gray-200/50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 rounded shrink-0">
+                                    {children.length} parts
+                                  </span>
+                                )}
+
+                                {/* Roof Hide/Show */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShapes(prev => prev.map(s => allRoofShapeIds.includes(s.id) ? { ...s, hidden: anyVisible } : s));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                  title={allHidden ? "Show Roof & Parts" : "Hide Roof & Parts"}
+                                >
+                                  {allHidden ? <EyeOff size={13} className="text-gray-400" /> : <Eye size={13} />}
+                                </button>
+
+                                {/* Roof Delete */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    allRoofShapeIds.forEach(id => removeShape(id));
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                  title="Delete Roof & Parts"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+
+                              {/* Roof Subcomponents (Indented Children) */}
+                              {isRoofExpanded && children.length > 0 && (
+                                <div className="pl-6 pr-1 py-1 space-y-0.5 border-t border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/30">
+                                  {children.map(child => {
+                                    const isChildSelected = selectedId === child.id || selectedIds.includes(child.id);
+                                    const badge = getChildBadge(child);
+                                    return (
+                                      <div
+                                        key={child.id}
+                                        onClick={() => {
+                                          setSelectedId(child.id);
+                                          setSelectedIds([child.id]);
+                                        }}
+                                        className={cn(
+                                          "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
+                                          isChildSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                          child.hidden && "opacity-40"
+                                        )}
+                                        title={child.name}
+                                      >
+                                        <div className="w-2 h-2 rounded-full shrink-0 border border-gray-300 dark:border-gray-600 shadow-sm" style={{ backgroundColor: child.color || '#ffffff' }} />
+                                        <span className="flex-1 truncate text-gray-700 dark:text-gray-300 font-medium">
+                                          {child.name || 'Roof Component'}
+                                        </span>
+                                        <span className={cn("text-[9px] px-1 py-0.2 rounded font-mono shrink-0", badge.bg)}>
+                                          {badge.label}
+                                        </span>
+
+                                        {/* Child Independent Hide/Show */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShapes(prev => prev.map(s => s.id === child.id ? { ...s, hidden: !s.hidden } : s));
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          title={child.hidden ? "Show Component" : "Hide Component"}
+                                        >
+                                          {child.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                                        </button>
+
+                                        {/* Child Independent Delete */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeShape(child.id);
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                          title="Delete Component"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 3. TIMBER FRAME CONSTRUCTION SUBGROUP */}
+                    {timberShapes.length > 0 && (() => {
+                      const allTimberIds = timberShapes.map(s => s.id);
+                      const allTimberHidden = timberShapes.every(s => s.hidden);
+                      const anyTimberVisible = timberShapes.some(s => !s.hidden);
+                      const allTimberSelected = allTimberIds.length > 0 && allTimberIds.every(id => selectedIds.includes(id));
+
+                      const wallMembers = timberShapes.filter(s => s.tags?.includes('timber-wall') || s.name?.includes('Stud') || s.name?.includes('Plate') || s.name?.includes('Header'));
+                      const floorMembers = timberShapes.filter(s => s.tags?.includes('timber-floor') || s.name?.includes('Joist') || s.name?.includes('Sill'));
+                      const roofMembers = timberShapes.filter(s => s.tags?.includes('timber-roof') || s.name?.includes('Rafter') || s.name?.includes('Ridge') || s.name?.includes('Tie'));
+
+                      const categories = [
+                        { key: 'walls', label: 'Wall Framing (Studs, Plates, Headers)', members: wallMembers, color: 'bg-amber-600' },
+                        { key: 'floors', label: 'Floor Framing (Joists & Rims)', members: floorMembers, color: 'bg-amber-700' },
+                        { key: 'roofs', label: 'Roof Framing (Rafters, Ridges & Ties)', members: roofMembers, color: 'bg-amber-800' }
+                      ].filter(c => c.members.length > 0);
+
+                      return (
+                        <div className="space-y-1 mt-1.5">
+                          <div className="px-2 pt-2 pb-0.5 text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-gray-500 flex items-center justify-between">
+                            <span>Timber Frame Construction</span>
+                            <span className="text-[9px] font-mono text-amber-600 dark:text-amber-400 font-semibold">{timberShapes.length} members</span>
+                          </div>
+
+                          <div className="rounded-lg overflow-hidden border border-amber-200/70 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/20">
+                            {/* Main Timber Frame Header */}
+                            <div
+                              onClick={() => {
+                                setSelectedId(null);
+                                setSelectedIds(allTimberIds);
+                              }}
+                              className={cn(
+                                "flex items-center gap-1.5 py-1.5 px-2 rounded cursor-pointer hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors group select-none text-xs",
+                                allTimberSelected && "bg-amber-200/50 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold"
+                              )}
+                              title={`Timber Frame Construction (${timberShapes.length} structural members)`}
+                            >
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedOutlinerTimber(!expandedOutlinerTimber);
+                                }}
+                                className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                                title={expandedOutlinerTimber ? "Collapse Timber Framing" : "Expand Timber Framing"}
+                              >
+                                <ChevronRight size={13} className={cn("transition-transform duration-200", expandedOutlinerTimber && "rotate-90")} />
+                              </button>
+
+                              <Hammer size={13} className="text-amber-700 dark:text-amber-400 shrink-0" />
+                              <span className="flex-1 truncate font-semibold text-gray-800 dark:text-gray-200">
+                                Timber Framing Group
+                              </span>
+
+                              <span className="text-[9px] font-mono px-1.5 py-0.2 bg-amber-200/60 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 rounded shrink-0">
+                                {timberShapes.length} pcs
+                              </span>
+
+                              {/* Bulk Hide/Show Toggle */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShapes(prev => prev.map(s => allTimberIds.includes(s.id) ? { ...s, hidden: anyTimberVisible } : s));
+                                }}
+                                className="opacity-0 group-hover:opacity-100 hover:text-amber-700 dark:hover:text-amber-300 p-0.5 shrink-0 transition-opacity"
+                                title={allTimberHidden ? "Show All Timber Members" : "Hide All Timber Members"}
+                              >
+                                {allTimberHidden ? <EyeOff size={13} className="text-gray-400" /> : <Eye size={13} />}
+                              </button>
+
+                              {/* Bulk Delete */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  allTimberIds.forEach(id => removeShape(id));
+                                }}
+                                className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0 transition-opacity"
+                                title={`Delete Timber Frame (${timberShapes.length} members)`}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+
+                            {/* Subcategories (Walls, Floors, Roof) */}
+                            {expandedOutlinerTimber && (
+                              <div className="pl-4 pr-1 py-1 space-y-1.5 border-t border-amber-100 dark:border-amber-900/40 bg-white/40 dark:bg-gray-900/30">
+                                {categories.map(cat => {
+                                  const isCatExpanded = expandedTimberSubgroups.has(cat.key);
+                                  const catIds = cat.members.map(m => m.id);
+                                  const catAllHidden = cat.members.every(m => m.hidden);
+                                  const catAnyVisible = cat.members.some(m => !m.hidden);
+                                  const catAllSelected = catIds.length > 0 && catIds.every(id => selectedIds.includes(id));
+
+                                  return (
+                                    <div key={cat.key} className="rounded border border-amber-200/40 dark:border-amber-900/30 overflow-hidden bg-amber-50/20 dark:bg-amber-950/10">
+                                      {/* Subgroup Header */}
+                                      <div
+                                        onClick={() => {
+                                          setSelectedId(null);
+                                          setSelectedIds(catIds);
+                                        }}
+                                        className={cn(
+                                          "flex items-center gap-1.5 py-1 px-1.5 rounded cursor-pointer hover:bg-amber-100/40 dark:hover:bg-amber-900/30 group text-[11px] select-none",
+                                          catAllSelected && "bg-amber-200/40 text-amber-900 dark:text-amber-200 font-semibold"
+                                        )}
+                                      >
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedTimberSubgroups(prev => {
+                                              const next = new Set(prev);
+                                              if (next.has(cat.key)) next.delete(cat.key);
+                                              else next.add(cat.key);
+                                              return next;
+                                            });
+                                          }}
+                                          className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                                        >
+                                          <ChevronRight size={11} className={cn("transition-transform duration-200", isCatExpanded && "rotate-90")} />
+                                        </button>
+                                        <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", cat.color)} />
+                                        <span className="flex-1 truncate font-medium text-gray-700 dark:text-gray-300">
+                                          {cat.label}
+                                        </span>
+                                        <span className="text-[9px] font-mono text-gray-400 shrink-0">
+                                          {cat.members.length}
+                                        </span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShapes(prev => prev.map(s => catIds.includes(s.id) ? { ...s, hidden: catAnyVisible } : s));
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-amber-700 p-0.5 shrink-0"
+                                          title={catAllHidden ? "Show Subgroup" : "Hide Subgroup"}
+                                        >
+                                          {catAllHidden ? <EyeOff size={11} className="text-gray-400" /> : <Eye size={11} />}
+                                        </button>
+                                      </div>
+
+                                      {/* Member list */}
+                                      {isCatExpanded && (
+                                        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-t border-amber-100/50 dark:border-amber-900/20 max-h-48 overflow-y-auto">
+                                          {cat.members.map(member => {
+                                            const isSelected = selectedId === member.id || selectedIds.includes(member.id);
+                                            const args = member.args as [number, number, number];
+                                            const dimStr = Array.isArray(args) ? `${(args[0] * 1000).toFixed(0)}×${(args[2] * 1000).toFixed(0)}mm (L:${args[1].toFixed(2)}m)` : '';
+
+                                            return (
+                                              <div
+                                                key={member.id}
+                                                onClick={() => {
+                                                  setSelectedId(member.id);
+                                                  setSelectedIds([member.id]);
+                                                }}
+                                                className={cn(
+                                                  "flex items-center gap-1.5 py-0.5 px-1.5 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-[10px]",
+                                                  isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                                  member.hidden && "opacity-40"
+                                                )}
+                                                title={`${member.name} — ${dimStr}`}
+                                              >
+                                                <div className="w-1.5 h-1.5 rounded-full shrink-0 border border-amber-700/50" style={{ backgroundColor: member.color || '#b45309' }} />
+                                                <span className="flex-1 truncate text-gray-700 dark:text-gray-300">
+                                                  {member.name}
+                                                </span>
+                                                {dimStr && (
+                                                  <span className="text-[8px] font-mono text-gray-400 shrink-0">
+                                                    {dimStr}
+                                                  </span>
+                                                )}
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShapes(prev => prev.map(s => s.id === member.id ? { ...s, hidden: !s.hidden } : s));
+                                                  }}
+                                                  className="opacity-0 group-hover:opacity-100 hover:text-amber-700 p-0.5 shrink-0"
+                                                  title={member.hidden ? "Show" : "Hide"}
+                                                >
+                                                  {member.hidden ? <EyeOff size={10} /> : <Eye size={10} />}
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    removeShape(member.id);
+                                                  }}
+                                                  className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                                  title="Delete"
+                                                >
+                                                  <Trash2 size={10} />
+                                                </button>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 4. OTHER MODEL SHAPES & COMPONENTS */}
+                    {otherShapes.length > 0 && (
+                      <div className="space-y-0.5 mt-1.5">
+                        {(sortedLevels.length > 0 || roofShapes.length > 0 || timberShapes.length > 0) && (
+                          <div className="px-2 pt-2 pb-0.5 text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-gray-500">
+                            Objects & Components ({otherShapes.length})
+                          </div>
+                        )}
+                        {otherShapes.map(shape => {
+                          const isSelected = selectedId === shape.id || selectedIds.includes(shape.id);
+                          return (
+                            <div
+                              key={shape.id}
+                              onClick={() => {
+                                setSelectedId(shape.id);
+                                setSelectedIds([shape.id]);
+                              }}
+                              className={cn(
+                                "flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-xs",
+                                isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                shape.hidden && "opacity-40"
+                              )}
+                            >
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: shape.color || '#94a3b8' }} />
+                              <span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, hidden: !s.hidden } : s));
+                                }}
+                                className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                title={shape.hidden ? "Show" : "Hide"}
+                              >
+                                {shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeShape(shape.id);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                title="Delete"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               {kernelGroups.length > 0 && (
                 <>
                   <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-wide text-gray-400">

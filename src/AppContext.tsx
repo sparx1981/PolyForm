@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl } from './types';
+import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -253,10 +255,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // defaulting to off with no obvious way to discover the toggle, which made the
   // feature look removed.
   const [contactFrictionEnabled, setContactFrictionEnabled] = useState(true);
-  const [isToolModifierDocked, setIsToolModifierDocked] = useState(true);
+  const [isToolModifierDocked, setIsToolModifierDocked] = useState(false);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
   const [autoOrbitEnabled, setAutoOrbitEnabled] = useState(false);
   const [orbitRotationSpeed, setOrbitRotationSpeed] = useState(1.0);
+
+  // Architecture & Wall Tool Engine State
+  const [wallToolSettings, setWallToolSettings] = useState<WallToolSettings>(DEFAULT_WALL_SETTINGS);
+  const [wallJustification, setWallJustification] = useState<WallJustification>('exterior');
+  const [activeStory, setActiveStory] = useState<number>(1);
+  const [roofModalTargetIds, setRoofModalTargetIds] = useState<string[] | null>(null);
+  const [storyPromptTargetIds, setStoryPromptTargetIds] = useState<string[] | null>(null);
   
   const logBuffer = useRef<DiagLogEntry[]>([]);
   const diagLog = (category: string, message: string, values?: Record<string, unknown>) => {
@@ -400,7 +409,7 @@ console.log("Created rectangle:", myRect.id);`);
   const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [defaultCameraPosition, setDefaultCameraPosition] = useState<[number, number, number]>([80, 80, 80]);
+  const [defaultCameraPosition, setDefaultCameraPosition] = useState<[number, number, number]>([14, 12, 16]);
   const [defaultCameraTarget, setDefaultCameraTarget] = useState<[number, number, number]>([0, 0, 0]);
   const [zoom, setZoom] = useState(1.0);
   
@@ -971,7 +980,8 @@ console.log("Created rectangle:", myRect.id);`);
 
   const handleSetShapes = (newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
     setShapes(prev => {
-      const nextShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
+      const rawShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
+      const nextShapes = applyStairwellHolesToSlabs(rawShapes);
       saveToHistory(nextShapes);
       return nextShapes;
     });
@@ -1506,7 +1516,17 @@ console.log("Created rectangle:", myRect.id);`);
       kernelRevision,
       bumpKernel,
       selectedFaceIds,
-      setSelectedFaceIds
+      setSelectedFaceIds,
+      wallToolSettings,
+      setWallToolSettings,
+      wallJustification,
+      setWallJustification,
+      activeStory,
+      setActiveStory,
+      roofModalTargetIds,
+      setRoofModalTargetIds,
+      storyPromptTargetIds,
+      setStoryPromptTargetIds
     }}>
       {children}
     </AppContext.Provider>
