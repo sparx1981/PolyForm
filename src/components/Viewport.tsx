@@ -62,6 +62,8 @@ import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
 import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
+import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
+import { snapshot } from '../lib/geometry/heal';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
@@ -1216,6 +1218,8 @@ function Scene() {
     setSubtractCutterId,
     subtractTargetId,
     setSubtractTargetId,
+    kernelSubtractTarget,
+    setKernelSubtractTarget,
     showCollaboratorCursors,
     user,
     setUser,
@@ -1708,6 +1712,34 @@ function Scene() {
       // tool was handled.
       if (!event.point) return false;
       setPlacingNotePos(event.point.clone());
+      return true;
+    }
+
+    if (activeTool === 'subtract') {
+      // Same click-target-then-click-cutter flow as the Shape-based
+      // version in handleMeshPointerDown, just resolving to a whole
+      // kernel solid (via groupContaining) rather than a single Shape —
+      // see performKernelCSGSubtraction's own doc comment for how the
+      // actual subtraction works. setSelectedFaceIds gives the armed
+      // target the same highlight color KernelGeometry already uses for
+      // an ordinary selection — the old tool's own red wireframe overlay
+      // has no equivalent for kernel faces without changing
+      // KernelGeometry's own props, but this reuses what's already there
+      // to give the same "target is armed" feedback.
+      const group = groupContaining(kernelHost.graph, faceId);
+      if (!kernelSubtractTarget) {
+        setKernelSubtractTarget(group);
+        setSelectedFaceIds(group);
+        setConsoleOutput(prev => [...prev, `[INFO] Target selected (kernel solid). Now select the cutter.`]);
+      } else if (kernelSubtractTarget.includes(faceId)) {
+        setKernelSubtractTarget(null);
+        setSelectedFaceIds([]);
+        setConsoleOutput(prev => [...prev, `[INFO] Target deselected.`]);
+      } else {
+        performKernelCSGSubtraction(kernelSubtractTarget, group);
+        setKernelSubtractTarget(null);
+        setSelectedFaceIds([]);
+      }
       return true;
     }
 
@@ -5689,6 +5721,90 @@ function Scene() {
     } catch (error: any) {
       console.error("[CSG] Operation failed:", error);
       setConsoleOutput(prev => [...prev, `[ERROR] CSG Operation failed: ${error.message}`]);
+    }
+  };
+
+  /**
+   * The kernel-solid equivalent of performCSGOperation above — subtracts
+   * one kernel group (the cutter) from another (the target), matching
+   * that function's own scope exactly rather than attempting a true
+   * B-rep boolean: kernel faces are tessellated into ordinary triangle
+   * geometry (via the same tessellateFace/mergeBuffers pipeline
+   * KernelGeometry.tsx already uses to render them), then run through
+   * the SAME three-bvh-csg Evaluator/Brush/SUBTRACTION as the Shape-based
+   * tool — so the result has the identical capabilities and limitations
+   * the old tool already has, just for kernel geometry instead of Shape
+   * meshes.
+   *
+   * The result, like the old tool's own, is NOT a kernel solid — it
+   * becomes a plain 'custom' Shape holding the resulting static mesh.
+   * There is no way to feed a boolean result back into the B-rep kernel
+   * as an editable solid without a genuine B-rep boolean algorithm (face
+   * splitting, intersection curves, re-stitching) — a substantially
+   * larger undertaking than matching the old tool's own scope, which is
+   * exactly what was asked for here.
+   *
+   * Both the target's and the cutter's own kernel faces/edges are
+   * deleted from the graph — the cutter is "consumed" by the operation,
+   * matching removeShape(cutterId) in the Shape-based version above.
+   */
+  const performKernelCSGSubtraction = (targetFaces: FaceId[], cutterFaces: FaceId[]) => {
+    console.log(`[CSG] Starting kernel subtraction: target=${targetFaces.length} faces, cutter=${cutterFaces.length} faces`);
+    try {
+      const buildBrush = (faceIds: FaceId[]) => {
+        const meshes = faceIds
+          .map((id) => tessellateFace(kernelHost.graph, id))
+          .filter((m): m is NonNullable<typeof m> => m !== null);
+        if (meshes.length === 0) return null;
+        const merged = mergeBuffers(meshes);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(merged.position, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(merged.normal, 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
+        geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
+        // Kernel face positions are already world-space (§6.3, same as
+        // KernelGeometry.tsx's own rendering) — no transform needed, both
+        // brushes are built directly at identity.
+        return new Brush(mergeVertices(geo));
+      };
+
+      const targetBrush = buildBrush(targetFaces);
+      const cutterBrush = buildBrush(cutterFaces);
+      if (!targetBrush || !cutterBrush) {
+        setConsoleOutput(prev => [...prev, `[ERROR] Kernel CSG failed: could not tessellate target or cutter.`]);
+        return;
+      }
+      targetBrush.updateMatrixWorld();
+      cutterBrush.updateMatrixWorld();
+
+      const evaluator = new Evaluator();
+      const resultBrush = evaluator.evaluate(targetBrush, cutterBrush, SUBTRACTION);
+      const geometryData = resultBrush.geometry.toJSON();
+
+      const before = snapshot(kernelHost.graph);
+      deleteGroupFacesAndEdges(kernelHost.graph, [...targetFaces, ...cutterFaces]);
+      kernelHost.recordUndo(before);
+      bumpKernel();
+
+      const newShape: Shape = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: 'CSG Result',
+        type: 'custom',
+        position: [0, 0, 0],
+        quaternion: [0, 0, 0, 1],
+        scale: [1, 1, 1],
+        color: activeMaterial,
+        args: [],
+        geometryData,
+      };
+      addShape(newShape);
+      commitHistory();
+
+      setConsoleOutput(prev => [...prev, `[SUCCESS] Kernel CSG Subtraction completed.`]);
+      recordAction(`sdk.performCSG(kernel target, kernel cutter, "SUBTRACTION");`);
+    } catch (error: any) {
+      console.error("[CSG] Kernel operation failed:", error);
+      setConsoleOutput(prev => [...prev, `[ERROR] Kernel CSG Operation failed: ${error.message}`]);
     }
   };
 

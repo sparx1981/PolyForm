@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl } from './types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
+import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
@@ -427,6 +428,15 @@ console.log("Created rectangle:", myRect.id);`);
   // Subtract
   const [subtractCutterId, setSubtractCutterId] = useState<string | null>(null);
   const [subtractTargetId, setSubtractTargetId] = useState<string | null>(null);
+  // The kernel-solid equivalent of subtractTargetId above — a set of
+  // FaceIds (the whole group, from groupContaining) rather than a Shape
+  // id, since kernel solids don't have their own top-level id the way a
+  // Shape does. Kept as a fully separate state rather than unifying the
+  // two into one polymorphic type: the click handling for each already
+  // lives in two completely separate handlers (Shape mesh vs kernel
+  // face), so a shared type would need to be discriminated right back
+  // apart at every use anyway.
+  const [kernelSubtractTarget, setKernelSubtractTarget] = useState<FaceId[] | null>(null);
 
   // Basic Toolbar (Enabled by default, persisted across sessions)
   const [isBasicToolbarEnabled, setIsBasicToolbarEnabledState] = useState<boolean>(() => {
@@ -662,8 +672,21 @@ console.log("Created rectangle:", myRect.id);`);
           if (data.gridEnabled !== undefined) setGridEnabled(data.gridEnabled);
           if (data.floorEnabled !== undefined) setFloorEnabled(data.floorEnabled);
           if (data.allNotesVisible !== undefined) setAllNotesVisible(data.allNotesVisible);
-          if (data.defaultCameraPosition) setDefaultCameraPosition(data.defaultCameraPosition);
-          if (data.defaultCameraTarget) setDefaultCameraTarget(data.defaultCameraTarget);
+          // Deliberately NOT loading data.defaultCameraPosition/
+          // defaultCameraTarget here on cold start — confirmed as the
+          // actual cause of "click File New has a different zoom level
+          // / viewpoint in comparison to when the application first
+          // loads." These are user-level settings (this collection is
+          // per-user, not per-model), so a value saved from an earlier
+          // session — however it got set — silently overrode the
+          // [80,80,80]/[0,0,0] default every subsequent cold start,
+          // while File > New's own reset-camera event explicitly resets
+          // to that same hardcoded default and ignores this collection
+          // entirely. Matching that behavior on cold start too, per
+          // explicit request, rather than guessing whether the saved-
+          // viewpoint feature itself should still exist elsewhere in the
+          // app — it's untouched, just no longer loaded automatically
+          // here.
           if (data.isArchitectureToolbarEnabled !== undefined) {
             setIsArchitectureToolbarEnabled(Boolean(data.isArchitectureToolbarEnabled));
           }
@@ -1424,6 +1447,8 @@ console.log("Created rectangle:", myRect.id);`);
       setSubtractCutterId,
       subtractTargetId,
       setSubtractTargetId,
+      kernelSubtractTarget,
+      setKernelSubtractTarget,
       // Camera
       defaultCameraPosition,
       setDefaultCameraPosition,
