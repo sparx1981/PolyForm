@@ -195,3 +195,42 @@ describe('filletSolid — eligibility and refusals', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe('filletSolid — tolerates a face with an inverted stored normal', () => {
+  // Confirmed directly, not assumed: reconstructing a box from stored
+  // boundary data (the re-apply path in kernelFillet.ts) can produce a
+  // face whose OWN geometry is entirely correct but whose stored
+  // plane.normal points inward instead of outward. Traced as the actual
+  // cause of a second re-apply producing a badly malformed result (and a
+  // third losing group connectivity entirely) — vertexCentre and
+  // bulgePoint both depend on the absolute direction of "outward", so a
+  // single inverted face normal there mirrors the corner geometry onto
+  // the wrong side, not just shifts it slightly.
+  it('produces a correct, connected result even with one face normal flipped', () => {
+    const s = scene(); box(s, 4, 4, 2);
+    // Flip one face's stored normal in place, simulating exactly what
+    // was found on a reconstructed box — the geometry itself (which
+    // vertices, which loop) is untouched, only the stored direction.
+    const faces = [...s.graph.faces.values()];
+    const target = faces[0]!;
+    target.plane = { point: target.plane.point, normal: { x: -target.plane.normal.x, y: -target.plane.normal.y, z: -target.plane.normal.z } };
+
+    const result = filletSolid(s.ctx, [...s.graph.faces.keys()], 0.5, 6);
+    expect(result.ok).toBe(true);
+    expect(checkIntegrity(s.graph)).toEqual([]);
+
+    // Every edge must be shared by exactly 2 faces — the direct signal
+    // of the connectivity loss this fix prevents.
+    const edgeFaceCount = new Map<EdgeId, Set<number>>();
+    for (const [fid, f] of s.graph.faces) {
+      const loop = s.graph.loops.get(f.outerLoop)!;
+      for (const use of loop.uses) {
+        if (!edgeFaceCount.has(use.edge)) edgeFaceCount.set(use.edge, new Set());
+        edgeFaceCount.get(use.edge)!.add(fid as unknown as number);
+      }
+    }
+    for (const faceSet of edgeFaceCount.values()) {
+      expect(faceSet.size).toBe(2);
+    }
+  });
+});

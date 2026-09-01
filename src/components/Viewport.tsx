@@ -1774,7 +1774,25 @@ function Scene() {
           // it only ever draws the flat, shrunk-face boundary, not the
           // curved corners, which is a fair approximation of "how much
           // material this removes" for either operation.
-          setChamferPreview({ faces: group, amount });
+          //
+          // When re-applying to an already-filleted solid, `group` is
+          // the CURRENT set of faces — which includes every tiny
+          // corner-patch and edge-strip face the previous fillet built,
+          // not just the original 6 flat faces. Feeding those into
+          // computeChamferInsets tries to 2D-mitre-inset each of those
+          // small patches independently, which produces a dense,
+          // self-intersecting tangle of wireframe at every rounded
+          // corner — confirmed directly as the cause of the reported
+          // "messy" preview. Same fix as chamfer's own onMove: when
+          // re-applying, build the preview from the RECONSTRUCTED
+          // original boundary instead of the current (already-rounded)
+          // faces, matching what commit() will actually shrink.
+          const reapplyFrom = filletRef.current.session?.reapplyFrom;
+          setChamferPreview(
+            reapplyFrom
+              ? { faces: group, amount, boundaries: reapplyFrom as Vec3[][] }
+              : { faces: group, amount },
+          );
         };
 
         const finish = () => {

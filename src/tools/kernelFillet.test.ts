@@ -5,6 +5,7 @@ import { pushPull } from '../lib/geometry/pushpull';
 import { derive } from '../lib/geometry/derive';
 import { vec3 } from '../lib/geometry/math';
 import { checkIntegrity, loopVertexIds, getVertex } from '../lib/geometry/topology';
+import { groupContaining } from './kernelSelection';
 
 const host = () => new KernelArcHost({ cameraDirection: vec3(0,0,-1), upAxis: vec3(0,1,0) });
 const square = (h: KernelArcHost, n = 4) => {
@@ -209,5 +210,54 @@ describe('fillet — clamped to the safe maximum, never inverts a face', () => {
     const ys = pts.map((p) => p.y);
     expect(Math.min(...ys)).toBeCloseTo(0.95, 5);
     expect(Math.max(...ys)).toBeCloseTo(1.05, 5);
+  });
+});
+
+describe('fillet — three successive re-applies stay fully connected', () => {
+  // Regression test for the actual reported bug: the first re-apply
+  // looked fine by every check available at the time, but silently left
+  // some faces disconnected from their neighbors (an inverted face
+  // normal on the reconstructed box — see fillet.ts's own doc comment on
+  // the fix). That meant a SECOND re-apply produced a malformed result,
+  // and a THIRD found only a single isolated face instead of the whole
+  // solid — exactly matching what was reported. Verified end-to-end
+  // through the real binding, not just the underlying geometry function.
+  it('group detection still finds the whole solid after 3 rounds, no orphaned edges', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createFilletBinding(h, () => {});
+
+    let allFaces = [...h.graph.faces.keys()];
+    b.begin(allFaces);
+    b.update(0.3);
+    expect(b.commit().ok).toBe(true);
+
+    allFaces = [...h.graph.faces.keys()];
+    let group = groupContaining(h.graph, allFaces[0]!);
+    expect(group.length).toBe(allFaces.length);
+    expect(b.begin(group).ok).toBe(true);
+    b.update(0.4);
+    expect(b.commit().ok).toBe(true);
+    expect(checkIntegrity(h.graph)).toEqual([]);
+
+    allFaces = [...h.graph.faces.keys()];
+    group = groupContaining(h.graph, allFaces[0]!);
+    // The actual regression: this used to come back as 1, not the full set.
+    expect(group.length).toBe(allFaces.length);
+    expect(b.begin(group).ok).toBe(true);
+    b.update(0.2);
+    expect(b.commit().ok).toBe(true);
+    expect(checkIntegrity(h.graph)).toEqual([]);
+
+    const edgeFaceCount = new Map<number, Set<number>>();
+    for (const [fid, f] of h.graph.faces) {
+      const loop = h.graph.loops.get(f.outerLoop)!;
+      for (const use of loop.uses) {
+        if (!edgeFaceCount.has(use.edge as any)) edgeFaceCount.set(use.edge as any, new Set());
+        edgeFaceCount.get(use.edge as any)!.add(fid as any);
+      }
+    }
+    for (const faceSet of edgeFaceCount.values()) {
+      expect(faceSet.size).toBe(2);
+    }
   });
 });

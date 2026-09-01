@@ -173,13 +173,50 @@ export function filletSolid(
   if (!validated.ok) return { ok: false, reason: validated.reason, touched: new Set() };
   const { vertexFaces } = validated;
 
+  // The box's own centroid — used below to verify each face's stored
+  // normal genuinely points outward, not just to trust it blindly.
+  //
+  // Confirmed directly as necessary, not a defensive guess: reconstructing
+  // a box from stored boundary data (the re-apply path — see
+  // kernelFillet.ts's own `reapplyFrom`) can produce a face whose stored
+  // `plane.normal` points INWARD instead of outward, even though the
+  // face's own geometry (which faces are where) is entirely correct.
+  // insetPoint below is immune to this — its 2D mitre-inset shrinks
+  // toward each face's own polygon centre regardless of which way its
+  // normal points, which is exactly why chamfer's identical re-apply
+  // path never surfaced this at all. vertexCentre and bulgePoint are
+  // NOT immune: both depend on the absolute direction of "outward", so
+  // a single inverted face normal there produces a vertexCentre wildly
+  // on the wrong side of the corner — not a small error, a mirrored one.
+  let cx = 0, cy = 0, cz = 0, count = 0;
+  for (const fid of faceIds) {
+    const f = g.faces.get(fid)!;
+    for (const vid of loopVertexIds(g, f.outerLoop)) {
+      const p = getVertex(g, vid).position;
+      cx += p.x; cy += p.y; cz += p.z; count++;
+    }
+  }
+  const centroid: Vec3 = count > 0 ? { x: cx / count, y: cy / count, z: cz / count } : { x: 0, y: 0, z: 0 };
+
   const originalNormal = new Map<FaceId, Vec3>();
   const insetPoint = new Map<FaceId, Map<VertexId, Vec3>>();
   for (const fid of faceIds) {
     const f = g.faces.get(fid)!;
-    originalNormal.set(fid, f.plane.normal);
-    const basis = planeBasis(f.plane);
     const order = loopVertexIds(g, f.outerLoop);
+    const faceCentre = order.reduce(
+      (acc, vid) => add(acc, getVertex(g, vid).position),
+      { x: 0, y: 0, z: 0 } as Vec3,
+    );
+    const faceCentreAvg = scale(faceCentre, 1 / order.length);
+    const towardOutside = sub(faceCentreAvg, centroid);
+    const storedNormal = f.plane.normal;
+    // Only the value stored in `originalNormal` is corrected — insetPoint
+    // below deliberately keeps reading `f.plane` directly, unaffected by
+    // this, since its own math never needed the fix in the first place.
+    const outwardNormal = dot(storedNormal, towardOutside) < 0 ? scale(storedNormal, -1) : storedNormal;
+    originalNormal.set(fid, outwardNormal);
+
+    const basis = planeBasis(f.plane);
     const points2D = order.map((vid) => projectToBasis(getVertex(g, vid).position, basis));
     const inset2D = offsetPolygon2D(points2D, -radius);
     const map = new Map<VertexId, Vec3>();
