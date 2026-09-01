@@ -81,28 +81,18 @@ export function createFilletBinding(
       );
 
       if (alreadyDone) {
-        // Re-applying radius to an already-rounded solid is NOT
-        // supported yet, unlike chamfer's own identical-looking feature
-        // (see kernelChamfer.ts) — deliberately rejected here, honestly
-        // and immediately, rather than starting a drag session that
-        // would eventually fail at commit() with a confusing internal
-        // error. Traced directly to a real bug in filletSolid's own
-        // Step 2 (the curved edge strips): reconstructing a box from
-        // stored boundary data, rather than drawing it fresh through the
-        // ordinary draw-then-push/pull flow, produces a face whose own
-        // edge reference goes stale partway through that step — the
-        // edge exists moments earlier, then is gone by the time Step 2
-        // tries to use it. Confirmed this is unrelated to the radius
-        // value itself, and confirmed that silently skipping the
-        // missing edge (rather than failing) produces incomplete
-        // geometry, not a real fix. Left as a known limitation rather
-        // than shipped broken or silently wrong.
-        return {
-          ok: false,
-          reason:
-            'Re-applying radius to an already-rounded surface isn\u2019t supported yet ' +
-            '\u2014 undo the previous rounding first, then apply a new radius.',
-        };
+        const reapplyFrom: Vec3[][] = [];
+        for (const fid of faces) {
+          const ob = host.graph.faces.get(fid)?.attributes.custom.originalBoundary as
+            | Vec3[]
+            | undefined;
+          if (ob) reapplyFrom.push(ob);
+        }
+        if (reapplyFrom.length === 0) {
+          return { ok: false, reason: 'cannot find the original shape to re-round from' };
+        }
+        session = { faces: [...faces], radius: 0, reapplyFrom };
+        return { ok: true };
       }
 
       const validated = validateBox(host.graph, faces);
@@ -120,7 +110,15 @@ export function createFilletBinding(
       if (!session) return { ok: false, reason: 'no active session' };
       const { faces, radius, reapplyFrom } = session;
       session = null;
-      if (radius <= 0) return { ok: false, reason: 'radius must be positive' };
+      // A non-re-apply fillet still requires a positive radius — there's
+      // no sharp shape to "return to" otherwise. Re-applying is
+      // different: dragging the radius down to (or past) zero is how
+      // the user returns an already-filleted solid to its original
+      // sharp shape — see the `radius <= 0` branch below, after
+      // reconstruction. Mirrors kernelChamfer.ts's own identical fix.
+      if (!reapplyFrom && radius <= 0) {
+        return { ok: false, reason: 'radius must be positive' };
+      }
 
       const before = snapshot(host.graph);
       const ctx = { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex };
@@ -147,6 +145,15 @@ export function createFilletBinding(
             restore(host.graph, before);
             host.reindex();
             return { ok: false, reason: 'could not reconstruct the original shape' };
+          }
+
+          // Dragged back down to zero (or below): the reconstructed
+          // sharp box IS the desired result — the user is returning to
+          // the original shape, not re-rounding it.
+          if (radius <= 0) {
+            host.recordUndo(before);
+            bumpKernel();
+            return { ok: true };
           }
         }
 

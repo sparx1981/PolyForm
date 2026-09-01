@@ -54,7 +54,7 @@ import {
 import { planeBasis, projectToBasis, unprojectFromBasis, distance, dot, normalize } from './math';
 import { makeUVBasis, edgeSetHash } from './derive';
 import { offsetPolygon2D } from './faceOffset';
-import { insertEdge, type InsertContext } from './insert';
+import { insertIsolatedEdge, type InsertContext } from './insert';
 
 export interface ChamferResult {
   readonly ok: boolean;
@@ -133,7 +133,18 @@ export function createDirectFace(
     const a = ordered[i]!;
     const b = ordered[(i + 1) % n]!;
     if (distance(a, b) < ctx.tolerances.MIN_EDGE_LENGTH) return null;
-    const result = insertEdge(ctx, a, b);
+    // insertIsolatedEdge, not the sticky insertEdge — this new quad's
+    // own corner can otherwise land exactly on the interior of one of
+    // the ORIGINAL box's edges (the ones this whole operation is about
+    // to remove anyway), triggering an unwanted split of it. Confirmed
+    // directly as the actual cause of a specific crash re-applying
+    // fillet to a reconstructed box: the split silently removes an edge
+    // a DIFFERENT part of this same construction still holds a stale
+    // reference to, later throwing when it tries to use it. Vertex
+    // snapping between this construction's OWN new pieces still works —
+    // insertIsolatedEdge only skips the crossing-splits-an-unrelated-
+    // edge behaviour, not deliberate vertex reuse.
+    const result = insertIsolatedEdge(ctx, a, b);
     for (const t of result.touched) touched.add(t);
     if (result.edges.length === 0) return null;
     edgeIds.push(...result.edges);
@@ -195,7 +206,8 @@ export function createDirectFace(
         const a = holePoints[i]!;
         const b = holePoints[(i + 1) % hn]!;
         if (distance(a, b) < ctx.tolerances.MIN_EDGE_LENGTH) return null;
-        const result = insertEdge(ctx, a, b);
+        // Same reasoning as the outer-loop construction above.
+        const result = insertIsolatedEdge(ctx, a, b);
         for (const t of result.touched) touched.add(t);
         if (result.edges.length === 0) return null;
         holeEdgeIds.push(...result.edges);

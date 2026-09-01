@@ -128,17 +128,19 @@ describe('fillet binding — lifecycle', () => {
   });
 });
 
-describe('fillet — re-applying to an already-rounded solid is refused, honestly', () => {
-  // Unlike chamfer's own identical-looking feature (see
-  // kernelChamfer.test.ts), fillet does NOT support re-applying yet — a
-  // real bug in filletSolid's own curved-edge-strip construction when
-  // run on reconstructed (rather than freshly-drawn) geometry, found and
-  // documented directly in kernelFillet.ts's own begin() comment. This
-  // is deliberately refused up front, with a clear reason, rather than
-  // left to fail confusingly mid-commit — these tests confirm exactly
-  // that refusal, not a working feature.
+describe('fillet — re-apply to an already-filleted solid', () => {
+  // Previously refused outright — a real bug in createDirectFace's own
+  // internal edge construction (shared by both chamfer.ts and fillet.ts):
+  // a new quad's corner could land exactly on the interior of an
+  // ORIGINAL box edge (the one this whole operation is about to remove
+  // anyway), triggering an unwanted split that silently removed an edge
+  // a different part of the same construction still held a stale
+  // reference to. Fixed at the source, in createDirectFace itself
+  // (switched to insertIsolatedEdge) rather than worked around here —
+  // these tests confirm the fix, mirroring kernelChamfer.test.ts's own
+  // identical re-apply suite.
 
-  it('clicking radius again on an already-rounded solid is refused with a clear reason', () => {
+  it('clicking radius again on a chamferLocked (filleted) solid succeeds with a new radius', () => {
     const h = host(); box(h, 4, 2);
     const b = createFilletBinding(h, () => {});
     b.begin([...h.graph.faces.keys()]);
@@ -148,24 +150,45 @@ describe('fillet — re-applying to an already-rounded solid is refused, honestl
     expect(h.graph.faces.size).toBe(expectedFaceCount);
 
     const filletedFaces = [...h.graph.faces.keys()];
-    const begun = b.begin(filletedFaces);
-    expect(begun.ok).toBe(false);
-    expect(begun.reason).toMatch(/isn.t supported yet/i);
-    expect(b.active).toBe(false);
+    expect(b.begin(filletedFaces).ok).toBe(true);
+    b.update(0.6);
+    const result = b.commit();
+    expect(result.ok).toBe(true);
+    expect(h.graph.faces.size).toBe(expectedFaceCount); // same shape, new radius
+    expect(checkIntegrity(h.graph)).toEqual([]);
   });
 
-  it('the refusal leaves the existing filleted solid completely untouched', () => {
+  it('re-applying is exactly one undo entry, not two', () => {
     const h = host(); box(h, 4, 2);
     const b = createFilletBinding(h, () => {});
     b.begin([...h.graph.faces.keys()]);
     b.update(0.3);
     b.commit();
-    const expectedFaceCount = 6 + 12 * 6 + 8 * 6 * 6;
-    const depthBefore = h.undoDepth;
+    const depthAfterFirst = h.undoDepth;
 
     b.begin([...h.graph.faces.keys()]);
-    expect(h.graph.faces.size).toBe(expectedFaceCount);
-    expect(h.undoDepth).toBe(depthBefore);
+    b.update(0.6);
+    b.commit();
+    expect(h.undoDepth).toBe(depthAfterFirst + 1);
+
+    h.undo();
+    expect(h.graph.faces.size).toBe(6 + 12 * 6 + 8 * 6 * 6);
+    h.undo();
+    expect(h.graph.faces.size).toBe(6);
+  });
+
+  it('dragging the re-applied radius down to zero returns to the original sharp box', () => {
+    const h = host(); box(h, 4, 2);
+    const b = createFilletBinding(h, () => {});
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0.3);
+    b.commit();
+
+    b.begin([...h.graph.faces.keys()]);
+    b.update(0);
+    const result = b.commit();
+    expect(result.ok).toBe(true);
+    expect(h.graph.faces.size).toBe(6);
     expect(checkIntegrity(h.graph)).toEqual([]);
   });
 });

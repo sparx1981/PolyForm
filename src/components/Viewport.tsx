@@ -1259,6 +1259,27 @@ function Scene() {
     setSelectedFaceIds
   } = useApp();
 
+  // Shared by every click path that can complete a "Pick Sun Centre"
+  // pick (Shape mesh, kernel face, the floor plane, and the always-
+  // present background plane — four separate onPointerDown handlers,
+  // one shared implementation). Moves the visible sun along with the
+  // pick, not just the invisible orbit centre: sunOrbitCenter only ever
+  // fed the ORBIT math (see the useFrame block below), which only runs
+  // while animateSun is on — with it off, picking a new centre changed
+  // no visible position at all, confirmed directly as the cause of
+  // "sun location is not updating." Preserving the sun's own current
+  // offset from the old centre and re-applying it to the new one keeps
+  // the sun's relative position (and, once animating, its orbit radius)
+  // unchanged — it moves WITH the pick rather than snapping to the
+  // pick point itself, which would put it at ground level.
+  const pickSunCenter = (point: { x: number; z: number }) => {
+    const dx = lightPosition[0] - sunOrbitCenter[0];
+    const dz = lightPosition[2] - sunOrbitCenter[2];
+    setSunOrbitCenter([point.x, sunOrbitCenter[1], point.z]);
+    setLightPosition([point.x + dx, lightPosition[1], point.z + dz]);
+    setPickingSunCenter(false);
+  };
+
   // Routes the line tool's drag into the geometry kernel. §4.1
   const lineBinding = useLineBinding(kernelHost, bumpKernel);
   // Exact, un-offset endpoints of the line being previewed. See where this is
@@ -1673,8 +1694,7 @@ function Scene() {
       // this covers a click landing on KERNEL geometry instead, a
       // separate click path from a Shape mesh's onPointerDown.
       if (!event.point) return false;
-      setSunOrbitCenter([event.point.x, sunOrbitCenter[1], event.point.z]);
-      setPickingSunCenter(false);
+      pickSunCenter(event.point);
       return true;
     }
     if (activeTool === 'note') {
@@ -1695,6 +1715,31 @@ function Scene() {
       // Fillets or chamfers the whole solid the clicked face belongs to —
       // the same click-selects-the-group resolution used everywhere else,
       // since either operation is inherently whole-solid, not per-face.
+      //
+      // Drag sensitivity is scaled to the SOLID's own size, not a fixed
+      // pixels-per-unit ratio — the old Shape-based bevel tool did the
+      // same thing (its own `maxRadius / 300`, mentioned in this
+      // function's earlier history). A fixed ratio meant a large model
+      // needed an impractically long drag to reach a meaningful amount
+      // relative to its own size.
+      const groupBoundsHalfMinDimension = (faces: FaceId[]): number => {
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        for (const fid of faces) {
+          const f = kernelHost.graph.faces.get(fid);
+          if (!f) continue;
+          for (const vid of loopVertexIds(kernelHost.graph, f.outerLoop)) {
+            const p = getVertex(kernelHost.graph, vid).position;
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+            if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+          }
+        }
+        if (!isFinite(minX)) return 1;
+        const dims = [maxX - minX, maxY - minY, maxZ - minZ].filter((d) => d > 1e-6);
+        return dims.length > 0 ? Math.min(...dims) / 2 : 1;
+      };
+
       if (activeBevelType === 'radius') {
         const group = groupContaining(kernelHost.graph, faceId);
         const begun = filletRef.current.begin(group);
@@ -1707,6 +1752,7 @@ function Scene() {
           return false;
         }
         setMeasurements('Move the cursor to set the radius, then release.');
+        const dragSensitivity = groupBoundsHalfMinDimension(group) / 300;
 
         let dragStartClientX = 0;
         let dragStarted = false;
@@ -1718,8 +1764,7 @@ function Scene() {
             return;
           }
           const deltaPx = ev.clientX - dragStartClientX;
-          // Same screen-space-drag feel as chamfer's own equivalent drag.
-          const amount = Math.max(0, deltaPx * 0.002);
+          const amount = Math.max(0, deltaPx * dragSensitivity);
           filletRef.current.update(amount);
           setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
           // Reuses ChamferPreview's own wireframe-of-shrunk-faces
@@ -1759,6 +1804,7 @@ function Scene() {
         return false;
       }
       setMeasurements('Move the cursor to set the chamfer amount, then release.');
+      const dragSensitivity = groupBoundsHalfMinDimension(group) / 300;
 
       let dragStartClientX = 0;
       let dragStarted = false;
@@ -1770,11 +1816,7 @@ function Scene() {
           return;
         }
         const deltaPx = ev.clientX - dragStartClientX;
-        // Same screen-space-drag feel as the existing Shape-based bevel
-        // tool, scaled to a sane default range rather than the old
-        // per-shape maxRadius (chamfer here applies to a whole solid, not
-        // one shape's own bounds).
-        const amount = Math.max(0, deltaPx * 0.002);
+        const amount = Math.max(0, deltaPx * dragSensitivity);
         chamferRef.current.update(amount);
         setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
         // When re-applying to an already-chamfered solid, the session
@@ -5154,8 +5196,7 @@ function Scene() {
       // just above — a one-off pick takes over whatever the click would
       // otherwise have done, the same way those do.
       e.stopPropagation();
-      setSunOrbitCenter([e.point.x, sunOrbitCenter[1], e.point.z]);
-      setPickingSunCenter(false);
+      pickSunCenter(e.point);
       return;
     }
 
@@ -5898,6 +5939,17 @@ function Scene() {
           position={[0, -0.02, 0]} 
           receiveShadow
           onPointerDown={(e) => {
+            if (pickingSunCenter) {
+              // Covers a click landing on EMPTY GROUND — a separate
+              // click path from either handleMeshPointerDown or
+              // handleKernelFacePointerDown (this is a plain ground-
+              // plane mesh, not a Shape or kernel face). Without this,
+              // picking a sun centre only worked when the click
+              // happened to land on existing geometry.
+              e.stopPropagation();
+              pickSunCenter(e.point);
+              return;
+            }
             if (placingLightId) handlePointerDown(e);
             else if (activeTool === 'select') {
               setSelectedId(null);
@@ -5921,6 +5973,15 @@ function Scene() {
         rotation={[-Math.PI / 2, 0, 0]} 
         position={[0, -0.05, 0]} 
         onPointerDown={(e) => {
+          if (pickingSunCenter) {
+            // Same reasoning as the identical check on the floor mesh
+            // just above — this is the ALWAYS-present fallback ground
+            // plane (2000x2000, invisible), which is what a click hits
+            // when floorEnabled is off.
+            e.stopPropagation();
+            pickSunCenter(e.point);
+            return;
+          }
           if (activeTool === 'select') {
             setSelectedId(null);
             setSelectedIds([]);
@@ -6827,6 +6888,20 @@ function Scene() {
           ) : (
             <meshBasicMaterial color={activeMaterial} transparent opacity={0.5} depthTest={false} />
           )}
+          {/*
+            This preview never had an outline at all — just the
+            semi-transparent fill above. That's invisible-to-hard-to-see
+            against a light background whenever the active material is
+            white or a near-white, confirmed directly as the cause: the
+            fill alone gives no edge to see the shape's actual bounds by,
+            which committed shapes never have this problem because they
+            get an Edges child from edgeLinesEnabled (see the shapes.map
+            render further down) — the live preview simply never got the
+            same treatment. depthTest disabled for the same reason as the
+            fill's own depthTest={false} above: this preview should never
+            lose a depth fight against the surface it's being drawn onto.
+          */}
+          <Edges threshold={15} color="#000000" transparent opacity={0.6} depthTest={false} renderOrder={6} />
         </mesh>
       )}
 
