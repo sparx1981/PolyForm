@@ -1675,6 +1675,103 @@ function Scene() {
    * starts on a face is routinely released somewhere else — a handler on the
    * face itself would simply never fire.
    */
+  /**
+   * The kernel-solid equivalent of performCSGOperation above — subtracts
+   * one kernel group (the cutter) from another (the target), matching
+   * that function's own scope exactly rather than attempting a true
+   * B-rep boolean: kernel faces are tessellated into ordinary triangle
+   * geometry (via the same tessellateFace/mergeBuffers pipeline
+   * KernelGeometry.tsx already uses to render them), then run through
+   * the SAME three-bvh-csg Evaluator/Brush/SUBTRACTION as the Shape-based
+   * tool — so the result has the identical capabilities and limitations
+   * the old tool already has, just for kernel geometry instead of Shape
+   * meshes.
+   *
+   * The result, like the old tool's own, is NOT a kernel solid — it
+   * becomes a plain 'custom' Shape holding the resulting static mesh.
+   * There is no way to feed a boolean result back into the B-rep kernel
+   * as an editable solid without a genuine B-rep boolean algorithm (face
+   * splitting, intersection curves, re-stitching) — a substantially
+   * larger undertaking than matching the old tool's own scope, which is
+   * exactly what was asked for here.
+   *
+   * Both the target's and the cutter's own kernel faces/edges are
+   * deleted from the graph — the cutter is "consumed" by the operation,
+   * matching removeShape(cutterId) in the Shape-based version above.
+   */
+  const performKernelCSGSubtraction = (targetFaces: FaceId[], cutterFaces: FaceId[]) => {
+    console.log(`[CSG] Starting kernel subtraction: target=${targetFaces.length} faces, cutter=${cutterFaces.length} faces`);
+    try {
+      const buildBrush = (faceIds: FaceId[]) => {
+        const meshes = faceIds
+          .map((id) => tessellateFace(kernelHost.graph, id))
+          .filter((m): m is NonNullable<typeof m> => m !== null);
+        if (meshes.length === 0) return null;
+        const merged = mergeBuffers(meshes);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(merged.position, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(merged.normal, 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
+        geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
+        // Kernel face positions are already world-space (§6.3, same as
+        // KernelGeometry.tsx's own rendering) — no transform needed, both
+        // brushes are built directly at identity.
+        return new Brush(mergeVertices(geo));
+      };
+
+      const targetBrush = buildBrush(targetFaces);
+      const cutterBrush = buildBrush(cutterFaces);
+      if (!targetBrush || !cutterBrush) {
+        setConsoleOutput(prev => [...prev, `[ERROR] Kernel CSG failed: could not tessellate target or cutter.`]);
+        return;
+      }
+      targetBrush.updateMatrixWorld();
+      cutterBrush.updateMatrixWorld();
+
+      const evaluator = new Evaluator();
+      const resultBrush = evaluator.evaluate(targetBrush, cutterBrush, SUBTRACTION);
+      // Same fix, same reasoning, as performCSGOperation's identical
+      // step above — see that function's own doc comment for the full
+      // explanation of why this is needed at all (the raw CSG result's
+      // triangles don't share vertices/normals the way one flat face
+      // normally does, so every internal triangulation seam renders as
+      // a visible edge line without this).
+      resultBrush.geometry = mergeVertices(resultBrush.geometry);
+      // See removeDegenerateCSGTriangles's own doc comment above — a
+      // separate artifact from the seam issue just above: degenerate,
+      // zero-area triangles in the raw CSG result render as a fan of
+      // real, visible sliver-edge lines converging on one point.
+      removeDegenerateCSGTriangles(resultBrush.geometry);
+      resultBrush.geometry.computeVertexNormals();
+      const geometryData = resultBrush.geometry.toJSON();
+
+      const before = snapshot(kernelHost.graph);
+      deleteGroupFacesAndEdges(kernelHost.graph, [...targetFaces, ...cutterFaces]);
+      kernelHost.recordUndo(before);
+      bumpKernel();
+
+      const newShape: Shape = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: 'CSG Result',
+        type: 'custom',
+        position: [0, 0, 0],
+        quaternion: [0, 0, 0, 1],
+        scale: [1, 1, 1],
+        color: activeMaterial,
+        args: [],
+        geometryData,
+      };
+      addShape(newShape);
+      commitHistory();
+
+      setConsoleOutput(prev => [...prev, `[SUCCESS] Kernel CSG Subtraction completed.`]);
+      recordAction(`sdk.performCSG(kernel target, kernel cutter, "SUBTRACTION");`);
+    } catch (error: any) {
+      console.error("[CSG] Kernel operation failed:", error);
+      setConsoleOutput(prev => [...prev, `[ERROR] Kernel CSG Operation failed: ${error.message}`]);
+    }
+  };
+
   const handleKernelFacePointerDown = useCallback((faceId: FaceId, event: { point?: THREE.Vector3 }) => {
     // Return value tells KernelGeometry whether to stop propagation. Only
     // push/pull claims the press; every other tool needs it to keep
@@ -2008,7 +2105,25 @@ function Scene() {
       );
       return false;
     }
-  }, [activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast, setPlacingNotePos]);
+  }, [
+    activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast, setPlacingNotePos,
+    // pickingSunCenter/pickSunCenter, and especially kernelSubtractTarget/
+    // setKernelSubtractTarget/performKernelCSGSubtraction/setSelectedFaceIds/
+    // setConsoleOutput below, were all missing from this list — meaning
+    // this whole callback was memoized and NEVER re-created when any of
+    // them changed. kernelSubtractTarget specifically stayed frozen at
+    // whatever it was when activeTool (the only thing that DID trigger a
+    // re-memoization) last changed — so every click after the very first
+    // one inside a single "stay on the subtract tool" session saw a
+    // stale kernelSubtractTarget still equal to null, and treated every
+    // click as "set the target" instead of ever reaching "perform the
+    // subtraction". Confirmed directly as the cause of "does not seem to
+    // register/change anything" until switching tools away and back —
+    // that's exactly what forced a fresh memoization with the actually-
+    // current value.
+    pickingSunCenter, pickSunCenter,
+    kernelSubtractTarget, setKernelSubtractTarget, performKernelCSGSubtraction, setSelectedFaceIds, setConsoleOutput,
+  ]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);
@@ -5665,6 +5780,53 @@ function Scene() {
 
   const isTransforming = ['move', 'rotate', 'scale'].includes(activeTool);
 
+  /**
+   * Removes degenerate (zero-area, or literally two-of-three-vertices-
+   * identical) triangles from a CSG result, shared by both
+   * performCSGOperation and performKernelCSGSubtraction below.
+   *
+   * Confirmed directly as the cause of the reported "fan of extra edge
+   * lines converging on one point" artifact, distinct from — and not
+   * fixed by — the mergeVertices/computeVertexNormals step both
+   * functions already do. A degenerate triangle (two of its three
+   * vertices coincide, so it has zero area and is itself invisible)
+   * still has a well-formed THIRD edge, from the shared/degenerate
+   * vertex to its one distinct vertex. That edge's own "face normal",
+   * computed from a triangle with zero area, comes out as (0,0,0) —
+   * comparing that to any real neighboring face's normal registers as
+   * a full 90-degree angle, well past the Edges component's own
+   * threshold, so that sliver edge renders as a real, visible line
+   * fanning out from the shared vertex — even though the triangle
+   * producing it is otherwise invisible. Traced and confirmed directly:
+   * removing these degenerate triangles (never legitimate geometry —
+   * true B-rep faces never come out this way) eliminates the fan
+   * artifact entirely, without discarding anything a viewer would
+   * actually see.
+   */
+  function removeDegenerateCSGTriangles(geometry: THREE.BufferGeometry): void {
+    const index = geometry.index;
+    if (!index) return;
+    const posAttr = geometry.attributes.position;
+    const triCount = index.count / 3;
+    const keptIndices: number[] = [];
+    const areaThreshold = 1e-10;
+    const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3();
+    const ab = new THREE.Vector3(), ac = new THREE.Vector3(), cross = new THREE.Vector3();
+    for (let t = 0; t < triCount; t++) {
+      const a = index.getX(t * 3), b = index.getX(t * 3 + 1), c = index.getX(t * 3 + 2);
+      if (a === b || b === c || a === c) continue;
+      pa.fromBufferAttribute(posAttr, a);
+      pb.fromBufferAttribute(posAttr, b);
+      pc.fromBufferAttribute(posAttr, c);
+      ab.subVectors(pb, pa);
+      ac.subVectors(pc, pa);
+      cross.crossVectors(ab, ac);
+      if (cross.length() * 0.5 < areaThreshold) continue;
+      keptIndices.push(a, b, c);
+    }
+    geometry.setIndex(keptIndices);
+  }
+
   const performCSGOperation = (targetId: string, cutterId: string, operation: 'SUBTRACTION') => {
     console.log(`[CSG] Starting subtraction: Target=${targetId}, Cutter=${cutterId}`);
     const targetMesh = getSceneObjectById(targetId) as THREE.Mesh;
@@ -5701,7 +5863,29 @@ function Scene() {
       const position: [number, number, number] = [targetMesh.position.x, targetMesh.position.y, targetMesh.position.z];
       const quaternion: [number, number, number, number] = [targetMesh.quaternion.x, targetMesh.quaternion.y, targetMesh.quaternion.z, targetMesh.quaternion.w];
       const scale: [number, number, number] = [targetMesh.scale.x, targetMesh.scale.y, targetMesh.scale.z];
-      
+
+      // The raw CSG result's own faces come out with each triangle
+      // carrying its own separately-computed normal, rather than
+      // adjacent coplanar triangles sharing identical vertices/normals
+      // the way a single flat face's own triangulation normally does —
+      // that shared-normal property is exactly what lets the renderer's
+      // Edges component correctly skip drawing a line between two
+      // triangles that are actually part of the same flat surface.
+      // Without it, every one of a face's own internal triangulation
+      // seams renders as a visible edge line — confirmed directly as the
+      // cause of the reported "extra edge lines"/"surfaces split into
+      // sub-surfaces that don't need to be" fan-triangulation artifact.
+      // mergeVertices RETURNS a new geometry rather than mutating in
+      // place, per its own documented behavior (same reason it's used
+      // as `new Brush(mergeVertices(...))` for the input brushes above)
+      // — the result must be assigned back, or this silently discards
+      // the merged geometry and changes nothing at all.
+      resultBrush.geometry = mergeVertices(resultBrush.geometry);
+      // See removeDegenerateCSGTriangles's own doc comment for the full
+      // explanation — a separate artifact from the seam issue above.
+      removeDegenerateCSGTriangles(resultBrush.geometry);
+      resultBrush.geometry.computeVertexNormals();
+
       // Serialize geometry for state
       const geometryData = resultBrush.geometry.toJSON();
       console.log("[CSG] Geometry serialized to JSON.");
@@ -5721,90 +5905,6 @@ function Scene() {
     } catch (error: any) {
       console.error("[CSG] Operation failed:", error);
       setConsoleOutput(prev => [...prev, `[ERROR] CSG Operation failed: ${error.message}`]);
-    }
-  };
-
-  /**
-   * The kernel-solid equivalent of performCSGOperation above — subtracts
-   * one kernel group (the cutter) from another (the target), matching
-   * that function's own scope exactly rather than attempting a true
-   * B-rep boolean: kernel faces are tessellated into ordinary triangle
-   * geometry (via the same tessellateFace/mergeBuffers pipeline
-   * KernelGeometry.tsx already uses to render them), then run through
-   * the SAME three-bvh-csg Evaluator/Brush/SUBTRACTION as the Shape-based
-   * tool — so the result has the identical capabilities and limitations
-   * the old tool already has, just for kernel geometry instead of Shape
-   * meshes.
-   *
-   * The result, like the old tool's own, is NOT a kernel solid — it
-   * becomes a plain 'custom' Shape holding the resulting static mesh.
-   * There is no way to feed a boolean result back into the B-rep kernel
-   * as an editable solid without a genuine B-rep boolean algorithm (face
-   * splitting, intersection curves, re-stitching) — a substantially
-   * larger undertaking than matching the old tool's own scope, which is
-   * exactly what was asked for here.
-   *
-   * Both the target's and the cutter's own kernel faces/edges are
-   * deleted from the graph — the cutter is "consumed" by the operation,
-   * matching removeShape(cutterId) in the Shape-based version above.
-   */
-  const performKernelCSGSubtraction = (targetFaces: FaceId[], cutterFaces: FaceId[]) => {
-    console.log(`[CSG] Starting kernel subtraction: target=${targetFaces.length} faces, cutter=${cutterFaces.length} faces`);
-    try {
-      const buildBrush = (faceIds: FaceId[]) => {
-        const meshes = faceIds
-          .map((id) => tessellateFace(kernelHost.graph, id))
-          .filter((m): m is NonNullable<typeof m> => m !== null);
-        if (meshes.length === 0) return null;
-        const merged = mergeBuffers(meshes);
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.BufferAttribute(merged.position, 3));
-        geo.setAttribute('normal', new THREE.BufferAttribute(merged.normal, 3));
-        geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
-        geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
-        // Kernel face positions are already world-space (§6.3, same as
-        // KernelGeometry.tsx's own rendering) — no transform needed, both
-        // brushes are built directly at identity.
-        return new Brush(mergeVertices(geo));
-      };
-
-      const targetBrush = buildBrush(targetFaces);
-      const cutterBrush = buildBrush(cutterFaces);
-      if (!targetBrush || !cutterBrush) {
-        setConsoleOutput(prev => [...prev, `[ERROR] Kernel CSG failed: could not tessellate target or cutter.`]);
-        return;
-      }
-      targetBrush.updateMatrixWorld();
-      cutterBrush.updateMatrixWorld();
-
-      const evaluator = new Evaluator();
-      const resultBrush = evaluator.evaluate(targetBrush, cutterBrush, SUBTRACTION);
-      const geometryData = resultBrush.geometry.toJSON();
-
-      const before = snapshot(kernelHost.graph);
-      deleteGroupFacesAndEdges(kernelHost.graph, [...targetFaces, ...cutterFaces]);
-      kernelHost.recordUndo(before);
-      bumpKernel();
-
-      const newShape: Shape = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: 'CSG Result',
-        type: 'custom',
-        position: [0, 0, 0],
-        quaternion: [0, 0, 0, 1],
-        scale: [1, 1, 1],
-        color: activeMaterial,
-        args: [],
-        geometryData,
-      };
-      addShape(newShape);
-      commitHistory();
-
-      setConsoleOutput(prev => [...prev, `[SUCCESS] Kernel CSG Subtraction completed.`]);
-      recordAction(`sdk.performCSG(kernel target, kernel cutter, "SUBTRACTION");`);
-    } catch (error: any) {
-      console.error("[CSG] Kernel operation failed:", error);
-      setConsoleOutput(prev => [...prev, `[ERROR] Kernel CSG Operation failed: ${error.message}`]);
     }
   };
 
