@@ -7208,6 +7208,30 @@ function Scene() {
           case 'rock':
             label = `Rock: 1.2m`;
             break;
+          case 'custom':
+            // A CSG-result 'custom' shape has no meaningful args (it holds
+            // a raw geometryData mesh instead) — so this was falling
+            // straight to the default/null case below, and the label
+            // never rendered at all. Computing the bounding box of the
+            // actual parsed geometry is the only way to get a real
+            // dimension for this shape type, since there's no [w,h,d]
+            // array to read like every other shape type has.
+            if (shape.geometryData) {
+              try {
+                const loader = new THREE.BufferGeometryLoader();
+                const geo = loader.parse(shape.geometryData as any);
+                geo.computeBoundingBox();
+                if (geo.boundingBox) {
+                  const size = new THREE.Vector3();
+                  geo.boundingBox.getSize(size);
+                  label = `${formatValue(size.x, unit, 1)} × ${formatValue(size.y, unit, 1)} × ${formatValue(size.z, unit, 1)}`;
+                }
+                geo.dispose();
+              } catch {
+                label = null;
+              }
+            }
+            break;
           default:
             label = null;
         }
