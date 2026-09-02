@@ -89,12 +89,11 @@ function createRailingAlongSegment(
   numBalusters: number = 6
 ): THREE.BufferGeometry[] {
   const geoms: THREE.BufferGeometry[] = [];
-  const dx = pEnd[0] - pStart[0];
-  const dy = pEnd[1] - pStart[1];
-  const dz = pEnd[2] - pStart[2];
-  const dist = Math.hypot(dx, dz);
-  const totalDist = Math.hypot(dx, dy, dz);
-  if (totalDist < 0.1) return geoms;
+  const vStart = new THREE.Vector3(...pStart);
+  const vEnd = new THREE.Vector3(...pEnd);
+  const delta = new THREE.Vector3().subVectors(vEnd, vStart);
+  const totalDist = delta.length();
+  if (totalDist < 0.12) return geoms;
 
   // Newel Posts at start & end
   const postGeom1 = new THREE.BoxGeometry(0.06, railHeight, 0.06);
@@ -105,30 +104,29 @@ function createRailingAlongSegment(
   postGeom2.translate(pEnd[0], pEnd[1] + railHeight / 2, pEnd[2]);
   geoms.push(postGeom2);
 
-  // Handrail bar
-  const railBar = new THREE.BoxGeometry(0.05, 0.04, totalDist);
-  const pitchAngle = Math.atan2(dy, dist);
-  const yawAngle = Math.atan2(dx, dz);
+  // Handrail bar: elevated by railHeight along the path
+  const handrailStart = vStart.clone().add(new THREE.Vector3(0, railHeight, 0));
+  const handrailEnd = vEnd.clone().add(new THREE.Vector3(0, railHeight, 0));
+  const handrailMid = handrailStart.clone().lerp(handrailEnd, 0.5);
 
-  railBar.rotateX(-pitchAngle);
-  railBar.rotateY(yawAngle);
-  railBar.translate(
-    (pStart[0] + pEnd[0]) / 2,
-    (pStart[1] + pEnd[1]) / 2 + railHeight,
-    (pStart[2] + pEnd[2]) / 2
-  );
+  const railBar = new THREE.BoxGeometry(0.05, 0.04, totalDist);
+  const dir = delta.clone().normalize();
+  const orientationQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+  railBar.applyQuaternion(orientationQuat);
+  railBar.translate(handrailMid.x, handrailMid.y, handrailMid.z);
   geoms.push(railBar);
 
-  // Balusters along path
+  // Vertical Balusters along path
   const count = Math.max(1, numBalusters);
+  const spindleH = Math.max(0.1, railHeight - 0.06);
   for (let b = 1; b < count; b++) {
     const t = b / count;
-    const bx = pStart[0] + dx * t;
-    const by = pStart[1] + dy * t;
-    const bz = pStart[2] + dz * t;
+    const bx = pStart[0] + delta.x * t;
+    const by = pStart[1] + delta.y * t;
+    const bz = pStart[2] + delta.z * t;
 
-    const balGeom = new THREE.CylinderGeometry(0.012, 0.012, railHeight - 0.06, 8);
-    balGeom.translate(bx, by + railHeight / 2, bz);
+    const balGeom = new THREE.CylinderGeometry(0.012, 0.012, spindleH, 8);
+    balGeom.translate(bx, by + spindleH / 2 + 0.03, bz);
     geoms.push(balGeom);
   }
 

@@ -8,6 +8,7 @@ import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
+import { updateTimberFramesIfPresent } from './lib/timberFrameGenerator';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -255,6 +256,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // defaulting to off with no obvious way to discover the toggle, which made the
   // feature look removed.
   const [contactFrictionEnabled, setContactFrictionEnabled] = useState(true);
+  const [contactFrictionStrength, setContactFrictionStrength] = useState(50); // 0-100 scale, default 50%
   const [isToolModifierDocked, setIsToolModifierDocked] = useState(false);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
   const [autoOrbitEnabled, setAutoOrbitEnabled] = useState(false);
@@ -981,7 +983,8 @@ console.log("Created rectangle:", myRect.id);`);
   const handleSetShapes = (newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
     setShapes(prev => {
       const rawShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
-      const nextShapes = applyStairwellHolesToSlabs(rawShapes);
+      const withCutouts = applyStairwellHolesToSlabs(rawShapes);
+      const nextShapes = updateTimberFramesIfPresent(withCutouts);
       saveToHistory(nextShapes);
       return nextShapes;
     });
@@ -1495,6 +1498,8 @@ console.log("Created rectangle:", myRect.id);`);
       setActivePlantScale,
       contactFrictionEnabled,
       setContactFrictionEnabled,
+      contactFrictionStrength,
+      setContactFrictionStrength,
       isAIGenerateOpen,
       setIsAIGenerateOpen,
       autoOrbitEnabled,

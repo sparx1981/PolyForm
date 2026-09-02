@@ -12,7 +12,8 @@ import {
   ChevronRight,
   Plus,
   Home,
-  Check
+  Check,
+  Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
@@ -127,17 +128,23 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
   };
 
   // Handle Roof Generation action
-  const handleGenerateRoof = (roofType: 'gable' | 'hip') => {
+  const handleGenerateRoof = (roofType: 'gable' | 'hip' | 'parapet') => {
     const wallShapes = shapes.filter(s => s.type === 'wall');
     if (wallShapes.length === 0) {
       setMeasurements('No walls found. Draw a closed room to generate a roof.');
       return;
     }
-    const assembly = buildRoofAssemblyForRoom(wallShapes, { roofType, pitchAngleDeg: 35, usePitchAngle: true, color: '#991b1b', fasciaColor: '#ffffff' }, shapes);
+    const assembly = buildRoofAssemblyForRoom(wallShapes, { 
+      roofType, 
+      pitchAngleDeg: roofType === 'parapet' ? 0 : 35, 
+      usePitchAngle: roofType !== 'parapet', 
+      color: roofType === 'parapet' ? '#475569' : '#991b1b', 
+      fasciaColor: '#ffffff' 
+    }, shapes);
     if (assembly) {
       assembly.allShapes.forEach(s => addShape(s));
       commitHistory();
-      setMeasurements(`Created ${roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly with all constituent parts.`);
+      setMeasurements(`Created detailed ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip Roof' : 'Gable Roof'} assembly.`);
     }
   };
 
@@ -213,7 +220,8 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
           title="Parametric Roof Generator (Gable / Hip / Parapet)"
           className={cn(
             "toolbar-btn relative flex items-center justify-center transition-all",
-            theme === 'dark' ? "hover:bg-gray-700 text-amber-400" : "hover:bg-gray-100 text-amber-600"
+            showRoofOptions && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+            theme === 'dark' ? "hover:bg-gray-700 text-sky-400 hover:text-sky-300" : "hover:bg-gray-100 text-trimble-blue hover:text-trimble-blue"
           )}
         >
           <Home size={18} />
@@ -222,7 +230,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
         {showRoofOptions && (
           <div 
             className={cn(
-              "absolute left-14 top-0 z-50 p-2 rounded-xl shadow-2xl border text-xs min-w-[170px] space-y-1 backdrop-blur-md",
+              "absolute left-14 top-0 z-50 p-2 rounded-xl shadow-2xl border text-xs min-w-[190px] space-y-1 backdrop-blur-md",
               theme === 'dark' ? "bg-gray-900/95 border-gray-700 text-white" : "bg-white/95 border-gray-200 text-gray-800"
             )}
           >
@@ -241,10 +249,58 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
               <span>Hip Roof (4 slopes)</span>
               <span className="text-[10px] text-gray-400 font-mono">35°</span>
             </button>
+            <button
+              onClick={() => { handleGenerateRoof('parapet'); setShowRoofOptions(false); }}
+              className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+            >
+              <span>Parapet Roof (Flat / Coping)</span>
+              <span className="text-[10px] text-gray-400 font-mono">0°</span>
+            </button>
           </div>
         )}
       </div>
+
+      <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />
+
+      <WorldViewToolButton />
     </aside>
     </FlyoutSideContext.Provider>
+  );
+}
+
+function WorldViewToolButton() {
+  const { setIsWorldViewOpen, isWorldViewActive, theme } = useApp();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
+
+  return (
+    <div className="relative group">
+      <button
+        ref={buttonRef}
+        id="arch-worldview-btn"
+        onClick={() => setIsWorldViewOpen(true)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className={cn(
+          "toolbar-btn relative flex items-center justify-center transition-all",
+          isWorldViewActive && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+          theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
+        )}
+      >
+        <Globe size={18} className={isWorldViewActive ? "text-trimble-blue" : undefined} />
+
+        <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
+          {hovered && (
+            <div className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none z-50">
+              <div className="font-semibold flex items-center gap-1.5">
+                <span>WorldView Geolocation</span>
+              </div>
+              <div className="text-[10px] text-gray-400 font-normal">Open satellite map & solar positioning</div>
+            </div>
+          )}
+        </FlyoutPortal>
+      </button>
+    </div>
   );
 }

@@ -2,7 +2,7 @@ import type { KernelArcHost } from './tools/kernelArcHost';
 
 export type ToolType = 
   | 'select' | 'lasso' | 'eraser' | 'paint' | 'component'
-  | 'line' | 'poly' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
+  | 'line' | 'poly' | 'bezier' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
   | 'move' | 'rotate' | 'scale' | 'pushpull' | 'followme' | 'offset' | 'flip'
   | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section'
   | 'orbit' | 'pan' | 'zoom' | 'zoomextents'
@@ -49,7 +49,7 @@ export function isTextureUrl(val?: any): boolean {
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
@@ -80,6 +80,8 @@ export interface Shape {
   isRingSection?: boolean;
   plantSpeciesId?: string;
   plantVariation?: string;
+  roofData?: any;
+  customData?: any;
 }
 
 export interface Tag {
@@ -341,6 +343,8 @@ export interface AppState {
   setActiveBevelAmount: (amount: number | ((prev: number) => number)) => void;
   contactFrictionEnabled: boolean;
   setContactFrictionEnabled: (enabled: boolean) => void;
+  contactFrictionStrength: number;
+  setContactFrictionStrength: (strength: number) => void;
   isToolModifierDocked: boolean;
   setIsToolModifierDocked: (docked: boolean | ((prev: boolean) => boolean)) => void;
   // WorldView

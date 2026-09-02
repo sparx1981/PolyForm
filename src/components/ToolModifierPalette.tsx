@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Settings, Info, Zap, Move, RotateCw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers } from 'lucide-react';
+import { Settings, Info, Zap, Move, RotateCw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon } from 'lucide-react';
 import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { WallJustification } from '../tools/inference/types';
@@ -13,6 +13,8 @@ export const ToolModifierPalette: React.FC = () => {
     theme,
     contactFrictionEnabled,
     setContactFrictionEnabled,
+    contactFrictionStrength,
+    setContactFrictionStrength,
     activeBevelAmount,
     setActiveBevelAmount,
     activeBevelType,
@@ -47,13 +49,15 @@ export const ToolModifierPalette: React.FC = () => {
   const [roofColor, setRoofColor] = useState<string>('#991b1b');
   const [fasciaColor, setFasciaColor] = useState<string>('#ffffff');
   const [showRoofSettings, setShowRoofSettings] = useState<boolean>(false);
+  const [bezierSegments, setBezierSegments] = useState<number>(24);
 
   const hasSettings = [
     'move', 
     'bevel', 
     'deform', 
     'orbit',
-    'wall'
+    'wall',
+    'bezier'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -100,7 +104,7 @@ export const ToolModifierPalette: React.FC = () => {
     setMeasurements(`Stacked new Story Level ${activeStory + 1} with floor slab and walls.`);
   };
 
-  const handleGenerateRoof = (roofType: 'gable' | 'hip') => {
+  const handleGenerateRoof = (roofType: 'gable' | 'hip' | 'parapet') => {
     const wallShapes = shapes.filter(s => s.type === 'wall');
     if (wallShapes.length === 0) {
       setMeasurements('No walls found. Draw a closed room to generate a roof.');
@@ -108,17 +112,17 @@ export const ToolModifierPalette: React.FC = () => {
     }
     const assembly = buildRoofAssemblyForRoom(wallShapes, { 
       roofType, 
-      pitchAngleDeg: roofPitchAngle, 
-      usePitchAngle: true,
-      eaveOverhang: roofOverhang,
+      pitchAngleDeg: roofType === 'parapet' ? 0 : roofPitchAngle, 
+      usePitchAngle: roofType !== 'parapet',
+      eaveOverhang: roofType === 'parapet' ? 0 : roofOverhang,
       fasciaHeight: roofFasciaHeight,
-      color: roofColor,
+      color: roofType === 'parapet' ? '#475569' : roofColor,
       fasciaColor: fasciaColor
     }, shapes);
     if (assembly) {
       assembly.allShapes.forEach(s => addShape(s));
       commitHistory();
-      setMeasurements(`Created detailed ${roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly with all parts (${roofPitchAngle}°, ${((roofOverhang) * 100).toFixed(0)}cm overhang, ${((roofFasciaHeight) * 100).toFixed(0)}cm fascia).`);
+      setMeasurements(`Created detailed ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly.`);
     }
   };
 
@@ -188,11 +192,13 @@ export const ToolModifierPalette: React.FC = () => {
         <div className="flex items-center gap-2">
           {activeTool === 'wall' ? (
             <Building2 size={14} className="text-trimble-blue" />
+          ) : activeTool === 'bezier' ? (
+            <Spline size={14} className="text-trimble-blue" />
           ) : (
             <Settings size={14} className="text-trimble-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -314,25 +320,34 @@ export const ToolModifierPalette: React.FC = () => {
                 <span>Stack Story Level {activeStory + 1}</span>
               </button>
 
-              {/* 2. Gable / Hip Roof Grid */}
-              <div className="grid grid-cols-2 gap-1.5">
+              {/* 2. Gable / Hip / Parapet Roof Grid */}
+              <div className="grid grid-cols-3 gap-1">
                 <button
                   id="arch-gable-roof-btn"
                   onClick={() => handleGenerateRoof('gable')}
-                  className="py-1.5 px-2 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  className="py-1.5 px-1 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Generate Detailed Parametric Gable Roof with Fascia & Eaves"
                 >
                   <Home size={12} className="text-trimble-blue dark:text-sky-400" />
-                  <span>Gable Roof</span>
+                  <span>Gable</span>
                 </button>
                 <button
                   id="arch-hip-roof-btn"
                   onClick={() => handleGenerateRoof('hip')}
-                  className="py-1.5 px-2 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  className="py-1.5 px-1 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Generate Detailed Parametric Hip Roof with Fascia & Eaves"
                 >
                   <Home size={12} className="text-trimble-blue dark:text-sky-400" />
-                  <span>Hip Roof</span>
+                  <span>Hip</span>
+                </button>
+                <button
+                  id="arch-parapet-roof-btn"
+                  onClick={() => handleGenerateRoof('parapet')}
+                  className="py-1.5 px-1 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  title="Generate Detailed Parametric Parapet Flat Roof with Coping"
+                >
+                  <Home size={12} className="text-trimble-blue dark:text-sky-400" />
+                  <span>Parapet</span>
                 </button>
               </div>
 
@@ -478,10 +493,10 @@ export const ToolModifierPalette: React.FC = () => {
               <button
                 id="arch-add-timber-frame-btn"
                 onClick={handleAddTimberFrame}
-                className="w-full py-1.5 px-2.5 bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                className="w-full py-1.5 px-2.5 bg-sky-50/80 hover:bg-sky-100/90 dark:bg-sky-950/30 dark:hover:bg-sky-900/40 text-sky-900 dark:text-sky-200 border border-sky-200/80 dark:border-sky-800/60 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 title="Generate Timber Frame structure (Studs, Bottom/Top Plates, Headers, Floor Joists & Roof Rafters) meeting building guidelines"
               >
-                <Hammer size={13} className="text-amber-700 dark:text-amber-400" />
+                <Hammer size={13} className="text-trimble-blue dark:text-sky-400" />
                 <span>{shapes.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ')) ? 'Update Timber Frame' : 'Add Timber Frame'}</span>
               </button>
 
@@ -495,6 +510,87 @@ export const ToolModifierPalette: React.FC = () => {
                 <CheckCircle2 size={14} className="text-white" />
                 <span>Close Room</span>
                 <span className="ml-auto text-[9px] font-mono opacity-80 bg-white/20 px-1 py-0.5 rounded">C / ↵</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTool === 'bezier' && (
+          <div className="space-y-3">
+            {/* Resolution (Segments per span) */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                <span>Span Resolution</span>
+                <span className="font-mono text-trimble-blue">{bezierSegments} segments</span>
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {[12, 24, 36, 48].map((seg) => (
+                  <button
+                    key={seg}
+                    onClick={() => {
+                      setBezierSegments(seg);
+                      window.dispatchEvent(new CustomEvent('polyform:set-bezier-resolution', { detail: { segments: seg } }));
+                      setMeasurements(`Resolution set to ${seg}s`);
+                    }}
+                    className={cn(
+                      "py-1 text-[10px] font-mono font-bold rounded border transition-colors cursor-pointer",
+                      bezierSegments === seg
+                        ? "bg-trimble-blue text-white border-trimble-blue shadow-xs"
+                        : theme === 'dark' ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                    )}
+                  >
+                    {seg}s
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Vector Mechanics Guide */}
+            <div className={cn(
+              "p-2 rounded-lg border text-[10px] space-y-1.5",
+              theme === 'dark' ? "bg-gray-800/60 border-gray-700/80 text-gray-300" : "bg-blue-50/60 border-blue-100 text-blue-950"
+            )}>
+              <div className="font-semibold text-[10px] text-trimble-blue flex items-center gap-1.5">
+                <Spline size={12} />
+                <span>Vector Mechanics</span>
+              </div>
+              <ul className="space-y-1 text-[9px] list-disc list-inside text-gray-500 dark:text-gray-400">
+                <li><strong className="text-gray-700 dark:text-gray-200">Click:</strong> Sharp corner knot</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Click & Drag:</strong> Smooth C1 tangent</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Alt + Drag:</strong> Broken tangent handle</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Type '36s':</strong> Set segment resolution</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Type length:</strong> Lock tangent magnitude</li>
+              </ul>
+            </div>
+
+            {/* Action buttons */}
+            <div className="space-y-1.5 pt-1">
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('polyform:close-bezier-loop'));
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+                }}
+                className="w-full py-2 px-3 bg-trimble-blue hover:bg-trimble-blue-hover text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                title="Close loop back to origin and generate a solid planar face ready for Push/Pull"
+              >
+                <CheckCircle2 size={14} className="text-white" />
+                <span>Close Loop & Form Surface</span>
+                <span className="ml-auto text-[9px] font-mono opacity-80 bg-white/20 px-1 py-0.5 rounded">C</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('polyform:finish-bezier-path'));
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                }}
+                className={cn(
+                  "w-full py-1.5 px-3 rounded-lg text-xs font-medium border flex items-center justify-center gap-2 transition-colors cursor-pointer",
+                  theme === 'dark' ? "border-gray-700 hover:bg-gray-800 text-gray-300" : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                )}
+                title="Commit open curve path as edge chain"
+              >
+                <span>Finish Open Path</span>
+                <span className="ml-auto text-[9px] font-mono opacity-60">↵ Enter</span>
               </button>
             </div>
           </div>
@@ -523,8 +619,33 @@ export const ToolModifierPalette: React.FC = () => {
                 )} />
               </button>
             </div>
+
+            {contactFrictionEnabled && (
+              <div className="space-y-1.5 pt-1 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                  <span>Friction Strength</span>
+                  <span className="font-mono text-trimble-blue">{contactFrictionStrength}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="10" 
+                  max="100" 
+                  step="5"
+                  value={contactFrictionStrength}
+                  onChange={(e) => setContactFrictionStrength(Number(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                  title={`Friction Strength: ${contactFrictionStrength}%`}
+                />
+                <div className="flex justify-between text-[8px] text-gray-400 font-mono">
+                  <span>Soft (10%)</span>
+                  <span>Medium (50%)</span>
+                  <span>Firm (100%)</span>
+                </div>
+              </div>
+            )}
+
             <p className="text-[9px] text-gray-400 italic leading-tight">
-              Adds resistance at the point two surfaces first meet.
+              Adds tactile resistance when objects touch to help precise alignment.
             </p>
           </div>
         )}
@@ -637,6 +758,60 @@ export const ToolModifierPalette: React.FC = () => {
               </div>
             )}
             <p className="text-[9px] text-gray-400 italic">Automatically rotates around the workspace center.</p>
+          </div>
+        )}
+
+        {activeTool === 'polygon' && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                <span>Polygon Presets</span>
+                <span className="font-mono text-trimble-blue">N-Gons</span>
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {[
+                  { sides: 3, label: 'Tri (3)' },
+                  { sides: 4, label: 'Quad (4)' },
+                  { sides: 5, label: 'Pent (5)' },
+                  { sides: 6, label: 'Hex (6)' },
+                  { sides: 8, label: 'Oct (8)' },
+                  { sides: 10, label: 'Dec (10)' },
+                  { sides: 12, label: 'Dodec (12)' },
+                  { sides: 16, label: '16-Gon' },
+                ].map(({ sides, label }) => (
+                  <button
+                    key={sides}
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('polyform:set-polygon-sides', { detail: { sides } }));
+                      window.dispatchEvent(new CustomEvent('polyform:measurements', { detail: { text: `Polygon set to ${sides} sides` } }));
+                    }}
+                    className={cn(
+                      "py-1 text-[9px] font-mono font-bold rounded border transition-colors cursor-pointer text-center",
+                      theme === 'dark' ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700 hover:text-white" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={cn(
+              "p-2 rounded-lg border text-[10px] space-y-1.5",
+              theme === 'dark' ? "bg-gray-800/60 border-gray-700/80 text-gray-300" : "bg-blue-50/60 border-blue-100 text-blue-950"
+            )}>
+              <div className="font-semibold text-[10px] text-trimble-blue flex items-center gap-1.5">
+                <Hexagon size={12} />
+                <span>Polygon Controls</span>
+              </div>
+              <ul className="space-y-1 text-[9px] list-disc list-inside text-gray-500 dark:text-gray-400">
+                <li><strong className="text-gray-700 dark:text-gray-200">1st Click:</strong> Place center origin point</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">2nd Click:</strong> Set outer radius and orientation</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">↑ / ↓ Arrow keys:</strong> Increase / decrease side count</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Type '8s' + Enter:</strong> Set exact side count (e.g. 8 sides)</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Type radius + Enter:</strong> Lock exact radius (e.g. 2.4m)</li>
+              </ul>
+            </div>
           </div>
         )}
       </div>

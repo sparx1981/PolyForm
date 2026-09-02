@@ -231,6 +231,36 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     defaultDimensions: [1.2, 2.4, 0.18],
     hasGlass: false,
     features: ['Offset Pivot Pins', '1.8m Vertical Pull Bar', 'Oversized Luxury Scale']
+  },
+  {
+    id: 'bifold',
+    type: 'door',
+    name: 'Bi-Fold Multi-Leaf Patio Door',
+    category: 'Modern',
+    description: 'Architectural multi-panel concertina folding patio doors with slim aluminum sightlines and flush floor track.',
+    defaultDimensions: [2.4, 2.1, 0.15],
+    hasGlass: true,
+    features: ['3-Leaf Concertina Folding Panels', 'Overhead Top Roller Track', 'Flush Floor Threshold', 'Full-Width Outdoor Opening']
+  },
+  {
+    id: 'patio-sliding',
+    type: 'door',
+    name: 'Sliding Glass Patio Door',
+    category: 'Modern',
+    description: 'Wide dual-panel sliding glass door with large expansive view and heavy-duty sliding rollers.',
+    defaultDimensions: [2.0, 2.1, 0.15],
+    hasGlass: true,
+    features: ['Dual Expansive Glass Panes', 'Heavy Duty Roller Guides', 'Integrated Security Deadbolt', 'Seamless Patio Access']
+  },
+  {
+    id: 'shutters',
+    type: 'door',
+    name: 'French Doors with Louvered Shutters',
+    category: 'Classic',
+    description: 'Full-lite French glass doors flanked by authentic operable louvered exterior timber shutters with wrought iron strap hinges.',
+    defaultDimensions: [1.8, 2.1, 0.18],
+    hasGlass: true,
+    features: ['Dual French Glass Leafs', 'Operable Louvered Shutters', 'Wrought Iron Strap Hinges', 'Traditional Architectural Charm']
   }
 ];
 
@@ -314,6 +344,26 @@ export const WINDOW_STYLES: ArchStyleDef[] = [
     defaultDimensions: [1.2, 1.6, 0.12],
     hasGlass: true,
     features: ['Upper 1/3 Transom Hopper', 'Lower 2/3 Fixed Pane', 'Horizontal Transom Bar']
+  },
+  {
+    id: 'bay',
+    type: 'window',
+    name: '3-Sided Architectural Bay Window',
+    category: 'Classic',
+    description: 'Cantilevered 3-sided bay window projecting outward from the wall plane with wide center picture window and dual 45° flanking sashes.',
+    defaultDimensions: [2.0, 1.5, 0.45],
+    hasGlass: true,
+    features: ['45° Angled Flanking Casements', 'Wide Center Picture Pane', 'Projecting Sill & Base Shelf', 'Panoramic Daylighting']
+  },
+  {
+    id: 'velux-roof',
+    type: 'window',
+    name: 'Velux Roof Skylight Window',
+    category: 'Specialty',
+    description: 'Roof-integrated pitched skylight window with perimeter weather flashing, center-pivot opening sash, and low-E insulated glass.',
+    defaultDimensions: [0.9, 1.2, 0.15],
+    hasGlass: true,
+    features: ['Pitched Roof Flashing Collar', 'Center-Pivot Opening Sash', 'Low-E Insulated Glazing', 'Top Control Ventilation Bar']
   }
 ];
 

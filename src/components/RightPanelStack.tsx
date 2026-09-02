@@ -11,7 +11,7 @@ import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc, getDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc, getDoc, deleteDoc, getDocs, setDoc } from 'firebase/firestore';
 
 const COLORS = [
   '#ffffff', '#ef4444', '#f97316', '#f59e0b', 
@@ -632,6 +632,41 @@ export default function RightPanelStack() {
     } finally {
       setUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleDeleteMaterial = async (matToDelete: any) => {
+    // Remove from local customMaterials state
+    setCustomMaterials(prev => prev.filter(m => {
+      if (matToDelete.id && m.id) return m.id !== matToDelete.id;
+      return m.value !== matToDelete.value;
+    }));
+
+    // If activeMaterial is the deleted one, fallback to standard neutral
+    if (activeMaterial === matToDelete.value) {
+      setActiveMaterial('#e2e8f0');
+    }
+
+    // Persist deletion to Firestore if logged in
+    if (user?.uid) {
+      try {
+        if (matToDelete.id) {
+          await deleteDoc(doc(db, 'materials', matToDelete.id));
+        }
+        const q = query(
+          collection(db, 'materials'),
+          where('userId', '==', user.uid)
+        );
+        const snap = await getDocs(q);
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.id === matToDelete.id || data.value === matToDelete.value) {
+            deleteDoc(d.ref).catch(() => {});
+          }
+        });
+      } catch (err) {
+        console.warn('[Materials] Firestore delete warning:', err);
+      }
     }
   };
 
@@ -1256,19 +1291,19 @@ export default function RightPanelStack() {
 
                 const sortedLevels = Array.from(levelGroupsMap.values()).sort((a, b) => a.levelNum - b.levelNum);
 
-                // 2. Identify Roofs and their child components (Fascias)
+                // 2. Identify Roofs and their child components (Fascias) - Strictly exclude timber framing
                 const roofShapes = shapes.filter(s => 
                   (s.tags?.includes('roof-structure') || (!s.parentShapeId && (s.name?.toLowerCase().includes('roof') || s.name?.toLowerCase().includes('gable') || s.name?.toLowerCase().includes('hip'))))
-                  && !s.tags?.includes('roof-fascia') && !s.tags?.includes('timber-frame')
+                  && !s.tags?.includes('roof-fascia') && !s.tags?.includes('timber-frame') && !s.tags?.includes('timber-framing') && !s.name?.toLowerCase().startsWith('timber ')
                 );
                 const roofIds = new Set(roofShapes.map(r => r.id));
 
-                // Child shapes parented to roofs or with roof-fascia tag
-                const roofChildren = shapes.filter(s => s.parentShapeId && roofIds.has(s.parentShapeId));
+                // Child shapes parented to roofs or with roof-fascia tag (strictly exclude timber)
+                const roofChildren = shapes.filter(s => s.parentShapeId && roofIds.has(s.parentShapeId) && !s.tags?.includes('timber-frame') && !s.tags?.includes('timber-framing') && !s.name?.toLowerCase().startsWith('timber '));
                 const roofChildIds = new Set(roofChildren.map(c => c.id));
 
                 // 3. Identify Timber Framing shapes
-                const timberShapes = shapes.filter(s => s.tags?.includes('timber-frame') || s.tags?.includes('timber-framing') || s.name?.startsWith('Timber '));
+                const timberShapes = shapes.filter(s => s.tags?.includes('timber-frame') || s.tags?.includes('timber-framing') || s.name?.startsWith('Timber ') || s.name?.includes(' - Common Rafter') || s.name?.includes(' - Jack Rafter') || s.name?.includes(' - Ridge Beam') || s.name?.includes(' - Hip Rafter') || s.name?.includes(' - Valley Rafter') || s.name?.includes(' - Ceiling Joist') || s.name?.includes(' - Collar Tie'));
                 const timberIds = new Set(timberShapes.map(t => t.id));
 
                 // 4. Other standalone shapes
@@ -1366,7 +1401,29 @@ export default function RightPanelStack() {
                                     const isSelected = selectedId === wall.id || selectedIds.includes(wall.id);
                                     const lengthM = Array.isArray(wall.args) ? wall.args[0] : 0;
                                     const heightM = Array.isArray(wall.args) ? wall.args[1] : 0;
+                                    const thicknessM = Array.isArray(wall.args) ? wall.args[2] || 0.2 : 0.2;
                                     const dimLabel = lengthM ? `${lengthM.toFixed(1)}m × ${heightM.toFixed(1)}m` : '';
+
+                                    // Determine Wall Classification (Interior, Exterior, Center)
+                                    const tags = wall.tags || [];
+                                    const rawName = wall.name || '';
+                                    let wallTypeLabel = 'Exterior Wall';
+                                    let wallBadgeColor = 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300';
+                                    let wallTypeTag = 'Exterior';
+
+                                    if (tags.includes('interior-wall') || tags.includes('wall-interior') || rawName.toLowerCase().includes('interior') || (wall as any).wallCategory === 'interior' || (wall as any).wallJustification === 'interior' || thicknessM <= 0.12) {
+                                      wallTypeLabel = rawName && !rawName.match(/^Wall \d+$/) ? rawName : `Interior Wall ${wIdx + 1}`;
+                                      wallBadgeColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300';
+                                      wallTypeTag = 'Interior';
+                                    } else if (tags.includes('center-wall') || tags.includes('wall-center') || rawName.toLowerCase().includes('center') || (wall as any).wallCategory === 'center' || (wall as any).wallJustification === 'center') {
+                                      wallTypeLabel = rawName && !rawName.match(/^Wall \d+$/) ? rawName : `Center Wall ${wIdx + 1}`;
+                                      wallBadgeColor = 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300';
+                                      wallTypeTag = 'Center';
+                                    } else {
+                                      wallTypeLabel = rawName && !rawName.match(/^Wall \d+$/) ? rawName : `Exterior Wall ${wIdx + 1}`;
+                                      wallBadgeColor = 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300';
+                                      wallTypeTag = 'Exterior';
+                                    }
 
                                     return (
                                       <div
@@ -1376,16 +1433,19 @@ export default function RightPanelStack() {
                                           setSelectedIds([wall.id]);
                                         }}
                                         className={cn(
-                                          "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
+                                          "flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
                                           isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
                                           wall.hidden && "opacity-40"
                                         )}
-                                        title={`${wall.name || `Wall ${wIdx + 1}`} (${dimLabel})`}
+                                        title={`${wallTypeLabel} (${dimLabel})`}
                                       >
                                         <Building2 size={11} className="text-gray-400 dark:text-gray-500 shrink-0" />
                                         <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: wall.color || '#f1f5f9' }} />
-                                        <span className="flex-1 truncate">
-                                          {wall.name || `Wall ${wIdx + 1}`}
+                                        <span className="flex-1 truncate font-medium">
+                                          {wallTypeLabel}
+                                        </span>
+                                        <span className={cn("text-[9px] px-1 py-0.2 rounded font-mono shrink-0", wallBadgeColor)}>
+                                          {wallTypeTag}
                                         </span>
                                         {dimLabel && (
                                           <span className="text-[9px] font-mono text-gray-400 shrink-0">
@@ -1711,10 +1771,12 @@ export default function RightPanelStack() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  allTimberIds.forEach(id => removeShape(id));
+                                  setShapes(prev => prev.filter(s => !allTimberIds.includes(s.id)));
+                                  setSelectedIds(prev => prev.filter(id => !allTimberIds.includes(id)));
+                                  if (selectedId && allTimberIds.includes(selectedId)) setSelectedId(null);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0 transition-opacity"
-                                title={`Delete Timber Frame (${timberShapes.length} members)`}
+                                title={`Delete All Timber Framing (${timberShapes.length} members)`}
                               >
                                 <Trash2 size={13} />
                               </button>
@@ -1774,6 +1836,17 @@ export default function RightPanelStack() {
                                         >
                                           {catAllHidden ? <EyeOff size={11} className="text-gray-400" /> : <Eye size={11} />}
                                         </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShapes(prev => prev.filter(s => !catIds.includes(s.id)));
+                                            setSelectedIds(prev => prev.filter(id => !catIds.includes(id)));
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                          title={`Delete ${cat.label}`}
+                                        >
+                                          <Trash2 size={11} />
+                                        </button>
                                       </div>
 
                                       {/* Member list */}
@@ -1820,7 +1893,9 @@ export default function RightPanelStack() {
                                                 <button
                                                   onClick={(e) => {
                                                     e.stopPropagation();
-                                                    removeShape(member.id);
+                                                    setShapes(prev => prev.filter(s => s.id !== member.id));
+                                                    setSelectedIds(prev => prev.filter(id => id !== member.id));
+                                                    if (selectedId === member.id) setSelectedId(null);
                                                   }}
                                                   className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
                                                   title="Delete"
@@ -2057,11 +2132,24 @@ export default function RightPanelStack() {
                       setActiveTool('paint');
                     }}
                     className={cn(
-                      "aspect-square rounded-sm border cursor-pointer transition-transform hover:scale-110",
+                      "group relative aspect-square rounded-sm border cursor-pointer transition-transform hover:scale-105",
                       activeMaterial === m.value ? "border-trimble-blue ring-1 ring-trimble-blue" : "border-gray-300"
                     )}
                     style={{ backgroundColor: m.value }}
-                  />
+                    title={m.name || m.value}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteMaterial(m);
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-black/70 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10 shadow-xs"
+                      title="Delete material"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
                 ))}
                 <button 
                   onClick={() => setIsAddMaterialOpen(true)}
@@ -2073,7 +2161,10 @@ export default function RightPanelStack() {
 
               {customMaterials.filter(m => m.type === 'texture').length > 0 && (
                 <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Textures</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Textures</span>
+                    <span className="text-[9px] text-gray-400">{customMaterials.filter(m => m.type === 'texture').length} custom</span>
+                  </div>
                   <div className="grid grid-cols-4 gap-2">
                     {customMaterials.filter(m => m.type === 'texture').map((m, i) => (
                       <div 
@@ -2084,11 +2175,37 @@ export default function RightPanelStack() {
                           setActiveTool('paint');
                         }}
                         className={cn(
-                          "aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-110",
-                          activeMaterial === m.value ? "border-trimble-blue ring-1 ring-trimble-blue" : "border-gray-300"
+                          "group relative aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-105 bg-gray-100 dark:bg-gray-800",
+                          activeMaterial === m.value ? "border-trimble-blue ring-1 ring-trimble-blue" : "border-gray-300 dark:border-gray-700"
                         )}
+                        title={m.name || 'Custom Texture'}
                       >
-                        <img src={m.value} alt={m.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <img 
+                          src={m.value} 
+                          alt={m.name || 'Texture'} 
+                          className="w-full h-full object-cover" 
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        {/* Fallback placeholder if image is broken or failed to load */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 p-1 text-center pointer-events-none -z-0">
+                          <ImageOff size={14} className="opacity-70 mb-0.5" />
+                          <span className="text-[7px] truncate max-w-full font-mono leading-none">{m.name || 'Broken'}</span>
+                        </div>
+                        {/* Remove texture action button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteMaterial(m);
+                          }}
+                          className="absolute top-0.5 right-0.5 p-1 bg-black/70 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-xs cursor-pointer"
+                          title="Remove texture"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </div>
                     ))}
                   </div>

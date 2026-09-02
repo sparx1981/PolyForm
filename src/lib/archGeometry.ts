@@ -132,11 +132,10 @@ export function createWallWithOpeningsGeometry(
     return baseGeom;
   }
 
-  // Generate 3D Cladding Battens / Boards / Grooves on exterior and facade faces
+  // Generate 3D Cladding Battens / Boards / Grooves on outward-facing exterior face (+Z)
   const claddingGeoms: THREE.BufferGeometry[] = [baseGeom];
   const zOffsets = [
-    { z: thickness / 2 + 0.010, rotSign: 1 },
-    { z: -thickness / 2 - 0.010, rotSign: -1 }
+    { z: thickness / 2 + 0.010, rotSign: 1 }
   ];
 
   for (const { z: faceZ, rotSign } of zOffsets) {
@@ -674,6 +673,259 @@ export function createDoorGeometry(
       break;
     }
 
+    case 'bifold': {
+      // 3-Leaf / 4-Leaf Bi-Fold Concertina Folding Patio Door
+      const numLeaves = width > 2.2 ? 4 : 3;
+      const leafW = (panelWidth - (numLeaves - 1) * 0.008) / numLeaves;
+      const stileW = 0.065;
+      const topRailH = 0.08;
+      const botRailH = 0.12;
+
+      // Top guide track & bottom flush track
+      const topTrack = new THREE.BoxGeometry(panelWidth, 0.035, frameDepth * 0.9);
+      topTrack.translate(0, height / 2 - frameThick / 2 - 0.015, 0);
+      hardwareParts.push(topTrack);
+
+      const botTrack = new THREE.BoxGeometry(panelWidth, 0.015, frameDepth * 0.9);
+      botTrack.translate(0, -height / 2 + 0.01, 0);
+      hardwareParts.push(botTrack);
+
+      // Generate folding leaves with slight concertina angle
+      for (let i = 0; i < numLeaves; i++) {
+        const foldAngle = (i % 2 === 0 ? 0.18 : -0.18);
+        const leafCenterX = -panelWidth / 2 + leafW / 2 + i * (leafW + 0.008);
+        const leafZ = (i % 2 === 0 ? 0.02 : -0.02);
+
+        // Leaf outer stile & rail frame
+        const frameL = new THREE.BoxGeometry(stileW, panelHeight - 0.06, panelThick * 0.85);
+        frameL.rotateY(foldAngle);
+        frameL.translate(leafCenterX - leafW / 2 + stileW / 2, -frameThick / 2, leafZ);
+        frameParts.push(frameL);
+
+        const frameR = new THREE.BoxGeometry(stileW, panelHeight - 0.06, panelThick * 0.85);
+        frameR.rotateY(foldAngle);
+        frameR.translate(leafCenterX + leafW / 2 - stileW / 2, -frameThick / 2, leafZ);
+        frameParts.push(frameR);
+
+        const frameT = new THREE.BoxGeometry(leafW - stileW * 2, topRailH, panelThick * 0.85);
+        frameT.rotateY(foldAngle);
+        frameT.translate(leafCenterX, -frameThick / 2 + (panelHeight - 0.06) / 2 - topRailH / 2, leafZ);
+        frameParts.push(frameT);
+
+        const frameB = new THREE.BoxGeometry(leafW - stileW * 2, botRailH, panelThick * 0.85);
+        frameB.rotateY(foldAngle);
+        frameB.translate(leafCenterX, -frameThick / 2 - (panelHeight - 0.06) / 2 + botRailH / 2, leafZ);
+        frameParts.push(frameB);
+
+        // Glass Pane
+        const glassW = leafW - stileW * 2;
+        const glassH = panelHeight - 0.06 - topRailH - botRailH;
+        const glassY = -frameThick / 2 + (topRailH - botRailH) / 2;
+        const glass = new THREE.BoxGeometry(glassW, glassH, 0.008);
+        glass.rotateY(foldAngle);
+        glass.translate(leafCenterX, glassY, leafZ);
+        glassParts.push(glass);
+
+        // Intermediate Hinge Cylinders
+        if (i < numLeaves - 1) {
+          const hingeX = leafCenterX + leafW / 2;
+          const hingeT = new THREE.CylinderGeometry(0.010, 0.010, 0.08, 12);
+          hingeT.translate(hingeX, 0.5, leafZ + 0.02);
+          hardwareParts.push(hingeT);
+
+          const hingeB = new THREE.CylinderGeometry(0.010, 0.010, 0.08, 12);
+          hingeB.translate(hingeX, -0.5, leafZ + 0.02);
+          hardwareParts.push(hingeB);
+        }
+      }
+
+      // Master Bi-fold Lever Handle
+      const handle = new THREE.CylinderGeometry(0.012, 0.012, 0.12, 12);
+      handle.rotateZ(Math.PI / 2);
+      handle.translate(panelWidth / 2 - leafW + 0.06, -0.05, panelThick / 2 + 0.04);
+      hardwareParts.push(handle);
+      break;
+    }
+
+    case 'patio-sliding': {
+      // 2-Panel Wide Sliding Glass Patio Door
+      const leafW = panelWidth / 2 + 0.03;
+      const stileW = 0.08;
+      const topRailH = 0.09;
+      const botRailH = 0.14;
+
+      // Sliding Top & Bottom Dual Tracks
+      const trackT = new THREE.BoxGeometry(panelWidth, 0.035, frameDepth * 0.95);
+      trackT.translate(0, height / 2 - frameThick / 2 - 0.015, 0);
+      hardwareParts.push(trackT);
+
+      const trackB = new THREE.BoxGeometry(panelWidth, 0.025, frameDepth * 0.95);
+      trackB.translate(0, -height / 2 + 0.012, 0);
+      hardwareParts.push(trackB);
+
+      // Left fixed leaf (slightly inward -Z) and Right sliding leaf (slightly outward +Z)
+      const leaves = [
+        { cx: -panelWidth / 4 + 0.015, z: -0.025, isSlider: false },
+        { cx: panelWidth / 4 - 0.015, z: 0.025, isSlider: true }
+      ];
+
+      leaves.forEach(({ cx, z, isSlider }) => {
+        // Frame stiles & rails
+        const frameL = new THREE.BoxGeometry(stileW, panelHeight - 0.05, panelThick * 0.85);
+        frameL.translate(cx - leafW / 2 + stileW / 2, -frameThick / 2, z);
+        frameParts.push(frameL);
+
+        const frameR = new THREE.BoxGeometry(stileW, panelHeight - 0.05, panelThick * 0.85);
+        frameR.translate(cx + leafW / 2 - stileW / 2, -frameThick / 2, z);
+        frameParts.push(frameR);
+
+        const frameT = new THREE.BoxGeometry(leafW - stileW * 2, topRailH, panelThick * 0.85);
+        frameT.translate(cx, -frameThick / 2 + (panelHeight - 0.05) / 2 - topRailH / 2, z);
+        frameParts.push(frameT);
+
+        const frameB = new THREE.BoxGeometry(leafW - stileW * 2, botRailH, panelThick * 0.85);
+        frameB.translate(cx, -frameThick / 2 - (panelHeight - 0.05) / 2 + botRailH / 2, z);
+        frameParts.push(frameB);
+
+        // Expansive Glass
+        const gw = leafW - stileW * 2;
+        const gh = panelHeight - 0.05 - topRailH - botRailH;
+        const gy = -frameThick / 2 + (topRailH - botRailH) / 2;
+        const glass = new THREE.BoxGeometry(gw, gh, 0.008);
+        glass.translate(cx, gy, z);
+        glassParts.push(glass);
+
+        if (isSlider) {
+          // Sliding D-Handle & Mortise Lock
+          const dHandle = new THREE.BoxGeometry(0.025, 0.22, 0.04);
+          dHandle.translate(cx - leafW / 2 + stileW + 0.03, -0.05, z + panelThick / 2 + 0.02);
+          hardwareParts.push(dHandle);
+
+          const lockThumb = new THREE.CylinderGeometry(0.012, 0.012, 0.03, 12);
+          lockThumb.rotateX(Math.PI / 2);
+          lockThumb.translate(cx - leafW / 2 + stileW + 0.03, 0.1, z + panelThick / 2 + 0.02);
+          hardwareParts.push(lockThumb);
+        }
+      });
+      break;
+    }
+
+    case 'shutters': {
+      // Full-Lite French Doors flanked by authentic Louvered Timber Shutters
+      const doorAreaW = panelWidth * 0.65;
+      const shutterW = (panelWidth - doorAreaW) / 2 - 0.02;
+      const leafW = doorAreaW / 2 - 0.005;
+      const stileW = 0.075;
+
+      // Central Dual French Glass Doors
+      [-doorAreaW / 4, doorAreaW / 4].forEach((leafCenterX) => {
+        const frameL = new THREE.BoxGeometry(stileW, panelHeight, panelThick * 0.85);
+        frameL.translate(leafCenterX - leafW / 2 + stileW / 2, -frameThick / 2, 0);
+        frameParts.push(frameL);
+
+        const frameR = new THREE.BoxGeometry(stileW, panelHeight, panelThick * 0.85);
+        frameR.translate(leafCenterX + leafW / 2 - stileW / 2, -frameThick / 2, 0);
+        frameParts.push(frameR);
+
+        const frameT = new THREE.BoxGeometry(leafW - stileW * 2, 0.1, panelThick * 0.85);
+        frameT.translate(leafCenterX, -frameThick / 2 + panelHeight / 2 - 0.05, 0);
+        frameParts.push(frameT);
+
+        const frameB = new THREE.BoxGeometry(leafW - stileW * 2, 0.14, panelThick * 0.85);
+        frameB.translate(leafCenterX, -frameThick / 2 - panelHeight / 2 + 0.07, 0);
+        frameParts.push(frameB);
+
+        // Glass Pane & Muntin Grid
+        const gw = leafW - stileW * 2;
+        const gh = panelHeight - 0.24;
+        const vm = new THREE.BoxGeometry(0.018, gh, panelThick * 0.7);
+        vm.translate(leafCenterX, -frameThick / 2 - 0.02, 0);
+        frameParts.push(vm);
+
+        const hm1 = new THREE.BoxGeometry(gw, 0.018, panelThick * 0.7);
+        hm1.translate(leafCenterX, -frameThick / 2 + gh / 4 - 0.02, 0);
+        frameParts.push(hm1);
+
+        const hm2 = new THREE.BoxGeometry(gw, 0.018, panelThick * 0.7);
+        hm2.translate(leafCenterX, -frameThick / 2 - gh / 4 - 0.02, 0);
+        frameParts.push(hm2);
+
+        const glass = new THREE.BoxGeometry(gw, gh, 0.008);
+        glass.translate(leafCenterX, -frameThick / 2 - 0.02, 0);
+        glassParts.push(glass);
+      });
+
+      // Left & Right Louvered Exterior Shutters
+      const shutterZ = frameDepth / 2 + 0.02;
+      const shutterH = panelHeight * 0.98;
+      const shutterStileW = 0.05;
+
+      [-panelWidth / 2 + shutterW / 2, panelWidth / 2 - shutterW / 2].forEach((shutX, sIdx) => {
+        // Shutter Outer Frame
+        const shutL = new THREE.BoxGeometry(shutterStileW, shutterH, 0.028);
+        shutL.translate(shutX - shutterW / 2 + shutterStileW / 2, -frameThick / 2, shutterZ);
+        frameParts.push(shutL);
+
+        const shutR = new THREE.BoxGeometry(shutterStileW, shutterH, 0.028);
+        shutR.translate(shutX + shutterW / 2 - shutterStileW / 2, -frameThick / 2, shutterZ);
+        frameParts.push(shutR);
+
+        const shutT = new THREE.BoxGeometry(shutterW - shutterStileW * 2, 0.06, 0.028);
+        shutT.translate(shutX, -frameThick / 2 + shutterH / 2 - 0.03, shutterZ);
+        frameParts.push(shutT);
+
+        const shutM = new THREE.BoxGeometry(shutterW - shutterStileW * 2, 0.05, 0.028);
+        shutM.translate(shutX, -frameThick / 2, shutterZ);
+        frameParts.push(shutM);
+
+        const shutB = new THREE.BoxGeometry(shutterW - shutterStileW * 2, 0.08, 0.028);
+        shutB.translate(shutX, -frameThick / 2 - shutterH / 2 + 0.04, shutterZ);
+        frameParts.push(shutB);
+
+        // Angled Louver Slats (14 upper slats, 14 lower slats)
+        const louverW = shutterW - shutterStileW * 2;
+        const numLouvers = 12;
+        const subH = shutterH / 2 - 0.07;
+
+        for (let l = 1; l <= numLouvers; l++) {
+          // Upper section
+          const yTop = -frameThick / 2 + 0.03 + (subH / (numLouvers + 1)) * l;
+          const louver1 = new THREE.BoxGeometry(louverW, 0.03, 0.006);
+          louver1.rotateX(0.45);
+          louver1.translate(shutX, yTop, shutterZ);
+          frameParts.push(louver1);
+
+          // Lower section
+          const yBot = -frameThick / 2 - shutterH / 2 + 0.05 + (subH / (numLouvers + 1)) * l;
+          const louver2 = new THREE.BoxGeometry(louverW, 0.03, 0.006);
+          louver2.rotateX(0.45);
+          louver2.translate(shutX, yBot, shutterZ);
+          frameParts.push(louver2);
+        }
+
+        // Wrought Iron Strap Hinges & Shutter Tiebacks
+        const hinge1 = new THREE.BoxGeometry(shutterW * 0.75, 0.02, 0.008);
+        hinge1.translate(shutX + (sIdx === 0 ? 0.02 : -0.02), -frameThick / 2 + shutterH / 2 - 0.08, shutterZ + 0.016);
+        hardwareParts.push(hinge1);
+
+        const hinge2 = new THREE.BoxGeometry(shutterW * 0.75, 0.02, 0.008);
+        hinge2.translate(shutX + (sIdx === 0 ? 0.02 : -0.02), -frameThick / 2 - shutterH / 2 + 0.08, shutterZ + 0.016);
+        hardwareParts.push(hinge2);
+      });
+
+      // Dual Brass French Knobs
+      const knob1 = new THREE.CylinderGeometry(0.014, 0.014, 0.04, 16);
+      knob1.rotateX(Math.PI / 2);
+      knob1.translate(-0.03, -0.05, panelThick / 2 + 0.03);
+      hardwareParts.push(knob1);
+
+      const knob2 = new THREE.CylinderGeometry(0.014, 0.014, 0.04, 16);
+      knob2.rotateX(Math.PI / 2);
+      knob2.translate(0.03, -0.05, panelThick / 2 + 0.03);
+      hardwareParts.push(knob2);
+      break;
+    }
+
     case 'flush':
     default: {
       // Clean Flush Modern Panel
@@ -839,33 +1091,224 @@ export function createWindowGeometry(
     }
 
     case 'arch': {
-      // Palladian / Arch Top Window
-      const archH = innerH * 0.35;
-      const lowerH = innerH - archH;
+      // Authentic Palladian / Georgian Arched Top Window
+      const archRadius = innerW / 2;
+      const springlineY = innerH / 2 - archRadius;
+      const lowerH = Math.max(0.2, springlineY - (-innerH / 2));
 
-      // Lower horizontal meeting bar
-      const meetingBar = new THREE.BoxGeometry(innerW, 0.03, mullionDepth);
-      meetingBar.translate(0, innerH / 2 - archH, 0);
-      frameParts.push(meetingBar);
+      // 1. Prominent Transom / Springline Beam
+      const transomBeam = new THREE.BoxGeometry(innerW, 0.045, frameDepth * 0.95);
+      transomBeam.translate(0, springlineY, 0);
+      frameParts.push(transomBeam);
 
-      // Lower center mullion
-      const lowerMullion = new THREE.BoxGeometry(0.025, lowerH, mullionDepth);
-      lowerMullion.translate(0, -archH / 2, 0);
-      frameParts.push(lowerMullion);
+      // 2. Semicircular True 3D Arch Surround Casing (Segmented curved arc)
+      const numArchSegments = 16;
+      for (let s = 0; s < numArchSegments; s++) {
+        const theta1 = (Math.PI / numArchSegments) * s;
+        const theta2 = (Math.PI / numArchSegments) * (s + 1);
+        const midTheta = (theta1 + theta2) / 2;
+        const segLen = (Math.PI * archRadius) / numArchSegments;
 
-      // Radial sunburst upper muntins
-      const radial1 = new THREE.BoxGeometry(0.02, archH, mullionDepth * 0.8);
-      radial1.rotateZ(Math.PI / 4);
-      radial1.translate(-innerW / 6, innerH / 2 - archH / 2, 0);
-      frameParts.push(radial1);
+        const x = Math.cos(midTheta) * (archRadius - frameThick / 2);
+        const y = springlineY + Math.sin(midTheta) * (archRadius - frameThick / 2);
 
-      const radial2 = new THREE.BoxGeometry(0.02, archH, mullionDepth * 0.8);
-      radial2.rotateZ(-Math.PI / 4);
-      radial2.translate(innerW / 6, innerH / 2 - archH / 2, 0);
-      frameParts.push(radial2);
+        const archSegment = new THREE.BoxGeometry(segLen * 1.05, frameThick, frameDepth);
+        archSegment.rotateZ(midTheta - Math.PI / 2);
+        archSegment.translate(x, y, 0);
+        frameParts.push(archSegment);
+      }
 
-      const glass = new THREE.BoxGeometry(innerW, innerH, 0.008);
+      // 3. Radial Fanlight / Sunburst Spokes (radiating from center of springline)
+      const spokeAngles = [Math.PI / 6, Math.PI / 3, Math.PI / 2, (2 * Math.PI) / 3, (5 * Math.PI) / 6];
+      spokeAngles.forEach(ang => {
+        const spokeLen = archRadius - frameThick;
+        const spoke = new THREE.BoxGeometry(0.018, spokeLen, mullionDepth * 0.8);
+        spoke.rotateZ(ang - Math.PI / 2);
+        spoke.translate(Math.cos(ang) * (spokeLen / 2), springlineY + Math.sin(ang) * (spokeLen / 2), 0);
+        frameParts.push(spoke);
+      });
+
+      // 4. Lower Dual Casement Sashes (2x2 Colonial Grid)
+      const casementW = (innerW - 0.04) / 2;
+      const casementCenterY = -innerH / 2 + lowerH / 2;
+
+      [-innerW / 4, innerW / 4].forEach(cx => {
+        // Vertical mullion
+        const vm = new THREE.BoxGeometry(0.02, lowerH, mullionDepth * 0.85);
+        vm.translate(cx, casementCenterY, 0);
+        frameParts.push(vm);
+
+        // Horizontal mullion
+        const hm = new THREE.BoxGeometry(casementW, 0.02, mullionDepth * 0.85);
+        hm.translate(cx, casementCenterY, 0);
+        frameParts.push(hm);
+      });
+
+      // Center divider mullion
+      const centerMullion = new THREE.BoxGeometry(0.035, lowerH, frameDepth * 0.9);
+      centerMullion.translate(0, casementCenterY, 0);
+      frameParts.push(centerMullion);
+
+      // Glass: Lower Rectangle + Upper Arched Lunette
+      const lowerGlass = new THREE.BoxGeometry(innerW, lowerH, 0.008);
+      lowerGlass.translate(0, casementCenterY, 0);
+      glassParts.push(lowerGlass);
+
+      const upperGlass = new THREE.CylinderGeometry(archRadius - frameThick, archRadius - frameThick, 0.008, 24, 1, false, 0, Math.PI);
+      upperGlass.rotateZ(Math.PI / 2);
+      upperGlass.rotateX(Math.PI / 2);
+      upperGlass.translate(0, springlineY, 0);
+      glassParts.push(upperGlass);
+      break;
+    }
+
+    case 'bay': {
+      // 3-Sided Architectural Cantilevered Bay Window (Projecting Outward towards Exterior -Z)
+      const bayDepth = Math.max(0.35, depth * 2.5);
+      const centerW = innerW * 0.55;
+      const wingW = (innerW - centerW) / 1.414; // 45 degree projection
+      const angle45 = Math.PI / 4;
+
+      // Projecting Base Platform Shelf & Top Roof Soffit Hip Cap
+      const shelfBase = new THREE.BoxGeometry(width + 0.15, 0.06, bayDepth + frameDepth);
+      shelfBase.translate(0, -height / 2 - 0.03, -bayDepth / 2);
+      frameParts.push(shelfBase);
+
+      const roofCap = new THREE.BoxGeometry(width + 0.15, 0.08, bayDepth + frameDepth);
+      roofCap.translate(0, height / 2 + 0.04, -bayDepth / 2);
+      frameParts.push(roofCap);
+
+      // 1. Center Picture Pane (Facing outward at -bayDepth)
+      const centerFrameT = new THREE.BoxGeometry(centerW, frameThick, frameDepth);
+      centerFrameT.translate(0, innerH / 2 - frameThick / 2, -bayDepth);
+      frameParts.push(centerFrameT);
+
+      const centerFrameB = new THREE.BoxGeometry(centerW, frameThick, frameDepth);
+      centerFrameB.translate(0, -innerH / 2 + frameThick / 2, -bayDepth);
+      frameParts.push(centerFrameB);
+
+      const centerGlass = new THREE.BoxGeometry(centerW - frameThick * 2, innerH - frameThick * 2, 0.008);
+      centerGlass.translate(0, 0, -bayDepth);
+      glassParts.push(centerGlass);
+
+      // Center Glass Vertical Glazing Bars
+      const cvm1 = new THREE.BoxGeometry(0.02, innerH - frameThick * 2, mullionDepth);
+      cvm1.translate(-centerW / 4, 0, -bayDepth);
+      frameParts.push(cvm1);
+      const cvm2 = new THREE.BoxGeometry(0.02, innerH - frameThick * 2, mullionDepth);
+      cvm2.translate(centerW / 4, 0, -bayDepth);
+      frameParts.push(cvm2);
+
+      // 2. Left 45° Angled Flanking Casement (Connecting from wall edge -width/2, 0 to center -centerW/2, -bayDepth)
+      const leftCenterX = -centerW / 2 - (wingW / 2) * Math.cos(angle45);
+      const leftCenterZ = -bayDepth + (wingW / 2) * Math.sin(angle45);
+
+      const leftFrameT = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
+      leftFrameT.rotateY(angle45);
+      leftFrameT.translate(leftCenterX, innerH / 2 - frameThick / 2, leftCenterZ);
+      frameParts.push(leftFrameT);
+
+      const leftFrameB = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
+      leftFrameB.rotateY(angle45);
+      leftFrameB.translate(leftCenterX, -innerH / 2 + frameThick / 2, leftCenterZ);
+      frameParts.push(leftFrameB);
+
+      const leftGlass = new THREE.BoxGeometry(wingW - frameThick * 2, innerH - frameThick * 2, 0.008);
+      leftGlass.rotateY(angle45);
+      leftGlass.translate(leftCenterX, 0, leftCenterZ);
+      glassParts.push(leftGlass);
+
+      // 3. Right 45° Angled Flanking Casement (Connecting from center centerW/2, -bayDepth to wall edge width/2, 0)
+      const rightCenterX = centerW / 2 + (wingW / 2) * Math.cos(angle45);
+      const rightCenterZ = -bayDepth + (wingW / 2) * Math.sin(angle45);
+
+      const rightFrameT = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
+      rightFrameT.rotateY(-angle45);
+      rightFrameT.translate(rightCenterX, innerH / 2 - frameThick / 2, rightCenterZ);
+      frameParts.push(rightFrameT);
+
+      const rightFrameB = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
+      rightFrameB.rotateY(-angle45);
+      rightFrameB.translate(rightCenterX, -innerH / 2 + frameThick / 2, rightCenterZ);
+      frameParts.push(rightFrameB);
+
+      const rightGlass = new THREE.BoxGeometry(wingW - frameThick * 2, innerH - frameThick * 2, 0.008);
+      rightGlass.rotateY(-angle45);
+      rightGlass.translate(rightCenterX, 0, rightCenterZ);
+      glassParts.push(rightGlass);
+
+      // Corner Posts
+      const postL = new THREE.BoxGeometry(0.06, height, 0.06);
+      postL.translate(-centerW / 2, 0, -bayDepth);
+      frameParts.push(postL);
+
+      const postR = new THREE.BoxGeometry(0.06, height, 0.06);
+      postR.translate(centerW / 2, 0, -bayDepth);
+      frameParts.push(postR);
+      break;
+    }
+
+    case 'velux-roof': {
+      // Velux Roof Skylight Window with Weather Flashing Collar & Center-Pivot Sash
+      const collarW = width + 0.16;
+      const collarH = height + 0.16;
+
+      // Perimeter Weather Flashing Flange Collar (Grey/Anthracite Aluminum)
+      const flashL = new THREE.BoxGeometry(0.08, collarH, 0.02);
+      flashL.translate(-width / 2 - 0.04, 0, -0.01);
+      frameParts.push(flashL);
+
+      const flashR = new THREE.BoxGeometry(0.08, collarH, 0.02);
+      flashR.translate(width / 2 + 0.04, 0, -0.01);
+      frameParts.push(flashR);
+
+      const flashT = new THREE.BoxGeometry(collarW, 0.08, 0.02);
+      flashT.translate(0, height / 2 + 0.04, -0.01);
+      frameParts.push(flashT);
+
+      const flashB = new THREE.BoxGeometry(collarW, 0.08, 0.02);
+      flashB.translate(0, -height / 2 - 0.04, -0.01);
+      frameParts.push(flashB);
+
+      // Center-Pivot Opening Sash Frame (slightly tilted out 6° for ventilation)
+      const sashW = innerW;
+      const sashH = innerH;
+      const sashFrameL = new THREE.BoxGeometry(0.04, sashH, 0.045);
+      sashFrameL.translate(-sashW / 2 + 0.02, 0, 0.025);
+      frameParts.push(sashFrameL);
+
+      const sashFrameR = new THREE.BoxGeometry(0.04, sashH, 0.045);
+      sashFrameR.translate(sashW / 2 - 0.02, 0, 0.025);
+      frameParts.push(sashFrameR);
+
+      const sashFrameT = new THREE.BoxGeometry(sashW, 0.04, 0.045);
+      sashFrameT.translate(0, sashH / 2 - 0.02, 0.025);
+      frameParts.push(sashFrameT);
+
+      const sashFrameB = new THREE.BoxGeometry(sashW, 0.04, 0.045);
+      sashFrameB.translate(0, -sashH / 2 + 0.02, 0.025);
+      frameParts.push(sashFrameB);
+
+      // Low-E Insulated Glazing Pane
+      const glass = new THREE.BoxGeometry(sashW - 0.08, sashH - 0.08, 0.012);
+      glass.translate(0, 0, 0.025);
       glassParts.push(glass);
+
+      // Top Ergonomic Aluminium Control Ventilation Flap Bar
+      const topBar = new THREE.BoxGeometry(sashW * 0.85, 0.035, 0.025);
+      topBar.translate(0, sashH / 2 - 0.04, 0.05);
+      hardwareParts.push(topBar);
+
+      // Side Pivot Hinges & Friction Stays
+      const pivotL = new THREE.CylinderGeometry(0.015, 0.015, 0.03, 16);
+      pivotL.rotateZ(Math.PI / 2);
+      pivotL.translate(-width / 2 + 0.02, 0, 0.025);
+      hardwareParts.push(pivotL);
+
+      const pivotR = new THREE.CylinderGeometry(0.015, 0.015, 0.03, 16);
+      pivotR.rotateZ(Math.PI / 2);
+      pivotR.translate(width / 2 - 0.02, 0, 0.025);
+      hardwareParts.push(pivotR);
       break;
     }
 

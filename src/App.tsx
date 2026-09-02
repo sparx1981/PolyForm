@@ -527,30 +527,35 @@ function AppContent() {
 
           {!isToolModifierDocked && <ToolModifierPalette />}
 
-          {/* Right Panel Toggle Button - Always visible and obvious */}
-          <button
-            onClick={() => setRightPanelVisible(!rightPanelVisible)}
-            className={`absolute top-4 z-30 p-2.5 rounded-lg shadow-xl border transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 ${
-              rightPanelVisible ? 'right-[300px]' : 'right-4'
-            } ${
-              theme === 'dark' 
-                ? 'bg-gray-800 text-gray-200 border-gray-700 hover:bg-gray-700' 
-                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
-            title={rightPanelVisible ? "Collapse Panel" : "Expand Panel"}
-          >
-            {rightPanelVisible ? (
-              <>
-                <PanelRightClose size={18} />
-                <span className="text-[10px] font-bold uppercase tracking-wider">Collapse</span>
-              </>
-            ) : (
-              <>
-                <PanelRightOpen size={18} />
-                <span className="text-[10px] font-bold uppercase tracking-wider">Tools & Info</span>
-              </>
-            )}
-          </button>
+          {/* Right Panel Toggle Button - Always visible and positioned below top-docked toolbars */}
+          {(() => {
+            const hasTopDockedToolbars = layoutMode === 'classic' && toolbarsInZone('top').length > 0;
+            return (
+              <button
+                onClick={() => setRightPanelVisible(!rightPanelVisible)}
+                className={`absolute ${hasTopDockedToolbars ? 'top-16' : 'top-4'} z-30 p-2.5 rounded-lg shadow-xl border transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 ${
+                  rightPanelVisible ? 'right-[300px]' : 'right-4'
+                } ${
+                  theme === 'dark' 
+                    ? 'bg-gray-800 text-gray-200 border-gray-700 hover:bg-gray-700' 
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+                title={rightPanelVisible ? "Collapse Panel" : "Expand Panel"}
+              >
+                {rightPanelVisible ? (
+                  <>
+                    <PanelRightClose size={18} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Collapse</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelRightOpen size={18} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Tools & Info</span>
+                  </>
+                )}
+              </button>
+            );
+          })()}
 
           <AnimatePresence>
             {rightPanelVisible && (

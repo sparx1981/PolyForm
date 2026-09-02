@@ -94,6 +94,44 @@ export function sampleTerrainElevation(x: number, z: number, terrain: Shape): nu
 }
 
 /**
+ * Automatically orients room perimeter walls so their local +Z face (the exterior/cladding face)
+ * is guaranteed to point outward towards the exterior, regardless of whether the user drew
+ * the room in a clockwise or counter-clockwise fashion.
+ */
+export function orientRoomWallsToExterior(
+  wallShapes: Shape[],
+  roomPolygon2D: Array<[number, number]>
+): Shape[] {
+  return wallShapes.map(wall => {
+    if (wall.type !== 'wall') return wall;
+    const midX = wall.position[0];
+    const midZ = wall.position[2];
+
+    const wallQuat = new THREE.Quaternion(...(wall.quaternion || [0, 0, 0, 1]));
+    const localZWorld = new THREE.Vector3(0, 0, 1).applyQuaternion(wallQuat);
+
+    // Test a point slightly offset along the current local +Z normal
+    const testDist = 0.20;
+    const testX = midX + localZWorld.x * testDist;
+    const testZ = midZ + localZWorld.z * testDist;
+
+    const isFacingInside = isPointInPolygon2D(testX, testZ, roomPolygon2D);
+
+    if (isFacingInside) {
+      // Local +Z is pointing inside the room; flip 180° around Y so local +Z faces the exterior
+      const flipQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+      const correctedQuat = wallQuat.clone().multiply(flipQuat);
+      return {
+        ...wall,
+        quaternion: [correctedQuat.x, correctedQuat.y, correctedQuat.z, correctedQuat.w] as [number, number, number, number],
+      };
+    }
+
+    return wall;
+  });
+}
+
+/**
  * Calculates balanced cut/fill datum elevation ($Z_0$) across perimeter points.
  */
 export function calculateBalancedDatumElevation(
@@ -326,7 +364,7 @@ export function buildRoomAssembly(
 
   return {
     datumZ,
-    wallShapes,
+    wallShapes: orientRoomWallsToExterior(wallShapes, roomPoly2D),
     slabShape,
     foundationShape,
     updatedTerrainData,

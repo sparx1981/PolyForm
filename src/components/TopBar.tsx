@@ -27,7 +27,10 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Sliders,
+  ZoomIn,
+  Layout
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
@@ -54,10 +57,16 @@ function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.B
     const posAttr = geo.attributes.position;
     const normAttr = geo.attributes.normal;
     const uvAttr = geo.attributes.uv;
-    for (let i = 0; i < posAttr.count; i++) {
-      positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-      normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
-      if (hasUv && uvAttr) uvs.push(uvAttr.getX(i), uvAttr.getY(i));
+    if (posAttr) {
+      for (let i = 0; i < posAttr.count; i++) {
+        positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+        if (normAttr) {
+          normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
+        } else {
+          normals.push(0, 1, 0);
+        }
+        if (hasUv && uvAttr) uvs.push(uvAttr.getX(i), uvAttr.getY(i));
+      }
     }
   });
   const merged = new THREE.BufferGeometry();
@@ -126,6 +135,7 @@ export default function TopBar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSavedModelsOpen, setIsSavedModelsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'general' | 'camera' | 'toolbars' | 'api'>('general');
   const [hfTokenInput, setHfTokenInput] = useState<string>(() => HuggingFaceService.getToken());
   const [showHfToken, setShowHfToken] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
@@ -724,362 +734,400 @@ export default function TopBar() {
 
       {/* Settings Modal */}
       <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Settings">
-        <div className="space-y-6">
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Measurement Unit</label>
-            <div className="grid grid-cols-3 gap-2 p-1 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              {['mm', 'cm', 'm'].map((u) => (
+        <div className="flex flex-col gap-5">
+          {/* Settings Tabs Navigation */}
+          <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800/80 rounded-xl border border-gray-200/60 dark:border-gray-700/60 text-xs font-semibold">
+            {[
+              { id: 'general' as const, label: 'General', icon: <Sliders size={14} /> },
+              { id: 'camera' as const, label: 'Camera / Zoom', icon: <Camera size={14} /> },
+              { id: 'toolbars' as const, label: 'Toolbars', icon: <Layout size={14} /> },
+              { id: 'api' as const, label: 'API', icon: <KeyRound size={14} /> },
+            ].map(tab => {
+              const isActive = settingsTab === tab.id;
+              return (
                 <button
-                  key={u}
-                  onClick={() => setUnit(u as any)}
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSettingsTab(tab.id)}
                   className={cn(
-                    "py-2 text-xs font-bold rounded-md transition-all",
-                    unit === u 
-                      ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
-                      : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all text-xs font-semibold whitespace-nowrap",
+                    isActive
+                      ? "bg-white dark:bg-gray-700 text-trimble-blue dark:text-blue-400 shadow-sm ring-1 ring-gray-200/80 dark:ring-gray-600"
+                      : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                   )}
                 >
-                  {u.toUpperCase()}
+                  {tab.icon}
+                  <span>{tab.label}</span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
 
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Appearance</label>
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex items-center gap-3">
-                {theme === 'light' ? <Sun size={18} className="text-orange-500" /> : <Moon size={18} className="text-indigo-500" />}
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{theme === 'light' ? 'Light Mode' : 'Dark Mode'}</span>
-              </div>
-              <button 
-                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                className={cn(
-                  "w-10 h-5 rounded-full relative transition-colors",
-                  theme === 'light' ? "bg-gray-300" : "bg-trimble-blue"
-                )}
-              >
-                <div className={cn(
-                  "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
-                  theme === 'light' ? "left-0.5" : "left-5.5"
-                )} />
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Default Zoom Level & Framing</label>
-                <button 
-                  onClick={() => {
-                    const defaultPos: [number, number, number] = [14, 12, 16];
-                    setDefaultCameraPosition(defaultPos);
-                    window.dispatchEvent(new CustomEvent('set-camera', { 
-                      detail: { position: defaultPos, target: defaultCameraTarget || [0, 0, 0] } 
-                    }));
-                  }}
-                  className="text-[10px] text-trimble-blue font-bold hover:underline"
-                >
-                  Reset to 1.0x (10m × 10m)
-                </button>
-              </div>
-
-              {/* Preset Zoom Level Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {[
-                  {
-                    id: 'detail',
-                    label: '0.5x Scale (Detail)',
-                    targetSize: '2m – 5m objects',
-                    pos: [7, 6, 8] as [number, number, number],
-                    goodFor: 'Good for furniture, doors, windows, staircases, cabinetry, and fine joinery'
-                  },
-                  {
-                    id: 'standard',
-                    label: '1.0x Scale (Standard Default)',
-                    targetSize: '10m × 10m objects',
-                    pos: [14, 12, 16] as [number, number, number],
-                    goodFor: 'Optimal for 10m × 10m rooms, single-story structures, timber frames, and architectural layouts'
-                  },
-                  {
-                    id: 'building',
-                    label: '2.0x Scale (Medium Building)',
-                    targetSize: '20m – 30m objects',
-                    pos: [28, 24, 32] as [number, number, number],
-                    goodFor: 'Good for multi-room residences, duplexes, commercial suites, and full floor plans'
-                  },
-                  {
-                    id: 'site',
-                    label: '5.0x Scale (Site / Masterplan)',
-                    targetSize: '50m – 100m+ objects',
-                    pos: [65, 55, 75] as [number, number, number],
-                    goodFor: 'Good for large site plots, subdivisions, landscaping terrain, and urban massing models'
-                  }
-                ].map((preset) => {
-                  const isCurrent = Math.abs(defaultCameraPosition[0] - preset.pos[0]) < 2 &&
-                                   Math.abs(defaultCameraPosition[1] - preset.pos[1]) < 2 &&
-                                   Math.abs(defaultCameraPosition[2] - preset.pos[2]) < 2;
-
-                  return (
+          {/* TAB 1: GENERAL */}
+          {settingsTab === 'general' && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Measurement Unit</label>
+                <div className="grid grid-cols-3 gap-2 p-1 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  {['mm', 'cm', 'm'].map((u) => (
                     <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => {
-                        setDefaultCameraPosition(preset.pos);
-                        window.dispatchEvent(new CustomEvent('set-camera', { 
-                          detail: { position: preset.pos, target: defaultCameraTarget || [0, 0, 0] } 
-                        }));
-                      }}
+                      key={u}
+                      onClick={() => setUnit(u as any)}
                       className={cn(
-                        "text-left p-2.5 rounded-lg border transition-all flex flex-col justify-between",
-                        isCurrent
-                          ? "bg-trimble-blue/10 border-trimble-blue text-gray-900 dark:text-white shadow-sm ring-1 ring-trimble-blue/30"
-                          : "bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-trimble-blue/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        "py-2 text-xs font-bold rounded-md transition-all",
+                        unit === u 
+                          ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                          : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                       )}
                     >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className="text-xs font-bold">{preset.label}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-gray-600 dark:text-gray-300">
-                          {preset.targetSize}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
-                        {preset.goodFor}
-                      </p>
+                      {u.toUpperCase()}
                     </button>
-                  );
-                })}
-              </div>
-
-              {/* Custom Coordinates */}
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-                <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1.5">Custom Camera Position (X, Y, Z meters)</span>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['X', 'Y', 'Z'] as const).map((axis, i) => (
-                    <div key={axis} className="flex flex-col">
-                      <span className="text-[10px] text-gray-400 font-mono mb-1">{axis}</span>
-                      <input 
-                        type="number" 
-                        step="0.5"
-                        value={defaultCameraPosition[i]}
-                        onChange={(e) => {
-                          const newPos = [...defaultCameraPosition] as [number, number, number];
-                          newPos[i] = parseFloat(e.target.value) || 0;
-                          setDefaultCameraPosition(newPos);
-                          window.dispatchEvent(new CustomEvent('set-camera', { 
-                            detail: { position: newPos, target: defaultCameraTarget || [0, 0, 0] } 
-                          }));
-                        }}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-trimble-blue outline-none"
-                      />
-                    </div>
                   ))}
                 </div>
               </div>
-            </div>
 
-            <p className="text-[10px] text-gray-400 italic">These settings define the starting view and framing for new models and perspective resets.</p>
-          </div>
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Appearance</label>
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    {theme === 'light' ? <Sun size={18} className="text-orange-500" /> : <Moon size={18} className="text-indigo-500" />}
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{theme === 'light' ? 'Light Mode' : 'Dark Mode'}</span>
+                  </div>
+                  <button 
+                    onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                    className={cn(
+                      "w-10 h-5 rounded-full relative transition-colors",
+                      theme === 'light' ? "bg-gray-300" : "bg-trimble-blue"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
+                      theme === 'light' ? "left-0.5" : "left-5.5"
+                    )} />
+                  </button>
+                </div>
+              </div>
 
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Toolbar Layout</label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
-              <button
-                type="button"
-                onClick={() => setLayoutMode('classic')}
-                className={cn(
-                  "py-2 text-xs font-bold rounded-md transition-all",
-                  layoutMode === 'classic' 
-                    ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
-                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                )}
-              >
-                Classic
-              </button>
-              <button
-                type="button"
-                onClick={() => setLayoutMode('unified')}
-                className={cn(
-                  "py-2 text-xs font-bold rounded-md transition-all",
-                  layoutMode === 'unified' 
-                    ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
-                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                )}
-              >
-                Unified
-              </button>
-            </div>
-            <p className="text-[10px] text-gray-400 italic">Choose between separate sidebars (Classic) or a consolidated tool palette (Unified).</p>
-          </div>
-
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Interface Visibility</label>
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-              <CollapsibleSection title="Toolbars" className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg px-2" defaultOpen={true}>
-                <VisibilityToggle 
-                  label="Standard 3D Modeling Toolbar"
-                  isVisible={isBasicToolbarEnabled}
-                  onToggle={() => setIsBasicToolbarEnabled(!isBasicToolbarEnabled)}
-                />
-                <VisibilityToggle 
-                  label="Basic Architecture Toolbar"
-                  isVisible={isArchitectureToolbarEnabled}
-                  onToggle={() => setIsArchitectureToolbarEnabled(!isArchitectureToolbarEnabled)}
-                />
-                <VisibilityToggle 
-                  label="Landscapes Toolbar"
-                  isVisible={isLandscapesToolbarEnabled}
-                  onToggle={() => setIsLandscapesToolbarEnabled(!isLandscapesToolbarEnabled)}
-                />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
-                {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'orbit', 'pan', 'zoom', 'component'].map(tool => (
-                  <VisibilityToggle 
-                    key={tool}
-                    label={tool === 'component' ? 'Make Component' : tool.charAt(0).toUpperCase() + tool.slice(1)}
-                    isVisible={toolbarVisibility[tool] !== false}
-                    onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
-                  />
-                ))}
-              </CollapsibleSection>
-              
-              <CollapsibleSection title="Right Panels" className="bg-orange-50/50 rounded-lg px-2">
-                {['entity', 'outliner', 'materials', 'styles', 'tags', 'scenes', 'shadows', 'components'].map(panel => (
-                  <VisibilityToggle 
-                    key={panel}
-                    label={panel === 'shadows' ? 'Visualisation' : panel.charAt(0).toUpperCase() + panel.slice(1)}
-                    isVisible={panelVisibility[panel] !== false}
-                    onToggle={() => setPanelVisibility({ ...panelVisibility, [panel]: panelVisibility[panel] === false })}
-                  />
-                ))}
-              </CollapsibleSection>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Banner Color</label>
-            <div className="flex flex-wrap gap-2">
-              {['#0063A3', '#18181b', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6'].map(color => (
-                <button 
-                  key={color}
-                  onClick={() => setBannerColor(color)}
-                  className={cn(
-                    "w-8 h-8 rounded-full border-2 transition-transform hover:scale-110",
-                    bannerColor === color ? "border-white ring-2 ring-trimble-blue" : "border-transparent"
-                  )}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-              <div className="relative">
-                <input 
-                  type="color" 
-                  value={bannerColor} 
-                  onChange={(e) => setBannerColor(e.target.value)}
-                  className="w-8 h-8 rounded-full border-2 border-transparent cursor-pointer opacity-0 absolute inset-0"
-                />
-                <div className="w-8 h-8 rounded-full border-2 border-gray-200 flex items-center justify-center bg-white">
-                  <Palette size={14} className="text-gray-400" />
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Banner Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {['#0063A3', '#18181b', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6'].map(color => (
+                    <button 
+                      key={color}
+                      onClick={() => setBannerColor(color)}
+                      className={cn(
+                        "w-8 h-8 rounded-full border-2 transition-transform hover:scale-110",
+                        bannerColor === color ? "border-white ring-2 ring-trimble-blue" : "border-transparent"
+                      )}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                  <div className="relative">
+                    <input 
+                      type="color" 
+                      value={bannerColor} 
+                      onChange={(e) => setBannerColor(e.target.value)}
+                      className="w-8 h-8 rounded-full border-2 border-transparent cursor-pointer opacity-0 absolute inset-0"
+                    />
+                    <div className="w-8 h-8 rounded-full border-2 border-gray-200 flex items-center justify-center bg-white">
+                      <Palette size={14} className="text-gray-400" />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* API Keys Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <KeyRound size={14} className="text-gray-400" />
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">API Keys</label>
-            </div>
+          {/* TAB 2: CAMERA / ZOOM */}
+          {settingsTab === 'camera' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Default Zoom Level & Framing</label>
+                  <button 
+                    onClick={() => {
+                      const defaultPos: [number, number, number] = [14, 12, 16];
+                      setDefaultCameraPosition(defaultPos);
+                      window.dispatchEvent(new CustomEvent('set-camera', { 
+                        detail: { position: defaultPos, target: defaultCameraTarget || [0, 0, 0] } 
+                      }));
+                    }}
+                    className="text-[10px] text-trimble-blue font-bold hover:underline"
+                  >
+                    Reset to 1.0x (10m × 10m)
+                  </button>
+                </div>
 
-            <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Google Maps API Key</span>
-                {googleMapsApiKey ? (
-                  <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
-                    <CheckCircle2 size={12} /> Configured
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-                    <AlertTriangle size={12} /> Not set
-                  </span>
-                )}
-              </div>
-              <div className="relative">
-                <input
-                  type={showMapsKey ? 'text' : 'password'}
-                  value={googleMapsApiKey}
-                  onChange={(e) => setGoogleMapsApiKey(e.target.value)}
-                  placeholder="Paste your Google Maps API key"
-                  className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowMapsKey(!showMapsKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  {showMapsKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Powers WorldView's Satellite &amp; 3D Photorealistic map and in-model geolocation imagery. Enable the "Maps JavaScript API" on your key.{' '}
-                <a
-                  href="https://console.cloud.google.com/google/maps-apis/credentials"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
-                >
-                  Get a key <ExternalLink size={10} />
-                </a>
-              </p>
-            </div>
+                {/* Preset Zoom Level Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    {
+                      id: 'detail',
+                      label: '0.5x Scale (Detail)',
+                      targetSize: '2m – 5m objects',
+                      pos: [7, 6, 8] as [number, number, number],
+                      goodFor: 'Good for furniture, doors, windows, staircases, cabinetry, and fine joinery'
+                    },
+                    {
+                      id: 'standard',
+                      label: '1.0x Scale (Standard Default)',
+                      targetSize: '10m × 10m objects',
+                      pos: [14, 12, 16] as [number, number, number],
+                      goodFor: 'Optimal for 10m × 10m rooms, single-story structures, timber frames, and architectural layouts'
+                    },
+                    {
+                      id: 'building',
+                      label: '2.0x Scale (Medium Building)',
+                      targetSize: '20m – 30m objects',
+                      pos: [28, 24, 32] as [number, number, number],
+                      goodFor: 'Good for multi-room residences, duplexes, commercial suites, and full floor plans'
+                    },
+                    {
+                      id: 'site',
+                      label: '5.0x Scale (Site / Masterplan)',
+                      targetSize: '50m – 100m+ objects',
+                      pos: [65, 55, 75] as [number, number, number],
+                      goodFor: 'Good for large site plots, subdivisions, landscaping terrain, and urban massing models'
+                    }
+                  ].map((preset) => {
+                    const isCurrent = Math.abs(defaultCameraPosition[0] - preset.pos[0]) < 2 &&
+                                     Math.abs(defaultCameraPosition[1] - preset.pos[1]) < 2 &&
+                                     Math.abs(defaultCameraPosition[2] - preset.pos[2]) < 2;
 
-            <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Hugging Face API Token</span>
-                {hfTokenInput ? (
-                  <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
-                    <CheckCircle2 size={12} /> Configured
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-                    <AlertTriangle size={12} /> Not set
-                  </span>
-                )}
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setDefaultCameraPosition(preset.pos);
+                          window.dispatchEvent(new CustomEvent('set-camera', { 
+                            detail: { position: preset.pos, target: defaultCameraTarget || [0, 0, 0] } 
+                          }));
+                        }}
+                        className={cn(
+                          "text-left p-2.5 rounded-lg border transition-all flex flex-col justify-between",
+                          isCurrent
+                            ? "bg-trimble-blue/10 border-trimble-blue text-gray-900 dark:text-white shadow-sm ring-1 ring-trimble-blue/30"
+                            : "bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-trimble-blue/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        )}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="text-xs font-bold">{preset.label}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-gray-600 dark:text-gray-300">
+                            {preset.targetSize}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                          {preset.goodFor}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Custom Coordinates */}
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1.5">Custom Camera Position (X, Y, Z meters)</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['X', 'Y', 'Z'] as const).map((axis, i) => (
+                      <div key={axis} className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 font-mono mb-1">{axis}</span>
+                        <input 
+                          type="number" 
+                          step="0.5"
+                          value={defaultCameraPosition[i]}
+                          onChange={(e) => {
+                            const newPos = [...defaultCameraPosition] as [number, number, number];
+                            newPos[i] = parseFloat(e.target.value) || 0;
+                            setDefaultCameraPosition(newPos);
+                            window.dispatchEvent(new CustomEvent('set-camera', { 
+                              detail: { position: newPos, target: defaultCameraTarget || [0, 0, 0] } 
+                            }));
+                          }}
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-trimble-blue outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="relative">
-                <input
-                  type={showHfToken ? 'text' : 'password'}
-                  value={hfTokenInput}
-                  onChange={(e) => {
-                    setHfTokenInput(e.target.value);
-                    HuggingFaceService.setToken(e.target.value);
-                  }}
-                  placeholder="hf_..."
-                  className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowHfToken(!showHfToken)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  {showHfToken ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Powers AI Photo-to-3D and AI PBR material generation. Free "read" token from{' '}
-                <a
-                  href="https://huggingface.co/settings/tokens"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
-                >
-                  huggingface.co/settings/tokens <ExternalLink size={10} />
-                </a>
-              </p>
+
+              <p className="text-[10px] text-gray-400 italic">These settings define the starting view and framing for new models and perspective resets.</p>
             </div>
-          </div>
+          )}
+
+          {/* TAB 3: TOOLBARS */}
+          {settingsTab === 'toolbars' && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Toolbar Layout</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setLayoutMode('classic')}
+                    className={cn(
+                      "py-2 text-xs font-bold rounded-md transition-all",
+                      layoutMode === 'classic' 
+                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                        : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    )}
+                  >
+                    Classic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLayoutMode('unified')}
+                    className={cn(
+                      "py-2 text-xs font-bold rounded-md transition-all",
+                      layoutMode === 'unified' 
+                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                        : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    )}
+                  >
+                    Unified
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 italic">Choose between separate sidebars (Classic) or a consolidated tool palette (Unified).</p>
+              </div>
+
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Interface Visibility</label>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                  <CollapsibleSection title="Toolbars" className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg px-2" defaultOpen={true}>
+                    <VisibilityToggle 
+                      label="Standard 3D Modeling Toolbar"
+                      isVisible={isBasicToolbarEnabled}
+                      onToggle={() => setIsBasicToolbarEnabled(!isBasicToolbarEnabled)}
+                    />
+                    <VisibilityToggle 
+                      label="Basic Architecture Toolbar"
+                      isVisible={isArchitectureToolbarEnabled}
+                      onToggle={() => setIsArchitectureToolbarEnabled(!isArchitectureToolbarEnabled)}
+                    />
+                    <VisibilityToggle 
+                      label="Landscapes Toolbar"
+                      isVisible={isLandscapesToolbarEnabled}
+                      onToggle={() => setIsLandscapesToolbarEnabled(!isLandscapesToolbarEnabled)}
+                    />
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                    {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'orbit', 'pan', 'zoom', 'component'].map(tool => (
+                      <VisibilityToggle 
+                        key={tool}
+                        label={tool === 'component' ? 'Make Component' : tool.charAt(0).toUpperCase() + tool.slice(1)}
+                        isVisible={toolbarVisibility[tool] !== false}
+                        onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
+                      />
+                    ))}
+                  </CollapsibleSection>
+                  
+                  <CollapsibleSection title="Right Panels" className="bg-orange-50/50 rounded-lg px-2">
+                    {['entity', 'outliner', 'materials', 'styles', 'tags', 'scenes', 'shadows', 'components'].map(panel => (
+                      <VisibilityToggle 
+                        key={panel}
+                        label={panel === 'shadows' ? 'Visualisation' : panel.charAt(0).toUpperCase() + panel.slice(1)}
+                        isVisible={panelVisibility[panel] !== false}
+                        onToggle={() => setPanelVisibility({ ...panelVisibility, [panel]: panelVisibility[panel] === false })}
+                      />
+                    ))}
+                  </CollapsibleSection>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: API */}
+          {settingsTab === 'api' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Google Maps API Key</span>
+                  {googleMapsApiKey ? (
+                    <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                      <CheckCircle2 size={12} /> Configured
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                      <AlertTriangle size={12} /> Not set
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type={showMapsKey ? 'text' : 'password'}
+                    value={googleMapsApiKey}
+                    onChange={(e) => setGoogleMapsApiKey(e.target.value)}
+                    placeholder="Paste your Google Maps API key"
+                    className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowMapsKey(!showMapsKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showMapsKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Powers WorldView's Satellite &amp; 3D Photorealistic map and in-model geolocation imagery. Enable the "Maps JavaScript API" on your key.{' '}
+                  <a
+                    href="https://console.cloud.google.com/google/maps-apis/credentials"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
+                  >
+                    Get a key <ExternalLink size={10} />
+                  </a>
+                </p>
+              </div>
+
+              <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Hugging Face API Token</span>
+                  {hfTokenInput ? (
+                    <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                      <CheckCircle2 size={12} /> Configured
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                      <AlertTriangle size={12} /> Not set
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type={showHfToken ? 'text' : 'password'}
+                    value={hfTokenInput}
+                    onChange={(e) => {
+                      setHfTokenInput(e.target.value);
+                      HuggingFaceService.setToken(e.target.value);
+                    }}
+                    placeholder="hf_..."
+                    className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowHfToken(!showHfToken)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showHfToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Powers AI Photo-to-3D and AI PBR material generation. Free "read" token from{' '}
+                  <a
+                    href="https://huggingface.co/settings/tokens"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
+                  >
+                    huggingface.co/settings/tokens <ExternalLink size={10} />
+                  </a>
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     </header>

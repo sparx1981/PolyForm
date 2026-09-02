@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Shape } from '../types';
 import { computeStairHoleForSlab } from './archStairwell';
 
-export type RoofType = 'gable' | 'hip';
+export type RoofType = 'gable' | 'hip' | 'parapet';
 
 export interface RoofParams {
   roofType: RoofType;
@@ -12,6 +12,9 @@ export interface RoofParams {
   eaveOverhang?: number;     // e.g. 0.30 m
   roofThickness?: number;    // e.g. 0.12 m
   fasciaHeight?: number;     // e.g. 0.18 m
+  parapetHeight?: number;    // e.g. 0.60 m (for parapet flat roofs)
+  parapetThickness?: number; // e.g. 0.20 m
+  copingColor?: string;      // e.g. '#334155'
   color?: string;
   ridgeCapColor?: string;
   fasciaColor?: string;
@@ -97,9 +100,13 @@ export function getRoomBoundingEnvelope(roomWalls: Shape[]): BuildingEnvelope | 
   for (const wall of roomWalls) {
     if (wall.hidden) continue;
 
-    const wallL = Array.isArray(wall.args) ? wall.args[0] || 3.0 : 3.0;
+    const arg0 = Array.isArray(wall.args) ? wall.args[0] || 3.0 : 3.0;
     const wallH = Array.isArray(wall.args) ? wall.args[1] || 2.8 : 2.8;
-    const wallT = Array.isArray(wall.args) ? wall.args[2] || 0.2 : 0.2;
+    const arg2 = Array.isArray(wall.args) ? wall.args[2] || 0.2 : 0.2;
+    const isUnrotatedZ = arg2 > arg0 && (!wall.rotation || (wall.rotation[0] === 0 && wall.rotation[1] === 0 && wall.rotation[2] === 0)) && (!wall.quaternion || (wall.quaternion[0] === 0 && wall.quaternion[1] === 0 && wall.quaternion[2] === 0));
+
+    const wallL = isUnrotatedZ ? arg2 : arg0;
+    const wallT = isUnrotatedZ ? arg0 : arg2;
 
     avgThickness += wallT;
     wallCount++;
@@ -116,7 +123,12 @@ export function getRoomBoundingEnvelope(roomWalls: Shape[]): BuildingEnvelope | 
       : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(wall.rotation || [0, 0, 0])));
 
     // 4 local horizontal corner offsets
-    const localCorners = [
+    const localCorners = isUnrotatedZ ? [
+      new THREE.Vector3(-halfT, 0, -halfL),
+      new THREE.Vector3(halfT, 0, -halfL),
+      new THREE.Vector3(halfT, 0, halfL),
+      new THREE.Vector3(-halfT, 0, halfL),
+    ] : [
       new THREE.Vector3(-halfL, 0, -halfT),
       new THREE.Vector3(halfL, 0, -halfT),
       new THREE.Vector3(halfL, 0, halfT),
@@ -199,12 +211,16 @@ export function extractRoomFootprintPolygon(
     const segments: { pA: THREE.Vector2; pB: THREE.Vector2 }[] = [];
     for (const w of roomWalls) {
       if (w.hidden) continue;
-      const wallL = Array.isArray(w.args) ? w.args[0] || 3.0 : 3.0;
+      const arg0 = Array.isArray(w.args) ? w.args[0] || 3.0 : 3.0;
+      const arg2 = Array.isArray(w.args) ? w.args[2] || 0.2 : 0.2;
+      const isUnrotatedZ = arg2 > arg0 && (!w.rotation || (w.rotation[0] === 0 && w.rotation[1] === 0 && w.rotation[2] === 0)) && (!w.quaternion || (w.quaternion[0] === 0 && w.quaternion[1] === 0 && w.quaternion[2] === 0));
+
+      const wallL = isUnrotatedZ ? arg2 : arg0;
       const halfL = wallL / 2;
       const quat = w.quaternion
         ? new THREE.Quaternion(...w.quaternion)
         : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(w.rotation || [0, 0, 0])));
-      const dir3D = new THREE.Vector3(1, 0, 0).applyQuaternion(quat);
+      const dir3D = (isUnrotatedZ ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0)).applyQuaternion(quat);
       const dir2D = new THREE.Vector2(dir3D.x, dir3D.z).normalize();
       
       const pA = new THREE.Vector2(w.position[0] - dir2D.x * halfL, w.position[2] - dir2D.y * halfL);
@@ -1026,7 +1042,7 @@ function distToPolygonBoundary2D(px: number, pz: number, polygon: [number, numbe
 /**
  * Extracts the 6 canonical ordered vertices of an L-shape starting at the reflex corner.
  */
-function getCanonicalLPolygon(poly: [number, number][], reflexIdx: number): [number, number][] {
+export function getCanonicalLPolygon(poly: [number, number][], reflexIdx: number): [number, number][] {
   const n = poly.length;
   const canon: [number, number][] = [];
   for (let i = 0; i < n; i++) {
@@ -1038,7 +1054,7 @@ function getCanonicalLPolygon(poly: [number, number][], reflexIdx: number): [num
 /**
  * Computes canonical roof ridge & junction points for an L-shape.
  */
-function computeLRidgeNodes(
+export function computeLRidgeNodes(
   wallPolyCanon: [number, number][],
   eavePolyCanon: [number, number][],
   ridgeHeight: number,
@@ -1363,6 +1379,105 @@ export function createGeneralPolygonalRoofSlopesGeometry(
 export const createGableRoofGeometry = createDetailedGableRoofGeometry;
 export const createHipRoofGeometry = createDetailedHipRoofGeometry;
 
+/**
+ * 8. Parapet Walls & Deck Geometry (Perimeter upstand walls + flat membrane roof deck)
+ */
+export function createParapetWallsGeometry(
+  outerPoly: [number, number][],
+  innerPoly: [number, number][],
+  parapetHeight: number = 0.60
+): THREE.BufferGeometry {
+  return createGeometryFromBuilder((addTriangle, addQuad) => {
+    const n = Math.min(outerPoly.length, innerPoly.length);
+    const h = parapetHeight;
+
+    // 1. Outer vertical perimeter faces
+    for (let i = 0; i < n; i++) {
+      const o1 = outerPoly[i];
+      const o2 = outerPoly[(i + 1) % n];
+      const o1_bot: [number, number, number] = [o1[0], 0, o1[1]];
+      const o2_bot: [number, number, number] = [o2[0], 0, o2[1]];
+      const o2_top: [number, number, number] = [o2[0], h, o2[1]];
+      const o1_top: [number, number, number] = [o1[0], h, o1[1]];
+      addQuad(o1_bot, o2_bot, o2_top, o1_top);
+    }
+
+    // 2. Inner vertical perimeter faces
+    for (let i = 0; i < n; i++) {
+      const i1 = innerPoly[i];
+      const i2 = innerPoly[(i + 1) % n];
+      const i1_bot: [number, number, number] = [i1[0], 0.05, i1[1]];
+      const i2_bot: [number, number, number] = [i2[0], 0.05, i2[1]];
+      const i2_top: [number, number, number] = [i2[0], h, i2[1]];
+      const i1_top: [number, number, number] = [i1[0], h, i1[1]];
+      // Faces inward into the roof deck
+      addQuad(i2_bot, i1_bot, i1_top, i2_top);
+    }
+
+    // 3. Flat roof membrane/deck inside innerPoly
+    let cx = 0, cz = 0;
+    for (const p of innerPoly) {
+      cx += p[0];
+      cz += p[1];
+    }
+    cx /= (innerPoly.length || 1);
+    cz /= (innerPoly.length || 1);
+    const center3D: [number, number, number] = [cx, 0.05, cz];
+
+    for (let i = 0; i < n; i++) {
+      const p1 = innerPoly[i];
+      const p2 = innerPoly[(i + 1) % n];
+      const p1_3d: [number, number, number] = [p1[0], 0.05, p1[1]];
+      const p2_3d: [number, number, number] = [p2[0], 0.05, p2[1]];
+      // Facing up (+Y)
+      addTriangle(p1_3d, p2_3d, center3D, [0, 1, 0]);
+    }
+  });
+}
+
+/**
+ * 9. Parapet Coping Cap Geometry (Continuous stone or metal coping over parapet wall top)
+ */
+export function createParapetCopingGeometry(
+  outerPoly: [number, number][],
+  innerPoly: [number, number][],
+  parapetHeight: number = 0.60,
+  copingHeight: number = 0.06,
+  copingOverhang: number = 0.04
+): THREE.BufferGeometry {
+  return createGeometryFromBuilder((_addTriangle, addQuad) => {
+    const copOuter = offsetPolygon2D(outerPoly, copingOverhang);
+    const copInner = insetPolygon2D(innerPoly, copingOverhang);
+    const n = Math.min(copOuter.length, copInner.length);
+    const topY = parapetHeight + copingHeight;
+    const botY = parapetHeight;
+
+    for (let i = 0; i < n; i++) {
+      const o1 = copOuter[i];
+      const o2 = copOuter[(i + 1) % n];
+      const in1 = copInner[i];
+      const in2 = copInner[(i + 1) % n];
+
+      // Top horizontal coping surface
+      const o1_top: [number, number, number] = [o1[0], topY, o1[1]];
+      const o2_top: [number, number, number] = [o2[0], topY, o2[1]];
+      const in2_top: [number, number, number] = [in2[0], topY, in2[1]];
+      const in1_top: [number, number, number] = [in1[0], topY, in1[1]];
+      addQuad(o1_top, o2_top, in2_top, in1_top, [0, 1, 0]);
+
+      // Outer drip fascia edge
+      const o1_bot: [number, number, number] = [o1[0], botY - 0.02, o1[1]];
+      const o2_bot: [number, number, number] = [o2[0], botY - 0.02, o2[1]];
+      addQuad(o1_bot, o2_bot, o2_top, o1_top);
+
+      // Inner drip edge
+      const in1_bot: [number, number, number] = [in1[0], botY, in1[1]];
+      const in2_bot: [number, number, number] = [in2[0], botY, in2[1]];
+      addQuad(in2_bot, in1_bot, in1_top, in2_top);
+    }
+  });
+}
+
 export interface RoofAssemblyResult {
   roofShape: Shape;
   fasciaShape: Shape;
@@ -1402,11 +1517,91 @@ export function buildRoofAssemblyForRoom(
   }
 
   const isHip = params.roofType === 'hip';
+  const isParapet = params.roofType === 'parapet';
   const roofId = `roof_${Math.random().toString(36).substr(2, 9)}`;
 
   // Convert world polygon to local coordinates centered at (centerX, centerZ)
   const localWallPoly: [number, number][] = worldPoly.map(([x, z]) => [x - centerX, z - centerZ]);
-  const localEavePoly: [number, number][] = offsetPolygon2D(localWallPoly, eaveOverhang);
+  const localEavePoly: [number, number][] = offsetPolygon2D(localWallPoly, isParapet ? 0 : eaveOverhang);
+
+  if (isParapet) {
+    const parapetH = params.parapetHeight ?? 0.60;
+    const parapetThick = params.parapetThickness ?? (bounds.wallThickness || 0.20);
+    const localInnerPoly = insetPolygon2D(localWallPoly, parapetThick);
+
+    const parapetWallGeom = createParapetWallsGeometry(localWallPoly, localInnerPoly, parapetH);
+    const copingGeom = createParapetCopingGeometry(localWallPoly, localInnerPoly, parapetH);
+
+    const roofShape: Shape = {
+      id: roofId,
+      name: `Parapet Roof (${width.toFixed(1)}m × ${depth.toFixed(1)}m)`,
+      type: 'custom',
+      position: [centerX, topY, centerZ],
+      rotation: [0, 0, 0],
+      args: [width, parapetH, depth],
+      color: params.color || '#475569',
+      roughness: 0.85,
+      metalness: 0.05,
+      geometryData: {
+        positions: Array.from(parapetWallGeom.attributes.position.array),
+        normals: Array.from(parapetWallGeom.attributes.normal.array),
+        uvs: parapetWallGeom.attributes.uv ? Array.from(parapetWallGeom.attributes.uv.array) : undefined,
+      },
+      roofData: {
+        roofType: 'parapet',
+        isLShape,
+        isRectangular,
+        reflexIndex,
+        ridgeHeight: parapetH,
+        eaveOverhang: 0,
+        pitchAngleDeg: 0,
+        localWallPoly,
+        localEavePoly: localWallPoly,
+        worldWallPoly: worldPoly,
+        bounds,
+      },
+      customData: {
+        roofType: 'parapet',
+        isLShape,
+        isRectangular,
+        reflexIndex,
+        ridgeHeight: parapetH,
+        eaveOverhang: 0,
+        pitchAngleDeg: 0,
+        localWallPoly,
+        localEavePoly: localWallPoly,
+        worldWallPoly: worldPoly,
+        bounds,
+      },
+      tags: ['architecture', 'roof-structure', 'roof-assembly', 'roof-parapet'],
+    };
+
+    const copingShape: Shape = {
+      id: `coping_${Math.random().toString(36).substr(2, 9)}`,
+      name: `Parapet Coping Stones Cap`,
+      type: 'custom',
+      position: [centerX, topY, centerZ],
+      rotation: [0, 0, 0],
+      args: [width, 0.06, depth],
+      parentShapeId: roofId,
+      color: params.copingColor || params.ridgeCapColor || '#1e293b',
+      roughness: 0.5,
+      metalness: 0.1,
+      geometryData: {
+        positions: Array.from(copingGeom.attributes.position.array),
+        normals: Array.from(copingGeom.attributes.normal.array),
+        uvs: copingGeom.attributes.uv ? Array.from(copingGeom.attributes.uv.array) : undefined,
+      },
+      tags: ['architecture', 'roof-coping', 'roof-part'],
+    };
+
+    return {
+      roofShape,
+      fasciaShape: copingShape,
+      ridgeCapShape: copingShape,
+      allShapes: [roofShape, copingShape],
+    };
+  }
 
   let slopesGeom: THREE.BufferGeometry;
   let pedimentGeom: THREE.BufferGeometry | null = null;
@@ -1472,6 +1667,32 @@ export function buildRoofAssemblyForRoom(
       positions: Array.from(slopesGeom.attributes.position.array),
       normals: Array.from(slopesGeom.attributes.normal.array),
       uvs: slopesGeom.attributes.uv ? Array.from(slopesGeom.attributes.uv.array) : undefined,
+    },
+    roofData: {
+      roofType: params.roofType,
+      isLShape,
+      isRectangular,
+      reflexIndex,
+      ridgeHeight: ridgeH,
+      eaveOverhang,
+      pitchAngleDeg: params.pitchAngleDeg,
+      localWallPoly,
+      localEavePoly,
+      worldWallPoly: worldPoly,
+      bounds,
+    },
+    customData: {
+      roofType: params.roofType,
+      isLShape,
+      isRectangular,
+      reflexIndex,
+      ridgeHeight: ridgeH,
+      eaveOverhang,
+      pitchAngleDeg: params.pitchAngleDeg,
+      localWallPoly,
+      localEavePoly,
+      worldWallPoly: worldPoly,
+      bounds,
     },
     tags: ['architecture', 'roof-structure', 'roof-assembly', 'roof-slopes'],
   };
@@ -1752,9 +1973,9 @@ export function buildCeilingSlabForRoom(
   if (staircases.length > 0) {
     const holes: [number, number][][] = [];
     for (const stair of staircases) {
-      const hole = computeStairHoleForSlab(stair, slabShape);
-      if (hole) {
-        holes.push(hole);
+      const holeData = computeStairHoleForSlab(stair, slabShape);
+      if (holeData) {
+        holes.push(holeData.hole2D);
       }
     }
     if (holes.length > 0) {

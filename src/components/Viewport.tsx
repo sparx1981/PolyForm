@@ -78,15 +78,20 @@ import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
-import { buildRoomAssembly } from '../lib/archRoomAssembly';
+import { buildRoomAssembly, orientRoomWallsToExterior } from '../lib/archRoomAssembly';
 import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
-import { buildRoofShapeForRoom, buildNextFloorLevel } from '../lib/archRoofGenerator';
-import { applyStairwellHolesToSlabs } from '../lib/archStairwell';
+import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
+import { applyStairwellHolesToSlabs, computeHolesForSlab } from '../lib/archStairwell';
+import { updateTimberFramesIfPresent } from '../lib/timberFrameGenerator';
+import { BezierTool } from '../tools/bezier/BezierTool';
+import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
+import { tessellateEntireCurve, tessellateBezierSpan } from '../tools/bezier/tessellate';
+import { BezierKnot, BezierCurveState } from '../tools/bezier/types';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
 const KERNEL_SNAP_TOOLS: string[] = [
-  'line', 'arc', 'rectangle', 'circle', 'poly', 'triangle', 'measurement',
+  'line', 'poly', 'bezier', 'arc', 'rectangle', 'circle', 'polygon', 'triangle', 'measurement',
 ];
 
 // Module-level texture cache: avoids re-creating (and re-downloading) a THREE.Texture
@@ -1270,6 +1275,7 @@ function Scene() {
     setLastInteractionData,
     diagLog,
     contactFrictionEnabled,
+    contactFrictionStrength,
     autoOrbitEnabled,
     orbitRotationSpeed,
     isAIGenerateOpen,
@@ -1297,6 +1303,8 @@ function Scene() {
     activeStory,
     setActiveStory
   } = useApp();
+
+  const { raycaster, mouse, camera, scene, gl } = useThree();
 
   // Shared by every click path that can complete a "Pick Sun Centre"
   // pick (Shape mesh, kernel face, the floor plane, and the always-
@@ -1426,12 +1434,19 @@ function Scene() {
       return;
     }
     if (activeTool === 'eraser') {
-      // Removes the face AND every edge used only by it, so nothing is left
-      // behind. Edges shared with a neighbour are kept, or that neighbour
-      // would be destroyed too.
-      deleteFaceAndEdges(kernelHost.graph, faceId);
-      bumpKernel();
-      setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
+      if (event.shiftKey) {
+        // Shift-click deletes a single surface/face
+        deleteFaceAndEdges(kernelHost.graph, faceId);
+        bumpKernel();
+        setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
+      } else {
+        // Plain click on an object deletes all of that object's surfaces
+        const group = groupContaining(kernelHost.graph, faceId);
+        deleteGroupFacesAndEdges(kernelHost.graph, group);
+        bumpKernel();
+        const groupSet = new Set(group);
+        setSelectedFaceIds(prev => prev.filter(f => !groupSet.has(f)));
+      }
       return;
     }
 
@@ -1471,6 +1486,57 @@ function Scene() {
   //
   // The existing TransformControls wiring above drives exactly one Shape's
   // position/quaternion/scale and writes the result back on release --
+  const checkCollision = useCallback((id: string, target: THREE.Object3D | THREE.Box3) => {
+    let box: THREE.Box3;
+    if (target instanceof THREE.Box3) {
+      box = target.clone();
+    } else {
+      target.updateWorldMatrix(true, true);
+      box = new THREE.Box3().setFromObject(target);
+    }
+    if (box.isEmpty()) return false;
+    // Shrink slightly to avoid grazing contacts triggering false positives
+    const testBox = box.clone().expandByScalar(-0.005);
+
+    let collided = false;
+    scene.traverse(child => {
+      if (collided) return;
+      // Skip the target object and any of its hierarchy
+      let curr: THREE.Object3D | null = child;
+      let isSelf = false;
+      while (curr) {
+        if (curr.userData?.id === id || (target instanceof THREE.Object3D && curr === target)) {
+          isSelf = true;
+          break;
+        }
+        curr = curr.parent;
+      }
+      if (isSelf) return;
+
+      // Check if child is a valid visible scene shape, group or mesh
+      if (child instanceof THREE.Mesh && child.geometry) {
+        const isShape = child.userData?.isShape || child.userData?.isKernelGeometry || child.userData?.id || (child.parent && child.parent.userData?.isShape);
+        if (isShape) {
+          child.updateWorldMatrix(true, false);
+          const otherBox = new THREE.Box3().setFromObject(child);
+          if (!otherBox.isEmpty() && testBox.intersectsBox(otherBox)) {
+            collided = true;
+          }
+        }
+      }
+    });
+    return collided;
+  }, [scene]);
+
+  const getSceneObjectById = useCallback((id: string | null) => {
+    if (!id) return null;
+    let found: THREE.Object3D | null = null;
+    scene.traverse(obj => {
+      if (obj.userData?.id === id) found = obj;
+    });
+    return found;
+  }, [scene]);
+
   // there is no way to hand it "these six faces" and have it mean anything
   // (grouptransform.ts's own doc comment goes into why). This attaches the
   // SAME gizmo to an invisible dummy pivot object instead, and translates
@@ -1518,6 +1584,34 @@ function Scene() {
     if (activeTool === 'move') {
       const start = groupTransformStartRef.current;
       if (!start) return;
+
+      if (contactFrictionEnabled) {
+        const now = Date.now();
+        if (now < frictionPausedUntilRef.current) {
+          if (lastValidPosRef.current) {
+            pivot.position.copy(lastValidPosRef.current);
+          }
+          return;
+        }
+
+        const pivotBox = new THREE.Box3().setFromObject(pivot);
+        pivotBox.expandByScalar(-0.02);
+        const isColliding = checkCollision('kernel-group-transform', pivotBox);
+        if (isColliding && !hasReachedFrictionRef.current) {
+          hasReachedFrictionRef.current = true;
+          const pauseMs = Math.round(60 + ((contactFrictionStrength ?? 50) / 100) * 440);
+          frictionPausedUntilRef.current = now + pauseMs;
+          if (lastValidPosRef.current) {
+            pivot.position.copy(lastValidPosRef.current);
+          }
+          return;
+        }
+        if (!isColliding) {
+          hasReachedFrictionRef.current = false;
+        }
+        lastValidPosRef.current = pivot.position.clone();
+      }
+
       binding.updateTranslate({
         x: pivot.position.x - start.x,
         y: pivot.position.y - start.y,
@@ -1541,7 +1635,7 @@ function Scene() {
 
     const session = binding.session;
     if (session) setGroupTransformPreview({ faces: session.faces, matrix: session.matrix });
-  }, [activeTool]);
+  }, [activeTool, contactFrictionEnabled, contactFrictionStrength, checkCollision]);
 
   const handleGroupTransformEnd = useCallback(() => {
     groupTransformActiveRef.current = false;
@@ -1696,7 +1790,6 @@ function Scene() {
   const pointerUpHandledRef = useRef<boolean>(false);
   const hasReachedFrictionRef = useRef<boolean>(false);
   const lastValidPosRef = useRef<THREE.Vector3 | null>(null);
-  const { raycaster, mouse, camera, scene, gl } = useThree();
 
   /**
    * Push/pull starts on PRESS, not click.
@@ -2171,31 +2264,6 @@ function Scene() {
   const selectedLightIdRef = useRef(selectedLightId);
   const isDraggingRef = useRef(false);
 
-  const checkCollision = (id: string, mesh: THREE.Mesh) => {
-    const box = new THREE.Box3().setFromObject(mesh);
-    // Shrink slightly to avoid grazing contacts triggering it too easily
-    box.expandByScalar(-0.01); 
-
-    for (const child of scene.children) {
-      if (child instanceof THREE.Mesh && child.userData.isShape && child.userData.id !== id) {
-        const otherBox = new THREE.Box3().setFromObject(child);
-        if (box.intersectsBox(otherBox)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  const getSceneObjectById = (id: string | null) => {
-    if (!id) return null;
-    let found: THREE.Object3D | null = null;
-    scene.traverse(obj => {
-      if (obj.userData?.id === id) found = obj;
-    });
-    return found;
-  };
-
   const captureDiagnosticData = (sIdOverride?: string | null) => {
     const sId = sIdOverride === undefined ? selectedIdRef.current : sIdOverride;
     const sLId = selectedLightIdRef.current;
@@ -2391,6 +2459,16 @@ function Scene() {
   const [polyCandidatePos, setPolyCandidatePos] = useState<THREE.Vector3 | null>(null);
   const [polyPlaneOnId, setPolyPlaneOnId] = useState<string | null>(null);
 
+  // Bézier Curve Tool State
+  const bezierToolRef = useRef<BezierTool>(new BezierTool());
+  const [bezierKnots, setBezierKnots] = useState<BezierKnot[]>([]);
+  const [bezierResolution, setBezierResolution] = useState<number>(24);
+  const [bezierActivePlane, setBezierActivePlane] = useState<THREE.Plane | null>(null);
+  const [bezierHoveredKnotIndex, setBezierHoveredKnotIndex] = useState<number | null>(null);
+  const [bezierCandidatePos, setBezierCandidatePos] = useState<THREE.Vector3 | null>(null);
+  const [isDraggingBezierHandle, setIsDraggingBezierHandle] = useState<boolean>(false);
+  const [bezierPlaneOnId, setBezierPlaneOnId] = useState<string | null>(null);
+
   const [wallVertices, setWallVertices] = useState<THREE.Vector3[]>([]);
   const [wallPlane, setWallPlane] = useState<THREE.Plane | null>(null);
   const [wallCandidatePos, setWallCandidatePos] = useState<THREE.Vector3 | null>(null);
@@ -2413,6 +2491,7 @@ function Scene() {
     railingMode?: string
   } | null>(null);
   const [stairRotationAngle, setStairRotationAngle] = useState<number>(0);
+  const [polygonSides, setPolygonSides] = useState<number>(6);
   
   // Push/Pull state
   const [pushPullState, setPushPullState] = useState<{
@@ -2584,6 +2663,19 @@ function Scene() {
     }
   }, [activeTool]);
 
+  // Listen for external polygon side count changes
+  useEffect(() => {
+    const handleSetSides = (e: CustomEvent<{ sides: number }>) => {
+      if (e.detail && typeof e.detail.sides === 'number' && e.detail.sides >= 3) {
+        setPolygonSides(Math.min(64, Math.max(3, Math.round(e.detail.sides))));
+      }
+    };
+    window.addEventListener('polyform:set-polygon-sides' as any, handleSetSides);
+    return () => {
+      window.removeEventListener('polyform:set-polygon-sides' as any, handleSetSides);
+    };
+  }, []);
+
   const finalizeRectangleInput = () => {
     if (!rectangleInputState.active || !rectangleInputState.startPoint) return;
     
@@ -2696,15 +2788,70 @@ function Scene() {
     wallDragStartRef.current = null;
   }, [setMeasurements]);
 
+  const findWallObstacleIntersection = useCallback((pA: THREE.Vector3, pB: THREE.Vector3) => {
+    const totalDist = pA.distanceTo(pB);
+    if (totalDist < 0.15) return null;
+
+    let closestHit: { hitPoint: THREE.Vector3; obstacleWall: Shape; dist: number } | null = null;
+    let minDist = totalDist;
+
+    shapes.forEach(sh => {
+      if (sh.hidden || sh.type !== 'wall') return;
+      const wL = Array.isArray(sh.args) ? sh.args[0] || 3.0 : 3.0;
+      const wH = Array.isArray(sh.args) ? sh.args[1] || 2.8 : 2.8;
+      const wPos = new THREE.Vector3(...sh.position);
+      const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion();
+
+      // Check vertical story level overlap
+      const wallMinY = wPos.y - wH / 2;
+      const wallMaxY = wPos.y + wH / 2;
+      if (pA.y < wallMinY - 0.4 || pA.y > wallMaxY + 0.4) return;
+
+      const vRun = new THREE.Vector3(1, 0, 0).applyQuaternion(wQuat).normalize();
+      const wP1 = wPos.clone().sub(vRun.clone().multiplyScalar(wL / 2));
+      const wP2 = wPos.clone().add(vRun.clone().multiplyScalar(wL / 2));
+
+      // 2D line segment intersection in XZ plane
+      const x1 = pA.x, z1 = pA.z;
+      const x2 = pB.x, z2 = pB.z;
+      const x3 = wP1.x, z3 = wP1.z;
+      const x4 = wP2.x, z4 = wP2.z;
+
+      const denom = (x1 - x2) * (z3 - z4) - (z1 - z2) * (x3 - x4);
+      if (Math.abs(denom) < 1e-5) return;
+
+      const t = ((x1 - x3) * (z3 - z4) - (z1 - z3) * (x3 - x4)) / denom;
+      const u = -((x1 - x2) * (z1 - z3) - (z1 - z2) * (x1 - x3)) / denom;
+
+      if (t > 0.08 && t <= 1.0 && u >= -0.02 && u <= 1.02) {
+        const hitX = x1 + t * (x2 - x1);
+        const hitZ = z1 + t * (z2 - z1);
+        const hitPt = new THREE.Vector3(hitX, pA.y, hitZ);
+        const distFromStart = pA.distanceTo(hitPt);
+
+        if (distFromStart < minDist) {
+          minDist = distFromStart;
+          closestHit = { hitPoint: hitPt, obstacleWall: sh, dist: distFromStart };
+        }
+      }
+    });
+
+    return closestHit;
+  }, [shapes]);
+
   const createWallSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, wallHeight?: number, wallThickness?: number, justification?: WallJustification) => {
-    const dist = pA.distanceTo(pB);
+    // Prevent interior and multi-story walls from passing through existing obstacle walls
+    const obstacle = findWallObstacleIntersection(pA, pB);
+    const effectivePB = obstacle ? obstacle.hitPoint.clone() : pB;
+
+    const dist = pA.distanceTo(effectivePB);
     if (dist < 0.1) return null;
 
     const actualHeight = wallHeight ?? (wallToolSettings?.height || 2.8);
     const actualThickness = wallThickness ?? (wallToolSettings?.thickness || 0.2);
     const actualJustification = justification ?? (wallJustification || 'exterior');
 
-    const dir = new THREE.Vector3().subVectors(pB, pA);
+    const dir = new THREE.Vector3().subVectors(effectivePB, pA);
     const angle = Math.atan2(dir.z, dir.x);
     const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
 
@@ -2717,9 +2864,20 @@ function Scene() {
       offsetScalar = -actualThickness / 2;
     }
 
-    const center = pA.clone().lerp(pB, 0.5);
+    const center = pA.clone().lerp(effectivePB, 0.5);
     center.add(normal.clone().multiplyScalar(offsetScalar));
-    center.y = Math.max(pA.y, pB.y) + actualHeight / 2;
+    const baseY = Math.max(pA.y, effectivePB.y);
+    center.y = baseY + actualHeight / 2;
+
+    const derivedStory = Math.max(1, Math.round(baseY / 2.8) + 1);
+
+    const wallCount = shapes.filter(s => s.type === 'wall').length + 1;
+    let wallName = `Exterior Wall ${wallCount}`;
+    if (actualJustification === 'interior') {
+      wallName = `Interior Wall St-${derivedStory} #${wallCount}`;
+    } else if (actualJustification === 'center') {
+      wallName = `Center Wall St-${derivedStory} #${wallCount}`;
+    }
 
     const newShape: Shape = {
       id: Math.random().toString(36).substr(2, 9),
@@ -2731,14 +2889,50 @@ function Scene() {
       roughness: activePBR.roughness,
       metalness: activePBR.metalness,
       opacity: activePBR.opacity,
-      name: `Wall ${shapes.filter(s => s.type === 'wall').length + 1}`
+      name: wallName,
+      tags: ['wall', `wall-${actualJustification}`, `story-${derivedStory}`]
     };
 
     addShape(newShape);
     commitHistory();
     recordAction(`sdk.createWall({ length: ${dist.toFixed(2)}, height: ${actualHeight.toFixed(2)}, thickness: ${actualThickness.toFixed(2)}, position: [${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}] });`);
     return newShape;
-  }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction, wallToolSettings, wallJustification]);
+  }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction, wallToolSettings, wallJustification, activeStory]);
+
+  // Helper to test if a 2D position lies inside an existing enclosed room or floor slab
+  const isPointInsideRoom = useCallback((point: THREE.Vector3): boolean => {
+    const wallShapes = shapes.filter(s => s.type === 'wall' && !s.hidden);
+    if (wallShapes.length === 0) return false;
+
+    // 1. Check floor slab shapes
+    const floorSlabs = shapes.filter(s => (s.tags?.includes('floor-slab') || s.type === 'poly') && !s.hidden);
+    for (const slab of floorSlabs) {
+      if (Array.isArray(slab.args) && slab.args.length >= 3) {
+        const [w, , d] = slab.args;
+        const hw = (w || 1) / 2 + 0.15;
+        const hd = (d || 1) / 2 + 0.15;
+        if (Math.abs(point.x - slab.position[0]) <= hw && Math.abs(point.z - slab.position[2]) <= hd) {
+          return true;
+        }
+      }
+    }
+
+    // 2. Check room envelope derived from walls
+    const envelope = getRoomBoundingEnvelope(wallShapes);
+    if (envelope) {
+      const margin = 0.20; // allowance for clicking right along interior wall faces
+      if (
+        point.x >= envelope.minX - margin &&
+        point.x <= envelope.maxX + margin &&
+        point.z >= envelope.minZ - margin &&
+        point.z <= envelope.maxZ + margin
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [shapes]);
 
   const closeWallLoopAndAssembleRoom = useCallback(() => {
     if (wallVertices.length < 2) return;
@@ -2762,6 +2956,7 @@ function Scene() {
     // Automatically assemble room floor slab and terrain integration
     const terrainShape = shapes.find(s => s.type === 'terrain') || null;
     const loopVectors = cleanVertices.length >= 3 ? [...cleanVertices] : [...wallVertices];
+    const roomPoly2D: [number, number][] = loopVectors.map(v => [v.x, v.z]);
     const assembly = buildRoomAssembly(
       loopVectors,
       terrainShape,
@@ -2780,9 +2975,13 @@ function Scene() {
     if (assembly.foundationShape) {
       addShape(assembly.foundationShape);
     }
-    if (assembly.updatedTerrainData && assembly.modifiedTerrainShapeId) {
-      setShapes(prevShapes => prevShapes.map(s => s.id === assembly.modifiedTerrainShapeId ? { ...s, terrainData: assembly.updatedTerrainData! } : s));
-    }
+
+    setShapes(prevShapes => {
+      const oriented = orientRoomWallsToExterior(prevShapes, roomPoly2D);
+      return assembly.updatedTerrainData && assembly.modifiedTerrainShapeId
+        ? oriented.map(s => s.id === assembly.modifiedTerrainShapeId ? { ...s, terrainData: assembly.updatedTerrainData! } : s)
+        : oriented;
+    });
 
     commitHistory();
     finalizeWallChain();
@@ -2805,6 +3004,148 @@ function Scene() {
       window.removeEventListener('polyform:close-wall-room', handleCloseRoomEvent);
     };
   }, [activeTool, wallVertices, closeWallLoopAndAssembleRoom, finalizeWallChain]);
+
+  const closeBezierLoop = useCallback(() => {
+    const currentKnots = bezierKnots.length > 0 ? bezierKnots : bezierToolRef.current.getKnots();
+    if (currentKnots.length < 2) return;
+
+    // Tessellate curve with resolution
+    const tessPts = tessellateEntireCurve(currentKnots, true, bezierResolution);
+    if (tessPts.length < 3) return;
+
+    const origin = currentKnots[0].point.clone();
+    const normal = (bezierActivePlane ? bezierActivePlane.normal.clone() : new THREE.Vector3(0, 1, 0)).normalize();
+    const p2d = projectToPlane(tessPts, origin, normal);
+
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+
+    const newShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: `Bézier Surface ${shapes.filter(s => s.type === 'poly' || s.type === 'bezier').length + 1}`,
+      type: 'poly',
+      position: [origin.x, origin.y, origin.z],
+      quaternion: [quat.x, quat.y, quat.z, quat.w],
+      args: {
+        vertices: p2d.map(p => [p.x, p.y]),
+        height: 0,
+        isClosed: true,
+        bezierKnots: currentKnots.map(k => ({
+          point: [k.point.x, k.point.y, k.point.z],
+          handleIn: k.handleIn ? [k.handleIn.x, k.handleIn.y, k.handleIn.z] : null,
+          handleOut: k.handleOut ? [k.handleOut.x, k.handleOut.y, k.handleOut.z] : null,
+          mode: k.mode
+        })),
+        resolution: bezierResolution
+      },
+      color: activeMaterial || '#ffffff',
+      roughness: activePBR.roughness,
+      metalness: activePBR.metalness,
+      opacity: activePBR.opacity
+    };
+
+    addShape(newShape);
+    commitHistory();
+    setActiveTool('select');
+    setSelectedId(newShape.id);
+    setSelectedIds([newShape.id]);
+
+    diagLog('SDK', 'Bézier closed loop surface created', { id: newShape.id, vertexCount: p2d.length });
+    setMeasurements(`Created solid Bézier surface (${p2d.length} vertices) ready for Push/Pull.`);
+
+    setBezierKnots([]);
+    setBezierActivePlane(null);
+    setBezierCandidatePos(null);
+    setBezierHoveredKnotIndex(null);
+    setSnapIndicator(null);
+    setIsDraggingBezierHandle(false);
+    bezierToolRef.current.activate();
+  }, [bezierKnots, bezierResolution, bezierActivePlane, activeMaterial, activePBR, addShape, commitHistory, setActiveTool, setSelectedId, setSelectedIds, setMeasurements, shapes, diagLog]);
+
+  const finishBezierOpenPath = useCallback(() => {
+    const currentKnots = bezierKnots.length > 0 ? bezierKnots : bezierToolRef.current.getKnots();
+    if (currentKnots.length < 2) return;
+
+    const tessPts = tessellateEntireCurve(currentKnots, false, bezierResolution);
+    if (tessPts.length < 2) return;
+
+    const newShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: `Bézier Curve ${shapes.filter(s => s.type === 'bezier').length + 1}`,
+      type: 'bezier',
+      position: [0, 0, 0],
+      quaternion: [0, 0, 0, 1],
+      args: {
+        points: tessPts.map(p => [p.x, p.y, p.z]),
+        bezierKnots: currentKnots.map(k => ({
+          point: [k.point.x, k.point.y, k.point.z],
+          handleIn: k.handleIn ? [k.handleIn.x, k.handleIn.y, k.handleIn.z] : null,
+          handleOut: k.handleOut ? [k.handleOut.x, k.handleOut.y, k.handleOut.z] : null,
+          mode: k.mode
+        })),
+        isClosed: false,
+        resolution: bezierResolution
+      },
+      color: activeMaterial || '#0063A3',
+      roughness: activePBR.roughness,
+      metalness: activePBR.metalness,
+      opacity: activePBR.opacity
+    };
+
+    addShape(newShape);
+    commitHistory();
+    setActiveTool('select');
+    setSelectedId(newShape.id);
+    setSelectedIds([newShape.id]);
+
+    setMeasurements(`Created open Bézier curve path (${tessPts.length} points).`);
+
+    setBezierKnots([]);
+    setBezierActivePlane(null);
+    setBezierCandidatePos(null);
+    setBezierHoveredKnotIndex(null);
+    setSnapIndicator(null);
+    setIsDraggingBezierHandle(false);
+    bezierToolRef.current.activate();
+  }, [bezierKnots, bezierResolution, activeMaterial, activePBR, addShape, commitHistory, setActiveTool, setSelectedId, setSelectedIds, setMeasurements, shapes]);
+
+  // Listen for external Bézier commands (from Modifier Palette or Toolbar)
+  useEffect(() => {
+    const handleCloseBezier = () => {
+      if (activeTool === 'bezier') closeBezierLoop();
+    };
+    const handleFinishBezier = () => {
+      if (activeTool === 'bezier') finishBezierOpenPath();
+    };
+    const handleSetRes = (e: any) => {
+      if (e.detail?.resolution) {
+        setBezierResolution(e.detail.resolution);
+        bezierToolRef.current.updateResolution(e.detail.resolution);
+      }
+    };
+    const handleCancelBezier = () => {
+      if (activeTool === 'bezier') {
+        setBezierKnots([]);
+        setBezierActivePlane(null);
+        setBezierCandidatePos(null);
+        setBezierHoveredKnotIndex(null);
+        setSnapIndicator(null);
+        setIsDraggingBezierHandle(false);
+        bezierToolRef.current.activate();
+      }
+    };
+
+    window.addEventListener('polyform:close-bezier-loop', handleCloseBezier);
+    window.addEventListener('polyform:finish-bezier-path', handleFinishBezier);
+    window.addEventListener('polyform:set-bezier-resolution', handleSetRes);
+    window.addEventListener('polyform:cancel-bezier', handleCancelBezier);
+
+    return () => {
+      window.removeEventListener('polyform:close-bezier-loop', handleCloseBezier);
+      window.removeEventListener('polyform:finish-bezier-path', handleFinishBezier);
+      window.removeEventListener('polyform:set-bezier-resolution', handleSetRes);
+      window.removeEventListener('polyform:cancel-bezier', handleCancelBezier);
+    };
+  }, [activeTool, closeBezierLoop, finishBezierOpenPath]);
 
   const finalizeFenceChain = useCallback(() => {
     setFenceVertices([]);
@@ -2857,9 +3198,25 @@ function Scene() {
       
       const key = e.key.toLowerCase();
 
-      // Numeric length entry while drawing a line (SketchUp-style inference)
-      if (['line', 'circle', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStart && !e.ctrlKey && !e.metaKey) { 
-        if (/^[0-9.]$/.test(e.key)) {
+      // Arrow keys to adjust polygon sides when polygon tool is active
+      if (activeTool === 'polygon') {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setPolygonSides(prev => Math.min(64, prev + 1));
+          setMeasurements(`Polygon sides: ${Math.min(64, polygonSides + 1)}`);
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setPolygonSides(prev => Math.max(3, prev - 1));
+          setMeasurements(`Polygon sides: ${Math.max(3, polygonSides - 1)}`);
+          return;
+        }
+      }
+
+      // Numeric length entry while drawing a line or shape (SketchUp-style inference)
+      if (['line', 'circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStart && !e.ctrlKey && !e.metaKey) { 
+        if (/^[0-9.sS]$/.test(e.key)) {
           e.preventDefault();
           setTypedLength(prev => prev + e.key);
           return;
@@ -2915,6 +3272,14 @@ function Scene() {
               setPolyPlane(null);
               setPolyNormal(null);
             }
+          } else if (activeTool === 'bezier' && bezierKnots.length > 0) {
+            const next = bezierKnots.slice(0, -1);
+            setBezierKnots(next);
+            bezierToolRef.current.setState({ ...bezierToolRef.current.getState(), knots: next });
+            if (next.length === 0) {
+              setBezierActivePlane(null);
+            }
+            return;
           } else {
             undo();
           }
@@ -2938,6 +3303,9 @@ function Scene() {
         if (activeTool === 'poly' && polyVertices.length > 0) {
           diagLog('TOOL', 'Poly drawing cancelled', { vertexCount: polyVertices.length });
         }
+        if (activeTool === 'bezier' && bezierKnots.length > 0) {
+          diagLog('TOOL', 'Bézier drawing cancelled', { knotCount: bezierKnots.length });
+        }
         setRectangleInputState({ active: false, startPoint: null, width: '', depth: '' });
         setDrawingStart(null);
         setDrawingNormal(null);
@@ -2958,6 +3326,12 @@ function Scene() {
         setPolyPlane(null);
         setPolyNormal(null);
         setPolyCandidatePos(null);
+        setBezierKnots([]);
+        setBezierActivePlane(null);
+        setBezierCandidatePos(null);
+        setBezierHoveredKnotIndex(null);
+        setIsDraggingBezierHandle(false);
+        bezierToolRef.current.activate();
         setWallVertices([]);
         setWallPlane(null);
         setWallCandidatePos(null);
@@ -2976,6 +3350,38 @@ function Scene() {
       }
 
       if (e.key === 'Enter') {
+        if (activeTool === 'bezier') {
+          e.preventDefault();
+          if (typedLength.trim()) {
+            const raw = typedLength.trim();
+            // Check for segment count like '36s'
+            const segMatch = /^(\d+)\s*s$/i.exec(raw);
+            if (segMatch) {
+              const segs = parseInt(segMatch[1], 10);
+              if (segs >= 2 && segs <= 1000) {
+                setBezierResolution(segs);
+                bezierToolRef.current.updateResolution(segs);
+                setMeasurements(`Bézier resolution set to ${segs} segments per span.`);
+                setTypedLength('');
+                return;
+              }
+            }
+            // Check for length value
+            const lenVal = parseFloat(raw);
+            if (!isNaN(lenVal) && lenVal > 0) {
+              const worldLen = unit === 'mm' ? lenVal / 1000 : unit === 'cm' ? lenVal / 100 : lenVal;
+              bezierToolRef.current.setTangentLength(worldLen);
+              setBezierKnots([...bezierToolRef.current.getKnots()]);
+              setMeasurements(`Bézier tangent handle length locked to ${formatValue(worldLen, unit, 2)}.`);
+              setTypedLength('');
+              return;
+            }
+          }
+          if (bezierKnots.length >= 2) {
+            finishBezierOpenPath();
+            return;
+          }
+        }
         if (activeTool === 'wall' && wallVertices.length > 0) {
           e.preventDefault();
           finalizeWallChain();
@@ -3020,8 +3426,19 @@ function Scene() {
           return;
         }
 
-        if (['circle', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStep === 1 && drawingStart && drawingNormal && typedLength.trim()) {
+        if (['circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStep === 1 && drawingStart && drawingNormal && typedLength.trim()) {
           e.preventDefault();
+
+          if (activeTool === 'polygon' && typedLength.toLowerCase().endsWith('s')) {
+            const sides = parseInt(typedLength.slice(0, -1), 10);
+            if (!isNaN(sides) && sides >= 3) {
+              setPolygonSides(Math.min(64, Math.max(3, sides)));
+              setTypedLength('');
+              setMeasurements(`Polygon sides set to ${Math.min(64, Math.max(3, sides))}`);
+              return;
+            }
+          }
+
           const raw = parseFloat(typedLength);
           if (!isNaN(raw) && raw > 0) {
             const worldRadius = unit === 'mm' ? raw / 1000 : unit === 'cm' ? raw / 100 : raw;
@@ -3039,6 +3456,8 @@ function Scene() {
 
             if (activeTool === 'circle') {
               newShape = { type: 'circle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, 32] };
+            } else if (activeTool === 'polygon') {
+              newShape = { type: 'circle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, polygonSides || 6] };
             } else if (activeTool === 'triangle') {
               newShape = { type: 'triangle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, 3] };
             } else if (activeTool === 'sphere') {
@@ -3152,6 +3571,14 @@ function Scene() {
       }
 
       // Tool Shortcuts
+      if (activeTool === 'bezier' && (key === 'c' || key === 'C')) {
+        e.preventDefault();
+        if (bezierKnots.length >= 2) {
+          closeBezierLoop();
+        }
+        return;
+      }
+
       if (activeTool === 'wall' && (key === 'c' || e.key === 'Enter')) {
         e.preventDefault();
         if (wallVertices.length >= 2) {
@@ -3171,7 +3598,7 @@ function Scene() {
         setActiveTool('paint');
       } else if (key === 'r') {
         setActiveTool('rectangle');
-      } else if (key === 'c' && activeTool !== 'wall') {
+      } else if (key === 'c' && activeTool !== 'wall' && activeTool !== 'bezier') {
         setActiveTool('circle');
       } else if (key === 'l') {
         setActiveTool('line');
@@ -3208,7 +3635,14 @@ function Scene() {
             const next = (prev + step) % (Math.PI * 2);
             const deg = Math.round(((next * 180) / Math.PI) % 360);
             const normDeg = deg < 0 ? deg + 360 : deg;
-            setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            if (activeTool === 'step') {
+              setMeasurements(`Single Step: 1.00m × 0.30m (Rise 0.18m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            } else {
+              setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            }
+            // Update live preview shape quaternion immediately
+            const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), next);
+            setPreviewShape(p => p ? { ...p, quaternion: [quat.x, quat.y, quat.z, quat.w] } : null);
             return next;
           });
           return;
@@ -3219,7 +3653,14 @@ function Scene() {
             const next = (prev - step + Math.PI * 2) % (Math.PI * 2);
             const deg = Math.round(((next * 180) / Math.PI) % 360);
             const normDeg = deg < 0 ? deg + 360 : deg;
-            setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            if (activeTool === 'step') {
+              setMeasurements(`Single Step: 1.00m × 0.30m (Rise 0.18m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            } else {
+              setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+            }
+            // Update live preview shape quaternion immediately
+            const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), next);
+            setPreviewShape(p => p ? { ...p, quaternion: [quat.x, quat.y, quat.z, quat.w] } : null);
             return next;
           });
           return;
@@ -3271,6 +3712,57 @@ function Scene() {
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     pointerUpHandledRef.current = false;
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
+
+    if (activeTool === 'bezier') {
+      e.stopPropagation();
+
+      // If clicking first knot -> finalize and close loop
+      if (bezierHoveredKnotIndex === 0 && bezierKnots.length >= 2) {
+        closeBezierLoop();
+        return;
+      }
+
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => (i.object.userData?.isShape || i.object.userData?.id) && i.object !== e.object);
+
+      let normal = new THREE.Vector3(0, 1, 0);
+      let onId: string | null = null;
+      let p = new THREE.Vector3();
+
+      if (shapeIntersect && shapeIntersect.face) {
+        normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
+        onId = shapeIntersect.object.userData.id;
+        p = shapeIntersect.point.clone();
+      } else {
+        const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        if (raycaster.ray.intersectPlane(ground, p)) {
+          // valid ground plane hit
+        } else {
+          p = e.point ? e.point.clone() : new THREE.Vector3();
+        }
+      }
+
+      if (bezierKnots.length === 0) {
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p);
+        setBezierActivePlane(plane);
+        setBezierPlaneOnId(onId);
+        bezierToolRef.current.activate();
+        bezierToolRef.current.onPointerDown(p, e.altKey, plane);
+        setBezierKnots([...bezierToolRef.current.getKnots()]);
+        setIsDraggingBezierHandle(true);
+        setMeasurements(`Bézier Knot #1 placed · Click & drag for C1 smooth handles · Alt for broken tangent`);
+      } else {
+        const res = bezierToolRef.current.onPointerDown(p, e.altKey, bezierActivePlane || undefined);
+        if (res.closed) {
+          closeBezierLoop();
+        } else {
+          setBezierKnots([...bezierToolRef.current.getKnots()]);
+          setIsDraggingBezierHandle(true);
+          setMeasurements(`Bézier Knot #${bezierKnots.length + 1} placed · Click & drag for C1 smooth handles · Alt for broken tangent`);
+        }
+      }
+      return;
+    }
 
     if (activeTool === 'poly') {
       e.stopPropagation();
@@ -3356,9 +3848,29 @@ function Scene() {
       if (wallVertices.length === 0) {
         let p = pointToPlace ? pointToPlace.clone() : e.point.clone();
         if (!pointToPlace) {
-          const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          let basePlaneY = ((activeStory || 1) - 1) * 2.8;
+          const intersects = raycaster.intersectObjects(scene.children, true);
+          const hitShapeObj = intersects.find(i => i.object.userData?.isShape);
+          if (hitShapeObj && hitShapeObj.object.userData?.id) {
+            const hitSh = shapes.find(s => s.id === hitShapeObj.object.userData.id);
+            if (hitSh && hitSh.type === 'wall') {
+              const wH = Array.isArray(hitSh.args) ? hitSh.args[1] || 2.8 : 2.8;
+              basePlaneY = hitSh.position[1] - wH / 2;
+            } else if (hitSh && (hitSh.type === 'poly' || hitSh.tags?.includes('floor-slab'))) {
+              basePlaneY = hitSh.position[1];
+            }
+          }
+          const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), -basePlaneY);
           if (!raycaster.ray.intersectPlane(ground, p)) {
             p = e.point.clone();
+          }
+        }
+
+        // Enforce: Interior walls must only be drawn inside an existing room
+        if (wallJustification === 'interior') {
+          if (!isPointInsideRoom(p)) {
+            setMeasurements('Interior walls must be drawn inside an existing room.');
+            return;
           }
         }
 
@@ -3368,6 +3880,15 @@ function Scene() {
         diagLog("TOOL", "Wall started at point", { pos: [p.x, p.y, p.z] });
       } else {
         if (!pointToPlace) pointToPlace = e.point.clone();
+
+        // Enforce: Interior wall vertices must remain inside the room
+        if (wallJustification === 'interior') {
+          if (!isPointInsideRoom(pointToPlace)) {
+            setMeasurements('Interior walls cannot extend outside the room boundary.');
+            return;
+          }
+        }
+
         const prev = wallVertices[wallVertices.length - 1];
         if (prev.distanceTo(pointToPlace) >= 0.10) {
           createWallSegment(prev, pointToPlace);
@@ -3584,16 +4105,21 @@ function Scene() {
       e.stopPropagation();
 
       let targetWall: Shape | null = null;
+      let targetRoof: Shape | null = null;
       let worldPos: THREE.Vector3 | null = null;
       let quatArray: [number, number, number, number] = [0, 0, 0, 1];
       const width = activeTool === 'door' ? 0.9 : 1.2;
       const height = activeTool === 'door' ? 2.1 : 1.2;
       let depth = 0.2;
+      let windowStyle = activeTool === 'door' ? 'flush' : 'cross';
 
       if (previewShape && previewShape.type === activeTool) {
         worldPos = new THREE.Vector3(...previewShape.position);
         quatArray = previewShape.quaternion;
         depth = Array.isArray(previewShape.args) ? (previewShape.args[2] || 0.2) : 0.2;
+        if ((previewShape as any).archStyle) {
+          windowStyle = (previewShape as any).archStyle;
+        }
         if ((previewShape as any).hostWallId) {
           targetWall = shapes.find(s => s.id === (previewShape as any).hostWallId) || null;
         }
@@ -3606,13 +4132,35 @@ function Scene() {
 
         if (shapeIntersect && shapeIntersect.object.userData.id) {
           const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
-          if (hitShape && hitShape.type === 'wall') {
+          const isRoof = hitShape && (
+            hitShape.tags?.some((t: string) => t.includes('roof')) ||
+            hitShape.name?.toLowerCase().includes('roof')
+          );
+
+          if (activeTool === 'window' && (isRoof || (shapeIntersect.face && Math.abs(shapeIntersect.face.normal.y) < 0.95 && Math.abs(shapeIntersect.face.normal.y) > 0.05))) {
+            targetRoof = hitShape || null;
+            hitPoint = shapeIntersect.point.clone();
+            const faceNorm = shapeIntersect.face?.normal 
+              ? shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize()
+              : new THREE.Vector3(0, 1, 0);
+
+            const up = new THREE.Vector3(0, 1, 0);
+            let right = new THREE.Vector3().crossVectors(up, faceNorm).normalize();
+            if (right.lengthSq() < 0.001) right = new THREE.Vector3(1, 0, 0);
+            const uphill = new THREE.Vector3().crossVectors(faceNorm, right).normalize();
+            const rotMatrix = new THREE.Matrix4().makeBasis(right, uphill, faceNorm);
+            const roofQuat = new THREE.Quaternion().setFromRotationMatrix(rotMatrix);
+
+            worldPos = hitPoint.clone().add(faceNorm.clone().multiplyScalar(0.04));
+            quatArray = [roofQuat.x, roofQuat.y, roofQuat.z, roofQuat.w];
+            windowStyle = 'velux-roof';
+          } else if (hitShape && hitShape.type === 'wall') {
             targetWall = hitShape;
             hitPoint = shapeIntersect.point.clone();
           }
         }
 
-        if (!targetWall) {
+        if (!targetWall && !targetRoof) {
           const ray = raycaster.ray;
           const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
           const groundHit = new THREE.Vector3();
@@ -3661,7 +4209,7 @@ function Scene() {
           const localPos = new THREE.Vector3(localX, localY, 0);
           worldPos = localPos.applyQuaternion(wallQuat).add(wallPos);
           quatArray = [wallQuat.x, wallQuat.y, wallQuat.z, wallQuat.w];
-        } else if (hitPoint) {
+        } else if (hitPoint && !worldPos) {
           const groundY = hitPoint.y + (activeTool === 'door' ? height / 2 : 1.5);
           worldPos = new THREE.Vector3(hitPoint.x, groundY, hitPoint.z);
           quatArray = [0, 0, 0, 1];
@@ -3672,17 +4220,17 @@ function Scene() {
         const shapeColor = (activeMaterial && activeMaterial !== '#ffffff' && activeMaterial !== '#8b5a2b' && activeMaterial !== '#38bdf8') ? activeMaterial : '#ffffff';
         const newDoorWindowShape: Shape = {
           id: Math.random().toString(36).substr(2, 9),
-          name: activeTool === 'door' ? 'Door' : 'Window',
+          name: targetRoof || windowStyle === 'velux-roof' ? 'Velux Roof Window' : activeTool === 'door' ? 'Door' : 'Window',
           type: activeTool,
           position: [worldPos.x, worldPos.y, worldPos.z],
           quaternion: quatArray,
           args: [width, height, depth],
           color: shapeColor,
-          archStyle: activeTool === 'door' ? 'flush' : 'cross',
+          archStyle: windowStyle,
           roughness: 0.4,
           metalness: 0.05,
           opacity: 1,
-          hostWallId: targetWall ? targetWall.id : undefined
+          hostWallId: targetWall ? targetWall.id : (targetRoof ? targetRoof.id : undefined)
         };
 
         addShape(newDoorWindowShape);
@@ -3691,7 +4239,9 @@ function Scene() {
         setSelectedIds([newDoorWindowShape.id]);
         setPreviewShape(null);
         setActiveTool('select');
-        setMeasurements(`${activeTool === 'door' ? 'Door' : 'Window'} placed & wall opening cut. Use Move tool to reposition.`);
+        setMeasurements(windowStyle === 'velux-roof' 
+          ? 'Velux Roof Skylight placed on roof pitch. Use Move tool to reposition.'
+          : `${activeTool === 'door' ? 'Door' : 'Window'} placed & wall opening cut. Use Move tool to reposition.`);
         recordAction(`sdk.addShape(${JSON.stringify(newDoorWindowShape)});`);
       }
       return;
@@ -3787,7 +4337,7 @@ function Scene() {
       return;
     }
 
-    if (['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
+    if (['rectangle', 'circle', 'polygon', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool)) {
       e.stopPropagation();
       
       if (drawingStep === 2) {
@@ -3948,6 +4498,43 @@ function Scene() {
           setOffsetPreviewPoints(null);
         }
       }
+      if (activeTool === 'bezier') {
+        const plane = bezierActivePlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const ray = raycaster.ray;
+        const target = new THREE.Vector3();
+        if (ray.intersectPlane(plane, target)) {
+          let finalPos = target.clone();
+          setBezierCandidatePos(finalPos);
+
+          if (isDraggingBezierHandle) {
+            bezierToolRef.current.onPointerMove(finalPos, e.altKey);
+            const updatedKnots = bezierToolRef.current.getKnots();
+            setBezierKnots([...updatedKnots]);
+            const activeK = updatedKnots[updatedKnots.length - 1];
+            if (activeK && activeK.handleOut) {
+              const len = activeK.handleOut.distanceTo(activeK.point);
+              setMeasurements(`Tangent Handle: ${len.toFixed(2)}m · ${activeK.mode === 'broken' ? 'Broken (Alt)' : 'Symmetric (Mirrored)'} · Release to place`);
+            }
+          } else {
+            // Check snap to knot 0
+            if (bezierKnots.length >= 2) {
+              const origin = bezierKnots[0].point;
+              const d = finalPos.distanceTo(origin);
+              if (d < 0.35) {
+                setBezierHoveredKnotIndex(0);
+                setSnapIndicator({
+                  point: [origin.x, origin.y + 0.05, origin.z],
+                  type: 'endpoint',
+                  tooltip: '🟢 Snap to Start Node · Click or press C to Close Loop & Form Planar Surface'
+                });
+              } else {
+                setBezierHoveredKnotIndex(null);
+                setSnapIndicator(null);
+              }
+            }
+          }
+        }
+      }
       if (activeTool === 'poly' && polyPlane && polyNormal) {
       const ray = raycaster.ray;
       const target = new THREE.Vector3();
@@ -3993,7 +4580,21 @@ function Scene() {
     }
 
     if (activeTool === 'wall') {
-      const plane = wallPlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      let basePlaneY = ((activeStory || 1) - 1) * 2.8;
+      if (!wallPlane) {
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        const hitShapeObj = intersects.find(i => i.object.userData?.isShape);
+        if (hitShapeObj && hitShapeObj.object.userData?.id) {
+          const hitSh = shapes.find(s => s.id === hitShapeObj.object.userData.id);
+          if (hitSh && hitSh.type === 'wall') {
+            const wH = Array.isArray(hitSh.args) ? hitSh.args[1] || 2.8 : 2.8;
+            basePlaneY = hitSh.position[1] - wH / 2;
+          } else if (hitSh && (hitSh.type === 'poly' || hitSh.tags?.includes('floor-slab'))) {
+            basePlaneY = hitSh.position[1];
+          }
+        }
+      }
+      const plane = wallPlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), -basePlaneY);
       const target = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, target)) {
         let finalPos = target.clone();
@@ -4091,7 +4692,53 @@ function Scene() {
               }
             }
 
+            // 2d. Snap to attaching wall at endpoint
+            let wallAttached = false;
             if (!alignedWithStart && !midpointSnapped) {
+              let bestAttachDist = 0.65;
+              let attachTarget: THREE.Vector3 | null = null;
+              let attachTooltip = '';
+              shapes.forEach(sh => {
+                if (sh.hidden || sh.type !== 'wall') return;
+                const wL = Array.isArray(sh.args) ? sh.args[0] || 3.0 : 3.0;
+                const wH = Array.isArray(sh.args) ? sh.args[1] || 2.8 : 2.8;
+                const wT = Array.isArray(sh.args) ? sh.args[2] || 0.2 : 0.2;
+                const wPos = new THREE.Vector3(...sh.position);
+                const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion();
+
+                const vRun = new THREE.Vector3(1, 0, 0).applyQuaternion(wQuat).normalize();
+                const vNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(wQuat).normalize();
+
+                const pA = wPos.clone().sub(vRun.clone().multiplyScalar(wL / 2));
+                const toTarget = target.clone().sub(pA);
+                const proj = toTarget.dot(vRun);
+                const t = Math.max(0, Math.min(wL, proj));
+                const centerlinePt = pA.clone().add(vRun.clone().multiplyScalar(t));
+                centerlinePt.y = lastVertex.y;
+
+                const innerFacePt = centerlinePt.clone().sub(vNormal.clone().multiplyScalar(wT / 2));
+                const dInner = target.distanceTo(innerFacePt);
+                const dCenter = target.distanceTo(centerlinePt);
+
+                if (wallJustification === 'interior' && dInner < bestAttachDist) {
+                  bestAttachDist = dInner;
+                  attachTarget = innerFacePt.clone();
+                  attachTooltip = 'Attached to Wall Interior Face';
+                } else if (dCenter < bestAttachDist) {
+                  bestAttachDist = dCenter;
+                  attachTarget = centerlinePt.clone();
+                  attachTooltip = 'Attached to Wall Centerline';
+                }
+              });
+
+              if (attachTarget) {
+                finalPos = attachTarget;
+                wallAttached = true;
+                setSnapIndicator({ point: [attachTarget.x, attachTarget.y + 0.1, attachTarget.z], type: 'center', tooltip: attachTooltip });
+              }
+            }
+
+            if (!alignedWithStart && !midpointSnapped && !wallAttached) {
               setSnapIndicator(null);
               setTrackingGuide(null);
             }
@@ -4107,21 +4754,76 @@ function Scene() {
             setSnapIndicator(null);
             setTrackingGuide(null);
           }
+        }
+
+        // Prevent wall segment from passing through existing obstacle walls
+        if (wallVertices.length > 0 && !isClosingLoop) {
+          const lastV = wallVertices[wallVertices.length - 1];
+          const obstacle = findWallObstacleIntersection(lastV, finalPos);
+          if (obstacle) {
+            finalPos = obstacle.hitPoint.clone();
+            setSnapIndicator({
+              point: [finalPos.x, finalPos.y + 0.1, finalPos.z],
+              type: 'endpoint',
+              tooltip: 'Attached to Intersecting Wall (Pass-through Prevented)'
+            });
+          }
         } else if (!e.shiftKey && wallVertices.length === 0) {
-          // Snap to other shapes' origins when initiating first wall point
-          let bestDist = 0.5;
+          // Snap to existing walls (interior face / centerline) or shape origins on any story level
+          let bestDist = 0.65;
           let snapTarget: THREE.Vector3 | null = null;
+          let snapTooltip = 'Shape Origin';
+          let snapType: 'endpoint' | 'midpoint' | 'center' = 'endpoint';
+
           shapes.forEach(sh => {
-            const shPos = new THREE.Vector3(...sh.position);
-            const d = finalPos.distanceTo(shPos);
-            if (d < bestDist) {
-              snapTarget = shPos.clone();
-              bestDist = d;
+            if (sh.hidden) return;
+            if (sh.type === 'wall') {
+              const wL = Array.isArray(sh.args) ? sh.args[0] || 3.0 : 3.0;
+              const wH = Array.isArray(sh.args) ? sh.args[1] || 2.8 : 2.8;
+              const wT = Array.isArray(sh.args) ? sh.args[2] || 0.2 : 0.2;
+              const wPos = new THREE.Vector3(...sh.position);
+              const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion();
+
+              const vRun = new THREE.Vector3(1, 0, 0).applyQuaternion(wQuat).normalize();
+              const vNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(wQuat).normalize();
+
+              const pA = wPos.clone().sub(vRun.clone().multiplyScalar(wL / 2));
+              const toTarget = finalPos.clone().sub(pA);
+              const proj = toTarget.dot(vRun);
+              const t = Math.max(0, Math.min(wL, proj));
+              const centerlinePt = pA.clone().add(vRun.clone().multiplyScalar(t));
+              centerlinePt.y = wPos.y - wH / 2;
+
+              const innerFacePt = centerlinePt.clone().sub(vNormal.clone().multiplyScalar(wT / 2));
+              const dInner = finalPos.distanceTo(innerFacePt);
+              const dCenter = finalPos.distanceTo(centerlinePt);
+
+              if (wallJustification === 'interior' && dInner < bestDist) {
+                bestDist = dInner;
+                snapTarget = innerFacePt.clone();
+                snapTooltip = 'Attached to Interior Face of Wall';
+                snapType = 'center';
+              } else if (dCenter < bestDist) {
+                bestDist = dCenter;
+                snapTarget = centerlinePt.clone();
+                snapTooltip = 'Attached to Wall Centerline';
+                snapType = 'center';
+              }
+            } else {
+              const shPos = new THREE.Vector3(...sh.position);
+              const d = finalPos.distanceTo(shPos);
+              if (d < bestDist) {
+                snapTarget = shPos.clone();
+                bestDist = d;
+                snapTooltip = 'Shape Origin';
+                snapType = 'endpoint';
+              }
             }
           });
+
           if (snapTarget) {
             finalPos = snapTarget;
-            setSnapIndicator({ point: [snapTarget.x, snapTarget.y + 0.1, snapTarget.z], type: 'endpoint', tooltip: 'Shape Origin' });
+            setSnapIndicator({ point: [snapTarget.x, snapTarget.y + 0.1, snapTarget.z], type: snapType, tooltip: snapTooltip });
           } else {
             setSnapIndicator(null);
           }
@@ -4204,17 +4906,38 @@ function Scene() {
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
 
       let targetWall: Shape | null = null;
+      let targetRoof: Shape | null = null;
       let hitPoint: THREE.Vector3 | null = null;
+      let roofQuat: THREE.Quaternion | null = null;
+      let roofFaceNorm: THREE.Vector3 | null = null;
 
       if (shapeIntersect && shapeIntersect.object.userData.id) {
         const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
-        if (hitShape && hitShape.type === 'wall') {
+        const isRoof = hitShape && (
+          hitShape.tags?.some((t: string) => t.includes('roof')) ||
+          hitShape.name?.toLowerCase().includes('roof')
+        );
+
+        if (activeTool === 'window' && (isRoof || (shapeIntersect.face && Math.abs(shapeIntersect.face.normal.y) < 0.95 && Math.abs(shapeIntersect.face.normal.y) > 0.05))) {
+          targetRoof = hitShape || null;
+          hitPoint = shapeIntersect.point.clone();
+          roofFaceNorm = shapeIntersect.face?.normal 
+            ? shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize()
+            : new THREE.Vector3(0, 1, 0);
+
+          const up = new THREE.Vector3(0, 1, 0);
+          let right = new THREE.Vector3().crossVectors(up, roofFaceNorm).normalize();
+          if (right.lengthSq() < 0.001) right = new THREE.Vector3(1, 0, 0);
+          const uphill = new THREE.Vector3().crossVectors(roofFaceNorm, right).normalize();
+          const rotMatrix = new THREE.Matrix4().makeBasis(right, uphill, roofFaceNorm);
+          roofQuat = new THREE.Quaternion().setFromRotationMatrix(rotMatrix);
+        } else if (hitShape && hitShape.type === 'wall') {
           targetWall = hitShape;
           hitPoint = shapeIntersect.point.clone();
         }
       }
 
-      if (!targetWall) {
+      if (!targetWall && !targetRoof) {
         const ray = raycaster.ray;
         const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
         const groundHit = new THREE.Vector3();
@@ -4242,7 +4965,24 @@ function Scene() {
         }
       }
 
-      if (targetWall && hitPoint) {
+      if (targetRoof && hitPoint && roofQuat && roofFaceNorm) {
+        const width = 1.2;
+        const height = 1.2;
+        const depth = 0.2;
+        const worldPos = hitPoint.clone().add(roofFaceNorm.clone().multiplyScalar(0.04));
+        const quatArray: [number, number, number, number] = [roofQuat.x, roofQuat.y, roofQuat.z, roofQuat.w];
+
+        setPreviewShape({
+          type: 'window',
+          archStyle: 'velux-roof',
+          position: [worldPos.x, worldPos.y, worldPos.z],
+          quaternion: quatArray,
+          args: [width, height, depth],
+          hostWallId: targetRoof.id
+        } as any);
+
+        setMeasurements(`Velux Roof Skylight: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} on Roof Slope (Click to insert)`);
+      } else if (targetWall && hitPoint) {
         const wallPos = new THREE.Vector3(...targetWall.position);
         const wallQuat = new THREE.Quaternion(...(targetWall.quaternion || [0, 0, 0, 1]));
         const wallArgs = Array.isArray(targetWall.args) ? targetWall.args : [3.0, 2.8, 0.2];
@@ -4291,7 +5031,7 @@ function Scene() {
           quaternion: [0, 0, 0, 1],
           args: [width, height, depth]
         });
-        setMeasurements(`Click on a wall to insert ${activeTool} and cut opening.`);
+        setMeasurements(`Click on a wall or roof to insert ${activeTool}.`);
       }
       return;
     }
@@ -4669,6 +5409,23 @@ function Scene() {
             args: [radius, radius, 0.01, 32]
           });
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
+        } else if (activeTool === 'polygon') {
+          const radius = drawingStart.distanceTo(target);
+          const sides = Math.min(64, Math.max(3, polygonSides || 6));
+          kernelRingRef.current = Array.from({ length: sides }, (_, i) => {
+            const a = (i / sides) * Math.PI * 2;
+            return drawingStart.clone()
+              .addScaledVector(tangent, Math.sin(a) * radius)
+              .addScaledVector(zAxis, Math.cos(a) * radius);
+          });
+          const pos = drawingStart.clone().add(drawingNormal.clone().multiplyScalar(0.005));
+          setPreviewShape({
+            type: 'circle',
+            position: [pos.x, pos.y, pos.z],
+            quaternion: quatArray,
+            args: [radius, radius, 0.01, sides]
+          });
+          setMeasurements(`Polygon (${sides}s) Radius: ${formatValue(radius, unit, 1)} [↑/↓ keys: sides]`);
         } else if (activeTool === 'triangle') {
           const radius = drawingStart.distanceTo(target);
           // Match the PREVIEW exactly, or the committed triangle is a
@@ -4949,6 +5706,27 @@ function Scene() {
           newPos[2] = pushPullState.initialPos[2] + (dist * pushPullState.normal.z) / 2;
         }
         
+        // Apply tactile contact friction during push/pull extrusion against adjacent shapes/surfaces
+        if (contactFrictionEnabled) {
+          const now = Date.now();
+          if (now < frictionPausedUntilRef.current) {
+            return;
+          }
+          const mesh = getSceneObjectById(pushPullState.id);
+          if (mesh) {
+            const isColliding = checkCollision(pushPullState.id, mesh as THREE.Mesh);
+            if (isColliding && !hasReachedFrictionRef.current) {
+              hasReachedFrictionRef.current = true;
+              const pauseMs = Math.round(60 + ((contactFrictionStrength ?? 50) / 100) * 440);
+              frictionPausedUntilRef.current = now + pauseMs;
+              return;
+            }
+            if (!isColliding) {
+              hasReachedFrictionRef.current = false;
+            }
+          }
+        }
+        
         setShapesSilent(prev => prev.map(s => {
           if (s.id === pushPullState.id) {
             const isHealed = pushPullState.isSubFace && pushPullState.parentDepth && dist <= -pushPullState.parentDepth + 0.1;
@@ -5157,6 +5935,12 @@ function Scene() {
     // same synchronous browser event tick, before React has re-rendered -- so the
     // closure's pushPullState would still read as null/stale here without this.
     const pushPullState = pushPullStateRef.current;
+
+    if (activeTool === 'bezier') {
+      bezierToolRef.current.onPointerUp();
+      setIsDraggingBezierHandle(false);
+      setBezierKnots([...bezierToolRef.current.getKnots()]);
+    }
 
     if (activeTool === 'wall') {
       wallDragStartRef.current = null;
@@ -5591,18 +6375,58 @@ function Scene() {
       setOffsetFaceKey(null);
       setMeasurements('');
     } else if (activeTool === 'eraser') {
-      if (subFaceIndex !== undefined) {
-        const key = `${e.faceIndex}-${subFaceIndex}`;
-        setShapes(prev => prev.map(s => {
-          if (s.id === id) {
-            const newSurfaceMaterials = { ...(s.surfaceMaterials || {}) };
-            delete newSurfaceMaterials[key];
-            return { ...s, surfaceMaterials: newSurfaceMaterials };
-          }
-          return s;
-        }));
+      if (e.shiftKey) {
+        // Shift + click deletes a single surface
+        if (subFaceIndex !== undefined) {
+          const key = `${e.faceIndex}-${subFaceIndex}`;
+          setShapes(prev => prev.map(s => {
+            if (s.id === id) {
+              const newSurfaceMaterials = { ...(s.surfaceMaterials || {}) };
+              delete newSurfaceMaterials[key];
+              return { ...s, surfaceMaterials: newSurfaceMaterials };
+            }
+            return s;
+          }));
+          commitHistory();
+        } else if (shape && shape.surfaceMaterials && e.faceIndex !== undefined) {
+          const faceKey = Math.floor(e.faceIndex / 2) * 2;
+          setShapes(prev => prev.map(s => {
+            if (s.id === id) {
+              const newSurfaceMaterials = { ...(s.surfaceMaterials || {}) };
+              delete newSurfaceMaterials[faceKey];
+              delete newSurfaceMaterials[e.faceIndex!];
+              const newSurfaceDivisions = { ...(s.surfaceDivisions || {}) };
+              delete newSurfaceDivisions[faceKey];
+              delete newSurfaceDivisions[e.faceIndex!];
+              return { ...s, surfaceMaterials: newSurfaceMaterials, surfaceDivisions: newSurfaceDivisions };
+            }
+            return s;
+          }));
+          commitHistory();
+        } else if (shape && shape.surfaceDivisions && e.faceIndex !== undefined) {
+          const faceKey = Math.floor(e.faceIndex / 2) * 2;
+          setShapes(prev => prev.map(s => {
+            if (s.id === id) {
+              const newDivs = { ...(s.surfaceDivisions || {}) };
+              delete newDivs[faceKey];
+              delete newDivs[e.faceIndex!];
+              return { ...s, surfaceDivisions: newDivs };
+            }
+            return s;
+          }));
+          commitHistory();
+        } else {
+          removeShape(id);
+          commitHistory();
+          if (selectedId === id) setSelectedId(null);
+          setSelectedIds(prev => prev.filter(i => i !== id));
+        }
       } else {
+        // Plain click deletes all surfaces of that object
         removeShape(id);
+        commitHistory();
+        if (selectedId === id) setSelectedId(null);
+        setSelectedIds(prev => prev.filter(i => i !== id));
       }
     }
   };
@@ -5958,7 +6782,7 @@ function Scene() {
               ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
               : 1
       });
-    } else if (activeTool === 'paint') {
+    } else if (activeTool === 'paint' || activeTool === 'eraser') {
       e.stopPropagation();
       handleMeshClick(e as any, shape.id);
     } else if (['move', 'rotate', 'scale'].includes(activeTool)) {
@@ -5983,7 +6807,7 @@ function Scene() {
     if (sId) {
       const mesh = getSceneObjectById(sId) as THREE.Mesh;
       if (mesh) {
-        if (contactFrictionEnabled && activeTool === 'move') {
+        if (contactFrictionEnabled && (activeTool === 'move' || activeTool === 'select')) {
           const now = Date.now();
           if (now < frictionPausedUntilRef.current) {
             if (lastValidPosRef.current) {
@@ -5995,11 +6819,17 @@ function Scene() {
           const isColliding = checkCollision(sId, mesh);
           if (isColliding && !hasReachedFrictionRef.current) {
             hasReachedFrictionRef.current = true;
-            frictionPausedUntilRef.current = now + 200; // Pause for 200ms
+            const pauseMs = Math.round(80 + ((contactFrictionStrength ?? 50) / 100) * 440);
+            frictionPausedUntilRef.current = now + pauseMs; // Scale friction pause by user strength setting
             if (lastValidPosRef.current) {
               mesh.position.copy(lastValidPosRef.current);
             }
             return;
+          }
+          if (isColliding && lastValidPosRef.current) {
+            // Apply slight physical drag resistance when colliding
+            const resistance = ((contactFrictionStrength ?? 50) / 100) * 0.4;
+            mesh.position.lerp(lastValidPosRef.current, resistance);
           }
           if (!isColliding) {
             hasReachedFrictionRef.current = false;
@@ -6087,13 +6917,17 @@ function Scene() {
           }
         }
 
-        setShapes(prev => prev.map(s => s.id === sId ? { 
-          ...s, 
-          position, 
-          quaternion,
-          scale,
-          hostWallId: updatedHostWallId
-        } : s));
+        setShapes(prev => {
+          const updated = prev.map(s => s.id === sId ? { 
+            ...s, 
+            position, 
+            quaternion,
+            scale,
+            hostWallId: updatedHostWallId
+          } : s);
+          const withCutouts = applyStairwellHolesToSlabs(updated);
+          return updateTimberFramesIfPresent(withCutouts);
+        });
 
         // Clear active transform from presence
         if (currentModelId && user?.email) {
@@ -6156,8 +6990,8 @@ function Scene() {
 
     for (let pass = 0; pass < maxPasses; pass++) {
       const index = geometry.index;
-      if (!index) return;
       const posAttr = geometry.attributes.position;
+      if (!index || !posAttr) return;
       const normalAttr = geometry.getAttribute('normal');
       const uvAttr = geometry.getAttribute('uv');
       const triCount = index.count / 3;
@@ -6292,8 +7126,8 @@ function Scene() {
    */
   function removeDegenerateCSGTriangles(geometry: THREE.BufferGeometry): void {
     const index = geometry.index;
-    if (!index) return;
     const posAttr = geometry.attributes.position;
+    if (!index || !posAttr) return;
     const triCount = index.count / 3;
     const keptIndices: number[] = [];
     const areaThreshold = 1e-10;
@@ -6720,7 +7554,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['poly', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['poly', 'bezier', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -6733,6 +7567,8 @@ function Scene() {
               finalizeWallChain();
             } else if (activeTool === 'poly' && polyVertices.length >= 3) {
               finalizePoly();
+            } else if (activeTool === 'bezier' && bezierKnots.length >= 2) {
+              finishBezierOpenPath();
             } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
               finalizeRoadCreation(roadPoints);
             }
@@ -6743,7 +7579,7 @@ function Scene() {
         </mesh>
       )}
 
-      {(drawingStart || pushPullState || isSculptingDragRef.current || (activeTool === 'wall' && wallVertices.length > 0) || (activeTool === 'poly' && polyVertices.length > 0) || ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length > 0)) && (
+      {(drawingStart || pushPullState || isSculptingDragRef.current || (activeTool === 'wall' && wallVertices.length > 0) || (activeTool === 'poly' && polyVertices.length > 0) || (activeTool === 'bezier' && bezierKnots.length > 0) || ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length > 0)) && (
         <mesh 
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -6754,6 +7590,8 @@ function Scene() {
               finalizeWallChain();
             } else if (activeTool === 'poly' && polyVertices.length >= 3) {
               finalizePoly();
+            } else if (activeTool === 'bezier' && bezierKnots.length >= 2) {
+              finishBezierOpenPath();
             } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
               finalizeRoadCreation(roadPoints);
             }
@@ -7078,6 +7916,103 @@ function Scene() {
           );
         }
 
+        if (shape.type === 'bezier') {
+          const bargs: any = shape.args || {};
+          const bknots: BezierKnot[] = (bargs.bezierKnots || []).map((k: any) => ({
+            point: new THREE.Vector3(...k.point),
+            handleIn: k.handleIn ? new THREE.Vector3(...k.handleIn) : null,
+            handleOut: k.handleOut ? new THREE.Vector3(...k.handleOut) : null,
+            mode: k.mode || 'mirrored'
+          }));
+
+          let displayPts: [number, number, number][] = bargs.points || [];
+          if ((!displayPts || displayPts.length < 2) && bknots.length >= 2) {
+            const tess = tessellateEntireCurve(bknots, bargs.isClosed || false, bargs.resolution || 24);
+            displayPts = tess.map(p => [p.x, p.y, p.z]);
+          }
+          if (!displayPts || displayPts.length < 2) return null;
+
+          const isSel = selectedId === shape.id || selectedIds.includes(shape.id);
+          const curveColor = isSel ? '#0063A3' : (shape.color || '#0284c7');
+
+          let totalLen = 0;
+          for (let i = 1; i < displayPts.length; i++) {
+            totalLen += Math.hypot(
+              displayPts[i][0] - displayPts[i - 1][0],
+              displayPts[i][1] - displayPts[i - 1][1],
+              displayPts[i][2] - displayPts[i - 1][2]
+            );
+          }
+          const midPt = displayPts[Math.floor(displayPts.length / 2)] || displayPts[0];
+
+          return (
+            <group 
+              key={shape.id}
+              onClick={(e: any) => {
+                e.stopPropagation();
+                setSelectedId(shape.id);
+                setSelectedIds([shape.id]);
+              }}
+            >
+              <Line
+                points={displayPts}
+                color={curveColor}
+                lineWidth={isSel ? 5 : 3.5}
+              />
+              {/* Knots & Tangent handles when selected */}
+              {bknots.map((knot, kIdx) => (
+                <group key={kIdx}>
+                  {/* Anchor Knot Marker */}
+                  <mesh position={knot.point}>
+                    <boxGeometry args={[0.08, 0.08, 0.08]} />
+                    <meshBasicMaterial color={isSel ? '#38bdf8' : curveColor} />
+                  </mesh>
+
+                  {/* Handles when selected */}
+                  {isSel && knot.handleOut && (
+                    <group>
+                      <Line
+                        points={[[knot.point.x, knot.point.y, knot.point.z], [knot.handleOut.x, knot.handleOut.y, knot.handleOut.z]]}
+                        color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'}
+                        lineWidth={2}
+                      />
+                      <mesh position={knot.handleOut}>
+                        <sphereGeometry args={[0.045, 16, 16]} />
+                        <meshBasicMaterial color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'} />
+                      </mesh>
+                    </group>
+                  )}
+
+                  {isSel && knot.handleIn && (
+                    <group>
+                      <Line
+                        points={[[knot.point.x, knot.point.y, knot.point.z], [knot.handleIn.x, knot.handleIn.y, knot.handleIn.z]]}
+                        color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'}
+                        lineWidth={2}
+                      />
+                      <mesh position={knot.handleIn}>
+                        <sphereGeometry args={[0.045, 16, 16]} />
+                        <meshBasicMaterial color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'} />
+                      </mesh>
+                    </group>
+                  )}
+                </group>
+              ))}
+
+              {(showAllDimensions || isSel) && (
+                <Html position={midPt} center occlude={false}>
+                  <div
+                    onClick={(e: any) => { e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }}
+                    className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-trimble-blue border-white' : 'bg-black/80 border-blue-500/50 hover:border-blue-400'}`}
+                  >
+                    {formatValue(totalLen, unit, 2)} ({bargs.resolution || 24}s)
+                  </div>
+                </Html>
+              )}
+            </group>
+          );
+        }
+
 
         const meshProps = {
           name: shape.id,
@@ -7352,7 +8287,7 @@ function Scene() {
           ) : shape.type === 'dome' ? (
             <sphereGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 32, 32]) as any} />
           ) : shape.type === 'poly' ? (
-            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={(shape.args as any)?.holes} />
+            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={computeHolesForSlab(shape, shapes)} />
           ) : ['wall', 'door', 'window', 'step', 'staircase'].includes(shape.type) ? (
             <ArchGeometry shape={shape} shapes={shapes} />
           ) : ['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(shape.type) ? (
@@ -8044,6 +8979,106 @@ function Scene() {
           ))}
         </group>
       )}
+
+      {/* Bézier Curve Drawing Preview */}
+      {activeTool === 'bezier' && bezierKnots.length > 0 && (() => {
+        const completedCurve = bezierKnots.length >= 2
+          ? tessellateEntireCurve(bezierKnots, false, bezierResolution)
+          : [];
+
+        const lastKnot = bezierKnots[bezierKnots.length - 1];
+        let candidateSpanPts: THREE.Vector3[] = [];
+        if (bezierCandidatePos && !isDraggingBezierHandle && lastKnot) {
+          const tempTargetKnot: BezierKnot = {
+            point: bezierCandidatePos.clone(),
+            handleIn: null,
+            handleOut: null,
+            mode: 'mirrored'
+          };
+          candidateSpanPts = tessellateBezierSpan(lastKnot, tempTargetKnot, bezierResolution);
+        }
+
+        let closingSpanPts: THREE.Vector3[] = [];
+        if (bezierKnots.length >= 2 && bezierCandidatePos && bezierHoveredKnotIndex === 0) {
+          const firstKnot = bezierKnots[0];
+          closingSpanPts = tessellateBezierSpan(lastKnot, firstKnot, bezierResolution);
+        }
+
+        return (
+          <group>
+            {/* Completed Curve Spans */}
+            {completedCurve.length >= 2 && (
+              <Line
+                points={completedCurve.map(p => [p.x, p.y, p.z])}
+                color="#0063A3"
+                lineWidth={3.5}
+              />
+            )}
+
+            {/* Live Candidate Span */}
+            {candidateSpanPts.length >= 2 && (
+              <Line
+                points={candidateSpanPts.map(p => [p.x, p.y, p.z])}
+                color={bezierHoveredKnotIndex === 0 ? '#FFD700' : '#0284c7'}
+                lineWidth={2.5}
+                dashed={true}
+                dashSize={0.15}
+                gapSize={0.08}
+              />
+            )}
+
+            {/* Ghost Loop Closure Span */}
+            {closingSpanPts.length >= 2 && (
+              <Line
+                points={closingSpanPts.map(p => [p.x, p.y, p.z])}
+                color="#FFD700"
+                lineWidth={4}
+              />
+            )}
+
+            {/* Knots & Tangent Handles */}
+            {bezierKnots.map((knot, kIdx) => (
+              <group key={kIdx}>
+                {/* Anchor Node */}
+                <mesh position={knot.point}>
+                  <boxGeometry args={[kIdx === 0 && bezierHoveredKnotIndex === 0 ? 0.12 : 0.08, kIdx === 0 && bezierHoveredKnotIndex === 0 ? 0.12 : 0.08, kIdx === 0 && bezierHoveredKnotIndex === 0 ? 0.12 : 0.08]} />
+                  <meshBasicMaterial color={kIdx === 0 && bezierHoveredKnotIndex === 0 ? '#FFD700' : '#0063A3'} />
+                </mesh>
+
+                {/* Tangent Handle Out */}
+                {knot.handleOut && (
+                  <group>
+                    <Line
+                      points={[[knot.point.x, knot.point.y, knot.point.z], [knot.handleOut.x, knot.handleOut.y, knot.handleOut.z]]}
+                      color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'}
+                      lineWidth={2}
+                    />
+                    <mesh position={knot.handleOut}>
+                      <sphereGeometry args={[0.045, 16, 16]} />
+                      <meshBasicMaterial color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'} />
+                    </mesh>
+                  </group>
+                )}
+
+                {/* Tangent Handle In */}
+                {knot.handleIn && (
+                  <group>
+                    <Line
+                      points={[[knot.point.x, knot.point.y, knot.point.z], [knot.handleIn.x, knot.handleIn.y, knot.handleIn.z]]}
+                      color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'}
+                      lineWidth={2}
+                    />
+                    <mesh position={knot.handleIn}>
+                      <sphereGeometry args={[0.045, 16, 16]} />
+                      <meshBasicMaterial color={knot.mode === 'broken' ? '#f59e0b' : '#38bdf8'} />
+                    </mesh>
+                  </group>
+                )}
+              </group>
+            ))}
+          </group>
+        );
+      })()}
 
       {/* Wall Drawing Preview (Poly-style continuous 3D wall placement) */}
       {activeTool === 'wall' && wallVertices.length > 0 && (
@@ -8916,6 +9951,7 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
 }
 
 function CustomGeometry({ shape }: { shape: Shape }) {
+  const { shapes } = useApp();
   const geometry = useMemo(() => {
     // 1. Roadway Strip 3D Geometry
     if (shape.args?.isRoad && Array.isArray(shape.args?.path) && shape.args.path.length >= 2) {
@@ -9010,36 +10046,98 @@ function CustomGeometry({ shape }: { shape: Shape }) {
       return geo;
     }
 
-    // 2. Custom JSON BufferGeometry or Raw Positions/Normals
+    // 2. Custom JSON BufferGeometry or Raw Positions/Normals (e.g. Roofs)
     if (shape.geometryData) {
+      let baseGeo: THREE.BufferGeometry | null = null;
       if (Array.isArray(shape.geometryData.positions) && shape.geometryData.positions.length > 0) {
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(shape.geometryData.positions, 3));
+        baseGeo = new THREE.BufferGeometry();
+        baseGeo.setAttribute('position', new THREE.Float32BufferAttribute(shape.geometryData.positions, 3));
         if (Array.isArray(shape.geometryData.normals) && shape.geometryData.normals.length > 0) {
-          geo.setAttribute('normal', new THREE.Float32BufferAttribute(shape.geometryData.normals, 3));
+          baseGeo.setAttribute('normal', new THREE.Float32BufferAttribute(shape.geometryData.normals, 3));
         } else {
-          geo.computeVertexNormals();
+          baseGeo.computeVertexNormals();
         }
         if (Array.isArray(shape.geometryData.uvs) && shape.geometryData.uvs.length > 0) {
-          geo.setAttribute('uv', new THREE.Float32BufferAttribute(shape.geometryData.uvs, 2));
+          baseGeo.setAttribute('uv', new THREE.Float32BufferAttribute(shape.geometryData.uvs, 2));
         }
         if (Array.isArray(shape.geometryData.indices) && shape.geometryData.indices.length > 0) {
-          geo.setIndex(shape.geometryData.indices);
+          baseGeo.setIndex(shape.geometryData.indices);
         }
-        return geo;
+      } else {
+        try {
+          const loader = new THREE.BufferGeometryLoader();
+          baseGeo = loader.parse(shape.geometryData);
+        } catch (err) {
+          console.warn('Error parsing custom geometryData:', err);
+        }
       }
 
-      try {
-        const loader = new THREE.BufferGeometryLoader();
-        return loader.parse(shape.geometryData);
-      } catch (err) {
-        console.warn('Error parsing custom geometryData:', err);
+      if (baseGeo) {
+        // Cut rectangular apertures for any hosted Velux roof windows/skylights
+        const isRoof = shape.tags?.some((t: string) => t.includes('roof')) || shape.name?.toLowerCase().includes('roof');
+        if (isRoof && shapes && shapes.length > 0) {
+          const hostedWindows = shapes.filter(s => 
+            s.type === 'window' && !s.hidden &&
+            (s.hostWallId === shape.id || s.archStyle === 'velux-roof' || s.name?.toLowerCase().includes('velux'))
+          );
+
+          if (hostedWindows.length > 0) {
+            try {
+              let currentBrush = new Brush(mergeVertices(baseGeo.clone()));
+              currentBrush.updateMatrixWorld();
+              const evaluator = new Evaluator();
+
+              const roofPos = new THREE.Vector3(...shape.position);
+              const roofQuat = shape.quaternion 
+                ? new THREE.Quaternion(...shape.quaternion) 
+                : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(shape.rotation || [0, 0, 0])));
+              const invRoofQuat = roofQuat.clone().invert();
+
+              let cutsApplied = 0;
+              for (const win of hostedWindows) {
+                const winPos = new THREE.Vector3(...win.position);
+                const winQuat = win.quaternion
+                  ? new THREE.Quaternion(...win.quaternion)
+                  : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(win.rotation || [0, 0, 0])));
+                const winArgs = Array.isArray(win.args) ? win.args : [1.2, 1.2, 0.4];
+                const winW = Math.max(0.4, (winArgs[0] || 1.2) * 0.95);
+                const winH = Math.max(0.4, (winArgs[1] || 1.2) * 0.95);
+                const winD = Math.max(0.8, (winArgs[2] || 0.4) * 4.0);
+
+                const relPos = winPos.clone().sub(roofPos).applyQuaternion(invRoofQuat);
+                const relQuat = invRoofQuat.clone().multiply(winQuat);
+
+                const cutterGeo = new THREE.BoxGeometry(winW, winH, winD);
+                cutterGeo.applyQuaternion(relQuat);
+                cutterGeo.translate(relPos.x, relPos.y, relPos.z);
+
+                const cutterBrush = new Brush(cutterGeo);
+                cutterBrush.updateMatrixWorld();
+
+                const result = evaluator.evaluate(currentBrush, cutterBrush, SUBTRACTION);
+                if (result && result.geometry) {
+                  currentBrush = result;
+                  cutsApplied++;
+                }
+              }
+
+              if (cutsApplied > 0 && currentBrush.geometry) {
+                const cutGeom = mergeVertices(currentBrush.geometry);
+                cutGeom.computeVertexNormals();
+                return cutGeom;
+              }
+            } catch (csgErr) {
+              console.warn('Velux roof window cutout error:', csgErr);
+            }
+          }
+        }
+        return baseGeo;
       }
     }
 
     // Fallback
     return new THREE.BoxGeometry(1, 1, 1);
-  }, [shape.args, shape.geometryData]);
+  }, [shape.args, shape.geometryData, shape.position, shape.quaternion, shape.rotation, shapes]);
 
   useEffect(() => {
     return () => {
@@ -9060,12 +10158,14 @@ function TerrainGeometry({ terrainData }: { terrainData?: any }) {
     geo.rotateX(-Math.PI / 2); // Orient horizontally in XZ plane with Y as elevation
 
     const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      if (heights[i] !== undefined) {
-        pos.setY(i, heights[i]);
+    if (pos) {
+      for (let i = 0; i < pos.count; i++) {
+        if (heights[i] !== undefined) {
+          pos.setY(i, heights[i]);
+        }
       }
+      pos.needsUpdate = true;
     }
-    pos.needsUpdate = true;
     geo.computeVertexNormals();
 
     // If texture repeating scale is provided, adjust the UV coordinates
@@ -9079,7 +10179,7 @@ function TerrainGeometry({ terrainData }: { terrainData?: any }) {
     }
 
     // Generate vertex colors if elevation, slope, or contour shading is requested
-    if (shadingMode && shadingMode !== 'default') {
+    if (shadingMode && shadingMode !== 'default' && pos) {
       const colors: number[] = [];
       const normals = geo.attributes.normal;
       
@@ -10559,21 +11659,24 @@ export default function Viewport() {
         theme={theme}
         onApplyStyle={(styleId, dims, extraOptions) => {
           if (!styleLibraryTargetId) return;
-          setShapes(prev => prev.map(s => {
-            if (s.id === styleLibraryTargetId) {
-              const updatedArgs = dims || s.args;
-              return {
-                ...s,
-                archStyle: styleId,
-                stairStyle: styleId,
-                wallStyle: styleId,
-                stairStructure: extraOptions?.stairStructure || s.stairStructure,
-                railingMode: extraOptions?.railingMode || s.railingMode,
-                args: updatedArgs
-              };
-            }
-            return s;
-          }));
+          setShapes(prev => {
+            const next = prev.map(s => {
+              if (s.id === styleLibraryTargetId) {
+                const updatedArgs = dims || s.args;
+                return {
+                  ...s,
+                  archStyle: styleId,
+                  stairStyle: styleId,
+                  wallStyle: styleId,
+                  stairStructure: extraOptions?.stairStructure || s.stairStructure,
+                  railingMode: extraOptions?.railingMode || s.railingMode,
+                  args: updatedArgs
+                };
+              }
+              return s;
+            });
+            return applyStairwellHolesToSlabs(next);
+          });
           commitHistory();
           setMeasurements(`Updated style to ${styleId.toUpperCase()}`);
           setStyleLibraryTargetId(null);

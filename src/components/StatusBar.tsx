@@ -6,7 +6,7 @@ import { useApp } from '../AppContext';
 const TOOL_INSTRUCTIONS: Record<string, string> = {
 select: 'Click to select objects. Shift to add/subtract.',
 lasso: 'Drag to select multiple objects.',
-eraser: 'Click an edge or object to erase it.',
+eraser: 'Click an object to delete all its surfaces. Shift+click to delete a single surface.',
 paint: 'Click a surface to apply the active material.',
 component: 'Click to place a new component.',
 line: 'Click to place points. Snaps to endpoints/midpoints/centers. Press X/Y/Z to lock an axis, or type a length + Enter to set it exactly.',

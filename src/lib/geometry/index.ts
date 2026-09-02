@@ -159,6 +159,15 @@ export class KernelSession {
 
   get canUndo(): boolean { return this.undoStack.length > 0; }
   get canRedo(): boolean { return this.redoStack.length > 0; }
+  get undoDepth(): number { return this.undoStack.length; }
+
+  replaceUndoEntry(): void {
+    if (this.undoStack.length >= 2) {
+      const latest = this.undoStack.pop()!;
+      this.undoStack.pop();
+      this.undoStack.push(latest);
+    }
+  }
 
   /** Cap the stack by entry count so long sessions cannot grow without bound. */
   trimHistory(maxEntries = 200): void {

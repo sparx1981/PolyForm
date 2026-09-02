@@ -543,11 +543,11 @@ export default function UnifiedToolRail() {
           tool: 'eraser',
           label: 'Eraser',
           hotkey: 'E',
-          subtitle: 'Delete objects and geometry',
+          subtitle: 'Delete all object surfaces (Shift+click to delete single surface)',
           icon: <Eraser size={19} />,
           isActive: (s) => s.activeTool === 'eraser',
           onClick: (s) => s.setActiveTool('eraser'),
-          keywords: ['eraser', 'delete', 'remove', 'trash']
+          keywords: ['eraser', 'delete', 'remove', 'trash', 'surface']
         },
         {
           id: 'paint',
@@ -588,12 +588,12 @@ export default function UnifiedToolRail() {
         {
           id: 'poly',
           tool: 'poly',
-          label: 'Poly Tool',
-          subtitle: 'Draw multi-sided polygons',
+          label: 'Poly Line Tool',
+          subtitle: 'Draw multi-segment polyline contours',
           icon: <Pentagon size={19} />,
           isActive: (s) => s.activeTool === 'poly',
           onClick: (s) => s.setActiveTool('poly'),
-          keywords: ['poly', 'polygon', 'pentagon', 'contour']
+          keywords: ['poly', 'polyline', 'polygon', 'pentagon', 'contour', 'line']
         },
         {
           id: 'arc',
@@ -831,15 +831,6 @@ export default function UnifiedToolRail() {
           keywords: ['zoom', 'magnify', 'view', 'in', 'out']
         },
         {
-          id: 'worldview',
-          label: 'WorldView Geolocation',
-          subtitle: 'Open satellite map & solar positioning',
-          icon: <Globe size={19} />,
-          isActive: (s) => s.isWorldViewActive,
-          onClick: (s) => s.setIsWorldViewOpen(true),
-          keywords: ['worldview', 'globe', 'map', 'geolocation', 'sun', 'solar']
-        },
-        {
           id: 'ai_query',
           label: 'AI Query',
           subtitle: 'Ask AI assistant about your model & scene',
@@ -934,6 +925,15 @@ export default function UnifiedToolRail() {
           isActive: (s) => s.activeTool === 'staircase',
           onClick: (s) => s.setActiveTool('staircase'),
           keywords: ['staircase', 'stairs', 'flight', 'steps', 'levels']
+        },
+        {
+          id: 'worldview',
+          label: 'WorldView Geolocation',
+          subtitle: 'Open satellite map & solar positioning',
+          icon: <Globe size={19} />,
+          isActive: (s) => s.isWorldViewActive,
+          onClick: (s) => s.setIsWorldViewOpen(true),
+          keywords: ['worldview', 'globe', 'map', 'geolocation', 'sun', 'solar', 'architecture', 'site']
         }
       ]
     },

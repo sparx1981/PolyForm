@@ -14,6 +14,7 @@ import {
   Layers,
   Spline,
   Pentagon,
+  Hexagon,
   Move, 
   RotateCw, 
   Maximize, 
@@ -27,7 +28,6 @@ import {
   CircleDot,
   CornerUpRight,
   Code,
-  Globe,
   Scissors,
   CircleDashed,
   Grab,
@@ -145,6 +145,9 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
   const [isLinePopoutOpen, setIsLinePopoutOpen] = useState(false);
   const lineGroupRef = useRef<HTMLDivElement>(null);
   const [lineGroupHovered, setLineGroupHovered] = useState(false);
+  const [isCirclePopoutOpen, setIsCirclePopoutOpen] = useState(false);
+  const circleGroupRef = useRef<HTMLDivElement>(null);
+  const [circleGroupHovered, setCircleGroupHovered] = useState(false);
   const [isBevelPopoutOpen, setIsBevelPopoutOpen] = useState(false);
   const bevelGroupRef = useRef<HTMLDivElement>(null);
   const [bevelGroupHovered, setBevelGroupHovered] = useState(false);
@@ -154,6 +157,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hover3DTimeout, setHover3DTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hoverLineTimeout, setHoverLineTimeout] = useState<NodeJS.Timeout|null>(null);
+  const [hoverCircleTimeout, setHoverCircleTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hoverBevelTimeout, setHoverBevelTimeout] = useState<NodeJS.Timeout|null>(null);
   const [hoverMeasureTimeout, setHoverMeasureTimeout] = useState<NodeJS.Timeout|null>(null);
 
@@ -264,6 +268,20 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     setLineGroupHovered(false);
   };
 
+  const handleCircleEnter = () => {
+    if (hoverCircleTimeout) clearTimeout(hoverCircleTimeout);
+    setIsCirclePopoutOpen(true);
+    setCircleGroupHovered(true);
+  };
+
+  const handleCircleLeave = () => {
+    const timeout = setTimeout(() => {
+      setIsCirclePopoutOpen(false);
+    }, 300);
+    setHoverCircleTimeout(timeout);
+    setCircleGroupHovered(false);
+  };
+
   const is3DActive = ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool);
 
   if (!isBasicToolbarEnabled) return null;
@@ -349,7 +367,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       </div>
       
       <ToolButton tool="select" icon={<MousePointer2 size={20} />} label="Select (Space)" />
-      <ToolButton tool="eraser" icon={<Eraser size={20} />} label="Eraser (E)" />
+      <ToolButton tool="eraser" icon={<Eraser size={20} />} label="Eraser (E) - click: delete object, Shift+click: delete surface" />
       <ToolButton tool="paint" icon={<PaintBucket size={20} />} label="Paint Bucket (B) - click: face/sub-face, Shift+click: whole object" />
       <ToolButton tool="component" icon={<Box size={20} />} label="Make Component (G)" />
       
@@ -365,10 +383,10 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
           onClick={() => setActiveTool('line')}
           className={cn(
             "toolbar-btn transition-colors relative",
-            (activeTool === 'line' || activeTool === 'poly' || activeTool === 'arc') && "toolbar-btn-active"
+            (activeTool === 'line' || activeTool === 'poly' || activeTool === 'bezier' || activeTool === 'arc') && "toolbar-btn-active"
           )}
         >
-          {activeTool === 'poly' ? <Pentagon size={20} /> : activeTool === 'arc' ? <Spline size={20} /> : <PenLine size={20} />}
+          {activeTool === 'poly' ? <Pentagon size={20} /> : activeTool === 'bezier' || activeTool === 'arc' ? <Spline size={20} /> : <PenLine size={20} />}
         </button>
 
         {/*
@@ -391,7 +409,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         <FlyoutPortal anchorRef={lineGroupRef} open={lineGroupHovered && !isLinePopoutOpen} side={flyoutSide}>
           {lineGroupHovered && !isLinePopoutOpen && (
             <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
-              Line, Poly & Arc Tools
+              Line, Poly, Bézier & Arc Tools
             </div>
           )}
         </FlyoutPortal>
@@ -405,7 +423,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
                   className={cn(
-                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px]",
+                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[150px]",
                     theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
                   )}
                 >
@@ -427,7 +445,17 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     )}
                   >
                     <Pentagon size={16} />
-                    <span>Poly Tool</span>
+                    <span>Poly Line Tool</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTool('bezier')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'bezier' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Spline size={16} />
+                    <span>Bézier Curve Tool</span>
                   </button>
                   <button
                     onClick={() => setActiveTool('arc')}
@@ -447,8 +475,81 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       </div>
 
       <ToolButton tool="rectangle" icon={<Square size={20} />} label="Rectangle (R)" />
-      <ToolButton tool="circle" icon={<Circle size={20} />} label="Circle (C)" />
-      <ToolButton tool="triangle" icon={<TriangleIcon size={20} />} label="Triangle (T)" />
+
+      {/* Circle, Polygon & Triangle Group Flyout */}
+      <div 
+        className="relative"
+        ref={circleGroupRef}
+        onMouseEnter={handleCircleEnter}
+        onMouseLeave={handleCircleLeave}
+      >
+        <button 
+          onClick={() => setActiveTool('circle')}
+          className={cn(
+            "toolbar-btn transition-colors relative",
+            (activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'triangle') && "toolbar-btn-active"
+          )}
+        >
+          {activeTool === 'polygon' ? <Hexagon size={20} /> : activeTool === 'triangle' ? <TriangleIcon size={20} /> : <Circle size={20} />}
+        </button>
+
+        <FlyoutPortal anchorRef={circleGroupRef} open={circleGroupHovered && !isCirclePopoutOpen} side={flyoutSide}>
+          {circleGroupHovered && !isCirclePopoutOpen && (
+            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+              Circle & Polygon Tools
+            </div>
+          )}
+        </FlyoutPortal>
+
+        <FlyoutPortal anchorRef={circleGroupRef} open={isCirclePopoutOpen} side={flyoutSide}>
+          <div onMouseEnter={handleCircleEnter} onMouseLeave={handleCircleLeave}>
+            <AnimatePresence>
+              {isCirclePopoutOpen && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className={cn(
+                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[160px]",
+                    theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
+                  )}
+                >
+                  <button 
+                    onClick={() => setActiveTool('circle')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'circle' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Circle size={16} />
+                    <span>Circle Tool (C)</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTool('polygon')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'polygon' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Hexagon size={16} />
+                    <span>Polygon Tool (Pg)</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTool('triangle')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'triangle' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <TriangleIcon size={16} />
+                    <span>Triangle (T)</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </FlyoutPortal>
+      </div>
 
       <div 
         className="relative"
@@ -687,10 +788,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <ToolButton tool="orbit" icon={<Orbit size={20} />} label="Orbit (O)" />
       <ToolButton tool="pan" icon={<Hand size={20} />} label="Pan (H)" />
       <ToolButton tool="zoom" icon={<ZoomIn size={20} />} label="Zoom (Z)" />
-      
-      <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
-
-      <WorldViewToolButton />
 
       {pinnedScripts.length > 0 && (
         <>
@@ -710,42 +807,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       )}
     </aside>
     </FlyoutSideContext.Provider>
-  );
-}
-
-/**
- * Both of these previously relied on `group-hover` CSS the same way
- * ToolButton originally did, with the same fix: portaled to document.body,
- * since this toolbar is a SIBLING of ArchitectureToolbar and
- * LandscapesToolbar in App.tsx, and a child's z-index can never escape a
- * losing tie between its own parent and a sibling toolbar's container.
- */
-function WorldViewToolButton() {
-  const { setIsWorldViewOpen, isWorldViewActive } = useApp();
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [hovered, setHovered] = useState(false);
-  const flyoutSide = useContext(FlyoutSideContext);
-
-  return (
-    <button
-      ref={buttonRef}
-      onClick={() => setIsWorldViewOpen(true)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className={cn(
-        "toolbar-btn relative transition-colors",
-        isWorldViewActive && "bg-trimble-blue/10"
-      )}
-    >
-      <Globe size={20} className={isWorldViewActive ? "text-trimble-blue" : "text-gray-500"} />
-      <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
-        {hovered && (
-          <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
-            WorldView Geolocation
-          </div>
-        )}
-      </FlyoutPortal>
-    </button>
   );
 }
 
