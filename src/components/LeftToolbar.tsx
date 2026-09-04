@@ -482,13 +482,13 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         onMouseLeave={handleCircleLeave}
       >
         <button 
-          onClick={() => setActiveTool('circle')}
+          onClick={() => setActiveTool('rectangle')}
           className={cn(
             "toolbar-btn transition-colors relative",
             (activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'triangle' || activeTool === 'rectangle') && "toolbar-btn-active"
           )}
         >
-          {activeTool === 'polygon' ? <Hexagon size={20} /> : activeTool === 'triangle' ? <TriangleIcon size={20} /> : activeTool === 'rectangle' ? <Square size={20} /> : <Circle size={20} />}
+          {activeTool === 'polygon' ? <Hexagon size={20} /> : activeTool === 'triangle' ? <TriangleIcon size={20} /> : activeTool === 'circle' ? <Circle size={20} /> : <Square size={20} />}
         </button>
 
         <FlyoutPortal anchorRef={circleGroupRef} open={circleGroupHovered && !isCirclePopoutOpen} side={flyoutSide}>

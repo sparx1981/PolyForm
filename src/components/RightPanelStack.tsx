@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as THREE from 'three';
 import { Box, BoxSelect, Building2, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
 import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
+import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { ToolModifierPalette } from './ToolModifierPalette';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator } from '../types';
@@ -185,6 +187,7 @@ export default function RightPanelStack() {
     setSelectedFaceIds, 
     setShapes,
     removeShape,
+    addShape,
     commitHistory,
     selectedId, 
     setSelectedId, 
@@ -302,6 +305,50 @@ export default function RightPanelStack() {
     }
   }, [fogSettings.enabled, fogSettings.animate, setFogSettings]);
   
+  /**
+   * Duplicates a set of kernel-graph faces (drawn geometry — lines,
+   * rectangles, arcs, subtract results — not Shape[] primitives) as a
+   * new, independent 'custom' Shape, offset slightly from the
+   * original. Needed because kernel faces have no single Shape object
+   * to spread-clone the way every other duplicate button here does —
+   * tessellating them into a real mesh and adding that as a new Shape
+   * is the only way to give them an independent copy at all. This is
+   * what was actually missing for "all object types" to have a
+   * working duplicate action, since every non-kernel row already had
+   * a plain Shape to clone directly.
+   */
+  const duplicateKernelFaces = (faces: any[], label: string) => {
+    const meshes = faces
+      .map((id) => tessellateFace(kernelHost.graph, id))
+      .filter((m): m is NonNullable<typeof m> => m !== null);
+    if (meshes.length === 0) return;
+    const merged = mergeBuffers(meshes);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(merged.position, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(merged.normal, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
+    geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
+    // The tessellated vertices are already in world space (same as
+    // every kernel-based 'custom' Shape delivered this session), so
+    // the visible offset has to be baked into the geometry itself —
+    // setting the Shape's own position here instead would ADD to
+    // those already-absolute coordinates rather than shifting them
+    // from where the original actually sits.
+    geo.translate(0.3, 0, 0.3);
+    const geometryData = geo.toJSON();
+    addShape({
+      id: Math.random().toString(36).substr(2, 9),
+      name: `${label} Copy`,
+      type: 'custom',
+      position: [0, 0, 0],
+      quaternion: [0, 0, 0, 1],
+      color: activeMaterial,
+      args: [],
+      geometryData,
+    });
+    commitHistory();
+  };
+
   const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers']);
 
   useEffect(() => {
@@ -1947,6 +1994,23 @@ export default function RightPanelStack() {
                                                 <button
                                                   onClick={(e) => {
                                                     e.stopPropagation();
+                                                    const clone = {
+                                                      ...member,
+                                                      id: Math.random().toString(36).substr(2, 9),
+                                                      name: `${member.name || 'Timber'} Copy`,
+                                                      position: [member.position[0] + 0.3, member.position[1], member.position[2] + 0.3] as [number, number, number],
+                                                    };
+                                                    setShapes(prev => [...prev, clone]);
+                                                    commitHistory();
+                                                  }}
+                                                  className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                                  title="Duplicate"
+                                                >
+                                                  <CopyIcon size={10} />
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
                                                     setShapes(prev => prev.filter(s => s.id !== member.id));
                                                     setSelectedIds(prev => prev.filter(id => id !== member.id));
                                                     if (selectedId === member.id) setSelectedId(null);
@@ -2006,6 +2070,24 @@ export default function RightPanelStack() {
                                 title={shape.hidden ? "Show" : "Hide"}
                               >
                                 {shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const clone = {
+                                    ...shape,
+                                    id: Math.random().toString(36).substr(2, 9),
+                                    name: `${shape.name || 'Object'} Copy`,
+                                    position: [shape.position[0] + 0.3, shape.position[1], shape.position[2] + 0.3] as [number, number, number],
+                                  };
+                                  setShapes(prev => [...prev, clone]);
+                                  commitHistory();
+                                }}
+                                className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                title="Duplicate"
+                              >
+                                <CopyIcon size={13} />
                               </button>
 
                               <button
@@ -2087,6 +2169,16 @@ export default function RightPanelStack() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                duplicateKernelFaces(group.faces, group.label);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              title={`Duplicate ${group.label.toLowerCase()}`}
+                            >
+                              <CopyIcon size={13} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 deleteGroupFacesAndEdges(kernelHost.graph, group.faces);
                                 setSelectedFaceIds(prev => prev.filter(f => !group.faces.includes(f)));
                                 bumpKernel();
@@ -2130,6 +2222,14 @@ export default function RightPanelStack() {
                               className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
                               title={row.hidden ? "Show" : "Hide"}
                             >{row.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                duplicateKernelFaces([row.id], row.label);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              title="Duplicate surface"
+                            ><CopyIcon size={13} /></button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();

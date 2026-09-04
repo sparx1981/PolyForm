@@ -1487,6 +1487,58 @@ function Scene() {
   //
   // The existing TransformControls wiring above drives exactly one Shape's
   // position/quaternion/scale and writes the result back on release --
+  /**
+   * Shrinks a Box3 slightly on every axis, without ever flipping it
+   * inside-out — which a flat `expandByScalar(-N)` genuinely does the
+   * instant an axis's own size is less than 2*N. Confirmed directly:
+   * a kernel face (a flat, 2D polygon with literally zero thickness
+   * along its own normal) fed straight into
+   * `box.expandByScalar(-0.02)` comes back with that axis's min
+   * greater than its max — box3.isEmpty() correctly reports that as
+   * empty, and checkCollision's own early-return then treats it as
+   * "never colliding," no matter how far the drag actually crosses
+   * into another object. This was the entire reason friction silently
+   * never fired for anything not yet given real volume via push/pull.
+   */
+  const safeShrinkBox3 = (box: THREE.Box3, amount: number): THREE.Box3 => {
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const shrinkX = Math.min(amount, size.x * 0.49);
+    const shrinkY = Math.min(amount, size.y * 0.49);
+    const shrinkZ = Math.min(amount, size.z * 0.49);
+    box.min.x += shrinkX; box.max.x -= shrinkX;
+    box.min.y += shrinkY; box.max.y -= shrinkY;
+    box.min.z += shrinkZ; box.max.z -= shrinkZ;
+    return box;
+  };
+
+  /**
+   * Ensures a Box3 has at least `minSize` thickness on every axis,
+   * expanding symmetrically around its own center wherever it's
+   * currently thinner than that. Needed for a second, separate reason
+   * friction never fired for flat objects (a rectangle lying flat on
+   * the ground, or any single, un-extruded kernel face): confirmed
+   * directly by logging both boxes live during an actual drag that
+   * moving an object that's resting exactly on Y=0 can drift its own Y
+   * by a tiny, entirely invisible amount (thousandths of a unit) from
+   * the drag/raycasting math itself — and when the OTHER object is
+   * also flat and sitting at exactly Y=0, that drift alone is enough
+   * to make their zero-thickness Y-ranges never overlap at all, even
+   * while the two objects visibly, fully overlap on screen from the
+   * camera's own perspective. Giving both boxes a small minimum
+   * thickness before the intersection test absorbs that drift without
+   * meaningfully loosening the check for objects that already have
+   * real volume.
+   */
+  const ensureMinThickness = (box: THREE.Box3, minSize: number): THREE.Box3 => {
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    if (size.x < minSize) { const pad = (minSize - size.x) / 2; box.min.x -= pad; box.max.x += pad; }
+    if (size.y < minSize) { const pad = (minSize - size.y) / 2; box.min.y -= pad; box.max.y += pad; }
+    if (size.z < minSize) { const pad = (minSize - size.z) / 2; box.min.z -= pad; box.max.z += pad; }
+    return box;
+  };
+
   const checkCollision = useCallback((id: string, target: THREE.Object3D | THREE.Box3) => {
     let box: THREE.Box3;
     if (target instanceof THREE.Box3) {
@@ -1497,7 +1549,7 @@ function Scene() {
     }
     if (box.isEmpty()) return false;
     // Shrink slightly to avoid grazing contacts triggering false positives
-    const testBox = box.clone().expandByScalar(-0.005);
+    const testBox = ensureMinThickness(safeShrinkBox3(box.clone(), 0.005), 0.1);
 
     let collided = false;
     scene.traverse(child => {
@@ -1516,10 +1568,19 @@ function Scene() {
 
       // Check if child is a valid visible scene shape, group or mesh
       if (child instanceof THREE.Mesh && child.geometry) {
+        // NOTE: all kernel faces render as ONE combined mesh with no
+        // per-face userData.id, so a kernel-vs-kernel caller can never
+        // use this to distinguish "this other specific kernel face"
+        // from "every kernel face in the scene, including the one
+        // being dragged" — a known, still-open limitation (see the
+        // note at handleGroupTransformChange's own isColliding line).
+        // Shape objects DO have their own real, individual
+        // userData.id, so Shape-vs-anything collision below is fully
+        // reliable regardless.
         const isShape = child.userData?.isShape || child.userData?.isKernelGeometry || child.userData?.id || (child.parent && child.parent.userData?.isShape);
         if (isShape) {
           child.updateWorldMatrix(true, false);
-          const otherBox = new THREE.Box3().setFromObject(child);
+          const otherBox = ensureMinThickness(new THREE.Box3().setFromObject(child), 0.1);
           if (!otherBox.isEmpty() && testBox.intersectsBox(otherBox)) {
             collided = true;
           }
@@ -1637,7 +1698,7 @@ function Scene() {
         } else {
           pivotBox = new THREE.Box3().setFromObject(pivot);
         }
-        pivotBox.expandByScalar(-0.02);
+        safeShrinkBox3(pivotBox, 0.02);
         // Guard against the false-positive this fix would otherwise
         // introduce: the ORIGINAL kernel faces stay fully rendered at
         // their un-moved position throughout the whole drag (confirmed
@@ -1657,6 +1718,20 @@ function Scene() {
           ? new THREE.Box3(startBounds.min.clone(), startBounds.max.clone())
           : null;
         const stillOverlapsOwnStart = !!startBoxForOverlapGuard && startBoxForOverlapGuard.intersectsBox(pivotBox);
+        // NOTE: a dedicated kernel-vs-kernel bounds check (comparing
+        // against specifically the non-selected faces) was attempted
+        // here and reverted — verified directly that it produced a
+        // worse regression than the plain check below: it read as
+        // colliding on every single frame of the drag, immediately
+        // freezing movement entirely. The actual cause needs its own
+        // investigation (how kernel faces group into the graph
+        // wasn't what this fix assumed), so this still shares the
+        // known, pre-existing limitation that a combined kernel mesh
+        // with no per-face id can't distinguish "hit another kernel
+        // object" from "hit myself, still in the scene" — a real
+        // Shape-vs-kernel or Shape-vs-Shape collision, though, IS
+        // reliably detected below, since Shape objects do have their
+        // own real, individual userData.id.
         const isColliding = !stillOverlapsOwnStart && checkCollision('kernel-group-transform', pivotBox);
         if (isColliding && !hasReachedFrictionRef.current) {
           hasReachedFrictionRef.current = true;
