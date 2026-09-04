@@ -1011,11 +1011,55 @@ export default function TopBar() {
                     />
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                  <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
                     {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'orbit', 'pan', 'zoom', 'component'].map(tool => (
                       <VisibilityToggle 
                         key={tool}
                         label={tool === 'component' ? 'Make Component' : tool.charAt(0).toUpperCase() + tool.slice(1)}
+                        isVisible={toolbarVisibility[tool] !== false}
+                        onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
+                      />
+                    ))}
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Architecture Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                    {[
+                      { tool: 'wall', label: 'Wall Tool' },
+                      { tool: 'door', label: 'Door Assembly' },
+                      { tool: 'window', label: 'Window Frame' },
+                      { tool: 'step', label: 'Single Step / Riser' },
+                      { tool: 'staircase', label: 'Staircase Flight' },
+                    ].map(({ tool, label }) => (
+                      <VisibilityToggle 
+                        key={tool}
+                        label={label}
+                        isVisible={toolbarVisibility[tool] !== false}
+                        onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
+                      />
+                    ))}
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Landscapes Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                    {[
+                      { tool: 'landscape_plot', label: 'Plot Terrain' },
+                      { tool: 'landscape_form', label: 'Form from Isolines/Mesh' },
+                      { tool: 'landscape_embed', label: 'Embed & Fit' },
+                      { tool: 'landscape_sculpt', label: 'Sculpting Brushes' },
+                      { tool: 'landscape_mask', label: 'Fenced / Masked Brushing' },
+                      { tool: 'landscape_road', label: 'Path & Road Tools' },
+                      { tool: 'landscape_zone', label: 'Zone & Subdivision' },
+                      { tool: 'landscape_texture', label: 'Dynamic Materials & Shading' },
+                      { tool: 'tree', label: 'Plant Tree' },
+                      { tool: 'bush', label: 'Plant Bush / Shrub' },
+                      { tool: 'fence', label: 'Post & Rail Fence' },
+                      { tool: 'railing', label: 'Safety Railing' },
+                      { tool: 'lamp', label: 'Street / Path Lamp' },
+                      { tool: 'bench', label: 'Park / Garden Bench' },
+                      { tool: 'rock', label: 'Landscape Boulder' },
+                    ].map(({ tool, label }) => (
+                      <VisibilityToggle 
+                        key={tool}
+                        label={label}
                         isVisible={toolbarVisibility[tool] !== false}
                         onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
                       />

@@ -474,8 +474,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         </FlyoutPortal>
       </div>
 
-      <ToolButton tool="rectangle" icon={<Square size={20} />} label="Rectangle (R)" />
-
       {/* Circle, Polygon & Triangle Group Flyout */}
       <div 
         className="relative"
