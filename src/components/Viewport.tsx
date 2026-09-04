@@ -1208,6 +1208,7 @@ function Scene() {
     setAmbientOcclusionEnabled,
     activeBevelType,
     setActiveBevelType,
+    activeBevelAmount,
     contextMenu,
     setContextMenu,
     undo,
@@ -1546,6 +1547,17 @@ function Scene() {
   const [groupPivotReady, setGroupPivotReady] = useState(false);
   const groupTransformActiveRef = useRef(false);
   const groupTransformStartRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  // Populated at drag-begin from the actual selected kernel faces' own
+  // bounds — needed because the group-transform gizmo is attached to an
+  // invisible, geometry-less dummy pivot object, so a Box3 built
+  // directly from that pivot is always empty and can never register a
+  // collision (confirmed directly: Box3().setFromObject on a bare
+  // Object3D with no geometry/children returns isEmpty()===true, every
+  // time, regardless of where the pivot actually is). That emptiness is
+  // the entire reason friction silently never triggered for kernel
+  // shapes — the collision check was structurally correct but always
+  // had nothing real to test against.
+  const groupTransformStartBoundsRef = useRef<{ min: THREE.Vector3; max: THREE.Vector3 } | null>(null);
   const groupTransformBindingRef = useRef(createGroupTransformBinding(kernelHost, bumpKernel));
   const [groupTransformPreview, setGroupTransformPreview] = useState<
     { faces: FaceId[]; matrix: Mat4 } | null
@@ -1573,8 +1585,15 @@ function Scene() {
       y: groupPivotRef.current.position.y,
       z: groupPivotRef.current.position.z,
     };
+    const bounds = boundsOfFaces(kernelHost.graph, [...kernelSelectedSet]);
+    groupTransformStartBoundsRef.current = bounds
+      ? {
+          min: new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
+          max: new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.max.z),
+        }
+      : null;
     groupTransformBindingRef.current.begin([...kernelSelectedSet]);
-  }, [kernelSelectedSet]);
+  }, [kernelSelectedSet, kernelHost]);
 
   const handleGroupTransformChange = useCallback(() => {
     const pivot = groupPivotRef.current;
@@ -1594,9 +1613,51 @@ function Scene() {
           return;
         }
 
-        const pivotBox = new THREE.Box3().setFromObject(pivot);
+        // FIX: was `new THREE.Box3().setFromObject(pivot)` — pivot is
+        // the invisible, geometry-less dummy Object3D the gizmo is
+        // attached to (see groupTransformStartBoundsRef's own doc
+        // comment above for why), so that box was always empty and
+        // never registered a collision, no matter how far the drag
+        // actually crossed into another object. Building the box from
+        // the real, original kernel-face bounds and offsetting it by
+        // however far the pivot has actually moved gives a real,
+        // non-empty box that represents where the selected geometry
+        // would truly end up.
+        const startBounds = groupTransformStartBoundsRef.current;
+        const start = groupTransformStartRef.current;
+        let pivotBox: THREE.Box3;
+        if (startBounds && start) {
+          const dx = pivot.position.x - start.x;
+          const dy = pivot.position.y - start.y;
+          const dz = pivot.position.z - start.z;
+          pivotBox = new THREE.Box3(
+            startBounds.min.clone().add(new THREE.Vector3(dx, dy, dz)),
+            startBounds.max.clone().add(new THREE.Vector3(dx, dy, dz)),
+          );
+        } else {
+          pivotBox = new THREE.Box3().setFromObject(pivot);
+        }
         pivotBox.expandByScalar(-0.02);
-        const isColliding = checkCollision('kernel-group-transform', pivotBox);
+        // Guard against the false-positive this fix would otherwise
+        // introduce: the ORIGINAL kernel faces stay fully rendered at
+        // their un-moved position throughout the whole drag (confirmed
+        // directly — KernelGeometry only adds a highlight overlay for
+        // selectedFaces, it never hides or fades the real geometry).
+        // Early in a drag, the translated pivotBox above can still
+        // overlap that original footprint, which checkCollision has no
+        // way to tell apart from a genuine external collision, since
+        // it isn't a distinct scene object with its own userData.id to
+        // skip. Treating "still overlapping where this same group
+        // started" as not-a-collision avoids that false trigger, at
+        // the cost of not detecting a real collision with some other
+        // object that happens to already be touching the start
+        // position — an acceptable trade against firing friction on
+        // literally every group move attempt.
+        const startBoxForOverlapGuard = startBounds
+          ? new THREE.Box3(startBounds.min.clone(), startBounds.max.clone())
+          : null;
+        const stillOverlapsOwnStart = !!startBoxForOverlapGuard && startBoxForOverlapGuard.intersectsBox(pivotBox);
+        const isColliding = !stillOverlapsOwnStart && checkCollision('kernel-group-transform', pivotBox);
         if (isColliding && !hasReachedFrictionRef.current) {
           hasReachedFrictionRef.current = true;
           const pauseMs = Math.round(60 + ((contactFrictionStrength ?? 50) / 100) * 440);
@@ -2198,6 +2259,16 @@ function Scene() {
           );
           return false;
         }
+        // The Radius Strength slider (activeBevelAmount) was previously
+        // never read anywhere outside the settings panel that displays
+        // it — confirmed directly, zero references to it in this file —
+        // so it had no effect on the actual fillet at all, matching the
+        // report that adjusting it changes nothing. Applying it here as
+        // the starting amount means it takes effect immediately, even
+        // before any drag happens; the drag below then adjusts UP or
+        // DOWN from this baseline instead of always starting at 0.
+        filletRef.current.update(activeBevelAmount);
+        setChamferPreview({ faces: group, amount: activeBevelAmount });
         setMeasurements('Move the cursor to set the radius, then release.');
         const dragSensitivity = groupBoundsHalfMinDimension(group) / 300;
 
@@ -2211,7 +2282,7 @@ function Scene() {
             return;
           }
           const deltaPx = ev.clientX - dragStartClientX;
-          const amount = Math.max(0, deltaPx * dragSensitivity);
+          const amount = Math.max(0, activeBevelAmount + deltaPx * dragSensitivity);
           filletRef.current.update(amount);
           setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
           // Reuses ChamferPreview's own wireframe-of-shrunk-faces
@@ -2268,6 +2339,11 @@ function Scene() {
         );
         return false;
       }
+      // See the matching comment in the 'radius' branch above — same
+      // fix, same reasoning: activeBevelAmount (Chamfer Strength) was
+      // never read anywhere outside its own slider before this.
+      chamferRef.current.update(activeBevelAmount);
+      setChamferPreview({ faces: group, amount: activeBevelAmount });
       setMeasurements('Move the cursor to set the chamfer amount, then release.');
       const dragSensitivity = groupBoundsHalfMinDimension(group) / 300;
 
@@ -2281,7 +2357,7 @@ function Scene() {
           return;
         }
         const deltaPx = ev.clientX - dragStartClientX;
-        const amount = Math.max(0, deltaPx * dragSensitivity);
+        const amount = Math.max(0, activeBevelAmount + deltaPx * dragSensitivity);
         chamferRef.current.update(amount);
         setMeasurements(`${formatValue(amount, unit, 2)} — release to confirm.`);
         // When re-applying to an already-chamfered solid, the session
@@ -2424,7 +2500,7 @@ function Scene() {
       return false;
     }
   }, [
-    activeTool, activeBevelType, kernelHost, setMeasurements, camera, gl, unit, showToast, setPlacingNotePos,
+    activeTool, activeBevelType, activeBevelAmount, kernelHost, setMeasurements, camera, gl, unit, showToast, setPlacingNotePos,
     // pickingSunCenter/pickSunCenter, and especially kernelSubtractTarget/
     // setKernelSubtractTarget/performKernelCSGSubtraction/setSelectedFaceIds/
     // setConsoleOutput below, were all missing from this list — meaning
@@ -7763,7 +7839,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['poly', 'bezier', 'rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 

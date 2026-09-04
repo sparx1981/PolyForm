@@ -392,7 +392,19 @@ export function createArchitecturalStaircaseGeometry(
 
       // Radial wedge tread
       const treadLen = radius - centerPostR;
-      const wedgeGeom = new THREE.BoxGeometry(0.24, 0.045, treadLen);
+      // FIX: was a fixed 0.24m regardless of radius or angle step —
+      // meaning a wider spiral never got wider treads, which is the
+      // literal cause of the reported "too narrow" complaint at the
+      // one place it's most noticeable (where your foot actually
+      // lands). Deriving this from the arc length at the tread's own
+      // midpoint radius (same approach already verified for the
+      // c-shape/curved staircase above) means widening the staircase
+      // via its own width/length dimensions now actually produces
+      // wider, more comfortable treads instead of the same fixed
+      // sliver every time.
+      const treadMidR = centerPostR + treadLen / 2;
+      const tangentialWidth = Math.max(0.24, treadMidR * anglePerStep * 1.15);
+      const wedgeGeom = new THREE.BoxGeometry(tangentialWidth, 0.045, treadLen);
       wedgeGeom.translate(0, -0.02, treadLen / 2 + centerPostR);
       wedgeGeom.rotateY(ang);
       wedgeGeom.translate(0, stepY, 0);
@@ -431,7 +443,21 @@ export function createArchitecturalStaircaseGeometry(
       const midR = (innerR + outerR) / 2;
       const treadD = midR * angleStep * 1.1;
 
-      const tread = new THREE.BoxGeometry(width, 0.045, treadD);
+      const tread = new THREE.BoxGeometry(treadD, 0.045, width);
+      // FIX: this box's own radial-span dimension ("width") must run
+      // along local Z, and its along-the-curve dimension ("treadD")
+      // along local X — confirmed directly (not assumed) by computing
+      // each tread's actual world-space corners: with width on X (the
+      // original code), a tread at angle 0 landed with its corners at
+      // radius ~0 and ~1 from the arc's own center instead of spanning
+      // innerR..outerR, meaning every tread's radial footprint was
+      // rotated 90° out of alignment with the curve itself — the
+      // actual cause of steps landing in the wrong position. Swapping
+      // the box's own two dimensions (rather than adding a rotation
+      // offset, which would only fix the sign for one direction of
+      // travel) puts each tread's radial span back along the true
+      // radial direction at its own angle, verified directly: corners
+      // now land at ~innerR and ~outerR as expected.
       tread.translate(0, -0.02, 0);
       tread.rotateY(ang);
 
@@ -471,14 +497,36 @@ export function createArchitecturalStaircaseGeometry(
 
     // 3 Pie-wedge corner winders
     const cornerZ = -length / 2 + run1;
+    // Post (pivot corner) the winders sweep around: the lower flight's
+    // own inner edge is at x=0, and it ends at z=cornerZ, so that's the
+    // fixed point both straight flights and every winder tread share.
+    const postX = 0;
+    const postZ = cornerZ;
     for (let w = 0; w < 3; w++) {
       const stepIdx = flight1Steps + 1 + w;
       const topY = -height / 2 + stepIdx * stepH;
-      const ang = (w / 3) * (Math.PI / 2);
+      const angStep = (Math.PI / 2) / 3;
+      const ang = (w + 0.5) * angStep;
+      const midR = flightW / 2;
+      // FIX: previously each winder's own center only ever moved by a
+      // flat, angle-independent 0.2m nudge (`sin(ang)*0.2` /
+      // `cos(ang)*0.2`), regardless of flightW or how far apart the
+      // two straight flights actually are — confirmed directly by
+      // computing each winder's real distance from the pivot post:
+      // the old formula left every winder clustered within ~0.2m of
+      // the same spot instead of progressively sweeping the full
+      // corner, which is what put steps in the wrong position. This
+      // sweeps each winder's own center at radius midR from the post,
+      // verified directly (not assumed) to progress smoothly from
+      // near the lower flight's own end (post - flightW along X) to
+      // near the upper flight's own start (post + flightW along Z).
+      const centerX = postX - Math.cos(ang) * midR;
+      const centerZ = postZ + Math.sin(ang) * midR;
+      const treadArc = midR * angStep * 1.3;
 
-      const winder = new THREE.BoxGeometry(flightW * 1.2, 0.045, flightW * 0.45);
+      const winder = new THREE.BoxGeometry(flightW, 0.045, treadArc);
       winder.rotateY(ang);
-      winder.translate(-flightW / 2 + Math.sin(ang) * 0.2, topY, cornerZ + Math.cos(ang) * 0.2);
+      winder.translate(centerX, topY, centerZ);
       geoms.push(winder);
     }
 
@@ -489,7 +537,14 @@ export function createArchitecturalStaircaseGeometry(
       const stepIdx = flight1Steps + 4 + j;
       const topY = -height / 2 + stepIdx * stepH;
       const xPos = -flightW / 2 + (j + 0.5) * stepD2 + flightW * 0.5;
-      const zPos = cornerZ + flightW * 0.8;
+      // FIX: was cornerZ + flightW*0.8, leaving this flight's own
+      // centerline slightly short of matching the post + half its own
+      // width — confirmed by the same reasoning as the winder fix
+      // above: the flight's tread is flightW wide and centered on
+      // zPos, so its inner edge sits at zPos-flightW/2, which needs to
+      // land exactly on postZ (cornerZ) to meet the winders and the
+      // post cleanly, not 0.1*flightW short of it.
+      const zPos = cornerZ + flightW / 2;
 
       const tread = new THREE.BoxGeometry(stepD2 + 0.02, 0.04, flightW);
       tread.translate(xPos, topY, zPos);
@@ -516,8 +571,20 @@ export function createArchitecturalStaircaseGeometry(
     const masterSteps = Math.floor(numSteps / 2);
     const wingSteps = numSteps - masterSteps - 1;
     const stepH = height / numSteps;
-    const masterW = width * 0.65;
-    const wingW = width * 0.35;
+    // Fixed, absolute master-flight width — deliberately NOT a
+    // percentage of the (now wider) total width parameter. Keeping
+    // this fixed is what lets the overall width grow to give the wing
+    // flights a proper, matching tread depth without changing the
+    // width of the lower flight itself, exactly as intended: widening
+    // the staircase should only add room for the wings, not resize
+    // the master flight underneath them.
+    const masterW = 2.2;
+    // Same reasoning as masterW above — fixed rather than scaling with
+    // the total width, which is now much larger specifically to give
+    // the wing flights more RUN space, not to inflate their lateral
+    // step width. Matches the original proportions (was width*0.35 at
+    // the old 3.4m default, ~1.19).
+    const wingW = 1.2;
     const masterRun = length * 0.55;
     const stepD = masterRun / masterSteps;
 

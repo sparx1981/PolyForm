@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, BoxSelect, Building2, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
+import { Box, BoxSelect, Building2, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
@@ -185,6 +185,7 @@ export default function RightPanelStack() {
     setSelectedFaceIds, 
     setShapes,
     removeShape,
+    commitHistory,
     selectedId, 
     setSelectedId, 
     selectedIds,
@@ -1136,7 +1137,24 @@ export default function RightPanelStack() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      const clone = {
+                        ...selectedShape,
+                        id: Math.random().toString(36).substr(2, 9),
+                        name: `${selectedShape.name || 'Object'} Copy`,
+                        position: [selectedShape.position[0] + 0.3, selectedShape.position[1], selectedShape.position[2] + 0.3] as [number, number, number],
+                      };
+                      setShapes(prev => [...prev, clone]);
+                      commitHistory();
+                      setSelectedId(clone.id);
+                      setSelectedIds([clone.id]);
+                    }}
+                    className="flex items-center gap-1 text-[10px] font-bold text-trimble-blue hover:underline" title="Duplicate Entity"
+                  >
+                    <CopyIcon size={13} />
+                  </button>
                   <button 
                     onClick={() => removeShape(selectedShape.id)}
                     className="flex items-center gap-1 text-[10px] font-bold text-red-500 hover:underline" title="Delete Entity"
@@ -1465,6 +1483,25 @@ export default function RightPanelStack() {
                                           {wall.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
                                         </button>
 
+                                        {/* Individual Wall Duplicate */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const clone = {
+                                              ...wall,
+                                              id: Math.random().toString(36).substr(2, 9),
+                                              name: `${wall.name || 'Wall'} Copy`,
+                                              position: [wall.position[0] + 0.3, wall.position[1], wall.position[2] + 0.3] as [number, number, number],
+                                            };
+                                            setShapes(prev => [...prev, clone]);
+                                            commitHistory();
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          title="Duplicate Wall"
+                                        >
+                                          <CopyIcon size={12} />
+                                        </button>
+
                                         {/* Individual Wall Delete */}
                                         <button
                                           onClick={(e) => {
@@ -1508,6 +1545,23 @@ export default function RightPanelStack() {
                                           title={slab.hidden ? "Show" : "Hide"}
                                         >
                                           {slab.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const clone = {
+                                              ...slab,
+                                              id: Math.random().toString(36).substr(2, 9),
+                                              name: `${slab.name || 'Floor Slab'} Copy`,
+                                              position: [slab.position[0] + 0.3, slab.position[1], slab.position[2] + 0.3] as [number, number, number],
+                                            };
+                                            setShapes(prev => [...prev, clone]);
+                                            commitHistory();
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          title="Duplicate"
+                                        >
+                                          <CopyIcon size={12} />
                                         </button>
                                         <button
                                           onClick={(e) => {

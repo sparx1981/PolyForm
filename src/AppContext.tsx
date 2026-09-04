@@ -248,7 +248,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [isMessagingCollapsed, setIsMessagingCollapsed] = useState(false);
   const [isMessagingDocked, setIsMessagingDocked] = useState(false);
-  const [activeBevelAmount, setActiveBevelAmount] = useState(1);
+  const [activeBevelAmount, setActiveBevelAmount] = useState(0.5);
   // Default true: this restores SketchUp-style movement friction (dragging pauses
   // briefly the instant two objects' surfaces touch, then lets you continue past it).
   // It's fully wired (Viewport.tsx's handleTransformObjectChange + checkCollision, and

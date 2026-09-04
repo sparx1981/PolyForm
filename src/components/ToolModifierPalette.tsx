@@ -15,12 +15,8 @@ export const ToolModifierPalette: React.FC = () => {
     setContactFrictionEnabled,
     contactFrictionStrength,
     setContactFrictionStrength,
-    activeBevelAmount,
-    setActiveBevelAmount,
-    activeBevelType,
     deformationSettings,
     setDeformationSettings,
-    diagLog,
     autoOrbitEnabled,
     setAutoOrbitEnabled,
     orbitRotationSpeed,
@@ -647,29 +643,6 @@ export const ToolModifierPalette: React.FC = () => {
             <p className="text-[9px] text-gray-400 italic leading-tight">
               Adds tactile resistance when objects touch to help precise alignment.
             </p>
-          </div>
-        )}
-
-        {activeTool === 'bevel' && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                <span>{activeBevelType === 'radius' ? 'Radius Strength' : 'Chamfer Strength'}</span>
-                <span className="font-mono text-trimble-blue">{activeBevelAmount.toFixed(1)}</span>
-              </div>
-              <input 
-                type="range" min="0" max="250" step="0.5"
-                value={activeBevelAmount}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  setActiveBevelAmount(val);
-                  diagLog('TOOL', 'Bevel amount updated', { val });
-                }}
-                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                title="Set the strength of the bevel"
-              />
-            </div>
-            <p className="text-[9px] text-gray-400 italic">Controls the amount of rounding or chamfer applied.</p>
           </div>
         )}
 

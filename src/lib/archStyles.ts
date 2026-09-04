@@ -125,7 +125,7 @@ export const STAIR_STYLES: ArchStyleDef[] = [
     name: 'Spiral Staircase (Central Post)',
     category: 'Layout',
     description: 'Treads radiate outward in a full 360-degree helical circle around a central vertical column post. Ultra-compact footprint.',
-    defaultDimensions: [1.6, 2.7, 1.6],
+    defaultDimensions: [2.0, 2.7, 2.0],
     hasGlass: false,
     features: ['Central Steel Column Spine', '360° Radial Fan Treads', 'Ultra-Compact Diameter Footprint']
   },
@@ -145,7 +145,7 @@ export const STAIR_STYLES: ArchStyleDef[] = [
     name: 'Bifurcated (Grand Grandstand)',
     category: 'Layout',
     description: 'Wide master flight rising to an intermediate central landing, then splitting into two opposite-facing wings. Iconic imperial entryway staircase.',
-    defaultDimensions: [3.4, 2.7, 3.8],
+    defaultDimensions: [5.8, 2.7, 3.8],
     hasGlass: false,
     features: ['Wide Master Bottom Flight', 'Dual Symmetrical Top Wings', 'Grand Mezzanine Landing']
   }

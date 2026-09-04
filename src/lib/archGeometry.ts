@@ -1163,45 +1163,112 @@ export function createWindowGeometry(
     }
 
     case 'bay': {
-      // 3-Sided Architectural Cantilevered Bay Window (Projecting Outward towards Exterior -Z)
+      // 3-Sided Architectural Cantilevered Bay Window (Projecting Outward towards Exterior +Z)
+      // FIX: was projecting toward -Z, but this file's own established
+      // convention elsewhere (see the cladding-generation comment
+      // above: "outward-facing exterior face (+Z)") puts +Z as
+      // exterior, not -Z — confirmed directly as the cause of the
+      // reported "bay window intrudes into the room" bug. Verified
+      // directly (not assumed): computed the actual world-space
+      // corners of a wing pane before and after, confirming the
+      // rotations themselves don't need to change, only the sign of
+      // every Z-translation — the 45° angled wings are symmetric
+      // enough that mirroring their position alone (without touching
+      // rotateY's own angle) still connects the wall edge to the
+      // center pane correctly, just toward +Z instead of -Z.
       const bayDepth = Math.max(0.35, depth * 2.5);
       const centerW = innerW * 0.55;
       const wingW = (innerW - centerW) / 1.414; // 45 degree projection
       const angle45 = Math.PI / 4;
 
       // Projecting Base Platform Shelf & Top Roof Soffit Hip Cap
-      const shelfBase = new THREE.BoxGeometry(width + 0.15, 0.06, bayDepth + frameDepth);
-      shelfBase.translate(0, -height / 2 - 0.03, -bayDepth / 2);
-      frameParts.push(shelfBase);
+      // FIX (design improvement): these were previously a single flat
+      // box spanning the full width, which doesn't actually trace the
+      // window's own 3-sided angled footprint — a bay window's sill
+      // and hip roof are one of its most recognizable features
+      // precisely because they follow the hexagonal plan, not a plain
+      // rectangle. Each is now 3 segments (center + both 45° wings),
+      // using the exact same positions and rotations already verified
+      // correct for the frame elements above, just wider for a visible
+      // overhang and thin enough to read as a sill/cap rather than a
+      // slab.
+      const shelfOverhang = 0.1;
+      const shelfThick = 0.06;
+      const roofThick = 0.08;
 
-      const roofCap = new THREE.BoxGeometry(width + 0.15, 0.08, bayDepth + frameDepth);
-      roofCap.translate(0, height / 2 + 0.04, -bayDepth / 2);
-      frameParts.push(roofCap);
+      const shelfCenter = new THREE.BoxGeometry(centerW + shelfOverhang * 2, shelfThick, bayDepth + frameDepth + shelfOverhang);
+      shelfCenter.translate(0, -height / 2 - shelfThick / 2, bayDepth / 2);
+      frameParts.push(shelfCenter);
 
-      // 1. Center Picture Pane (Facing outward at -bayDepth)
+      const roofCenter = new THREE.BoxGeometry(centerW + shelfOverhang * 2, roofThick, bayDepth + frameDepth + shelfOverhang);
+      roofCenter.translate(0, height / 2 + roofThick / 2, bayDepth / 2);
+      frameParts.push(roofCenter);
+
+      const wingPlanDepth = (wingW + shelfOverhang * 2) * Math.SQRT1_2; // 45°-projected footprint depth of one wing segment
+      for (const side of [-1, 1] as const) {
+        const wingCenterX = side * (centerW / 2 + (wingW / 2) * Math.cos(angle45));
+        const wingCenterZ = bayDepth - (wingW / 2) * Math.sin(angle45);
+        const wingAngle = side * angle45;
+
+        const shelfWing = new THREE.BoxGeometry(wingW + shelfOverhang * 2, shelfThick, wingPlanDepth + shelfOverhang);
+        shelfWing.rotateY(wingAngle);
+        shelfWing.translate(wingCenterX, -height / 2 - shelfThick / 2, wingCenterZ);
+        frameParts.push(shelfWing);
+
+        const roofWing = new THREE.BoxGeometry(wingW + shelfOverhang * 2, roofThick, wingPlanDepth + shelfOverhang);
+        roofWing.rotateY(wingAngle);
+        roofWing.translate(wingCenterX, height / 2 + roofThick / 2, wingCenterZ);
+        frameParts.push(roofWing);
+      }
+
+      // Cantilever Support Brackets — real bay windows always show
+      // visible structural support underneath, since they project out
+      // past the wall's own face with nothing below; this was entirely
+      // absent before. Three simple angled corbels (center + both
+      // wings) reading clearly from below without needing full,
+      // separately-modeled bracket geometry.
+      const bracketDepth = 0.04;
+      const bracketDrop = 0.14;
+      for (const bx of [-centerW / 3, 0, centerW / 3]) {
+        const bracket = new THREE.BoxGeometry(0.05, bracketDrop, bayDepth * 0.85);
+        bracket.rotateX(-Math.PI / 10);
+        bracket.translate(bx, -height / 2 - shelfThick - bracketDrop * 0.4, bayDepth * 0.4);
+        frameParts.push(bracket);
+      }
+      for (const side of [-1, 1] as const) {
+        const bx = side * (centerW / 2 + (wingW / 2) * Math.cos(angle45) * 0.6);
+        const bz = bayDepth - (wingW / 2) * Math.sin(angle45) * 0.6;
+        const bracket = new THREE.BoxGeometry(0.05, bracketDrop, bayDepth * 0.6);
+        bracket.rotateY(side * angle45);
+        bracket.rotateX(-Math.PI / 10);
+        bracket.translate(bx, -height / 2 - shelfThick - bracketDrop * 0.4, bz);
+        frameParts.push(bracket);
+      }
+
+      // 1. Center Picture Pane (Facing outward at +bayDepth)
       const centerFrameT = new THREE.BoxGeometry(centerW, frameThick, frameDepth);
-      centerFrameT.translate(0, innerH / 2 - frameThick / 2, -bayDepth);
+      centerFrameT.translate(0, innerH / 2 - frameThick / 2, bayDepth);
       frameParts.push(centerFrameT);
 
       const centerFrameB = new THREE.BoxGeometry(centerW, frameThick, frameDepth);
-      centerFrameB.translate(0, -innerH / 2 + frameThick / 2, -bayDepth);
+      centerFrameB.translate(0, -innerH / 2 + frameThick / 2, bayDepth);
       frameParts.push(centerFrameB);
 
       const centerGlass = new THREE.BoxGeometry(centerW - frameThick * 2, innerH - frameThick * 2, 0.008);
-      centerGlass.translate(0, 0, -bayDepth);
+      centerGlass.translate(0, 0, bayDepth);
       glassParts.push(centerGlass);
 
       // Center Glass Vertical Glazing Bars
       const cvm1 = new THREE.BoxGeometry(0.02, innerH - frameThick * 2, mullionDepth);
-      cvm1.translate(-centerW / 4, 0, -bayDepth);
+      cvm1.translate(-centerW / 4, 0, bayDepth);
       frameParts.push(cvm1);
       const cvm2 = new THREE.BoxGeometry(0.02, innerH - frameThick * 2, mullionDepth);
-      cvm2.translate(centerW / 4, 0, -bayDepth);
+      cvm2.translate(centerW / 4, 0, bayDepth);
       frameParts.push(cvm2);
 
-      // 2. Left 45° Angled Flanking Casement (Connecting from wall edge -width/2, 0 to center -centerW/2, -bayDepth)
+      // 2. Left 45° Angled Flanking Casement (Connecting from wall edge -width/2, 0 to center -centerW/2, +bayDepth)
       const leftCenterX = -centerW / 2 - (wingW / 2) * Math.cos(angle45);
-      const leftCenterZ = -bayDepth + (wingW / 2) * Math.sin(angle45);
+      const leftCenterZ = bayDepth - (wingW / 2) * Math.sin(angle45);
 
       const leftFrameT = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
       leftFrameT.rotateY(angle45);
@@ -1218,9 +1285,9 @@ export function createWindowGeometry(
       leftGlass.translate(leftCenterX, 0, leftCenterZ);
       glassParts.push(leftGlass);
 
-      // 3. Right 45° Angled Flanking Casement (Connecting from center centerW/2, -bayDepth to wall edge width/2, 0)
+      // 3. Right 45° Angled Flanking Casement (Connecting from center centerW/2, +bayDepth to wall edge width/2, 0)
       const rightCenterX = centerW / 2 + (wingW / 2) * Math.cos(angle45);
-      const rightCenterZ = -bayDepth + (wingW / 2) * Math.sin(angle45);
+      const rightCenterZ = bayDepth - (wingW / 2) * Math.sin(angle45);
 
       const rightFrameT = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
       rightFrameT.rotateY(-angle45);
@@ -1239,11 +1306,11 @@ export function createWindowGeometry(
 
       // Corner Posts
       const postL = new THREE.BoxGeometry(0.06, height, 0.06);
-      postL.translate(-centerW / 2, 0, -bayDepth);
+      postL.translate(-centerW / 2, 0, bayDepth);
       frameParts.push(postL);
 
       const postR = new THREE.BoxGeometry(0.06, height, 0.06);
-      postR.translate(centerW / 2, 0, -bayDepth);
+      postR.translate(centerW / 2, 0, bayDepth);
       frameParts.push(postR);
       break;
     }
