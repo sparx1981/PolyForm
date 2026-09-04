@@ -487,10 +487,10 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
           onClick={() => setActiveTool('circle')}
           className={cn(
             "toolbar-btn transition-colors relative",
-            (activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'triangle') && "toolbar-btn-active"
+            (activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'triangle' || activeTool === 'rectangle') && "toolbar-btn-active"
           )}
         >
-          {activeTool === 'polygon' ? <Hexagon size={20} /> : activeTool === 'triangle' ? <TriangleIcon size={20} /> : <Circle size={20} />}
+          {activeTool === 'polygon' ? <Hexagon size={20} /> : activeTool === 'triangle' ? <TriangleIcon size={20} /> : activeTool === 'rectangle' ? <Square size={20} /> : <Circle size={20} />}
         </button>
 
         <FlyoutPortal anchorRef={circleGroupRef} open={circleGroupHovered && !isCirclePopoutOpen} side={flyoutSide}>
@@ -543,6 +543,16 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   >
                     <TriangleIcon size={16} />
                     <span>Triangle (T)</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTool('rectangle')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'rectangle' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <Square size={16} />
+                    <span>Rectangle (R)</span>
                   </button>
                 </motion.div>
               )}

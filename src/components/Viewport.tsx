@@ -1906,6 +1906,178 @@ function Scene() {
     }
   };
 
+  /**
+   * Subtracts a kernel solid and a Shape mesh from one another, in
+   * either direction — the case neither performCSGOperation (Shape↔
+   * Shape only) nor performKernelCSGSubtraction (kernel↔kernel only)
+   * can handle.
+   *
+   * Root cause this exists to fix: the subtract tool tracks a Shape
+   * target via subtractTargetId and a kernel target via
+   * kernelSubtractTarget — two entirely separate pieces of state that
+   * never communicated. Clicking a Shape then a kernel solid (or vice
+   * versa) armed one variable's own target while the other click's own
+   * logic checked a DIFFERENT variable, still empty — so neither side
+   * ever saw a complete target+cutter pair, and the subtract silently
+   * never fired. This function is the actual subtraction logic for
+   * that mixed case; the two click handlers now detect a mismatched
+   * pair and route here instead of leaving both variables "half-armed"
+   * forever.
+   *
+   * A Shape-kind target keeps the result anchored in that Shape's own
+   * local space (position/quaternion/scale preserved, matching
+   * performCSGOperation's own behavior) — a kernel-kind target keeps
+   * the result at world-space identity (matching
+   * performKernelCSGSubtraction's own behavior), since kernel geometry
+   * has no separate local transform of its own to preserve.
+   */
+  const performMixedCSGSubtraction = (
+    target: { kind: 'shape'; id: string } | { kind: 'kernel'; faces: FaceId[] },
+    cutter: { kind: 'shape'; id: string } | { kind: 'kernel'; faces: FaceId[] },
+  ) => {
+    console.log(`[CSG] Starting mixed subtraction: target=${target.kind}, cutter=${cutter.kind}`);
+    try {
+      const buildKernelBrush = (faces: FaceId[]): THREE.BufferGeometry | null => {
+        const meshes = faces
+          .map((id) => tessellateFace(kernelHost.graph, id))
+          .filter((m): m is NonNullable<typeof m> => m !== null);
+        if (meshes.length === 0) return null;
+        const merged = mergeBuffers(meshes);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(merged.position, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(merged.normal, 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
+        geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
+        return geo; // already world-space, identity transform
+      };
+
+      let targetBrush: Brush;
+      let resultTransform: { position: [number, number, number]; quaternion: [number, number, number, number]; scale: [number, number, number] };
+      let targetShapeMesh: THREE.Mesh | null = null;
+
+      if (target.kind === 'shape') {
+        const mesh = getSceneObjectById(target.id) as THREE.Mesh;
+        if (!mesh) {
+          setConsoleOutput(prev => [...prev, `[ERROR] Mixed CSG failed: target Shape not found.`]);
+          return;
+        }
+        targetShapeMesh = mesh;
+        mesh.updateMatrixWorld(true);
+        targetBrush = new Brush(mergeVertices(mesh.geometry.clone()), mesh.material);
+        targetBrush.updateMatrixWorld();
+        resultTransform = {
+          position: [mesh.position.x, mesh.position.y, mesh.position.z],
+          quaternion: [mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w],
+          scale: [mesh.scale.x, mesh.scale.y, mesh.scale.z],
+        };
+      } else {
+        const geo = buildKernelBrush(target.faces);
+        if (!geo) {
+          setConsoleOutput(prev => [...prev, `[ERROR] Mixed CSG failed: could not tessellate kernel target.`]);
+          return;
+        }
+        targetBrush = new Brush(mergeVertices(geo));
+        targetBrush.updateMatrixWorld();
+        resultTransform = { position: [0, 0, 0], quaternion: [0, 0, 0, 1], scale: [1, 1, 1] };
+      }
+
+      let cutterBrush: Brush;
+      if (cutter.kind === 'shape') {
+        const mesh = getSceneObjectById(cutter.id) as THREE.Mesh;
+        if (!mesh) {
+          setConsoleOutput(prev => [...prev, `[ERROR] Mixed CSG failed: cutter Shape not found.`]);
+          return;
+        }
+        mesh.updateMatrixWorld(true);
+        cutterBrush = new Brush(mergeVertices(mesh.geometry.clone()), mesh.material);
+        if (target.kind === 'shape' && targetShapeMesh) {
+          // Cutter must land in the SAME local space the result will be
+          // kept in — the target Shape's own local space.
+          const targetInv = targetShapeMesh.matrixWorld.clone().invert();
+          const cutterInTargetSpace = mesh.matrixWorld.clone().premultiply(targetInv);
+          cutterBrush.applyMatrix4(cutterInTargetSpace);
+        } else {
+          // Kernel target lives at world-space identity, so the cutter
+          // needs its own full world transform applied directly.
+          cutterBrush.applyMatrix4(mesh.matrixWorld);
+        }
+        cutterBrush.updateMatrixWorld();
+      } else {
+        const geo = buildKernelBrush(cutter.faces);
+        if (!geo) {
+          setConsoleOutput(prev => [...prev, `[ERROR] Mixed CSG failed: could not tessellate kernel cutter.`]);
+          return;
+        }
+        cutterBrush = new Brush(mergeVertices(geo));
+        if (target.kind === 'shape' && targetShapeMesh) {
+          // Kernel cutter is world-space; transform it INTO the Shape
+          // target's own local space, same reasoning as the Shape-cutter
+          // branch above, just the source space is already-world instead
+          // of needing its own matrixWorld first.
+          const targetInv = targetShapeMesh.matrixWorld.clone().invert();
+          cutterBrush.applyMatrix4(targetInv);
+        }
+        // Kernel target + kernel cutter is handled by
+        // performKernelCSGSubtraction, never reaches here — no further
+        // transform needed for a kernel target's own identity space.
+        cutterBrush.updateMatrixWorld();
+      }
+
+      const evaluator = new Evaluator();
+      const resultBrush = evaluator.evaluate(targetBrush, cutterBrush, SUBTRACTION);
+      // Same three-step cleanup pipeline as both same-kind subtract
+      // functions — see healTJunctions's and removeDegenerateCSGTriangles's
+      // own doc comments for the full reasoning behind each step.
+      resultBrush.geometry = mergeVertices(resultBrush.geometry);
+      healTJunctions(resultBrush.geometry);
+      removeDegenerateCSGTriangles(resultBrush.geometry);
+      resultBrush.geometry.computeVertexNormals();
+      const geometryData = resultBrush.geometry.toJSON();
+
+      // Remove whichever side(s) were kernel geometry, in one undo step.
+      const kernelFacesToRemove: FaceId[] = [
+        ...(target.kind === 'kernel' ? target.faces : []),
+        ...(cutter.kind === 'kernel' ? cutter.faces : []),
+      ];
+      if (kernelFacesToRemove.length > 0) {
+        const before = snapshot(kernelHost.graph);
+        deleteGroupFacesAndEdges(kernelHost.graph, kernelFacesToRemove);
+        kernelHost.recordUndo(before);
+        bumpKernel();
+      }
+
+      if (target.kind === 'shape') {
+        setShapes(prev => prev.map(s => s.id === target.id ? {
+          ...s,
+          type: 'custom',
+          ...resultTransform,
+          geometryData,
+        } : s));
+      } else {
+        const newShape: Shape = {
+          id: Math.random().toString(36).substr(2, 9),
+          name: 'CSG Result',
+          type: 'custom',
+          ...resultTransform,
+          color: activeMaterial,
+          args: [],
+          geometryData,
+        };
+        addShape(newShape);
+      }
+      if (cutter.kind === 'shape') {
+        removeShape(cutter.id);
+      }
+      commitHistory();
+
+      setConsoleOutput(prev => [...prev, `[SUCCESS] Mixed CSG Subtraction completed.`]);
+      recordAction(`sdk.performCSG(mixed target, mixed cutter, "SUBTRACTION");`);
+    } catch (error: any) {
+      console.error("[CSG] Mixed operation failed:", error);
+      setConsoleOutput(prev => [...prev, `[ERROR] Mixed CSG Operation failed: ${error.message}`]);
+    }
+  };
+
   const handleKernelFacePointerDown = useCallback((faceId: FaceId, event: { point?: THREE.Vector3 }) => {
     // Return value tells KernelGeometry whether to stop propagation. Only
     // push/pull claims the press; every other tool needs it to keep
@@ -1958,7 +2130,19 @@ function Scene() {
       // KernelGeometry's own props, but this reuses what's already there
       // to give the same "target is armed" feedback.
       const group = groupContaining(kernelHost.graph, faceId);
-      if (!kernelSubtractTarget) {
+      if (subtractTargetId) {
+        // A Shape was already armed as the target (via the Shape-mesh
+        // click handler, further below) — this kernel-face click is the
+        // cutter. See performMixedCSGSubtraction's own doc comment for
+        // why this cross-check exists at all: without it, this click
+        // would only ever check kernelSubtractTarget (still empty),
+        // arming a completely separate, second "target" that nothing
+        // ever paired against subtractTargetId.
+        performMixedCSGSubtraction({ kind: 'shape', id: subtractTargetId }, { kind: 'kernel', faces: group });
+        setSubtractTargetId(null);
+        setKernelSubtractTarget(null);
+        setSelectedFaceIds([]);
+      } else if (!kernelSubtractTarget) {
         setKernelSubtractTarget(group);
         setSelectedFaceIds(group);
         setConsoleOutput(prev => [...prev, `[INFO] Target selected (kernel solid). Now select the cutter.`]);
@@ -2257,6 +2441,7 @@ function Scene() {
     // current value.
     pickingSunCenter, pickSunCenter,
     kernelSubtractTarget, setKernelSubtractTarget, performKernelCSGSubtraction, setSelectedFaceIds, setConsoleOutput,
+    subtractTargetId, setSubtractTargetId, performMixedCSGSubtraction,
   ]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
   const transformRef = useRef<any>(null);
@@ -5373,24 +5558,39 @@ function Scene() {
         const quatArray: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
 
         if (activeTool === 'rectangle') {
+          // Shift constrains the rectangle to a square — matches the
+          // standard convention other drawing tools use (SketchUp,
+          // Figma): take the larger of the two drag distances, keep
+          // each axis's own sign so the square still extends in the
+          // direction the cursor is actually in, not always toward one
+          // fixed corner.
+          let xDistConstrained = xDist;
+          let yDistConstrained = yDist;
+          if (e.shiftKey) {
+            const side = Math.max(Math.abs(xDist), Math.abs(yDist));
+            xDistConstrained = Math.sign(xDist || 1) * side;
+            yDistConstrained = Math.sign(yDist || 1) * side;
+          }
           // A rectangle is four edges. Capturing the corners here lets it be
           // committed to the kernel instead of as a flat Shape, which is what
           // makes it splittable and push/pullable like any drawn surface.
           kernelRingRef.current = [
             drawingStart.clone(),
-            drawingStart.clone().addScaledVector(tangent, xDist),
-            drawingStart.clone().addScaledVector(tangent, xDist).addScaledVector(bitangent, yDist),
-            drawingStart.clone().addScaledVector(bitangent, yDist),
+            drawingStart.clone().addScaledVector(tangent, xDistConstrained),
+            drawingStart.clone().addScaledVector(tangent, xDistConstrained).addScaledVector(bitangent, yDistConstrained),
+            drawingStart.clone().addScaledVector(bitangent, yDistConstrained),
           ];
-          const centerX = drawingStart.clone().add(tangent.clone().multiplyScalar(xDist / 2)).add(bitangent.clone().multiplyScalar(yDist / 2));
+          const centerX = drawingStart.clone().add(tangent.clone().multiplyScalar(xDistConstrained / 2)).add(bitangent.clone().multiplyScalar(yDistConstrained / 2));
           centerX.add(drawingNormal.clone().multiplyScalar(0.005));
           setPreviewShape({
             type: 'rect',
             position: [centerX.x, centerX.y, centerX.z],
             quaternion: quatArray,
-            args: [Math.abs(xDist), 0.01, Math.abs(yDist)]
+            args: [Math.abs(xDistConstrained), 0.01, Math.abs(yDistConstrained)]
           });
-          setMeasurements(`${formatValue(Math.abs(xDist), unit, 1)} x ${formatValue(Math.abs(yDist), unit, 1)}`);
+          setMeasurements(e.shiftKey
+            ? `${formatValue(Math.abs(xDistConstrained), unit, 1)} x ${formatValue(Math.abs(yDistConstrained), unit, 1)} (square)`
+            : `${formatValue(Math.abs(xDist), unit, 1)} x ${formatValue(Math.abs(yDist), unit, 1)}`);
         } else if (activeTool === 'circle') {
           const radius = drawingStart.distanceTo(target);
           // A circle is a closed ring of straight edges — the same
@@ -6529,7 +6729,16 @@ function Scene() {
 
     if (activeTool === 'subtract') {
        e.stopPropagation();
-       if (!subtractTargetId) {
+       if (kernelSubtractTarget) {
+         // A kernel solid was already armed as the target (via
+         // handleKernelFacePointerDown, above) — this Shape click is the
+         // cutter. See performMixedCSGSubtraction's own doc comment for
+         // why this cross-check exists.
+         performMixedCSGSubtraction({ kind: 'kernel', faces: kernelSubtractTarget }, { kind: 'shape', id: shape.id });
+         setKernelSubtractTarget(null);
+         setSelectedFaceIds([]);
+         setSubtractTargetId(null);
+       } else if (!subtractTargetId) {
          setSubtractTargetId(shape.id);
          setConsoleOutput(prev => [...prev, `[INFO] Target selected: ${shape.type}. Now select the cutter.`]);
        } else if (subtractTargetId === shape.id) {

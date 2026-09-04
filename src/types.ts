@@ -1,4 +1,7 @@
 import type { KernelArcHost } from './tools/kernelArcHost';
+import type * as THREE from 'three';
+import type { FaceId } from './lib/geometry/types';
+import type { ToolbarKey, DockZone } from './AppContext';
 
 export type ToolType = 
   | 'select' | 'lasso' | 'eraser' | 'paint' | 'component'
@@ -506,6 +509,26 @@ export interface AppState {
   /** Selected kernel faces. Separate from selectedIds, which holds Shape ids. */
   selectedFaceIds: number[];
   setSelectedFaceIds: (ids: number[] | ((prev: number[]) => number[])) => void;
+  // Fields below were added to the actual context (AppContext.tsx) at
+  // various points but never reflected here — a real type-drift gap,
+  // not new functionality. Types match AppContext.tsx's own useState/
+  // wrapper-function declarations exactly.
+  viewportToast: string | null;
+  setViewportToast: (msg: string | null) => void;
+  placingNotePos: THREE.Vector3 | null;
+  setPlacingNotePos: (pos: THREE.Vector3 | null) => void;
+  sunOrbitCenter: [number, number, number];
+  setSunOrbitCenter: (pos: [number, number, number]) => void;
+  pickingSunCenter: boolean;
+  setPickingSunCenter: (picking: boolean) => void;
+  kernelSubtractTarget: FaceId[] | null;
+  setKernelSubtractTarget: (target: FaceId[] | null) => void;
+  toolbarOrder: ToolbarKey[];
+  setToolbarOrder: (val: ToolbarKey[] | ((prev: ToolbarKey[]) => ToolbarKey[])) => void;
+  toolbarDocks: Record<ToolbarKey, DockZone>;
+  setToolbarDocks: (
+    val: Record<ToolbarKey, DockZone> | ((prev: Record<ToolbarKey, DockZone>) => Record<ToolbarKey, DockZone>),
+  ) => void;
 }
 
 export interface DiagLogEntry {
