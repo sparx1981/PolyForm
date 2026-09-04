@@ -6791,7 +6791,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
