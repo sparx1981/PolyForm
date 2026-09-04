@@ -215,6 +215,8 @@ export interface AppState {
   setPlacingLightId: (id: string | null) => void;
   shapes: Shape[];
   setShapes: (shapes: Shape[] | ((prev: Shape[]) => Shape[])) => void;
+  duplicateObject: (id: string) => void;
+  duplicateMultiple: (ids: string[]) => void;
   setShapesSilent: (shapes: Shape[] | ((prev: Shape[]) => Shape[])) => void;
   setTagsSilent: (tags: Tag[] | ((prev: Tag[]) => Tag[])) => void;
   setScenesSilent: (scenes: SceneState[] | ((prev: SceneState[]) => SceneState[])) => void;

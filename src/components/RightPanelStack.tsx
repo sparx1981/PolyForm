@@ -188,6 +188,7 @@ export default function RightPanelStack() {
     setShapes,
     removeShape,
     addShape,
+    duplicateObject,
     commitHistory,
     selectedId, 
     setSelectedId, 
@@ -1186,18 +1187,7 @@ export default function RightPanelStack() {
 
                 <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
                   <button
-                    onClick={() => {
-                      const clone = {
-                        ...selectedShape,
-                        id: Math.random().toString(36).substr(2, 9),
-                        name: `${selectedShape.name || 'Object'} Copy`,
-                        position: [selectedShape.position[0] + 0.3, selectedShape.position[1], selectedShape.position[2] + 0.3] as [number, number, number],
-                      };
-                      setShapes(prev => [...prev, clone]);
-                      commitHistory();
-                      setSelectedId(clone.id);
-                      setSelectedIds([clone.id]);
-                    }}
+                    onClick={() => duplicateObject(selectedShape.id)}
                     className="flex items-center gap-1 text-[10px] font-bold text-trimble-blue hover:underline" title="Duplicate Entity"
                   >
                     <CopyIcon size={13} />
@@ -1534,14 +1524,7 @@ export default function RightPanelStack() {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            const clone = {
-                                              ...wall,
-                                              id: Math.random().toString(36).substr(2, 9),
-                                              name: `${wall.name || 'Wall'} Copy`,
-                                              position: [wall.position[0] + 0.3, wall.position[1], wall.position[2] + 0.3] as [number, number, number],
-                                            };
-                                            setShapes(prev => [...prev, clone]);
-                                            commitHistory();
+                                            duplicateObject(wall.id);
                                           }}
                                           className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
                                           title="Duplicate Wall"
@@ -1596,14 +1579,7 @@ export default function RightPanelStack() {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            const clone = {
-                                              ...slab,
-                                              id: Math.random().toString(36).substr(2, 9),
-                                              name: `${slab.name || 'Floor Slab'} Copy`,
-                                              position: [slab.position[0] + 0.3, slab.position[1], slab.position[2] + 0.3] as [number, number, number],
-                                            };
-                                            setShapes(prev => [...prev, clone]);
-                                            commitHistory();
+                                            duplicateObject(slab.id);
                                           }}
                                           className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
                                           title="Duplicate"
@@ -1994,14 +1970,7 @@ export default function RightPanelStack() {
                                                 <button
                                                   onClick={(e) => {
                                                     e.stopPropagation();
-                                                    const clone = {
-                                                      ...member,
-                                                      id: Math.random().toString(36).substr(2, 9),
-                                                      name: `${member.name || 'Timber'} Copy`,
-                                                      position: [member.position[0] + 0.3, member.position[1], member.position[2] + 0.3] as [number, number, number],
-                                                    };
-                                                    setShapes(prev => [...prev, clone]);
-                                                    commitHistory();
+                                                    duplicateObject(member.id);
                                                   }}
                                                   className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
                                                   title="Duplicate"
@@ -2075,14 +2044,7 @@ export default function RightPanelStack() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const clone = {
-                                    ...shape,
-                                    id: Math.random().toString(36).substr(2, 9),
-                                    name: `${shape.name || 'Object'} Copy`,
-                                    position: [shape.position[0] + 0.3, shape.position[1], shape.position[2] + 0.3] as [number, number, number],
-                                  };
-                                  setShapes(prev => [...prev, clone]);
-                                  commitHistory();
+                                  duplicateObject(shape.id);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
                                 title="Duplicate"

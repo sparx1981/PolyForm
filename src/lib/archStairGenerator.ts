@@ -429,8 +429,23 @@ export function createArchitecturalStaircaseGeometry(
   else if (style === 'c-shape' || style === 'curved') {
     const isFull180 = style === 'c-shape';
     const totalSweep = isFull180 ? Math.PI : Math.PI * 0.75;
-    const innerR = 0.9;
-    const outerR = innerR + width;
+    // FIX: "width" was being used directly as the tread's own radial
+    // depth (outerR - innerR) — confirmed directly by computing actual
+    // tread footprints: at this style's own 2.8m default, that meant
+    // EVERY tread was 2.8m deep in the radial direction (a real
+    // staircase tread is ~0.3m along its run), so each tread's own box
+    // swept through a huge arc as it rotated to face its own angle,
+    // overlapping heavily with its neighbors — exactly the twisted,
+    // overlapping look reported. "width" now sets the overall outer
+    // radius instead (matching how every other staircase style uses
+    // its own width as an overall footprint dimension, not a
+    // per-tread one), with a fixed, realistic tread depth carved
+    // inward from it. Verified directly: each tread's own footprint is
+    // now ~1.1m in its radial direction regardless of the overall
+    // size, instead of scaling up to several meters.
+    const treadDepth = 1.1;
+    const outerR = width;
+    const innerR = Math.max(0.6, outerR - treadDepth);
     const stepH = height / numSteps;
     const angleStep = totalSweep / numSteps;
 
@@ -443,21 +458,21 @@ export function createArchitecturalStaircaseGeometry(
       const midR = (innerR + outerR) / 2;
       const treadD = midR * angleStep * 1.1;
 
-      const tread = new THREE.BoxGeometry(treadD, 0.045, width);
-      // FIX: this box's own radial-span dimension ("width") must run
-      // along local Z, and its along-the-curve dimension ("treadD")
-      // along local X — confirmed directly (not assumed) by computing
-      // each tread's actual world-space corners: with width on X (the
-      // original code), a tread at angle 0 landed with its corners at
-      // radius ~0 and ~1 from the arc's own center instead of spanning
-      // innerR..outerR, meaning every tread's radial footprint was
-      // rotated 90° out of alignment with the curve itself — the
-      // actual cause of steps landing in the wrong position. Swapping
-      // the box's own two dimensions (rather than adding a rotation
-      // offset, which would only fix the sign for one direction of
-      // travel) puts each tread's radial span back along the true
-      // radial direction at its own angle, verified directly: corners
-      // now land at ~innerR and ~outerR as expected.
+      const tread = new THREE.BoxGeometry(treadD, 0.045, outerR - innerR);
+      // FIX: this box's own radial-span dimension ("outerR - innerR")
+      // must run along local Z, and its along-the-curve dimension
+      // ("treadD") along local X — confirmed directly (not assumed) by
+      // computing each tread's actual world-space corners: with width
+      // on X (the original code), a tread at angle 0 landed with its
+      // corners at radius ~0 and ~1 from the arc's own center instead
+      // of spanning innerR..outerR, meaning every tread's radial
+      // footprint was rotated 90° out of alignment with the curve
+      // itself — the actual cause of steps landing in the wrong
+      // position. Swapping the box's own two dimensions (rather than
+      // adding a rotation offset, which would only fix the sign for
+      // one direction of travel) puts each tread's radial span back
+      // along the true radial direction at its own angle, verified
+      // directly: corners now land at ~innerR and ~outerR as expected.
       tread.translate(0, -0.02, 0);
       tread.rotateY(ang);
 
@@ -572,18 +587,9 @@ export function createArchitecturalStaircaseGeometry(
     const wingSteps = numSteps - masterSteps - 1;
     const stepH = height / numSteps;
     // Fixed, absolute master-flight width — deliberately NOT a
-    // percentage of the (now wider) total width parameter. Keeping
-    // this fixed is what lets the overall width grow to give the wing
-    // flights a proper, matching tread depth without changing the
-    // width of the lower flight itself, exactly as intended: widening
-    // the staircase should only add room for the wings, not resize
-    // the master flight underneath them.
+    // percentage of the total width parameter, so widening the
+    // staircase doesn't resize the master flight underneath the wings.
     const masterW = 2.2;
-    // Same reasoning as masterW above — fixed rather than scaling with
-    // the total width, which is now much larger specifically to give
-    // the wing flights more RUN space, not to inflate their lateral
-    // step width. Matches the original proportions (was width*0.35 at
-    // the old 3.4m default, ~1.19).
     const wingW = 1.2;
     const masterRun = length * 0.55;
     const stepD = masterRun / masterSteps;
@@ -606,46 +612,96 @@ export function createArchitecturalStaircaseGeometry(
     // 2. Grand Center Landing
     const landY = -height / 2 + (masterSteps + 1) * stepH;
     const landZ = -length / 2 + masterRun + 0.5;
-    const landing = new THREE.BoxGeometry(width * 1.1, 0.08, 1.0);
+    const landing = new THREE.BoxGeometry(masterW + wingW * 2 + 0.6, 0.08, 1.0);
     landing.translate(0, landY - 0.04, landZ);
     geoms.push(landing);
 
-    // 3. Left Wing Flight (turning left)
-    const wingRun = (width - masterW) / 2;
+    // FIX: real "grand imperial" staircases have both upper wings turn
+    // 180° at the landing and climb BACK toward the entrance, parallel
+    // to the master flight below — not spread out sideways at a fixed
+    // depth, which is what this produced before (every wing tread
+    // shared the exact same z position, landZ, and only moved in X —
+    // a flat, sideways shelf of steps rather than a flight that
+    // actually goes anywhere as it rises, which is what "the
+    // direction is completely wrong" was describing). Each wing now
+    // has a fixed lateral (X) offset instead, and travels backward in
+    // Z as it climbs — the same axis the master flight itself climbs
+    // along, just reversed and offset sideways. wingRun is set to
+    // exactly match the master flight's own tread depth (verified
+    // directly: both come out to 0.299m at the 14-step default),
+    // rather than being derived from the overall width, which is what
+    // caused the earlier, separate incline-mismatch bug.
+    const wingRun = stepD * wingSteps;
     const wingStepD = wingRun / wingSteps;
+    const wingLateralOffset = masterW / 2 + wingW / 2 + 0.1;
+
+    // 3. Left Wing Flight (turns 180°, climbs back toward -Z)
     for (let j = 0; j < wingSteps; j++) {
       const stepIdx = masterSteps + 1 + (j + 1);
       const topY = -height / 2 + stepIdx * stepH;
-      const xPos = -masterW / 2 - (j + 0.5) * wingStepD;
-      const zPos = landZ;
+      const xPos = -wingLateralOffset;
+      const zPos = landZ - (j + 0.5) * wingStepD;
 
-      const tread = new THREE.BoxGeometry(wingStepD + 0.02, 0.04, wingW * 1.8);
+      // FIX: wing treads previously had no riser/support beneath them
+      // at all — just a thin, isolated slab hanging in mid-air, unlike
+      // the master flight below (which gets a full solid block down to
+      // the ground when structure is 'closed'). That absence of any
+      // visible support is a real part of why the upper section reads
+      // as floating and disconnected. Each wing riser now runs from
+      // the landing's own height up to that step's own height, at the
+      // same position as its tread — connected to the landing the wing
+      // actually springs from, not the ground far below at a different
+      // X position entirely.
+      if (structure === 'closed') {
+        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - landY, wingStepD + 0.02);
+        riser.translate(xPos, (topY + landY) / 2, zPos);
+        geoms.push(riser);
+      }
+      const tread = new THREE.BoxGeometry(wingW * 1.8, 0.04, wingStepD + 0.02);
       tread.translate(xPos, topY, zPos);
       geoms.push(tread);
     }
 
-    // 4. Right Wing Flight (turning right)
+    // 4. Right Wing Flight (turns 180°, climbs back toward -Z)
     for (let k = 0; k < wingSteps; k++) {
       const stepIdx = masterSteps + 1 + (k + 1);
       const topY = -height / 2 + stepIdx * stepH;
-      const xPos = masterW / 2 + (k + 0.5) * wingStepD;
-      const zPos = landZ;
+      const xPos = wingLateralOffset;
+      const zPos = landZ - (k + 0.5) * wingStepD;
 
-      const tread = new THREE.BoxGeometry(wingStepD + 0.02, 0.04, wingW * 1.8);
+      if (structure === 'closed') {
+        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - landY, wingStepD + 0.02);
+        riser.translate(xPos, (topY + landY) / 2, zPos);
+        geoms.push(riser);
+      }
+      const tread = new THREE.BoxGeometry(wingW * 1.8, 0.04, wingStepD + 0.02);
       tread.translate(xPos, topY, zPos);
       geoms.push(tread);
     }
 
-    // Grand Railings
+    // Grand Railings — now follow the wings' own backward climb
+    // FIX: previously jumped straight from the landing edge
+    // (masterW/2) to the wing's own far top corner (wingLateralOffset)
+    // in a single diagonal segment — cutting sideways across X over
+    // the SAME span where the actual wing steps stay at a constant X
+    // and only move in Y/Z. That mismatch is what made the railing
+    // visibly detach from the steps beneath it. Adding a transition
+    // point at the wing's own lateral offset, still at the landing's
+    // own height and depth, means the final segment only rises and
+    // moves backward — exactly matching the wing treads' own path —
+    // instead of cutting across them at a different angle.
+    const wingTopZ = landZ - wingRun;
     const rL: [number, number, number][] = [
       [-masterW / 2, -height / 2, -length / 2],
       [-masterW / 2, landY, landZ - 0.5],
-      [-width * 0.6, height / 2, landZ]
+      [-wingLateralOffset, landY, landZ - 0.5],
+      [-wingLateralOffset, height / 2, wingTopZ]
     ];
     const rR: [number, number, number][] = [
       [masterW / 2, -height / 2, -length / 2],
       [masterW / 2, landY, landZ - 0.5],
-      [width * 0.6, height / 2, landZ]
+      [wingLateralOffset, landY, landZ - 0.5],
+      [wingLateralOffset, height / 2, wingTopZ]
     ];
     addRailings(rL, rR);
   }

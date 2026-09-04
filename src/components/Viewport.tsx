@@ -1162,6 +1162,8 @@ function Scene() {
     isDeveloperConsoleOpen,
     shapes, 
     setShapes,
+    duplicateObject,
+    duplicateMultiple,
     setShapesSilent,
     commitHistory,
     addShape, 
@@ -10612,6 +10614,7 @@ export default function Viewport() {
     activePBR, 
     setShapes, 
     addShape,
+    duplicateObject,
     commitHistory,
     setMeasurements,
     viewportToast,
@@ -10776,41 +10779,10 @@ export default function Viewport() {
     return () => window.removeEventListener('reset-camera', handleReset);
   }, [defaultCameraPosition, defaultCameraTarget]);
 
-  const duplicateObject = (id: string) => {
-    const shape = shapes.find(s => s.id === id);
-    if (!shape) return;
-
-    const newShape = {
-      ...shape,
-      id: Math.random().toString(36).substr(2, 9),
-      position: [shape.position[0] + 1, shape.position[1], shape.position[2] + 1] as [number, number, number],
-      name: `${shape.name || shape.type} (Copy)`
-    };
-
-    setShapes(prev => [...prev, newShape]);
-    setSelectedId(newShape.id);
-    recordAction(`sdk.duplicateObject("${id}");`);
-  };
-
-  const duplicateMultiple = (ids: string[]) => {
-    const newShapes: Shape[] = [];
-    ids.forEach(id => {
-      const shape = shapes.find(s => s.id === id);
-      if (shape) {
-        newShapes.push({
-          ...shape,
-          id: Math.random().toString(36).substr(2, 9),
-          position: [shape.position[0] + 1, shape.position[1], shape.position[2] + 1] as [number, number, number],
-          name: `${shape.name || shape.type} (Copy)`
-        });
-      }
-    });
-    if (newShapes.length > 0) {
-      setShapes(prev => [...prev, ...newShapes]);
-      setSelectedIds(newShapes.map(s => s.id));
-      recordAction(`sdk.duplicateObjects(${JSON.stringify(ids)});`);
-    }
-  };
+  // duplicateObject/duplicateMultiple now come from useApp() above —
+  // moved into AppContext.tsx so this component and RightPanelStack's
+  // own Outliner duplicate buttons share the exact same implementation
+  // instead of two copies that had already drifted apart.
 
   return (
     <div className={cn(

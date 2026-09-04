@@ -1081,6 +1081,53 @@ console.log("Created rectangle:", myRect.id);`);
     recordAction(`sdk.deleteObject("${id}");`);
   };
 
+  /**
+   * The single, shared duplicate implementation — previously
+   * Viewport.tsx's own right-click "Duplicate Object" and the
+   * Outliner's own duplicate buttons each had their own separate copy
+   * of this logic, and had drifted apart: different position offset
+   * (0.3 vs 1), different name format, whether the new copy became
+   * selected, and whether the action got logged via recordAction.
+   * Moved here and exposed through context so every caller shares
+   * this exact behavior going forward, rather than two definitions
+   * that can silently diverge again.
+   */
+  const duplicateObject = (id: string) => {
+    const shape = shapes.find(s => s.id === id);
+    if (!shape) return;
+
+    const newShape = {
+      ...shape,
+      id: Math.random().toString(36).substr(2, 9),
+      position: [shape.position[0] + 1, shape.position[1], shape.position[2] + 1] as [number, number, number],
+      name: `${shape.name || shape.type} (Copy)`
+    };
+
+    handleSetShapes(prev => [...prev, newShape]);
+    setSelectedId(newShape.id);
+    recordAction(`sdk.duplicateObject("${id}");`);
+  };
+
+  const duplicateMultiple = (ids: string[]) => {
+    const newShapes: Shape[] = [];
+    ids.forEach(id => {
+      const shape = shapes.find(s => s.id === id);
+      if (shape) {
+        newShapes.push({
+          ...shape,
+          id: Math.random().toString(36).substr(2, 9),
+          position: [shape.position[0] + 1, shape.position[1], shape.position[2] + 1] as [number, number, number],
+          name: `${shape.name || shape.type} (Copy)`
+        });
+      }
+    });
+    if (newShapes.length > 0) {
+      handleSetShapes(prev => [...prev, ...newShapes]);
+      setSelectedIds(newShapes.map(s => s.id));
+      recordAction(`sdk.duplicateObjects(${JSON.stringify(ids)});`);
+    }
+  };
+
   const handleSetSkybox = (type: SkyboxType) => {
     setSkybox(type);
     recordAction(`sdk.setSkybox("${type}", ${skyboxBlur}, ${skyboxRotation}, ${environmentIntensity});`);
@@ -1268,6 +1315,8 @@ console.log("Created rectangle:", myRect.id);`);
       setPlacingLightId,
       shapes,
       setShapes: handleSetShapes,
+      duplicateObject,
+      duplicateMultiple,
       setShapesSilent,
       setTagsSilent,
       setScenesSilent,
