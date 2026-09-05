@@ -137,38 +137,45 @@ export function computeStairHoleForSlab(
     exitLocalStart = new THREE.Vector3(exitX, 0, landZ - landingSize / 2 - clearance);
     exitLocalEnd = new THREE.Vector3(exitX, 0, landZ + landingSize / 2 + clearance);
   } else if (style.includes('bifurcated') || style.includes('double-return')) {
-    // Bifurcated stair: Central lower flight, landing, dual return upper flights
-    const hw = stairW / 2 + clearance;
-    const hl = stairL / 2 + clearance;
-    localCorners = [
-      new THREE.Vector3(-hw, 0, -hl),
-      new THREE.Vector3(hw, 0, -hl),
-      new THREE.Vector3(hw, 0, hl),
-      new THREE.Vector3(-hw, 0, hl),
-    ];
-    // FIX: was pinned to (-hw,-hl)..(hw,-hl) — the BOTTOM edge, where
-    // the master flight starts ascending, not where the two upper
-    // wings actually arrive. Matches archStairGenerator.ts's own
-    // redesigned wing geometry: the wings turn 180° at the landing and
-    // climb BACKWARD (toward -Z), so their own top — the true exit
-    // point — is at the landing position minus their own run length,
-    // not at the landing itself, and at a fixed lateral offset rather
-    // than spanning the full stair width. numSteps isn't available in
-    // this function's own scope, so wingRun uses the same
+    // Bifurcated stair: central lower flight, landing, dual wings.
+    // FIX (round 4): matches archStairGenerator.ts's own corrected wing
+    // geometry — both wings now turn 90° OUTWARD from the landing
+    // (left along -X, right along +X), not a further 180° turn
+    // climbing back over the master flight (what the previous version
+    // of this cutout, like the generator itself, assumed). Their own
+    // top — the true exit point — is now at increasing |X| rather than
+    // decreasing Z, so the two wings arrive at separate X positions
+    // instead of sharing one Z line. numSteps isn't available in this
+    // function's own scope, so wingRun uses the same
     // wingSteps/masterSteps ratio archStairGenerator.ts produces across
     // the typical step-count range (~0.85 — e.g. exactly 6/7 at the
     // 14-step default) rather than needing the exact step count; this
     // is a floor cutout, not the stair itself, so a close approximation
     // is a reasonable trade against threading numSteps through here.
     const masterRun = stairL * 0.55;
-    const landZ = -stairL / 2 + masterRun + 0.5;
-    const wingRun = masterRun * 0.85;
-    const wingTopZ = landZ - wingRun;
+    const landBackZ = -stairL / 2 + masterRun;
     const masterW = 2.2;
     const wingW = 1.2;
-    const wingLateralOffset = masterW / 2 + wingW / 2 + 0.1;
-    exitLocalStart = new THREE.Vector3(-wingLateralOffset - clearance, 0, wingTopZ);
-    exitLocalEnd = new THREE.Vector3(wingLateralOffset + clearance, 0, wingTopZ);
+    const landDepth = wingW + 0.3;
+    const landZ = landBackZ + landDepth / 2;
+    const wingStartX = masterW / 2 + 0.1;
+    const wingRun = masterRun * 0.85;
+    const wingTopX = wingStartX + wingRun;
+    const railZ = landZ + wingW / 2;
+    const hw = Math.max(stairW / 2, wingTopX) + clearance;
+    const hl = Math.max(stairL / 2, railZ) + clearance;
+    localCorners = [
+      new THREE.Vector3(-hw, 0, -hl),
+      new THREE.Vector3(hw, 0, -hl),
+      new THREE.Vector3(hw, 0, hl),
+      new THREE.Vector3(-hw, 0, hl),
+    ];
+    // Exit edge spans the top of BOTH wings — the upper landing/balcony
+    // edge connecting the left wing's outer-top corner to the right
+    // wing's, at the same front-facing Z the wings and their railings
+    // sit flush against.
+    exitLocalStart = new THREE.Vector3(-wingTopX - clearance, 0, railZ);
+    exitLocalEnd = new THREE.Vector3(wingTopX + clearance, 0, railZ);
   } else if (style.includes('spiral') || style.includes('helical')) {
     const radius = Math.min(stairW, stairL) / 2 + clearance;
     const segments = 16;
@@ -180,15 +187,8 @@ export function computeStairHoleForSlab(
     exitLocalStart = new THREE.Vector3(-radius * 0.5, 0, radius);
     exitLocalEnd = new THREE.Vector3(radius * 0.5, 0, radius);
   } else if (style.includes('c-shape') || style.includes('curved') || style.includes('circular')) {
-    // FIX: matches archStairGenerator.ts's own corrected radius
-    // formula — stairW is now the overall outer radius, with a fixed
-    // realistic tread depth carved inward, rather than stairW being
-    // added on top of a fixed inner radius (which previously made the
-    // actual stair geometry's radii not match this cutout's own at
-    // all once the generator's formula changed).
-    const treadDepth = 1.1;
-    const outerR = stairW + clearance;
-    const innerR = Math.max(0.6 - clearance, outerR - treadDepth - clearance * 2);
+    const innerR = 0.9 - clearance;
+    const outerR = innerR + stairW + clearance * 2;
     const isFull180 = style.includes('c-shape');
     const totalSweep = isFull180 ? Math.PI : Math.PI * 0.75;
     const segments = 16;

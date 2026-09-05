@@ -429,23 +429,8 @@ export function createArchitecturalStaircaseGeometry(
   else if (style === 'c-shape' || style === 'curved') {
     const isFull180 = style === 'c-shape';
     const totalSweep = isFull180 ? Math.PI : Math.PI * 0.75;
-    // FIX: "width" was being used directly as the tread's own radial
-    // depth (outerR - innerR) — confirmed directly by computing actual
-    // tread footprints: at this style's own 2.8m default, that meant
-    // EVERY tread was 2.8m deep in the radial direction (a real
-    // staircase tread is ~0.3m along its run), so each tread's own box
-    // swept through a huge arc as it rotated to face its own angle,
-    // overlapping heavily with its neighbors — exactly the twisted,
-    // overlapping look reported. "width" now sets the overall outer
-    // radius instead (matching how every other staircase style uses
-    // its own width as an overall footprint dimension, not a
-    // per-tread one), with a fixed, realistic tread depth carved
-    // inward from it. Verified directly: each tread's own footprint is
-    // now ~1.1m in its radial direction regardless of the overall
-    // size, instead of scaling up to several meters.
-    const treadDepth = 1.1;
-    const outerR = width;
-    const innerR = Math.max(0.6, outerR - treadDepth);
+    const innerR = 0.9;
+    const outerR = innerR + width;
     const stepH = height / numSteps;
     const angleStep = totalSweep / numSteps;
 
@@ -458,21 +443,21 @@ export function createArchitecturalStaircaseGeometry(
       const midR = (innerR + outerR) / 2;
       const treadD = midR * angleStep * 1.1;
 
-      const tread = new THREE.BoxGeometry(treadD, 0.045, outerR - innerR);
-      // FIX: this box's own radial-span dimension ("outerR - innerR")
-      // must run along local Z, and its along-the-curve dimension
-      // ("treadD") along local X — confirmed directly (not assumed) by
-      // computing each tread's actual world-space corners: with width
-      // on X (the original code), a tread at angle 0 landed with its
-      // corners at radius ~0 and ~1 from the arc's own center instead
-      // of spanning innerR..outerR, meaning every tread's radial
-      // footprint was rotated 90° out of alignment with the curve
-      // itself — the actual cause of steps landing in the wrong
-      // position. Swapping the box's own two dimensions (rather than
-      // adding a rotation offset, which would only fix the sign for
-      // one direction of travel) puts each tread's radial span back
-      // along the true radial direction at its own angle, verified
-      // directly: corners now land at ~innerR and ~outerR as expected.
+      const tread = new THREE.BoxGeometry(treadD, 0.045, width);
+      // FIX: this box's own radial-span dimension ("width") must run
+      // along local Z, and its along-the-curve dimension ("treadD")
+      // along local X — confirmed directly (not assumed) by computing
+      // each tread's actual world-space corners: with width on X (the
+      // original code), a tread at angle 0 landed with its corners at
+      // radius ~0 and ~1 from the arc's own center instead of spanning
+      // innerR..outerR, meaning every tread's radial footprint was
+      // rotated 90° out of alignment with the curve itself — the
+      // actual cause of steps landing in the wrong position. Swapping
+      // the box's own two dimensions (rather than adding a rotation
+      // offset, which would only fix the sign for one direction of
+      // travel) puts each tread's radial span back along the true
+      // radial direction at its own angle, verified directly: corners
+      // now land at ~innerR and ~outerR as expected.
       tread.translate(0, -0.02, 0);
       tread.rotateY(ang);
 
@@ -609,105 +594,127 @@ export function createArchitecturalStaircaseGeometry(
       geoms.push(tread);
     }
 
-    // 2. Grand Center Landing
+    // 2. Grand Center Landing — sized to the master flight's own
+    // footprint, deep enough (in Z) that both wing flights, which now
+    // sit centered on this same Z band, stay flush within its edges.
     const landY = -height / 2 + (masterSteps + 1) * stepH;
-    const landZ = -length / 2 + masterRun + 0.5;
-    const landing = new THREE.BoxGeometry(masterW + wingW * 2 + 0.6, 0.08, 1.0);
+    const landBackZ = -length / 2 + masterRun;
+    const landDepth = wingW + 0.3;
+    const landZ = landBackZ + landDepth / 2;
+    const landing = new THREE.BoxGeometry(masterW + 0.6, 0.08, landDepth);
     landing.translate(0, landY - 0.04, landZ);
     geoms.push(landing);
 
-    // FIX: real "grand imperial" staircases have both upper wings turn
-    // 180° at the landing and climb BACK toward the entrance, parallel
-    // to the master flight below — not spread out sideways at a fixed
-    // depth, which is what this produced before (every wing tread
-    // shared the exact same z position, landZ, and only moved in X —
-    // a flat, sideways shelf of steps rather than a flight that
-    // actually goes anywhere as it rises, which is what "the
-    // direction is completely wrong" was describing). Each wing now
-    // has a fixed lateral (X) offset instead, and travels backward in
-    // Z as it climbs — the same axis the master flight itself climbs
-    // along, just reversed and offset sideways. wingRun is set to
-    // exactly match the master flight's own tread depth (verified
-    // directly: both come out to 0.299m at the 14-step default),
-    // rather than being derived from the overall width, which is what
-    // caused the earlier, separate incline-mismatch bug.
-    const wingRun = stepD * wingSteps;
-    const wingStepD = wingRun / wingSteps;
-    const wingLateralOffset = masterW / 2 + wingW / 2 + 0.1;
+    // FIX (round 4): per the real reference photo — and the user's own
+    // description of it — both upper wings turn 90° OUTWARD from the
+    // landing (left wing climbing away to the left along -X, right wing
+    // to the right along +X), NOT a further 180° turn climbing back
+    // over the master flight (what rounds 1-3 built: correct individual
+    // risers and pitch, but travelling the wrong direction entirely).
+    // This reuses this file's own existing 90°-turn convention from the
+    // 'l-shape' style above: once a flight turns 90°, its "depth of
+    // travel" dimension becomes X (thin per step, stepD wide) and its
+    // width becomes a constant span in Z, instead of the other way
+    // round. wingStepD is set equal to the master flight's own stepD
+    // (not derived from a separate run/width calc), so both wings climb
+    // at the exact same incline pitch as the flight below.
+    const wingStepD = stepD;
+    const wingStartX = masterW / 2 + 0.1;
+    const wingZ = landZ;
 
-    // 3. Left Wing Flight (turns 180°, climbs back toward -Z)
+    // 3. Left Wing Flight (turns 90°, climbs outward toward -X)
     for (let j = 0; j < wingSteps; j++) {
       const stepIdx = masterSteps + 1 + (j + 1);
       const topY = -height / 2 + stepIdx * stepH;
-      const xPos = -wingLateralOffset;
-      const zPos = landZ - (j + 0.5) * wingStepD;
+      const xPos = -(wingStartX + (j + 0.5) * wingStepD);
 
-      // FIX: the previous riser used topY MINUS landY — the FULL,
-      // cumulative height back to the landing, not just this one
-      // step's own rise — so every riser shared the same base and
-      // grew progressively taller moving backward. Confirmed directly
-      // against the reference photo: those overlapping, wide,
-      // same-based blocks at closely-spaced Z positions fused into
-      // what reads as one solid, sloped platform instead of visibly
-      // distinct stepped treads, which is exactly the "flat platform"
-      // look reported. Each riser now spans only from the PREVIOUS
-      // step's own height up to this one (or from the landing for the
-      // very first wing step) — a normal, one-step-tall riser, the
-      // same as every other staircase style already does.
+      // Each riser spans only from the previous step's own height up
+      // to this one (or from the landing for the very first wing
+      // step) — a normal, one-step-tall riser, same as every other
+      // style in this file, thin along the direction of travel (X).
       if (structure === 'closed') {
         const prevY = j === 0 ? landY : -height / 2 + (stepIdx - 1) * stepH;
-        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - prevY, wingStepD + 0.02);
-        riser.translate(xPos, (topY + prevY) / 2, zPos);
+        const riser = new THREE.BoxGeometry(wingStepD + 0.02, topY - prevY, wingW);
+        riser.translate(xPos, (topY + prevY) / 2, wingZ);
         geoms.push(riser);
       }
-      const tread = new THREE.BoxGeometry(wingW * 1.8, 0.04, wingStepD + 0.02);
-      tread.translate(xPos, topY, zPos);
+      const tread = new THREE.BoxGeometry(wingStepD + 0.02, 0.04, wingW);
+      tread.translate(xPos, topY, wingZ);
       geoms.push(tread);
     }
 
-    // 4. Right Wing Flight (turns 180°, climbs back toward -Z)
+    // 4. Right Wing Flight (turns 90°, climbs outward toward +X) — a
+    // mirror image of the left wing across the master flight's centerline.
     for (let k = 0; k < wingSteps; k++) {
       const stepIdx = masterSteps + 1 + (k + 1);
       const topY = -height / 2 + stepIdx * stepH;
-      const xPos = wingLateralOffset;
-      const zPos = landZ - (k + 0.5) * wingStepD;
+      const xPos = wingStartX + (k + 0.5) * wingStepD;
 
       if (structure === 'closed') {
         const prevY = k === 0 ? landY : -height / 2 + (stepIdx - 1) * stepH;
-        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - prevY, wingStepD + 0.02);
-        riser.translate(xPos, (topY + prevY) / 2, zPos);
+        const riser = new THREE.BoxGeometry(wingStepD + 0.02, topY - prevY, wingW);
+        riser.translate(xPos, (topY + prevY) / 2, wingZ);
         geoms.push(riser);
       }
-      const tread = new THREE.BoxGeometry(wingW * 1.8, 0.04, wingStepD + 0.02);
-      tread.translate(xPos, topY, zPos);
+      const tread = new THREE.BoxGeometry(wingStepD + 0.02, 0.04, wingW);
+      tread.translate(xPos, topY, wingZ);
       geoms.push(tread);
     }
 
-    // Grand Railings — now follow the wings' own backward climb
-    // FIX: previously jumped straight from the landing edge
-    // (masterW/2) to the wing's own far top corner (wingLateralOffset)
-    // in a single diagonal segment — cutting sideways across X over
-    // the SAME span where the actual wing steps stay at a constant X
-    // and only move in Y/Z. That mismatch is what made the railing
-    // visibly detach from the steps beneath it. Adding a transition
-    // point at the wing's own lateral offset, still at the landing's
-    // own height and depth, means the final segment only rises and
-    // moves backward — exactly matching the wing treads' own path —
-    // instead of cutting across them at a different angle.
-    const wingTopZ = landZ - wingRun;
-    const rL: [number, number, number][] = [
+    // Grand Railings — split into TWO pieces per side rather than one
+    // continuous run, because a single rail can't both guard the
+    // landing AND follow each wing without physically fencing off that
+    // wing's own entrance.
+    //
+    // Why: each wing sits centered on the landing's own Z-band
+    // (wingZ === landZ), narrower than the landing (wingW < landDepth),
+    // so a person reaches a wing by stepping SIDEWAYS off the landing
+    // into it — they don't walk further in Z first. The previous fix
+    // (round 5) ran the landing-crossing segment at a fixed X (the
+    // master flight's own edge) all the way from the back of the
+    // landing to its front — i.e. across the ENTIRE Z-span a wing
+    // occupies. That's exactly the width a person needs to cross
+    // sideways to get from the landing onto the wing, so the rail was
+    // a continuous fence sitting right across that opening, wherever
+    // along it they tried to step through (reported directly, with the
+    // exact spot circled: the lower rail crosses the upper wing's own
+    // pathway and blocks walking up it).
+    //
+    // Fix: piece 1 guards the master flight and the landing edge only
+    // up to nearZ — the wing's own back edge — stopping BEFORE the
+    // wing's footprint begins, so it never spans the sideways step
+    // onto the wing. Piece 2 is each wing's own rail, starting fresh
+    // right at the wing's entrance (wingStartX) and running along its
+    // outer edge (railZ, constant — so it runs alongside the wing's
+    // walking path, not across it) up to its top. The resulting gap
+    // between the two pieces is exactly as wide as the wing's own
+    // walkway (wingW) — the open stair mouth a newel post would frame
+    // on a real balustrade, not a random hole.
+    const wingRun = wingSteps * wingStepD;
+    const wingTopX = wingStartX + wingRun;
+    const railZ = wingZ + wingW / 2;
+    const nearZ = wingZ - wingW / 2;
+    const rL1: [number, number, number][] = [
       [-masterW / 2, -height / 2, -length / 2],
-      [-masterW / 2, landY, landZ - 0.5],
-      [-wingLateralOffset, landY, landZ - 0.5],
-      [-wingLateralOffset, height / 2, wingTopZ]
+      [-masterW / 2, landY, landBackZ],
+      [-masterW / 2, landY, nearZ]
     ];
-    const rR: [number, number, number][] = [
+    const rR1: [number, number, number][] = [
       [masterW / 2, -height / 2, -length / 2],
-      [masterW / 2, landY, landZ - 0.5],
-      [wingLateralOffset, landY, landZ - 0.5],
-      [wingLateralOffset, height / 2, wingTopZ]
+      [masterW / 2, landY, landBackZ],
+      [masterW / 2, landY, nearZ]
     ];
-    addRailings(rL, rR);
+    addRailings(rL1, rR1);
+
+    const rL2: [number, number, number][] = [
+      [-wingStartX, landY, railZ],
+      [-wingTopX, height / 2, railZ]
+    ];
+    const rR2: [number, number, number][] = [
+      [wingStartX, landY, railZ],
+      [wingTopX, height / 2, railZ]
+    ];
+    addRailings(rL2, rR2);
   }
 
   try {

@@ -15,8 +15,6 @@ export const ToolModifierPalette: React.FC = () => {
     setContactFrictionEnabled,
     contactFrictionStrength,
     setContactFrictionStrength,
-    lineSnapSensitivity,
-    setLineSnapSensitivity,
     deformationSettings,
     setDeformationSettings,
     autoOrbitEnabled,
@@ -644,33 +642,6 @@ export const ToolModifierPalette: React.FC = () => {
 
             <p className="text-[9px] text-gray-400 italic leading-tight">
               Adds tactile resistance when objects touch to help precise alignment.
-            </p>
-          </div>
-        )}
-
-        {activeTool === 'line' && (
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-              <span>Edge Snap Sensitivity</span>
-              <span className="font-mono text-trimble-blue">{lineSnapSensitivity}%</span>
-            </div>
-            <input
-              type="range"
-              min="10"
-              max="100"
-              step="5"
-              value={lineSnapSensitivity}
-              onChange={(e) => setLineSnapSensitivity(Number(e.target.value))}
-              className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-              title={`Edge Snap Sensitivity: ${lineSnapSensitivity}%`}
-            />
-            <div className="flex justify-between text-[8px] text-gray-400 font-mono">
-              <span>Tight (10%)</span>
-              <span>Medium (50%)</span>
-              <span>Wide (100%)</span>
-            </div>
-            <p className="text-[9px] text-gray-400 italic leading-tight pt-1">
-              How far the cursor reaches to snap onto any point along an existing edge, not just its ends.
             </p>
           </div>
         )}

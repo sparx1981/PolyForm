@@ -95,7 +95,7 @@ export const STAIR_STYLES: ArchStyleDef[] = [
     name: 'U-Shaped (Half-Turn / Switchback)',
     category: 'Layout',
     description: 'Two parallel flights connected by a 180-degree switchback landing. Compact footprint with an efficient vertical circulation core.',
-    defaultDimensions: [2.0, 2.7, 2.4],
+    defaultDimensions: [2.1, 2.7, 2.4],
     hasGlass: false,
     features: ['180° Switchback Turn', 'Dual Parallel Flights', 'Compact Floorplan Footprint']
   },

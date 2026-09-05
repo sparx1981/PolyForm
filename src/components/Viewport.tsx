@@ -58,7 +58,7 @@ import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers
 import StyleLibraryModal from './StyleLibraryModal';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
-import { collectKernelSnapPoints, closestPointsOnKernelEdges } from '../tools/kernelSnapPoints';
+import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
 import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
@@ -1279,7 +1279,6 @@ function Scene() {
     diagLog,
     contactFrictionEnabled,
     contactFrictionStrength,
-    lineSnapSensitivity,
     autoOrbitEnabled,
     orbitRotationSpeed,
     isAIGenerateOpen,
@@ -1778,17 +1777,9 @@ function Scene() {
 
   const handleGroupTransformEnd = useCallback(() => {
     groupTransformActiveRef.current = false;
-    const committed = groupTransformBindingRef.current.commit();
-    if (committed) {
-      // Same fix as fillet/chamfer/face-offset/push-pull's own
-      // finish() functions — see the comment on fillet's finish() for
-      // the full reasoning. This binding's own doc comment even says
-      // "one drag is one undo entry" was the original intent, but
-      // nothing here ever actually registered one.
-      commitHistory();
-    }
+    groupTransformBindingRef.current.commit();
     setGroupTransformPreview(null);
-  }, [commitHistory]);
+  }, []);
 
   const [roadPoints, setRoadPoints] = useState<THREE.Vector3[]>([]);
   const [sculptCursorPos, setSculptCursorPos] = useState<THREE.Vector3 | null>(null);
@@ -2406,15 +2397,6 @@ function Scene() {
           const result = filletRef.current.commit();
           if (!result.ok) {
             showToast(result.reason ? `Rounding failed: ${result.reason}` : 'Rounding failed.');
-          } else {
-            // FIX: undo/redo only ever tracked the shapes array, never
-            // the kernel graph that fillet actually mutates — commit()
-            // succeeding here previously left nothing in history to
-            // revert to. commitHistory() now also snapshots the kernel
-            // graph (see saveToHistory's own doc comment in
-            // AppContext.tsx), so this is the missing link that
-            // actually registers the change as undoable.
-            commitHistory();
           }
           setMeasurements('');
         };
@@ -2477,9 +2459,6 @@ function Scene() {
         const result = chamferRef.current.commit();
         if (!result.ok) {
           showToast(result.reason ? `Chamfer failed: ${result.reason}` : 'Chamfer failed.');
-        } else {
-          // Same fix as fillet's own finish() above — see that comment.
-          commitHistory();
         }
         setMeasurements('');
       };
@@ -2532,12 +2511,7 @@ function Scene() {
       const finish = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', finish);
-        const ok = faceOffsetRef.current.commit();
-        if (ok) {
-          // Same fix as fillet/chamfer's own finish() — see the
-          // comment on fillet's finish() above for the full reasoning.
-          commitHistory();
-        }
+        faceOffsetRef.current.commit();
         setFaceOffsetPreview(null);
         setMeasurements('');
       };
@@ -2587,15 +2561,7 @@ function Scene() {
     const finish = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', finish);
-      const ok = pushPullRef.current.commit();
-      if (ok) {
-        // Same fix as fillet/chamfer/face-offset's own finish() — see
-        // the comment on fillet's finish() above for the full
-        // reasoning. Push/pull on kernel geometry is exactly the same
-        // class of bug: it mutates the kernel graph directly, which
-        // was never part of undo/redo history before this.
-        commitHistory();
-      }
+      pushPullRef.current.commit();
       setPushPullPreview(null);
       setMeasurements('');
     };
@@ -5626,27 +5592,6 @@ function Scene() {
           const rank = rankSnap(kp.kind, Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY));
           if (!Number.isFinite(rank)) continue;
           candidates.push({ point: kv, type: kp.kind, screenDist: rank });
-        }
-
-        // Snap to any point along a kernel edge, not just its own
-        // endpoints/midpoint — closestPointsOnKernelEdges already existed
-        // and was fully implemented and tested, but was never actually
-        // called from here; this is the missing wiring, not new logic.
-        // lineSnapSensitivity (0-100, same convention as
-        // contactFrictionStrength) maps to how far in world space the
-        // cursor reaches to find a point on a nearby edge — kept modest
-        // (5cm to 40cm) since this runs in world units, not screen pixels,
-        // unlike every other candidate here.
-        if (activeTool === 'line') {
-          const onEdgeMaxDist = 0.05 + (lineSnapSensitivity / 100) * 0.35;
-          for (const kp of closestPointsOnKernelEdges(kernelHost.graph, { x: target.x, y: target.y, z: target.z }, onEdgeMaxDist)) {
-            const kv = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
-            const pr = projectToScreen(kv);
-            if (!pr.inFront) continue;
-            const rank = rankSnap(kp.kind, Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY));
-            if (!Number.isFinite(rank)) continue;
-            candidates.push({ point: kv, type: kp.kind, screenDist: rank });
-          }
         }
 
         // Evaluate snap target
