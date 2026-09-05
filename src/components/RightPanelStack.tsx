@@ -794,6 +794,33 @@ export default function RightPanelStack() {
   const selectedLight = customLights.find(l => l.id === selectedLightId);
   
   // Local state for editing in real-time
+  /**
+   * How many of a shape's own leading `args` values are actually
+   * meaningful dimensions, versus mesh-quality settings (segment or
+   * side counts) that happen to share the same array. Confirmed
+   * directly against each shape's own creation code and the existing,
+   * already-correct per-type Volume calculation elsewhere in this
+   * file: a sphere's own args are [radius, widthSegments,
+   * heightSegments] — so the Dimensions panel's previous blind
+   * `args.slice(0, 3)` displayed the segment counts (typically 32) as
+   * if they were meter values, which is exactly the "shows 32m"
+   * report. Defaults to 3 (the previous, unconditional behavior) for
+   * any type not explicitly covered here, so nothing changes for
+   * shapes this doesn't apply to.
+   */
+  const getDimensionCount = (type: string): number => {
+    switch (type) {
+      case 'sphere':
+      case 'dome':
+        return 1; // radius only
+      case 'cone':
+      case 'pyramid':
+      case 'donut':
+        return 2; // radius, height/tube — index 2+ is a segment/side count
+      default:
+        return 3;
+    }
+  };
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
   const [editingPosIndex, setEditingPosIndex] = useState<number | null>(null);
   const [editingRotIndex, setEditingRotIndex] = useState<number | null>(null);
@@ -974,7 +1001,7 @@ export default function RightPanelStack() {
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Dimensions ({unit})</label>
                   <div className="flex flex-wrap gap-1.5 mt-1">
-                    {Array.isArray(selectedShape.args) && selectedShape.args.slice(0, 3).map((arg: number, idx: number) => (
+                    {Array.isArray(selectedShape.args) && selectedShape.args.slice(0, getDimensionCount(selectedShape.type)).map((arg: number, idx: number) => (
                       <div key={idx} className="flex items-center gap-1">
                         {editingDimIndex === idx ? (
                           <input 
@@ -1009,7 +1036,7 @@ export default function RightPanelStack() {
                             {formatDistance(arg)}
                           </button>
                         )}
-                        {idx < 2 && idx < selectedShape.args.length - 1 && <span className="text-gray-400">×</span>}
+                        {idx < getDimensionCount(selectedShape.type) - 1 && <span className="text-gray-400">×</span>}
                       </div>
                     ))}
                     {selectedShape.type === 'poly' && (

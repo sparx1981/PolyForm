@@ -350,6 +350,8 @@ export interface AppState {
   setContactFrictionEnabled: (enabled: boolean) => void;
   contactFrictionStrength: number;
   setContactFrictionStrength: (strength: number) => void;
+  lineSnapSensitivity: number;
+  setLineSnapSensitivity: (sensitivity: number) => void;
   isToolModifierDocked: boolean;
   setIsToolModifierDocked: (docked: boolean | ((prev: boolean) => boolean)) => void;
   // WorldView

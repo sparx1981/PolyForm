@@ -5,7 +5,7 @@ import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './to
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import type { FaceId } from './lib/geometry/types';
-import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
+import { serializeGraph, deserializeGraph, SerializedGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { updateTimberFramesIfPresent } from './lib/timberFrameGenerator';
@@ -231,7 +231,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     styles: false
   });
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'surface' | 'multi' | 'light' | 'kernel', data?: any, faceId?: any } | null>(null);
-  const [history, setHistory] = useState<Shape[][]>([]);
+  const [history, setHistory] = useState<{ shapes: Shape[]; kernel: SerializedGraph }[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline' | 'unsaved'>('unsaved');
   const [quotaLockdownTime, setQuotaLockdownTime] = useState<number>(0);
@@ -257,6 +257,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // feature look removed.
   const [contactFrictionEnabled, setContactFrictionEnabled] = useState(true);
   const [contactFrictionStrength, setContactFrictionStrength] = useState(50); // 0-100 scale, default 50%
+  // 0-100 scale, default 50% — controls how far the Line tool reaches to
+  // snap onto any point along an existing kernel edge, not just its
+  // endpoints/midpoint. Same 0-100 convention as contactFrictionStrength
+  // above so it reads consistently with the app's other "how sensitive"
+  // sliders.
+  const [lineSnapSensitivity, setLineSnapSensitivity] = useState(50);
   const [isToolModifierDocked, setIsToolModifierDocked] = useState(false);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
   const [autoOrbitEnabled, setAutoOrbitEnabled] = useState(false);
@@ -972,9 +978,21 @@ console.log("Created rectangle:", myRect.id);`);
     }
   };
 
+  /**
+   * Snapshots both the shapes array AND the kernel graph together.
+   * Previously only shapes was captured — the kernel graph (which
+   * chamfer, fillet, and every other kernel-based operation mutate
+   * directly, in place) was never part of undo/redo history at all.
+   * Confirmed directly: undo()/redo() only ever called setShapes,
+   * never anything that touched kernelHost.graph, so a chamfer or
+   * fillet commit — a kernel-graph mutation, not a shapes change —
+   * had nothing in history to be reverted to or restored from. This
+   * is the root cause of the reported undo/redo incorrectness for
+   * those tools specifically.
+   */
   const saveToHistory = (newShapes: Shape[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push([...newShapes]);
+    newHistory.push({ shapes: [...newShapes], kernel: serializeGraph(kernelHost.graph) });
     if (newHistory.length > 100) newHistory.shift();
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
@@ -1031,16 +1049,18 @@ console.log("Created rectangle:", myRect.id);`);
 
   const undo = () => {
     if (historyIndex > 0) {
-      const prevShapes = history[historyIndex - 1];
-      setShapes(prevShapes);
+      const prev = history[historyIndex - 1];
+      setShapes(prev.shapes);
+      replaceKernelGraph(prev.kernel);
       setHistoryIndex(historyIndex - 1);
     }
   };
 
   const redo = () => {
     if (historyIndex < history.length - 1) {
-      const nextShapes = history[historyIndex + 1];
-      setShapes(nextShapes);
+      const next = history[historyIndex + 1];
+      setShapes(next.shapes);
+      replaceKernelGraph(next.kernel);
       setHistoryIndex(historyIndex + 1);
     }
   };
@@ -1549,6 +1569,8 @@ console.log("Created rectangle:", myRect.id);`);
       setContactFrictionEnabled,
       contactFrictionStrength,
       setContactFrictionStrength,
+      lineSnapSensitivity,
+      setLineSnapSensitivity,
       isAIGenerateOpen,
       setIsAIGenerateOpen,
       autoOrbitEnabled,

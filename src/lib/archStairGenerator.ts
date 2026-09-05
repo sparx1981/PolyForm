@@ -642,19 +642,22 @@ export function createArchitecturalStaircaseGeometry(
       const xPos = -wingLateralOffset;
       const zPos = landZ - (j + 0.5) * wingStepD;
 
-      // FIX: wing treads previously had no riser/support beneath them
-      // at all — just a thin, isolated slab hanging in mid-air, unlike
-      // the master flight below (which gets a full solid block down to
-      // the ground when structure is 'closed'). That absence of any
-      // visible support is a real part of why the upper section reads
-      // as floating and disconnected. Each wing riser now runs from
-      // the landing's own height up to that step's own height, at the
-      // same position as its tread — connected to the landing the wing
-      // actually springs from, not the ground far below at a different
-      // X position entirely.
+      // FIX: the previous riser used topY MINUS landY — the FULL,
+      // cumulative height back to the landing, not just this one
+      // step's own rise — so every riser shared the same base and
+      // grew progressively taller moving backward. Confirmed directly
+      // against the reference photo: those overlapping, wide,
+      // same-based blocks at closely-spaced Z positions fused into
+      // what reads as one solid, sloped platform instead of visibly
+      // distinct stepped treads, which is exactly the "flat platform"
+      // look reported. Each riser now spans only from the PREVIOUS
+      // step's own height up to this one (or from the landing for the
+      // very first wing step) — a normal, one-step-tall riser, the
+      // same as every other staircase style already does.
       if (structure === 'closed') {
-        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - landY, wingStepD + 0.02);
-        riser.translate(xPos, (topY + landY) / 2, zPos);
+        const prevY = j === 0 ? landY : -height / 2 + (stepIdx - 1) * stepH;
+        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - prevY, wingStepD + 0.02);
+        riser.translate(xPos, (topY + prevY) / 2, zPos);
         geoms.push(riser);
       }
       const tread = new THREE.BoxGeometry(wingW * 1.8, 0.04, wingStepD + 0.02);
@@ -670,8 +673,9 @@ export function createArchitecturalStaircaseGeometry(
       const zPos = landZ - (k + 0.5) * wingStepD;
 
       if (structure === 'closed') {
-        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - landY, wingStepD + 0.02);
-        riser.translate(xPos, (topY + landY) / 2, zPos);
+        const prevY = k === 0 ? landY : -height / 2 + (stepIdx - 1) * stepH;
+        const riser = new THREE.BoxGeometry(wingW * 1.8, topY - prevY, wingStepD + 0.02);
+        riser.translate(xPos, (topY + prevY) / 2, zPos);
         geoms.push(riser);
       }
       const tread = new THREE.BoxGeometry(wingW * 1.8, 0.04, wingStepD + 0.02);
