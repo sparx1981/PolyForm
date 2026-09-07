@@ -65,6 +65,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // conflating them would make every consumer guess which it is holding.
   const [selectedFaceIds, setSelectedFaceIds] = useState<number[]>([]);
 
+  // Selection tool settings (Lasso / Marquee)
+  const [selectionShapeMode, setSelectionShapeMode] = useState<'lasso' | 'marquee'>('lasso');
+  const [selectionFilter, setSelectionFilter] = useState<'all' | 'shapes' | 'surfaces'>('all');
+  const [selectionCriteria, setSelectionCriteria] = useState<'crossing' | 'window'>('crossing');
+
 
   /**
    * Swaps the kernel graph's contents in place.
@@ -1571,6 +1576,12 @@ console.log("Created rectangle:", myRect.id);`);
       bumpKernel,
       selectedFaceIds,
       setSelectedFaceIds,
+      selectionShapeMode,
+      setSelectionShapeMode,
+      selectionFilter,
+      setSelectionFilter,
+      selectionCriteria,
+      setSelectionCriteria,
       wallToolSettings,
       setWallToolSettings,
       wallJustification,

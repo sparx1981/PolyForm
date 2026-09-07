@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Settings, Info, Zap, Move, RotateCw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon } from 'lucide-react';
+import { Settings, Info, Zap, Move, RotateCw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X } from 'lucide-react';
 import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { WallJustification } from '../tools/inference/types';
@@ -33,6 +33,18 @@ export const ToolModifierPalette: React.FC = () => {
     shapes,
     setShapes,
     selectedId,
+    setSelectedId,
+    selectedIds,
+    setSelectedIds,
+    selectedFaceIds,
+    setSelectedFaceIds,
+    selectionShapeMode,
+    setSelectionShapeMode,
+    selectionFilter,
+    setSelectionFilter,
+    selectionCriteria,
+    setSelectionCriteria,
+    kernelHost,
     addShape,
     commitHistory,
     setMeasurements
@@ -53,7 +65,10 @@ export const ToolModifierPalette: React.FC = () => {
     'deform', 
     'orbit',
     'wall',
-    'bezier'
+    'bezier',
+    'polygon',
+    'select',
+    'lasso'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -190,11 +205,13 @@ export const ToolModifierPalette: React.FC = () => {
             <Building2 size={14} className="text-trimble-blue" />
           ) : activeTool === 'bezier' ? (
             <Spline size={14} className="text-trimble-blue" />
+          ) : (activeTool === 'select' || activeTool === 'lasso') ? (
+            <Lasso size={14} className="text-trimble-blue" />
           ) : (
             <Settings size={14} className="text-trimble-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -783,6 +800,200 @@ export const ToolModifierPalette: React.FC = () => {
                 <li><strong className="text-gray-700 dark:text-gray-200">↑ / ↓ Arrow keys:</strong> Increase / decrease side count</li>
                 <li><strong className="text-gray-700 dark:text-gray-200">Type '8s' + Enter:</strong> Set exact side count (e.g. 8 sides)</li>
                 <li><strong className="text-gray-700 dark:text-gray-200">Type radius + Enter:</strong> Lock exact radius (e.g. 2.4m)</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {(activeTool === 'select' || activeTool === 'lasso') && (
+          <div className="space-y-3.5">
+            {/* Mode: Lasso vs Marquee */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                Selection Gesture
+              </label>
+              <div className="grid grid-cols-2 gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                <button
+                  onClick={() => setSelectionShapeMode('lasso')}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all",
+                    selectionShapeMode === 'lasso'
+                      ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm font-semibold"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  )}
+                  title="Draw a freehand custom path around objects"
+                >
+                  <Lasso size={13} />
+                  <span>Freehand Lasso</span>
+                </button>
+                <button
+                  onClick={() => setSelectionShapeMode('marquee')}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all",
+                    selectionShapeMode === 'marquee'
+                      ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm font-semibold"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  )}
+                  title="Drag a rectangular marquee window"
+                >
+                  <SquareDashed size={13} />
+                  <span>Marquee Box</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Target Filter */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                Target Filter
+              </label>
+              <div className="grid grid-cols-3 gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                {[
+                  { id: 'all' as const, label: 'All' },
+                  { id: 'shapes' as const, label: 'Shapes' },
+                  { id: 'surfaces' as const, label: 'Surfaces' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setSelectionFilter(item.id)}
+                    className={cn(
+                      "py-1 px-1.5 rounded-md text-[11px] font-medium transition-all text-center",
+                      selectionFilter === item.id
+                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm font-semibold"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Selection Logic: Crossing vs Window */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                Match Criteria
+              </label>
+              <div className="grid grid-cols-2 gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                <button
+                  onClick={() => setSelectionCriteria('crossing')}
+                  className={cn(
+                    "flex flex-col items-center py-1.5 px-2 rounded-md text-center transition-all",
+                    selectionCriteria === 'crossing'
+                      ? "bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-400 shadow-sm font-semibold"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  )}
+                  title="Selects objects touching or inside the selection path"
+                >
+                  <span className="text-xs font-semibold">Crossing</span>
+                  <span className="text-[9px] opacity-75">Touch / Intersect</span>
+                </button>
+                <button
+                  onClick={() => setSelectionCriteria('window')}
+                  className={cn(
+                    "flex flex-col items-center py-1.5 px-2 rounded-md text-center transition-all",
+                    selectionCriteria === 'window'
+                      ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm font-semibold"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  )}
+                  title="Only selects objects completely enclosed by the selection path"
+                >
+                  <span className="text-xs font-semibold">Window</span>
+                  <span className="text-[9px] opacity-75">Fully Enclosed</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
+                <span className="font-semibold">Current Selection</span>
+                <span className="font-mono text-trimble-blue">
+                  {selectedIds.length} shapes · {selectedFaceIds.length} faces
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                <button
+                  onClick={() => {
+                    const allShapeIds = shapes.filter(s => !s.hidden).map(s => s.id);
+                    const allFaceIds = kernelHost?.graph ? Array.from(kernelHost.graph.faces.keys()) : [];
+                    setSelectedIds(allShapeIds);
+                    setSelectedFaceIds(allFaceIds);
+                    setSelectedId(allShapeIds[0] || null);
+                    setMeasurements(`Selected all (${allShapeIds.length} shapes, ${allFaceIds.length} surfaces)`);
+                  }}
+                  className={cn(
+                    "py-1 px-1.5 rounded border text-[10px] font-medium transition-colors text-center",
+                    theme === 'dark'
+                      ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
+                      : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                  )}
+                >
+                  Select All
+                </button>
+
+                <button
+                  onClick={() => {
+                    const allShapeIds = shapes.filter(s => !s.hidden).map(s => s.id);
+                    const currentSet = new Set(selectedIds);
+                    const invertedShapes = allShapeIds.filter(id => !currentSet.has(id));
+
+                    const allFaceIds = kernelHost?.graph ? Array.from(kernelHost.graph.faces.keys()) : [];
+                    const currentFaceSet = new Set(selectedFaceIds);
+                    const invertedFaces = allFaceIds.filter(id => !currentFaceSet.has(id));
+
+                    setSelectedIds(invertedShapes);
+                    setSelectedFaceIds(invertedFaces);
+                    setSelectedId(invertedShapes[0] || null);
+                    setMeasurements(`Inverted selection (${invertedShapes.length} shapes, ${invertedFaces.length} surfaces)`);
+                  }}
+                  className={cn(
+                    "py-1 px-1.5 rounded border text-[10px] font-medium transition-colors text-center",
+                    theme === 'dark'
+                      ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
+                      : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                  )}
+                >
+                  Invert
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSelectedId(null);
+                    setSelectedIds([]);
+                    setSelectedFaceIds([]);
+                    setMeasurements('Cleared selection');
+                  }}
+                  disabled={selectedIds.length === 0 && selectedFaceIds.length === 0}
+                  className={cn(
+                    "py-1 px-1.5 rounded border text-[10px] font-medium transition-colors text-center",
+                    selectedIds.length === 0 && selectedFaceIds.length === 0
+                      ? "opacity-50 cursor-not-allowed border-gray-200 dark:border-gray-800 text-gray-400"
+                      : (theme === 'dark'
+                          ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
+                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100")
+                  )}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Gesture & Shortcut Card */}
+            <div className={cn(
+              "p-2.5 rounded-lg border text-[10px] space-y-1.5",
+              theme === 'dark' ? "bg-gray-800/60 border-gray-700/80 text-gray-300" : "bg-blue-50/60 border-blue-100 text-blue-950"
+            )}>
+              <div className="font-semibold text-[10px] text-trimble-blue flex items-center gap-1.5">
+                <Lasso size={12} />
+                <span>Lasso Gestures & Modifiers</span>
+              </div>
+              <ul className="space-y-1 text-[9px] list-disc list-inside text-gray-500 dark:text-gray-400">
+                <li><strong className="text-gray-700 dark:text-gray-200">Left Drag:</strong> Draw custom lasso path or marquee</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Shift + Drag:</strong> Add to current selection</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Alt + Drag:</strong> Subtract from current selection</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">Esc key:</strong> Cancel active drawing or deselect</li>
+                <li><strong className="text-gray-700 dark:text-gray-200">L key:</strong> Toggle between Lasso & Marquee</li>
               </ul>
             </div>
           </div>

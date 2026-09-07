@@ -73,6 +73,7 @@ export interface Shape {
   geometryData?: any; // For custom/CSG meshes
   hostWallId?: string; // For door/window shapes hosted on a wall
   archStyle?: string; // Style identifier for architectural doors, windows, and stairs
+  wallStyle?: string;
   stairStyle?: 'straight' | 'l-shape' | 'u-shape' | 'c-shape' | 'winder' | 'spiral' | 'curved' | 'bifurcated' | string;
   stairStructure?: 'closed' | 'open' | 'floating' | 'mono-stringer';
   railingMode?: 'none' | 'left' | 'right' | 'both';
@@ -84,6 +85,8 @@ export interface Shape {
   plantSpeciesId?: string;
   plantVariation?: string;
   roofData?: any;
+  isParametric?: boolean;
+  parametricData?: any;
   customData?: any;
 }
 
@@ -525,6 +528,12 @@ export interface AppState {
   setPickingSunCenter: (picking: boolean) => void;
   kernelSubtractTarget: FaceId[] | null;
   setKernelSubtractTarget: (target: FaceId[] | null) => void;
+  selectionShapeMode: 'lasso' | 'marquee';
+  setSelectionShapeMode: (mode: 'lasso' | 'marquee' | ((prev: 'lasso' | 'marquee') => 'lasso' | 'marquee')) => void;
+  selectionFilter: 'all' | 'shapes' | 'surfaces';
+  setSelectionFilter: (filter: 'all' | 'shapes' | 'surfaces' | ((prev: 'all' | 'shapes' | 'surfaces') => 'all' | 'shapes' | 'surfaces')) => void;
+  selectionCriteria: 'crossing' | 'window';
+  setSelectionCriteria: (criteria: 'crossing' | 'window' | ((prev: 'crossing' | 'window') => 'crossing' | 'window')) => void;
   toolbarOrder: ToolbarKey[];
   setToolbarOrder: (val: ToolbarKey[] | ((prev: ToolbarKey[]) => ToolbarKey[])) => void;
   toolbarDocks: Record<ToolbarKey, DockZone>;

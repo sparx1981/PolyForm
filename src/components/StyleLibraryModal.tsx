@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
-import { X, Check, Layers, Sparkles, Sliders, ArrowRight, ShieldCheck, Box, HelpCircle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  X, Check, Layers, Sparkles, Sliders, ArrowRight, ShieldCheck, Box, HelpCircle, 
+  RotateCcw, SlidersHorizontal, Calculator, Ruler, Activity, CheckCircle2, AlertCircle
+} from 'lucide-react';
 import { 
   DOOR_STYLES, 
   WINDOW_STYLES, 
@@ -11,6 +14,14 @@ import {
 } from '../lib/archStyles';
 import { Shape } from '../types';
 import { cn } from '../lib/utils';
+import { useApp } from '../AppContext';
+import {
+  scanSceneForTargetHeight,
+  calculateParametricStairs,
+  DEFAULT_IDEAL_STEP_HEIGHT,
+  DEFAULT_STRIDE_CONSTANT,
+  DEFAULT_STAIRCASE_HEIGHT
+} from '../lib/parametricStairs';
 
 interface StyleLibraryModalProps {
   isOpen: boolean;
@@ -18,13 +29,16 @@ interface StyleLibraryModalProps {
   targetShape: Shape | null;
   onApplyStyle: (
     styleId: string, 
-    dimensions?: [number, number, number],
+    dimensions?: [number, number, number] | [number, number, number, number],
     extraOptions?: {
       stairStructure?: 'closed' | 'open' | 'floating' | 'mono-stringer';
       railingMode?: 'none' | 'left' | 'right' | 'both';
+      isParametric?: boolean;
+      parametricData?: any;
     }
   ) => void;
   theme?: 'light' | 'dark';
+  allShapes?: Shape[];
 }
 
 function StyleDiagram({ style }: { style: ArchStyleDef }) {
@@ -497,7 +511,8 @@ export default function StyleLibraryModal({
   onClose,
   targetShape,
   onApplyStyle,
-  theme = 'light'
+  theme = 'light',
+  allShapes
 }: StyleLibraryModalProps) {
   if (!isOpen || !targetShape) return null;
 
@@ -528,6 +543,9 @@ export default function StyleLibraryModal({
     title = 'Architectural Window Styles';
   }
 
+  const appContext = useApp();
+  const shapes = allShapes || appContext.shapes || [];
+
   const currentStyleId = targetShape.wallStyle || targetShape.stairStyle || targetShape.archStyle || defaultStyleId;
   const [selectedStyleId, setSelectedStyleId] = useState<string>(currentStyleId);
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -540,20 +558,70 @@ export default function StyleLibraryModal({
     targetShape.railingMode || 'both'
   );
 
+  // Parametric Stair Tool State
+  const [isParametric, setIsParametric] = useState<boolean>(
+    targetShape.isParametric !== undefined ? targetShape.isParametric : true
+  );
+  const [idealStepHeight, setIdealStepHeight] = useState<number>(
+    targetShape.parametricData?.idealStepHeight || DEFAULT_IDEAL_STEP_HEIGHT
+  );
+  const [targetHeightOverride, setTargetHeightOverride] = useState<number | null>(
+    targetShape.isParametric && targetShape.parametricData?.targetHeight
+      ? targetShape.parametricData.targetHeight
+      : null
+  );
+  const [scanRefreshKey, setScanRefreshKey] = useState<number>(0);
+
+  // Calculate base elevation of the staircase
+  const initialH = Array.isArray(targetShape.args) ? targetShape.args[1] || 2.7 : 2.7;
+  const baseElevation = targetShape.position[1] - initialH / 2;
+
+  // Scene scanning to detect walls or upper floors
+  const sceneScan = useMemo(() => {
+    return scanSceneForTargetHeight(shapes, baseElevation, targetShape.position);
+  }, [shapes, baseElevation, targetShape.position, scanRefreshKey]);
+
+  // Determine effective target height
+  const effectiveTargetHeight = targetHeightOverride ?? sceneScan.targetHeight;
+
+  // Real-time Parametric Step & Depth Calculation
+  const parametricCalc = useMemo(() => {
+    return calculateParametricStairs({
+      targetHeight: effectiveTargetHeight,
+      idealStepHeight,
+      strideConstant: DEFAULT_STRIDE_CONSTANT,
+      width: Array.isArray(targetShape.args) ? targetShape.args[0] || 1.0 : 1.0,
+      source: sceneScan.source,
+      sourceDescription: sceneScan.description
+    });
+  }, [effectiveTargetHeight, idealStepHeight, targetShape.args, sceneScan]);
+
   // Dimensions
   const defaultWidth = isDoor ? 0.9 : isStair ? 1.0 : isWall ? 3.0 : 1.2;
-  const defaultHeight = isDoor ? 2.1 : isStair ? 2.7 : isWall ? 2.8 : 1.2;
-  const defaultDepth = isDoor ? 0.15 : isStair ? 3.6 : isWall ? 0.2 : 0.12;
+  const defaultHeight = isDoor ? 2.1 : isStair ? (isParametric ? parametricCalc.targetHeight : 2.7) : isWall ? 2.8 : 1.2;
+  const defaultDepth = isDoor ? 0.15 : isStair ? (isParametric ? parametricCalc.totalRun : 3.6) : isWall ? 0.2 : 0.12;
 
   const [width, setWidth] = useState<number>(
     Array.isArray(targetShape.args) ? targetShape.args[0] || defaultWidth : defaultWidth
   );
   const [height, setHeight] = useState<number>(
-    Array.isArray(targetShape.args) ? targetShape.args[1] || defaultHeight : defaultHeight
+    isStair && isParametric 
+      ? parametricCalc.targetHeight 
+      : (Array.isArray(targetShape.args) ? targetShape.args[1] || defaultHeight : defaultHeight)
   );
   const [depth, setDepth] = useState<number>(
-    Array.isArray(targetShape.args) ? targetShape.args[2] || defaultDepth : defaultDepth
+    isStair && isParametric 
+      ? parametricCalc.totalRun 
+      : (Array.isArray(targetShape.args) ? targetShape.args[2] || defaultDepth : defaultDepth)
   );
+
+  // Keep height and depth in sync when parametric calculation updates
+  useEffect(() => {
+    if (isStair && isParametric) {
+      setHeight(parametricCalc.targetHeight);
+      setDepth(parametricCalc.totalRun);
+    }
+  }, [isStair, isParametric, parametricCalc.targetHeight, parametricCalc.totalRun]);
 
   const categories = ['All', 'Layout', 'Modern', 'Classic', 'Specialty', 'Commercial'].filter(cat => 
     cat === 'All' || styles.some(s => s.category === cat)
@@ -565,22 +633,32 @@ export default function StyleLibraryModal({
 
   const handleSelectStyle = (style: ArchStyleDef) => {
     setSelectedStyleId(style.id);
-    // Only update default dimensions for door/window if the shape didn't already have custom dimensions
-    if (!isWall && !isStair && style.defaultDimensions) {
+    // Update dimensions from style defaults for doors, windows, and non-parametric staircases
+    if (!isWall && style.defaultDimensions) {
       setWidth(style.defaultDimensions[0]);
-      setHeight(style.defaultDimensions[1]);
-      setDepth(style.defaultDimensions[2]);
+      if (!isStair || !isParametric) {
+        setHeight(style.defaultDimensions[1]);
+        setDepth(style.defaultDimensions[2]);
+      }
     }
   };
 
   const handleConfirm = () => {
-    const finalDims = isStair 
-      ? [width, height, depth, Array.isArray(targetShape.args) && targetShape.args[3] ? targetShape.args[3] : 12]
+    const finalDims: [number, number, number, number] | [number, number, number] = isStair 
+      ? (isParametric 
+          ? [width, parametricCalc.targetHeight, parametricCalc.totalRun, parametricCalc.stepCount]
+          : [width, height, depth, Array.isArray(targetShape.args) && targetShape.args[3] ? targetShape.args[3] : 12])
       : [width, height, depth];
+
     onApplyStyle(
       selectedStyleId, 
       finalDims, 
-      isStair ? { stairStructure, railingMode } : undefined
+      isStair ? { 
+        stairStructure, 
+        railingMode,
+        isParametric,
+        parametricData: isParametric ? parametricCalc : undefined
+      } : undefined
     );
     onClose();
   };
@@ -719,66 +797,290 @@ export default function StyleLibraryModal({
 
           {/* Staircase Specific Configuration Section */}
           {isStair && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-200 dark:border-gray-800">
-              {/* Structural / Architectural Style */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
-                  <Box size={14} className="text-trimble-blue" />
-                  <span>Architectural & Structural Style</span>
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {STAIR_STRUCTURE_OPTIONS.map((opt) => (
+            <div className="space-y-6 pt-4 border-t border-gray-200 dark:border-gray-800">
+              {/* Parametric Staircase Tool Control Card */}
+              <div 
+                id="stair-parametric-container"
+                className={cn(
+                  "p-4 rounded-xl border transition-all",
+                  isParametric 
+                    ? "border-trimble-blue/40 bg-gradient-to-br from-trimble-blue/[0.03] to-blue-500/[0.02] dark:from-trimble-blue/[0.08] dark:to-transparent"
+                    : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30"
+                )}
+              >
+                {/* Parametric Toggle Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-200/80 dark:border-gray-700/60">
+                  <div className="flex items-start gap-2.5">
+                    <div className={cn(
+                      "p-2 rounded-lg mt-0.5",
+                      isParametric ? "bg-trimble-blue text-white shadow-sm shadow-trimble-blue/30" : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                    )}>
+                      <Sparkles size={16} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-gray-900 dark:text-white">Parametric Staircase Generator</span>
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                          isParametric 
+                            ? "bg-trimble-blue/15 text-trimble-blue border border-trimble-blue/30" 
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                        )}>
+                          {isParametric ? "Parametric Active" : "Manual Mode"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Scans scene for walls & upper floors, calculating equal risers and ergonomic tread depth with zero stretching.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Parametric Toggle Switch */}
+                  <div className="flex items-center gap-2.5 self-end sm:self-center">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                      Parametric
+                    </span>
                     <button
-                      key={opt.id}
+                      id="stair-parametric-toggle"
                       type="button"
-                      onClick={() => setStairStructure(opt.id)}
+                      role="switch"
+                      aria-checked={isParametric}
+                      onClick={() => setIsParametric(!isParametric)}
                       className={cn(
-                        "p-3 text-left rounded-lg border transition-all text-xs flex flex-col justify-between",
-                        stairStructure === opt.id
-                          ? "border-trimble-blue bg-trimble-blue/5 text-trimble-blue ring-1 ring-trimble-blue"
-                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800/50"
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-trimble-blue focus:ring-offset-2",
+                        isParametric ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-700"
                       )}
                     >
-                      <div className="font-semibold flex items-center justify-between w-full">
-                        <span>{opt.name}</span>
-                        {stairStructure === opt.id && <Check size={14} />}
-                      </div>
-                      <p className="mt-1 text-[11px] opacity-75 leading-tight">
-                        {opt.description}
-                      </p>
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                          isParametric ? "translate-x-5" : "translate-x-0"
+                        )}
+                      />
                     </button>
-                  ))}
+                  </div>
                 </div>
+
+                {/* Parametric Details when Enabled */}
+                {isParametric && (
+                  <div className="mt-4 space-y-4 animate-fade-in">
+                    {/* Scene Scan Diagnostic Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-white/70 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 text-xs">
+                      <div className="flex items-center gap-2">
+                        <Activity size={14} className={sceneScan.source === 'upper_floor' ? "text-emerald-500" : sceneScan.source === 'wall' ? "text-trimble-blue" : "text-amber-500"} />
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">Environment Scan:</span>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[11px] font-medium",
+                          sceneScan.source === 'upper_floor' 
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20" 
+                            : sceneScan.source === 'wall'
+                            ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20"
+                            : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                        )}>
+                          {sceneScan.source === 'upper_floor' 
+                            ? `Upper Floor Slab (${sceneScan.targetHeight.toFixed(2)}m rise)`
+                            : sceneScan.source === 'wall'
+                            ? `Wall Top (${sceneScan.targetHeight.toFixed(2)}m rise)`
+                            : `Default Height (${DEFAULT_STAIRCASE_HEIGHT.toFixed(2)}m)`}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400 hidden md:inline truncate max-w-xs">
+                          {sceneScan.detectedObjectName ? `from "${sceneScan.detectedObjectName}"` : 'Fallback height'}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTargetHeightOverride(null);
+                          setScanRefreshKey(k => k + 1);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium text-[11px] transition-colors"
+                        title="Re-scan current 3D scene elements"
+                      >
+                        <RotateCcw size={12} />
+                        <span>Re-scan Scene</span>
+                      </button>
+                    </div>
+
+                    {/* 4 Metric Calculation Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {/* Metric 1: Equal Riser Height */}
+                      <div className="p-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Riser Height</span>
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">Equal</span>
+                        </div>
+                        <div className="my-1.5">
+                          <span className="text-lg font-bold text-gray-900 dark:text-white font-mono">
+                            {(parametricCalc.actualStepHeight * 100).toFixed(2)}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-1">cm</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 leading-tight">
+                          100% equal across all steps
+                        </span>
+                      </div>
+
+                      {/* Metric 2: Step Count */}
+                      <div className="p-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Step Count</span>
+                          <Calculator size={12} className="text-trimble-blue" />
+                        </div>
+                        <div className="my-1.5">
+                          <span className="text-lg font-bold text-gray-900 dark:text-white font-mono">
+                            {parametricCalc.stepCount}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-1">steps</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 leading-tight">
+                          Round(Height ÷ {(idealStepHeight * 100).toFixed(1)}cm)
+                        </span>
+                      </div>
+
+                      {/* Metric 3: Ergonomic Tread Depth */}
+                      <div className="p-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Tread Depth</span>
+                          <Ruler size={12} className="text-trimble-blue" />
+                        </div>
+                        <div className="my-1.5">
+                          <span className="text-lg font-bold text-gray-900 dark:text-white font-mono">
+                            {(parametricCalc.treadDepth * 100).toFixed(2)}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-1">cm</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 leading-tight">
+                          Blondel standard: 2R + T
+                        </span>
+                      </div>
+
+                      {/* Metric 4: Total Run Length */}
+                      <div className="p-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Run</span>
+                          <span className="text-[10px] font-bold text-trimble-blue bg-trimble-blue/10 px-1.5 py-0.2 rounded">
+                            {parametricCalc.pitchAngleDeg.toFixed(1)}°
+                          </span>
+                        </div>
+                        <div className="my-1.5">
+                          <span className="text-lg font-bold text-gray-900 dark:text-white font-mono">
+                            {parametricCalc.totalRun.toFixed(2)}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-1">m</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 leading-tight">
+                          {parametricCalc.stepCount} × {(parametricCalc.treadDepth * 100).toFixed(1)}cm
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Ergonomic Formula & Fine-tuning Bar */}
+                    <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200/70 dark:border-gray-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
+                        <span className="font-semibold text-trimble-blue">Ergonomic Formula:</span>
+                        <code className="font-mono bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+                          (2 × {(parametricCalc.actualStepHeight * 100).toFixed(1)}cm) + {(parametricCalc.treadDepth * 100).toFixed(1)}cm = {(parametricCalc.strideFormulaValue * 100).toFixed(1)}cm
+                        </code>
+                        <span className="text-gray-400 hidden lg:inline">[Ideal 24–25 in / 62–64 cm]</span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-gray-500">Ideal Riser:</span>
+                          <input
+                            type="number"
+                            step="0.005"
+                            min="0.14"
+                            max="0.22"
+                            value={idealStepHeight}
+                            onChange={(e) => setIdealStepHeight(parseFloat(e.target.value) || DEFAULT_IDEAL_STEP_HEIGHT)}
+                            className="w-16 px-1.5 py-0.5 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                          />
+                          <span className="text-[11px] text-gray-400">m</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-gray-500">Target Rise:</span>
+                          <input
+                            type="number"
+                            step="0.05"
+                            min="0.4"
+                            max="8.0"
+                            value={effectiveTargetHeight}
+                            onChange={(e) => setTargetHeightOverride(parseFloat(e.target.value) || effectiveTargetHeight)}
+                            className="w-16 px-1.5 py-0.5 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                          />
+                          <span className="text-[11px] text-gray-400">m</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Railing & Balustrade Options */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
-                  <ShieldCheck size={14} className="text-trimble-blue" />
-                  <span>Balustrade & Handrail Placement</span>
-                </h4>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {RAILING_OPTIONS.map((rail) => (
-                    <button
-                      key={rail.id}
-                      type="button"
-                      onClick={() => setRailingMode(rail.id)}
-                      className={cn(
-                        "p-3 text-left rounded-lg border transition-all text-xs flex flex-col justify-between",
-                        railingMode === rail.id
-                          ? "border-trimble-blue bg-trimble-blue/5 text-trimble-blue ring-1 ring-trimble-blue"
-                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800/50"
-                      )}
-                    >
-                      <div className="font-semibold flex items-center justify-between w-full">
-                        <span>{rail.name}</span>
-                        {railingMode === rail.id && <Check size={14} />}
-                      </div>
-                      <p className="mt-1 text-[11px] opacity-75 leading-tight">
-                        {rail.description}
-                      </p>
-                    </button>
-                  ))}
+              {/* Structural / Architectural Style & Railings */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Structural / Architectural Style */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+                    <Box size={14} className="text-trimble-blue" />
+                    <span>Architectural & Structural Style</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {STAIR_STRUCTURE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setStairStructure(opt.id)}
+                        className={cn(
+                          "p-3 text-left rounded-lg border transition-all text-xs flex flex-col justify-between",
+                          stairStructure === opt.id
+                            ? "border-trimble-blue bg-trimble-blue/5 text-trimble-blue ring-1 ring-trimble-blue"
+                            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800/50"
+                        )}
+                      >
+                        <div className="font-semibold flex items-center justify-between w-full">
+                          <span>{opt.name}</span>
+                          {stairStructure === opt.id && <Check size={14} />}
+                        </div>
+                        <p className="mt-1 text-[11px] opacity-75 leading-tight">
+                          {opt.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Railing & Balustrade Options */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+                    <ShieldCheck size={14} className="text-trimble-blue" />
+                    <span>Balustrade & Handrail Placement</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {RAILING_OPTIONS.map((rail) => (
+                      <button
+                        key={rail.id}
+                        type="button"
+                        onClick={() => setRailingMode(rail.id)}
+                        className={cn(
+                          "p-3 text-left rounded-lg border transition-all text-xs flex flex-col justify-between",
+                          railingMode === rail.id
+                            ? "border-trimble-blue bg-trimble-blue/5 text-trimble-blue ring-1 ring-trimble-blue"
+                            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800/50"
+                        )}
+                      >
+                        <div className="font-semibold flex items-center justify-between w-full">
+                          <span>{rail.name}</span>
+                          {railingMode === rail.id && <Check size={14} />}
+                        </div>
+                        <p className="mt-1 text-[11px] opacity-75 leading-tight">
+                          {rail.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -812,8 +1114,15 @@ export default function StyleLibraryModal({
                 step="0.05"
                 min="0.2"
                 max="10.0"
-                value={height}
-                onChange={(e) => setHeight(parseFloat(e.target.value) || height)}
+                value={isStair && isParametric ? Number(parametricCalc.targetHeight.toFixed(2)) : height}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  if (isStair && isParametric) {
+                    setTargetHeightOverride(val);
+                  } else {
+                    setHeight(val);
+                  }
+                }}
                 className="w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:border-trimble-blue"
               />
               <span className="text-gray-400">m</span>
@@ -824,11 +1133,23 @@ export default function StyleLibraryModal({
                 step="0.05"
                 min="0.05"
                 max="15.0"
-                value={depth}
+                disabled={isStair && isParametric}
+                title={isStair && isParametric ? "Calculated dynamically from ergonomic formula: (2*Riser) + Tread" : undefined}
+                value={isStair && isParametric ? Number(parametricCalc.totalRun.toFixed(2)) : depth}
                 onChange={(e) => setDepth(parseFloat(e.target.value) || depth)}
-                className="w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:border-trimble-blue"
+                className={cn(
+                  "w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue",
+                  isStair && isParametric 
+                    ? "bg-gray-100 dark:bg-gray-800/40 text-gray-500 cursor-not-allowed" 
+                    : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                )}
               />
               <span className="text-gray-400">m</span>
+              {isStair && isParametric && (
+                <span className="text-[10px] font-bold text-trimble-blue bg-trimble-blue/10 px-1.5 py-0.5 rounded">
+                  {parametricCalc.stepCount} Steps ({(parametricCalc.actualStepHeight * 100).toFixed(1)}cm riser)
+                </span>
+              )}
             </div>
           </div>
 

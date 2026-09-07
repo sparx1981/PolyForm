@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   MousePointer2, 
+  Lasso,
   Eraser, 
   PaintBucket, 
   Box, 
@@ -533,11 +534,28 @@ export default function UnifiedToolRail() {
           tool: 'select',
           label: 'Select',
           hotkey: 'Space',
-          subtitle: 'Select objects, faces, or edges',
+          subtitle: 'Select objects, faces, or edges (Click or Drag)',
           icon: <MousePointer2 size={19} />,
-          isActive: (s) => s.activeTool === 'select',
-          onClick: (s) => s.setActiveTool('select'),
-          keywords: ['select', 'pointer', 'pick', 'choose']
+          isActive: (s) => s.activeTool === 'select' && s.selectionShapeMode === 'marquee',
+          onClick: (s) => {
+            s.setActiveTool('select');
+            s.setSelectionShapeMode('marquee');
+          },
+          keywords: ['select', 'pointer', 'pick', 'choose', 'marquee']
+        },
+        {
+          id: 'lasso',
+          tool: 'lasso',
+          label: 'Lasso Select',
+          hotkey: 'L',
+          subtitle: 'Freehand lasso & marquee window selection for shapes and surfaces',
+          icon: <Lasso size={19} />,
+          isActive: (s) => s.activeTool === 'lasso' || (s.activeTool === 'select' && s.selectionShapeMode === 'lasso'),
+          onClick: (s) => {
+            s.setActiveTool('select');
+            s.setSelectionShapeMode('lasso');
+          },
+          keywords: ['lasso', 'marquee', 'select', 'box', 'window', 'crossing', 'multiselect', 'enclose']
         },
         {
           id: 'eraser',

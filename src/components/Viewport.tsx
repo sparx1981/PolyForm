@@ -39,6 +39,11 @@ import {
   createStaircaseGeometry 
 } from '../lib/archGeometry';
 import {
+  scanSceneForTargetHeight,
+  calculateParametricStairs,
+  createParametricStaircaseGeometry
+} from '../lib/parametricStairs';
+import {
   createTreeGeometry,
   createBushGeometry,
   createFenceGeometry,
@@ -54,7 +59,7 @@ import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl
 import { getLandscapeCanvas, LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
-import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers } from 'lucide-react';
+import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers, Lasso, SquareDashed } from 'lucide-react';
 import StyleLibraryModal from './StyleLibraryModal';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
@@ -76,6 +81,7 @@ import { FaceOffsetPreview } from './FaceOffsetPreview';
 import { ChamferPreview } from './ChamferPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
 import { GroupTransformPreview } from './GroupTransformPreview';
+import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
 import { buildRoomAssembly, orientRoomWallsToExterior } from '../lib/archRoomAssembly';
@@ -804,6 +810,16 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
       case 'step':
         return createStepGeometry(args[0] || 1.0, args[1] || 0.18, args[2] || 0.30);
       case 'staircase':
+        if (shape.isParametric) {
+          return createParametricStaircaseGeometry({
+            targetHeight: shape.parametricData?.targetHeight || args[1] || 2.16,
+            idealStepHeight: shape.parametricData?.idealStepHeight,
+            strideConstant: shape.parametricData?.strideConstant,
+            width: args[0] || 1.0,
+            stairStructure: shape.stairStructure || 'closed',
+            railingMode: shape.railingMode || 'both'
+          }).geometry;
+        }
         return createStaircaseGeometry(
           args[0] || 1.0, 
           args[1] || 2.16, 
@@ -812,7 +828,10 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
           {
             stairStyle: shape.stairStyle || shape.archStyle || 'straight',
             stairStructure: shape.stairStructure || 'closed',
-            railingMode: shape.railingMode || 'both'
+            railingMode: shape.railingMode || 'both',
+            isParametric: shape.isParametric,
+            idealStepHeight: shape.parametricData?.idealStepHeight,
+            strideConstant: shape.parametricData?.strideConstant
           }
         );
       default:
@@ -827,6 +846,11 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
     shape.stairStyle, 
     shape.stairStructure, 
     shape.railingMode, 
+    shape.isParametric,
+    shape.parametricData?.targetHeight,
+    shape.parametricData?.stepCount,
+    shape.parametricData?.actualStepHeight,
+    shape.parametricData?.treadDepth,
     args[0], 
     args[1], 
     args[2], 
@@ -1257,6 +1281,8 @@ function Scene() {
     setSubtractTargetId,
     kernelSubtractTarget,
     setKernelSubtractTarget,
+    selectionShapeMode,
+    setSelectionShapeMode,
     showCollaboratorCursors,
     user,
     setUser,
@@ -1421,6 +1447,9 @@ function Scene() {
   }, [kernelHost, setContextMenu, setSelectedFaceIds, setSelectedId, setSelectedIds]);
 
   const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
+    if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
+      return;
+    }
     if (activeTool === 'paint') {
       // Matches select-tool semantics: a plain click acts on the whole
       // object (paints every face of the group the clicked one belongs
@@ -4005,6 +4034,22 @@ function Scene() {
         }
       }
 
+      // Toggle between Lasso & Marquee selection when 'L' key is pressed
+      if (key === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+          return;
+        }
+        e.preventDefault();
+        setActiveTool('select');
+        setSelectionShapeMode(prev => {
+          const next = prev === 'lasso' ? 'marquee' : 'lasso';
+          setMeasurements(`Selection Mode: ${next === 'lasso' ? 'Freehand Lasso' : 'Marquee Window'}`);
+          return next;
+        });
+        return;
+      }
+
       // Wall Tool specific in-flight shortcuts
       if (activeTool === 'wall') {
         if (e.key === 'Tab' || key === 'j') {
@@ -4043,7 +4088,7 @@ function Scene() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, fenceVertices.length, finalizeFenceChain, rectangleInputState.active, finalizeRectangleInput, wallJustification, wallToolSettings, setWallJustification, setWallToolSettings, closeWallLoopAndAssembleRoom, setMeasurements]);
+  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, setSelectionShapeMode, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, fenceVertices.length, finalizeFenceChain, rectangleInputState.active, finalizeRectangleInput, wallJustification, wallToolSettings, setWallJustification, setWallToolSettings, closeWallLoopAndAssembleRoom, setMeasurements]);
 
   const [pointerDownInfo, setPointerDownInfo] = useState<{ time: number, pos: THREE.Vector3 } | null>(null);
 
@@ -4602,6 +4647,8 @@ function Scene() {
           stairStyle: (previewShape as any).stairStyle || 'straight',
           stairStructure: (previewShape as any).stairStructure || 'closed',
           railingMode: (previewShape as any).railingMode || 'both',
+          isParametric: (previewShape as any).isParametric ?? (isStaircase ? true : undefined),
+          parametricData: (previewShape as any).parametricData,
           tags: ['architecture', activeTool],
         };
 
@@ -4610,7 +4657,7 @@ function Scene() {
         commitHistory();
         setPreviewShape(null);
         setActiveTool('select');
-        setMeasurements(`${isStaircase ? 'Staircase' : 'Step'} placed. Right-click on stairs to Change Style.`);
+        setMeasurements(`${isStaircase ? 'Parametric Staircase' : 'Step'} placed. Right-click on stairs to configure styles and parametric rise.`);
         recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
       }
       return;
@@ -5409,8 +5456,23 @@ function Scene() {
 
         const isStaircase = activeTool === 'staircase';
         const width = 1.0;
-        const height = isStaircase ? 2.16 : 0.18;
-        const length = isStaircase ? 3.60 : 0.30;
+        let height = isStaircase ? 2.16 : 0.18;
+        let length = isStaircase ? 3.60 : 0.30;
+        let parametricCalc: any = null;
+        let scanResult: any = null;
+
+        if (isStaircase) {
+          scanResult = scanSceneForTargetHeight(shapes, surfaceElevation, [hitPoint.x, surfaceElevation, hitPoint.z]);
+          parametricCalc = calculateParametricStairs({
+            targetHeight: scanResult.targetHeight,
+            width: 1.0,
+            source: scanResult.source,
+            sourceDescription: scanResult.description
+          });
+          height = parametricCalc.targetHeight;
+          length = parametricCalc.totalRun;
+        }
+
         const stairPos = new THREE.Vector3(hitPoint.x, surfaceElevation + height / 2, hitPoint.z);
 
         const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), stairRotationAngle);
@@ -5420,16 +5482,18 @@ function Scene() {
           type: activeTool,
           position: [stairPos.x, stairPos.y, stairPos.z],
           quaternion: quatArray,
-          args: isStaircase ? [width, height, length, 12] : [width, height, length],
+          args: isStaircase ? [width, height, length, parametricCalc?.stepCount || 12] : [width, height, length],
           stairStyle: 'straight',
           stairStructure: 'closed',
           railingMode: 'both',
+          isParametric: isStaircase,
+          parametricData: parametricCalc || undefined,
         } as any);
 
         const deg = Math.round(((stairRotationAngle * 180) / Math.PI) % 360);
         const normDeg = deg < 0 ? deg + 360 : deg;
-        if (isStaircase) {
-          setMeasurements(`Staircase: 12 Steps (Rise 2.16m, Run 3.60m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
+        if (isStaircase && parametricCalc && scanResult) {
+          setMeasurements(`Parametric Staircase: ${parametricCalc.stepCount} Steps (Riser: ${(parametricCalc.actualStepHeight * 100).toFixed(1)}cm, Tread: ${(parametricCalc.treadDepth * 100).toFixed(1)}cm) | Rise: ${parametricCalc.targetHeight.toFixed(2)}m (${scanResult.description}) | Angle: ${normDeg}° [← / → rotate] | Click to place`);
         } else {
           setMeasurements(`Step: 1.00m × 0.30m (Rise 0.18m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
         }
@@ -6579,6 +6643,9 @@ function Scene() {
 
   const handleMeshClick = (e: ThreeEvent<MouseEvent>, id: string) => {
     e.stopPropagation();
+    if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
+      return;
+    }
     
     const shape = shapes.find(s => s.id === id);
     let subFaceIndex: number | undefined = undefined;
@@ -7874,8 +7941,12 @@ function Scene() {
             }
             if (placingLightId) handlePointerDown(e);
             else if (activeTool === 'select') {
+              if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
+                return;
+              }
               setSelectedId(null);
               setSelectedIds([]);
+              setSelectedFaceIds([]);
               setSelectedLightId(null);
               setSelectedSurface(null);
             }
@@ -7905,8 +7976,12 @@ function Scene() {
             return;
           }
           if (activeTool === 'select') {
+            if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
+              return;
+            }
             setSelectedId(null);
             setSelectedIds([]);
+            setSelectedFaceIds([]);
             setSelectedLightId(null);
             setSelectedSurface(null);
           }
@@ -8167,6 +8242,8 @@ function Scene() {
         edgeOpacity={edgeLinesOpacity}
         edgeLineWidth={edgeLinesThickness}
       />
+
+      <LassoOverlay getSceneObjectById={getSceneObjectById} />
 
       {faceOffsetPreview && (
         <FaceOffsetPreview
@@ -10618,6 +10695,13 @@ export default function Viewport() {
     commitHistory,
     setMeasurements,
     viewportToast,
+    selectionShapeMode,
+    setSelectionShapeMode,
+    selectionFilter,
+    setSelectionFilter,
+    selectionCriteria,
+    setSelectionCriteria,
+    selectedFaceIds,
     placingNotePos,
     setPlacingNotePos,
     setNotes,
@@ -11865,6 +11949,69 @@ export default function Viewport() {
         >
           <span className="">Split View</span>
         </button>
+
+        {(activeTool === 'select' || activeTool === 'lasso') && (
+          <div className={cn(
+            "backdrop-blur-sm px-2 py-1 rounded border flex items-center gap-1.5 shadow-sm text-[10px]",
+            theme === 'dark' ? "bg-gray-800/90 border-gray-700 text-gray-200" : "bg-white/90 border-gray-200 text-gray-700"
+          )}>
+            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/10 p-0.5 rounded">
+              <button
+                onClick={() => {
+                  setSelectionShapeMode('lasso');
+                  setMeasurements('Selection tool: Freehand Lasso (draw freeform loop)');
+                }}
+                className={cn(
+                  "px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1",
+                  selectionShapeMode === 'lasso'
+                    ? "bg-trimble-blue text-white shadow-xs"
+                    : "text-gray-500 hover:text-gray-800 dark:hover:text-white"
+                )}
+                title="Lasso: Draw a custom loop around shapes or surfaces (Hotkey: L)"
+              >
+                <Lasso size={11} />
+                <span>Lasso</span>
+              </button>
+              <button
+                onClick={() => {
+                  setSelectionShapeMode('marquee');
+                  setMeasurements('Selection tool: Marquee Window (drag rectangular box)');
+                }}
+                className={cn(
+                  "px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1",
+                  selectionShapeMode === 'marquee'
+                    ? "bg-trimble-blue text-white shadow-xs"
+                    : "text-gray-500 hover:text-gray-800 dark:hover:text-white"
+                )}
+                title="Marquee: Drag a rectangular window (Hotkey: L)"
+              >
+                <SquareDashed size={11} />
+                <span>Marquee</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setSelectionCriteria(prev => prev === 'crossing' ? 'window' : 'crossing');
+              }}
+              className={cn(
+                "px-2 py-0.5 rounded border text-[9px] font-bold uppercase transition-all",
+                selectionCriteria === 'crossing'
+                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                  : "bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400"
+              )}
+              title={selectionCriteria === 'crossing' ? "Crossing: selects objects touching or inside path" : "Window: only selects objects 100% inside path"}
+            >
+              {selectionCriteria}
+            </button>
+
+            {(selectedIds.length > 0 || selectedFaceIds.length > 0) && (
+              <span className="font-mono text-[9px] text-gray-500 dark:text-gray-400 pl-0.5">
+                {selectedIds.length + selectedFaceIds.length} sel
+              </span>
+            )}
+          </div>
+        )}
       </div>
       {isDividePopupOpen && selectedSurface && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-[2px]">
@@ -11987,6 +12134,7 @@ export default function Viewport() {
       <StyleLibraryModal 
         isOpen={!!styleLibraryTargetId}
         targetShape={shapes.find(s => s.id === styleLibraryTargetId) || null}
+        allShapes={shapes}
         onClose={() => setStyleLibraryTargetId(null)}
         theme={theme}
         onApplyStyle={(styleId, dims, extraOptions) => {
@@ -12002,6 +12150,8 @@ export default function Viewport() {
                   wallStyle: styleId,
                   stairStructure: extraOptions?.stairStructure || s.stairStructure,
                   railingMode: extraOptions?.railingMode || s.railingMode,
+                  isParametric: extraOptions?.isParametric !== undefined ? extraOptions.isParametric : s.isParametric,
+                  parametricData: extraOptions?.parametricData !== undefined ? extraOptions.parametricData : s.parametricData,
                   args: updatedArgs
                 };
               }
@@ -12010,7 +12160,7 @@ export default function Viewport() {
             return applyStairwellHolesToSlabs(next);
           });
           commitHistory();
-          setMeasurements(`Updated style to ${styleId.toUpperCase()}`);
+          setMeasurements(`Updated style to ${styleId.toUpperCase()}${extraOptions?.isParametric ? ' (Parametric Mode Active)' : ''}`);
           setStyleLibraryTargetId(null);
         }}
       />

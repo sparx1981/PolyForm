@@ -70,23 +70,34 @@ export function computeStairHoleForSlab(
     // Top exit is at -Z on the right half (x >= 0, z = -hl)
     const hw = stairW / 2 + clearance;
     const hl = stairL / 2 + clearance;
-    localCorners = [
-      new THREE.Vector3(-hw, 0, -hl),
-      new THREE.Vector3(hw, 0, -hl),
-      new THREE.Vector3(hw, 0, hl),
-      new THREE.Vector3(-hw, 0, hl),
-    ];
     // Exit edge is along the right half (Flight 2 top) of the front edge
     exitLocalStart = new THREE.Vector3(0, 0, -hl);
     exitLocalEnd = new THREE.Vector3(hw, 0, -hl);
+    // FIX: split the front edge exactly at the exit boundary so the
+    // non-exit left half and the exit right half are separate polygon
+    // edges. Previously this was one edge for the whole front, so at
+    // wider stair widths (e.g. the new 2m default) the guard railing's
+    // exit-threshold check no longer covered the whole edge and a rail
+    // was left standing across part of the walkway a person exits onto.
+    localCorners = [
+      new THREE.Vector3(-hw, 0, -hl),
+      exitLocalStart.clone(),
+      exitLocalEnd.clone(),
+      new THREE.Vector3(hw, 0, hl),
+      new THREE.Vector3(-hw, 0, hl),
+    ];
   } else if (style.includes('winder')) {
     // Winder stair: straight flight along +Z, quarter-turn PIE-WEDGE
     // corner (not a flat square landing), then a straight flight along
-    // +X — matches archStairGenerator.ts's own winder geometry exactly
-    // (same flightW/run1/run2/post formulas), since this cutout was
-    // previously sharing l-shape's flat-landing footprint instead of
-    // winder's actual pie-wedge corner, leaving the hole's own corner
-    // shape mismatched against the real staircase underneath it.
+    // +X = matches archStairGenerator.ts's own winder geometry exactly
+    // (same flightW/run1/run2/post formulas).
+    // FIX: the previous hole never extended past the newel post, so the
+    // ENTIRE upper (turned) flight walked through solid floor above it.
+    // The corner is now cut with a straight diagonal near the post (the
+    // same simplification the working L-shape hole uses for its own
+    // inner corner) while the true pie-wedge arc forms the OUTER
+    // boundary of the turn, connecting flight 1's outer wall directly
+    // to flight 2's outer wall so both flights are fully covered.
     const flightW = stairW * 0.85;
     const run1 = stairL * 0.45;
     const run2 = stairL * 0.45;
@@ -95,27 +106,29 @@ export function computeStairHoleForSlab(
     const postZ = cornerZ;
     const outerR = flightW + clearance;
     const segments = 8;
+    const exitX = run2 + clearance;
+
+    exitLocalStart = new THREE.Vector3(exitX, 0, cornerZ + clearance);
+    exitLocalEnd = new THREE.Vector3(exitX, 0, cornerZ + flightW + clearance);
 
     localCorners = [
       new THREE.Vector3(-flightW - clearance, 0, -stairL / 2 - clearance),
       new THREE.Vector3(clearance, 0, -stairL / 2 - clearance),
-      new THREE.Vector3(clearance, 0, cornerZ - clearance),
+      exitLocalStart.clone(),
+      exitLocalEnd.clone(),
+      new THREE.Vector3(postX, 0, cornerZ + flightW + clearance),
     ];
-    // Outer arc of the pie-wedge corner, sweeping from the lower
-    // flight's own outer edge to the upper flight's own outer edge.
-    for (let i = 0; i <= segments; i++) {
+    // Outer arc of the pie-wedge corner, walked BACKWARD from flight 2's
+    // outer wall to flight 1's outer wall so the polygon stays simple
+    // (non-self-intersecting) while still tracing the real curved turn.
+    for (let i = segments - 1; i >= 0; i--) {
       const ang = (i / segments) * (Math.PI / 2);
       localCorners.push(new THREE.Vector3(
         postX - Math.cos(ang) * outerR,
         0,
-        postZ + Math.sin(ang) * outerR,
+        postZ + Math.sin(ang) * outerR
       ));
     }
-    localCorners.push(new THREE.Vector3(-flightW - clearance, 0, cornerZ + flightW + clearance));
-
-    const exitX = run2 + clearance;
-    exitLocalStart = new THREE.Vector3(exitX, 0, cornerZ + clearance);
-    exitLocalEnd = new THREE.Vector3(exitX, 0, cornerZ + flightW + clearance);
   } else if (style.includes('l-shape') || style.includes('quarter-turn')) {
     // L-shaped stair: Flight 1 along +Z on left side (-X), turns 90° right along +X
     // Top exit is at the +X end of flight 2

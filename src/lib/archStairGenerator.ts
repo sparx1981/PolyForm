@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import {
+  createParametricStaircaseGeometry,
+  calculateParametricStairs,
+  DEFAULT_IDEAL_STEP_HEIGHT,
+  DEFAULT_STRIDE_CONSTANT
+} from './parametricStairs';
 
 export type StairStyleType = 'straight' | 'l-shape' | 'u-shape' | 'c-shape' | 'winder' | 'spiral' | 'curved' | 'bifurcated';
 export type StairStructureType = 'closed' | 'open' | 'floating' | 'mono-stringer';
@@ -13,6 +19,12 @@ export interface StaircaseOptions {
   stairStyle?: StairStyleType | string;
   stairStructure?: StairStructureType;
   railingMode?: RailingModeType;
+  isParametric?: boolean;
+  idealStepHeight?: number;
+  strideConstant?: number;
+  targetHeight?: number;
+  actualStepHeight?: number;
+  treadDepth?: number;
 }
 
 /**
@@ -140,12 +152,37 @@ export function createArchitecturalStaircaseGeometry(
   options: StaircaseOptions = {}
 ): THREE.BufferGeometry {
   const width = options.width || 1.0;
-  const height = options.height || 2.7;
-  const length = options.length || 3.6;
-  const numSteps = Math.max(4, options.numSteps || 14);
+  let height = options.targetHeight || options.height || 2.7;
+  let length = options.length || 3.6;
+  let numSteps = Math.max(4, options.numSteps || 14);
   const style = (options.stairStyle || 'straight').toLowerCase();
   const structure = options.stairStructure || 'closed';
   const railing = options.railingMode || 'both';
+
+  // If parametric mode is enabled, dynamically compute step count, equal riser height,
+  // and ergonomic tread depth without any global Y-stretching
+  if (options.isParametric) {
+    const calc = calculateParametricStairs({
+      targetHeight: height,
+      idealStepHeight: options.idealStepHeight,
+      strideConstant: options.strideConstant,
+      width
+    });
+    height = calc.targetHeight;
+    numSteps = calc.stepCount;
+    length = calc.totalRun;
+
+    if (style === 'straight') {
+      return createParametricStaircaseGeometry({
+        targetHeight: height,
+        idealStepHeight: options.idealStepHeight,
+        strideConstant: options.strideConstant,
+        width,
+        stairStructure: structure,
+        railingMode: railing
+      }).geometry;
+    }
+  }
 
   const geoms: THREE.BufferGeometry[] = [];
 
@@ -718,7 +755,7 @@ export function createArchitecturalStaircaseGeometry(
   }
 
   try {
-    const merged = BufferGeometryUtils.mergeGeometries(geoms, false);
+    const merged = BufferGeometryUtils.mergeGeometries(geoms.map(g => g.index ? g.toNonIndexed() : g), false);
     return merged || new THREE.BoxGeometry(width, height, length);
   } catch (e) {
     return new THREE.BoxGeometry(width, height, length);
