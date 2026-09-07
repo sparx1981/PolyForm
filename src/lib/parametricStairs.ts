@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Shape } from '../types';
 import { StairStructureType, RailingModeType, StairStyleType } from './archStairGenerator';
+import { buildStairFlightGeometry } from './stairs/stairFlightGeometry';
 
 /**
  * Predefined architectural defaults
@@ -369,6 +370,31 @@ export function createParametricStaircaseGeometry(
   const { stepCount, actualStepHeight, treadDepth, width } = calc;
   const structure = options.stairStructure || 'closed';
   const railing = options.railingMode || 'both';
+
+  // StairFix: dispatch by style. This is the fix for the bug where every
+  // parametric staircase silently rendered as a straight flight regardless
+  // of the selected style — `options.stairStyle` was accepted by this
+  // function's signature but never actually consulted. For every style
+  // other than 'straight', hand off to the single shared per-style
+  // geometry builder (`buildStairFlightGeometry`) that the static
+  // (non-parametric) generator in `archStairGenerator.ts` also uses, so the
+  // two paths can never again disagree on which style was requested. The
+  // 'straight' case keeps its original, separately-tuned implementation
+  // below (nosing/tread detail already matched the static straight style,
+  // and this preserves that low-risk path unchanged).
+  const style = (options.stairStyle || 'straight').toString().toLowerCase();
+  if (style !== 'straight') {
+    const geometry = buildStairFlightGeometry({
+      style,
+      width,
+      height: calc.targetHeight,
+      length: calc.totalRun,
+      numSteps: stepCount,
+      structure,
+      railing
+    });
+    return { geometry, calculation: calc };
+  }
 
   const geoms: THREE.BufferGeometry[] = [];
 

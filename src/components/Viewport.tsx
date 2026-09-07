@@ -816,6 +816,12 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
             idealStepHeight: shape.parametricData?.idealStepHeight,
             strideConstant: shape.parametricData?.strideConstant,
             width: args[0] || 1.0,
+            // StairFix: this was the actual trigger of the style-mismatch bug —
+            // stairStyle was never forwarded here, so every parametric
+            // staircase fell through to the parametric generator's default
+            // (straight-run) behavior no matter which of the 8 styles was
+            // selected in the Style Library.
+            stairStyle: shape.stairStyle || shape.archStyle || 'straight',
             stairStructure: shape.stairStructure || 'closed',
             railingMode: shape.railingMode || 'both'
           }).geometry;

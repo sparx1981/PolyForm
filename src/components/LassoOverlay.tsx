@@ -6,7 +6,6 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useApp } from '../AppContext';
@@ -348,147 +347,167 @@ export const LassoOverlay: React.FC<LassoOverlayProps> = ({ getSceneObjectById }
     scheduleCandidateEvaluation,
   ]);
 
-  if (!isDrawing || points.length < 2 || !gl.domElement?.parentElement) {
-    return null;
-  }
+  // Reference to the SVG DOM element attached to the canvas container
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // Visual Theme & CAD Selection Styling
-  const isWindowMode = selectionCriteria === 'window';
-  const strokeColor = isWindowMode ? '#3b82f6' : '#10b981';
-  const fillColor = isWindowMode ? 'rgba(59, 130, 246, 0.14)' : 'rgba(16, 185, 129, 0.14)';
-  const strokeDash = isWindowMode ? 'none' : '5 4';
+  // Mount/unmount the selection SVG directly in the canvas parent DOM element.
+  // This avoids passing DOM/SVG JSX to React Three Fiber's custom reconciler,
+  // preventing R3F namespace lookup errors (e.g. 'FeDropShadow is not part of the THREE namespace').
+  useEffect(() => {
+    const parent = gl.domElement?.parentElement;
+    if (!parent) return;
 
-  const startPt = points[0];
-  const lastPt = points[points.length - 1];
+    let svg = parent.querySelector<SVGSVGElement>('#polyform-lasso-selection-svg');
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.id = 'polyform-lasso-selection-svg';
+      svg.setAttribute('class', 'absolute inset-0 pointer-events-none z-20 overflow-hidden select-none');
+      svg.style.display = 'none';
+      parent.appendChild(svg);
+    }
+    svgRef.current = svg;
 
-  let marqueeX = 0;
-  let marqueeY = 0;
-  let marqueeWidth = 0;
-  let marqueeHeight = 0;
+    return () => {
+      if (svg && svg.parentElement) {
+        svg.parentElement.removeChild(svg);
+      }
+      svgRef.current = null;
+    };
+  }, [gl.domElement]);
 
-  if (selectionShapeMode === 'marquee') {
-    marqueeX = Math.min(startPt.x, lastPt.x);
-    marqueeY = Math.min(startPt.y, lastPt.y);
-    marqueeWidth = Math.abs(lastPt.x - startPt.x);
-    marqueeHeight = Math.abs(lastPt.y - startPt.y);
-  }
+  // Synchronize the SVG contents whenever drawing state, points, or candidates change
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
 
-  // Floating HUD coordinates constrained within canvas bounds
-  const hudX = Math.max(16, Math.min(size.width - 160, lastPt.x + 14));
-  const hudY = Math.max(24, Math.min(size.height - 40, lastPt.y - 28));
+    if (!isDrawing || points.length < 2) {
+      svg.style.display = 'none';
+      svg.innerHTML = '';
+      return;
+    }
 
-  const hudModifierText = keyModifiers.shift
-    ? '+ Add'
-    : keyModifiers.alt
-    ? '- Remove'
-    : null;
+    svg.style.display = 'block';
+    svg.setAttribute('width', String(size.width));
+    svg.setAttribute('height', String(size.height));
+    svg.setAttribute('viewBox', `0 0 ${size.width} ${size.height}`);
 
-  return createPortal(
-    <svg
-      id="polyform-lasso-selection-svg"
-      className="absolute inset-0 pointer-events-none z-20 overflow-hidden select-none"
-      width={size.width}
-      height={size.height}
-      viewBox={`0 0 ${size.width} ${size.height}`}
-    >
-      <defs>
-        {/* Subtle glow filter for the selection border */}
-        <filter id="lasso-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor={strokeColor} floodOpacity="0.45" />
-        </filter>
-      </defs>
+    const isWindowMode = selectionCriteria === 'window';
+    const strokeColor = isWindowMode ? '#3b82f6' : '#10b981';
+    const fillColor = isWindowMode ? 'rgba(59, 130, 246, 0.14)' : 'rgba(16, 185, 129, 0.14)';
+    const strokeDash = isWindowMode ? 'none' : '5 4';
 
-      {/* Render Marquee Rect or Freehand Lasso Path */}
-      {selectionShapeMode === 'marquee' ? (
-        <rect
-          x={marqueeX}
-          y={marqueeY}
-          width={marqueeWidth}
-          height={marqueeHeight}
-          rx={2}
-          ry={2}
-          fill={fillColor}
-          stroke={strokeColor}
-          strokeWidth={1.5}
-          strokeDasharray={strokeDash}
-          filter="url(#lasso-glow)"
+    const startPt = points[0];
+    const lastPt = points[points.length - 1];
+
+    let shapeHtml = '';
+    if (selectionShapeMode === 'marquee') {
+      const marqueeX = Math.min(startPt.x, lastPt.x);
+      const marqueeY = Math.min(startPt.y, lastPt.y);
+      const marqueeWidth = Math.abs(lastPt.x - startPt.x);
+      const marqueeHeight = Math.abs(lastPt.y - startPt.y);
+      shapeHtml = `<rect
+        x="${marqueeX}"
+        y="${marqueeY}"
+        width="${marqueeWidth}"
+        height="${marqueeHeight}"
+        rx="2"
+        ry="2"
+        fill="${fillColor}"
+        stroke="${strokeColor}"
+        stroke-width="1.5"
+        stroke-dasharray="${strokeDash}"
+        style="filter: drop-shadow(0 0 2px ${strokeColor});"
+      />`;
+    } else {
+      shapeHtml = `
+        <path
+          d="${pointsToPathD(points, true)}"
+          fill="${fillColor}"
+          stroke="${strokeColor}"
+          stroke-width="1.5"
+          stroke-dasharray="${strokeDash}"
+          style="filter: drop-shadow(0 0 2px ${strokeColor});"
         />
-      ) : (
-        <>
-          {/* Main user-drawn path */}
-          <path
-            d={pointsToPathD(points, true)}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={1.5}
-            strokeDasharray={strokeDash}
-            filter="url(#lasso-glow)"
-          />
+        <line
+          x1="${lastPt.x}"
+          y1="${lastPt.y}"
+          x2="${startPt.x}"
+          y2="${startPt.y}"
+          stroke="${strokeColor}"
+          stroke-width="1"
+          stroke-dasharray="3 3"
+          opacity="0.65"
+        />
+        <circle
+          cx="${startPt.x}"
+          cy="${startPt.y}"
+          r="3.5"
+          fill="#ffffff"
+          stroke="${strokeColor}"
+          stroke-width="1.5"
+        />
+      `;
+    }
 
-          {/* Faint closing guideline from current cursor back to origin */}
-          <line
-            x1={lastPt.x}
-            y1={lastPt.y}
-            x2={startPt.x}
-            y2={startPt.y}
-            stroke={strokeColor}
-            strokeWidth={1}
-            strokeDasharray="3 3"
-            opacity={0.65}
-          />
+    const hudX = Math.max(16, Math.min(size.width - 160, lastPt.x + 14));
+    const hudY = Math.max(24, Math.min(size.height - 40, lastPt.y - 28));
 
-          {/* Starting anchor dot */}
-          <circle
-            cx={startPt.x}
-            cy={startPt.y}
-            r={3.5}
-            fill="#ffffff"
-            stroke={strokeColor}
-            strokeWidth={1.5}
-          />
-        </>
-      )}
+    const hudModifierText = keyModifiers.shift
+      ? '+ Add'
+      : keyModifiers.alt
+      ? '- Remove'
+      : '';
 
-      {/* Live Floating HUD Badge */}
-      <g transform={`translate(${hudX}, ${hudY})`} className="transition-transform duration-75">
+    const hudHtml = `
+      <g transform="translate(${hudX}, ${hudY})" style="transition: transform 75ms ease-out;">
         <rect
-          x={0}
-          y={-18}
-          width={130}
-          height={26}
-          rx={6}
-          ry={6}
+          x="0"
+          y="-18"
+          width="130"
+          height="26"
+          rx="6"
+          ry="6"
           fill="rgba(15, 23, 42, 0.92)"
           stroke="rgba(255, 255, 255, 0.15)"
-          strokeWidth={1}
+          stroke-width="1"
         />
-
         <text
-          x={8}
-          y={-2}
+          x="8"
+          y="-2"
           fill="#f8fafc"
-          fontSize="10"
-          fontFamily="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont"
-          fontWeight="600"
-          letterSpacing="0.02em"
+          font-size="10"
+          font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont"
+          font-weight="600"
+          letter-spacing="0.02em"
         >
-          {candidateCounts.shapes} shape{candidateCounts.shapes === 1 ? '' : 's'}, {candidateCounts.surfaces} surf
+          ${candidateCounts.shapes} shape${candidateCounts.shapes === 1 ? '' : 's'}, ${candidateCounts.surfaces} surf
         </text>
-
-        {hudModifierText && (
+        ${hudModifierText ? `
           <text
-            x={118}
-            y={-2}
-            textAnchor="end"
-            fill={keyModifiers.shift ? '#38bdf8' : '#f87171'}
-            fontSize="9"
-            fontWeight="bold"
+            x="118"
+            y="-2"
+            text-anchor="end"
+            fill="${keyModifiers.shift ? '#38bdf8' : '#f87171'}"
+            font-size="9"
+            font-weight="bold"
           >
-            {hudModifierText}
+            ${hudModifierText}
           </text>
-        )}
+        ` : ''}
       </g>
-    </svg>,
-    gl.domElement.parentElement
-  );
+    `;
+
+    svg.innerHTML = `${shapeHtml}${hudHtml}`;
+  }, [
+    isDrawing,
+    points,
+    size.width,
+    size.height,
+    selectionCriteria,
+    selectionShapeMode,
+    candidateCounts,
+    keyModifiers,
+  ]);
+
+  return null;
 };

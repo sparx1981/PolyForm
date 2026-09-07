@@ -22,6 +22,7 @@ import {
   DEFAULT_STRIDE_CONSTANT,
   DEFAULT_STAIRCASE_HEIGHT
 } from '../lib/parametricStairs';
+import { getParamDefsForStyle, isParamActiveForStyle, ALL_STAIR_PARAM_DEFS } from '../lib/stairs/styleParamSchema';
 
 interface StyleLibraryModalProps {
   isOpen: boolean;
@@ -973,6 +974,36 @@ export default function StyleLibraryModal({
                           {parametricCalc.stepCount} × {(parametricCalc.treadDepth * 100).toFixed(1)}cm
                         </span>
                       </div>
+                    </div>
+
+                    {/* StairFix: Active parameters for the selected style.
+                        This is driven entirely by STYLE_PARAM_SCHEMA (the same
+                        single source of truth the geometry engine now uses),
+                        so this list can never drift out of sync with what the
+                        engine actually does with each style. */}
+                    <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mr-1">
+                        Active for {STAIR_STYLES.find(s => s.id === selectedStyleId)?.name || 'this style'}:
+                      </span>
+                      {getParamDefsForStyle(selectedStyleId).map(def => (
+                        <span
+                          key={def.key}
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-trimble-blue/10 text-trimble-blue border border-trimble-blue/20"
+                        >
+                          {def.label}
+                        </span>
+                      ))}
+                      {(['turnRadius', 'sweepAngle', 'helixPitch'] as const)
+                        .filter(k => !isParamActiveForStyle(selectedStyleId, k))
+                        .map(k => (
+                          <span
+                            key={k}
+                            title={ALL_STAIR_PARAM_DEFS[k].disabledReason}
+                            className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 cursor-help"
+                        >
+                          {ALL_STAIR_PARAM_DEFS[k].label}
+                        </span>
+                      ))}
                     </div>
 
                     {/* Ergonomic Formula & Fine-tuning Bar */}

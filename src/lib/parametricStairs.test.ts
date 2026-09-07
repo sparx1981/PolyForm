@@ -8,6 +8,8 @@ import {
   calculateParametricStairs,
   createParametricStaircaseGeometry
 } from './parametricStairs';
+import { createArchitecturalStaircaseGeometry, ALL_STAIR_STYLES } from './archStairGenerator';
+import { sanitizeStairParameters, getDefaultStairParameters, clampRiserHeight } from './stairs/styleParamSchema';
 import { Shape } from '../types';
 
 describe('Parametric Stair Tool Core Logic & Constraints', () => {
@@ -288,6 +290,159 @@ describe('Parametric Stair Tool Core Logic & Constraints', () => {
       expect(result.calculation.source).toBe('wall');
       expect(result.calculation.stepCount).toBe(Math.round(3.0 / DEFAULT_IDEAL_STEP_HEIGHT));
       expect(result.calculation.actualStepHeight * result.calculation.stepCount).toBeCloseTo(3.0, 5);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // StairFix regression/validation harness.
+  //
+  // This is the permanent guardrail called for by the spec: for every one
+  // of the 8 supported styles, generating through the PARAMETRIC entry
+  // point (createParametricStaircaseGeometry, with a style passed in) must
+  // no longer silently collapse to a straight run. It must instead produce
+  // geometry that is dimensionally and topologically consistent with the
+  // known-correct STATIC generator (createArchitecturalStaircaseGeometry)
+  // at matched parameter values.
+  //
+  // Before the fix, every one of these styles (other than 'straight'
+  // itself) failed this suite: the parametric path ignored `stairStyle`
+  // entirely and always returned a straight-flight bounding box.
+  // ---------------------------------------------------------------------
+  describe('StairFix: Parametric vs Static Style Parity Regression Harness', () => {
+    const width = 1.0;
+    const targetHeight = 2.80;
+
+    for (const style of ALL_STAIR_STYLES) {
+      it(`renders the correct '${style}' geometry in parametric mode (not a straight-run fallback)`, () => {
+        const parametricResult = createParametricStaircaseGeometry({
+          targetHeight,
+          width,
+          stairStyle: style,
+          stairStructure: 'closed',
+          railingMode: 'both'
+        });
+
+        // Deliberately mirror the exact inputs the parametric path used
+        // (isParametric: true, same targetHeight/width) rather than passing
+        // a pre-computed numSteps/length: this way the static generator
+        // independently re-derives the same calculateParametricStairs()
+        // result and both paths dispatch into buildStairFlightGeometry()
+        // with identical parameters, which is what makes them structurally
+        // (not just approximately) comparable.
+        const staticGeometry = createArchitecturalStaircaseGeometry({
+          width,
+          targetHeight,
+          stairStyle: style,
+          stairStructure: 'closed',
+          railingMode: 'both',
+          isParametric: true
+        });
+
+        expect(parametricResult.geometry).toBeInstanceOf(THREE.BufferGeometry);
+        expect(parametricResult.geometry.attributes.position.count).toBeGreaterThan(0);
+
+        parametricResult.geometry.computeBoundingBox();
+        staticGeometry.computeBoundingBox();
+        const pBox = parametricResult.geometry.boundingBox!;
+        const sBox = staticGeometry.boundingBox!;
+
+        const pSize = new THREE.Vector3();
+        const sSize = new THREE.Vector3();
+        pBox.getSize(pSize);
+        sBox.getSize(sSize);
+
+        // Geometric equivalence within a small tolerance on every axis — the
+        // parity check that guarantees the parametric path rendered THIS
+        // style's own footprint, not a generic straight flight's. Since both
+        // paths now dispatch into the same buildStairFlightGeometry() with
+        // matching computed inputs, these should be near-identical.
+        expect(Math.abs(pSize.x - sSize.x)).toBeLessThan(0.05);
+        expect(Math.abs(pSize.y - sSize.y)).toBeLessThan(0.05);
+        expect(Math.abs(pSize.z - sSize.z)).toBeLessThan(0.05);
+
+        // Vertex-count parity within a generous tolerance guards against a
+        // structurally different (e.g. much simpler straight-run) mesh
+        // being substituted for the requested style.
+        const pVerts = parametricResult.geometry.attributes.position.count;
+        const sVerts = staticGeometry.attributes.position.count;
+        expect(Math.abs(pVerts - sVerts) / Math.max(pVerts, sVerts)).toBeLessThan(0.2);
+      });
+    }
+
+    it('produces visibly different footprints across styles (guards against every style collapsing to the same box)', () => {
+      const sizes = ALL_STAIR_STYLES.map(style => {
+        const result = createParametricStaircaseGeometry({
+          targetHeight,
+          width,
+          stairStyle: style,
+          stairStructure: 'closed',
+          railingMode: 'both'
+        });
+        result.geometry.computeBoundingBox();
+        const size = new THREE.Vector3();
+        result.geometry.boundingBox!.getSize(size);
+        return `${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)}`;
+      });
+
+      // Straight, L-shape, U-shape, spiral, c-shape/curved, winder, and
+      // bifurcated all have materially different footprints — this must
+      // not collapse to a single repeated value.
+      const uniqueSizes = new Set(sizes);
+      expect(uniqueSizes.size).toBeGreaterThan(1);
+    });
+
+    it('preserves the existing "Parametric Staircase Generator" toggle contract for the straight style', () => {
+      // Explicitly re-asserts the spec's Section 1 requirement: toggling
+      // parametric ON for the (already-correct) straight style must keep
+      // producing straight-run geometry, unaffected by this refactor.
+      const result = createParametricStaircaseGeometry({
+        targetHeight,
+        width,
+        stairStyle: 'straight',
+        stairStructure: 'closed',
+        railingMode: 'both'
+      });
+      result.geometry.computeBoundingBox();
+      const size = new THREE.Vector3();
+      result.geometry.boundingBox!.getSize(size);
+      // Within 20cm to allow for nosing overhangs and railing newel posts
+      // extending slightly past the run — not asserting exact equality,
+      // since those cosmetic extras are legitimate and pre-existing.
+      expect(Math.abs(size.z - result.calculation.totalRun)).toBeLessThan(0.2);
+    });
+  });
+
+  describe('StairFix: Persistence Sanitization & Diagnostics', () => {
+    it('sanitizeStairParameters defaults to a valid straight configuration for missing/malformed input', () => {
+      expect(sanitizeStairParameters(null).style).toBe('straight');
+      expect(sanitizeStairParameters(undefined).style).toBe('straight');
+      expect(sanitizeStairParameters('not-an-object' as any).style).toBe('straight');
+      expect(sanitizeStairParameters({}).style).toBe('straight');
+    });
+
+    it('sanitizeStairParameters rejects an invalid/legacy style string rather than silently keeping it', () => {
+      const sanitized = sanitizeStairParameters({ style: 'not-a-real-style', width: 1.2 });
+      expect(sanitized.style).toBe('straight');
+      expect(sanitized.width).toBe(1.2); // other valid fields are preserved
+    });
+
+    it('sanitizeStairParameters preserves a valid style and fills in missing defaults', () => {
+      const sanitized = sanitizeStairParameters({ style: 'spiral' });
+      expect(sanitized.style).toBe('spiral');
+      expect(sanitized.targetHeight).toBe(getDefaultStairParameters('spiral').targetHeight);
+    });
+
+    it('clampRiserHeight clamps above the 0.22m architectural maximum and reports a diagnostic', () => {
+      const { value, event } = clampRiserHeight(0.30);
+      expect(value).toBe(0.22);
+      expect(event?.kind).toBe('clamped');
+      expect(event?.message).toContain('0.22');
+    });
+
+    it('clampRiserHeight passes through in-range values without a diagnostic', () => {
+      const { value, event } = clampRiserHeight(0.18);
+      expect(value).toBe(0.18);
+      expect(event).toBeUndefined();
     });
   });
 });
