@@ -107,7 +107,7 @@ export const PRESET_ROOF_TEXTURES = [
 ];
 
 export const DEFAULT_ROOF_TILE_SETTINGS: RoofTileSettings = {
-  shape: 'roman',
+  shape: 'none',
   size: 0.35, // 35 cm standard
   color: '#991b1b',
   randomizeColor: false,

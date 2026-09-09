@@ -93,12 +93,16 @@ export interface Shape {
   customData?: any;
   parentWallOrRoofId?: string;
   timberFrame?: TimberFrameShapeData;
+  timberMemberData?: TimberMemberData;
+  layerStack?: LayerStackItem[];
 }
 
 export interface TimberFrameShapeData {
   params: TimberFrameParams;
   openingAssemblies?: OpeningFrameAssembly[];
   lastComputedAt?: string | number;
+  report?: TimberGenerationReport;
+  bom?: TimberBOM;
 }
 
 export interface Tag {
@@ -569,13 +573,15 @@ export interface AppState {
   setCameraNear: (near: number | ((prev: number) => number)) => void;
   cameraFar: number;
   setCameraFar: (far: number | ((prev: number) => number)) => void;
-  // Wall Transparency in Architecture Visualization
+  // Wall & Roof Transparency in Architecture Visualization
   wallTransparency: number;
   setWallTransparency: (val: number | ((prev: number) => number)) => void;
   exteriorWallTransparency: number;
   setExteriorWallTransparency: (val: number | ((prev: number) => number)) => void;
   interiorWallTransparency: number;
   setInteriorWallTransparency: (val: number | ((prev: number) => number)) => void;
+  roofTransparency: number;
+  setRoofTransparency: (val: number | ((prev: number) => number)) => void;
 }
 
 export interface DiagLogEntry {
@@ -696,6 +702,228 @@ export interface StructuralValidationRules {
   maxStudSpacing: number;
   maxStudSpacingMm?: number;
   headerDepthBrackets: HeaderDepthBracket[];
+}
+
+// -----------------------------------------------------------------------------
+// Timber Frame System Specification Contracts (§0 - §10)
+// -----------------------------------------------------------------------------
+
+export interface ProjectMetadata {
+  project_id: string;
+  wind_zone: string;
+  snow_load_kn_m2: number;
+  seismic_category: string;
+  exposure_category: string;
+  species_grade_defaults: { species: string; grade: string };
+}
+
+export type LayerStackSide = 'exterior' | 'structural' | 'interior';
+
+export interface LayerStackItem {
+  name: string;
+  thickness_mm: number;
+  material: string;
+  side: LayerStackSide;
+}
+
+export interface WallOpeningContract {
+  id: string;
+  type: 'window' | 'door' | 'skylight';
+  bounding_box?: [number, number, number, number]; // [minX, minY, maxX, maxY]
+  head_height: number;
+  sill_height: number;
+  width: number;
+  rough_opening_tolerance_mm?: number;
+}
+
+export interface WallToolOutput {
+  wall_id: string;
+  project_id: string;
+  centerline: [number, number, number][] | { points: [number, number, number][] };
+  total_depth: number; // mm
+  height: number; // mm
+  layer_stack: LayerStackItem[];
+  openings: WallOpeningContract[];
+  corner_conditions?: Array<{ position: [number, number, number]; adjoining_wall_id: string; angle: number }>;
+  bearing_points?: Array<{ position: [number, number, number]; load_source: string }>;
+  gravity_load_kn_m?: number;
+}
+
+export interface RoofSurfaceOutput {
+  face_ref?: string;
+  pitch_deg: number;
+  orientation: number | string;
+}
+
+export interface RoofPurlinContract {
+  id: string;
+  line: [number, number, number][];
+  start?: [number, number, number];
+  end?: [number, number, number];
+  span_mm: number;
+  bearing_wall_ids: string[];
+}
+
+export interface RoofVoidClearanceZone {
+  boundary: [number, number, number][] | { min: [number, number, number]; max: [number, number, number] };
+  boundary_box?: { minX: number; maxX: number; minZ: number; maxZ: number };
+  reason: 'ventilation' | 'access' | 'tank' | 'room-in-roof-headroom';
+}
+
+export interface RoofToolOutput {
+  roof_id: string;
+  project_id: string;
+  surfaces: RoofSurfaceOutput[];
+  ridge_lines: [number, number, number][][];
+  hip_lines: [number, number, number][][];
+  valley_lines: [number, number, number][][];
+  eave_lines: [number, number, number][][];
+  verge_lines: [number, number, number][][];
+  bearing_wall_ids: string[];
+  span_data: Array<{ plane_id: string; clear_span_mm: number }>;
+  layer_stack: LayerStackItem[];
+  total_depth?: number;
+  purlins?: RoofPurlinContract[];
+  roof_void_clearance_zones?: RoofVoidClearanceZone[];
+}
+
+export interface FloorLayerStackItem {
+  name: string;
+  thickness_mm: number;
+  material: string;
+  side: 'above' | 'structural' | 'below';
+  structural_contribution?: boolean;
+  structural_zone?: boolean;
+}
+
+export interface StairGeometry {
+  pitch_angle_deg: number;
+  going_mm?: number;
+  rise_mm?: number;
+  number_of_risers?: number;
+  flight_width_mm?: number;
+  travel_direction?: [number, number, number];
+  headroom_min_mm: number;
+  riser_height_mm?: number;
+  tread_going_mm?: number;
+}
+
+export interface FloorOpeningContract {
+  id: string;
+  type: 'duct' | 'flue' | 'hearth' | 'stairwell';
+  bounding_box?: [number, number, number, number]; // [minX, minZ, maxX, maxZ]
+  rough_opening_tolerance_mm?: number;
+  stairwell_id?: string;
+  opening_boundary?: [number, number][]; // 2D plan boundary polygon
+  boundary?: [number, number][];
+  stair_geometry?: StairGeometry;
+}
+
+export interface FloorToolOutput {
+  floor_id: string;
+  project_id: string;
+  boundary: [number, number, number][]; // plan polygon 3D
+  span_direction: [number, number, number]; // primary joist direction - mandatory input, not inferred
+  total_depth: number; // mm
+  layer_stack: FloorLayerStackItem[];
+  openings: FloorOpeningContract[];
+  supporting_wall_ids_below: string[];
+  supporting_wall_ids_above: string[];
+  imposed_load_kn_m2: number;
+  dead_load_kn_m2?: number;
+  deflection_limit: string; // e.g. "L/360", "L/480"
+  vibration_criteria?: string;
+}
+
+export type IfcTimberClass = 'IfcColumn' | 'IfcBeam' | 'IfcMember' | 'IfcPlate';
+
+export interface GenerationParamsSnapshot {
+  structural_zone_depth_mm: number;
+  frame_depth_mm: number;
+  spacing_mm: number;
+  load_case: {
+    gravity_load_kn_m: number;
+    wind_zone: string;
+    snow_load_kn_m2: number;
+    seismic_category: string;
+    exposure_category?: string;
+  };
+  species?: string;
+  grade?: string;
+  timestamp?: number;
+}
+
+export interface TimberMemberData {
+  id: string;
+  ifcClass: IfcTimberClass;
+  is_user_modified: boolean;
+  generation_params_snapshot: GenerationParamsSnapshot;
+  hardwareSku?: string;
+  cutLengthMm?: number;
+}
+
+export interface JointLibraryEntry {
+  connection_type: 'hanger' | 'bracket' | 'toe-nail' | 'birdsmouth' | 'rafter-tie' | 'corner-bracket';
+  hardware_geometry?: { type: string; dimensions: [number, number, number]; position: [number, number, number] };
+  hardware_sku: string;
+  clearance_mm: number;
+  description: string;
+}
+
+export interface BOMLine {
+  species: string;
+  grade: string;
+  cross_section: string; // e.g. "38x140"
+  cut_list: Array<{ length_mm: number; angle_notes?: string; member_id: string }>;
+  stock_length_mm: number;
+  stock_quantity_required: number;
+  total_waste_pct: number;
+}
+
+export interface BOMHardwareLine {
+  sku: string;
+  description: string;
+  quantity: number;
+}
+
+export interface TimberBOM {
+  lines: BOMLine[];
+  hardware: BOMHardwareLine[];
+  totalTimberLinearMeters: number;
+  totalTimberVolumeM3: number;
+}
+
+export interface TimberValidationResult {
+  coplanarity_valid: boolean;
+  containment_valid: boolean;
+  load_valid: boolean;
+  load_path_valid: boolean;
+  clash_valid: boolean;
+  override_conflict_valid: boolean;
+  service_zone_valid?: boolean;
+  headroom_valid?: boolean;
+  stairwell_alignment_valid?: boolean;
+  diaphragm_valid?: boolean;
+  ventilation_continuity_valid?: boolean;
+  roof_void_clearance_valid?: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface TimberGenerationReport {
+  wall_id?: string;
+  roof_id?: string;
+  floor_id?: string;
+  structural_zone_depth_mm: number;
+  frame_depth_mm: number;
+  clamped_depths: string[];
+  flagged_spans: string[];
+  deferred_clashes: string[];
+  inserted_intermediate_posts: string[];
+  bom: TimberBOM;
+  validation: TimberValidationResult;
+  summary: string;
+  conflicts?: string[];
 }
 
 export interface CustomToolbarItem {

@@ -74,7 +74,7 @@ export const RoofModifierSection: React.FC = () => {
 
   // 2. State for Tile Configuration
   const [tileShape, setTileShape] = useState<RoofTileShape>(
-    activeRoof?.roofTileData?.shape || 'roman'
+    activeRoof?.roofTileData?.shape || 'none'
   );
   const [tileSize, setTileSize] = useState<number>(
     activeRoof?.roofTileData?.size ?? 0.35
@@ -113,7 +113,7 @@ export const RoofModifierSection: React.FC = () => {
   useEffect(() => {
     if (activeRoof) {
       if (activeRoof.roofTileData) {
-        setTileShape(activeRoof.roofTileData.shape || 'roman');
+        setTileShape(activeRoof.roofTileData.shape || 'none');
         setTileSize(activeRoof.roofTileData.size ?? 0.35);
         setTileColor(activeRoof.roofTileData.color || '#991b1b');
         setRandomizeColor(Boolean(activeRoof.roofTileData.randomizeColor));

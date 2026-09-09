@@ -268,10 +268,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [cameraNear, setCameraNear] = useState<number>(0.1);
   const [cameraFar, setCameraFar] = useState<number>(2000);
 
-  // Wall Transparency in Architecture Visualization
+  // Wall & Roof Transparency in Architecture Visualization
   const [wallTransparency, setWallTransparency] = useState<number>(0);
   const [exteriorWallTransparency, setExteriorWallTransparency] = useState<number>(0);
   const [interiorWallTransparency, setInteriorWallTransparency] = useState<number>(0);
+  const [roofTransparency, setRoofTransparency] = useState<number>(0);
   
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [isMessagingCollapsed, setIsMessagingCollapsed] = useState(false);
@@ -1846,13 +1847,15 @@ console.log("Created rectangle:", myRect.id);`);
       setCameraNear,
       cameraFar,
       setCameraFar,
-      // Wall Transparency
+      // Wall & Roof Transparency
       wallTransparency,
       setWallTransparency,
       exteriorWallTransparency,
       setExteriorWallTransparency,
       interiorWallTransparency,
-      setInteriorWallTransparency
+      setInteriorWallTransparency,
+      roofTransparency,
+      setRoofTransparency
     }}>
       {children}
     </AppContext.Provider>

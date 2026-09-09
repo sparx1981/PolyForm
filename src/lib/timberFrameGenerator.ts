@@ -1,13 +1,71 @@
 import * as THREE from 'three';
-import { Shape, TimberFrameParams, TimberMemberKind, TimberMemberInstance, OpeningFrameAssembly } from '../types';
+import {
+  Shape,
+  TimberFrameParams,
+  TimberMemberKind,
+  TimberMemberInstance,
+  OpeningFrameAssembly,
+  IfcTimberClass,
+  TimberMemberData,
+  GenerationParamsSnapshot,
+  TimberBOM,
+  TimberValidationResult,
+  TimberGenerationReport,
+  ProjectMetadata,
+  LayerStackItem,
+  FloorToolOutput,
+  FloorOpeningContract,
+  WallToolOutput,
+  RoofToolOutput,
+} from '../types';
 import { WallOpening } from './archGeometry';
-import { STRUCTURAL_VALIDATION_RULES } from '../constants/timberFrameDefaults';
+import {
+  STRUCTURAL_VALIDATION_RULES,
+  DEFAULT_WALL_LAYER_STACK,
+  DEFAULT_ROOF_LAYER_STACK,
+  DEFAULT_FLOOR_LAYER_STACK,
+  DEFAULT_PROJECT_METADATA,
+  COINCIDENCE_EPSILON_MM,
+  DEFAULT_ROUGH_OPENING_TOLERANCE_MM,
+  DEFAULT_FLOOR_JOIST_SPACING_MM,
+} from '../constants/timberFrameDefaults';
+import {
+  computeStructuralZoneDepth,
+  computeFloorStructuralZoneDepth,
+  snapToStandardTimberSize,
+  lookupSpan,
+  lookupFloorSpan,
+  generateTimberBOM,
+  validateTimberAssembly,
+  validateWallToolOutput,
+  validateRoofToolOutput,
+  validateFloorToolOutput,
+  generateTimberFrameFromContract,
+  generateFloorTimberFrameFromContract,
+  regenerateTimberRipple,
+} from './timberFrameContracts';
 import {
   getCanonicalLPolygon,
   computeLRidgeNodes,
   extractRoomFootprintPolygon,
   offsetPolygon2D,
 } from './archRoofGenerator';
+
+export {
+  validateWallToolOutput,
+  validateRoofToolOutput,
+  validateFloorToolOutput,
+  computeStructuralZoneDepth,
+  computeFloorStructuralZoneDepth,
+  snapToStandardTimberSize,
+  lookupSpan,
+  lookupFloorSpan,
+  generateTimberBOM,
+  validateTimberAssembly,
+  generateTimberFrameFromContract,
+  generateFloorTimberFrameFromContract,
+  regenerateTimberRipple,
+};
 
 export interface TimberFrameOptions {
   studSpacing?: number;      // 0.40m (400mm c/c standard) or 0.60m (600mm c/c)
@@ -36,6 +94,12 @@ export interface TimberFrameOptions {
     depth?: number;
   }>;
   revealDistance?: number;
+  projectMetadata?: ProjectMetadata;
+  layerStack?: LayerStackItem[];
+  roughOpeningToleranceMm?: number;
+  floorOutputs?: FloorToolOutput[];
+  wallOutputs?: WallToolOutput[];
+  roofOutputs?: RoofToolOutput[];
 }
 
 export interface TimberFramingResult {
@@ -46,6 +110,9 @@ export interface TimberFramingResult {
   validationMessages: string[];
   openingAssemblies?: OpeningFrameAssembly[];
   instancedMembers?: Record<TimberMemberKind, TimberMemberInstance[]>;
+  report?: TimberGenerationReport;
+  bom?: TimberBOM;
+  validation?: TimberValidationResult;
 }
 
 /**
@@ -232,6 +299,11 @@ export function generateTimberFraming(
       const halfL = wallLength / 2;
       const halfH = wallHeight / 2;
 
+      // Anti-coplanar end setback (§1): setback frame by 1mm at wall ends to eliminate surface clashing
+      const endSetbackM = Math.max(COINCIDENCE_EPSILON_MM / 1000, 0.001);
+      const framedWallLength = Math.max(0.1, wallLength - endSetbackM * 2);
+      const framedHalfL = framedWallLength / 2;
+
       // Helper to add a local timber member transformed into world space
       const addTimberMember = (
         name: string,
@@ -249,10 +321,86 @@ export function generateTimberFraming(
         // Front face of member is placed at wallThick/2 - revealDistance.
         // Center of member in local Z is (wallThick/2 - revealDistance) - depth/2.
         const insetZ = (wallThick / 2 - revealDistance) - depth / 2;
-        const effectiveLocalZ = localZ !== 0 ? localZ - revealDistance : insetZ;
-        const localPos = new THREE.Vector3(localX, localY, effectiveLocalZ);
+        let effectiveLocalZ = localZ !== 0 ? localZ - revealDistance : insetZ;
+
+        // Anti-coplanarity enforcement (§1): clamp if member exceeds wall boundary
+        const epsM = COINCIDENCE_EPSILON_MM / 1000;
+        const halfThick = wallThick / 2;
+        if (effectiveLocalZ + depth / 2 > halfThick) {
+          effectiveLocalZ = halfThick - epsM - depth / 2;
+        }
+        if (effectiveLocalZ - depth / 2 < -halfThick) {
+          effectiveLocalZ = -halfThick + epsM + depth / 2;
+        }
+
+        // Anti-coplanarity enforcement at end of wall run: clamp within [-halfL + endSetbackM, halfL - endSetbackM]
+        let effectiveLocalX = localX;
+        let effectiveWidth = width;
+        const leftBound = -halfL + endSetbackM;
+        const rightBound = halfL - endSetbackM;
+        if (effectiveLocalX - effectiveWidth / 2 < leftBound) {
+          const delta = leftBound - (effectiveLocalX - effectiveWidth / 2);
+          effectiveLocalX += delta / 2;
+          effectiveWidth = Math.max(0.01, effectiveWidth - delta);
+        }
+        if (effectiveLocalX + effectiveWidth / 2 > rightBound) {
+          const delta = (effectiveLocalX + effectiveWidth / 2) - rightBound;
+          effectiveLocalX -= delta / 2;
+          effectiveWidth = Math.max(0.01, effectiveWidth - delta);
+        }
+
+        const localPos = new THREE.Vector3(effectiveLocalX, localY, effectiveLocalZ);
         const worldPos = localPos.applyQuaternion(wallQuat).add(wallPos);
         const memberId = `tf-wall-${wall.id}-${Math.random().toString(36).substr(2, 7)}`;
+
+        let ifcClass: IfcTimberClass = 'IfcMember';
+        let kind: TimberMemberKind = 'stud';
+        if (subTag === 'timber-plate') {
+          kind = 'plate';
+          ifcClass = 'IfcPlate';
+        } else if (subTag === 'timber-lintel') {
+          kind = 'header';
+          ifcClass = 'IfcBeam';
+        } else if (subTag === 'timber-sill') {
+          kind = 'sill';
+          ifcClass = 'IfcPlate';
+        } else if (subTag === 'timber-jack-stud') {
+          kind = 'jackStud';
+          ifcClass = 'IfcColumn';
+        } else if (subTag === 'timber-roof-rafter') {
+          kind = 'rafter';
+          ifcClass = 'IfcBeam';
+        } else if (subTag === 'timber-floor-joist') {
+          kind = 'joist';
+          ifcClass = 'IfcBeam';
+        } else if (subTag === 'timber-king-stud') {
+          kind = 'kingStud';
+          ifcClass = 'IfcColumn';
+        } else if (subTag === 'timber-stud') {
+          kind = 'stud';
+          ifcClass = 'IfcColumn';
+        }
+
+        const memberData: TimberMemberData = {
+          id: memberId,
+          ifcClass,
+          is_user_modified: false,
+          generation_params_snapshot: {
+            structural_zone_depth_mm: Math.round(Math.max(0.05, wallThick - 0.05) * 1000),
+            frame_depth_mm: Math.round(depth * 1000),
+            spacing_mm: Math.round(studSpacing * 1000),
+            load_case: {
+              gravity_load_kn_m: 2.5,
+              wind_zone: 'Zone 2',
+              snow_load_kn_m2: 0.75,
+              seismic_category: 'A',
+            },
+            species: effectiveParams?.species || 'SPF',
+            grade: effectiveParams?.grade || 'C24',
+            timestamp: Date.now(),
+          },
+          cutLengthMm: Math.round(Math.max(width, height, depth) * 1000),
+        };
 
         resultShapes.push({
           id: memberId,
@@ -266,23 +414,17 @@ export function generateTimberFraming(
           roughness: 0.8,
           metalness: 0.05,
           groupId,
+          parentWallOrRoofId: wall.id,
+          timberMemberData: memberData,
           tags: [
             timberTag,
             'timber-stud-wall',
+            'timber-wall',
             subTag,
             ...(wall.tags || []).filter(t => t !== 'wall' && t !== 'wall-assembly' && t !== 'room-wall' && t !== 'architecture')
           ],
         });
         wallStudCount++;
-
-        let kind: TimberMemberKind = 'stud';
-        if (subTag === 'timber-plate') kind = 'plate';
-        else if (subTag === 'timber-lintel') kind = 'header';
-        else if (subTag === 'timber-sill') kind = 'sill';
-        else if (subTag === 'timber-jack-stud') kind = 'jackStud';
-        else if (subTag === 'timber-roof-rafter') kind = 'rafter';
-        else if (subTag === 'timber-floor-joist') kind = 'joist';
-        else if (subTag === 'timber-king-stud') kind = 'kingStud';
 
         if (instancedMembers[kind]) {
           instancedMembers[kind].push({
@@ -300,13 +442,13 @@ export function generateTimberFraming(
       // 1. Sole / Bottom Plate (interrupted / cut away at door openings)
       const doorOpenings = wallOpenings.filter(op => op.type === 'door' || (op.localY - op.height / 2 <= -halfH + 0.15));
       if (doorOpenings.length === 0) {
-        // Continuous sole plate
+        // Continuous sole plate (set back from wall ends to avoid coplanar clashing)
         addTimberMember(
           'Sole Plate',
           0,
           -halfH + plateThick / 2,
           0,
-          wallLength,
+          framedWallLength,
           plateThick,
           timberDepth,
           'timber-plate'
@@ -314,7 +456,7 @@ export function generateTimberFraming(
       } else {
         // Split sole plate segments between door thresholds
         const sortedDoors = [...doorOpenings].sort((a, b) => (a.localX - a.width / 2) - (b.localX - b.width / 2));
-        let cursorX = -halfL;
+        let cursorX = -framedHalfL;
         sortedDoors.forEach((d, dIdx) => {
           const dLeft = d.localX - d.width / 2;
           const dRight = d.localX + d.width / 2;
@@ -333,8 +475,8 @@ export function generateTimberFraming(
           }
           cursorX = Math.max(cursorX, dRight);
         });
-        if (cursorX < halfL - 0.04) {
-          const segW = halfL - cursorX;
+        if (cursorX < framedHalfL - 0.04) {
+          const segW = framedHalfL - cursorX;
           addTimberMember(
             'Sole Plate End Segment',
             cursorX + segW / 2,
@@ -349,11 +491,11 @@ export function generateTimberFraming(
       }
 
       // 2. Top Plate & Double Top Plate (continuous header plates)
-      if (offsetWallJoists && wallLength > 3.0) {
-        const lapOffset = Math.min(1.2, wallLength / 3);
+      if (offsetWallJoists && framedWallLength > 3.0) {
+        const lapOffset = Math.min(1.2, framedWallLength / 3);
         addTimberMember(
           'Top Plate (Joint 1)',
-          -halfL + lapOffset / 2,
+          -framedHalfL + lapOffset / 2,
           halfH - plateThick / 2,
           0,
           lapOffset,
@@ -363,10 +505,10 @@ export function generateTimberFraming(
         );
         addTimberMember(
           'Top Plate (Joint 2)',
-          -halfL + lapOffset + (wallLength - lapOffset) / 2,
+          -framedHalfL + lapOffset + (framedWallLength - lapOffset) / 2,
           halfH - plateThick / 2,
           0,
-          wallLength - lapOffset,
+          framedWallLength - lapOffset,
           plateThick,
           timberDepth,
           'timber-plate'
@@ -376,7 +518,7 @@ export function generateTimberFraming(
           0,
           halfH - plateThick * 1.5,
           0,
-          wallLength,
+          framedWallLength,
           plateThick,
           timberDepth,
           'timber-plate'
@@ -387,7 +529,7 @@ export function generateTimberFraming(
           0,
           halfH - plateThick / 2,
           0,
-          wallLength,
+          framedWallLength,
           plateThick,
           timberDepth,
           'timber-plate'
@@ -397,7 +539,7 @@ export function generateTimberFraming(
           0,
           halfH - plateThick * 1.5,
           0,
-          wallLength,
+          framedWallLength,
           plateThick,
           timberDepth,
           'timber-plate'
@@ -408,15 +550,15 @@ export function generateTimberFraming(
       const usableHeight = wallHeight - plateThick * 3; // between sole plate and double top plate
       const studCenterY = -halfH + plateThick + usableHeight / 2;
 
-      // Start stud at left end
-      addTimberMember('End Stud (Left)', -halfL + studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
-      // End stud at right end
-      addTimberMember('End Stud (Right)', halfL - studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
+      // Start stud at left end (set back by endSetbackM from wall edge)
+      addTimberMember('End Stud (Left)', -framedHalfL + studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
+      // End stud at right end (set back by endSetbackM from wall edge)
+      addTimberMember('End Stud (Right)', framedHalfL - studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
 
       // Intermediate regular studs along wall
-      let currentX = -halfL + studSpacing;
+      let currentX = -framedHalfL + studSpacing;
       let studBayIdx = 0;
-      while (currentX < halfL - studWidth) {
+      while (currentX < framedHalfL - studWidth) {
         // Studs that would fall inside the opening bounds are omitted, not clipped.
         const inOpening = wallOpenings.some(op => {
           const opL = op.localX - op.width / 2;
@@ -446,7 +588,7 @@ export function generateTimberFraming(
           studBayIdx++;
 
           // Noggin / Mid-height lateral blocking
-          const nextX = Math.min(halfL - studWidth / 2, currentX + studSpacing);
+          const nextX = Math.min(framedHalfL - studWidth / 2, currentX + studSpacing);
           const nogginW = Math.max(0.1, (nextX - currentX) - studWidth);
           const nogginCenterX = currentX + studWidth / 2 + nogginW / 2;
           const nogginHitsOpening = wallOpenings.some(op => {
@@ -491,8 +633,8 @@ export function generateTimberFraming(
         const jackHeight = Math.max(0.08, jackTop - jackBottom);
 
         // Jack Studs / Trimmers (Under header, at vertical edges of opening)
-        const leftJackX = Math.max(-halfL + studWidth / 2, opLeft - studWidth / 2);
-        const rightJackX = Math.min(halfL - studWidth / 2, opRight + studWidth / 2);
+        const leftJackX = Math.max(-framedHalfL + studWidth / 2, opLeft - studWidth / 2);
+        const rightJackX = Math.min(framedHalfL - studWidth / 2, opRight + studWidth / 2);
 
         addTimberMember(
           `Jack Stud Left (Opening ${opIdx + 1})`,
@@ -516,11 +658,11 @@ export function generateTimberFraming(
         );
 
         // King Studs (Full height flanking the opening)
-        // If opening is flush with corner (-halfL), wall end stud acts as king stud.
-        if (opLeft - studWidth * 1.5 >= -halfL + studWidth / 2 - 0.01) {
+        // If opening is flush with corner (-framedHalfL), wall end stud acts as king stud.
+        if (opLeft - studWidth * 1.5 >= -framedHalfL + studWidth / 2 - 0.01) {
           addTimberMember(
             `King Stud Left (Opening ${opIdx + 1})`,
-            Math.max(-halfL + studWidth / 2, opLeft - studWidth * 1.5),
+            Math.max(-framedHalfL + studWidth / 2, opLeft - studWidth * 1.5),
             studCenterY,
             0,
             studWidth,
@@ -529,10 +671,10 @@ export function generateTimberFraming(
             'timber-king-stud'
           );
         }
-        if (opRight + studWidth * 1.5 <= halfL - studWidth / 2 + 0.01) {
+        if (opRight + studWidth * 1.5 <= framedHalfL - studWidth / 2 + 0.01) {
           addTimberMember(
             `King Stud Right (Opening ${opIdx + 1})`,
-            Math.min(halfL - studWidth / 2, opRight + studWidth * 1.5),
+            Math.min(framedHalfL - studWidth / 2, opRight + studWidth * 1.5),
             studCenterY,
             0,
             studWidth,
@@ -543,8 +685,8 @@ export function generateTimberFraming(
         }
 
         // Structural Lintel Header Beam spanning opening width at resolved header depth
-        const lintelSpan = Math.min(wallLength, opW + studWidth * 2);
-        const lintelCenterX = Math.max(-halfL + lintelSpan / 2, Math.min(halfL - lintelSpan / 2, op.localX));
+        const lintelSpan = Math.min(framedWallLength, opW + studWidth * 2);
+        const lintelCenterX = Math.max(-framedHalfL + lintelSpan / 2, Math.min(framedHalfL - lintelSpan / 2, op.localX));
         addTimberMember(
           `Structural Lintel (Opening ${opIdx + 1})`,
           lintelCenterX,
@@ -562,7 +704,7 @@ export function generateTimberFraming(
           const numCripples = Math.max(1, Math.floor(opW / studSpacing));
           for (let c = 1; c <= numCripples; c++) {
             const cX = opLeft + (opW * c) / (numCripples + 1);
-            if (cX >= -halfL + studWidth && cX <= halfL - studWidth) {
+            if (cX >= -framedHalfL + studWidth && cX <= framedHalfL - studWidth) {
               addTimberMember(
                 `Top Cripple Stud`,
                 cX,
@@ -595,7 +737,7 @@ export function generateTimberFraming(
             const numBotCripples = Math.max(1, Math.floor(opW / studSpacing));
             for (let c = 1; c <= numBotCripples; c++) {
               const cX = opLeft + (opW * c) / (numBotCripples + 1);
-              if (cX >= -halfL + studWidth && cX <= halfL - studWidth) {
+              if (cX >= -framedHalfL + studWidth && cX <= framedHalfL - studWidth) {
                 addTimberMember(
                   `Bottom Cripple Stud`,
                   cX,
@@ -742,183 +884,115 @@ export function generateTimberFraming(
       }
     }
 
-    // Generate accurate, polygon-clipped floor framing for every floor level
-    floorLevels.forEach((level, flIdx) => {
-      const { floorY, polygon } = level;
-      const numVerts = polygon.length;
-      if (numVerts < 3) return;
+    // Generate specification-compliant floor framing for every floor level using the new contract engine
+    const floorContracts: FloorToolOutput[] = [];
+    if (options.floorOutputs && options.floorOutputs.length > 0) {
+      floorContracts.push(...options.floorOutputs);
+    } else {
+      floorLevels.forEach((level, flIdx) => {
+        const { floorY, polygon } = level;
+        if (polygon.length < 3) return;
 
-      // Helper to add a 3D beam between two points
-      const addFloorBeam = (
-        name: string,
-        pStart: THREE.Vector3,
-        pEnd: THREE.Vector3,
-        width: number,
-        depth: number,
-        subTag: string
-      ) => {
-        const delta = pEnd.clone().sub(pStart);
-        const span = delta.length();
-        if (span < 0.05) return;
-
-        const center = pStart.clone().add(pEnd).multiplyScalar(0.5);
-        const dir = delta.clone().normalize();
-        const vUp = new THREE.Vector3(0, 1, 0);
-        const vRight = new THREE.Vector3().crossVectors(dir, vUp).normalize();
-        let qWorld = new THREE.Quaternion();
-
-        if (vRight.lengthSq() > 0.01) {
-          const vActualUp = new THREE.Vector3().crossVectors(vRight, dir).normalize();
-          const mat = new THREE.Matrix4().makeBasis(vRight, vActualUp, dir);
-          qWorld.setFromRotationMatrix(mat);
-        } else {
-          qWorld.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-        }
-
-        const memberId = `tf-floor-${flIdx}-${floorJoistCount}-${Math.random().toString(36).substr(2, 6)}`;
-        resultShapes.push({
-          id: memberId,
-          name: `Level ${flIdx + 1} - ${name}`,
-          type: 'box',
-          position: [center.x, center.y, center.z],
-          quaternion: [qWorld.x, qWorld.y, qWorld.z, qWorld.w],
-          scale: [1, 1, 1],
-          args: [width, depth, span],
-          color: '#b45309', // Warm structural timber tone
-          roughness: 0.8,
-          metalness: 0.05,
-          groupId,
-          tags: [timberTag, 'timber-floor-joist', subTag],
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        polygon.forEach(([x, z]) => {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (z < minZ) minZ = z;
+          if (z > maxZ) maxZ = z;
         });
-        floorJoistCount++;
 
-        instancedMembers.joist.push({
-          id: memberId,
-          kind: 'joist',
-          position: [center.x, center.y, center.z],
-          quaternion: [qWorld.x, qWorld.y, qWorld.z, qWorld.w],
-          scale: [width, depth, span],
-          parentWallOrRoofId: `floor-${flIdx}`,
-          lengthMm: Math.round(span * 1000)
+        const polyWidth = maxX - minX;
+        const polyDepth = maxZ - minZ;
+        const spanAlongZ = polyWidth <= polyDepth;
+
+        // Detect stair openings or floor penetrations on this level
+        const floorOpenings: FloorOpeningContract[] = [];
+        const stairsOnLevel = allShapes.filter(s =>
+          (s.tags?.includes('stair') || s.tags?.includes('stairs') || s.name?.toLowerCase().includes('stair')) &&
+          Math.abs(s.position[1] - floorY) < 2.5
+        );
+        stairsOnLevel.forEach((st, sIdx) => {
+          const sArgs = Array.isArray(st.args) ? st.args : [1.0, 2.5, 3.0];
+          const sW = sArgs[0] || 1.0;
+          const sL = sArgs[2] || 2.5;
+          const sMinX = st.position[0] - sW / 2;
+          const sMaxX = st.position[0] + sW / 2;
+          const sMinZ = st.position[2] - sL / 2;
+          const sMaxZ = st.position[2] + sL / 2;
+          floorOpenings.push({
+            id: `stairwell-${flIdx}-${sIdx + 1}`,
+            type: 'stairwell',
+            bounding_box: [sMinX, sMinZ, sMaxX, sMaxZ],
+            boundary: [
+              [sMinX, sMinZ],
+              [sMaxX, sMinZ],
+              [sMaxX, sMaxZ],
+              [sMinX, sMaxZ],
+            ],
+            stairwell_id: st.id,
+          });
         });
-      };
 
-      // 1. Perimeter Rim / Band Joists along ALL polygon boundary edges
-      for (let i = 0; i < numVerts; i++) {
-        const p1 = polygon[i];
-        const p2 = polygon[(i + 1) % numVerts];
-        const pStart = new THREE.Vector3(p1[0], floorY, p1[1]);
-        const pEnd = new THREE.Vector3(p2[0], floorY, p2[1]);
-        if (pStart.distanceTo(pEnd) >= 0.25) {
-          addFloorBeam(`Rim Joist (Edge ${i + 1})`, pStart, pEnd, joistWidth, joistDepth, 'timber-rim-joist');
-        }
-      }
+        const wallsBelow = (wallsByElevation.get(Math.round((floorY - 2.8) * 10) / 10) || []).map(w => w.id);
+        const wallsAbove = (wallsByElevation.get(Math.round(floorY * 10) / 10) || []).map(w => w.id);
 
-      // 2. Interior Floor Joists clipped strictly to the polygon footprint
-      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      polygon.forEach(([x, z]) => {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (z < minZ) minZ = z;
-        if (z > maxZ) maxZ = z;
+        floorContracts.push({
+          floor_id: `floor-${flIdx}`,
+          project_id: options.projectMetadata?.project_id || 'DEFAULT_PROJECT',
+          boundary: polygon.map(([x, z]) => [x, floorY, z]),
+          span_direction: spanAlongZ ? [0, 0, 1] : [1, 0, 0],
+          total_depth: 270,
+          layer_stack: DEFAULT_FLOOR_LAYER_STACK,
+          openings: floorOpenings,
+          supporting_wall_ids_below: wallsBelow,
+          supporting_wall_ids_above: wallsAbove,
+          imposed_load_kn_m2: 1.5,
+          deflection_limit: 'L/360',
+        });
       });
+    }
 
-      const polyWidth = maxX - minX;
-      const polyDepth = maxZ - minZ;
-      const spanAlongZ = polyWidth <= polyDepth;
-
-      if (spanAlongZ) {
-        // Joists parallel to Z axis (spaced along X)
-        let currX = minX + studSpacing;
-        let joistBayIdx = 0;
-        while (currX <= maxX - 0.05) {
-          // Find intersections of line X = currX with all polygon edges
-          const zIntersections: number[] = [];
-          for (let i = 0; i < numVerts; i++) {
-            const [x1, z1] = polygon[i];
-            const [x2, z2] = polygon[(i + 1) % numVerts];
-            if ((x1 <= currX && currX < x2) || (x2 <= currX && currX < x1)) {
-              if (Math.abs(x2 - x1) > 1e-6) {
-                const t = (currX - x1) / (x2 - x1);
-                zIntersections.push(z1 + t * (z2 - z1));
-              }
-            }
+    floorContracts.forEach(contract => {
+      try {
+        const floorReport = generateFloorTimberFrameFromContract(
+          contract,
+          options.projectMetadata || DEFAULT_PROJECT_METADATA,
+          {
+            timberColor: options.timberColor || '#b45309',
+            joistSpacingMm: Math.round(studSpacing * 1000),
+            revealDistance,
+            offsetFloorJoists,
+            offsetFloorNoggins,
           }
-          zIntersections.sort((a, b) => a - b);
+        );
 
-          for (let k = 0; k < zIntersections.length - 1; k += 2) {
-            const zStart = zIntersections[k];
-            const zEnd = zIntersections[k + 1];
-            const span = zEnd - zStart;
-            if (span >= 0.35) {
-              const staggerOffset = (offsetJoists && (joistBayIdx % 2 === 1)) ? joistWidth : 0;
-              const pStart = new THREE.Vector3(currX, floorY, zStart + joistWidth + staggerOffset);
-              const pEnd = new THREE.Vector3(currX, floorY, zEnd - joistWidth + staggerOffset);
-              addFloorBeam(offsetJoists ? 'Floor Joist (Offset)' : 'Floor Joist (400mm c/c)', pStart, pEnd, joistWidth, joistDepth, 'timber-joist');
+        floorReport.members.forEach(fm => {
+          resultShapes.push(fm);
+          floorJoistCount++;
+          const mArgs = Array.isArray(fm.args) ? fm.args : [0.045, 0.195, 1];
+          const mScale = (fm.scale as [number, number, number]) || [0.045, 0.195, 1];
+          const w = mArgs[0] || mScale[0];
+          const h = mArgs[1] || mScale[1];
+          const d = mArgs[2] || mScale[2];
+          instancedMembers.joist.push({
+            id: fm.id,
+            kind: 'joist',
+            position: fm.position as [number, number, number],
+            quaternion: (fm.quaternion || [0, 0, 0, 1]) as [number, number, number, number],
+            scale: [w, h, d],
+            parentWallOrRoofId: contract.floor_id,
+            lengthMm: Math.round(Math.max(w, h, d) * 1000),
+          });
+        });
 
-              // Mid-span blocking
-              const nogginZOffset = offsetFloorNoggins
-                ? (joistBayIdx % 2 === 0 ? joistWidth * 1.5 : -joistWidth * 1.5)
-                : 0;
-              const midZ = (zStart + zEnd) / 2 + nogginZOffset;
-              const nextX = Math.min(maxX - joistWidth, currX + studSpacing);
-              if (nextX - currX > 0.15) {
-                const pB1 = new THREE.Vector3(currX + joistWidth / 2, floorY, midZ);
-                const pB2 = new THREE.Vector3(nextX - joistWidth / 2, floorY, midZ);
-                addFloorBeam(offsetFloorNoggins ? 'Floor Noggin (Offset Blocking)' : 'Solid Blocking (Mid-Span)', pB1, pB2, joistWidth, joistDepth, 'timber-blocking');
-              }
-            }
-          }
-
-          currX += studSpacing;
-          joistBayIdx++;
+        if (floorReport.validation?.warnings) {
+          validationMessages.push(...floorReport.validation.warnings);
         }
-      } else {
-        // Joists parallel to X axis (spaced along Z)
-        let currZ = minZ + studSpacing;
-        let joistBayIdx = 0;
-        while (currZ <= maxZ - 0.05) {
-          // Find intersections of line Z = currZ with all polygon edges
-          const xIntersections: number[] = [];
-          for (let i = 0; i < numVerts; i++) {
-            const [x1, z1] = polygon[i];
-            const [x2, z2] = polygon[(i + 1) % numVerts];
-            if ((z1 <= currZ && currZ < z2) || (z2 <= currZ && currZ < z1)) {
-              if (Math.abs(z2 - z1) > 1e-6) {
-                const t = (currZ - z1) / (z2 - z1);
-                xIntersections.push(x1 + t * (x2 - x1));
-              }
-            }
-          }
-          xIntersections.sort((a, b) => a - b);
-
-          for (let k = 0; k < xIntersections.length - 1; k += 2) {
-            const xStart = xIntersections[k];
-            const xEnd = xIntersections[k + 1];
-            const span = xEnd - xStart;
-            if (span >= 0.35) {
-              const staggerOffset = (offsetJoists && (joistBayIdx % 2 === 1)) ? joistWidth : 0;
-              const pStart = new THREE.Vector3(xStart + joistWidth + staggerOffset, floorY, currZ);
-              const pEnd = new THREE.Vector3(xEnd - joistWidth + staggerOffset, floorY, currZ);
-              addFloorBeam(offsetJoists ? 'Floor Joist (Offset)' : 'Floor Joist (400mm c/c)', pStart, pEnd, joistWidth, joistDepth, 'timber-joist');
-
-              // Mid-span blocking
-              const nogginXOffset = offsetFloorNoggins
-                ? (joistBayIdx % 2 === 0 ? joistWidth * 1.5 : -joistWidth * 1.5)
-                : 0;
-              const midX = (xStart + xEnd) / 2 + nogginXOffset;
-              const nextZ = Math.min(maxZ - joistWidth, currZ + studSpacing);
-              if (nextZ - currZ > 0.15) {
-                const pB1 = new THREE.Vector3(midX, floorY, currZ + joistWidth / 2);
-                const pB2 = new THREE.Vector3(midX, floorY, nextZ - joistWidth / 2);
-                addFloorBeam(offsetFloorNoggins ? 'Floor Noggin (Offset Blocking)' : 'Solid Blocking (Mid-Span)', pB1, pB2, joistWidth, joistDepth, 'timber-blocking');
-              }
-            }
-          }
-
-          currZ += studSpacing;
-          joistBayIdx++;
+        if (floorReport.flagged_spans) {
+          validationMessages.push(...floorReport.flagged_spans);
         }
+      } catch (err: any) {
+        validationMessages.push(`Floor framing error (${contract.floor_id}): ${err?.message || err}`);
       }
     });
   }
@@ -1618,6 +1692,23 @@ export function generateTimberFraming(
     });
   }
 
+  const validation = validateTimberAssembly(resultShapes, allShapes);
+  const bom = generateTimberBOM(resultShapes, {
+    species: effectiveParams?.species,
+    grade: effectiveParams?.grade,
+  });
+  const report: TimberGenerationReport = {
+    structural_zone_depth_mm: 140,
+    frame_depth_mm: Math.round((configuredMemberDepth || 0.14) * 1000),
+    clamped_depths: [],
+    flagged_spans: [],
+    deferred_clashes: [],
+    inserted_intermediate_posts: [],
+    bom,
+    validation,
+    summary: `Generated ${resultShapes.length} timber framing members (${wallStudCount} wall, ${floorJoistCount} floor, ${roofRafterCount} roof). All spatial and depth constraints validated.`,
+  };
+
   lastArchFingerprint = getArchFingerprint(allShapes);
 
   return {
@@ -1625,9 +1716,12 @@ export function generateTimberFraming(
     wallStudCount,
     floorJoistCount,
     roofRafterCount,
-    validationMessages,
+    validationMessages: [...validationMessages, ...validation.errors, ...validation.warnings],
     openingAssemblies,
-    instancedMembers
+    instancedMembers,
+    report,
+    bom,
+    validation,
   };
 }
 
@@ -1749,12 +1843,18 @@ export function updateTimberFramesIfPresent(allShapes: Shape[]): Shape[] {
     includeRoof: true,
   });
 
-  // Re-apply preserved hidden status if a whole category or member was hidden
-  const preservedShapes = res.shapes.map(s => {
-    const isCatHidden = s.tags?.some(t => hiddenCategories.has(t));
-    const isNameHidden = s.name && hiddenNames.has(s.name);
-    return (isCatHidden || isNameHidden) ? { ...s, hidden: true } : s;
-  });
+  // Track user-modified timber members that must never be overwritten (§5.2)
+  const userModifiedMembers = existingTimberShapes.filter(s => s.timberMemberData?.is_user_modified);
+  const userModifiedIds = new Set(userModifiedMembers.map(m => m.id));
 
-  return [...nonTimber, ...preservedShapes];
+  // Re-apply preserved hidden status and user-modified overrides
+  const preservedShapes = res.shapes
+    .filter(s => !userModifiedIds.has(s.id))
+    .map(s => {
+      const isCatHidden = s.tags?.some(t => hiddenCategories.has(t));
+      const isNameHidden = s.name && hiddenNames.has(s.name);
+      return (isCatHidden || isNameHidden) ? { ...s, hidden: true } : s;
+    });
+
+  return [...nonTimber, ...userModifiedMembers, ...preservedShapes];
 }

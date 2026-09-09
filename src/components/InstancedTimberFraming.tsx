@@ -42,14 +42,15 @@ const KIND_CONFIGS: Record<TimberKind, KindConfig> = {
 
 function resolveTimberKind(shape: Shape): TimberKind {
   const tags = shape.tags || [];
+  const name = shape.name || '';
   if (tags.includes('timber-jack-stud')) return 'jackStud';
   if (tags.includes('timber-king-stud')) return 'kingStud';
   if (tags.includes('timber-lintel') || tags.includes('timber-header')) return 'header';
   if (tags.includes('timber-sill')) return 'sill';
-  if (tags.includes('timber-top-plate') || tags.includes('timber-bottom-plate') || tags.includes('timber-plate')) return 'plate';
-  if (tags.includes('timber-roof-rafter') || tags.includes('timber-rafter') || tags.includes('timber-hip-rafter') || tags.includes('timber-ridge-beam') || tags.includes('timber-collar-tie') || tags.includes('timber-valley-rafter')) return 'rafter';
-  if (tags.includes('timber-floor-joist') || tags.includes('timber-joist') || tags.includes('timber-rim-joist')) return 'joist';
-  if (tags.includes('timber-blocking') || tags.includes('timber-noggin')) return 'blocking';
+  if (tags.includes('timber-top-plate') || tags.includes('timber-bottom-plate') || tags.includes('timber-plate') || name.includes('Plate')) return 'plate';
+  if (tags.includes('timber-roof-rafter') || tags.includes('timber-rafter') || tags.includes('timber-hip-rafter') || tags.includes('timber-ridge-beam') || tags.includes('timber-collar-tie') || tags.includes('timber-valley-rafter') || name.includes('Rafter') || name.includes('Ridge') || name.includes('Tie')) return 'rafter';
+  if (tags.includes('timber-floor-joist') || tags.includes('timber-joist') || tags.includes('timber-rim-joist') || tags.includes('timber-trimmer-joist') || tags.includes('timber-header-joist') || tags.includes('timber-strutting') || tags.includes('timber-bearing-blocking') || tags.includes('timber-floor') || name.includes('Joist') || name.includes('Rim') || name.includes('Trimmer') || name.includes('Strut') || name.startsWith('FLOOR_')) return 'joist';
+  if (tags.includes('timber-blocking') || tags.includes('timber-noggin') || name.includes('Noggin') || name.includes('NOGGIN') || name.includes('Blocking')) return 'blocking';
   return 'stud';
 }
 
@@ -132,6 +133,13 @@ function InstancedMeshGroup({
       args={[unitBoxGeometry, undefined, count]}
       castShadow={Boolean(shadowsEnabled)}
       receiveShadow={Boolean(shadowsEnabled)}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        const instanceId = e.instanceId;
+        if (instanceId !== undefined && items[instanceId] && onSelectShape) {
+          onSelectShape(items[instanceId].id);
+        }
+      }}
       onClick={(e) => {
         e.stopPropagation();
         const instanceId = e.instanceId;

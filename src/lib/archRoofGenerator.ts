@@ -1794,8 +1794,8 @@ export function buildRoofAssemblyForRoom(
 
   // 6. 3D Roof Tile Models (Geometry)
   let tilesShape: Shape | undefined;
-  if (params.roofType !== 'parapet' && params.tileShape !== 'none') {
-    const tileShape = params.tileShape || 'roman';
+  if (params.roofType !== 'parapet' && params.tileShape && params.tileShape !== 'none') {
+    const tileShape = params.tileShape;
     const tileSize = params.tileSize ?? 0.35;
     const tileColor = params.tileColor || params.color || '#991b1b';
     const tilesGeom = create3DRoofTilesGeometry({
@@ -2885,7 +2885,7 @@ export function updateRoofAssembly(
     ? Math.max(0.06, Math.min(0.50, Number(params.fasciaHeight.toFixed(2))))
     : (roofData.fasciaHeight ?? 0.18);
 
-  const tileShape = params.tileShape || targetRoof.roofTileData?.shape || 'roman';
+  const tileShape = params.tileShape || targetRoof.roofTileData?.shape || 'none';
   const tileSize = params.tileSize ?? targetRoof.roofTileData?.size ?? 0.35;
   const tileColor = params.tileColor || targetRoof.roofTileData?.color || targetRoof.color || '#991b1b';
   const randomizeColor = params.randomizeColor !== undefined 

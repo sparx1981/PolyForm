@@ -145,7 +145,8 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
       pitchAngleDeg: roofType === 'parapet' ? 0 : 35, 
       usePitchAngle: roofType !== 'parapet', 
       color: roofType === 'parapet' ? '#475569' : '#991b1b', 
-      fasciaColor: '#ffffff' 
+      fasciaColor: '#ffffff',
+      tileShape: 'none',
     }, shapes);
     if (assembly) {
       assembly.allShapes.forEach(s => addShape(s));
