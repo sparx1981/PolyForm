@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl } from './types';
+import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
@@ -8,7 +8,9 @@ import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
-import { updateTimberFramesIfPresent } from './lib/timberFrameGenerator';
+import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimberFrameForRoof, generateTimberFrameForBuilding } from './lib/timberFrameGenerator';
+import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
+import { TimberFrameParams, TimberFrameRecomputeState } from './types';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -249,6 +251,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lastInteractionData, setLastInteractionData] = useState<any>(null);
   const [diagnosticLogs, setDiagnosticLogs] = useState<DiagLogEntry[]>([]);
   const [embeddedWebpageUrl, setEmbeddedWebpageUrl] = useState<string | null>(null);
+
+  // Timber Frame Parametric State & Scoped Recompute
+  const [timberFrameParams, setTimberFrameParams] = useState<TimberFrameParams>(DEFAULT_TIMBER_FRAME_PARAMS);
+  const [timberFrameRecomputeState, setTimberFrameRecomputeState] = useState<TimberFrameRecomputeState>({
+    status: 'idle',
+    state: 'idle',
+    affectedWallIds: [],
+    lastComputedAt: null,
+  });
+  const staleWallOrRoofIdsRef = useRef<Set<string>>(new Set());
+  const timberRecomputeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Camera Frustum Depth Clipping (Near and Far Clipping Planes)
+  const [cameraDepthClippingEnabled, setCameraDepthClippingEnabled] = useState<boolean>(false);
+  const [cameraNear, setCameraNear] = useState<number>(0.1);
+  const [cameraFar, setCameraFar] = useState<number>(2000);
+
+  // Wall Transparency in Architecture Visualization
+  const [wallTransparency, setWallTransparency] = useState<number>(0);
+  const [exteriorWallTransparency, setExteriorWallTransparency] = useState<number>(0);
+  const [interiorWallTransparency, setInteriorWallTransparency] = useState<number>(0);
   
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [isMessagingCollapsed, setIsMessagingCollapsed] = useState(false);
@@ -399,6 +422,8 @@ console.log("Created rectangle:", myRect.id);`);
   const [developerSuiteWidth, setDeveloperSuiteWidth] = useState(800);
   const [isDeveloperSuiteCollapsed, setIsDeveloperSuiteCollapsed] = useState(false);
   const [pinnedScripts, setPinnedScripts] = useState<string[]>([]);
+  const [customToolbars, setCustomToolbars] = useState<CustomToolbarDef[]>([]);
+  const [basicToolbarExtensions, setBasicToolbarExtensions] = useState<CustomToolbarItem[]>([]);
 
   // Code Recorder
   const [codeRecorderEnabled, setCodeRecorderEnabled] = useState(false);
@@ -773,7 +798,8 @@ console.log("Created rectangle:", myRect.id);`);
           tags: data.tags || [],
           scenes: data.scenes || [],
           customMaterials: data.customMaterials || [],
-          animations: data.animations || []
+          animations: data.animations || [],
+          timberFrameParams: data.timberFrameParams || null
         };
         lastStateHash.current = JSON.stringify(newState);
 
@@ -790,6 +816,7 @@ console.log("Created rectangle:", myRect.id);`);
         if (data.animations) setAnimations(data.animations);
         if (data.notes) setNotes(data.notes);
         if (data.customLights) setCustomLights(data.customLights);
+        if (data.timberFrameParams) setTimberFrameParams(data.timberFrameParams);
         if (data.name) setCurrentModelName(data.name);
         
         setSyncStatus('synced');
@@ -868,7 +895,7 @@ console.log("Created rectangle:", myRect.id);`);
     // kernelRevision stands in for the graph itself: the graph is mutated in
     // place, so hashing it by reference would never change and a
     // geometry-only edit would never be saved.
-    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision };
+    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision, timberFrameParams };
     const currentStateHash = JSON.stringify(currentState);
     
     if (currentStateHash === lastStateHash.current) {
@@ -876,6 +903,7 @@ console.log("Created rectangle:", myRect.id);`);
     }
 
     const sync = async () => {
+      if (checkQuota()) return;
       if (pushInProgress.current) {
         needsSync.current = true;
         return;
@@ -893,6 +921,7 @@ console.log("Created rectangle:", myRect.id);`);
           animations,
           notes,
           customLights,
+          timberFrameParams,
           // Drawn geometry lives in the kernel graph, not in shapes. Without
           // this it is never persisted, and because the provider does not
           // unmount when you switch documents it also leaks between them:
@@ -919,7 +948,7 @@ console.log("Created rectangle:", myRect.id);`);
 
     const timeoutId = setTimeout(sync, 5000); // 5 second debounce for model synchronization
     return () => clearTimeout(timeoutId);
-  }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid]);
+  }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams]);
 
   // Service Worker
 
@@ -985,10 +1014,217 @@ console.log("Created rectangle:", myRect.id);`);
     setHistoryIndex(newHistory.length - 1);
   };
 
+  const scheduleScopedTimberRecompute = useCallback((affectedIds: string[]) => {
+    if (affectedIds.length === 0) return;
+
+    affectedIds.forEach(id => staleWallOrRoofIdsRef.current.add(id));
+    const currentAffected = Array.from(staleWallOrRoofIdsRef.current);
+
+    setTimberFrameRecomputeState(prev => ({
+      ...prev,
+      status: 'pending',
+      state: 'pending',
+      affectedWallIds: currentAffected,
+    }));
+
+    if (timberRecomputeTimerRef.current) {
+      clearTimeout(timberRecomputeTimerRef.current);
+    }
+
+    timberRecomputeTimerRef.current = setTimeout(() => {
+      setTimberFrameRecomputeState(prev => ({
+        ...prev,
+        status: 'computing',
+        state: 'computing',
+      }));
+
+      setShapes(prevShapes => {
+        const idsToRecompute = Array.from(staleWallOrRoofIdsRef.current);
+        staleWallOrRoofIdsRef.current.clear();
+
+        const hasTimber = prevShapes.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+        if (!hasTimber) {
+          setTimberFrameRecomputeState({
+            status: 'idle',
+            state: 'idle',
+            affectedWallIds: [],
+            lastComputedAt: Date.now(),
+          });
+          return prevShapes;
+        }
+
+        let updated = [...prevShapes];
+
+        idsToRecompute.forEach(targetId => {
+          const target = updated.find(s => s.id === targetId);
+          // Remove old framing for this target
+          updated = updated.filter(s => {
+            const isTargetTimber =
+              s.id.includes(`tf-wall-${targetId}`) ||
+              s.id.includes(`tf-roof-${targetId}`) ||
+              s.parentWallOrRoofId === targetId;
+            return !isTargetTimber;
+          });
+
+          // Recompute if target still exists
+          if (target) {
+            const isWall = target.type === 'wall' || target.tags?.some(t => t.includes('wall')) || target.name?.toLowerCase().includes('wall');
+            const isRoof = target.type === 'roof' || target.tags?.some(t => t.includes('roof')) || target.name?.toLowerCase().includes('roof');
+            if (isWall) {
+              const newMembers = generateTimberFrameForWall(target, updated, {
+                params: timberFrameParams,
+                offsetJoists: timberFrameParams.offsetFloorJoists ?? timberFrameParams.offsetJoists,
+                offsetFloorJoists: timberFrameParams.offsetFloorJoists ?? timberFrameParams.offsetJoists,
+                offsetWallJoists: timberFrameParams.offsetWallJoists,
+                offsetFloorNoggins: timberFrameParams.offsetFloorNoggins,
+                offsetWallNoggins: timberFrameParams.offsetWallNoggins,
+                studSpacing: timberFrameParams.studSpacing,
+              });
+              target.timberFrame = {
+                params: timberFrameParams,
+                lastComputedAt: new Date().toISOString()
+              };
+              updated.push(...newMembers);
+            } else if (isRoof) {
+              const newMembers = generateTimberFrameForRoof(target, updated, {
+                params: timberFrameParams,
+                offsetJoists: timberFrameParams.offsetFloorJoists ?? timberFrameParams.offsetJoists,
+                offsetFloorJoists: timberFrameParams.offsetFloorJoists ?? timberFrameParams.offsetJoists,
+                offsetWallJoists: timberFrameParams.offsetWallJoists,
+                offsetFloorNoggins: timberFrameParams.offsetFloorNoggins,
+                offsetWallNoggins: timberFrameParams.offsetWallNoggins,
+                studSpacing: timberFrameParams.studSpacing,
+              });
+              target.timberFrame = {
+                params: timberFrameParams,
+                lastComputedAt: new Date().toISOString()
+              };
+              updated.push(...newMembers);
+            }
+          }
+        });
+
+        setTimberFrameRecomputeState({
+          status: 'idle',
+          state: 'idle',
+          affectedWallIds: [],
+          lastComputedAt: Date.now(),
+        });
+
+        return updated;
+      });
+    }, 250);
+  }, [timberFrameParams]);
+
+  const commitUpdatedFraming = useCallback((candidateShapes?: Shape[]) => {
+    setShapes(currentShapes => {
+      const baseShapes = candidateShapes || currentShapes;
+      const existingTimber = baseShapes.filter(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+      const existingIds = new Set(existingTimber.map(t => t.id));
+      const remainingShapes = baseShapes.filter(s => !existingIds.has(s.id));
+
+      const result = generateTimberFrameForBuilding(remainingShapes, {
+        params: timberFrameParams,
+        offsetJoists: timberFrameParams.offsetFloorJoists ?? timberFrameParams.offsetJoists,
+        offsetFloorJoists: timberFrameParams.offsetFloorJoists ?? timberFrameParams.offsetJoists,
+        offsetWallJoists: timberFrameParams.offsetWallJoists,
+        offsetFloorNoggins: timberFrameParams.offsetFloorNoggins,
+        offsetWallNoggins: timberFrameParams.offsetWallNoggins,
+        studSpacing: timberFrameParams.studSpacing,
+        joistSpacing: timberFrameParams.studSpacing,
+        rafterSpacing: timberFrameParams.studSpacing * 1.5,
+      });
+
+      if (result.members.length === 0) {
+        return baseShapes;
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedArchShapes = remainingShapes.map(s => {
+        const isWall = s.type === 'wall' || s.tags?.some(t => t.includes('wall')) || s.name?.toLowerCase().includes('wall');
+        const isRoof = s.type === 'roof' || s.tags?.some(t => t.includes('roof')) || s.name?.toLowerCase().includes('roof');
+        if (isWall || isRoof) {
+          const wallAssemblies = result.openingAssemblies?.filter(oa => oa.hostWallId === s.id) || [];
+          return {
+            ...s,
+            timberFrame: {
+              params: timberFrameParams,
+              openingAssemblies: wallAssemblies,
+              lastComputedAt: nowIso
+            }
+          };
+        }
+        return s;
+      });
+
+      const nextShapes = [...updatedArchShapes, ...result.members];
+      saveToHistory(nextShapes);
+      return nextShapes;
+    });
+  }, [timberFrameParams, saveToHistory]);
+
+  useEffect(() => {
+    return () => {
+      if (timberRecomputeTimerRef.current) {
+        clearTimeout(timberRecomputeTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleSetShapes = (newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
     setShapes(prev => {
       const rawShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
       const withCutouts = applyStairwellHolesToSlabs(rawShapes);
+
+      const hasTimber = withCutouts.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+      if (hasTimber) {
+        const prevMap = new Map(prev.map(s => [s.id, s]));
+        const nextMap = new Map(withCutouts.map(s => [s.id, s]));
+        const affected = new Set<string>();
+
+        const isWallOrRoof = (s: Shape) =>
+          s.type === 'wall' || s.type === 'roof' ||
+          s.tags?.some(t => t.includes('wall') || t.includes('roof')) ||
+          s.name?.toLowerCase().includes('wall') || s.name?.toLowerCase().includes('roof');
+
+        const isOpening = (s: Shape) =>
+          s.type === 'door' || s.type === 'window' ||
+          s.tags?.some(t => t.includes('door') || t.includes('window')) ||
+          s.name?.toLowerCase().includes('door') || s.name?.toLowerCase().includes('window');
+
+        for (const next of withCutouts) {
+          const old = prevMap.get(next.id);
+          if (!old) {
+            if (isWallOrRoof(next)) affected.add(next.id);
+            else if (isOpening(next) && next.hostWallId) affected.add(next.hostWallId);
+          } else {
+            const posChanged = old.position[0] !== next.position[0] || old.position[1] !== next.position[1] || old.position[2] !== next.position[2];
+            const argsChanged = JSON.stringify(old.args) !== JSON.stringify(next.args);
+            const hostChanged = old.hostWallId !== next.hostWallId;
+            if (posChanged || argsChanged || hostChanged) {
+              if (isWallOrRoof(next)) affected.add(next.id);
+              else if (isOpening(next)) {
+                if (next.hostWallId) affected.add(next.hostWallId);
+                if (old.hostWallId) affected.add(old.hostWallId);
+              }
+            }
+          }
+        }
+
+        for (const old of prev) {
+          if (!nextMap.has(old.id)) {
+            if (isWallOrRoof(old)) affected.add(old.id);
+            else if (isOpening(old) && old.hostWallId) affected.add(old.hostWallId);
+          }
+        }
+
+        if (affected.size > 0) {
+          scheduleScopedTimberRecompute(Array.from(affected));
+          saveToHistory(withCutouts);
+          return withCutouts;
+        }
+      }
+
       const nextShapes = updateTimberFramesIfPresent(withCutouts);
       saveToHistory(nextShapes);
       return nextShapes;
@@ -1438,6 +1674,10 @@ console.log("Created rectangle:", myRect.id);`);
       setIsDeveloperSuiteCollapsed,
       pinnedScripts,
       setPinnedScripts,
+      customToolbars,
+      setCustomToolbars,
+      basicToolbarExtensions,
+      setBasicToolbarExtensions,
       refreshScripts: () => fetchScripts(true),
       refreshMaterials: () => fetchMaterials(true),
       codeRecorderEnabled,
@@ -1591,7 +1831,28 @@ console.log("Created rectangle:", myRect.id);`);
       roofModalTargetIds,
       setRoofModalTargetIds,
       storyPromptTargetIds,
-      setStoryPromptTargetIds
+      setStoryPromptTargetIds,
+      // Timber Frame
+      timberFrameParams,
+      setTimberFrameParams,
+      timberFrameRecomputeState,
+      setTimberFrameRecomputeState,
+      scheduleScopedTimberRecompute,
+      commitUpdatedFraming,
+      // Camera Depth Clipping
+      cameraDepthClippingEnabled,
+      setCameraDepthClippingEnabled,
+      cameraNear,
+      setCameraNear,
+      cameraFar,
+      setCameraFar,
+      // Wall Transparency
+      wallTransparency,
+      setWallTransparency,
+      exteriorWallTransparency,
+      setExteriorWallTransparency,
+      interiorWallTransparency,
+      setInteriorWallTransparency
     }}>
       {children}
     </AppContext.Provider>

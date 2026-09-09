@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { Box, BoxSelect, Building2, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
+import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, RotateCcw, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
 import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
-import { ToolModifierPalette } from './ToolModifierPalette';
+import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
+import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
-import { SceneAnimation, ChatMessage, Collaborator } from '../types';
+import { SceneAnimation, ChatMessage, Collaborator, Shape } from '../types';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
@@ -245,6 +246,18 @@ export default function RightPanelStack() {
     setCustomLights,
     fogSettings,
     setFogSettings,
+    cameraDepthClippingEnabled,
+    setCameraDepthClippingEnabled,
+    cameraNear,
+    setCameraNear,
+    cameraFar,
+    setCameraFar,
+    wallTransparency,
+    setWallTransparency,
+    exteriorWallTransparency,
+    setExteriorWallTransparency,
+    interiorWallTransparency,
+    setInteriorWallTransparency,
     selectedLightId,
     setSelectedLightId,
     activeTool,
@@ -853,7 +866,9 @@ export default function RightPanelStack() {
     'orbit',
     'wall',
     'fence',
-    'railing'
+    'railing',
+    'timber-frame',
+    'roof'
   ].includes(activeTool);
 
   return (
@@ -1301,8 +1316,14 @@ export default function RightPanelStack() {
               
               {/* Hierarchical Outliner Section */}
               {(() => {
-                // 1. Group walls by Story/Level
-                const wallShapes = shapes.filter(s => s.type === 'wall' || s.tags?.includes('wall-assembly'));
+                // 1. Group walls by Story/Level (strictly exclude timber frame members)
+                const wallShapes = shapes.filter(s =>
+                  (s.type === 'wall' || s.tags?.includes('wall-assembly')) &&
+                  !s.tags?.includes('timber-frame') &&
+                  !s.tags?.includes('timber-framing') &&
+                  !s.name?.toLowerCase().startsWith('timber ') &&
+                  !s.id.startsWith('tf-')
+                );
                 const wallIds = new Set(wallShapes.map(w => w.id));
 
                 // Determine levels present
@@ -1624,7 +1645,10 @@ export default function RightPanelStack() {
                           const allHidden = [roof, ...children].every(s => s.hidden);
 
                           const getChildBadge = (child: Shape) => {
-                            if (child.tags?.includes('roof-slopes') || child.name?.toLowerCase().includes('slope') || child.name?.toLowerCase().includes('tile')) {
+                            if (child.tags?.includes('roof-tiles') || child.name?.toLowerCase().includes('3d roof tile') || child.name?.toLowerCase().includes('tile model')) {
+                              return { label: '3D Tiles', bg: 'bg-orange-500/10 text-orange-600 dark:text-orange-400' };
+                            }
+                            if (child.tags?.includes('roof-slopes') || child.name?.toLowerCase().includes('slope')) {
                               return { label: 'Roof Pitch', bg: 'bg-red-500/10 text-red-600 dark:text-red-400' };
                             }
                             if (child.tags?.includes('roof-pediment') || child.name?.toLowerCase().includes('pediment') || child.name?.toLowerCase().includes('infill')) {
@@ -2613,6 +2637,215 @@ export default function RightPanelStack() {
                   </>
                 )}
               </div>
+
+              <SubSection title="Architecture" defaultOpen={true}>
+                <div className="space-y-3 px-1 py-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Building2 size={13} className="text-trimble-blue" />
+                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Wall Transparency</span>
+                    </div>
+                    {(wallTransparency > 0 || exteriorWallTransparency > 0 || interiorWallTransparency > 0) && (
+                      <button
+                        onClick={() => {
+                          setWallTransparency(0);
+                          setExteriorWallTransparency(0);
+                          setInteriorWallTransparency(0);
+                        }}
+                        className="text-[9px] text-trimble-blue hover:underline cursor-pointer flex items-center gap-1 font-medium"
+                        title="Reset all walls to fully opaque"
+                      >
+                        <RotateCcw size={9} />
+                        <span>Reset Opaque</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 p-2 rounded border border-gray-100 dark:border-gray-700">
+                    Adjust wall transparency sliders to reveal structural timber framing, view interior floor plans, and navigate room layouts.
+                  </div>
+
+                  {/* 1. All Walls Transparency Slider */}
+                  <div className="space-y-1.5 pt-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">All Walls</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={Math.round(wallTransparency * 100)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) setWallTransparency(Math.max(0, Math.min(100, val)) / 100);
+                          }}
+                          className="w-12 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.02"
+                      value={wallTransparency}
+                      onChange={(e) => setWallTransparency(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                      <span className="text-[8px] uppercase font-bold text-gray-400 mr-0.5">Presets:</span>
+                      {[
+                        { label: 'Opaque (0%)', val: 0 },
+                        { label: 'Tint (25%)', val: 0.25 },
+                        { label: 'X-Ray (50%)', val: 0.50 },
+                        { label: 'Ghost (75%)', val: 0.75 },
+                        { label: 'Clear (100%)', val: 1.0 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          onClick={() => setWallTransparency(preset.val)}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded text-[9px] font-medium border transition-colors cursor-pointer",
+                            Math.abs(wallTransparency - preset.val) < 0.01
+                              ? "bg-trimble-blue text-white border-trimble-blue"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Exterior Walls Transparency Slider */}
+                  <div className="space-y-1.5 pt-1 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Exterior Walls</span>
+                        <span className="text-[8px] text-gray-400 font-mono">(Envelope)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={Math.round(exteriorWallTransparency * 100)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) setExteriorWallTransparency(Math.max(0, Math.min(100, val)) / 100);
+                          }}
+                          className="w-12 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.02"
+                      value={exteriorWallTransparency}
+                      onChange={(e) => setExteriorWallTransparency(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                  </div>
+
+                  {/* 3. Interior Walls Transparency Slider */}
+                  <div className="space-y-1.5 pt-1 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Interior Walls</span>
+                        <span className="text-[8px] text-gray-400 font-mono">(Partitions)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={Math.round(interiorWallTransparency * 100)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) setInteriorWallTransparency(Math.max(0, Math.min(100, val)) / 100);
+                          }}
+                          className="w-12 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.02"
+                      value={interiorWallTransparency}
+                      onChange={(e) => setInteriorWallTransparency(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                  </div>
+
+                  {/* 4. Selected Wall Slider (if a wall is selected) */}
+                  {(() => {
+                    const selectedShape = shapes.find(s => s.id === selectedId);
+                    const isSelectedWall = selectedShape && (
+                      selectedShape.type === 'wall' || 
+                      (selectedShape.type !== 'door' && selectedShape.type !== 'window' && (
+                        selectedShape.tags?.some(t => t.includes('wall')) || 
+                        selectedShape.name?.toLowerCase().includes('wall')
+                      ))
+                    );
+                    if (!isSelectedWall || !selectedShape) return null;
+
+                    const wallName = selectedShape.name || `Wall ${selectedShape.id.slice(0, 5)}`;
+                    const currentOpacity = selectedShape.opacity !== undefined ? selectedShape.opacity : 1;
+                    const currentTransPercent = Math.round((1 - currentOpacity) * 100);
+
+                    return (
+                      <div className="p-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 space-y-1.5 mt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-trimble-blue uppercase tracking-wider truncate max-w-[140px]" title={wallName}>
+                            {wallName}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-gray-700 dark:text-gray-200">
+                            {currentTransPercent}%
+                          </span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="100" 
+                          step="5"
+                          value={currentTransPercent}
+                          onChange={(e) => {
+                            const trans = parseFloat(e.target.value);
+                            const newOpacity = Math.max(0, Math.min(1, 1 - trans / 100));
+                            setShapes(prev => prev.map(s => s.id === selectedShape.id ? { ...s, opacity: newOpacity } : s));
+                          }}
+                          onMouseUp={() => commitHistory()}
+                          onTouchEnd={() => commitHistory()}
+                          className="w-full h-1 bg-blue-200 dark:bg-blue-900 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                        />
+                        <div className="flex items-center justify-between text-[9px] text-gray-500">
+                          <span>Selected wall opacity: {Math.round(currentOpacity * 100)}%</span>
+                          <button
+                            onClick={() => {
+                              setShapes(prev => prev.map(s => s.id === selectedShape.id ? { ...s, opacity: 1 } : s));
+                              commitHistory();
+                            }}
+                            className="text-trimble-blue hover:underline cursor-pointer"
+                          >
+                            Reset Solid
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </SubSection>
+
               <SubSection title="Skybox">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Environment</label>
@@ -3321,6 +3554,189 @@ export default function RightPanelStack() {
                 )}
               </SubSection>
 
+              <SubSection title="Camera Depth Clipping">
+                <div className="space-y-3 px-1 py-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Enable Depth Clipping</span>
+                      <span className="text-[9px] text-gray-400">Near & Far Frustum Planes</span>
+                    </div>
+                    <button 
+                      id="toggle-camera-depth-clipping"
+                      onClick={() => setCameraDepthClippingEnabled(!cameraDepthClippingEnabled)}
+                      className={cn(
+                        "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                        cameraDepthClippingEnabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                      )}
+                      title={cameraDepthClippingEnabled ? "Disable Camera Depth Clipping" : "Enable Camera Depth Clipping"}
+                    >
+                      <div className={cn(
+                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                        cameraDepthClippingEnabled ? "left-4.5" : "left-0.5"
+                      )} />
+                    </button>
+                  </div>
+
+                  <div className="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 p-2 rounded border border-gray-100 dark:border-gray-700">
+                    Controls visibility within the camera's view frustum. Unlike fixed section cuts that slice at a physical coordinate, depth clipping acts as an invisible boundary that moves dynamically with your viewpoint.
+                  </div>
+
+                  {/* Near Clipping Plane */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Near Plane</span>
+                        <span className="text-[9px] text-gray-400">(Min Distance)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0.01"
+                          max="100"
+                          step="0.05"
+                          value={cameraNear}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= 0.01) {
+                              setCameraNear(val);
+                              if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                            }
+                          }}
+                          className="w-16 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">m</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0.01" 
+                      max="25" 
+                      step="0.05"
+                      value={Math.min(cameraNear, 25)}
+                      onChange={(e) => {
+                        setCameraNear(parseFloat(e.target.value));
+                        if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                      }}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                    <div className="text-[9px] text-gray-400 leading-normal">
+                      Hides any geometry that falls between the camera lens and this minimum distance. Critical for navigating tight interior spaces, allowing the camera to see through objects (like a wall directly behind the lens) without them blocking the viewport.
+                    </div>
+                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                      <span className="text-[8px] uppercase font-bold text-gray-400 mr-1">Presets:</span>
+                      {[
+                        { label: '0.1m', val: 0.1 },
+                        { label: '0.8m', val: 0.8 },
+                        { label: '1.5m', val: 1.5 },
+                        { label: '3.0m', val: 3.0 },
+                        { label: '5.0m', val: 5.0 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          onClick={() => {
+                            setCameraNear(preset.val);
+                            if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                          }}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
+                            cameraNear === preset.val
+                              ? "bg-trimble-blue text-white border-trimble-blue"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Far Clipping Plane */}
+                  <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700/60">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Far Plane</span>
+                        <span className="text-[9px] text-gray-400">(Max Distance)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="10000"
+                          step="1"
+                          value={cameraFar}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= 1) {
+                              setCameraFar(val);
+                              if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                            }
+                          }}
+                          className="w-16 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">m</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="5" 
+                      max="3000" 
+                      step="5"
+                      value={Math.min(cameraFar, 3000)}
+                      onChange={(e) => {
+                        setCameraFar(parseFloat(e.target.value));
+                        if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                      }}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                    <div className="text-[9px] text-gray-400 leading-normal">
+                      Culls and hides any geometry that sits beyond this maximum distance. Primarily used to optimize rendering performance in massive scenes or fade out distant background clutter.
+                    </div>
+                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                      <span className="text-[8px] uppercase font-bold text-gray-400 mr-1">Presets:</span>
+                      {[
+                        { label: '25m', val: 25 },
+                        { label: '100m', val: 100 },
+                        { label: '500m', val: 500 },
+                        { label: '2000m', val: 2000 },
+                        { label: '5000m', val: 5000 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          onClick={() => {
+                            setCameraFar(preset.val);
+                            if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                          }}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
+                            cameraFar === preset.val
+                              ? "bg-trimble-blue text-white border-trimble-blue"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Reset Button */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        setCameraNear(0.1);
+                        setCameraFar(2000);
+                        setCameraDepthClippingEnabled(false);
+                      }}
+                      className="w-full py-1.5 px-2 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      title="Reset Near and Far clipping planes to default camera settings"
+                    >
+                      <RotateCcw size={12} />
+                      <span>Reset to Camera Defaults (0.1m / 2000m)</span>
+                    </button>
+                  </div>
+                </div>
+              </SubSection>
+
               <SubSection title="Animations">
                 <div className="space-y-4">
                   <button 
@@ -3702,7 +4118,23 @@ export default function RightPanelStack() {
             isOpen={openPanels.includes('toolModifiers')}
             onToggle={() => togglePanel('toolModifiers')}
           >
-            <ToolModifierPalette />
+            <ErrorBoundary name="Tool Modifiers" compact>
+              <ToolModifierPalette />
+            </ErrorBoundary>
+          </Panel>
+        )}
+
+        {((panelVisibility['timberFrame'] !== false && (activeTool === 'timber-frame' || openPanels.includes('timberFrame')))) && (
+          <Panel 
+            id="timberFrame" 
+            title="Timber Frame Engine" 
+            icon={<Hammer size={16} />} 
+            isOpen={openPanels.includes('timberFrame') || activeTool === 'timber-frame'}
+            onToggle={() => togglePanel('timberFrame')}
+          >
+            <ErrorBoundary name="Timber Frame Panel" compact>
+              <TimberFrameModifierSection />
+            </ErrorBoundary>
           </Panel>
         )}
 

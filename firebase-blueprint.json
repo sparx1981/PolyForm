@@ -27,7 +27,88 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "userId": { "type": "string" },
-        "shapes": { "type": "array" },
+        "shapes": {
+          "type": "array",
+          "description": "List of 3D objects, meshes, and parametric architectural members in the scene",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "position": {
+                "type": "array",
+                "items": { "type": "number" }
+              },
+              "args": { "type": "array" },
+              "color": { "type": "string" },
+              "timberFrame": {
+                "type": "object",
+                "description": "Parametric timber frame definition for wall or roof shapes",
+                "properties": {
+                  "params": {
+                    "type": "object",
+                    "description": "Timber frame parameters used to generate framing members",
+                    "properties": {
+                      "studSpacing": { "type": "number" },
+                      "memberWidth": { "type": "number" },
+                      "memberDepth": { "type": "number" },
+                      "species": { "type": "string" },
+                      "grade": { "type": "string" },
+                      "headerDepthRule": { "type": "string" },
+                      "revealDistance": { "type": "number" },
+                      "advancedModeEnabled": { "type": "boolean" }
+                    },
+                    "required": ["studSpacing", "memberWidth", "memberDepth", "species", "grade"]
+                  },
+                  "openingAssemblies": {
+                    "type": "array",
+                    "description": "Framed opening assemblies for doors and windows",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "openingId": { "type": "string" },
+                        "headerMemberIds": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "sillMemberIds": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "jackStudMemberIds": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "kingStudMemberIds": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "isValid": { "type": "boolean" },
+                        "validationMessages": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "hostWallId": { "type": "string" },
+                        "headerDepth": { "type": "number" },
+                        "spanMm": { "type": "number" },
+                        "headerDepthMm": { "type": "number" }
+                      },
+                      "required": ["openingId"]
+                    }
+                  },
+                  "lastComputedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Timestamp when timber framing was last generated or synchronized"
+                  }
+                },
+                "required": ["params"]
+              }
+            },
+            "required": ["id", "type", "position"]
+          }
+        },
         "previewUrl": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }

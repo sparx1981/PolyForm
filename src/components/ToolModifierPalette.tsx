@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Settings, Info, Zap, Move, RotateCw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X } from 'lucide-react';
+import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal } from 'lucide-react';
 import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { WallJustification } from '../tools/inference/types';
+import { NumberField, SectionLabel, EmptyState, Chip } from './ui/Surface';
+import { DEFAULT_TIMBER_FRAME_PARAMS, STRUCTURAL_VALIDATION_RULES } from '../constants/timberFrameDefaults';
+import { TimberFrameParams } from '../types';
+import { ErrorBoundary } from './ErrorBoundary';
+import { RoofModifierSection } from './RoofModifierSection';
 
 export const ToolModifierPalette: React.FC = () => {
   const { 
@@ -68,7 +73,9 @@ export const ToolModifierPalette: React.FC = () => {
     'bezier',
     'polygon',
     'select',
-    'lasso'
+    'lasso',
+    'timber-frame',
+    'roof'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -203,6 +210,10 @@ export const ToolModifierPalette: React.FC = () => {
         <div className="flex items-center gap-2">
           {activeTool === 'wall' ? (
             <Building2 size={14} className="text-trimble-blue" />
+          ) : activeTool === 'timber-frame' ? (
+            <Hammer size={14} className="text-amber-500" />
+          ) : activeTool === 'roof' ? (
+            <Home size={14} className="text-sky-500" />
           ) : activeTool === 'bezier' ? (
             <Spline size={14} className="text-trimble-blue" />
           ) : (activeTool === 'select' || activeTool === 'lasso') ? (
@@ -211,7 +222,7 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-trimble-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -378,126 +389,8 @@ export const ToolModifierPalette: React.FC = () => {
                 </button>
 
                 {showRoofSettings && (
-                  <div className="pt-1.5 space-y-2 border-t border-gray-200/50 dark:border-gray-700/50">
-                    {/* Pitch Angle */}
-                    <div>
-                      <div className="flex justify-between text-gray-500 dark:text-gray-400 mb-1">
-                        <span>Pitch Angle</span>
-                        <span className="font-mono text-gray-800 dark:text-gray-200">{roofPitchAngle}°</span>
-                      </div>
-                      <input 
-                        type="range"
-                        min={15}
-                        max={60}
-                        step={1}
-                        value={roofPitchAngle}
-                        onChange={(e) => setRoofPitchAngle(Number(e.target.value))}
-                        className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                      />
-                    </div>
-
-                    {/* Eave Overhang */}
-                    <div>
-                      <div className="flex justify-between text-gray-500 dark:text-gray-400 mb-1">
-                        <span>Eave Overhang</span>
-                        <span className="font-mono text-gray-800 dark:text-gray-200">{((roofOverhang) * 100).toFixed(0)} cm</span>
-                      </div>
-                      <input 
-                        type="range"
-                        min={0.10}
-                        max={0.80}
-                        step={0.05}
-                        value={roofOverhang}
-                        onChange={(e) => setRoofOverhang(Number(e.target.value))}
-                        className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                      />
-                    </div>
-
-                    {/* Fascia Board Height */}
-                    <div>
-                      <div className="flex justify-between text-gray-500 dark:text-gray-400 mb-1">
-                        <span>Fascia Board Trim</span>
-                        <span className="font-mono text-gray-800 dark:text-gray-200">{((roofFasciaHeight) * 100).toFixed(0)} cm</span>
-                      </div>
-                      <input 
-                        type="range"
-                        min={0.08}
-                        max={0.35}
-                        step={0.02}
-                        value={roofFasciaHeight}
-                        onChange={(e) => setRoofFasciaHeight(Number(e.target.value))}
-                        className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                      />
-                    </div>
-
-                    {/* Roof Material / Color Palette */}
-                    <div>
-                      <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 mb-1">
-                        <span>Roof Color Finish</span>
-                        <span className="w-2.5 h-2.5 rounded-full border border-gray-300 dark:border-gray-600 inline-block" style={{ backgroundColor: roofColor }} />
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {[
-                          { name: 'Terracotta', color: '#991b1b' },
-                          { name: 'Slate', color: '#1e293b' },
-                          { name: 'Spanish Clay', color: '#b45309' },
-                          { name: 'Anthracite', color: '#334155' },
-                          { name: 'Forest Green', color: '#14532d' },
-                          { name: 'Stone Grey', color: '#475569' }
-                        ].map((mat) => (
-                          <button
-                            key={mat.name}
-                            onClick={() => setRoofColor(mat.color)}
-                            title={mat.name}
-                            className={cn(
-                              "w-5 h-5 rounded-full border transition-all cursor-pointer",
-                              roofColor === mat.color ? "ring-2 ring-trimble-blue scale-110 border-white shadow-xs" : "border-gray-300 dark:border-gray-600 opacity-80 hover:opacity-100"
-                            )}
-                            style={{ backgroundColor: mat.color }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Fascia & Trim Material / Color Palette */}
-                    <div>
-                      <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 mb-1">
-                        <span>Fascia & Trim Color</span>
-                        <span className="w-2.5 h-2.5 rounded-full border border-gray-300 dark:border-gray-600 inline-block" style={{ backgroundColor: fasciaColor }} />
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {[
-                          { name: 'Pure White', color: '#ffffff' },
-                          { name: 'Off-White', color: '#fef08a' },
-                          { name: 'Light Grey', color: '#e2e8f0' },
-                          { name: 'Slate Grey', color: '#64748b' },
-                          { name: 'Anthracite', color: '#1e293b' },
-                          { name: 'Rich Timber', color: '#78350f' },
-                          { name: 'Match Roof', color: roofColor }
-                        ].map((fMat) => (
-                          <button
-                            key={fMat.name}
-                            onClick={() => {
-                              setFasciaColor(fMat.color);
-                              if (selectedId) {
-                                setShapes(prev => prev.map(s => {
-                                  if (s.id === selectedId && (s.tags?.includes('roof-fascia') || s.name?.includes('Fascia'))) {
-                                    return { ...s, color: fMat.color };
-                                  }
-                                  return s;
-                                }));
-                              }
-                            }}
-                            title={fMat.name}
-                            className={cn(
-                              "w-5 h-5 rounded-full border transition-all cursor-pointer",
-                              fasciaColor === fMat.color ? "ring-2 ring-trimble-blue scale-110 border-white shadow-xs" : "border-gray-300 dark:border-gray-600 opacity-80 hover:opacity-100"
-                            )}
-                            style={{ backgroundColor: fMat.color }}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                  <div className="pt-2 border-t border-gray-200/50 dark:border-gray-700/50">
+                    <RoofModifierSection />
                   </div>
                 )}
               </div>
@@ -526,6 +419,18 @@ export const ToolModifierPalette: React.FC = () => {
               </button>
             </div>
           </div>
+        )}
+
+        {activeTool === 'timber-frame' && (
+          <ErrorBoundary name="Timber Frame Panel" compact>
+            <TimberFrameModifierSection />
+          </ErrorBoundary>
+        )}
+
+        {activeTool === 'roof' && (
+          <ErrorBoundary name="Roof Modifiers Panel" compact>
+            <RoofModifierSection />
+          </ErrorBoundary>
         )}
 
         {activeTool === 'bezier' && (
@@ -1010,5 +915,627 @@ export const ToolModifierPalette: React.FC = () => {
     </motion.div>
   );
 };
+
+export function TimberFrameModifierSection() {
+  const {
+    shapes,
+    setShapes,
+    selectedId,
+    commitHistory,
+    setMeasurements,
+    timberFrameParams,
+    setTimberFrameParams,
+    timberFrameRecomputeState
+  } = useApp();
+
+  const [params, setParams] = useState<TimberFrameParams>(timberFrameParams || DEFAULT_TIMBER_FRAME_PARAMS);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [spacingTolerance, setSpacingTolerance] = useState(0.005);
+  
+  // Interactive state selector for evaluating all 3 explicit visual states
+  const [visualMode, setVisualMode] = useState<'auto' | 'active' | 'pending' | 'empty'>('auto');
+
+  // Scene inspection
+  const selectedShape = shapes.find(s => s.id === selectedId);
+  const isFramableSelected = selectedShape && (
+    selectedShape.type === 'wall' || 
+    selectedShape.tags?.some(t => t.includes('wall') || t.includes('roof') || t.includes('timber-frame')) ||
+    selectedShape.name?.toLowerCase().includes('wall') ||
+    selectedShape.name?.toLowerCase().includes('roof') ||
+    selectedShape.name?.toLowerCase().includes('timber')
+  );
+  const hasExistingFraming = shapes.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+
+  // Determine current effective state (including background recompute status)
+  const currentState: 'active' | 'pending' | 'empty' = 
+    visualMode !== 'auto'
+      ? visualMode
+      : (timberFrameRecomputeState?.status === 'pending' || timberFrameRecomputeState?.status === 'computing')
+        ? 'pending'
+        : (isFramableSelected || hasExistingFraming)
+          ? 'active'
+          : 'empty';
+
+  // Live validation checks against STRUCTURAL_VALIDATION_RULES
+  const validationErrors: string[] = [];
+  if (params.studSpacing > STRUCTURAL_VALIDATION_RULES.maxStudSpacing) {
+    validationErrors.push(`Stud spacing of ${(params.studSpacing * 1000).toFixed(0)}mm exceeds code maximum (${STRUCTURAL_VALIDATION_RULES.maxStudSpacingMm}mm / 600mm c/c) per Eurocode 5 / BS 5268.`);
+  }
+  if (params.studSpacing < 0.20) {
+    validationErrors.push(`Stud spacing of ${(params.studSpacing * 1000).toFixed(0)}mm is below minimum constructible spacing (200mm).`);
+  }
+  if (params.memberWidth < 0.035) {
+    validationErrors.push(`Member width of ${(params.memberWidth * 1000).toFixed(0)}mm is below minimum structural width (35mm).`);
+  }
+  if (params.memberDepth < 0.070) {
+    validationErrors.push(`Member depth of ${(params.memberDepth * 1000).toFixed(0)}mm is below minimum wall framing depth (70mm).`);
+  }
+
+  const isInvalid = validationErrors.length > 0;
+  const isStudSpacingExceeded = params.studSpacing > STRUCTURAL_VALIDATION_RULES.maxStudSpacing;
+
+  const handleResetDefaults = () => {
+    const defaults: TimberFrameParams = {
+      ...DEFAULT_TIMBER_FRAME_PARAMS,
+      offsetJoists: false,
+      offsetFloorJoists: false,
+      offsetWallJoists: false,
+      offsetFloorNoggins: false,
+      offsetWallNoggins: false,
+    };
+    setParams(defaults);
+    if (setTimberFrameParams) {
+      setTimberFrameParams(defaults);
+    }
+    setAdvancedOpen(false);
+    setSpacingTolerance(0.005);
+    setVisualMode('auto');
+    setMeasurements('Reset Timber Frame modifiers to defaults.');
+  };
+
+  const handleCommitFraming = () => {
+    if (isInvalid) return;
+
+    if (setTimberFrameParams) {
+      setTimberFrameParams(params);
+    }
+
+    const existingTimber = shapes.filter(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+    const existingIds = new Set(existingTimber.map(t => t.id));
+    const remainingShapes = shapes.filter(s => !existingIds.has(s.id));
+
+    const result = generateTimberFrameForBuilding(remainingShapes, {
+      params,
+      offsetJoists: params.offsetFloorJoists ?? params.offsetJoists,
+      offsetFloorJoists: params.offsetFloorJoists ?? params.offsetJoists,
+      offsetWallJoists: params.offsetWallJoists,
+      offsetFloorNoggins: params.offsetFloorNoggins,
+      offsetWallNoggins: params.offsetWallNoggins,
+      studSpacing: params.studSpacing,
+      joistSpacing: params.studSpacing,
+      rafterSpacing: params.studSpacing * 1.5,
+    });
+
+    if (result.members.length === 0) {
+      setMeasurements('No walls, floors, or roof found to frame. Draw architecture elements first.');
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedArchShapes = remainingShapes.map(s => {
+      const isWall = s.type === 'wall' || s.tags?.some(t => t.includes('wall')) || s.name?.toLowerCase().includes('wall');
+      const isRoof = s.type === 'roof' || s.tags?.some(t => t.includes('roof')) || s.name?.toLowerCase().includes('roof');
+      if (isWall || isRoof) {
+        const wallAssemblies = result.openingAssemblies?.filter(oa => oa.hostWallId === s.id) || [];
+        return {
+          ...s,
+          timberFrame: {
+            params,
+            openingAssemblies: wallAssemblies,
+            lastComputedAt: nowIso
+          }
+        };
+      }
+      return s;
+    });
+
+    setShapes([...updatedArchShapes, ...result.members]);
+    commitHistory();
+    setMeasurements(`Committed Timber Frame construction (${result.members.length} members: studs, plates, headers, sills, joists & rafters).`);
+  };
+
+  const handleAddTimberFrame = () => {
+    if (setTimberFrameParams) {
+      setTimberFrameParams(params);
+    }
+
+    const existingTimber = shapes.filter(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+    const options = {
+      params,
+      offsetJoists: params?.offsetFloorJoists ?? params?.offsetJoists,
+      offsetFloorJoists: params?.offsetFloorJoists ?? params?.offsetJoists,
+      offsetWallJoists: params?.offsetWallJoists,
+      offsetFloorNoggins: params?.offsetFloorNoggins,
+      offsetWallNoggins: params?.offsetWallNoggins,
+      studSpacing: params?.studSpacing || 0.40,
+      joistSpacing: params?.studSpacing || 0.40,
+      rafterSpacing: (params?.studSpacing ? params.studSpacing * 1.5 : 0.60)
+    };
+
+    if (existingTimber.length > 0) {
+      // Remove old and regenerate
+      const existingIds = new Set(existingTimber.map(t => t.id));
+      const remainingShapes = shapes.filter(s => !existingIds.has(s.id));
+      const result = generateTimberFrameForBuilding(remainingShapes, options);
+      if (result.members.length === 0) {
+        setMeasurements('No walls, floors, or roof found to frame.');
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedArchShapes = remainingShapes.map(s => {
+        const isWall = s.type === 'wall' || s.tags?.some(t => t.includes('wall')) || s.name?.toLowerCase().includes('wall');
+        const isRoof = s.type === 'roof' || s.tags?.some(t => t.includes('roof')) || s.name?.toLowerCase().includes('roof');
+        if (isWall || isRoof) {
+          const wallAssemblies = result.openingAssemblies?.filter(oa => oa.hostWallId === s.id) || [];
+          return {
+            ...s,
+            timberFrame: {
+              params,
+              openingAssemblies: wallAssemblies,
+              lastComputedAt: nowIso
+            }
+          };
+        }
+        return s;
+      });
+
+      setShapes([...updatedArchShapes, ...result.members]);
+      commitHistory();
+      setMeasurements(`Updated Timber Frame construction (${result.members.length} members: studs, plates, headers, joists & rafters).`);
+      return;
+    }
+
+    const result = generateTimberFrameForBuilding(shapes, options);
+    if (result.members.length === 0) {
+      setMeasurements('No walls, floors, or roof found. Draw walls, floors or a roof first to generate timber frame construction.');
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedShapes = shapes.map(s => {
+      const isWall = s.type === 'wall' || s.tags?.some(t => t.includes('wall')) || s.name?.toLowerCase().includes('wall');
+      const isRoof = s.type === 'roof' || s.tags?.some(t => t.includes('roof')) || s.name?.toLowerCase().includes('roof');
+      if (isWall || isRoof) {
+        const wallAssemblies = result.openingAssemblies?.filter(oa => oa.hostWallId === s.id) || [];
+        return {
+          ...s,
+          timberFrame: {
+            params,
+            openingAssemblies: wallAssemblies,
+            lastComputedAt: nowIso
+          }
+        };
+      }
+      return s;
+    });
+
+    setShapes([...updatedShapes, ...result.members]);
+    commitHistory();
+    setMeasurements(`Added Timber Frame construction (${result.members.length} members: walls, floors & roof).`);
+  };
+
+  return (
+    <div className="space-y-3 select-none">
+      {/* Add / Update Timber Frame Button */}
+      <button
+        id="timber-add-frame-btn"
+        onClick={handleAddTimberFrame}
+        className="w-full py-1.5 px-2.5 bg-sky-50/80 hover:bg-sky-100/90 dark:bg-sky-950/30 dark:hover:bg-sky-900/40 text-sky-900 dark:text-sky-200 border border-sky-200/80 dark:border-sky-800/60 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+        title="Generate Timber Frame structure (Studs, Bottom/Top Plates, Headers, Floor Joists & Roof Rafters) meeting building guidelines"
+      >
+        <Hammer size={13} className="text-trimble-blue dark:text-sky-400" />
+        <span>{hasExistingFraming ? 'Update Timber Frame' : 'Add Timber Frame'}</span>
+      </button>
+
+      {/* 1. EMPTY STATE */}
+      {currentState === 'empty' && (
+        <div className="py-2 space-y-3">
+          <EmptyState
+            title="No Timber Frame Selected"
+            hint="Select a wall, roof, or building assembly in the viewport to display and configure reactive timber framing."
+            icon={<Hammer size={24} className="text-gray-400 dark:text-gray-500" />}
+          />
+          <button
+            id="timber-add-frame-empty-btn"
+            onClick={handleAddTimberFrame}
+            className="w-full py-2 px-3 bg-trimble-blue hover:bg-trimble-dark-blue active:scale-[0.99] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            title="Generate Timber Frame structure for all walls, floors, and roof in the building"
+          >
+            <Hammer size={14} className="text-white" />
+            <span>{hasExistingFraming ? 'Update Timber Frame' : 'Add Timber Frame'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* 2. PENDING / COMPUTING STATE */}
+      {currentState === 'pending' && (
+        <div className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/50 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-semibold text-trimble-blue">
+              <Loader2 size={15} className="animate-spin text-trimble-blue" />
+              <span>Computing Framing Load Path...</span>
+            </div>
+            <Chip tone="accent">Calculating</Chip>
+          </div>
+          
+          <div className="space-y-2 pt-1">
+            <div className="h-4 bg-gray-200/80 dark:bg-gray-700/60 rounded animate-pulse w-4/5" />
+            <div className="h-3 bg-gray-200/60 dark:bg-gray-700/40 rounded animate-pulse w-3/5" />
+            <div className="h-3 bg-gray-200/40 dark:bg-gray-700/30 rounded animate-pulse w-1/2" />
+          </div>
+
+          <div className="pt-2 border-t border-gray-200/60 dark:border-gray-800 text-[11px] text-gray-500 flex items-center justify-between font-mono">
+            <span>Affected members:</span>
+            <span className="animate-pulse text-trimble-blue font-bold">est. 52 studs / 6 plates</span>
+          </div>
+        </div>
+      )}
+
+      {/* 3. ACTIVE STATE */}
+      {currentState === 'active' && (
+        <div className="space-y-3">
+          {/* Header with Default Reset */}
+          <div className="flex items-center justify-end pb-1 border-b border-gray-100 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={handleResetDefaults}
+              className="text-[10px] text-trimble-blue hover:text-trimble-dark-blue hover:underline cursor-pointer font-medium"
+              title="Reset all values for this panel to defaults"
+            >
+              Default
+            </button>
+          </div>
+
+          {/* Always-visible Parameters */}
+          <div className="space-y-2.5">
+            {/* Stud Spacing with inline validation feedback */}
+            <div className={cn(
+              "rounded-lg p-1 transition-all",
+              isStudSpacingExceeded && "bg-red-50/60 dark:bg-red-950/20 border border-red-300 dark:border-red-800/80"
+            )}>
+              <NumberField
+                label="Stud Spacing"
+                value={params.studSpacing}
+                onChange={(val) => setParams(p => ({ ...p, studSpacing: val }))}
+                suffix="m"
+                step={0.05}
+                min={0.10}
+                max={1.20}
+                className={cn(
+                  isStudSpacingExceeded && "[&_input]:border-red-500 [&_input]:ring-red-500/30 [&_input]:text-red-600 dark:[&_input]:text-red-400"
+                )}
+              />
+              {isStudSpacingExceeded && (
+                <div className="flex items-center gap-1.5 mt-1.5 px-1 text-[11px] font-medium text-red-600 dark:text-red-400 animate-in fade-in duration-200">
+                  <AlertCircle size={12} className="shrink-0 text-red-500" />
+                  <span>
+                    Exceeds max allowable stud spacing ({STRUCTURAL_VALIDATION_RULES.maxStudSpacingMm}mm / {STRUCTURAL_VALIDATION_RULES.maxStudSpacing}m) per building code.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Member Width & Member Depth */}
+            <div className="grid grid-cols-2 gap-2">
+              <NumberField
+                label="Member Width"
+                value={params.memberWidth}
+                onChange={(val) => setParams(p => ({ ...p, memberWidth: val }))}
+                suffix="m"
+                step={0.005}
+                min={0.035}
+                max={0.15}
+              />
+              <NumberField
+                label="Member Depth"
+                value={params.memberDepth}
+                onChange={(val) => setParams(p => ({ ...p, memberDepth: val }))}
+                suffix="m"
+                step={0.01}
+                min={0.05}
+                max={0.35}
+              />
+            </div>
+
+            {/* Reveal Distance */}
+            <NumberField
+              label="Reveal Distance (Plane Inset)"
+              value={params.revealDistance}
+              onChange={(val) => setParams(p => ({ ...p, revealDistance: val }))}
+              suffix="m"
+              step={0.005}
+              min={0.0}
+              max={0.10}
+            />
+
+            {/* Offset Joists Section (Floor & Wall Joists toggles) */}
+            <div className="space-y-2 rounded-lg bg-gray-50/70 dark:bg-gray-800/50 border border-gray-200/80 dark:border-gray-700/60 p-2.5 transition-colors">
+              <div className="flex items-center justify-between pb-1 border-b border-gray-200/60 dark:border-gray-700/50">
+                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+                  Offset Joists
+                </span>
+                <span className="text-[9px] text-gray-500 dark:text-gray-400 font-mono">
+                  Lapped & Staggered
+                </span>
+              </div>
+
+              {/* 1. Floor Joists Toggle */}
+              <div className="flex items-center justify-between pt-0.5">
+                <div className="space-y-0.5 pr-2">
+                  <label htmlFor="timber-offset-floor-joists-toggle" className="text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer flex items-center gap-1.5">
+                    <span>Floor Joists</span>
+                  </label>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                    Staggers alternating floor joists by member width for lapped bearings
+                  </p>
+                </div>
+                <button
+                  id="timber-offset-floor-joists-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={!!(params.offsetFloorJoists ?? params.offsetJoists)}
+                  onClick={() => {
+                    const nextVal = !(params.offsetFloorJoists ?? params.offsetJoists);
+                    setParams(p => ({ ...p, offsetFloorJoists: nextVal, offsetJoists: nextVal }));
+                  }}
+                  className={cn(
+                    "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
+                    (params.offsetFloorJoists ?? params.offsetJoists) ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                  title="Enable or disable offset floor joists"
+                >
+                  <div
+                    className={cn(
+                      "bg-white w-4 h-4 rounded-full shadow-xs transform transition-transform",
+                      (params.offsetFloorJoists ?? params.offsetJoists) ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+
+              {/* 2. Wall Joists Toggle */}
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200/50 dark:border-gray-700/40">
+                <div className="space-y-0.5 pr-2">
+                  <label htmlFor="timber-offset-wall-joists-toggle" className="text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer flex items-center gap-1.5">
+                    <span>Wall Joists</span>
+                  </label>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                    Offsets alternating wall framing members and double top plate joints
+                  </p>
+                </div>
+                <button
+                  id="timber-offset-wall-joists-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={!!params.offsetWallJoists}
+                  onClick={() => setParams(p => ({ ...p, offsetWallJoists: !p.offsetWallJoists }))}
+                  className={cn(
+                    "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
+                    params.offsetWallJoists ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                  title="Enable or disable offset wall joists"
+                >
+                  <div
+                    className={cn(
+                      "bg-white w-4 h-4 rounded-full shadow-xs transform transition-transform",
+                      params.offsetWallJoists ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Offset Noggins Section (Floor & Wall Noggins toggles) */}
+            <div className="space-y-2 rounded-lg bg-gray-50/70 dark:bg-gray-800/50 border border-gray-200/80 dark:border-gray-700/60 p-2.5 transition-colors">
+              <div className="flex items-center justify-between pb-1 border-b border-gray-200/60 dark:border-gray-700/50">
+                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+                  Offset Noggins
+                </span>
+                <span className="text-[9px] text-gray-500 dark:text-gray-400 font-mono">
+                  Staggered Blocking
+                </span>
+              </div>
+
+              {/* Offset Floor Noggins Toggle */}
+              <div className="flex items-center justify-between pt-0.5">
+                <div className="space-y-0.5 pr-2">
+                  <label htmlFor="timber-offset-floor-noggins-toggle" className="text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer flex items-center gap-1.5">
+                    <span>Offset Floor Noggins</span>
+                  </label>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                    Staggers solid floor blocking between joists for straight-through end-nailing
+                  </p>
+                </div>
+                <button
+                  id="timber-offset-floor-noggins-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={!!params.offsetFloorNoggins}
+                  onClick={() => setParams(p => ({ ...p, offsetFloorNoggins: !p.offsetFloorNoggins }))}
+                  className={cn(
+                    "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
+                    params.offsetFloorNoggins ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                  title="Enable or disable offset floor noggins"
+                >
+                  <div
+                    className={cn(
+                      "bg-white w-4 h-4 rounded-full shadow-xs transform transition-transform",
+                      params.offsetFloorNoggins ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+
+              {/* Offset Wall Noggins Toggle */}
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200/50 dark:border-gray-700/40">
+                <div className="space-y-0.5 pr-2">
+                  <label htmlFor="timber-offset-wall-noggins-toggle" className="text-xs font-semibold text-gray-700 dark:text-gray-200 cursor-pointer flex items-center gap-1.5">
+                    <span>Offset Wall Noggins</span>
+                  </label>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                    Offsets alternating wall blocking heights for easy two-nail stud fastening
+                  </p>
+                </div>
+                <button
+                  id="timber-offset-wall-noggins-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={!!params.offsetWallNoggins}
+                  onClick={() => setParams(p => ({ ...p, offsetWallNoggins: !p.offsetWallNoggins }))}
+                  className={cn(
+                    "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
+                    params.offsetWallNoggins ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                  title="Enable or disable offset wall noggins"
+                >
+                  <div
+                    className={cn(
+                      "bg-white w-4 h-4 rounded-full shadow-xs transform transition-transform",
+                      params.offsetWallNoggins ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Behind "Advanced" toggle (collapsed by default) */}
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden bg-gray-50/50 dark:bg-gray-900/30">
+            <button
+              onClick={() => setAdvancedOpen(!advancedOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-black/5 transition-colors"
+            >
+              <div className="flex items-center gap-1.5">
+                <SlidersHorizontal size={13} className="text-trimble-blue" />
+                <span>Advanced Specification</span>
+              </div>
+              {advancedOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+
+            {advancedOpen && (
+              <div className="p-3 space-y-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-850 animate-in fade-in duration-150">
+                {/* Species */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                    Timber Species
+                  </label>
+                  <select
+                    value={params.species}
+                    onChange={(e) => setParams(p => ({ ...p, species: e.target.value }))}
+                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                  >
+                    <option value="Spruce-Pine-Fir">Spruce-Pine-Fir (SPF)</option>
+                    <option value="Douglas Fir-Larch">Douglas Fir-Larch</option>
+                    <option value="Southern Pine">Southern Pine</option>
+                    <option value="Hem-Fir">Hem-Fir</option>
+                    <option value="Glulam Engineered">Glulam Engineered</option>
+                  </select>
+                </div>
+
+                {/* Structural Grade */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                    Structural Grade
+                  </label>
+                  <select
+                    value={params.grade}
+                    onChange={(e) => setParams(p => ({ ...p, grade: e.target.value }))}
+                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                  >
+                    <option value="C24">C24 (High Strength Structural)</option>
+                    <option value="C16">C16 (Standard Framing)</option>
+                    <option value="Select Structural">Select Structural</option>
+                    <option value="No. 2 Framing">No. 2 Framing</option>
+                  </select>
+                </div>
+
+                {/* Spacing Tolerances */}
+                <NumberField
+                  label="Spacing Tolerance"
+                  value={spacingTolerance}
+                  onChange={setSpacingTolerance}
+                  suffix="m"
+                  step={0.001}
+                  min={0.001}
+                  max={0.02}
+                />
+
+                {/* Header Depth Rule Overrides */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                    Header Depth Rule Override
+                  </label>
+                  <select
+                    value={params.headerDepthRule}
+                    onChange={(e) => setParams(p => ({ ...p, headerDepthRule: e.target.value as any }))}
+                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                  >
+                    <option value="code-table">Code Table (Span-Bracketed)</option>
+                    <option value="span-ratio-1-10">Span Ratio 1:10</option>
+                    <option value="double-depth">Double Depth (Heavy Load)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Live Validation Panel */}
+          {validationErrors.length > 0 && (
+            <div id="timber-validation-errors" className="p-2.5 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50/80 dark:bg-red-950/40 text-[11px] text-red-700 dark:text-red-300 space-y-1.5 animate-in fade-in duration-150">
+              <div className="flex items-center gap-1.5 font-semibold text-red-600 dark:text-red-400">
+                <AlertCircle size={14} className="text-red-500 shrink-0" />
+                <span>Structural Validation Blocked ({validationErrors.length})</span>
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-[10px] pl-1 text-red-600 dark:text-red-300">
+                {validationErrors.map((err, idx) => (
+                  <li key={idx}>{err}</li>
+                ))}
+              </ul>
+              <div className="text-[10px] font-medium text-red-700 dark:text-red-400 pt-0.5">
+                Commit is blocked until parameters conform to building code.
+              </div>
+            </div>
+          )}
+
+          {/* Commit Framing Button */}
+          <div className="pt-1">
+            <button
+              id="timber-commit-framing-btn"
+              disabled={isInvalid || timberFrameRecomputeState?.status === 'computing'}
+              onClick={handleCommitFraming}
+              className={cn(
+                "w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer",
+                isInvalid
+                  ? "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-700"
+                  : "bg-trimble-blue hover:bg-trimble-blue/90 text-white shadow-sm"
+              )}
+              title={isInvalid ? "Cannot commit: Resolve structural validation errors first" : "Commit timber framing to scene"}
+            >
+              <Hammer size={14} />
+              <span>{hasExistingFraming ? 'Commit Updated Framing' : 'Commit Timber Framing'}</span>
+            </button>
+            {isInvalid && (
+              <p className="text-[10px] text-red-500 dark:text-red-400 text-center mt-1">
+                Framing commit blocked by structural validation rules
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 

@@ -13,7 +13,8 @@ export type ToolType =
   | 'bevel' | 'subtract' | 'note' | 'deform'
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
-  | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock';
+  | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock'
+  | 'roof' | 'timber-frame';
 
 export type SkyboxType = 'none' | 'golden-hour' | 'woodland' | 'sunrise' | 'twilight' | 'cyberspace-neon' | 'studio';
 
@@ -52,7 +53,7 @@ export function isTextureUrl(val?: any): boolean {
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
@@ -85,9 +86,19 @@ export interface Shape {
   plantSpeciesId?: string;
   plantVariation?: string;
   roofData?: any;
+  roofTileData?: any;
+  textureUrl?: string;
   isParametric?: boolean;
   parametricData?: any;
   customData?: any;
+  parentWallOrRoofId?: string;
+  timberFrame?: TimberFrameShapeData;
+}
+
+export interface TimberFrameShapeData {
+  params: TimberFrameParams;
+  openingAssemblies?: OpeningFrameAssembly[];
+  lastComputedAt?: string | number;
 }
 
 export interface Tag {
@@ -323,6 +334,10 @@ export interface AppState {
   setIsDeveloperSuiteCollapsed: (collapsed: boolean) => void;
   pinnedScripts: string[];
   setPinnedScripts: (ids: string[] | ((prev: string[]) => string[])) => void;
+  customToolbars: CustomToolbarDef[];
+  setCustomToolbars: React.Dispatch<React.SetStateAction<CustomToolbarDef[]>>;
+  basicToolbarExtensions: CustomToolbarItem[];
+  setBasicToolbarExtensions: React.Dispatch<React.SetStateAction<CustomToolbarItem[]>>;
   refreshScripts: () => void;
   refreshMaterials: () => void;
   // Code Recorder
@@ -540,6 +555,27 @@ export interface AppState {
   setToolbarDocks: (
     val: Record<ToolbarKey, DockZone> | ((prev: Record<ToolbarKey, DockZone>) => Record<ToolbarKey, DockZone>),
   ) => void;
+  // Timber Frame Parametric State & Scoped Recompute
+  timberFrameParams: TimberFrameParams;
+  setTimberFrameParams: (params: TimberFrameParams | ((prev: TimberFrameParams) => TimberFrameParams)) => void;
+  timberFrameRecomputeState: TimberFrameRecomputeState;
+  setTimberFrameRecomputeState: (state: TimberFrameRecomputeState | ((prev: TimberFrameRecomputeState) => TimberFrameRecomputeState)) => void;
+  scheduleScopedTimberRecompute: (affectedIds: string[]) => void;
+  commitUpdatedFraming: (candidateShapes?: Shape[]) => void;
+  // Camera Depth Clipping (Near and Far Clipping Planes)
+  cameraDepthClippingEnabled: boolean;
+  setCameraDepthClippingEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  cameraNear: number;
+  setCameraNear: (near: number | ((prev: number) => number)) => void;
+  cameraFar: number;
+  setCameraFar: (far: number | ((prev: number) => number)) => void;
+  // Wall Transparency in Architecture Visualization
+  wallTransparency: number;
+  setWallTransparency: (val: number | ((prev: number) => number)) => void;
+  exteriorWallTransparency: number;
+  setExteriorWallTransparency: (val: number | ((prev: number) => number)) => void;
+  interiorWallTransparency: number;
+  setInteriorWallTransparency: (val: number | ((prev: number) => number)) => void;
 }
 
 export interface DiagLogEntry {
@@ -580,4 +616,116 @@ export interface SavedModel {
 }
 
 export * from './lib/PolyformInferenceEngine';
+
+// =============================================================================
+// Reactive Timber Frame Engine Types
+// =============================================================================
+
+export interface TimberFrameParams {
+  studSpacing: number;
+  memberWidth: number;
+  memberDepth: number;
+  species: string;
+  grade: string;
+  headerDepthRule: string;
+  revealDistance: number;
+  advancedModeEnabled: boolean;
+  offsetJoists?: boolean;
+  offsetFloorJoists?: boolean;
+  offsetWallJoists?: boolean;
+  offsetFloorNoggins?: boolean;
+  offsetWallNoggins?: boolean;
+}
+
+export type TimberMemberKind =
+  | 'stud'
+  | 'plate'
+  | 'header'
+  | 'sill'
+  | 'jackStud'
+  | 'rafter'
+  | 'kingStud'
+  | 'king Stud'
+  | 'joist'
+  | 'blocking';
+
+export interface TimberMemberInstance {
+  id: string;
+  kind: TimberMemberKind;
+  transformMatrix?: number[];
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  quaternion?: [number, number, number, number];
+  scale?: [number, number, number];
+  parentWallOrRoofId: string;
+  lengthMm: number;
+}
+
+export interface OpeningFrameAssembly {
+  openingId: string;
+  headerMemberIds: string[];
+  sillMemberIds: string[] | null;
+  jackStudMemberIds: string[];
+  kingStudMemberIds: string[];
+  isValid: boolean;
+  validationMessages: string[];
+  hostWallId?: string;
+  headerDepth?: number;
+  spanMm?: number;
+  headerDepthMm?: number;
+}
+
+export type TimberFrameRecomputeStatus = 'idle' | 'pending' | 'computing' | 'stale' | 'error';
+
+export interface TimberFrameRecomputeState {
+  status: TimberFrameRecomputeStatus;
+  state?: TimberFrameRecomputeStatus;
+  affectedWallIds: string[];
+  lastComputedAt: number | null;
+}
+
+export interface HeaderDepthBracket {
+  maxOpeningWidth: number;
+  minHeaderDepth: number;
+  maxOpeningWidthMm?: number;
+  minHeaderDepthMm?: number;
+  description?: string;
+}
+
+export interface StructuralValidationRules {
+  maxStudSpacing: number;
+  maxStudSpacingMm?: number;
+  headerDepthBrackets: HeaderDepthBracket[];
+}
+
+export interface CustomToolbarItem {
+  id: string;
+  label: string;
+  icon?: string; // Lucide icon name (e.g. 'Home', 'Hammer', 'TreePine', 'Sparkles'), emoji, or text
+  tooltip?: string;
+  color?: string;
+  badge?: string;
+  hotkey?: string;
+  code?: string; // JavaScript code to execute
+  scriptId?: string; // Reference to existing saved script
+  action?: (sdk: any) => void | Promise<void>; // In-memory callback function
+}
+
+export interface CustomToolbarDef {
+  id: string;
+  title: string;
+  position?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'floating' | 'dock-left' | 'dock-top' | 'dock-bottom';
+  orientation?: 'horizontal' | 'vertical';
+  items: CustomToolbarItem[];
+  closable?: boolean;
+  collapsed?: boolean;
+  floatPosition?: { x: number; y: number };
+}
+
+export type CustomToolbarButton = CustomToolbarItem;
+export type CustomToolbarConfig = CustomToolbarDef & {
+  buttons?: CustomToolbarItem[];
+};
+
+
 

@@ -411,10 +411,15 @@ export function buildStairFlightGeometry(params: StairFlightParams): THREE.Buffe
   else if (style === 'c-shape' || style === 'curved') {
     const isFull180 = style === 'c-shape';
     const totalSweep = isFull180 ? Math.PI : Math.PI * 0.75;
+    // StairFix: Curved Staircase Fix — defensive floor so a corrupted/zero
+    // width can never collapse innerR/outerR onto each other (Section 7
+    // guardrail spirit: no silent NaN/degenerate geometry).
+    const safeWidth = Number.isFinite(width) && width > 0.05 ? width : 1.0;
     const innerR = 0.9;
-    const outerR = innerR + width;
+    const outerR = innerR + safeWidth;
     const stepH = height / numSteps;
     const angleStep = totalSweep / numSteps;
+    const midR = (innerR + outerR) / 2;
 
     const ptsIn: [number, number, number][] = [];
     const ptsOut: [number, number, number][] = [];
@@ -422,12 +427,32 @@ export function buildStairFlightGeometry(params: StairFlightParams): THREE.Buffe
     for (let i = 0; i < numSteps; i++) {
       const ang = i * angleStep;
       const stepY = -height / 2 + (i + 1) * stepH;
-      const midR = (innerR + outerR) / 2;
       const treadD = midR * angleStep * 1.1;
 
-      const tread = new THREE.BoxGeometry(treadD, 0.045, width);
+      // StairFix: Curved Staircase Fix.
+      //
+      // BEFORE: `tread.rotateY(ang)` rotated the tread box (still centered
+      // on the rotation axis) by +ang, then `translate(cx, stepY, cz)`
+      // moved it out to its position on the arc. Because the position
+      // (cx, cz) and the orientation were derived with opposite angular
+      // sign conventions, the tread's radial (width) edge did not track
+      // the same circle as the inner/outer railing points (ptsIn/ptsOut)
+      // below — the mismatch is zero at the first tread (ang = 0) and
+      // grows with the sweep, which is exactly the "treads clip through
+      // the railing / gaps open up further round the curve" defect.
+      //
+      // AFTER: rotating by -ang instead makes the tread's local axes
+      // orient consistently with the SAME (sin ang, -cos ang)-parameterized
+      // circle that ptsIn/ptsOut already use (this mirrors the technique
+      // "Spiral Staircase" already gets right, where the radial offset and
+      // the rotation are applied in a single consistent sweep). See the
+      // "Curved Tread Centerline Conformance" regression test in
+      // parametricStairs.test.ts for the invariant this restores: every
+      // tread-edge vertex sits at a fixed radial distance from the curve's
+      // center of curvature, regardless of how far round the sweep it is.
+      const tread = new THREE.BoxGeometry(treadD, 0.045, safeWidth);
       tread.translate(0, -0.02, 0);
-      tread.rotateY(ang);
+      tread.rotateY(-ang);
 
       const cx = Math.sin(ang) * midR;
       const cz = -Math.cos(ang) * midR + midR;

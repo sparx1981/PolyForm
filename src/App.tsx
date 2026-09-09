@@ -31,6 +31,7 @@ import WebpageModal from './components/WebpageModal';
 import AIDiagnosticLog from './components/AIDiagnosticLog';
 import { DeveloperSuite } from './components/DeveloperSuite';
 import { CodeRecorder } from './components/CodeRecorder';
+import { CustomToolbarOverlay } from './components/CustomToolbarOverlay';
 import { ToolModifierPalette } from './components/ToolModifierPalette';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
@@ -525,7 +526,11 @@ function AppContent() {
 
           <Viewport />
 
-          {!isToolModifierDocked && <ToolModifierPalette />}
+          {!isToolModifierDocked && (
+            <ErrorBoundary name="Tool Modifiers">
+              <ToolModifierPalette />
+            </ErrorBoundary>
+          )}
 
           {/* Right Panel Toggle Button - Always visible and positioned below top-docked toolbars */}
           {(() => {
@@ -619,6 +624,7 @@ function AppContent() {
       <WebpageModal />
       <DeveloperSuite />
       <CodeRecorder />
+      <CustomToolbarOverlay />
     </div>
   );
 }

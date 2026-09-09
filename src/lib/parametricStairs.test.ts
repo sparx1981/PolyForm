@@ -9,6 +9,7 @@ import {
   createParametricStaircaseGeometry
 } from './parametricStairs';
 import { createArchitecturalStaircaseGeometry, ALL_STAIR_STYLES } from './archStairGenerator';
+import { buildStairFlightGeometry } from './stairs/stairFlightGeometry';
 import { sanitizeStairParameters, getDefaultStairParameters, clampRiserHeight } from './stairs/styleParamSchema';
 import { Shape } from '../types';
 
@@ -409,6 +410,138 @@ describe('Parametric Stair Tool Core Logic & Constraints', () => {
       // extending slightly past the run — not asserting exact equality,
       // since those cosmetic extras are legitimate and pre-existing.
       expect(Math.abs(size.z - result.calculation.totalRun)).toBeLessThan(0.2);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // StairFix: Curved Staircase Fix regression harness.
+  //
+  // "Spiral Staircase (Central Post)" builds each tread by translating it
+  // radially outward *before* rotating it into place, so a single rotateY
+  // sweeps both its position and its orientation together and every tread
+  // edge lands on a fixed-radius circle centered on the stair's rotation
+  // axis, no matter how far round the sweep it is.
+  //
+  // "C-Shaped (Half-Turn Curved)" and "Curved / Helical (Open-Center)"
+  // instead rotated the tread *before* moving it to its final position,
+  // using the opposite angular sign convention from the one used to place
+  // it — so the tread's radial edges did not track the same circle as the
+  // inner/outer railing points. The mismatch is invisible on the very
+  // first tread (angle = 0) and grows with the sweep, which is exactly the
+  // "treads clip through the railing / gaps open up further round the
+  // curve" defect this fix corrects.
+  //
+  // Because both edges of a tread are flat (it's a box approximating an
+  // arc segment), a tread's own corner vertices are always slightly
+  // farther from the curve's center than its inner/outer *radius* — by
+  // exactly sqrt((treadD/2)^2 + radius^2), where treadD is the tread's
+  // tangential length. That distance is constant for every tread once the
+  // orientation is correct (it does not depend on which angle the tread
+  // sits at), which is what makes it a precise, angle-independent
+  // invariant to assert against — before the fix this value drifted
+  // instead of staying fixed.
+  // ---------------------------------------------------------------------
+  describe('StairFix: Curved Staircase Fix — Tread/Railing Centerline Conformance', () => {
+    const INNER_R = 0.9; // matches the hardcoded innerR in stairFlightGeometry.ts
+
+    function expectedRadialEnvelope(style: 'c-shape' | 'curved', width: number, numSteps: number) {
+      const totalSweep = style === 'c-shape' ? Math.PI : Math.PI * 0.75;
+      const angleStep = totalSweep / numSteps;
+      const outerR = INNER_R + width;
+      const midR = (INNER_R + outerR) / 2;
+      const treadD = midR * angleStep * 1.1;
+      return {
+        expectedMin: Math.sqrt((treadD / 2) ** 2 + INNER_R ** 2),
+        expectedMax: Math.sqrt((treadD / 2) ** 2 + outerR ** 2),
+        midR
+      };
+    }
+
+    function radialExtentFromCenter(style: string, width: number, numSteps: number, midR: number) {
+      // railing: 'none' isolates tread geometry so railing/baluster
+      // vertices (which legitimately sit further out) don't pollute the
+      // measurement.
+      const geometry = buildStairFlightGeometry({
+        style, width, height: 2.8, length: 4, numSteps, structure: 'closed', railing: 'none'
+      });
+      const pos = geometry.attributes.position;
+      let minDist = Infinity;
+      let maxDist = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const dist = Math.hypot(pos.getX(i), pos.getZ(i) - midR);
+        minDist = Math.min(minDist, dist);
+        maxDist = Math.max(maxDist, dist);
+      }
+      return { minDist, maxDist };
+    }
+
+    for (const style of ['c-shape', 'curved'] as const) {
+      for (const numSteps of [12, 16, 24]) {
+        it(`keeps every '${style}' tread vertex at the exact radial distance the curve's geometry implies (numSteps=${numSteps})`, () => {
+          const width = 1.0;
+          const { expectedMin, expectedMax, midR } = expectedRadialEnvelope(style, width, numSteps);
+          const { minDist, maxDist } = radialExtentFromCenter(style, width, numSteps, midR);
+
+          // Tight tolerance (5mm): the corrected math matches this formula
+          // to floating-point precision. Before the fix these values were
+          // off by a much larger, numSteps-dependent amount.
+          expect(minDist).toBeCloseTo(expectedMin, 2);
+          expect(maxDist).toBeCloseTo(expectedMax, 2);
+        });
+      }
+    }
+
+    it("does not change 'Spiral Staircase (Central Post)' output (the reference implementation this fix mirrors)", () => {
+      const geometry = buildStairFlightGeometry({
+        style: 'spiral', width: 1.0, height: 2.8, length: 3.6, numSteps: 16, structure: 'closed', railing: 'both'
+      });
+      geometry.computeBoundingBox();
+      const size = new THREE.Vector3();
+      geometry.boundingBox!.getSize(size);
+
+      // Baseline captured from the current (unmodified) spiral generator —
+      // this fix must never alter spiral's output.
+      expect(size.x).toBeCloseTo(1.0157, 3);
+      expect(size.y).toBeCloseTo(3.8, 3);
+      expect(size.z).toBeCloseTo(1.0157, 3);
+    });
+
+    it("leaves 'straight', 'l-shape', 'u-shape', 'winder', and 'bifurcated' styles untouched", () => {
+      // Regression guard: this fix only patches the shared 'c-shape' /
+      // 'curved' branch. Every other style must still produce non-empty,
+      // finite geometry exactly as before.
+      for (const style of ['straight', 'l-shape', 'u-shape', 'winder', 'bifurcated']) {
+        const geometry = buildStairFlightGeometry({
+          style, width: 1.0, height: 2.8, length: 3.6, numSteps: 16, structure: 'closed', railing: 'both'
+        });
+        expect(geometry.attributes.position.count).toBeGreaterThan(0);
+        geometry.computeBoundingBox();
+        const box = geometry.boundingBox!;
+        expect(Number.isFinite(box.min.x) && Number.isFinite(box.max.x)).toBe(true);
+      }
+    });
+
+    it("never produces NaN/non-finite vertices for 'c-shape'/'curved' even with a degenerate (zero/negative) width", () => {
+      // Section 7-style guardrail: a corrupted or legacy-zero width must
+      // fall back to a safe default rather than collapsing innerR/outerR
+      // onto each other or propagating NaN into the buffer.
+      for (const style of ['c-shape', 'curved']) {
+        for (const badWidth of [0, -1, NaN]) {
+          const geometry = buildStairFlightGeometry({
+            style, width: badWidth, height: 2.8, length: 3.6, numSteps: 16, structure: 'closed', railing: 'both'
+          });
+          const pos = geometry.attributes.position;
+          let allFinite = true;
+          for (let i = 0; i < pos.count; i++) {
+            if (!Number.isFinite(pos.getX(i)) || !Number.isFinite(pos.getY(i)) || !Number.isFinite(pos.getZ(i))) {
+              allFinite = false;
+              break;
+            }
+          }
+          expect(allFinite).toBe(true);
+          expect(pos.count).toBeGreaterThan(0);
+        }
+      }
     });
   });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LAYER } from './ui/Surface';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Upload, Plus, AlertCircle, Globe, User, Users, Settings, Circle as CircleIcon, Square as SquareIcon, Box as BoxIcon, Triangle as TriangleIcon, Cone as ConeIcon, Pyramid as PyramidIcon, Torus as TorusIcon, CircleDot, MousePointer2, Eraser, PaintBucket, Move, ArrowUpFromLine, RotateCw, Maximize, CornerUpRight, Orbit, Hand, ZoomIn, Sparkles, Search, MoreHorizontal, Video, Image, Palette, Layers, Box, PenLine, Radio, Zap, Disc, Hexagon, FileCode, FileText, Scissors } from 'lucide-react';
+import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Upload, Plus, AlertCircle, Globe, User, Users, Settings, Circle as CircleIcon, Square as SquareIcon, Box as BoxIcon, Triangle as TriangleIcon, Cone as ConeIcon, Pyramid as PyramidIcon, Torus as TorusIcon, CircleDot, MousePointer2, Eraser, PaintBucket, Move, ArrowUpFromLine, RotateCw, Maximize, CornerUpRight, Orbit, Hand, ZoomIn, Sparkles, Search, MoreHorizontal, Video, Image, Palette, Layers, Box, PenLine, Radio, Zap, Disc, Hexagon, FileCode, FileText, Scissors, Trees, Ruler, Compass, Eye, EyeOff, Copy, Group, Undo, Redo, Hammer, Building, Home, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
@@ -24,6 +24,9 @@ export function DeveloperSuite() {
     setShapes,
     updateShapeColor,
     selectedId,
+    setSelectedId,
+    selectedIds,
+    setSelectedIds,
     developerSuiteWidth,
     setDeveloperSuiteWidth,
     developerScripts,
@@ -56,7 +59,75 @@ export function DeveloperSuite() {
     triggerFocusOnMap,
     developerCode,
     setDeveloperCode,
-    refreshScripts
+    refreshScripts,
+    activeTool,
+    setActiveTool,
+    activeMaterial,
+    setActiveMaterial,
+    activePBR,
+    setActivePBR,
+    unit,
+    setUnit,
+    isAIRendererOpen,
+    setIsAIRendererOpen,
+    isAIQueryOpen,
+    setIsAIQueryOpen,
+    timberFrameParams,
+    setTimberFrameParams,
+    commitUpdatedFraming,
+    activePlantSpecies,
+    setActivePlantSpecies,
+    activePlantVariation,
+    setActivePlantVariation,
+    activePlantScale,
+    setActivePlantScale,
+    wallTransparency,
+    setWallTransparency,
+    exteriorWallTransparency,
+    setExteriorWallTransparency,
+    interiorWallTransparency,
+    setInteriorWallTransparency,
+    cameraDepthClippingEnabled,
+    setCameraDepthClippingEnabled,
+    cameraNear,
+    setCameraNear,
+    cameraFar,
+    setCameraFar,
+    orbitRotationSpeed,
+    setOrbitRotationSpeed,
+    edgeLinesEnabled,
+    setEdgeLinesEnabled,
+    edgeLinesColor,
+    setEdgeLinesColor,
+    edgeLinesOpacity,
+    setEdgeLinesOpacity,
+    edgeLinesThickness,
+    setEdgeLinesThickness,
+    undo,
+    redo,
+    selectionFilter,
+    setSelectionFilter,
+    selectionShapeMode,
+    setSelectionShapeMode,
+    setShadowsEnabled,
+    setGridEnabled,
+    setFloorEnabled,
+    setFloorColor,
+    setAmbientOcclusionEnabled,
+    setSunIntensity,
+    setLightPosition,
+    setAnimateSun,
+    setSunSpeed,
+    setNotes,
+    setAllNotesVisible,
+    customToolbars,
+    setCustomToolbars,
+    basicToolbarExtensions,
+    setBasicToolbarExtensions,
+    landscapeSculptSettings,
+    setLandscapeSculptSettings,
+    landscapeRoadSettings,
+    setLandscapeRoadSettings
   } = useApp();
 
   const dragControls = useDragControls();
@@ -112,7 +183,79 @@ export function DeveloperSuite() {
         setWorldViewAltitude,
         setWorldViewRadius,
         triggerFocusOnMap,
-        onLog: (msg: string) => setConsoleOutput(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
+        onLog: (msg: string) => setConsoleOutput(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]),
+        // Extended App State Setters
+        selectedIds,
+        setSelectedIds,
+        setSelectedId,
+        activeTool,
+        setActiveTool,
+        activeMaterial,
+        setActiveMaterial,
+        activePBR,
+        setActivePBR,
+        unit,
+        setUnit,
+        isAIRendererOpen,
+        setIsAIRendererOpen,
+        isAIQueryOpen,
+        setIsAIQueryOpen,
+        timberFrameParams,
+        setTimberFrameParams,
+        commitUpdatedFraming,
+        activePlantSpecies,
+        setActivePlantSpecies,
+        activePlantVariation,
+        setActivePlantVariation,
+        activePlantScale,
+        setActivePlantScale,
+        wallTransparency,
+        setWallTransparency,
+        exteriorWallTransparency,
+        setExteriorWallTransparency,
+        interiorWallTransparency,
+        setInteriorWallTransparency,
+        cameraDepthClippingEnabled,
+        setCameraDepthClippingEnabled,
+        cameraNear,
+        setCameraNear,
+        cameraFar,
+        setCameraFar,
+        orbitRotationSpeed,
+        setOrbitRotationSpeed,
+        edgeLinesEnabled,
+        setEdgeLinesEnabled,
+        edgeLinesColor,
+        setEdgeLinesColor,
+        edgeLinesOpacity,
+        setEdgeLinesOpacity,
+        edgeLinesThickness,
+        setEdgeLinesThickness,
+        undo,
+        redo,
+        selectionFilter,
+        setSelectionFilter,
+        selectionShapeMode,
+        setSelectionShapeMode,
+        setShadowsEnabled,
+        setGridEnabled,
+        setFloorEnabled,
+        setFloorColor,
+        setAmbientOcclusionEnabled,
+        setSunIntensity,
+        setLightPosition,
+        setAnimateSun,
+        setSunSpeed,
+        setNotes,
+        setAllNotesVisible,
+        customToolbars,
+        setCustomToolbars,
+        basicToolbarExtensions,
+        setBasicToolbarExtensions,
+        landscapeSculptSettings,
+        setLandscapeSculptSettings,
+        landscapeRoadSettings,
+        setLandscapeRoadSettings
       }
     );
   }, [
@@ -123,7 +266,28 @@ export function DeveloperSuite() {
     setContactFrictionEnabled, setIsAIGenerateOpen, setAutoOrbitEnabled, 
     setEmbeddedWebpageUrl, setConsoleOutput, setIsWorldViewActive,
     setWorldViewLocation, setWorldViewAltitude, setWorldViewRadius,
-    triggerFocusOnMap
+    triggerFocusOnMap, selectedIds, setSelectedIds, setSelectedId, activeTool,
+    setActiveTool, activeMaterial, setActiveMaterial, activePBR, setActivePBR,
+    unit, setUnit, isAIRendererOpen, setIsAIRendererOpen, isAIQueryOpen,
+    setIsAIQueryOpen, timberFrameParams, setTimberFrameParams,
+    commitUpdatedFraming, activePlantSpecies, setActivePlantSpecies,
+    activePlantVariation, setActivePlantVariation, activePlantScale,
+    setActivePlantScale, wallTransparency, setWallTransparency,
+    exteriorWallTransparency, setExteriorWallTransparency,
+    interiorWallTransparency, setInteriorWallTransparency,
+    cameraDepthClippingEnabled, setCameraDepthClippingEnabled,
+    cameraNear, setCameraNear, cameraFar, setCameraFar,
+    orbitRotationSpeed, setOrbitRotationSpeed, edgeLinesEnabled,
+    setEdgeLinesEnabled, edgeLinesColor, setEdgeLinesColor,
+    edgeLinesOpacity, setEdgeLinesOpacity, edgeLinesThickness,
+    setEdgeLinesThickness, undo, redo, selectionFilter, setSelectionFilter,
+    selectionShapeMode, setSelectionShapeMode, setShadowsEnabled,
+    setGridEnabled, setFloorEnabled, setFloorColor, setAmbientOcclusionEnabled,
+    setSunIntensity, setLightPosition, setAnimateSun, setSunSpeed,
+    setNotes, setAllNotesVisible, customToolbars, setCustomToolbars,
+    basicToolbarExtensions, setBasicToolbarExtensions,
+    landscapeSculptSettings, setLandscapeSculptSettings,
+    landscapeRoadSettings, setLandscapeRoadSettings
   ]);
 
   useEffect(() => {
@@ -324,6 +488,307 @@ function DeveloperConsole({ sdkProps }: { sdkProps: any }) {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [newScriptName, setNewScriptName] = useState('New Script');
 
+  const QUICK_TEMPLATES = [
+    {
+      name: 'Terracotta Gable Roof',
+      code: `// Create a Gable Roof with Spanish 3D Terracotta Tiles
+const roof = sdk.architecture.createRoof({
+  roofType: "gable",
+  width: 8,
+  depth: 12,
+  pitchAngleDeg: 30,
+  eaveOverhang: 0.45,
+  fasciaHeight: 0.20,
+  tileShape: "spanish",
+  tileSize: 0.85,
+  tileColor: "#c2410c",
+  randomizeColor: true,
+  colorPalette: ["#c2410c", "#9a3412", "#ea580c", "#b45309"],
+  position: [0, 3, 0]
+});
+console.log("Created roof assembly:", roof.id);`
+    },
+    {
+      name: 'Floating Staircase',
+      code: `// Create an architectural floating staircase with dual railings
+const stairs = sdk.architecture.createStairs({
+  style: "straight",
+  width: 1.2,
+  height: 3.0,
+  length: 4.2,
+  structure: "floating",
+  railing: "both",
+  isParametric: true,
+  idealStepHeight: 0.175,
+  handrailHeight: 0.95,
+  position: [0, 0, 0]
+});
+console.log("Created floating stairs:", stairs.id);`
+    },
+    {
+      name: 'Complete Room Envelope',
+      code: `// Build 4 mitered walls, floor slab, and ceiling
+const room = sdk.architecture.createRoom({
+  width: 8,
+  length: 10,
+  height: 3.2,
+  wallThickness: 0.25,
+  wallColor: "#f8fafc",
+  floorColor: "#334155"
+});
+console.log("Room envelope generated:", room.length, "elements");`
+    },
+    {
+      name: 'Structural Timber Framing',
+      code: `// Auto-generate studs, plates, and roof rafters
+const framing = sdk.architecture.generateTimberFraming({
+  spacing: 0.60,
+  rafterWidth: 0.045,
+  rafterDepth: 0.145,
+  species: "douglas-fir",
+  color: "#b45309"
+});
+console.log("Timber framing generated:", framing.length, "members");`
+    },
+    {
+      name: 'Landscape & Trees',
+      code: `// Place specimen trees, shrubs, and street furniture
+sdk.landscape.addPlant("english_oak", { position: [-5, 0, -4], scale: 1.2 });
+sdk.landscape.addPlant("scots_pine", { position: [6, 0, -4], scale: 1.0 });
+sdk.landscape.addPlant("hydrangea_bush", { position: [-3, 0, 2] });
+sdk.landscape.addSiteFurniture("bench", { position: [0, 0, 4] });
+sdk.landscape.addSiteFurniture("lamp", { position: [3, 0, 4] });
+console.log("Landscape elements placed!");`
+    },
+    {
+      name: 'PBR Material & Edges',
+      code: `// Apply architectural preset & enable linework outlines
+const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.materials.applyMaterial(obj.id, "vertical-timber");
+}
+sdk.materials.setEdgeLines({
+  enabled: true,
+  color: "#0f172a",
+  thickness: 1.5,
+  opacity: 0.95
+});
+console.log("PBR material and edge outlines updated!");`
+    },
+    {
+      name: '3D Measure & Annotate',
+      code: `// Add dimension line and measure vector slope
+sdk.measurement.addDimension([0, 0, 0], [8, 0, 0], "Building Span: 8.00m");
+const m = sdk.measurement.measureDistance([0, 0, 0], [0, 3.2, 4.0]);
+console.log("Distance:", m.formatted, "Pitch Angle:", m.pitchDeg.toFixed(1) + "°");`
+    },
+    {
+      name: 'Scene Stats & Export',
+      code: `// Inspect scene metrics and export JSON
+const stats = sdk.scene.getStats();
+console.log("Scene Metrics:", stats);
+const json = sdk.scene.exportJSON();
+console.log("JSON export length:", json.length, "bytes");`
+    },
+    {
+      name: 'Custom Floating Toolbar',
+      code: `// 1. Create a Custom Floating or Docked Toolbar
+const customTb = sdk.toolbars.create({
+  id: "arch-studio-toolbar",
+  title: "Arch Studio Ext",
+  position: "floating",
+  orientation: "horizontal",
+  floatPosition: { x: 80, y: 120 },
+  items: [
+    {
+      id: "btn-quick-pavilion",
+      label: "Pavilion",
+      icon: "Building",
+      tooltip: "Build complete room envelope with 4 walls & floor slab",
+      color: "#3b82f6",
+      badge: "PRO",
+      code: \`
+        sdk.architecture.createRoom({
+          width: 8,
+          length: 10,
+          height: 3.2,
+          wallThickness: 0.25,
+          wallColor: "#f8fafc",
+          floorColor: "#334155"
+        });
+        console.log("Pavilion envelope generated!");
+      \`
+    },
+    {
+      id: "btn-spanish-roof",
+      label: "Tile Roof",
+      icon: "Home",
+      tooltip: "Generate Spanish terracotta roof assembly",
+      color: "#ea580c",
+      code: \`
+        sdk.architecture.createRoof({
+          roofType: "gable",
+          width: 8.5,
+          depth: 10.5,
+          pitchAngleDeg: 28,
+          tileShape: "spanish",
+          tileColor: "#c2410c",
+          position: [0, 3.2, 0]
+        });
+        console.log("Spanish terracotta roof added!");
+      \`
+    },
+    {
+      id: "btn-add-trees",
+      label: "Grove",
+      icon: "Trees",
+      tooltip: "Scatter landscape specimen trees",
+      color: "#16a34a",
+      code: \`
+        sdk.landscape.addPlant("english_oak", { position: [-6, 0, -4], scale: 1.2 });
+        sdk.landscape.addPlant("scots_pine", { position: [7, 0, -3], scale: 1.0 });
+        sdk.landscape.addSiteFurniture("bench", { position: [0, 0, 6] });
+        console.log("Landscape grove & furniture placed!");
+      \`
+    }
+  ]
+});
+
+// 2. Add an additional action button dynamically
+sdk.toolbars.addButton("arch-studio-toolbar", {
+  id: "btn-edge-lines",
+  label: "Edges",
+  icon: "PenLine",
+  tooltip: "Toggle architectural linework outlines",
+  color: "#8b5cf6",
+  badge: "CAD",
+  code: \`
+    sdk.materials.setEdgeLines({ enabled: true, color: "#0f172a", thickness: 2, opacity: 0.95 });
+    console.log("Architectural CAD outlines applied!");
+  \`
+});
+
+console.log("Custom toolbar created! ID:", customTb.id);`
+    },
+    {
+      name: 'Basic Toolbar Extension',
+      code: `// Add custom extension buttons directly to the Left Rail Basic Toolbar
+sdk.toolbars.addToBasicToolbar({
+  id: "ext-quick-stairs",
+  label: "Floating Stairs",
+  icon: "Layers",
+  tooltip: "Quickly generate parametric floating staircase",
+  color: "#f59e0b",
+  badge: "NEW",
+  hotkey: "Ctrl+Alt+S",
+  code: \`
+    const stairs = sdk.architecture.createStairs({
+      style: "straight",
+      width: 1.2,
+      height: 3.0,
+      length: 4.2,
+      structure: "floating",
+      railing: "both",
+      idealStepHeight: 0.175,
+      position: [0, 0, 0]
+    });
+    console.log("Floating stairs placed via basic toolbar extension:", stairs.id);
+  \`
+});
+
+sdk.toolbars.addToBasicToolbar({
+  id: "ext-quick-measure",
+  label: "Span Measure",
+  icon: "Ruler",
+  tooltip: "Add span dimension across active bounds",
+  color: "#06b6d4",
+  badge: "DIM",
+  code: \`
+    const dim = sdk.measurement.addDimension([0, 0, 0], [8, 0, 0], "Span: 8.00m");
+    console.log("Dimension line added:", dim.id);
+  \`
+});
+
+console.log("Added 2 custom extension buttons to basic toolbar!");`
+    },
+    {
+      name: 'Configure Tool Parameters',
+      code: `// Configure defaults & variables matching all main tools
+
+// 1. Architecture: Roof Defaults
+sdk.architecture.configureRoofDefaults({
+  roofType: "gable",
+  pitchAngleDeg: 35,
+  eaveOverhang: 0.5,
+  fasciaHeight: 0.22,
+  tileShape: "spanish",
+  tileSize: 0.85,
+  tileColor: "#c2410c",
+  randomizeColor: true,
+  colorPalette: ["#c2410c", "#9a3412", "#ea580c", "#b45309"],
+  ridgeCap: true,
+  gutter: true
+});
+
+// 2. Architecture: Stair Defaults
+sdk.architecture.configureStairDefaults({
+  style: "straight",
+  structure: "floating",
+  railing: "both",
+  width: 1.2,
+  height: 3.0,
+  idealStepHeight: 0.175,
+  treadColor: "#d97706",
+  stringerColor: "#334155",
+  handrailHeight: 0.95
+});
+
+// 3. Architecture: Wall Defaults
+sdk.architecture.configureWallDefaults({
+  wallThickness: 0.25,
+  wallHeight: 3.2,
+  wallColor: "#f1f5f9",
+  transparency: 0.0
+});
+
+// 4. Landscape: Sculpt Settings
+sdk.landscape.configureSculptSettings({
+  mode: "push",
+  radius: 4.5,
+  intensity: 0.6,
+  masked: false
+});
+
+// 5. Landscape: Road Settings
+sdk.landscape.configureRoadSettings({
+  width: 4.0,
+  embankment: true,
+  roadColor: "#1e293b",
+  curbHeight: 0.2
+});
+
+// 6. Materials & Edges Defaults
+sdk.materials.configureMaterialDefaults({
+  roughness: 0.45,
+  metalness: 0.05,
+  opacity: 1.0,
+  edgeLinesEnabled: true,
+  edgeLinesColor: "#0f172a",
+  edgeLinesThickness: 1.5,
+  edgeLinesOpacity: 0.95
+});
+
+// 7. Measurement Defaults
+sdk.measurement.configureMeasurementSettings({
+  unit: "m",
+  precision: 3,
+  showAllDimensions: true
+});
+
+console.log("All tool parameters and variables successfully configured!");`
+    }
+  ];
+
   const handleSaveToLibrary = () => {
     setIsSaveModalOpen(true);
   };
@@ -451,6 +916,22 @@ function DeveloperConsole({ sdkProps }: { sdkProps: any }) {
             </button>
           </div>
         </div>
+
+        {/* Quick Snippets Bar */}
+        <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700/80 flex items-center gap-1.5 overflow-x-auto text-[11px] no-scrollbar">
+          <span className="text-[9px] uppercase font-bold text-gray-400 whitespace-nowrap mr-1 tracking-wider">Templates:</span>
+          {QUICK_TEMPLATES.map((tpl, idx) => (
+            <button
+              key={idx}
+              onClick={() => setDeveloperCode(tpl.code)}
+              className="px-2 py-0.5 rounded bg-white dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-trimble-blue hover:text-trimble-blue dark:hover:text-trimble-blue whitespace-nowrap transition-colors text-[10px] font-medium"
+              title={`Load ${tpl.name}`}
+            >
+              {tpl.name}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-hidden">
           <Editor
             height="100%"
@@ -808,40 +1289,146 @@ function GettingStarted() {
 
   const examples = [
     {
-      title: "Add a Rectangle",
-      description: "Adds a 2D rectangle to the origin",
-      code: `const myRect = sdk.createRectangle({
-  width: 5,
-  height: 3,
+      title: "Pavilion with Terracotta 3D Tile Roof",
+      description: "Generates a complete room envelope and caps it with a 30° gable roof featuring 3D Spanish terracotta tiles and eave overhangs.",
+      code: `// 1. Build room envelope (4 mitered walls, floor slab, ceiling)
+const room = sdk.architecture.createRoom({
+  width: 8,
+  length: 12,
+  height: 3.2,
+  wallThickness: 0.25,
+  wallColor: "#f8fafc",
+  floorColor: "#334155"
+});
+
+// 2. Add Gable roof with 3D Spanish terracotta tiles and eave overhang
+const roof = sdk.architecture.createRoof({
+  roofType: "gable",
+  width: 8,
+  depth: 12,
+  pitchAngleDeg: 30,
+  eaveOverhang: 0.45,
+  fasciaHeight: 0.20,
+  tileShape: "spanish",
+  tileSize: 0.85,
+  tileColor: "#c2410c",
+  randomizeColor: true,
+  colorPalette: ["#c2410c", "#9a3412", "#ea580c", "#b45309"],
+  position: [0, 3.2, 0]
+});
+
+console.log("Pavilion created with roof ID:", roof.id);`
+    },
+    {
+      title: "Parametric Floating Staircase with Railings",
+      description: "Generates an ergonomic floating staircase with continuous steel/glass railings and precise riser/tread geometry.",
+      code: `// Create an architectural floating staircase
+const stairs = sdk.architecture.createStairs({
+  style: "straight",
+  width: 1.2,
+  height: 3.0,
+  length: 4.2,
+  structure: "floating",
+  railing: "both",
+  isParametric: true,
+  idealStepHeight: 0.175,
+  handrailHeight: 0.95,
+  color: "#e2e8f0",
   position: [0, 0, 0]
-});`
+});
+
+console.log("Staircase generated:", stairs.id);`
     },
     {
-      title: "Push-Pull (Extrusion)",
-      description: "Create a rectangle and extrude it by 2 units",
-      code: `const base = sdk.createRectangle({ width: 2, height: 2 });
-const box = sdk.pushPull(base, 2);`
+      title: "Site Planning, Specimen Trees & Urban Furniture",
+      description: "Populates the site with botanical specimens from the 3D plant catalog, site furniture, and terrain ground textures.",
+      code: `// Place specimen trees and flowering shrubs
+sdk.landscape.addPlant("english_oak", { position: [-5, 0, -4], scale: 1.2 });
+sdk.landscape.addPlant("scots_pine", { position: [6, 0, -4], scale: 1.1 });
+sdk.landscape.addPlant("hydrangea_bush", { position: [-3, 0, 2], scale: 0.9 });
+
+// Place site fixtures
+sdk.landscape.addSiteFurniture("bench", { position: [-1, 0, 4], rotation: 0.3 });
+sdk.landscape.addSiteFurniture("lamp", { position: [4, 0, 4] });
+
+// Apply terrain texture
+sdk.landscape.applyTerrainTexture("grass");
+console.log("Site planning completed successfully!");`
     },
     {
-      title: "Styling (Hex Colors)",
-      description: "Target an object and apply a specific hex color",
-      code: `const myObj = sdk.getSelectedObject();
-if (myObj) {
-  sdk.applyColor(myObj, "#FF5733");
-} else {
-  console.log("Select an object first!");
-}`
+      title: "Automated Structural Timber Framing",
+      description: "Generates structural studs, sole/top plates, and roof rafters with standard 600mm spacing and timber member sizing.",
+      code: `// Generate studs, plates, and rafters
+const framing = sdk.architecture.generateTimberFraming({
+  spacing: 0.60,
+  rafterWidth: 0.045,
+  rafterDepth: 0.145,
+  species: "douglas-fir",
+  color: "#b45309"
+});
+
+console.log(\`Generated \${framing.length} structural timber members.\`);`
     },
     {
-      title: "Find Object Info",
-      description: "Get the name and ID of the currently selected object",
-      code: `const obj = sdk.getSelectedObject();
+      title: "Architectural PBR Cladding & Edge Outlines",
+      description: "Applies architectural material presets (vertical timber, stone, brick) and configures high-contrast linework outlines.",
+      code: `// Apply architectural material to selection
+const obj = sdk.getSelectedObject();
 if (obj) {
-  console.log("Object Name:", obj.name || "Untitled");
-  console.log("Object ID:", obj.id);
-} else {
-  console.log("No object selected!");
-}`
+  sdk.materials.applyMaterial(obj.id, "vertical-timber", {
+    roughness: 0.7,
+    metalness: 0.05
+  });
+}
+
+// Enable crisp architectural linework
+sdk.materials.setEdgeLines({
+  enabled: true,
+  color: "#0f172a",
+  thickness: 1.5,
+  opacity: 0.95
+});
+
+console.log("PBR materials and edge linework applied!");`
+    },
+    {
+      title: "3D Measurement, Dimensions & Pitch Angle",
+      description: "Places spatial dimension annotations and measures true 3D distance, horizontal run, vertical rise, and slope angle.",
+      code: `// Place dimension line annotation
+sdk.measurement.addDimension([0, 0, 0], [8, 0, 0], "Building Span: 8.00m");
+
+// Calculate 3D distance, run, rise, and slope pitch
+const m = sdk.measurement.measureDistance([0, 0, 0], [0, 3.2, 4.0]);
+console.log("Vector Distance:", m.formatted);
+console.log("Horizontal Run:", m.run.toFixed(2) + "m");
+console.log("Vertical Rise:", m.rise.toFixed(2) + "m");
+console.log("Roof Pitch Angle:", m.pitchDeg.toFixed(1) + "°");`
+    },
+    {
+      title: "Boolean CSG Solid Modeling",
+      description: "Carves architectural openings and reveals using solid boolean subtraction, union, or intersection.",
+      code: `// Create solid target and cutter
+const wall = sdk.createBox({ width: 6, height: 3, depth: 0.3, position: [0, 1.5, 0] });
+const doorway = sdk.createBox({ width: 1.2, height: 2.2, depth: 0.5, position: [0, 1.1, 0] });
+
+// Subtract doorway from wall after geometry mounts
+setTimeout(() => {
+  sdk.performCSG(wall.id, doorway.id, "SUBTRACTION");
+  console.log("CSG Subtraction completed!");
+}, 150);`
+    },
+    {
+      title: "Scene Diagnostics, Stats & JSON Export",
+      description: "Queries real-time scene geometry statistics, memory usage, and exports the full scene graph as JSON.",
+      code: `// Query live scene metrics
+const stats = sdk.scene.getStats();
+console.log("Total Shapes:", stats.shapeCount);
+console.log("Estimated Vertices:", stats.estimatedVertices);
+console.log("Bounding Box:", JSON.stringify(stats.boundingBox));
+
+// Export full project JSON
+const sceneData = sdk.scene.exportJSON();
+console.log(\`Exported JSON size: \${(sceneData.length / 1024).toFixed(1)} KB\`);`
     }
   ];
 
@@ -850,37 +1437,48 @@ if (obj) {
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">Getting Started</h2>
-          <p className="text-sm text-gray-500">Learn how to automate your 3D workflow with the SDK.</p>
+          <p className="text-sm text-gray-500">Automate your 3D architectural, landscape, and structural workflows using the Developer SDK.</p>
         </div>
 
         <div className="space-y-6">
           <section className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
               <BookOpen className="w-5 h-5 text-trimble-blue" />
-              Quick Start
+              SDK Architecture & Subsystems
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-              The SDK provides an imperative API to manipulate the 3D scene. You can create shapes, modify their properties, and perform geometric operations like extrusion.
+              The Developer SDK exposes modular subsystems accessible via the global <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-trimble-blue font-mono text-xs">sdk</code> instance:
+              <br />
+              <span className="font-semibold text-gray-800 dark:text-gray-200">sdk.architecture</span> (roofs with 3D tile profiles, rooms, parametric stairs, timber framing) · 
+              <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.landscape</span> (trees, shrubs, site furniture, terrain) · 
+              <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.materials</span> (PBR presets, linework edge lines) · 
+              <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.measurement</span> (dimension lines, pitch angle calculations, units) · 
+              <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.selection</span> (grouping, alignment, duplicate, transform) · 
+              <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.camera</span> (section depth clipping, projections, auto-orbit) · 
+              <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.ai</span> (generative massing, rendering, copilot) · 
+              <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.scene</span> (statistics, JSON export, undo/redo).
             </p>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {examples.map((example, i) => (
-                <div key={i} className="group p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-trimble-blue/30 transition-all">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-bold text-sm text-gray-900 dark:text-white">{example.title}</h4>
-                    <button 
-                      onClick={() => {
-                        setDeveloperCode(example.code);
-                        setActiveDeveloperTab('console');
-                      }}
-                      className="text-[10px] font-bold text-trimble-blue hover:underline uppercase flex items-center gap-1"
-                    >
-                      Try It Now
-                      <ChevronRight className="w-3 h-3" />
-                    </button>
+                <div key={i} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-trimble-blue/30 transition-all flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-bold text-sm text-gray-900 dark:text-white">{example.title}</h4>
+                      <button 
+                        onClick={() => {
+                          setDeveloperCode(example.code);
+                          setActiveDeveloperTab('console');
+                        }}
+                        className="text-[10px] font-bold text-trimble-blue hover:underline uppercase flex items-center gap-1 shrink-0 ml-2"
+                      >
+                        Try It Now
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">{example.description}</p>
                   </div>
-                  <p className="text-xs text-gray-500 mb-3">{example.description}</p>
-                  <pre className="p-3 bg-gray-900 text-gray-300 rounded-lg text-[10px] font-mono overflow-x-auto">
+                  <pre className="p-3 bg-gray-900 text-gray-300 rounded-lg text-[10px] font-mono overflow-x-auto max-h-48">
                     {example.code}
                   </pre>
                 </div>
@@ -898,244 +1496,522 @@ function FullDocumentation() {
 
   const categories = [
     {
-      title: "Shape Creation",
-      icon: <BoxIcon className="w-4 h-4" />,
+      title: "Architecture: Roofs & 3D Tile Profiles",
+      icon: <Home className="w-4 h-4 text-orange-500" />,
       items: [
-        { name: "Create Box", code: `// width/height/depth: 0.1 to 100. Higher values create larger structures.
-sdk.createBox({ width: 2, height: 2, depth: 2, position: [0, 1, 0] });` },
-        { name: "Create Sphere", code: `// radius: 0.1 to 50. Larger radius increases surface area significantly.
-sdk.createSphere({ radius: 1, position: [3, 1, 0] });` },
-        { name: "Create Cone", code: `// radius/height: 0.1 to 50. High height with low radius creates a needle shape.
-sdk.createCone({ radius: 1, height: 2, position: [-3, 1, 0] });` },
-        { name: "Create Pyramid", code: `// radius/height: 0.1 to 50.
-sdk.createPyramid({ radius: 1, height: 2, position: [0, 1, 3] });` },
-        { name: "Create Donut", code: `// radius: 0.5 to 50, tube: 0.1 to 10. Tube must be smaller than radius.
-sdk.createDonut({ radius: 1, tube: 0.4, position: [0, 1, -3] });` },
-        { name: "Create Dome", code: `// radius: 0.1 to 50.
-sdk.createDome({ radius: 1, position: [3, 0, 3] });` }
-      ]
-    },
-    {
-      title: "Geometric Operations",
-      icon: <Maximize className="w-4 h-4" />,
-      items: [
-        { name: "Push Pull", code: `// distance: -50 to 50. Positive values extrude, negative values intrude.
-const base = sdk.createRectangle({ width: 2, height: 2 });
-sdk.pushPull(base, 3);` },
-        { name: "Delete Object", code: `// Removes the object from the scene permanently.
-const obj = sdk.getSelectedObject();
-if (obj && obj.id) sdk.deleteObject(obj.id);` },
-        { name: "Divide Surface", code: `// divisions: [1-20, 1-20]. Higher numbers increase geometric complexity.
-const obj = sdk.getSelectedObject();
-if (obj && obj.id) sdk.divideSurface(obj.id, 0, [4, 2]);` },
-        { name: "Set Bevel", code: `// amount: 0 to 1, segments: 1 to 20. High segments create smoother curves.
-const obj = sdk.getSelectedObject();
-if (obj && obj.id) sdk.setBevel(obj, { amount: 0.2, type: 'radius', segments: 10 });` },
-        { name: "Set Bevel Type", code: `// 'radius' for rounded, 'chamfer' for flat angled edges.
-sdk.setBevelType('radius');` }
-      ]
-    },
-    {
-      title: "Advanced Geometry",
-      icon: <Scissors className="w-4 h-4" />,
-      items: [
-        { name: "Perform CSG (Subtract)", code: `// Subtract cutterId from targetId. Both must exist.
-const target = sdk.createBox({ width: 2, height: 2, depth: 2 });
-const cutter = sdk.createSphere({ radius: 1, position: [1, 1, 1] });
-// Wait for meshes to instantiate in scene if running rapidly
-setTimeout(() => {
-  sdk.performCSG(target.id, cutter.id, "SUBTRACTION");
-}, 100);` },
-        { name: "Deform Object", code: `// direction: 'outward'|'inward'|'both', strength: 0 to 1.
-const obj = sdk.createBox({ width: 4, height: 4, depth: 4 });
-sdk.deformObject(obj.id, { radius: 2, strength: 0.8, direction: 'outward' });` },
-        { name: "AI Generate", code: `// Open the AI Designer UI.
-sdk.generateModel("A row of 5 colorful beach huts on a sand platform.");` },
-        { name: "Contact Friction", code: `// Enable physical resistance when moving objects.
-sdk.setContactFriction(true);` }
-      ]
-    },
-    {
-      title: "Collaboration & Sync",
-      icon: <Users className="w-4 h-4" />,
-      items: [
-        { name: "Get Sync Status", code: `// Possible values: 'synced', 'syncing', 'error', 'offline'
-console.log("Status:", sdk.getSyncStatus());` },
-        { name: "List Collaborators", code: `// Get an array of active collaborators in this session
-const users = sdk.getCollaborators();
-console.log(\`Active users: \${users.length}\`);` }
-      ]
-    },
-    {
-      title: "Environment & Scene",
-      icon: <Sparkles className="w-4 h-4" />,
-      items: [
-        { name: "Save Scene", code: `// Saves current state. Name should be descriptive.
-sdk.saveScene("My Scene");` },
-        { name: "Set Skybox", code: `// intensity: 0 to 5, blur: 0 to 1, rotation: 0 to 360.
-sdk.setSkybox("golden-hour", { intensity: 1.5, blur: 0.1, rotation: 45 });` },
-        { name: "Set Fog", code: `// density: 0 to 0.1. High density obscures objects quickly.
-sdk.setFog({ enabled: true, density: 0.05, colors: ["#ffffff", "#888888"] });` },
-        { name: "Set Shadows", code: `// true/false. Enabling shadows impacts rendering performance.
-sdk.setShadows(true);` },
-        { name: "Set Grid", code: `// true/false. Helpful for spatial alignment.
-sdk.setGrid(true);` },
-        { name: "Set Floor", code: `// true/false. Provides a ground plane.
-sdk.setFloor(true, "#333333");` },
-        { name: "Set Ambient Occlusion", code: `// true/false. Adds soft shadows in corners/crevices.
-sdk.setAmbientOcclusion(true);` },
-        { name: "Set Sun Settings", code: `// intensity: 0 to 10, speed: 0 to 5.
-sdk.setSunSettings({ intensity: 2, animate: true, speed: 1 });` }
-      ]
-    },
-    {
-      title: "Lighting",
-      icon: <Zap className="w-4 h-4" />,
-      items: [
-        { name: "Add Custom Light", code: `// intensity: 0 to 20. Point lights emit in all directions.
-sdk.addLight({ type: 'point', color: '#ff0000', intensity: 2, position: [0, 5, 0] });` },
-        { name: "Add Projector (Texture)", code: `// Scale: 1-100. Intensity: 0-50.
-// Projectors default to 'texture' mode when a map URL is provided.
-sdk.addLight({
-  type: 'projector',
-  intensity: 10,
-  position: [0, 20, 0],
-  scale: 5,
-  rotateTexture: true,
-  textureRotationSpeed: 0.5,
-  map: 'https://images.unsplash.com/photo-1518005020251-58296b8646f1?q=80&w=2000'
-});` }
-      ]
-    },
-    {
-      title: "Styling & Metadata",
-      icon: <Palette className="w-4 h-4" />,
-      items: [
-        { name: "Apply Color", code: `// color: Hex string. Changes the base material color.
-const obj = sdk.getSelectedObject();
-if (obj && obj.id) sdk.applyColor(obj, "#FF0000");` },
-        { name: "Set Name", code: `// name: string. Used for identification in scripts and UI.
-const obj = sdk.getSelectedObject();
-if (obj) sdk.setName(obj, "My Custom Part");` },
-        { name: "Set Tag", code: `// key/value: strings. Used for metadata filtering and logic.
-const obj = sdk.getSelectedObject();
-if (obj && obj.id) sdk.setTag(obj, "Status", "In Progress");` }
-      ]
-    },
-    {
-      title: "Camera & Navigation",
-      icon: <ZoomIn className="w-4 h-4" />,
-      items: [
-        { name: "Set Zoom", code: `// Set camera zoom factor where 1.0 is standard.
-sdk.setZoom(1.5);` },
-        { name: "Reset View", code: `// Reset to default perspective or specific view ('plan', 'front', etc).
-sdk.resetView('perspective');` },
-        { name: "Focus Object", code: `// Orbit camera around target object.
-const obj = sdk.getSelectedObject();
-if (obj) sdk.focusObject(obj.id);` },
-        { name: "Set Camera Defaults", code: `// Set persistent starting position and target.
-sdk.setCameraDefaults([10, 10, 10], [0, 0, 0]);` }
-      ]
-    },
-    {
-      title: "Map & WorldView",
-      icon: <Globe size={18} className="text-blue-500" />,
-      items: [
-        { name: "Global Map Overlay", code: `// Lat, Lng, Zoom, Altitude, Radius.
-sdk.worldView.importMap({
-  lat: 51.154449,
-  lng: 0.841756,
-  zoom: 18,
-  altitude: -0.1,
-  radius: 500
-});` },
-        { name: "Update Location", code: `sdk.worldView.setLocation(51.5074, -0.1278);` },
-        { name: "Set Map Coverage", code: `// Set discovery radius in meters.
-sdk.worldView.setRadius(750);` },
-        { name: "Set Zoom", code: `sdk.worldView.setZoom(19);` }
-      ]
-    },
-    {
-      title: "Notes & Annotations",
-      icon: <FileText size={18} className="text-yellow-500" />,
-      items: [
-        { name: "Add Note", code: `// content: string, pos: [x,y,z].
-sdk.addNote("Base reinforcement required", [0, 2, 0]);` },
-        { name: "Set Note Visibility", code: `sdk.setNoteVisibility("note-id", false);` },
-        { name: "Toggle All Notes", code: `sdk.toggleAllNotes(false);` }
-      ]
-    },
-    {
-      title: "Visuals & Lighting",
-      icon: <Zap size={18} className="text-purple-500" />,
-      items: [
-        { name: "Rect Light", code: `// color, intensity, pos, scale.
-sdk.addRectLight("#0000FF", 5, [2, 5, 2], [5, 5]);` },
-        { name: "Animate Sun", code: `// Animate sun position over time.
-sdk.animateSun(30); // 30s cycle` },
-        { name: "Add Triangle", code: `sdk.addObject("triangle", { position: [0, 0, 0], args: [2, 2, 2] });` },
-        { name: "Toggle Floor", code: `sdk.toggleFloor(false);` },
-        { name: "Toggle Grid", code: `sdk.toggleGrid(false);` }
-      ]
-    },
-    {
-      title: "Diagnostics & Debugging",
-      icon: <Terminal className="w-4 h-4 text-orange-500" />,
-      items: [
-        { name: "Live Diagnostic Log", code: `// category: 'SDK'|'RENDER'|'ERROR', message: string, values?: object.
-// Log entries appear in the AI Diagnostic Log panel (Ctrl+Shift+L).
-sdk.diagLog("SDK", "Script execution started", { timestamp: Date.now() });` },
-        { name: "Log Texture State", code: `// Log custom telemetry to track async asset loading.
-sdk.diagLog("TEXTURE", "Starting manual texture preload", { url: "..." });` }
-      ]
-    },
-    {
-      title: "Embedded Browser",
-      icon: <Globe size={18} className="text-teal-500" />,
-      items: [
-        { 
-          name: "Open Asset Library", 
-          code: `// Opens the example interactive asset library.
-sdk.openWebpage("/example-assets.html");` 
+        {
+          name: "Create Roof (Spanish 3D Tiles)",
+          code: `// Supported profiles: 'none', 'roman', 'mission', 'spanish', 'flat', 'slate', 'shingle', 'barrel', 'scallop', 'interlocking', 'standing-seam'
+// Supported roof types: 'gable', 'hip', 'mansard', 'shed', 'flat', 'dutch-hip', 'gambrel', 'butterfly', 'saltbox', 'parapet'
+sdk.architecture.createRoof({
+  roofType: "gable",
+  width: 8,
+  depth: 12,
+  pitchAngleDeg: 30,       // or ridgeHeight: 2.5
+  eaveOverhang: 0.40,
+  fasciaHeight: 0.18,
+  tileShape: "spanish",
+  tileSize: 0.85,
+  tileColor: "#c2410c",
+  randomizeColor: true,
+  colorPalette: ["#c2410c", "#9a3412", "#ea580c"],
+  position: [0, 3.2, 0]
+});`
         },
         {
-          name: "Web-to-SDK Communication",
-          code: `// Instructions for hosted pages:
-// Access the SDK from within your hosted iframe using 'parent.sdk'.
-// Example JS on your page:
-// parent.sdk.addObject('box', { color: '#ff0000' });`
+          name: "Create Hip Roof (No Tile for Performance)",
+          code: `// Uses 'none' tile shape profile for optimal rendering speed
+sdk.architecture.createRoof({
+  roofType: "hip",
+  width: 10,
+  depth: 10,
+  pitchAngleDeg: 25,
+  eaveOverhang: 0.50,
+  tileShape: "none",
+  tileColor: "#475569",
+  position: [0, 3, 0]
+});`
+        },
+        {
+          name: "Update Existing Roof",
+          code: `// Modify roof pitch, fascia, or tile profile at runtime
+const roofs = sdk.architecture.listRoofs();
+if (roofs.length > 0) {
+  sdk.architecture.updateRoof(roofs[0].id, {
+    pitchAngleDeg: 35,
+    tileShape: "barrel",
+    eaveOverhang: 0.60
+  });
+}`
+        },
+        {
+          name: "List Scene Roofs",
+          code: `// Retrieve all architectural roof assemblies
+const roofs = sdk.architecture.listRoofs();
+console.log(\`Found \${roofs.length} roofs in scene.\`);`
         }
       ]
     },
     {
-      title: "Advanced Scripting (scene.*)",
-      icon: <FileCode size={18} className="text-indigo-500" />,
+      title: "Architecture: Rooms, Walls & Openings",
+      icon: <Building className="w-4 h-4 text-blue-500" />,
       items: [
-        { 
-          name: "Import SketchUp (.skp)", 
-          code: `// Programmatically import a bridge file.
-// In a real script, 'file' would be a Blob or URL.
-scene.importSKP("path/to/model.skp");` 
+        {
+          name: "Create Room Envelope",
+          code: `// Generates 4 mitered walls, floor slab, and ceiling in 1 call
+sdk.architecture.createRoom({
+  width: 8,
+  length: 10,
+  height: 3.2,
+  wallThickness: 0.25,
+  wallColor: "#f8fafc",
+  floorColor: "#334155",
+  ceilingColor: "#ffffff",
+  position: [0, 0, 0]
+});`
         },
-        { 
-          name: "Custom Mesh Creation", 
-          code: `// Create complex geometry from raw arrays.
-const vertices = new Float32Array([0,0,0, 1,0,0, 0,1,0]);
-const indices = new Uint32Array([0,1,2]);
-scene.addCustomMesh(vertices, indices, "GeneratedPart");` 
+        {
+          name: "Create Single Wall",
+          code: `// Place parametric wall by length or between coordinates
+sdk.architecture.createWall({
+  start: [0, 0, 0],
+  end: [6, 0, 0],
+  height: 3.0,
+  thickness: 0.20,
+  color: "#e2e8f0"
+});`
         },
-        { 
-          name: "Scene Traversal", 
-          code: `// Iterate over all objects and update metadata.
-const objects = scene.getObjects();
-objects.forEach(obj => scene.log(\`Found \${obj.type} at \${obj.position}\`));` 
+        {
+          name: "Create Door / Window Opening",
+          code: `// Place architectural door or window opening
+sdk.architecture.createDoor({
+  width: 0.95,
+  height: 2.10,
+  depth: 0.15,
+  position: [2, 1.05, 0]
+});
+sdk.architecture.createWindow({
+  width: 1.50,
+  height: 1.20,
+  depth: 0.15,
+  position: [4, 1.60, 0]
+});`
         },
-        { 
-          name: "Async Delay", 
-          code: `// Precise timing for sequential operations.
-scene.log("Step 1");
-await scene.wait(1000);
-scene.log("Step 2 (1s later)");` 
+        {
+          name: "Set Wall Transparency",
+          code: `// Control overall, exterior, and interior wall transparency (0 to 1)
+sdk.architecture.setWallTransparency({
+  overall: 0.2,
+  exterior: 0.1,
+  interior: 0.3
+});`
+        }
+      ]
+    },
+    {
+      title: "Architecture: Parametric Stairs & Railings",
+      icon: <ArrowUpFromLine className="w-4 h-4 text-green-500" />,
+      items: [
+        {
+          name: "Straight Floating Staircase",
+          code: `// Styles: 'straight', 'l-shape', 'u-shape', 'spiral', 'curved', 'winder'
+// Structures: 'closed', 'open', 'floating', 'mono-stringer'
+sdk.architecture.createStairs({
+  style: "straight",
+  width: 1.2,
+  height: 3.0,
+  length: 4.2,
+  structure: "floating",
+  railing: "both",
+  isParametric: true,
+  idealStepHeight: 0.175,
+  handrailHeight: 0.95,
+  color: "#cbd5e1"
+});`
+        },
+        {
+          name: "L-Shape Staircase with Landing",
+          code: `sdk.architecture.createStairs({
+  style: "l-shape",
+  width: 1.0,
+  height: 3.2,
+  length: 3.8,
+  structure: "closed",
+  railing: "right",
+  position: [0, 0, 0]
+});`
+        },
+        {
+          name: "Spiral Staircase",
+          code: `sdk.architecture.createStairs({
+  style: "spiral",
+  width: 1.1,
+  height: 3.4,
+  structure: "mono-stringer",
+  railing: "both",
+  position: [0, 0, 0]
+});`
+        },
+        {
+          name: "Create Architectural Railing",
+          code: `// Add standalone railing / balustrade
+sdk.architecture.createRailing({
+  start: [0, 3.0, 0],
+  end: [5, 3.0, 0],
+  height: 1.0,
+  style: "glass-metal",
+  color: "#94a3b8"
+});`
+        }
+      ]
+    },
+    {
+      title: "Architecture: Structural Timber Framing",
+      icon: <Hammer className="w-4 h-4 text-amber-500" />,
+      items: [
+        {
+          name: "Generate Timber Framing",
+          code: `// Auto-calculates studs, top/sole plates, rafters, and ridge beams
+const members = sdk.architecture.generateTimberFraming({
+  spacing: 0.60,             // 0.40m (16in) or 0.60m (24in) centers
+  rafterWidth: 0.045,        // 45mm timber
+  rafterDepth: 0.145,        // 145mm timber
+  species: "douglas-fir",    // 'douglas-fir', 'pine', 'oak', 'cedar'
+  color: "#b45309"
+});
+console.log(\`Framing member count: \${members.length}\`);`
+        },
+        {
+          name: "Clear Timber Framing",
+          code: `// Removes all generated timber framing elements
+sdk.architecture.clearTimberFraming();
+console.log("Timber framing cleared.");`
+        }
+      ]
+    },
+    {
+      title: "Landscaping, Plants & Site Planning",
+      icon: <Trees className="w-4 h-4 text-emerald-500" />,
+      items: [
+        {
+          name: "Place Botanical Plant / Tree",
+          code: `// Species: 'english_oak', 'mediterranean_cypress', 'scots_pine', 'japanese_maple', 'boxwood_shrub', 'hydrangea_bush', 'ribbon_grass'
+sdk.landscape.addPlant("english_oak", {
+  position: [-4, 0, -3],
+  scale: 1.25,
+  rotation: Math.PI / 6
+});`
+        },
+        {
+          name: "Place Site Furniture & Fixtures",
+          code: `// Types: 'bench', 'lamp', 'fence', 'rock', 'planter'
+sdk.landscape.addSiteFurniture("bench", { position: [0, 0, 3] });
+sdk.landscape.addSiteFurniture("lamp", { position: [3, 0, 3] });`
+        },
+        {
+          name: "Apply Terrain Surface Texture",
+          code: `// Textures: 'grass', 'gravel', 'paving', 'mulch', 'flagstone'
+sdk.landscape.applyTerrainTexture("grass");`
+        },
+        {
+          name: "List Plant Catalog Species",
+          code: `// Inspect all available species in catalog
+const catalog = sdk.landscape.listPlantCatalog();
+console.log("Available plants:", catalog.map(p => p.commonName).join(", "));`
+        }
+      ]
+    },
+    {
+      title: "Materials, PBR & Edge Lines",
+      icon: <Palette className="w-4 h-4 text-pink-500" />,
+      items: [
+        {
+          name: "Apply Architectural Material Preset",
+          code: `// Presets: 'red-brick', 'coursed-stone', 'polished-concrete', 'stucco-white', 'vertical-timber', 'architectural-glass', 'slate-tile'
+const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.materials.applyMaterial(obj.id, "red-brick", {
+    roughness: 0.8,
+    metalness: 0.0,
+    uvScale: [2, 2]
+  });
+}`
+        },
+        {
+          name: "Configure Architectural Edge Lines",
+          code: `// Crisp outlines highlight model contours and massing
+sdk.materials.setEdgeLines({
+  enabled: true,
+  color: "#0f172a",
+  thickness: 1.5,
+  opacity: 0.95
+});`
+        },
+        {
+          name: "List Material Presets",
+          code: `const presets = sdk.materials.listPresets();
+console.log("Available Presets:", presets.join(", "));`
+        }
+      ]
+    },
+    {
+      title: "Measurement, Snapping & Units",
+      icon: <Ruler className="w-4 h-4 text-cyan-500" />,
+      items: [
+        {
+          name: "Add 3D Dimension Annotation",
+          code: `// Anchor 3D measurement line between points with text
+sdk.measurement.addDimension([0, 0, 0], [8, 0, 0], "Width: 8.00m");`
+        },
+        {
+          name: "Measure Vector Distance & Slope",
+          code: `// Computes true distance, horizontal run, vertical rise, and pitch angle
+const res = sdk.measurement.measureDistance([0, 0, 0], [0, 3.2, 4.0]);
+console.log("Distance:", res.formatted);
+console.log("Pitch Angle:", res.pitchDeg.toFixed(1) + "°");`
+        },
+        {
+          name: "Set Active Unit",
+          code: `// Supported: 'm', 'ft', 'in', 'mm'
+sdk.measurement.setUnit("m");
+console.log("Active unit is now:", sdk.measurement.getUnit());`
+        }
+      ]
+    },
+    {
+      title: "Selection, Grouping & Transform",
+      icon: <MousePointer2 className="w-4 h-4 text-purple-500" />,
+      items: [
+        {
+          name: "Select / Deselect Objects",
+          code: `// Select single or multiple IDs
+sdk.selection.select(["id-1", "id-2"]);
+// Or clear selection:
+// sdk.selection.deselectAll();`
+        },
+        {
+          name: "Group & Ungroup",
+          code: `const selected = sdk.selection.getSelected();
+if (selected.length > 1) {
+  const group = sdk.selection.group(selected.map(s => s.id), "Facade Bay");
+  console.log("Created group:", group.id);
+}`
+        },
+        {
+          name: "Duplicate Object with Offset",
+          code: `const obj = sdk.getSelectedObject();
+if (obj) {
+  const copy = sdk.selection.duplicateObject(obj.id, [2.5, 0, 0]);
+  console.log("Duplicated object:", copy.id);
+}`
+        },
+        {
+          name: "Align Objects Along Axis",
+          code: `// Axis: 'x'|'y'|'z', Alignment: 'min'|'center'|'max'
+const ids = sdk.selection.getSelected().map(s => s.id);
+if (ids.length > 1) {
+  sdk.selection.alignObjects(ids, "z", "center");
+}`
+        },
+        {
+          name: "Hide, Isolate & Unhide",
+          code: `const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.selection.isolateObject(obj.id); // Hides all other objects
+  // sdk.selection.unhideAll();       // Restores visibility
+}`
+        },
+        {
+          name: "Transform Object",
+          code: `const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.selection.transformObject(obj.id, {
+    position: [0, 2, 0],
+    rotation: [0, Math.PI / 4, 0],
+    scale: [1.2, 1.2, 1.2]
+  });
+}`
+        }
+      ]
+    },
+    {
+      title: "Direct Modeling & 3D Primitives",
+      icon: <BoxIcon className="w-4 h-4 text-amber-500" />,
+      items: [
+        {
+          name: "Create Box / Cube",
+          code: `sdk.createBox({ width: 4, height: 3, depth: 4, position: [0, 1.5, 0] });`
+        },
+        {
+          name: "Create Cylinder / Sphere / Cone",
+          code: `sdk.createSphere({ radius: 1.5, position: [3, 1.5, 0] });
+sdk.createCone({ radius: 1.2, height: 2.5, position: [-3, 1.25, 0] });`
+        },
+        {
+          name: "Push-Pull Face Extrusion",
+          code: `const rect = sdk.createRectangle({ width: 3, height: 3 });
+sdk.pushPull(rect, 2.5); // Extrudes 2D shape into 3D volume`
+        },
+        {
+          name: "Divide Surface / Paneling",
+          code: `const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.divideSurface(obj.id, 0, [4, 4]); // 4x4 panel grid
+}`
+        },
+        {
+          name: "Set Edge Bevel & Chamfer",
+          code: `const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.setBevel(obj, { amount: 0.15, type: "radius", segments: 8 });
+}`
+        }
+      ]
+    },
+    {
+      title: "Boolean Solid Modeling (CSG)",
+      icon: <Scissors className="w-4 h-4 text-red-500" />,
+      items: [
+        {
+          name: "CSG Subtraction (Carve Reveal)",
+          code: `const wall = sdk.createBox({ width: 4, height: 3, depth: 0.3 });
+const cut = sdk.createBox({ width: 1.2, height: 2.1, depth: 0.5 });
+setTimeout(() => {
+  sdk.performCSG(wall.id, cut.id, "SUBTRACTION");
+}, 100);`
+        },
+        {
+          name: "CSG Union & Intersection",
+          code: `// Operations: 'UNION', 'SUBTRACTION', 'INTERSECTION'
+const partA = sdk.createBox({ width: 2, height: 2, depth: 2 });
+const partB = sdk.createSphere({ radius: 1.2, position: [0.5, 0.5, 0.5] });
+setTimeout(() => {
+  sdk.performCSG(partA.id, partB.id, "UNION");
+}, 100);`
+        }
+      ]
+    },
+    {
+      title: "Camera, Section Clipping & Views",
+      icon: <ZoomIn className="w-4 h-4 text-indigo-500" />,
+      items: [
+        {
+          name: "Switch Projection (Perspective vs Ortho)",
+          code: `// Mode: 'perspective' | 'orthographic'
+sdk.camera.setProjection("orthographic");`
+        },
+        {
+          name: "Set Standard Architectural View",
+          code: `// Views: 'plan', 'front', 'rear', 'left', 'right', 'perspective'
+sdk.camera.resetView("plan"); // Top-down architectural plan`
+        },
+        {
+          name: "Set Section Depth Clipping",
+          code: `// Cut section planes across the building
+sdk.camera.setDepthClipping(true, 5.0, 50.0);`
+        },
+        {
+          name: "Start Cinematic Auto-Orbit",
+          code: `// Rotates camera smoothly around orbit target
+sdk.camera.setAutoOrbit(true, 1.2);`
+        },
+        {
+          name: "Focus on Object",
+          code: `const obj = sdk.getSelectedObject();
+if (obj) sdk.camera.focusObject(obj.id);`
+        }
+      ]
+    },
+    {
+      title: "Environment, Sun & Lighting",
+      icon: <Sparkles className="w-4 h-4 text-yellow-500" />,
+      items: [
+        {
+          name: "Set Skybox Environment",
+          code: `// Presets: 'golden-hour', 'studio', 'cloudy', 'sunset', 'night'
+sdk.setSkybox("golden-hour", { intensity: 1.5, blur: 0.1, rotation: 45 });`
+        },
+        {
+          name: "Configure Atmospheric Fog",
+          code: `sdk.setFog({ enabled: true, density: 0.02, colors: ["#ffffff", "#94a3b8"] });`
+        },
+        {
+          name: "Add Custom Spot / Point / Rect Light",
+          code: `sdk.addLight({
+  type: "point",
+  color: "#ffedd5",
+  intensity: 3,
+  position: [0, 4, 0]
+});`
+        },
+        {
+          name: "Animate Solar Study",
+          code: `// Animate sun position across 30 seconds
+sdk.animateSun(30);`
+        }
+      ]
+    },
+    {
+      title: "AI Architectural Copilot",
+      icon: <Sparkles className="w-4 h-4 text-violet-500" />,
+      items: [
+        {
+          name: "Generative Massing Model",
+          code: `sdk.ai.generateModel("A minimalist Scandinavian timber lakehouse with cantilevered terrace");`
+        },
+        {
+          name: "Open AI Architectural Renderer",
+          code: `sdk.ai.openRenderer("Warm dusk light, photorealistic architectural photography");`
+        },
+        {
+          name: "Ask Architectural Assistant",
+          code: `sdk.ai.askAssistant("Suggest structural bay spacing for mass timber construction.");`
+        }
+      ]
+    },
+    {
+      title: "WorldView & Geolocation",
+      icon: <Globe className="w-4 h-4 text-blue-500" />,
+      items: [
+        {
+          name: "Import Real-World Map Overlay",
+          code: `sdk.worldView.importMap({
+  lat: 51.5074,
+  lng: -0.1278,
+  zoom: 18,
+  altitude: -0.05,
+  radius: 500
+});`
+        },
+        {
+          name: "Update Coordinates & Radius",
+          code: `sdk.worldView.setLocation(40.7128, -74.0060);
+sdk.worldView.setRadius(750);`
+        }
+      ]
+    },
+    {
+      title: "Scene Management, Diagnostics & Export",
+      icon: <Terminal className="w-4 h-4 text-teal-500" />,
+      items: [
+        {
+          name: "Export Full Scene JSON",
+          code: `const json = sdk.scene.exportJSON();
+console.log("Exported JSON string length:", json.length);`
+        },
+        {
+          name: "Query Geometry Statistics",
+          code: `const stats = sdk.scene.getStats();
+console.log("Stats:", stats);`
+        },
+        {
+          name: "Undo & Redo Action",
+          code: `sdk.scene.undo();
+// sdk.scene.redo();`
+        },
+        {
+          name: "Record Diagnostic Telemetry",
+          code: `sdk.diagLog("SDK", "Script executed successfully", { timestamp: Date.now() });`
         }
       ]
     }
@@ -1146,32 +2022,34 @@ scene.log("Step 2 (1s later)");`
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">Full API Documentation</h2>
-          <p className="text-sm text-gray-500">Comprehensive reference for all SDK capabilities.</p>
+          <p className="text-sm text-gray-500">Comprehensive reference guide for all DraftUp Developer SDK functions, options, and subsystems.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-6">
           {categories.map((cat, i) => (
             <section key={i} className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-              <h3 className="text-md font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-white border-b pb-2">
+              <h3 className="text-md font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-3">
                 {cat.icon}
                 {cat.title}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {cat.items.map((item, j) => (
-                  <div key={j} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{item.name}</span>
-                      <button 
-                        onClick={() => {
-                          setDeveloperCode(item.code);
-                          setActiveDeveloperTab('console');
-                        }}
-                        className="text-[9px] font-bold text-trimble-blue hover:underline uppercase"
-                      >
-                        Try Now
-                      </button>
+                  <div key={j} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{item.name}</span>
+                        <button 
+                          onClick={() => {
+                            setDeveloperCode(item.code);
+                            setActiveDeveloperTab('console');
+                          }}
+                          className="text-[9px] font-bold text-trimble-blue hover:underline uppercase shrink-0 ml-2"
+                        >
+                          Try Now
+                        </button>
+                      </div>
                     </div>
-                    <pre className="p-2 bg-gray-900 text-gray-400 rounded text-[9px] font-mono overflow-x-auto">
+                    <pre className="p-2.5 bg-gray-900 text-gray-300 rounded text-[9.5px] font-mono overflow-x-auto max-h-40 leading-relaxed">
                       {item.code}
                     </pre>
                   </div>
@@ -1181,33 +2059,25 @@ scene.log("Step 2 (1s later)");`
           ))}
         </div>
 
-        {/* Deprecated Examples */}
+        {/* Deprecated Notice */}
         <div className="mt-12 opacity-60">
-          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
             <AlertCircle className="w-4 h-4" />
             Deprecated Examples
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="p-3 bg-gray-200 dark:bg-gray-800/30 rounded-xl border border-gray-300 dark:border-gray-800">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-gray-500 line-through">Legacy Projector Spin</span>
-              </div>
-              <p className="text-[9px] text-gray-400 mb-2 italic">Reason: Rotating texture matrix does not affect shadow-mapped projections. Use up-vector roll instead.</p>
+            <div className="p-3 bg-gray-200 dark:bg-gray-800/30 rounded-xl border border-gray-300 dark:border-gray-800">
+              <span className="text-[10px] font-bold text-gray-500 line-through">Legacy Projector Spin</span>
+              <p className="text-[9px] text-gray-400 my-1 italic">Reason: Rotating texture matrix does not affect shadow-mapped projections. Use up-vector roll instead.</p>
               <pre className="p-2 bg-gray-900 text-gray-600 rounded text-[9px] font-mono overflow-x-auto">
-                {`// Deprecated (has no visual effect)
-texture.rotation += delta * speed;
-texture.updateMatrix();`}
+                {`texture.rotation += delta * speed;\ntexture.updateMatrix();`}
               </pre>
             </div>
-             <div className="p-3 bg-gray-200 dark:bg-gray-800/30 rounded-xl border border-gray-300 dark:border-gray-800">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-gray-500 line-through">Legacy Note Prompt</span>
-              </div>
-              <p className="text-[9px] text-gray-400 mb-2 italic">Reason: Prompt dialogs are blocked in iframe. Use sdk.addNote instead.</p>
+            <div className="p-3 bg-gray-200 dark:bg-gray-800/30 rounded-xl border border-gray-300 dark:border-gray-800">
+              <span className="text-[10px] font-bold text-gray-500 line-through">Legacy Browser Prompt</span>
+              <p className="text-[9px] text-gray-400 my-1 italic">Reason: Prompt dialogs are blocked in iframe. Use sdk.addNote instead.</p>
               <pre className="p-2 bg-gray-900 text-gray-600 rounded text-[9px] font-mono overflow-x-auto">
-                {`// Old way (now removed)
-const text = prompt("Enter note");
-sdk.addNote(text, [0,0,0]);`}
+                {`const text = prompt("Enter note");\nsdk.addNote(text, [0,0,0]);`}
               </pre>
             </div>
           </div>

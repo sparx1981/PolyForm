@@ -1,8 +1,12 @@
 import React, { ErrorInfo, ReactNode } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 interface Props {
   children?: ReactNode;
   fallback?: ReactNode;
+  name?: string;
+  onReset?: () => void;
+  compact?: boolean;
 }
 
 interface State {
@@ -20,23 +24,40 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[ERROR] Uncaught error in component tree:", error, errorInfo);
+    console.error(`[ERROR] Uncaught error in ${this.props.name || 'component tree'}:`, error, errorInfo);
   }
+
+  public handleReset = () => {
+    this.props.onReset?.();
+    this.setState({ hasError: false, error: undefined });
+  };
 
   public render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl m-4">
-          <div className="flex items-center gap-3 mb-2 text-red-600 dark:text-red-400">
-            <span className="font-bold text-sm">Component Failure</span>
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      const isCompact = this.props.compact;
+
+      return (
+        <div className={`border border-red-200 dark:border-red-900/50 bg-red-50/90 dark:bg-red-950/30 rounded-xl text-red-700 dark:text-red-300 ${
+          isCompact ? 'p-3 m-1' : 'p-4 m-2'
+        }`}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <AlertTriangle size={isCompact ? 14 : 16} className="text-red-500 shrink-0" />
+            <span className="font-semibold text-xs tracking-tight">
+              {this.props.name ? `${this.props.name} Encountered an Issue` : 'Component Failure'}
+            </span>
           </div>
-          <p className="text-xs text-red-600/70 dark:text-red-400/70 overflow-hidden text-ellipsis">
-            {this.state.error?.message}
+          <p className="text-[11px] text-red-600/80 dark:text-red-400/80 line-clamp-2 leading-relaxed mb-2 font-mono">
+            {this.state.error?.message || 'An unexpected runtime error occurred.'}
           </p>
           <button 
-            onClick={() => this.setState({ hasError: false })}
-            className="mt-3 text-[10px] font-bold text-red-600 hover:underline"
+            onClick={this.handleReset}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-medium bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-200 rounded-md transition-colors cursor-pointer"
           >
+            <RefreshCw size={10} />
             Attempt Recovery
           </button>
         </div>

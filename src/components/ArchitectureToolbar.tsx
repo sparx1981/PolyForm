@@ -13,7 +13,8 @@ import {
   Plus,
   Home,
   Check,
-  Globe
+  Globe,
+  Hammer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
@@ -108,6 +109,11 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
 
   const [showWallOptions, setShowWallOptions] = useState(false);
   const [showRoofOptions, setShowRoofOptions] = useState(false);
+
+  // Unified modifier panel opening handler
+  const handleOpenModifierPanel = (toolId: ToolType) => {
+    setActiveTool(toolId);
+  };
 
   if (!isArchitectureToolbarEnabled) return null;
 
@@ -216,11 +222,14 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
       <div className="relative">
         <button
           id="arch-roof-menu-btn"
-          onClick={() => setShowRoofOptions(!showRoofOptions)}
+          onClick={() => {
+            handleOpenModifierPanel('roof');
+            setShowRoofOptions(!showRoofOptions);
+          }}
           title="Parametric Roof Generator (Gable / Hip / Parapet)"
           className={cn(
             "toolbar-btn relative flex items-center justify-center transition-all",
-            showRoofOptions && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+            (showRoofOptions || activeTool === 'roof') && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
             theme === 'dark' ? "hover:bg-gray-700 text-sky-400 hover:text-sky-300" : "hover:bg-gray-100 text-trimble-blue hover:text-trimble-blue"
           )}
         >
@@ -256,8 +265,39 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
               <span>Parapet Roof (Flat / Coping)</span>
               <span className="text-[10px] text-gray-400 font-mono">0°</span>
             </button>
+            <div className="pt-1 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  handleOpenModifierPanel('timber-frame');
+                  setShowRoofOptions(false);
+                }}
+                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 transition-colors flex items-center justify-between"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Hammer size={12} />
+                  <span>Timber Frame</span>
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Engine</span>
+              </button>
+            </div>
           </div>
         )}
+      </div>
+
+      {/* Reactive Timber Frame Engine */}
+      <div className="relative">
+        <button
+          id="arch-timber-frame-btn"
+          onClick={() => handleOpenModifierPanel('timber-frame')}
+          title="Reactive Timber Frame Engine (Studs, Plates, Headers, Joists & Rafters)"
+          className={cn(
+            "toolbar-btn relative flex items-center justify-center transition-all",
+            activeTool === 'timber-frame' && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+            theme === 'dark' ? "hover:bg-gray-700 text-amber-400 hover:text-amber-300" : "hover:bg-gray-100 text-amber-600 hover:text-amber-700"
+          )}
+        >
+          <Hammer size={18} />
+        </button>
       </div>
 
       <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />

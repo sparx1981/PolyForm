@@ -57,6 +57,7 @@ import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
 import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl } from '../types';
 import { getLandscapeCanvas, LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
+import { getRoofTileCanvas } from '../lib/roofTileGenerator';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers, Lasso, SquareDashed } from 'lucide-react';
@@ -90,6 +91,7 @@ import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
 import { applyStairwellHolesToSlabs, computeHolesForSlab } from '../lib/archStairwell';
 import { updateTimberFramesIfPresent } from '../lib/timberFrameGenerator';
+import { InstancedTimberFraming } from './InstancedTimberFraming';
 import { BezierTool } from '../tools/bezier/BezierTool';
 import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
 import { tessellateEntireCurve, tessellateBezierSpan } from '../tools/bezier/tessellate';
@@ -152,7 +154,7 @@ function getCachedTexture(url: string): THREE.Texture {
   }
 
   // 1. Direct canvas lookup for landscape presets or generated canvases
-  const knownCanvas = getLandscapeCanvas(url);
+  const knownCanvas = getLandscapeCanvas(url) || getRoofTileCanvas(url);
   if (knownCanvas) {
     const canvasTex = new THREE.CanvasTexture(knownCanvas);
     canvasTex.wrapS = THREE.RepeatWrapping;
@@ -1336,7 +1338,14 @@ function Scene() {
     wallJustification,
     setWallJustification,
     activeStory,
-    setActiveStory
+    setActiveStory,
+    commitUpdatedFraming,
+    cameraDepthClippingEnabled,
+    cameraNear,
+    cameraFar,
+    wallTransparency,
+    exteriorWallTransparency,
+    interiorWallTransparency
   } = useApp();
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
@@ -4590,7 +4599,26 @@ function Scene() {
           const localHit = hitPoint.clone().sub(wallPos).applyQuaternion(invQuat);
 
           const maxLocalX = Math.max(0, wallLen / 2 - width / 2);
-          const localX = Math.max(-maxLocalX, Math.min(maxLocalX, localHit.x));
+          const snapTolerance = Math.min(0.25, wallLen * 0.12);
+          const inferenceTargets = [
+            { ratio: 0.25, localX: -wallLen * 0.25, label: 'Wall 25% Point (1/4 Width)' },
+            { ratio: 0.50, localX: 0, label: 'Wall Mid-point (50% Width)' },
+            { ratio: 0.75, localX: wallLen * 0.25, label: 'Wall 75% Point (3/4 Width)' },
+          ];
+
+          let matchedTarget: { ratio: number; localX: number; label: string } | null = null;
+          let bestDist = Infinity;
+          for (const target of inferenceTargets) {
+            if (Math.abs(target.localX) <= maxLocalX) {
+              const dist = Math.abs(localHit.x - target.localX);
+              if (dist <= snapTolerance && dist < bestDist) {
+                bestDist = dist;
+                matchedTarget = target;
+              }
+            }
+          }
+
+          const localX = matchedTarget ? matchedTarget.localX : Math.max(-maxLocalX, Math.min(maxLocalX, localHit.x));
           const localY = activeTool === 'door'
             ? (-wallH / 2 + height / 2)
             : (-wallH / 2 + 0.9 + height / 2);
@@ -4622,15 +4650,25 @@ function Scene() {
           hostWallId: targetWall ? targetWall.id : (targetRoof ? targetRoof.id : undefined)
         };
 
-        addShape(newDoorWindowShape);
-        commitHistory();
+        const hasExistingFraming = shapes.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+        const targetHostId = targetWall ? targetWall.id : (targetRoof ? targetRoof.id : undefined);
+        const hostHasFraming = targetHostId ? shapes.some(s => s.parentWallOrRoofId === targetHostId || s.id.includes(`tf-wall-${targetHostId}`) || s.id.includes(`tf-roof-${targetHostId}`)) : false;
+
+        if (hasExistingFraming || hostHasFraming) {
+          commitUpdatedFraming([...shapes, newDoorWindowShape]);
+          commitHistory();
+        } else {
+          addShape(newDoorWindowShape);
+          commitHistory();
+        }
         setSelectedId(newDoorWindowShape.id);
         setSelectedIds([newDoorWindowShape.id]);
         setPreviewShape(null);
-        setActiveTool('select');
+        setSnapIndicator(null);
+        // Persist active tool across consecutive placements (matches Wall tool continuous behavior)
         setMeasurements(windowStyle === 'velux-roof' 
-          ? 'Velux Roof Skylight placed on roof pitch. Use Move tool to reposition.'
-          : `${activeTool === 'door' ? 'Door' : 'Window'} placed & wall opening cut. Use Move tool to reposition.`);
+          ? 'Velux Roof Skylight placed on roof pitch & updated framing committed. Click to place another, or switch tool.'
+          : `${activeTool === 'door' ? 'Door' : 'Window'} placed & wall opening cut (updated timber framing committed). Click to place another, or switch tool.`);
         recordAction(`sdk.addShape(${JSON.stringify(newDoorWindowShape)});`);
       }
       return;
@@ -5357,6 +5395,7 @@ function Scene() {
       }
 
       if (targetRoof && hitPoint && roofQuat && roofFaceNorm) {
+        setSnapIndicator(null);
         const width = 1.2;
         const height = 1.2;
         const depth = 0.2;
@@ -5389,7 +5428,26 @@ function Scene() {
         const depth = wallT;
 
         const maxLocalX = Math.max(0, wallLen / 2 - width / 2);
-        const localX = Math.max(-maxLocalX, Math.min(maxLocalX, localHit.x));
+        const snapTolerance = Math.min(0.25, wallLen * 0.12);
+        const inferenceTargets = [
+          { ratio: 0.25, localX: -wallLen * 0.25, label: 'Wall 25% Point (1/4 Width)' },
+          { ratio: 0.50, localX: 0, label: 'Wall Mid-point (50% Width)' },
+          { ratio: 0.75, localX: wallLen * 0.25, label: 'Wall 75% Point (3/4 Width)' },
+        ];
+
+        let matchedTarget: { ratio: number; localX: number; label: string } | null = null;
+        let bestDist = Infinity;
+        for (const target of inferenceTargets) {
+          if (Math.abs(target.localX) <= maxLocalX) {
+            const dist = Math.abs(localHit.x - target.localX);
+            if (dist <= snapTolerance && dist < bestDist) {
+              bestDist = dist;
+              matchedTarget = target;
+            }
+          }
+        }
+
+        const localX = matchedTarget ? matchedTarget.localX : Math.max(-maxLocalX, Math.min(maxLocalX, localHit.x));
         const localY = activeTool === 'door'
           ? (-wallH / 2 + height / 2)
           : (-wallH / 2 + 0.9 + height / 2);
@@ -5406,12 +5464,30 @@ function Scene() {
           hostWallId: targetWall.id
         } as any);
 
-        setMeasurements(
-          activeTool === 'door'
-            ? `Door: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} on Wall (Click to insert & cut opening)`
-            : `Window: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} (Sill ${formatValue(0.9, unit, 2)}) on Wall (Click to insert & cut opening)`
-        );
+        if (matchedTarget) {
+          const snapWorldPos = new THREE.Vector3(matchedTarget.localX, localY, 0)
+            .applyQuaternion(wallQuat)
+            .add(wallPos);
+          setSnapIndicator({
+            point: [snapWorldPos.x, snapWorldPos.y, snapWorldPos.z],
+            type: 'midpoint',
+            tooltip: `Inference Lock: ${matchedTarget.label}`
+          });
+          setMeasurements(
+            activeTool === 'door'
+              ? `Door: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} — Locked to ${matchedTarget.label} (Click to insert & cut opening)`
+              : `Window: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} — Locked to ${matchedTarget.label} (Click to insert & cut opening)`
+          );
+        } else {
+          setSnapIndicator(null);
+          setMeasurements(
+            activeTool === 'door'
+              ? `Door: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} on Wall (Click to insert & cut opening)`
+              : `Window: ${formatValue(width, unit, 2)} × ${formatValue(height, unit, 2)} (Sill ${formatValue(0.9, unit, 2)}) on Wall (Click to insert & cut opening)`
+          );
+        }
       } else if (hitPoint) {
+        setSnapIndicator(null);
         const width = activeTool === 'door' ? 0.9 : 1.2;
         const height = activeTool === 'door' ? 2.1 : 1.2;
         const depth = 0.15;
@@ -7842,14 +7918,25 @@ function Scene() {
 
   const selectedLight = customLights.find(l => l.id === selectedLightId);
 
+  const effectiveCameraNear = cameraDepthClippingEnabled ? Math.max(0.01, cameraNear) : 0.1;
+  const effectiveCameraFar = cameraDepthClippingEnabled ? Math.max(effectiveCameraNear + 0.1, cameraFar) : 5000;
+
+  useEffect(() => {
+    if (camera && (camera as any).isPerspectiveCamera) {
+      camera.near = effectiveCameraNear;
+      camera.far = effectiveCameraFar;
+      camera.updateProjectionMatrix();
+    }
+  }, [camera, effectiveCameraNear, effectiveCameraFar]);
+
   return (
     <>
 
       <PerspectiveCamera 
         makeDefault 
         position={defaultCameraPosition} 
-        near={0.1} 
-        far={5000} 
+        near={effectiveCameraNear} 
+        far={effectiveCameraFar} 
       />
       <OrbitControls 
         makeDefault 
@@ -8276,8 +8363,25 @@ function Scene() {
         />
       )}
 
+      {/* Instanced Timber Framing for performant GPU rendering */}
+      <InstancedTimberFraming
+        shapes={shapes}
+        tags={tags}
+        selectedId={selectedId}
+        selectedIds={selectedIds}
+        onSelectShape={(id) => {
+          setSelectedId(id);
+          setSelectedIds([id]);
+        }}
+        shadowsEnabled={shadowsEnabled}
+      />
+
       {shapes.map((shape) => {
       if (shape.hidden) return null;
+        if (shape.tags?.includes('timber-frame') || shape.id.startsWith('tf-')) {
+          // Rendered via InstancedTimberFraming for batch instancing performance
+          return null;
+        }
         const isVisible = !shape.tags || shape.tags.length === 0 || shape.tags.some(tagId => {
           const tag = tags.find(t => t.id === tagId);
           return tag ? tag.visible : true;
@@ -8584,6 +8688,33 @@ function Scene() {
           },
         };
 
+        const isWallShape = shape.type === 'wall' || (shape.type !== 'door' && shape.type !== 'window' && (shape.tags?.some(t => t.includes('wall')) || shape.name?.toLowerCase().includes('wall')));
+        let effectiveOpacity = shape.opacity ?? 1;
+        if (isWallShape) {
+          const isInterior = shape.tags?.includes('interior-wall') ||
+            shape.tags?.includes('wall-interior') ||
+            shape.name?.toLowerCase().includes('interior') ||
+            (shape as any).wallCategory === 'interior' ||
+            (shape as any).wallJustification === 'interior' ||
+            ((shape.args && typeof shape.args === 'object' && !Array.isArray(shape.args) && (shape.args as any).thickness) ? (shape.args as any).thickness <= 0.12 : false);
+
+          let maxTransparency = 0;
+          if (wallTransparency > 0) {
+            maxTransparency = Math.max(maxTransparency, wallTransparency);
+          }
+          if (isInterior && interiorWallTransparency > 0) {
+            maxTransparency = Math.max(maxTransparency, interiorWallTransparency);
+          } else if (!isInterior && exteriorWallTransparency > 0) {
+            maxTransparency = Math.max(maxTransparency, exteriorWallTransparency);
+          }
+          if (shape.opacity !== undefined && shape.opacity < 1) {
+            maxTransparency = Math.max(maxTransparency, 1 - shape.opacity);
+          }
+          if (maxTransparency > 0) {
+            effectiveOpacity = Math.max(0, Math.min(1, 1 - maxTransparency));
+          }
+        }
+
         const materialElements = shape.type === 'box' && shape.surfaceMaterials && !shape.bevelAmount ? (
           [0, 2, 4, 6, 8, 10].map((idx) => {
             const mat = shape.surfaceMaterials?.[idx] || shape.color;
@@ -8595,8 +8726,10 @@ function Scene() {
                 color="#ffffff"
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
-                transparent={shape.opacity !== undefined && shape.opacity < 1}
-                opacity={shape.opacity ?? 1}
+                transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+                opacity={effectiveOpacity}
+                depthWrite={effectiveOpacity >= 0.85}
+                side={effectiveOpacity < 1 ? THREE.DoubleSide : (shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide)}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
               />
@@ -8607,8 +8740,10 @@ function Scene() {
                 color={mat} 
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
-                transparent={shape.opacity !== undefined && shape.opacity < 1}
-                opacity={shape.opacity ?? 1}
+                transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+                opacity={effectiveOpacity}
+                depthWrite={effectiveOpacity >= 0.85}
+                side={effectiveOpacity < 1 ? THREE.DoubleSide : (shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide)}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
               />
@@ -8621,8 +8756,10 @@ function Scene() {
               color="#ffffff"
               roughness={shape.roughness ?? 0.5}
               metalness={shape.metalness ?? 0}
-              transparent={shape.opacity !== undefined && shape.opacity < 1}
-              opacity={shape.opacity ?? 1}
+              transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+              opacity={effectiveOpacity}
+              depthWrite={effectiveOpacity >= 0.85}
+              side={effectiveOpacity < 1 ? THREE.DoubleSide : THREE.FrontSide}
               emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
               emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
             />
@@ -8631,8 +8768,10 @@ function Scene() {
               color={shape.color} 
               roughness={shape.roughness || 0.5}
               metalness={shape.metalness || 0}
-              transparent={shape.opacity !== undefined && shape.opacity < 1}
-              opacity={shape.opacity || 1}
+              transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+              opacity={effectiveOpacity}
+              depthWrite={effectiveOpacity >= 0.85}
+              side={effectiveOpacity < 1 ? THREE.DoubleSide : THREE.FrontSide}
               emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
               emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
             />
@@ -8820,7 +8959,7 @@ function Scene() {
               const resolvedTexUrl = !isTerrainHeatmap ? (
                 (shape.type === 'terrain')
                   ? (isTextureUrl(shape.terrainData?.textureUrl) ? shape.terrainData!.textureUrl! : (isTextureUrl(shape.color) ? shape.color : (shape.terrainData?.textureUrl || 'lush_grass')))
-                  : (isTextureUrl(shape.color) ? shape.color : '')
+                  : (isTextureUrl(shape.textureUrl) ? shape.textureUrl! : (isTextureUrl(shape.color) ? shape.color : ''))
               ) : '';
 
               if (resolvedTexUrl) {
@@ -8830,24 +8969,28 @@ function Scene() {
                     color="#ffffff"
                     roughness={shape.roughness ?? 0.8}
                     metalness={shape.metalness ?? 0.05}
-                    transparent={shape.opacity !== undefined && shape.opacity < 1}
-                    opacity={shape.opacity ?? 1}
-                    side={(shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
+                    transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+                    opacity={effectiveOpacity}
+                    depthWrite={effectiveOpacity >= 0.85}
+                    side={(effectiveOpacity < 1 || shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
                     emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                     emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
                   />
                 );
               }
 
+              const hasVertexColors = isTerrainHeatmap || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0);
+
               return (
                 <meshStandardMaterial 
-                  color={isTerrainHeatmap ? '#ffffff' : (shape.color || '#ffffff')} 
-                  vertexColors={isTerrainHeatmap}
+                  color={hasVertexColors ? '#ffffff' : (shape.color || '#ffffff')} 
+                  vertexColors={hasVertexColors}
                   roughness={shape.roughness ?? 0.8}
                   metalness={shape.metalness ?? 0.05}
-                  transparent={shape.opacity !== undefined && shape.opacity < 1}
-                  opacity={shape.opacity ?? 1}
-                  side={(shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
+                  transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+                  opacity={effectiveOpacity}
+                  depthWrite={effectiveOpacity >= 0.85}
+                  side={(effectiveOpacity < 1 || shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
                   emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                   emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
                 />
@@ -10505,6 +10648,9 @@ function CustomGeometry({ shape }: { shape: Shape }) {
         if (Array.isArray(shape.geometryData.uvs) && shape.geometryData.uvs.length > 0) {
           baseGeo.setAttribute('uv', new THREE.Float32BufferAttribute(shape.geometryData.uvs, 2));
         }
+        if (Array.isArray(shape.geometryData.colors) && shape.geometryData.colors.length > 0) {
+          baseGeo.setAttribute('color', new THREE.Float32BufferAttribute(shape.geometryData.colors, 3));
+        }
         if (Array.isArray(shape.geometryData.indices) && shape.geometryData.indices.length > 0) {
           baseGeo.setIndex(shape.geometryData.indices);
         }
@@ -10699,6 +10845,7 @@ export default function Viewport() {
     addShape,
     duplicateObject,
     commitHistory,
+    commitUpdatedFraming,
     setMeasurements,
     viewportToast,
     selectionShapeMode,
@@ -12145,28 +12292,42 @@ export default function Viewport() {
         theme={theme}
         onApplyStyle={(styleId, dims, extraOptions) => {
           if (!styleLibraryTargetId) return;
-          setShapes(prev => {
-            const next = prev.map(s => {
-              if (s.id === styleLibraryTargetId) {
-                const updatedArgs = dims || s.args;
-                return {
-                  ...s,
-                  archStyle: styleId,
-                  stairStyle: styleId,
-                  wallStyle: styleId,
-                  stairStructure: extraOptions?.stairStructure || s.stairStructure,
-                  railingMode: extraOptions?.railingMode || s.railingMode,
-                  isParametric: extraOptions?.isParametric !== undefined ? extraOptions.isParametric : s.isParametric,
-                  parametricData: extraOptions?.parametricData !== undefined ? extraOptions.parametricData : s.parametricData,
-                  args: updatedArgs
-                };
-              }
-              return s;
-            });
-            return applyStairwellHolesToSlabs(next);
+          const target = shapes.find(s => s.id === styleLibraryTargetId);
+          const isDoorOrWindow = target && (
+            target.type === 'door' || 
+            target.type === 'window' || 
+            target.tags?.some(t => t.includes('door') || t.includes('window'))
+          );
+          const hasTimberFraming = shapes.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+
+          const nextShapes = shapes.map(s => {
+            if (s.id === styleLibraryTargetId) {
+              const updatedArgs = dims || s.args;
+              return {
+                ...s,
+                archStyle: styleId,
+                stairStyle: styleId,
+                wallStyle: styleId,
+                stairStructure: extraOptions?.stairStructure || s.stairStructure,
+                railingMode: extraOptions?.railingMode || s.railingMode,
+                isParametric: extraOptions?.isParametric !== undefined ? extraOptions.isParametric : s.isParametric,
+                parametricData: extraOptions?.parametricData !== undefined ? extraOptions.parametricData : s.parametricData,
+                args: updatedArgs
+              };
+            }
+            return s;
           });
-          commitHistory();
-          setMeasurements(`Updated style to ${styleId.toUpperCase()}${extraOptions?.isParametric ? ' (Parametric Mode Active)' : ''}`);
+          const nextWithStairwells = applyStairwellHolesToSlabs(nextShapes);
+
+          if (isDoorOrWindow && hasTimberFraming) {
+            commitUpdatedFraming(nextWithStairwells);
+            commitHistory();
+          } else {
+            setShapes(nextWithStairwells);
+            commitHistory();
+          }
+
+          setMeasurements(`Updated style to ${styleId.toUpperCase()}${extraOptions?.isParametric ? ' (Parametric Mode Active)' : ''}${isDoorOrWindow && hasTimberFraming ? ' · Framing Committed' : ''}`);
           setStyleLibraryTargetId(null);
         }}
       />

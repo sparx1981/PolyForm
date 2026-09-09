@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import { useRef, useState, createContext, useContext } from 'react';
 import { FlyoutPortal } from './ui/FlyoutPortal';
+import { DynamicIcon } from './ui/DynamicIcon';
+import { CustomToolbarButton } from '../types';
 
 /**
  * Which side tooltips/flyouts open toward — 'right' for the original
@@ -126,6 +128,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     setActiveBevelAmount,
     pinnedScripts,
     developerScripts,
+    basicToolbarExtensions,
     shapes,
     setShapes,
     updateShapeColor,
@@ -193,6 +196,57 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       `);
 
       await fn(sdk, customConsole);
+    } catch (err: any) {
+      setConsoleOutput(prev => [...prev, `[ERROR] ${err.message}`]);
+    }
+  };
+
+  const runCustomExtension = async (item: CustomToolbarButton) => {
+    try {
+      const sdk = new DeveloperSDK(
+        shapes,
+        setShapes,
+        updateShapeColor,
+        selectedId
+      );
+
+      const customConsole = {
+        log: (...args: any[]) => {
+          setConsoleOutput(prev => [...prev, `[LOG] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`]);
+        },
+        error: (...args: any[]) => {
+          setConsoleOutput(prev => [...prev, `[ERROR] ${args.join(' ')}`]);
+        }
+      };
+
+      if (item.action) {
+        await item.action(sdk);
+      } else if (item.scriptId) {
+        const found = developerScripts.find(s => s.id === item.scriptId);
+        if (found) {
+          const fn = new Function('sdk', 'console', `
+            return (async () => {
+              try {
+                ${found.code}
+              } catch (e) {
+                console.error(e.message);
+              }
+            })();
+          `);
+          await fn(sdk, customConsole);
+        }
+      } else if (item.code) {
+        const fn = new Function('sdk', 'console', `
+          return (async () => {
+            try {
+              ${item.code}
+            } catch (e) {
+              console.error(e.message);
+            }
+          })();
+        `);
+        await fn(sdk, customConsole);
+      }
     } catch (err: any) {
       setConsoleOutput(prev => [...prev, `[ERROR] ${err.message}`]);
     }
@@ -813,8 +867,55 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
           })}
         </>
       )}
+
+      {basicToolbarExtensions && basicToolbarExtensions.length > 0 && (
+        <>
+          <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
+          {basicToolbarExtensions.map(btn => (
+            <CustomExtensionButton
+              key={btn.id}
+              button={btn}
+              onClick={() => runCustomExtension(btn)}
+            />
+          ))}
+        </>
+      )}
     </aside>
     </FlyoutSideContext.Provider>
+  );
+}
+
+function CustomExtensionButton({ button, onClick }: { button: CustomToolbarButton; onClick: () => void }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
+
+  return (
+    <button
+      ref={buttonRef}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="toolbar-btn relative transition-all duration-150 transform hover:scale-105 active:scale-95"
+      style={button.color ? { color: button.color } : undefined}
+      title={button.tooltip || button.label}
+    >
+      <DynamicIcon name={button.icon || 'Code'} size={19} className="shrink-0" />
+      {button.badge && (
+        <span className="absolute -top-1 -right-1 px-1 min-w-3.5 h-3.5 text-[9px] font-bold bg-amber-500 text-white rounded-full flex items-center justify-center pointer-events-none">
+          {button.badge}
+        </span>
+      )}
+      <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
+        {hovered && (
+          <div className="px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none flex flex-col gap-0.5">
+            <span className="font-semibold">{button.label}</span>
+            {button.tooltip && <span className="text-[10px] text-gray-300">{button.tooltip}</span>}
+            {button.hotkey && <span className="text-[9px] text-amber-400 font-mono mt-0.5">Hotkey: {button.hotkey}</span>}
+          </div>
+        )}
+      </FlyoutPortal>
+    </button>
   );
 }
 

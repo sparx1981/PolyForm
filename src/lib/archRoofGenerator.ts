@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { Shape } from '../types';
 import { computeStairHoleForSlab } from './archStairwell';
+import { 
+  RoofTileShape, 
+  RoofTilePaletteItem, 
+  DEFAULT_ROOF_TILE_SETTINGS, 
+  ROOF_TILE_SHAPES 
+} from './roofTileGenerator';
 
 export type RoofType = 'gable' | 'hip' | 'parapet';
 
@@ -20,6 +26,12 @@ export interface RoofParams {
   fasciaColor?: string;
   pedimentColor?: string;
   soffitColor?: string;
+  tileShape?: RoofTileShape;
+  tileSize?: number;
+  tileColor?: string;
+  randomizeColor?: boolean;
+  colorPalette?: RoofTilePaletteItem[];
+  seed?: number;
 }
 
 export interface BuildingEnvelope {
@@ -1484,7 +1496,29 @@ export interface RoofAssemblyResult {
   pedimentShape?: Shape;
   ridgeCapShape?: Shape;
   soffitShape?: Shape;
+  tilesShape?: Shape;
   allShapes: Shape[];
+}
+
+/**
+ * Safely extracts positions, normals, uvs, and colors from a BufferGeometry,
+ * guarding against undefined attributes to prevent runtime TypeErrors.
+ */
+function safeExtractGeometryData(geom?: THREE.BufferGeometry | null): { 
+  positions: number[]; 
+  normals: number[]; 
+  uvs?: number[]; 
+  colors?: number[];
+} {
+  if (!geom || !geom.attributes || !geom.attributes.position || !geom.attributes.position.array) {
+    return { positions: [], normals: [] };
+  }
+  return {
+    positions: Array.from(geom.attributes.position.array),
+    normals: geom.attributes.normal?.array ? Array.from(geom.attributes.normal.array) : [],
+    uvs: geom.attributes.uv?.array ? Array.from(geom.attributes.uv.array) : undefined,
+    colors: geom.attributes.color?.array ? Array.from(geom.attributes.color.array) : undefined,
+  };
 }
 
 /**
@@ -1542,11 +1576,7 @@ export function buildRoofAssemblyForRoom(
       color: params.color || '#475569',
       roughness: 0.85,
       metalness: 0.05,
-      geometryData: {
-        positions: Array.from(parapetWallGeom.attributes.position.array),
-        normals: Array.from(parapetWallGeom.attributes.normal.array),
-        uvs: parapetWallGeom.attributes.uv ? Array.from(parapetWallGeom.attributes.uv.array) : undefined,
-      },
+      geometryData: safeExtractGeometryData(parapetWallGeom),
       roofData: {
         roofType: 'parapet',
         isLShape,
@@ -1587,11 +1617,7 @@ export function buildRoofAssemblyForRoom(
       color: params.copingColor || params.ridgeCapColor || '#1e293b',
       roughness: 0.5,
       metalness: 0.1,
-      geometryData: {
-        positions: Array.from(copingGeom.attributes.position.array),
-        normals: Array.from(copingGeom.attributes.normal.array),
-        uvs: copingGeom.attributes.uv ? Array.from(copingGeom.attributes.uv.array) : undefined,
-      },
+      geometryData: safeExtractGeometryData(copingGeom),
       tags: ['architecture', 'roof-coping', 'roof-part'],
     };
 
@@ -1663,11 +1689,7 @@ export function buildRoofAssemblyForRoom(
     color: params.color || '#991b1b', // Terracotta roof red
     roughness: 0.75,
     metalness: 0.05,
-    geometryData: {
-      positions: Array.from(slopesGeom.attributes.position.array),
-      normals: Array.from(slopesGeom.attributes.normal.array),
-      uvs: slopesGeom.attributes.uv ? Array.from(slopesGeom.attributes.uv.array) : undefined,
-    },
+    geometryData: safeExtractGeometryData(slopesGeom),
     roofData: {
       roofType: params.roofType,
       isLShape,
@@ -1713,11 +1735,7 @@ export function buildRoofAssemblyForRoom(
       color: params.pedimentColor || '#f1f5f9', // Clean matching wall exterior
       roughness: 0.7,
       metalness: 0.05,
-      geometryData: {
-        positions: Array.from(pedimentGeom.attributes.position.array),
-        normals: Array.from(pedimentGeom.attributes.normal.array),
-        uvs: pedimentGeom.attributes.uv ? Array.from(pedimentGeom.attributes.uv.array) : undefined,
-      },
+      geometryData: safeExtractGeometryData(pedimentGeom),
       tags: ['architecture', 'roof-pediment', 'roof-part'],
     };
     childShapes.push(pedimentShape);
@@ -1735,11 +1753,7 @@ export function buildRoofAssemblyForRoom(
     color: params.ridgeCapColor || '#334155', // Slate/anthracite ridge trim
     roughness: 0.6,
     metalness: 0.1,
-    geometryData: {
-      positions: Array.from(ridgeCapGeom.attributes.position.array),
-      normals: Array.from(ridgeCapGeom.attributes.normal.array),
-      uvs: ridgeCapGeom.attributes.uv ? Array.from(ridgeCapGeom.attributes.uv.array) : undefined,
-    },
+    geometryData: safeExtractGeometryData(ridgeCapGeom),
     tags: ['architecture', 'roof-ridge-cap', 'roof-part'],
   };
   childShapes.push(ridgeCapShape);
@@ -1756,11 +1770,7 @@ export function buildRoofAssemblyForRoom(
     color: params.fasciaColor || '#f8fafc', // Architectural white trim
     roughness: 0.45,
     metalness: 0.05,
-    geometryData: {
-      positions: Array.from(fasciaGeom.attributes.position.array),
-      normals: Array.from(fasciaGeom.attributes.normal.array),
-      uvs: fasciaGeom.attributes.uv ? Array.from(fasciaGeom.attributes.uv.array) : undefined,
-    },
+    geometryData: safeExtractGeometryData(fasciaGeom),
     tags: ['architecture', 'roof-fascia', 'roof-part'],
   };
   childShapes.push(fasciaShape);
@@ -1777,14 +1787,57 @@ export function buildRoofAssemblyForRoom(
     color: params.soffitColor || '#e2e8f0', // Soft off-white soffit finish
     roughness: 0.7,
     metalness: 0.05,
-    geometryData: {
-      positions: Array.from(soffitGeom.attributes.position.array),
-      normals: Array.from(soffitGeom.attributes.normal.array),
-      uvs: soffitGeom.attributes.uv ? Array.from(soffitGeom.attributes.uv.array) : undefined,
-    },
+    geometryData: safeExtractGeometryData(soffitGeom),
     tags: ['architecture', 'roof-soffit', 'roof-part'],
   };
   childShapes.push(soffitShape);
+
+  // 6. 3D Roof Tile Models (Geometry)
+  let tilesShape: Shape | undefined;
+  if (params.roofType !== 'parapet' && params.tileShape !== 'none') {
+    const tileShape = params.tileShape || 'roman';
+    const tileSize = params.tileSize ?? 0.35;
+    const tileColor = params.tileColor || params.color || '#991b1b';
+    const tilesGeom = create3DRoofTilesGeometry({
+      roofType: params.roofType,
+      width,
+      depth,
+      ridgeHeight: ridgeH,
+      eaveOverhang,
+      tileShape,
+      tileSize,
+      tileColor,
+      randomizeColor: params.randomizeColor,
+      colorPalette: params.colorPalette,
+      seed: params.seed,
+    });
+
+    if (tilesGeom.attributes.position && tilesGeom.attributes.position.count > 0) {
+      tilesShape = {
+        id: `tiles_${roofId}`,
+        name: `3D Roof Tiles (${ROOF_TILE_SHAPES.find(t => t.id === tileShape)?.name || tileShape})`,
+        type: 'custom',
+        position: [centerX, topY, centerZ],
+        rotation: [0, 0, 0],
+        args: [width, ridgeH, depth],
+        parentShapeId: roofId,
+        color: tileColor,
+        roughness: tileShape === 'standing-seam' ? 0.45 : 0.75,
+        metalness: tileShape === 'standing-seam' ? 0.35 : 0.05,
+        geometryData: safeExtractGeometryData(tilesGeom),
+        roofTileData: {
+          shape: tileShape,
+          size: tileSize,
+          color: tileColor,
+          randomizeColor: params.randomizeColor || false,
+          colorPalette: params.colorPalette || DEFAULT_ROOF_TILE_SETTINGS.colorPalette,
+          seed: params.seed || 42,
+        },
+        tags: ['architecture', 'roof-tiles', 'roof-part'],
+      };
+      childShapes.push(tilesShape);
+    }
+  }
 
   const allShapes = [roofShape, ...childShapes];
 
@@ -1794,6 +1847,7 @@ export function buildRoofAssemblyForRoom(
     pedimentShape,
     ridgeCapShape,
     soffitShape,
+    tilesShape,
     allShapes,
   };
 }
@@ -2069,4 +2123,1051 @@ export function buildNextFloorLevel(
   const newSlab = newSlabs[0] || null;
 
   return { newWalls, newOpenings, newSlab, newSlabs };
+}
+
+/**
+ * Generates accurate, high-detail 3D tile models for a roof's slopes.
+ * Supports: roman (barrel/mission), flat (slate/shingle), scallop (beaver-tail),
+ * diamond (lozenge), pantile (S-curve), and standing-seam.
+ */
+export function create3DRoofTilesGeometry(options: {
+  roofType: RoofType;
+  width: number;
+  depth: number;
+  ridgeHeight: number;
+  eaveOverhang: number;
+  tileShape?: RoofTileShape;
+  tileSize?: number;
+  tileColor?: string;
+  randomizeColor?: boolean;
+  colorPalette?: RoofTilePaletteItem[];
+  seed?: number;
+}): THREE.BufferGeometry {
+  const {
+    roofType,
+    width,
+    depth,
+    ridgeHeight,
+    eaveOverhang,
+    tileShape = 'roman',
+    tileSize = 0.35,
+    tileColor = '#991b1b',
+    randomizeColor = false,
+    colorPalette = DEFAULT_ROOF_TILE_SETTINGS.colorPalette,
+    seed = 42,
+  } = options;
+
+  const geom = new THREE.BufferGeometry();
+  if (roofType === 'parapet' || tileShape === 'none') {
+    return geom;
+  }
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const colors: number[] = [];
+
+  const addVertex = (
+    p: [number, number, number],
+    norm: [number, number, number],
+    uv: [number, number],
+    rgb: [number, number, number]
+  ) => {
+    positions.push(p[0], p[1], p[2]);
+    normals.push(norm[0], norm[1], norm[2]);
+    uvs.push(uv[0], uv[1]);
+    colors.push(rgb[0], rgb[1], rgb[2]);
+  };
+
+  const addTriangle = (
+    p1: [number, number, number],
+    p2: [number, number, number],
+    p3: [number, number, number],
+    norm: [number, number, number],
+    rgb: [number, number, number]
+  ) => {
+    addVertex(p1, norm, [0, 0], rgb);
+    addVertex(p2, norm, [1, 0], rgb);
+    addVertex(p3, norm, [1, 1], rgb);
+  };
+
+  const addQuad = (
+    p1: [number, number, number],
+    p2: [number, number, number],
+    p3: [number, number, number],
+    p4: [number, number, number],
+    norm: [number, number, number],
+    rgb: [number, number, number]
+  ) => {
+    addTriangle(p1, p2, p3, norm, rgb);
+    addTriangle(p1, p3, p4, norm, rgb);
+  };
+
+  const getTileColor = (slopeIdx: number, row: number, col: number): [number, number, number] => {
+    if (!randomizeColor || !colorPalette || colorPalette.length === 0) {
+      const c = new THREE.Color(tileColor || '#991b1b');
+      return [c.r, c.g, c.b];
+    }
+    const h = Math.abs(Math.sin((slopeIdx + 1) * 374761393 + row * 668265263 + col * 1274126177 + seed * 99991)) * 10000;
+    const idx = Math.floor(h) % colorPalette.length;
+    const swatch = colorPalette[idx];
+    const c = new THREE.Color(swatch?.value || '#991b1b');
+    const shade = 0.95 + ((Math.floor(h * 10) % 11) / 100);
+    return [
+      Math.min(1, Math.max(0, c.r * shade)),
+      Math.min(1, Math.max(0, c.g * shade)),
+      Math.min(1, Math.max(0, c.b * shade)),
+    ];
+  };
+
+  const hw = width / 2;
+  const hd = depth / 2;
+  const hw_eave = hw + eaveOverhang;
+  const hd_eave = hd + eaveOverhang;
+  const isWidthLonger = width >= depth;
+  const isHip = roofType === 'hip';
+
+  interface SlopeDef {
+    slopeIdx: number;
+    origin: [number, number, number];
+    uDir: [number, number, number];
+    vDir: [number, number, number];
+    nDir: [number, number, number];
+    slopeLen: number;
+    hwEave: number;
+    getHalfWidthAt: (s: number) => number;
+  }
+
+  const slopes: SlopeDef[] = [];
+
+  if (isWidthLonger) {
+    const run = hd_eave;
+    const slopeLen = Math.hypot(run, ridgeHeight);
+    const cosP = run / slopeLen;
+    const sinP = ridgeHeight / slopeLen;
+
+    // 1. Front Slope (+Z)
+    slopes.push({
+      slopeIdx: 0,
+      origin: [0, 0, hd_eave],
+      uDir: [1, 0, 0],
+      vDir: [0, sinP, -cosP],
+      nDir: [0, cosP, sinP],
+      slopeLen,
+      hwEave: hw_eave,
+      getHalfWidthAt: (s) => isHip ? Math.max(0.05, hw_eave - s * cosP) : hw_eave,
+    });
+
+    // 2. Back Slope (-Z)
+    slopes.push({
+      slopeIdx: 1,
+      origin: [0, 0, -hd_eave],
+      uDir: [-1, 0, 0],
+      vDir: [0, sinP, cosP],
+      nDir: [0, cosP, -sinP],
+      slopeLen,
+      hwEave: hw_eave,
+      getHalfWidthAt: (s) => isHip ? Math.max(0.05, hw_eave - s * cosP) : hw_eave,
+    });
+
+    if (isHip) {
+      const runHip = hw_eave;
+      const slopeLenHip = Math.hypot(runHip, ridgeHeight);
+      const cosPHip = runHip / slopeLenHip;
+      const sinPHip = ridgeHeight / slopeLenHip;
+
+      // 3. Left Hip Slope (-X)
+      slopes.push({
+        slopeIdx: 2,
+        origin: [-hw_eave, 0, 0],
+        uDir: [0, 0, 1],
+        vDir: [cosPHip, sinPHip, 0],
+        nDir: [-sinPHip, cosPHip, 0],
+        slopeLen: slopeLenHip,
+        hwEave: hd_eave,
+        getHalfWidthAt: (s) => Math.max(0.05, hd_eave * (1 - s / slopeLenHip)),
+      });
+
+      // 4. Right Hip Slope (+X)
+      slopes.push({
+        slopeIdx: 3,
+        origin: [hw_eave, 0, 0],
+        uDir: [0, 0, -1],
+        vDir: [-cosPHip, sinPHip, 0],
+        nDir: [sinPHip, cosPHip, 0],
+        slopeLen: slopeLenHip,
+        hwEave: hd_eave,
+        getHalfWidthAt: (s) => Math.max(0.05, hd_eave * (1 - s / slopeLenHip)),
+      });
+    }
+  } else {
+    // Depth > Width: ridge runs along Z
+    const run = hw_eave;
+    const slopeLen = Math.hypot(run, ridgeHeight);
+    const cosP = run / slopeLen;
+    const sinP = ridgeHeight / slopeLen;
+
+    // 1. Left Slope (-X)
+    slopes.push({
+      slopeIdx: 0,
+      origin: [-hw_eave, 0, 0],
+      uDir: [0, 0, -1],
+      vDir: [cosP, sinP, 0],
+      nDir: [-sinP, cosP, 0],
+      slopeLen,
+      hwEave: hd_eave,
+      getHalfWidthAt: (s) => isHip ? Math.max(0.05, hd_eave - s * cosP) : hd_eave,
+    });
+
+    // 2. Right Slope (+X)
+    slopes.push({
+      slopeIdx: 1,
+      origin: [hw_eave, 0, 0],
+      uDir: [0, 0, 1],
+      vDir: [-cosP, sinP, 0],
+      nDir: [sinP, cosP, 0],
+      slopeLen,
+      hwEave: hd_eave,
+      getHalfWidthAt: (s) => isHip ? Math.max(0.05, hd_eave - s * cosP) : hd_eave,
+    });
+
+    if (isHip) {
+      const runHip = hd_eave;
+      const slopeLenHip = Math.hypot(runHip, ridgeHeight);
+      const cosPHip = runHip / slopeLenHip;
+      const sinPHip = ridgeHeight / slopeLenHip;
+
+      // 3. Front Hip Slope (+Z)
+      slopes.push({
+        slopeIdx: 2,
+        origin: [0, 0, hd_eave],
+        uDir: [-1, 0, 0],
+        vDir: [0, sinPHip, -cosPHip],
+        nDir: [0, cosPHip, sinPHip],
+        slopeLen: slopeLenHip,
+        hwEave: hw_eave,
+        getHalfWidthAt: (s) => Math.max(0.05, hw_eave * (1 - s / slopeLenHip)),
+      });
+
+      // 4. Back Hip Slope (-Z)
+      slopes.push({
+        slopeIdx: 3,
+        origin: [0, 0, -hd_eave],
+        uDir: [1, 0, 0],
+        vDir: [0, sinPHip, cosPHip],
+        nDir: [0, cosPHip, -sinPHip],
+        slopeLen: slopeLenHip,
+        hwEave: hw_eave,
+        getHalfWidthAt: (s) => Math.max(0.05, hw_eave * (1 - s / slopeLenHip)),
+      });
+    }
+  }
+
+  const normalizedShape = (tileShape === 'standing-seam' || (tileShape as string) === 'standing_seam') 
+    ? 'standing-seam' 
+    : tileShape;
+  const clampedSize = Math.max(0.18, Math.min(0.75, tileSize));
+
+  // Build 3D tile models on each slope
+  for (const slope of slopes) {
+    const { slopeIdx, origin, uDir, vDir, nDir, slopeLen, hwEave, getHalfWidthAt } = slope;
+
+    const to3D = (u: number, s: number, zn: number): [number, number, number] => [
+      origin[0] + u * uDir[0] + s * vDir[0] + zn * nDir[0],
+      origin[1] + u * uDir[1] + s * vDir[1] + zn * nDir[1],
+      origin[2] + u * uDir[2] + s * vDir[2] + zn * nDir[2],
+    ];
+
+    const norm3D = (nu: number, nv: number, nn: number): [number, number, number] => {
+      const nx = nu * uDir[0] + nv * vDir[0] + nn * nDir[0];
+      const ny = nu * uDir[1] + nv * vDir[1] + nn * nDir[1];
+      const nz = nu * uDir[2] + nv * vDir[2] + nn * nDir[2];
+      const len = Math.hypot(nx, ny, nz) || 1;
+      return [nx / len, ny / len, nz / len];
+    };
+
+    const zBase = 0.008; // 8mm elevation above underlayment
+
+    if (normalizedShape === 'standing-seam') {
+      const panW = Math.max(0.30, Math.min(0.60, clampedSize));
+      const ribW = 0.016;
+      const ribH = 0.035;
+      const numPans = Math.ceil((2 * hwEave) / panW);
+      const startU = -hwEave + (2 * hwEave - numPans * panW) / 2;
+
+      for (let i = 0; i <= numPans; i++) {
+        const u = startU + i * panW;
+        const rgb = getTileColor(slopeIdx, 0, i);
+
+        // Standing Seam Rib along seam line
+        if (Math.abs(u) <= hwEave) {
+          const sEnd = slopeLen;
+          const uL = u - ribW / 2;
+          const uR = u + ribW / 2;
+          const z0 = zBase;
+          const z1 = zBase + ribH;
+
+          // Left vertical face
+          addQuad(
+            to3D(uL, 0, z0),
+            to3D(uL, sEnd, z0),
+            to3D(uL, sEnd, z1),
+            to3D(uL, 0, z1),
+            norm3D(-1, 0, 0),
+            rgb
+          );
+          // Right vertical face
+          addQuad(
+            to3D(uR, 0, z1),
+            to3D(uR, sEnd, z1),
+            to3D(uR, sEnd, z0),
+            to3D(uR, 0, z0),
+            norm3D(1, 0, 0),
+            rgb
+          );
+          // Top folded cap
+          addQuad(
+            to3D(uL, 0, z1),
+            to3D(uR, 0, z1),
+            to3D(uR, sEnd, z1),
+            to3D(uL, sEnd, z1),
+            norm3D(0, 0, 1),
+            rgb
+          );
+        }
+
+        // Panel Flat Tray between seams
+        if (i < numPans) {
+          const u1 = u + ribW / 2;
+          const u2 = u + panW - ribW / 2;
+          const maxHw = Math.max(getHalfWidthAt(0), getHalfWidthAt(slopeLen));
+          if (u1 >= -maxHw && u2 <= maxHw) {
+            const stepsS = 4;
+            const ds = slopeLen / stepsS;
+            for (let st = 0; st < stepsS; st++) {
+              const sA = st * ds;
+              const sB = (st + 1) * ds;
+              const hwA = getHalfWidthAt(sA);
+              const hwB = getHalfWidthAt(sB);
+              const cu1A = Math.max(-hwA, Math.min(hwA, u1));
+              const cu2A = Math.max(-hwA, Math.min(hwA, u2));
+              const cu1B = Math.max(-hwB, Math.min(hwB, u1));
+              const cu2B = Math.max(-hwB, Math.min(hwB, u2));
+
+              if (cu2A > cu1A + 0.02 && cu2B > cu1B + 0.02) {
+                addQuad(
+                  to3D(cu1A, sA, zBase),
+                  to3D(cu2A, sA, zBase),
+                  to3D(cu2B, sB, zBase),
+                  to3D(cu1B, sB, zBase),
+                  norm3D(0, 0, 1),
+                  rgb
+                );
+              }
+            }
+          }
+        }
+      }
+    } else if (normalizedShape === 'roman') {
+      const wTile = Math.max(0.22, Math.min(0.48, clampedSize));
+      const lCourse = wTile * 0.78;
+      const lTile = lCourse * 1.25;
+      const numCourses = Math.ceil(slopeLen / lCourse);
+
+      for (let j = 0; j < numCourses; j++) {
+        const s0 = j * lCourse;
+        const s1 = Math.min(slopeLen, s0 + lTile);
+        const sMid = s0 + lCourse / 2;
+        const hwMid = getHalfWidthAt(sMid);
+        const numCols = Math.ceil((2 * hwMid) / wTile);
+        const startU = -hwMid;
+
+        for (let i = 0; i < numCols; i++) {
+          const u0 = startU + i * wTile;
+          const uCenter = u0 + wTile / 2;
+          if (Math.abs(uCenter) > hwMid + wTile / 3) continue;
+
+          const rgb = getTileColor(slopeIdx, j, i);
+          const archRadius = wTile * 0.42;
+          const archHeight = wTile * 0.28;
+          const segments = 5;
+
+          // Arched barrel cover
+          for (let k = 0; k < segments; k++) {
+            const a1 = (k * Math.PI) / segments;
+            const a2 = ((k + 1) * Math.PI) / segments;
+            const x1 = uCenter - archRadius * Math.cos(a1);
+            const x2 = uCenter - archRadius * Math.cos(a2);
+            const z1 = zBase + Math.sin(a1) * archHeight + 0.010;
+            const z2 = zBase + Math.sin(a2) * archHeight + 0.010;
+
+            const aMid = (a1 + a2) / 2;
+            const normFace = norm3D(-Math.cos(aMid), 0, Math.sin(aMid));
+
+            // Tile cylindrical surface
+            addQuad(
+              to3D(x1, s0, z1),
+              to3D(x2, s0, z2),
+              to3D(x2, s1, z2),
+              to3D(x1, s1, z1),
+              normFace,
+              rgb
+            );
+
+            // Exposed bottom rim lip facing down slope
+            addQuad(
+              to3D(x1, s0, zBase),
+              to3D(x2, s0, zBase),
+              to3D(x2, s0, z2),
+              to3D(x1, s0, z1),
+              norm3D(0, -1, 0),
+              rgb
+            );
+          }
+
+          // Concave drainage trough / pan between barrels
+          const uPanL = uCenter + archRadius;
+          const uPanR = uCenter + wTile - archRadius;
+          if (uPanR > uPanL) {
+            addQuad(
+              to3D(uPanL, s0, zBase + 0.002),
+              to3D(uPanR, s0, zBase + 0.002),
+              to3D(uPanR, s1, zBase + 0.002),
+              to3D(uPanL, s1, zBase + 0.002),
+              norm3D(0, 0, 1),
+              [rgb[0] * 0.85, rgb[1] * 0.85, rgb[2] * 0.85]
+            );
+          }
+        }
+      }
+    } else if (normalizedShape === 'scallop') {
+      const wTile = Math.max(0.20, Math.min(0.42, clampedSize));
+      const lCourse = wTile * 0.60;
+      const lTile = lCourse * 1.40;
+      const rArc = wTile / 2;
+      const numCourses = Math.ceil(slopeLen / lCourse);
+
+      for (let j = 0; j < numCourses; j++) {
+        const s0 = j * lCourse;
+        const s1 = Math.min(slopeLen, s0 + lTile);
+        const sMid = s0 + lCourse / 2;
+        const hwMid = getHalfWidthAt(sMid);
+        const rowOffset = (j % 2) * (wTile / 2);
+        const numCols = Math.ceil((2 * hwMid) / wTile) + 1;
+        const startU = -hwMid - wTile / 2 + rowOffset;
+
+        for (let i = 0; i < numCols; i++) {
+          const u0 = startU + i * wTile;
+          const uC = u0 + wTile / 2;
+          if (Math.abs(uC) > hwMid + wTile / 3) continue;
+
+          const rgb = getTileColor(slopeIdx, j, i);
+          const sArcCenter = s0 + rArc;
+          const zFace = zBase + 0.012;
+
+          // Upper rectangular portion
+          if (s1 > sArcCenter) {
+            addQuad(
+              to3D(u0, sArcCenter, zFace),
+              to3D(u0 + wTile, sArcCenter, zFace),
+              to3D(u0 + wTile, s1, zFace),
+              to3D(u0, s1, zFace),
+              norm3D(0, 0, 1),
+              rgb
+            );
+          }
+
+          // Lower rounded scallop tongue (discretized arc)
+          const arcSegments = 4;
+          for (let k = 0; k < arcSegments; k++) {
+            const a1 = (k * Math.PI) / arcSegments;
+            const a2 = ((k + 1) * Math.PI) / arcSegments;
+            const x1 = uC - rArc * Math.cos(a1);
+            const y1 = sArcCenter - rArc * Math.sin(a1);
+            const x2 = uC - rArc * Math.cos(a2);
+            const y2 = sArcCenter - rArc * Math.sin(a2);
+
+            // Tongue face triangle from arc center
+            addTriangle(
+              to3D(uC, sArcCenter, zFace),
+              to3D(x1, y1, zFace),
+              to3D(x2, y2, zFace),
+              norm3D(0, 0, 1),
+              rgb
+            );
+
+            // Rounded tongue drop edge lip
+            const aMid = (a1 + a2) / 2;
+            addQuad(
+              to3D(x1, y1, zBase),
+              to3D(x2, y2, zBase),
+              to3D(x2, y2, zFace),
+              to3D(x1, y1, zFace),
+              norm3D(-Math.cos(aMid), -Math.sin(aMid), 0),
+              rgb
+            );
+          }
+        }
+      }
+    } else if (normalizedShape === 'diamond') {
+      const wTile = Math.max(0.20, Math.min(0.48, clampedSize));
+      const lCourse = wTile * 0.55;
+      const numCourses = Math.ceil(slopeLen / lCourse);
+
+      for (let j = 0; j < numCourses; j++) {
+        const s0 = j * lCourse;
+        const sMid = s0 + lCourse;
+        const sTop = Math.min(slopeLen, s0 + 2 * lCourse);
+        const hwMid = getHalfWidthAt(sMid);
+        const rowOffset = (j % 2) * (wTile / 2);
+        const numCols = Math.ceil((2 * hwMid) / wTile) + 1;
+        const startU = -hwMid - wTile / 2 + rowOffset;
+
+        for (let i = 0; i < numCols; i++) {
+          const uC = startU + i * wTile;
+          if (Math.abs(uC) > hwMid + wTile / 3) continue;
+
+          const rgb = getTileColor(slopeIdx, j, i);
+          const z0 = zBase;
+          const zTip = zBase + 0.014;
+          const zCrease = zBase + 0.020;
+
+          const pBot = to3D(uC, s0, zTip);
+          const pLeft = to3D(uC - wTile / 2, sMid, zTip);
+          const pRight = to3D(uC + wTile / 2, sMid, zTip);
+          const pTop = to3D(uC, sTop, zTip * 0.8);
+          const pCenter = to3D(uC, sMid, zCrease);
+
+          // 4 faceted diamond triangles
+          addTriangle(pBot, pRight, pCenter, norm3D(0.2, -0.2, 0.95), rgb);
+          addTriangle(pBot, pCenter, pLeft, norm3D(-0.2, -0.2, 0.95), rgb);
+          addTriangle(pLeft, pCenter, pTop, norm3D(-0.2, 0.2, 0.95), rgb);
+          addTriangle(pRight, pTop, pCenter, norm3D(0.2, 0.2, 0.95), rgb);
+
+          // Drop edges on lower diamond tip
+          addQuad(
+            to3D(uC, s0, z0),
+            to3D(uC + wTile / 2, sMid, z0),
+            pRight,
+            pBot,
+            norm3D(0.7, -0.7, 0),
+            rgb
+          );
+          addQuad(
+            to3D(uC - wTile / 2, sMid, z0),
+            to3D(uC, s0, z0),
+            pBot,
+            pLeft,
+            norm3D(-0.7, -0.7, 0),
+            rgb
+          );
+        }
+      }
+    } else if (normalizedShape === 'pantile') {
+      const wTile = Math.max(0.22, Math.min(0.48, clampedSize));
+      const lCourse = wTile * 0.75;
+      const lTile = lCourse * 1.25;
+      const numCourses = Math.ceil(slopeLen / lCourse);
+
+      for (let j = 0; j < numCourses; j++) {
+        const s0 = j * lCourse;
+        const s1 = Math.min(slopeLen, s0 + lTile);
+        const sMid = s0 + lCourse / 2;
+        const hwMid = getHalfWidthAt(sMid);
+        const numCols = Math.ceil((2 * hwMid) / wTile);
+        const startU = -hwMid;
+
+        for (let i = 0; i < numCols; i++) {
+          const u0 = startU + i * wTile;
+          if (Math.abs(u0 + wTile / 2) > hwMid + wTile / 3) continue;
+
+          const rgb = getTileColor(slopeIdx, j, i);
+          const segments = 6;
+          const amp = 0.020;
+
+          for (let k = 0; k < segments; k++) {
+            const f1 = k / segments;
+            const f2 = (k + 1) / segments;
+            const x1 = u0 + f1 * wTile;
+            const x2 = u0 + f2 * wTile;
+            const z1 = zBase + 0.014 + Math.sin(2 * Math.PI * f1 - Math.PI / 2) * amp;
+            const z2 = zBase + 0.014 + Math.sin(2 * Math.PI * f2 - Math.PI / 2) * amp;
+
+            const fMid = (f1 + f2) / 2;
+            const slopeDz = Math.cos(2 * Math.PI * fMid - Math.PI / 2) * 2 * Math.PI * amp;
+            const normPantile = norm3D(-slopeDz, 0, 1);
+
+            // S-curve face
+            addQuad(
+              to3D(x1, s0, z1),
+              to3D(x2, s0, z2),
+              to3D(x2, s1, z2),
+              to3D(x1, s1, z1),
+              normPantile,
+              rgb
+            );
+
+            // Exposed bottom wave lip
+            addQuad(
+              to3D(x1, s0, zBase),
+              to3D(x2, s0, zBase),
+              to3D(x2, s0, z2),
+              to3D(x1, s0, z1),
+              norm3D(0, -1, 0),
+              rgb
+            );
+          }
+        }
+      }
+    } else {
+      // Default: 'flat' Interlocking Slate / Shingle in Staggered Running Bond
+      const wTile = Math.max(0.20, Math.min(0.48, clampedSize));
+      const lCourse = wTile * 0.65;
+      const lTile = lCourse * 1.35;
+      const slateW = wTile * 0.98; // crisp 2% shadow groove between slates
+      const slateThickness = 0.014; // 14mm thick slate
+      const numCourses = Math.ceil(slopeLen / lCourse);
+
+      for (let j = 0; j < numCourses; j++) {
+        const s0 = j * lCourse;
+        const s1 = Math.min(slopeLen, s0 + lTile);
+        const sMid = s0 + lCourse / 2;
+        const hwMid = getHalfWidthAt(sMid);
+        const rowOffset = (j % 2) * (wTile / 2);
+        const numCols = Math.ceil((2 * hwMid) / wTile) + 1;
+        const startU = -hwMid - wTile / 2 + rowOffset;
+
+        for (let i = 0; i < numCols; i++) {
+          const u0 = startU + i * wTile;
+          const u1 = u0 + slateW;
+          const uC = (u0 + u1) / 2;
+          if (Math.abs(uC) > hwMid + wTile / 3) continue;
+
+          const rgb = getTileColor(slopeIdx, j, i);
+          const z0 = zBase;
+          const zLip = zBase + slateThickness;
+          const zTop = zBase + slateThickness * 0.65; // tilted down-pitch
+
+          // Slate top surface
+          addQuad(
+            to3D(u0, s0, zLip),
+            to3D(u1, s0, zLip),
+            to3D(u1, s1, zTop),
+            to3D(u0, s1, zTop),
+            norm3D(0, 0, 1),
+            rgb
+          );
+
+          // Exposed bottom drop edge (deep shadow line)
+          addQuad(
+            to3D(u0, s0, z0),
+            to3D(u1, s0, z0),
+            to3D(u1, s0, zLip),
+            to3D(u0, s0, zLip),
+            norm3D(0, -1, 0),
+            rgb
+          );
+
+          // Left bevel shadow edge
+          addQuad(
+            to3D(u0, s1, z0),
+            to3D(u0, s0, z0),
+            to3D(u0, s0, zLip),
+            to3D(u0, s1, zTop),
+            norm3D(-1, 0, 0),
+            rgb
+          );
+
+          // Right bevel shadow edge
+          addQuad(
+            to3D(u1, s0, z0),
+            to3D(u1, s1, z0),
+            to3D(u1, s1, zTop),
+            to3D(u1, s0, zLip),
+            norm3D(1, 0, 0),
+            rgb
+          );
+        }
+      }
+    }
+  }
+
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+  return geom;
+}
+
+export interface RoofAssemblyUpdateParams {
+  height?: number;
+  eaveOverhang?: number;
+  fasciaHeight?: number;
+  tileShape?: RoofTileShape;
+  tileSize?: number;
+  tileColor?: string;
+  randomizeColor?: boolean;
+  colorPalette?: RoofTilePaletteItem[];
+  seed?: number;
+}
+
+/**
+ * Parametrically updates an existing roof assembly in the scene.
+ * Updates slope heights, eave overhang, fascia trim, soffits, and regenerates 3D tile models.
+ */
+export function updateRoofAssembly(
+  allShapes: Shape[],
+  targetRoofId?: string | null,
+  params: RoofAssemblyUpdateParams = {}
+): {
+  updatedShapes: Shape[];
+  updatedRoofId: string | null;
+  actualHeight: number;
+  pitchAngleDeg: number;
+  eaveOverhang: number;
+  fasciaHeight: number;
+} {
+  // Realistic constraints
+  const MIN_REALISTIC_ROOF_HEIGHT = 0.60;
+  const MAX_REALISTIC_ROOF_HEIGHT = 4.50;
+
+  // Find target roof
+  let targetRoof = targetRoofId ? allShapes.find(s => s.id === targetRoofId) : null;
+  if (targetRoof?.parentShapeId) {
+    const parent = allShapes.find(s => s.id === targetRoof!.parentShapeId);
+    if (parent) targetRoof = parent;
+  }
+  if (!targetRoof) {
+    targetRoof = allShapes.find(s => 
+      (s.type === 'roof' || s.tags?.includes('roof-assembly') || s.tags?.includes('roof-slopes') || s.name?.toLowerCase().includes('roof')) &&
+      !s.tags?.includes('roof-fascia') &&
+      !s.tags?.includes('roof-ridge-cap') &&
+      !s.tags?.includes('roof-pediment') &&
+      !s.tags?.includes('roof-soffit') &&
+      !s.tags?.includes('roof-tiles')
+    );
+  }
+
+  if (!targetRoof) {
+    return { 
+      updatedShapes: allShapes, 
+      updatedRoofId: null, 
+      actualHeight: 2.20, 
+      pitchAngleDeg: 35,
+      eaveOverhang: 0.30,
+      fasciaHeight: 0.18,
+    };
+  }
+
+  const roofId = targetRoof.id;
+  const roofData = targetRoof.roofData || targetRoof.customData || {};
+  const isHip = targetRoof.name?.toLowerCase().includes('hip') || 
+                targetRoof.tags?.includes('roof-hip') || 
+                roofData.roofType === 'hip';
+  const isParapet = targetRoof.name?.toLowerCase().includes('parapet') || 
+                    targetRoof.tags?.includes('roof-parapet') || 
+                    roofData.roofType === 'parapet';
+
+  const width = Array.isArray(targetRoof.args) ? targetRoof.args[0] : (roofData.bounds?.width || 6.0);
+  const depth = Array.isArray(targetRoof.args) ? targetRoof.args[2] : (roofData.bounds?.depth || 6.0);
+  
+  const currentHeight = (Array.isArray(targetRoof.args) && targetRoof.args[1]) ? targetRoof.args[1] : (roofData.ridgeHeight || 2.20);
+  const clampedHeight = params.height !== undefined 
+    ? Math.max(MIN_REALISTIC_ROOF_HEIGHT, Math.min(MAX_REALISTIC_ROOF_HEIGHT, Number(params.height.toFixed(2))))
+    : currentHeight;
+
+  const eaveOverhang = params.eaveOverhang !== undefined
+    ? Math.max(0.05, Math.min(1.20, Number(params.eaveOverhang.toFixed(2))))
+    : (roofData.eaveOverhang ?? 0.30);
+
+  const fasciaHeight = params.fasciaHeight !== undefined
+    ? Math.max(0.06, Math.min(0.50, Number(params.fasciaHeight.toFixed(2))))
+    : (roofData.fasciaHeight ?? 0.18);
+
+  const tileShape = params.tileShape || targetRoof.roofTileData?.shape || 'roman';
+  const tileSize = params.tileSize ?? targetRoof.roofTileData?.size ?? 0.35;
+  const tileColor = params.tileColor || targetRoof.roofTileData?.color || targetRoof.color || '#991b1b';
+  const randomizeColor = params.randomizeColor !== undefined 
+    ? params.randomizeColor 
+    : Boolean(targetRoof.roofTileData?.randomizeColor);
+  const colorPalette = params.colorPalette || targetRoof.roofTileData?.colorPalette || DEFAULT_ROOF_TILE_SETTINGS.colorPalette;
+  const seed = params.seed ?? targetRoof.roofTileData?.seed ?? 42;
+
+  const span = Math.min(width, depth);
+  const pitchRad = Math.atan(clampedHeight / (span / 2 + eaveOverhang));
+  const pitchAngleDeg = Math.round(THREE.MathUtils.radToDeg(pitchRad));
+
+  // If parapet:
+  if (isParapet) {
+    const localWallPoly: [number, number][] = roofData.localWallPoly || [
+      [-width / 2, -depth / 2],
+      [width / 2, -depth / 2],
+      [width / 2, depth / 2],
+      [-width / 2, depth / 2]
+    ];
+    const parapetThick = 0.20;
+    const localInnerPoly = insetPolygon2D(localWallPoly, parapetThick);
+    const parapetWallGeom = createParapetWallsGeometry(localWallPoly, localInnerPoly, clampedHeight);
+    const copingGeom = createParapetCopingGeometry(localWallPoly, localInnerPoly, clampedHeight);
+
+    const updatedRoofShape: Shape = {
+      ...targetRoof,
+      args: [width, clampedHeight, depth],
+      geometryData: safeExtractGeometryData(parapetWallGeom),
+      roofData: {
+        ...roofData,
+        ridgeHeight: clampedHeight,
+        eaveOverhang: 0,
+        fasciaHeight,
+        pitchAngleDeg: 0,
+      }
+    };
+
+    const updatedShapes = allShapes.map(s => {
+      if (s.id === roofId) return updatedRoofShape;
+      if (s.parentShapeId === roofId && (s.tags?.includes('roof-coping') || s.name?.includes('Coping'))) {
+        return {
+          ...s,
+          geometryData: safeExtractGeometryData(copingGeom),
+        };
+      }
+      return s;
+    });
+
+    return { 
+      updatedShapes, 
+      updatedRoofId: roofId, 
+      actualHeight: clampedHeight, 
+      pitchAngleDeg: 0,
+      eaveOverhang: 0,
+      fasciaHeight,
+    };
+  }
+
+  // Hip or Gable
+  const isRectangular = roofData.isRectangular !== false;
+  const isLShape = Boolean(roofData.isLShape);
+  const reflexIndex = roofData.reflexIndex as number | undefined;
+  const localWallPoly = roofData.localWallPoly || [
+    [-width / 2, -depth / 2],
+    [width / 2, -depth / 2],
+    [width / 2, depth / 2],
+    [-width / 2, depth / 2]
+  ];
+  const localEavePoly = offsetPolygon2D(localWallPoly, eaveOverhang);
+
+  let slopesGeom: THREE.BufferGeometry;
+  let pedimentGeom: THREE.BufferGeometry | null = null;
+  let ridgeCapGeom: THREE.BufferGeometry;
+  let fasciaGeom: THREE.BufferGeometry;
+  let soffitGeom: THREE.BufferGeometry;
+
+  if (isRectangular || !roofData.localWallPoly) {
+    slopesGeom = isHip
+      ? createHipRoofSlopesGeometry(width, depth, clampedHeight, eaveOverhang)
+      : createGableRoofSlopesGeometry(width, depth, clampedHeight, eaveOverhang);
+
+    if (!isHip) {
+      pedimentGeom = createGablePedimentWallsGeometry(width, depth, clampedHeight);
+    }
+    ridgeCapGeom = isHip
+      ? createHipRidgeCapGeometry(width, depth, clampedHeight, eaveOverhang)
+      : createGableRidgeCapGeometry(width, depth, clampedHeight, eaveOverhang);
+
+    fasciaGeom = isHip
+      ? createHipFasciaGeometry(width, depth, clampedHeight, eaveOverhang, fasciaHeight)
+      : createGableFasciaGeometry(width, depth, clampedHeight, eaveOverhang, fasciaHeight);
+
+    soffitGeom = isHip
+      ? createHipSoffitsGeometry(width, depth, eaveOverhang, fasciaHeight)
+      : createGableSoffitsGeometry(width, depth, eaveOverhang, fasciaHeight);
+  } else if (isLShape && reflexIndex !== undefined) {
+    slopesGeom = isHip
+      ? createLShapedHipRoofSlopesGeometry(localWallPoly, localEavePoly, reflexIndex, clampedHeight)
+      : createLShapedGableRoofSlopesGeometry(localWallPoly, localEavePoly, reflexIndex, clampedHeight);
+
+    if (!isHip) {
+      pedimentGeom = createLShapedPedimentWallsGeometry(localWallPoly, localEavePoly, reflexIndex, clampedHeight);
+    }
+
+    ridgeCapGeom = createLShapedRidgeCapGeometry(localWallPoly, localEavePoly, reflexIndex, clampedHeight, isHip);
+    fasciaGeom = createPolygonalFasciaGeometry(localWallPoly, localEavePoly, fasciaHeight, !isHip, reflexIndex, clampedHeight);
+    soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
+  } else {
+    slopesGeom = createGeneralPolygonalRoofSlopesGeometry(localWallPoly, localEavePoly, clampedHeight, pitchAngleDeg);
+    ridgeCapGeom = createHipRidgeCapGeometry(width, depth, clampedHeight, eaveOverhang);
+    fasciaGeom = createPolygonalFasciaGeometry(localWallPoly, localEavePoly, fasciaHeight, false);
+    soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
+  }
+
+  // Generate 3D Tile Models
+  const tilesGeom = create3DRoofTilesGeometry({
+    roofType: isHip ? 'hip' : 'gable',
+    width,
+    depth,
+    ridgeHeight: clampedHeight,
+    eaveOverhang,
+    tileShape,
+    tileSize,
+    tileColor,
+    randomizeColor,
+    colorPalette,
+    seed,
+  });
+
+  const updatedRoofShape: Shape = {
+    ...targetRoof,
+    args: [width, clampedHeight, depth],
+    geometryData: safeExtractGeometryData(slopesGeom),
+    roofData: {
+      ...roofData,
+      ridgeHeight: clampedHeight,
+      eaveOverhang,
+      fasciaHeight,
+      pitchAngleDeg,
+      localEavePoly,
+    },
+    customData: {
+      ...(targetRoof.customData || {}),
+      ridgeHeight: clampedHeight,
+      eaveOverhang,
+      fasciaHeight,
+      pitchAngleDeg,
+    },
+    roofTileData: {
+      shape: tileShape,
+      size: tileSize,
+      color: tileColor,
+      randomizeColor,
+      colorPalette,
+      seed,
+    }
+  };
+
+  let foundTilesShape = false;
+
+  const updatedShapes = allShapes.map(s => {
+    if (s.id === roofId) return updatedRoofShape;
+    if (s.parentShapeId === roofId) {
+      if (s.tags?.includes('roof-tiles') || s.name?.toLowerCase().includes('3d roof tile') || s.name?.toLowerCase().includes('tile model')) {
+        foundTilesShape = true;
+        if (tileShape === 'none' || !tilesGeom.attributes.position || tilesGeom.attributes.position.count === 0) {
+          return {
+            ...s,
+            geometryData: { positions: [], normals: [] },
+          };
+        }
+        return {
+          ...s,
+          name: `3D Roof Tiles (${ROOF_TILE_SHAPES.find(t => t.id === tileShape)?.name || tileShape})`,
+          color: tileColor,
+          roughness: tileShape === 'standing-seam' ? 0.45 : 0.75,
+          metalness: tileShape === 'standing-seam' ? 0.35 : 0.05,
+          geometryData: safeExtractGeometryData(tilesGeom),
+          roofTileData: {
+            shape: tileShape,
+            size: tileSize,
+            color: tileColor,
+            randomizeColor,
+            colorPalette,
+            seed,
+          }
+        };
+      }
+      if (s.tags?.includes('roof-ridge-cap') || s.name?.includes('Ridge Cap')) {
+        return {
+          ...s,
+          geometryData: safeExtractGeometryData(ridgeCapGeom),
+        };
+      }
+      if (s.tags?.includes('roof-fascia') || s.name?.includes('Fascia')) {
+        return {
+          ...s,
+          geometryData: safeExtractGeometryData(fasciaGeom),
+        };
+      }
+      if (s.tags?.includes('roof-soffit') || s.name?.includes('Soffit')) {
+        return {
+          ...s,
+          geometryData: safeExtractGeometryData(soffitGeom),
+        };
+      }
+      if ((s.tags?.includes('roof-pediment') || s.name?.includes('Pediment') || s.name?.includes('Gable Infill')) && pedimentGeom) {
+        return {
+          ...s,
+          geometryData: safeExtractGeometryData(pedimentGeom),
+        };
+      }
+    }
+    return s;
+  });
+
+  // If tiles shape didn't exist yet, insert it right after the roof
+  if (!foundTilesShape && tileShape !== 'none' && tilesGeom.attributes.position && tilesGeom.attributes.position.count > 0) {
+    const newTilesShape: Shape = {
+      id: `tiles_${roofId}`,
+      name: `3D Roof Tiles (${ROOF_TILE_SHAPES.find(t => t.id === tileShape)?.name || tileShape})`,
+      type: 'custom',
+      position: [...targetRoof.position],
+      rotation: [0, 0, 0],
+      args: [width, clampedHeight, depth],
+      parentShapeId: roofId,
+      color: tileColor,
+      roughness: tileShape === 'standing-seam' ? 0.45 : 0.75,
+      metalness: tileShape === 'standing-seam' ? 0.35 : 0.05,
+      geometryData: safeExtractGeometryData(tilesGeom),
+      roofTileData: {
+        shape: tileShape,
+        size: tileSize,
+        color: tileColor,
+        randomizeColor,
+        colorPalette,
+        seed,
+      },
+      tags: ['architecture', 'roof-tiles', 'roof-part'],
+    };
+
+    const roofIdx = updatedShapes.findIndex(s => s.id === roofId);
+    if (roofIdx >= 0) {
+      updatedShapes.splice(roofIdx + 1, 0, newTilesShape);
+    } else {
+      updatedShapes.push(newTilesShape);
+    }
+  }
+
+  let finalUpdatedShapes = updatedShapes;
+  if (tileShape === 'none') {
+    finalUpdatedShapes = updatedShapes.filter(s => 
+      !( (s.parentShapeId === roofId || s.id === `tiles_${roofId}`) && (s.tags?.includes('roof-tiles') || s.name?.toLowerCase().includes('3d roof tile') || s.name?.toLowerCase().includes('tile model')) )
+    );
+  }
+
+  return { 
+    updatedShapes: finalUpdatedShapes, 
+    updatedRoofId: roofId, 
+    actualHeight: clampedHeight, 
+    pitchAngleDeg,
+    eaveOverhang,
+    fasciaHeight,
+  };
+}
+
+/**
+ * Updates the overall height of an existing roof assembly in the scene.
+ * Clamps the new height within realistic engineering boundaries (0.60m to 4.50m).
+ * Updates slopes, ridge caps, fascias, pediment infills, soffits, and 3D tile models.
+ */
+export function updateRoofAssemblyHeight(
+  allShapes: Shape[],
+  targetRoofId: string,
+  newHeight: number
+): { updatedShapes: Shape[]; updatedRoofId: string | null; actualHeight: number; pitchAngleDeg: number } {
+  const res = updateRoofAssembly(allShapes, targetRoofId, { height: newHeight });
+  return {
+    updatedShapes: res.updatedShapes,
+    updatedRoofId: res.updatedRoofId,
+    actualHeight: res.actualHeight,
+    pitchAngleDeg: res.pitchAngleDeg,
+  };
 }

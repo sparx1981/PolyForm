@@ -432,15 +432,56 @@ export function generateStairwellGuardRailing(
     roughness: 0.5,
     metalness: 0.1,
     parentShapeId: staircase.id,
+    // Task: lets isStairGuardRailingValid() find the exact slab this railing
+    // belongs to later, without having to parse it back out of `id`.
+    customData: { stairwellSlabId: slab.id },
     geometryData: {
-      positions: Array.from(merged.attributes.position.array),
-      normals: Array.from(merged.attributes.normal.array),
+      positions: merged.attributes.position ? Array.from(merged.attributes.position.array) : [],
+      normals: merged.attributes.normal ? Array.from(merged.attributes.normal.array) : [],
       uvs: merged.attributes.uv ? Array.from(merged.attributes.uv.array) : undefined,
     },
     tags: ['architecture', 'stair-guard-railing', 'stairwell-railing', 'railing'],
   };
 
   return railingShape;
+}
+
+/**
+ * Guard-railing shapes are baked, static meshes: generated once by
+ * applyStairwellHolesToSlabs() and then left untouched in the scene until
+ * that function runs again. The matching floor-slab cutout, by contrast, is
+ * recomputed live on every render (see computeHolesForSlab(), used directly
+ * in the slab's render path) straight from the CURRENT staircase/slab
+ * positions.
+ *
+ * Because most drag interactions (resizing a wall, moving a stair, nudging a
+ * slab) update shape state via the "silent" setter while the drag is live,
+ * and only resync stairwell holes/railings via applyStairwellHolesToSlabs()
+ * once the drag commits, there's a window — and, if some interaction never
+ * reaches a commit, potentially longer than a window — where the live hole
+ * has already moved/closed but the old railing hasn't been rebuilt or
+ * removed yet. The visible result is a guard railing floating over a floor
+ * slab that no longer has a matching cutout underneath it.
+ *
+ * Call this before rendering any 'stair-guard-railing' shape so a stale one
+ * is skipped rather than shown floating with no hole beneath it. It does not
+ * mutate or remove the shape from state — the next applyStairwellHolesToSlabs()
+ * pass (triggered by any committed setShapes call) will still clean it up or
+ * regenerate it properly for the current geometry.
+ */
+export function isStairGuardRailingValid(railing: Shape, allShapes: Shape[]): boolean {
+  const stairId = railing.parentShapeId;
+  const slabId = (railing.customData as any)?.stairwellSlabId;
+  // Can't identify which stair/slab this railing belongs to (e.g. an older
+  // railing saved before customData.stairwellSlabId was added) — render it
+  // rather than risk hiding a legitimate railing we can't verify.
+  if (!stairId || !slabId) return true;
+
+  const stair = allShapes.find(s => s.id === stairId && s.type === 'staircase' && !s.hidden);
+  const slab = allShapes.find(s => s.id === slabId && !s.hidden);
+  if (!stair || !slab) return false;
+
+  return computeStairHoleForSlab(stair, slab) !== null;
 }
 
 /**

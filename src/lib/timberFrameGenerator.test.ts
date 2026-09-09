@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { generateTimberFraming, updateTimberFramesIfPresent } from './timberFrameGenerator';
 import { buildRoofAssemblyForRoom } from './archRoofGenerator';
 import { Shape } from '../types';
+import { DEFAULT_TIMBER_FRAME_PARAMS } from '../constants/timberFrameDefaults';
 
 describe('timberFrameGenerator - Roof Framing Precision', () => {
   it('generates accurate timber frame rafters and beams for an L-shaped Gable roof', () => {
@@ -200,5 +201,199 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
     const unchangedResult = updateTimberFramesIfPresent(shapesWithHiddenFloors);
     const hiddenFloorCount = unchangedResult.filter(s => s.tags?.includes('timber-floor-joist') && s.hidden).length;
     expect(hiddenFloorCount).toBeGreaterThan(0);
+  });
+
+  it('frames an opening centered mid-wall with jacks, kings, header, sill, and omitted studs', () => {
+    const wall: Shape = {
+      id: 'w1',
+      type: 'wall',
+      position: [0, 1.4, 0],
+      args: [6.0, 2.8, 0.2],
+      color: '#ffffff'
+    };
+    const windowShape: Shape = {
+      id: 'win1',
+      type: 'window',
+      position: [0, 1.4, 0],
+      args: [1.2, 1.2, 0.1],
+      hostWallId: 'w1',
+      color: '#38bdf8'
+    };
+
+    const res = generateTimberFraming([wall, windowShape], {
+      includeWalls: true,
+      includeFloors: false,
+      includeRoof: false,
+      studSpacing: 0.40,
+    });
+
+    // Check jack studs exist
+    const jackStuds = res.shapes.filter(s => s.tags?.includes('timber-jack-stud'));
+    expect(jackStuds.length).toBeGreaterThanOrEqual(2);
+
+    // Check king studs exist
+    const kingStuds = res.shapes.filter(s => s.tags?.includes('timber-king-stud'));
+    expect(kingStuds.length).toBeGreaterThanOrEqual(2);
+
+    // Check header exists
+    const header = res.shapes.find(s => s.tags?.includes('timber-lintel'));
+    expect(header).toBeDefined();
+
+    // Check sill exists
+    const sill = res.shapes.find(s => s.tags?.includes('timber-sill'));
+    expect(sill).toBeDefined();
+
+    // Check common studs do not fall within the window bounds (x in [-0.5, 0.5])
+    const studsInWindow = res.shapes.filter(s => {
+      if (!s.tags?.includes('timber-stud')) return false;
+      const x = s.position[0];
+      return x > -0.5 && x < 0.5;
+    });
+    expect(studsInWindow.length).toBe(0);
+
+    // Verify openingAssemblies output
+    expect(res.openingAssemblies).toBeDefined();
+    expect(res.openingAssemblies.length).toBe(1);
+    expect(res.openingAssemblies[0].spanMm).toBe(1200);
+  });
+
+  it('frames an opening flush against a corner without placing studs outside the wall boundary', () => {
+    const wall: Shape = {
+      id: 'w1',
+      type: 'wall',
+      position: [0, 1.4, 0],
+      args: [6.0, 2.8, 0.2],
+      color: '#ffffff'
+    };
+    // Door placed near the left edge: wall extends from -3 to +3
+    // Door centered at -2.4 with width 0.9 => left edge at -2.85 (flush to corner)
+    const doorShape: Shape = {
+      id: 'd1',
+      type: 'door',
+      position: [-2.4, 1.05, 0],
+      args: [0.9, 2.1, 0.1],
+      hostWallId: 'w1',
+      color: '#475569'
+    };
+
+    const res = generateTimberFraming([wall, doorShape], {
+      includeWalls: true,
+      includeFloors: false,
+      includeRoof: false,
+    });
+
+    // None of the generated shapes should exceed the wall's outer bounds [-3.05, 3.05]
+    res.shapes.forEach(s => {
+      const x = s.position[0];
+      expect(x).toBeGreaterThanOrEqual(-3.05);
+      expect(x).toBeLessThanOrEqual(3.05);
+    });
+
+    // Check header and jack studs are formed safely
+    const header = res.shapes.find(s => s.tags?.includes('timber-lintel'));
+    expect(header).toBeDefined();
+  });
+
+  it('detects colliding jack studs between two adjacent openings and produces validation message without crashing', () => {
+    const wall: Shape = {
+      id: 'w1',
+      type: 'wall',
+      position: [0, 1.4, 0],
+      args: [6.0, 2.8, 0.2],
+      color: '#ffffff'
+    };
+    // Two windows with only 40mm between them (jack stud width is 45mm, so they collide)
+    const win1: Shape = {
+      id: 'win1',
+      type: 'window',
+      position: [-0.6, 1.4, 0],
+      args: [1.0, 1.2, 0.1],
+      color: '#ffffff',
+      hostWallId: 'w1',
+    };
+    const win2: Shape = {
+      id: 'win2',
+      type: 'window',
+      position: [0.45, 1.4, 0], // win1 right = -0.1, win2 left = -0.05 => gap = 0.05m (50mm < 90mm needed)
+      args: [1.0, 1.2, 0.1],
+      color: '#ffffff',
+      hostWallId: 'w1',
+    };
+
+    const res = generateTimberFraming([wall, win1, win2], {
+      includeWalls: true,
+      includeFloors: false,
+      includeRoof: false,
+    });
+
+    expect(res.validationMessages).toBeDefined();
+    expect(res.validationMessages.length).toBeGreaterThan(0);
+    expect(res.validationMessages[0]).toMatch(/collid|closer than/i);
+  });
+
+  it('applies revealDistance as an inward offset along the wall surface normal', () => {
+    const wall: Shape = {
+      id: 'w1',
+      type: 'wall',
+      position: [0, 1.4, 0],
+      args: [4.0, 2.8, 0.2], // wall depth = 0.2, half-depth = 0.1
+      color: '#ffffff'
+    };
+
+    const resZero = generateTimberFraming([wall], {
+      includeWalls: true,
+      includeFloors: false,
+      includeRoof: false,
+      params: { ...DEFAULT_TIMBER_FRAME_PARAMS, revealDistance: 0 }
+    });
+
+    const resInset = generateTimberFraming([wall], {
+      includeWalls: true,
+      includeFloors: false,
+      includeRoof: false,
+      params: { ...DEFAULT_TIMBER_FRAME_PARAMS, revealDistance: 0.025 }
+    });
+
+    const studZero = resZero.shapes.find(s => s.tags?.includes('timber-stud'));
+    const studInset = resInset.shapes.find(s => s.tags?.includes('timber-stud'));
+
+    expect(studZero).toBeDefined();
+    expect(studInset).toBeDefined();
+    if (studZero && studInset) {
+      // With revealDistance = 0.025, the localZ shifts by -0.025
+      expect(studInset.position[2]).toBeLessThan(studZero.position[2]);
+      expect(studZero.position[2] - studInset.position[2]).toBeCloseTo(0.025, 4);
+    }
+  });
+
+  it('populates instancedMembers for member kinds in TimberFramingResult', () => {
+    const wall: Shape = {
+      id: 'w1',
+      type: 'wall',
+      position: [0, 1.4, 0],
+      args: [4.0, 2.8, 0.2],
+      color: '#ffffff'
+    };
+    const win: Shape = {
+      id: 'win1',
+      type: 'window',
+      position: [0, 1.4, 0],
+      args: [1.0, 1.2, 0.1],
+      color: '#ffffff',
+      hostWallId: 'w1',
+    };
+
+    const res = generateTimberFraming([wall, win], {
+      includeWalls: true,
+      includeFloors: false,
+      includeRoof: false,
+    });
+
+    expect(res.instancedMembers).toBeDefined();
+    expect(res.instancedMembers.stud.length).toBeGreaterThan(0);
+    expect(res.instancedMembers.plate.length).toBeGreaterThan(0);
+    expect(res.instancedMembers.jackStud.length).toBeGreaterThan(0);
+    expect(res.instancedMembers.header.length).toBeGreaterThan(0);
+    expect(res.instancedMembers.sill.length).toBeGreaterThan(0);
   });
 });
