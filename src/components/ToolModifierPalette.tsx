@@ -48,8 +48,6 @@ export const ToolModifierPalette: React.FC = () => {
     setSelectionShapeMode,
     selectionFilter,
     setSelectionFilter,
-    selectionCriteria,
-    setSelectionCriteria,
     kernelHost,
     addShape,
     commitHistory,
@@ -804,41 +802,6 @@ export const ToolModifierPalette: React.FC = () => {
               </div>
             </div>
 
-            {/* Selection Logic: Crossing vs Window */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                Match Criteria
-              </label>
-              <div className="grid grid-cols-2 gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-                <button
-                  onClick={() => setSelectionCriteria('crossing')}
-                  className={cn(
-                    "flex flex-col items-center py-1.5 px-2 rounded-md text-center transition-all",
-                    selectionCriteria === 'crossing'
-                      ? "bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-400 shadow-sm font-semibold"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                  )}
-                  title="Selects objects touching or inside the selection path"
-                >
-                  <span className="text-xs font-semibold">Crossing</span>
-                  <span className="text-[9px] opacity-75">Touch / Intersect</span>
-                </button>
-                <button
-                  onClick={() => setSelectionCriteria('window')}
-                  className={cn(
-                    "flex flex-col items-center py-1.5 px-2 rounded-md text-center transition-all",
-                    selectionCriteria === 'window'
-                      ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm font-semibold"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                  )}
-                  title="Only selects objects completely enclosed by the selection path"
-                >
-                  <span className="text-xs font-semibold">Window</span>
-                  <span className="text-[9px] opacity-75">Fully Enclosed</span>
-                </button>
-              </div>
-            </div>
-
             {/* Quick Actions */}
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
@@ -912,24 +875,6 @@ export const ToolModifierPalette: React.FC = () => {
                   Clear
                 </button>
               </div>
-            </div>
-
-            {/* Gesture & Shortcut Card */}
-            <div className={cn(
-              "p-2.5 rounded-lg border text-[10px] space-y-1.5",
-              theme === 'dark' ? "bg-gray-800/60 border-gray-700/80 text-gray-300" : "bg-blue-50/60 border-blue-100 text-blue-950"
-            )}>
-              <div className="font-semibold text-[10px] text-trimble-blue flex items-center gap-1.5">
-                <Lasso size={12} />
-                <span>Lasso Gestures & Modifiers</span>
-              </div>
-              <ul className="space-y-1 text-[9px] list-disc list-inside text-gray-500 dark:text-gray-400">
-                <li><strong className="text-gray-700 dark:text-gray-200">Left Drag:</strong> Draw custom lasso path or marquee</li>
-                <li><strong className="text-gray-700 dark:text-gray-200">Shift + Drag:</strong> Add to current selection</li>
-                <li><strong className="text-gray-700 dark:text-gray-200">Alt + Drag:</strong> Subtract from current selection</li>
-                <li><strong className="text-gray-700 dark:text-gray-200">Esc key:</strong> Cancel active drawing or deselect</li>
-                <li><strong className="text-gray-700 dark:text-gray-200">L key:</strong> Toggle between Lasso & Marquee</li>
-              </ul>
             </div>
           </div>
         )}

@@ -1,17 +1,17 @@
 import React, { useState, useRef, createContext, useContext, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
+import { motion } from 'motion/react';
 import { FlyoutPortal } from './ui/FlyoutPortal';
-import { 
-  Route, 
-  Square, 
-  Circle, 
-  Grid3X3, 
-  Layers, 
-  HardHat, 
-  X, 
-  Check, 
-  Activity, 
+import {
+  Route,
+  Square,
+  Circle,
+  Grid3X3,
+  Layers,
+  HardHat,
+  X,
+  Check,
   Mountain,
   Plus,
   Trash2,
@@ -25,7 +25,10 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  MousePointer2
+  MousePointer2,
+  PanelRightClose,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape } from '../types';
 import { createTerrainShape, generateTerrainHeights, TopographyPreset } from '../lib/terrain/terrainFactory';
@@ -136,6 +139,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     setLandscapeSculptSettings,
     terrainModifiers,
     setTerrainModifiers,
+    addTerrainModifier,
     updateTerrainModifier,
     selectedModifierId,
     setSelectedModifierId,
@@ -146,8 +150,13 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     showCutFillOverlay,
     setShowCutFillOverlay,
     setMeasurements,
-    theme
+    theme,
+    rightPanelVisible,
+    isToolModifierDocked,
+    setIsToolModifierDocked
   } = useApp();
+
+  const [isCivilPanelCollapsed, setIsCivilPanelCollapsed] = useState(false);
 
   const selectedTerrain = shapes.find(s => s.id === selectedId && s.type === 'terrain' && s.terrainData);
   const existingTerrain = shapes.find(s => s.type === 'terrain' && !s.hidden);
@@ -392,9 +401,10 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     }
 
     setShapes(prev => prev.map(s => s.id === existingTerrain.id ? { ...s, terrainData: updatedData } : s));
+    addTerrainModifier(padSpec);
     commitHistory();
     setActivePadDraft(null);
-    setSelectedModifierId(null);
+    setSelectedModifierId(padSpec.id);
     setMeasurements?.(`Graded terrain to ${civilPadSettings.primitive} pad platform at EL ${civilPadSettings.targetElevation >= 0 ? '+' : ''}${civilPadSettings.targetElevation}m.`);
     setConsoleOutput(c => [...c, `[Terrain Studio] Graded terrain to ${civilPadSettings.primitive} pad at EL ${civilPadSettings.targetElevation}m.`]);
   };
@@ -540,7 +550,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
         <div className="relative group">
           <CivilToolButton
             tool="terrain"
-            label="Base Site Terrain"
+            label="Terrain"
             subtitle="Base Site Canvas: Add or configure civil ground surface for roads, pads & grading"
             icon={<Mountain size={20} />}
             active={activeTool === 'terrain'}
@@ -549,7 +559,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             onClick={() => {
               setActiveTool('terrain');
               setActiveTier(prev => prev === 'terrain' && activeTool === 'terrain' ? null : 'terrain');
-              setConsoleOutput(c => [...c, '[Terrain Studio] Base Site Terrain tool active: add or configure site terrain surface.']);
+              setConsoleOutput(c => [...c, '[Terrain Studio] Terrain tool active: add or configure site terrain surface.']);
             }}
           />
         </div>
@@ -561,7 +571,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
         <div className="relative group flex flex-col sm:flex-row items-center gap-1">
           <CivilToolButton
             tool="landscape_sculpt"
-            label="Sculpt Terrain Surface"
+            label="Sculpt Terrain"
             subtitle={`Sculpting Brushes: Push, pull, smooth & flatten terrain (${landscapeSculptSettings.mode.toUpperCase()})`}
             icon={<Paintbrush size={20} />}
             active={activeTool === 'landscape_sculpt'}
@@ -570,7 +580,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             onClick={() => {
               setActiveTool('landscape_sculpt');
               setActiveTier(prev => prev === 'sculpt' && activeTool === 'landscape_sculpt' ? null : 'sculpt');
-              setConsoleOutput(c => [...c, `[Terrain Studio] Sculpt Terrain Surface active (${landscapeSculptSettings.mode.toUpperCase()} mode). Drag on terrain to sculpt.`]);
+              setConsoleOutput(c => [...c, `[Terrain Studio] Sculpt Terrain active (${landscapeSculptSettings.mode.toUpperCase()} mode). Drag on terrain to sculpt.`]);
             }}
           />
         </div>
@@ -582,14 +592,14 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
         <div className="relative group">
           <CivilToolButton
             tool="road"
-            label="Corridors & Pathways"
-            subtitle="Corridors & Pathways: Catmull-Rom spline alignment with curb, ditch & markings"
+            label="Pathways & Roads"
+            subtitle="Pathways & Roads: Catmull-Rom spline alignment with curb, ditch & markings"
             icon={<Route size={20} />}
             active={activeTool === 'road'}
             onClick={() => {
               setActiveTool('road');
               setActiveTier(prev => prev === 'corridors' && activeTool === 'road' ? null : 'corridors');
-              setConsoleOutput(c => [...c, '[Terrain Studio] Corridors & Pathways active: click to add road alignment control points.']);
+              setConsoleOutput(c => [...c, '[Terrain Studio] Pathways & Roads active: click to add road alignment control points.']);
             }}
           />
         </div>
@@ -601,8 +611,8 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
         <div className="relative group">
           <CivilToolButton
             tool="pad-rect"
-            label="Building & Grading Pads"
-            subtitle="Building & Grading Pads: Platforms, batter daylight slopes, elevations & surface detailing"
+            label="Grading Pads"
+            subtitle="Grading Pads: Platforms, batter daylight slopes, elevations & surface detailing"
             icon={<Layers size={20} />}
             active={isPadToolActive}
             badge={civilPadSettings.primitive === 'circle' ? 'Circle' : 'Rect'}
@@ -610,7 +620,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
               const nextTool = civilPadSettings.primitive === 'circle' ? 'pad-circle' : 'pad-rect';
               setActiveTool(nextTool);
               setActiveTier(prev => prev === 'pads' && isPadToolActive ? null : 'pads');
-              setConsoleOutput(c => [...c, `[Terrain Studio] Building & Grading Pads active (${civilPadSettings.primitive}). Click terrain to position pad.`]);
+              setConsoleOutput(c => [...c, `[Terrain Studio] Grading Pads active (${civilPadSettings.primitive}). Click terrain to position pad.`]);
             }}
           />
         </div>
@@ -654,46 +664,58 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
           </button>
         </div>
 
-        {/* Interactive Parametric Flyout / Drawer Panel for Active Tier (Styled as ToolModifierPalette) */}
+        {/* Floating / Dockable Tool Modifier Panel for Active Tier (Terrain, Sculpt, Pathways & Roads, Grading Pads) */}
         {activeTier && (
-          <div 
+          <motion.div
             id="civil-tier-settings-panel"
+            drag={!isToolModifierDocked}
+            dragMomentum={false}
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 300, opacity: 0 }}
+            style={!isToolModifierDocked ? {
+              right: rightPanelVisible ? 320 : 16,
+              top: 80,
+            } : {}}
             className={cn(
-              "absolute z-50 w-80 rounded-xl border shadow-xl overflow-hidden text-xs select-none transition-all duration-200 flex flex-col",
+              "z-50 w-80 rounded-xl border shadow-xl overflow-hidden text-xs select-none transition-all duration-200 flex flex-col",
               theme === 'dark' ? "bg-gray-900 border-gray-700 text-gray-200 shadow-black/50" : "bg-white border-gray-200 text-gray-800 shadow-xl",
-              horizontal
-                ? (dock === 'top' ? "top-full left-2 mt-2" : "bottom-full left-2 mb-2")
-                : "left-full top-2 ml-2"
+              isToolModifierDocked
+                ? (horizontal
+                    ? (dock === 'top' ? "absolute top-full left-2 mt-2 max-h-full" : "absolute bottom-full left-2 mb-2 max-h-full")
+                    : "absolute left-full top-2 ml-2 max-h-full")
+                : "fixed max-h-[calc(100vh-100px)]"
             )}
           >
             {/* Header matching ToolModifierPalette styling */}
             <div className={cn(
               "px-3 h-10 border-b flex items-center justify-between select-none shrink-0",
-              theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100"
+              theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100",
+              !isToolModifierDocked ? "cursor-move active:cursor-grabbing" : "cursor-default"
             )}>
               <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px] text-gray-600 dark:text-gray-300">
                 {activeTier === 'terrain' && (
                   <>
                     <Mountain size={14} className="text-trimble-blue" />
-                    <span>Base Site Terrain</span>
+                    <span>Terrain</span>
                   </>
                 )}
                 {activeTier === 'sculpt' && (
                   <>
                     <Paintbrush size={14} className="text-trimble-blue" />
-                    <span>Sculpt Terrain Surface</span>
+                    <span>Sculpt Terrain</span>
                   </>
                 )}
                 {activeTier === 'corridors' && (
                   <>
                     <Route size={14} className="text-trimble-blue" />
-                    <span>Corridors & Pathways</span>
+                    <span>Pathways & Roads</span>
                   </>
                 )}
                 {activeTier === 'pads' && (
                   <>
                     <Layers size={14} className="text-trimble-blue" />
-                    <span>Building & Grading Pads</span>
+                    <span>Grading Pads</span>
                   </>
                 )}
               </div>
@@ -701,6 +723,27 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                 <span className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded font-bold">
                   {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : 'PAD'}
                 </span>
+                {!isToolModifierDocked && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCivilPanelCollapsed(!isCivilPanelCollapsed)}
+                    className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                    title={isCivilPanelCollapsed ? "Expand Panel" : "Collapse Panel"}
+                  >
+                    {isCivilPanelCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsToolModifierDocked(!isToolModifierDocked)}
+                  className={cn(
+                    "p-1.5 hover:bg-black/5 rounded-lg transition-colors cursor-pointer",
+                    isToolModifierDocked ? "text-trimble-blue bg-trimble-blue/10" : "text-gray-400"
+                  )}
+                  title={isToolModifierDocked ? "Undock Panel" : "Dock Panel"}
+                >
+                  <PanelRightClose size={14} />
+                </button>
                 <button
                   type="button"
                   onClick={() => setActiveTier(null)}
@@ -712,46 +755,36 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
               </div>
             </div>
 
+            {(!isCivilPanelCollapsed || isToolModifierDocked) && (
             <div className="p-3 space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto select-text flex-1">
             {/* 1. Base Site Terrain Controls */}
             {activeTier === 'terrain' && (
               <div className="space-y-3.5">
-                {/* Status card */}
-                <div className={cn(
-                  "p-2.5 rounded-xl border flex items-center gap-2.5 text-xs transition-colors",
-                  activeTerrain 
-                    ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300" 
-                    : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60 text-blue-800 dark:text-blue-300"
-                )}>
-                  {activeTerrain ? (
+                {/* Status card (only shown once a terrain canvas exists) */}
+                {activeTerrain && (
+                  <div className="p-2.5 rounded-xl border flex items-center gap-2.5 text-xs transition-colors bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300">
                     <Check size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  ) : (
-                    <Activity size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
-                  )}
-                  <div className="leading-tight flex-1 min-w-0">
-                    <div className="font-semibold truncate">
-                      {selectedTerrain 
-                        ? `Selected: ${selectedTerrain.name || 'Base Site Terrain'}`
-                        : activeTerrain
-                          ? `Active Site: ${terrainOptions.width}m × ${terrainOptions.depth}m` 
-                          : 'No Terrain Canvas'}
+                    <div className="leading-tight flex-1 min-w-0">
+                      <div className="font-semibold truncate">
+                        {selectedTerrain
+                          ? `Selected: ${selectedTerrain.name || 'Terrain'}`
+                          : `Active Site: ${terrainOptions.width}m × ${terrainOptions.depth}m`}
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                        {`Grid: ${terrainOptions.resolution}×${terrainOptions.resolution} · Roughness: ${(terrainOptions.roughness * 100).toFixed(0)}%`}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                      {activeTerrain 
-                        ? `Grid: ${terrainOptions.resolution}×${terrainOptions.resolution} · Roughness: ${(terrainOptions.roughness * 100).toFixed(0)}%` 
-                        : 'Add terrain canvas below to enable road & pad tools'}
-                    </div>
+                    {selectedTerrain && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(null)}
+                        className="text-[10px] text-emerald-700 dark:text-emerald-300 hover:underline shrink-0 font-medium cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                  {selectedTerrain && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(null)}
-                      className="text-[10px] text-emerald-700 dark:text-emerald-300 hover:underline shrink-0 font-medium cursor-pointer"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
+                )}
 
                 {/* Topography Preset Selection */}
                 <div>
@@ -1089,7 +1122,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             {activeTier === 'corridors' && (
               <div className="space-y-3.5">
                 {/* Selected Road Status Banner */}
-                {selectedRoad ? (
+                {selectedRoad && (
                   <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 font-semibold text-blue-900 dark:text-blue-200 truncate">
                       <Route size={14} className="shrink-0 text-trimble-blue" />
@@ -1102,11 +1135,6 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                     >
                       Deselect
                     </button>
-                  </div>
-                ) : (
-                  <div className="p-2 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/60 text-[11px] text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-                    <MousePointer2 size={13} className="text-gray-400 shrink-0" />
-                    <span>Adjust default parameters below or select a road to edit.</span>
                   </div>
                 )}
 
@@ -1714,7 +1742,8 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
               </div>
             )}
             </div>
-          </div>
+            )}
+          </motion.div>
         )}
       </aside>
     </FlyoutSideContext.Provider>

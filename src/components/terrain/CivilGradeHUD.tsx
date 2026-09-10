@@ -16,23 +16,21 @@ import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CivilGradeHUD() {
-  const { 
-    activeTool, 
-    activeCivilGrade, 
-    civilRoadSettings, 
+  const {
+    activeTool,
+    activeCivilGrade,
+    civilRoadSettings,
     cutFillMetrics,
     terrainModifiers,
-    unit
+    unit,
+    showCutFillOverlay
   } = useApp();
 
   const [expanded, setExpanded] = useState<boolean>(false);
   const [minimized, setMinimized] = useState<boolean>(false);
 
-  // Display HUD when using civil tools or when terrain modifiers are present
-  const isCivilMode = ['road', 'pad-rect', 'pad-circle', 'striping', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_sculpt', 'landscape_road'].includes(activeTool);
-  const hasModifiers = terrainModifiers && terrainModifiers.length > 0;
-
-  if (!isCivilMode && !hasModifiers) {
+  // Display HUD only when the Earthwork Cut & Fill Overlay is active
+  if (!showCutFillOverlay) {
     return null;
   }
 

@@ -4649,6 +4649,8 @@ function Scene() {
         const updated = applyPadGradingToTerrain(terrainShape, padSpec);
         if (updated) {
           setShapes(prev => prev.map(s => s.id === terrainShape.id ? { ...s, terrainData: updated } : s));
+          addTerrainModifier(padSpec);
+          setSelectedModifierId(padSpec.id);
           commitHistory();
           setMeasurements(`Graded terrain to ${primitive === 'rectangle' ? 'building' : 'circular'} pad platform (${civilPadSettings.dimensions[0]}m × ${civilPadSettings.dimensions[1]}m) at EL ${targetElev >= 0 ? '+' : ''}${targetElev}m.`);
         } else {
