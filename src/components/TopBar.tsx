@@ -143,7 +143,9 @@ export default function TopBar() {
       isLandscapesToolbarEnabled,
       setIsLandscapesToolbarEnabled,
       layoutMode,
-      setLayoutMode
+      setLayoutMode,
+      terrainModifiers,
+      kernelHost
     } = useApp();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -177,7 +179,9 @@ export default function TopBar() {
   }, []);
 
   const handleNew = () => {
-    if (shapes.length > 0) {
+    const hasKernelContent = kernelHost?.graph && (kernelHost.graph.faces.size > 0 || kernelHost.graph.vertices.size > 0);
+    const hasContent = shapes.length > 0 || (terrainModifiers && terrainModifiers.length > 0) || Boolean(hasKernelContent) || (notes && notes.length > 0);
+    if (hasContent) {
       if (window.confirm('Do you want to save your current design before starting a new one?')) {
         handleSave();
       }

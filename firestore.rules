@@ -48,7 +48,8 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'userId', 'shapes']) &&
              data.name is string && data.name.size() > 0 &&
              data.userId is string &&
-             data.shapes is list;
+             data.shapes is list &&
+             (!('terrainModifiers' in data) || data.terrainModifiers is list);
     }
 
     function isValidMaterial(data) {
@@ -127,6 +128,10 @@ service cloud.firestore {
       allow read, list, get: if isAuthenticated();
       allow create: if isAuthenticated() && isValidCollaboration(request.resource.data);
       allow update, delete: if isAuthenticated();
+    }
+
+    match /test/{testId} {
+      allow read: if true;
     }
   }
 }

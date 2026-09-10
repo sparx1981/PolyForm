@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, RotateCcw, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
+import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
 import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
+import TerrainModifierStack from './terrain/TerrainModifierStack';
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
-import { SceneAnimation, ChatMessage, Collaborator, Shape } from '../types';
+import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier } from '../types';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
@@ -316,7 +317,12 @@ export default function RightPanelStack() {
     setShowCollaboratorCursors,
     diagLog,
     openMaterialsSignal,
-  refreshMaterials
+    refreshMaterials,
+    terrainModifiers,
+    selectedModifierId,
+    setSelectedModifierId,
+    updateTerrainModifier,
+    removeTerrainModifier
   } = useApp();
 
   useEffect(() => {
@@ -369,7 +375,7 @@ export default function RightPanelStack() {
     commitHistory();
   };
 
-  const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame']);
+  const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame', 'terrainModifiers']);
 
   useEffect(() => {
     if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit'].includes(activeTool)) {
@@ -377,6 +383,9 @@ export default function RightPanelStack() {
     }
     if (activeTool === 'timber-frame') {
       setOpenPanels(prev => prev.includes('timberFrame') ? prev : [...prev, 'timberFrame']);
+    }
+    if (['road', 'pad-rect', 'pad-circle', 'striping'].includes(activeTool)) {
+      setOpenPanels(prev => prev.includes('terrainModifiers') ? prev : [...prev, 'terrainModifiers']);
     }
   }, [activeTool]);
 
@@ -813,6 +822,7 @@ export default function RightPanelStack() {
   const [expandedOutlinerRoofs, setExpandedOutlinerRoofs] = React.useState<Set<string>>(new Set());
   const [expandedOutlinerTimber, setExpandedOutlinerTimber] = React.useState<boolean>(false);
   const [expandedTimberSubgroups, setExpandedTimberSubgroups] = React.useState<Set<string>>(new Set());
+  const [expandedOutlinerCivil, setExpandedOutlinerCivil] = React.useState<boolean>(true);
   const selectedLight = customLights.find(l => l.id === selectedLightId);
   
   // Local state for editing in real-time
@@ -2101,7 +2111,175 @@ export default function RightPanelStack() {
                       );
                     })()}
 
-                    {/* 4. OTHER MODEL SHAPES & COMPONENTS */}
+                    {/* 4. SITE, ROADS & PATHWAYS */}
+                    {(terrainModifiers.filter(m => m.type === 'road' || m.type === 'pad').length > 0 || shapes.some(s => s.type === 'terrain')) && (
+                      <div className="rounded border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/15 dark:bg-emerald-950/10 overflow-hidden mt-1.5">
+                        <div
+                          onClick={() => {
+                            setSelectedId(null);
+                            setSelectedIds([]);
+                          }}
+                          className="flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer hover:bg-emerald-100/40 dark:hover:bg-emerald-900/30 group text-xs select-none"
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedOutlinerCivil(!expandedOutlinerCivil);
+                            }}
+                            className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                            title={expandedOutlinerCivil ? "Collapse Site & Corridors" : "Expand Site & Corridors"}
+                          >
+                            <ChevronRight size={13} className={cn("transition-transform duration-200", expandedOutlinerCivil && "rotate-90")} />
+                          </button>
+                          <Route size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span className="flex-1 truncate font-semibold text-gray-800 dark:text-gray-200">
+                            Site, Roads & Pathways
+                          </span>
+                          <span className="text-[9px] font-mono text-gray-400">
+                            {terrainModifiers.filter(m => m.type === 'road' || m.type === 'pad').length + shapes.filter(s => s.type === 'terrain').length}
+                          </span>
+                        </div>
+
+                        {expandedOutlinerCivil && (
+                          <div className="pl-4 pr-1 py-1 space-y-1 border-t border-emerald-100 dark:border-emerald-900/30">
+                            {/* Base Terrain meshes */}
+                            {shapes.filter(s => s.type === 'terrain').map(terrain => {
+                              const isSelected = selectedId === terrain.id;
+                              return (
+                                <div
+                                  key={terrain.id}
+                                  onClick={() => {
+                                    setSelectedId(terrain.id);
+                                    setSelectedIds([terrain.id]);
+                                    setSelectedModifierId(null);
+                                  }}
+                                  className={cn(
+                                    "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-xs",
+                                    isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium"
+                                  )}
+                                >
+                                  <Mountain size={13} className="text-emerald-600 shrink-0" />
+                                  <span className="flex-1 truncate">{terrain.name || "Base Site Terrain"}</span>
+                                  <span className="text-[9px] font-mono text-gray-400">
+                                    {terrain.terrainData ? `${terrain.terrainData.width}×${terrain.terrainData.depth}m` : ''}
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShapes(prev => prev.map(s => s.id === terrain.id ? { ...s, hidden: !s.hidden } : s));
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                    title={terrain.hidden ? "Show Terrain" : "Hide Terrain"}
+                                  >
+                                    {terrain.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {/* Roads & Pathways */}
+                            {terrainModifiers.filter((m): m is any => m.type === 'road').map(road => {
+                              const isSelected = selectedModifierId === road.id;
+                              return (
+                                <div
+                                  key={road.id}
+                                  onClick={() => {
+                                    setSelectedModifierId(road.id);
+                                    setSelectedId(null);
+                                    setSelectedIds([]);
+                                    setActiveTool('road');
+                                  }}
+                                  className={cn(
+                                    "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-xs",
+                                    isSelected && "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-medium"
+                                  )}
+                                >
+                                  <Route size={13} className="text-cyan-500 shrink-0" />
+                                  <span className="flex-1 truncate">{road.name}</span>
+                                  <span className="text-[9px] font-mono text-gray-400">
+                                    {road.width}m width ({road.points.length} pts)
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      updateTerrainModifier(road.id, { enabled: !road.enabled });
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 hover:text-cyan-500 p-0.5 shrink-0"
+                                    title={!road.enabled ? "Enable Corridor" : "Disable Corridor"}
+                                  >
+                                    {!road.enabled ? <EyeOff size={12} /> : <Eye size={12} />}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeTerrainModifier(road.id);
+                                      if (selectedModifierId === road.id) setSelectedModifierId(null);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                    title="Delete Road"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {/* Building Pads */}
+                            {terrainModifiers.filter((m): m is PadModifier => m.type === 'pad').map(pad => {
+                              const isSelected = selectedModifierId === pad.id;
+                              return (
+                                <div
+                                  key={pad.id}
+                                  onClick={() => {
+                                    setSelectedModifierId(pad.id);
+                                    setSelectedId(null);
+                                    setSelectedIds([]);
+                                    setActiveTool(pad.primitive === 'circle' ? 'pad-circle' : 'pad-rect');
+                                  }}
+                                  className={cn(
+                                    "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-xs",
+                                    isSelected && "bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium"
+                                  )}
+                                >
+                                  {pad.primitive === 'circle' ? (
+                                    <CircleIcon size={13} className="text-amber-500 shrink-0" />
+                                  ) : (
+                                    <SquareIcon size={13} className="text-amber-500 shrink-0" />
+                                  )}
+                                  <span className="flex-1 truncate">{pad.name}</span>
+                                  <span className="text-[9px] font-mono text-gray-400">
+                                    {pad.primitive === 'circle' ? `Ø${pad.dimensions[0]}m` : `${pad.dimensions[0]}×${pad.dimensions[1]}m`}, EL {pad.targetElevation >= 0 ? `+${pad.targetElevation}` : pad.targetElevation}m
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      updateTerrainModifier(pad.id, { enabled: !pad.enabled });
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 hover:text-amber-500 p-0.5 shrink-0"
+                                    title={!pad.enabled ? "Enable Pad" : "Disable Pad"}
+                                  >
+                                    {!pad.enabled ? <EyeOff size={12} /> : <Eye size={12} />}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeTerrainModifier(pad.id);
+                                      if (selectedModifierId === pad.id) setSelectedModifierId(null);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                                    title="Delete Pad"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 5. OTHER MODEL SHAPES & COMPONENTS */}
                     {otherShapes.length > 0 && (
                       <div className="space-y-0.5 mt-1.5">
                         {(sortedLevels.length > 0 || roofShapes.length > 0 || timberShapes.length > 0) && (
@@ -4297,6 +4475,18 @@ export default function RightPanelStack() {
             </ErrorBoundary>
           </Panel>
         )}
+
+        <Panel 
+          id="terrainModifiers" 
+          title="Terrain Modifiers" 
+          icon={<Layers size={16} />} 
+          isOpen={openPanels.includes('terrainModifiers')}
+          onToggle={() => togglePanel('terrainModifiers')}
+        >
+          <ErrorBoundary name="Terrain Modifiers" compact>
+            <TerrainModifierStack />
+          </ErrorBoundary>
+        </Panel>
 
         {isMessagingDocked && isMessagingOpen && (
           <Panel 

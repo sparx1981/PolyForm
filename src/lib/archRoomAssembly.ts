@@ -161,15 +161,16 @@ export function calculateBalancedDatumElevation(
 
 /**
  * Performs terrain excavation with safety apron ($Z = Z_0$ with Buffer).
- * Any terrain that clashes with a floor slab is automatically flattened so it does not protrude through.
+ * Any terrain that clashes with a floor slab is automatically flattened below the slab underside so it does not protrude through.
  * 1m of terrain around the floor slab is also flattened.
- * Surrounding terrain beyond 1m is not affected.
+ * Surrounding terrain beyond 1m is smoothly transitioned with a daylight batter slope.
  */
 export function excavateTerrainMesh(
   terrain: Shape,
   roomPolygon2D: Array<[number, number]>,
   datumZ: number,
-  apronMargin: number = 1.0
+  apronMargin: number = 1.0,
+  slabThickness: number = 0.2
 ): TerrainData | null {
   if (!terrain.terrainData) return null;
   const { gridX, gridY, width, depth, heights } = terrain.terrainData;
@@ -178,41 +179,64 @@ export function excavateTerrainMesh(
   const posZ = terrain.position[2];
 
   const newHeights = [...heights];
-  const targetLocalDatum = datumZ - posY;
+  // datumZ is top of floor slab. Underside of floor slab is datumZ - slabThickness.
+  // Excavate 0.15m below underside of floor slab to guarantee zero clashes or peaking through slab.
+  const targetUndersideWorld = datumZ - Math.max(0.05, slabThickness) - 0.15;
+  const targetUndersideLocal = targetUndersideWorld - posY;
+
+  // 1m perimeter apron around the floor slab is graded 50mm below slab top/edge
+  const apronElevWorld = datumZ - Math.max(0.05, slabThickness) - 0.05;
+  const apronElevLocal = apronElevWorld - posY;
+  let modified = false;
 
   for (let iy = 0; iy < gridY; iy++) {
     for (let ix = 0; ix < gridX; ix++) {
-      const worldX = posX - width / 2 + (ix / (gridX - 1)) * width;
-      const worldZ = posZ - depth / 2 + (iy / (gridY - 1)) * depth;
+      const worldX = posX - width / 2 + (ix / Math.max(1, gridX - 1)) * width;
+      const worldZ = posZ - depth / 2 + (iy / Math.max(1, gridY - 1)) * depth;
 
       const idx = iy * gridX + ix;
       const currentH = newHeights[idx];
       const isInside = isPointInPolygon2D(worldX, worldZ, roomPolygon2D);
 
       if (isInside) {
-        // Flat excavation at datum elevation inside building footprint so terrain does not protrude through slab
-        newHeights[idx] = Math.min(currentH, targetLocalDatum);
+        // Flat excavation below floor slab underside so terrain cannot protrude through slab
+        if (currentH > targetUndersideLocal) {
+          newHeights[idx] = targetUndersideLocal;
+          modified = true;
+        }
       } else {
         // Within the 1m excavation safety apron buffer around floor slab
         const edgeDist = distanceToPolygonBoundary2D(worldX, worldZ, roomPolygon2D);
         if (edgeDist <= apronMargin) {
-          // 1m of terrain around the floor slab is also flattened
-          newHeights[idx] = Math.min(currentH, targetLocalDatum);
+          // 1m perimeter apron around the floor slab is cleanly graded (both cut & fill)
+          if (Math.abs(newHeights[idx] - apronElevLocal) > 1e-4) {
+            newHeights[idx] = apronElevLocal;
+            modified = true;
+          }
+        } else if (edgeDist <= apronMargin + 1.8) {
+          // Smooth daylight batter transition over next 1.8m to surrounding terrain
+          const t = (edgeDist - apronMargin) / 1.8;
+          const factor = t * t * (3 - 2 * t);
+          const blendedLocal = apronElevLocal + (currentH - apronElevLocal) * factor;
+          if (Math.abs(newHeights[idx] - blendedLocal) > 1e-4) {
+            newHeights[idx] = blendedLocal;
+            modified = true;
+          }
         }
-        // Any other surrounding terrain (> 1m) is not affected
       }
     }
   }
 
-  return {
+  return modified ? {
     ...terrain.terrainData,
     heights: newHeights,
-  };
+  } : null;
 }
 
 /**
- * Automatically flattens terrain for all floor slabs and foundations present in the shapes collection.
- * Includes a 1m flattened safety apron around each slab.
+ * Automatically flattens terrain for all floor slabs present in the shapes collection.
+ * Perimeter and elevation are strictly based on Floor Slabs (not Foundation Skirts, as foundations go underground).
+ * Includes a 1m flattened safety apron around each slab with feathered daylight batter slope.
  * Can be applied regardless of whether terrain or floor slab was added first.
  */
 export function flattenTerrainForFloorSlabs(
@@ -222,14 +246,13 @@ export function flattenTerrainForFloorSlabs(
 ): TerrainData | null {
   if (!terrain.terrainData) return null;
 
+  // STRICT REQUIREMENT: Base perimeter strictly on 'Floor Slab', NOT 'Foundation Skirt'.
+  // Foundations of a building typically extend down into the ground.
   const slabs = allShapes.filter(s => 
-    s.id !== terrain.id && (
+    s.id !== terrain.id && !s.hidden && (
       s.tags?.includes('floor-slab') ||
-      s.tags?.includes('foundation-skirt') ||
-      s.name?.toLowerCase().includes('floor slab') ||
-      s.name?.toLowerCase().includes('foundation') ||
-      (s.type === 'poly' && s.tags?.includes('architecture'))
-    )
+      (s.name?.toLowerCase().includes('floor slab') && !s.tags?.includes('foundation-skirt') && !s.name?.toLowerCase().includes('foundation'))
+    ) && !s.tags?.includes('foundation-skirt') && !s.name?.toLowerCase().includes('foundation')
   );
 
   if (slabs.length === 0) return null;
@@ -245,9 +268,18 @@ export function flattenTerrainForFloorSlabs(
         const vz = Array.isArray(v) ? v[1] : (v.y ?? v.z ?? 0);
         return [slab.position[0] + vx, slab.position[2] + vz] as [number, number];
       });
-    } else if (Array.isArray(slab.args)) {
-      const w = slab.args[0] || 2;
-      const d = slab.args[2] || slab.args[1] || 2;
+    } else if (slab.type === 'circle') {
+      const radius = Array.isArray(slab.args) ? (slab.args[0] || 5) : 5;
+      const cx = slab.position[0];
+      const cz = slab.position[2];
+      poly2D = [];
+      for (let a = 0; a < 24; a++) {
+        const theta = (a / 24) * Math.PI * 2;
+        poly2D.push([cx + Math.cos(theta) * radius, cz + Math.sin(theta) * radius]);
+      }
+    } else if (Array.isArray(slab.args) || slab.type === 'box' || slab.type === 'rect') {
+      const w = Array.isArray(slab.args) ? (slab.args[0] || 2) : 2;
+      const d = Array.isArray(slab.args) ? (slab.args[2] || slab.args[1] || 2) : 2;
       const cx = slab.position[0];
       const cz = slab.position[2];
       poly2D = [
@@ -260,10 +292,11 @@ export function flattenTerrainForFloorSlabs(
 
     if (poly2D.length < 3) continue;
 
-    const slabH = slab.type === 'poly' ? (slab.args?.height || 0.2) : (Array.isArray(slab.args) ? slab.args[1] || 0.2 : 0.2);
-    const datumZ = slab.position[1];
+    const slabH = slab.type === 'poly' ? ((slab.args as any)?.height || 0.2) : (Array.isArray(slab.args) ? slab.args[1] || 0.2 : 0.2);
+    // Top of floor slab:
+    const datumZ = slab.position[1] + slabH / 2;
 
-    const res = excavateTerrainMesh({ ...terrain, terrainData: currentTerrainData }, poly2D, datumZ, apronMargin);
+    const res = excavateTerrainMesh({ ...terrain, terrainData: currentTerrainData }, poly2D, datumZ, apronMargin, slabH);
     if (res) {
       currentTerrainData = res;
       modified = true;
@@ -312,7 +345,7 @@ export function buildRoomAssembly(
   let modifiedTerrainShapeId: string | null = null;
 
   if (activeTerrain && activeTerrain.terrainData) {
-    updatedTerrainData = excavateTerrainMesh(activeTerrain, roomPoly2D, datumZ, apronMargin);
+    updatedTerrainData = excavateTerrainMesh(activeTerrain, roomPoly2D, datumZ, apronMargin, slabThickness);
     modifiedTerrainShapeId = activeTerrain.id;
   }
 

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem } from './types';
+import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
@@ -245,7 +245,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [quotaLockdownTime, setQuotaLockdownTime] = useState<number>(0);
   const [totalReads, setTotalReads] = useState(0);
   
-  const checkQuota = () => Date.now() < quotaLockdownTime;
+  const checkQuota = () => isQuotaLocked() || Date.now() < quotaLockdownTime;
   const incrementReads = (count: number) => setTotalReads(prev => prev + count);
 
   const [isDiagnosticLogOpen, setIsDiagnosticLogOpen] = useState(false);
@@ -673,6 +673,71 @@ console.log("Created rectangle:", myRect.id);`);
   const [activeScaleFigureCharacter, setActiveScaleFigureCharacter] = useState<string>('architect-alex');
   const [activeScaleFigureHeight, setActiveScaleFigureHeight] = useState<number>(1.78);
 
+  // Civil Toolset & Terrain Studio
+  const [terrainModifiers, setTerrainModifiers] = useState<TerrainModifier[]>([]);
+  const [selectedModifierId, setSelectedModifierId] = useState<string | null>(null);
+  const [activeSplineDraft, setActiveSplineDraft] = useState<[number, number, number][]>([]);
+  const [activePadDraft, setActivePadDraft] = useState<{ center: [number, number, number]; dimensions: [number, number]; primitive: 'rectangle' | 'circle' } | null>(null);
+  const [isBakeModalOpen, setIsBakeModalOpen] = useState<boolean>(false);
+  const [civilRoadSettings, setCivilRoadSettings] = useState<{
+    width: number;
+    maxGradePercent: number;
+    hasCurb: boolean;
+    hasDitch: boolean;
+    curbWidth: number;
+    curbHeight: number;
+    ditchWidth: number;
+    ditchDepth: number;
+    markings: RoadMarkingPreset;
+    material: string;
+  }>({
+    width: 6.0,
+    maxGradePercent: 8.0,
+    hasCurb: true,
+    hasDitch: false,
+    curbWidth: 0.15,
+    curbHeight: 0.15,
+    ditchWidth: 1.2,
+    ditchDepth: 0.35,
+    markings: 'center-dashed',
+    material: 'asphalt-weathered',
+  });
+  const [civilPadSettings, setCivilPadSettings] = useState<{
+    primitive: PadPrimitiveType;
+    batterDistance: number;
+    batterProfile: BatterFalloffType;
+    targetElevation: number;
+    dimensions: [number, number];
+  }>({
+    primitive: 'rectangle',
+    batterDistance: 3.0,
+    batterProfile: 'linear',
+    targetElevation: 1.5,
+    dimensions: [18, 12],
+  });
+  const [civilStripingSettings, setCivilStripingSettings] = useState<{
+    angle: ParkingAngle;
+    stallWidth: number;
+    stallDepth: number;
+    stripeColor: string;
+    doubleRow: boolean;
+  }>({
+    angle: 90,
+    stallWidth: 2.7,
+    stallDepth: 5.5,
+    stripeColor: '#FFFFFF',
+    doubleRow: false,
+  });
+  const [activeCivilGrade, setActiveCivilGrade] = useState<number | null>(null);
+  const [cutFillMetrics, setCutFillMetrics] = useState<CutFillMetrics>({
+    cutVolumeM3: 0,
+    fillVolumeM3: 0,
+    netVolumeM3: 0,
+    cutAreaM2: 0,
+    fillAreaM2: 0,
+  });
+  const [showCutFillOverlay, setShowCutFillOverlay] = useState<boolean>(false);
+
   // Persistence for user settings
   useEffect(() => {
     if (user?.uid) {
@@ -807,7 +872,8 @@ console.log("Created rectangle:", myRect.id);`);
           scenes: data.scenes || [],
           customMaterials: data.customMaterials || [],
           animations: data.animations || [],
-          timberFrameParams: data.timberFrameParams || null
+          timberFrameParams: data.timberFrameParams || null,
+          terrainModifiers: data.terrainModifiers || []
         };
         lastStateHash.current = JSON.stringify(newState);
 
@@ -825,6 +891,7 @@ console.log("Created rectangle:", myRect.id);`);
         if (data.notes) setNotes(data.notes);
         if (data.customLights) setCustomLights(data.customLights);
         if (data.timberFrameParams) setTimberFrameParams(data.timberFrameParams);
+        if (data.terrainModifiers && Array.isArray(data.terrainModifiers)) setTerrainModifiers(data.terrainModifiers.filter((m: any) => m.type !== 'pad'));
         if (data.name) setCurrentModelName(data.name);
         
         setSyncStatus('synced');
@@ -903,7 +970,7 @@ console.log("Created rectangle:", myRect.id);`);
     // kernelRevision stands in for the graph itself: the graph is mutated in
     // place, so hashing it by reference would never change and a
     // geometry-only edit would never be saved.
-    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision, timberFrameParams };
+    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision, timberFrameParams, terrainModifiers };
     const currentStateHash = JSON.stringify(currentState);
     
     if (currentStateHash === lastStateHash.current) {
@@ -930,6 +997,7 @@ console.log("Created rectangle:", myRect.id);`);
           notes,
           customLights,
           timberFrameParams,
+          terrainModifiers,
           // Drawn geometry lives in the kernel graph, not in shapes. Without
           // this it is never persisted, and because the provider does not
           // unmount when you switch documents it also leaks between them:
@@ -956,7 +1024,7 @@ console.log("Created rectangle:", myRect.id);`);
 
     const timeoutId = setTimeout(sync, 5000); // 5 second debounce for model synchronization
     return () => clearTimeout(timeoutId);
-  }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams]);
+  }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers]);
 
   // Service Worker
 
@@ -1184,10 +1252,29 @@ console.log("Created rectangle:", myRect.id);`);
       const rawShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
       const withCutouts = applyStairwellHolesToSlabs(rawShapes);
 
-      const hasTimber = withCutouts.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
+      // Ensure terrain excavation with 1m safety apron is maintained for all floor slabs
+      const terrainShape = withCutouts.find(s => s.type === 'terrain' && s.terrainData);
+      let workingShapes = withCutouts;
+      if (terrainShape && terrainShape.terrainData) {
+        const hasFloorSlabs = withCutouts.some(s => s.id !== terrainShape.id && (
+          s.tags?.includes('floor-slab') ||
+          s.tags?.includes('foundation-skirt') ||
+          s.name?.toLowerCase().includes('floor slab') ||
+          s.name?.toLowerCase().includes('foundation') ||
+          (s.type === 'poly' && s.tags?.includes('architecture'))
+        ));
+        if (hasFloorSlabs) {
+          const updatedTerrain = flattenTerrainForFloorSlabs(terrainShape, withCutouts, 1.0);
+          if (updatedTerrain) {
+            workingShapes = withCutouts.map(s => s.id === terrainShape.id ? { ...s, terrainData: updatedTerrain } : s);
+          }
+        }
+      }
+
+      const hasTimber = workingShapes.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ') || s.id.startsWith('tf-'));
       if (hasTimber) {
         const prevMap = new Map(prev.map(s => [s.id, s]));
-        const nextMap = new Map(withCutouts.map(s => [s.id, s]));
+        const nextMap = new Map(workingShapes.map(s => [s.id, s]));
         const affected = new Set<string>();
 
         const isWallOrRoof = (s: Shape) =>
@@ -1200,7 +1287,7 @@ console.log("Created rectangle:", myRect.id);`);
           s.tags?.some(t => t.includes('door') || t.includes('window')) ||
           s.name?.toLowerCase().includes('door') || s.name?.toLowerCase().includes('window');
 
-        for (const next of withCutouts) {
+        for (const next of workingShapes) {
           const old = prevMap.get(next.id);
           if (!old) {
             if (isWallOrRoof(next)) affected.add(next.id);
@@ -1228,12 +1315,12 @@ console.log("Created rectangle:", myRect.id);`);
 
         if (affected.size > 0) {
           scheduleScopedTimberRecompute(Array.from(affected));
-          saveToHistory(withCutouts);
-          return withCutouts;
+          saveToHistory(workingShapes);
+          return workingShapes;
         }
       }
 
-      const nextShapes = updateTimberFramesIfPresent(withCutouts);
+      const nextShapes = updateTimberFramesIfPresent(workingShapes);
       saveToHistory(nextShapes);
       return nextShapes;
     });
@@ -1277,6 +1364,54 @@ console.log("Created rectangle:", myRect.id);`);
   const commitHistory = () => {
     saveToHistory(shapes);
   };
+
+  const addTerrainModifier = useCallback((mod: TerrainModifier) => {
+    setTerrainModifiers(prev => [...prev, mod]);
+    setSelectedModifierId(mod.id);
+  }, []);
+
+  const updateTerrainModifier = useCallback((id: string, updates: Partial<TerrainModifier>) => {
+    setTerrainModifiers(prev => prev.map(m => m.id === id ? ({ ...m, ...updates } as TerrainModifier) : m));
+  }, []);
+
+  const removeTerrainModifier = useCallback((id: string) => {
+    setTerrainModifiers(prev => prev.filter(m => m.id !== id));
+    setSelectedModifierId(prev => prev === id ? null : prev);
+  }, []);
+
+  const reorderTerrainModifiers = useCallback((sourceIndex: number, destIndex: number) => {
+    setTerrainModifiers(prev => {
+      if (sourceIndex < 0 || sourceIndex >= prev.length || destIndex < 0 || destIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(destIndex, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const bakeTerrainModifiers = useCallback(async (mode: 'mesh' | 'glb' | 'obj') => {
+    const activeModifiers = terrainModifiers.filter(m => m.enabled);
+    if (mode === 'mesh') {
+      const newBakedShape: Shape = {
+        id: `baked-terrain-${Date.now()}`,
+        name: `Baked Civil Terrain (${activeModifiers.length} Modifiers)`,
+        type: 'box',
+        position: [0, 0, 0],
+        args: [30, 1.5, 30],
+        color: '#64748b',
+        roughness: 0.9,
+        metalness: 0.05,
+        opacity: 1.0,
+      };
+      setShapes(prev => [...prev, newBakedShape]);
+      saveToHistory([...shapes, newBakedShape]);
+      setConsoleOutput(prev => [...prev, `[Terrain Studio] Baked ${activeModifiers.length} civil modifiers into static mesh.`]);
+      setViewportToast(`Terrain baked: ${activeModifiers.length} modifiers flattened into scene mesh.`);
+    } else {
+      setConsoleOutput(prev => [...prev, `[Terrain Studio] Exported ${activeModifiers.length} modifiers as ${mode.toUpperCase()}.`]);
+      setViewportToast(`Civil terrain exported as ${mode.toUpperCase()}.`);
+    }
+  }, [terrainModifiers, shapes]);
 
   const undo = () => {
     if (historyIndex > 0) {
@@ -1486,6 +1621,11 @@ console.log("Created rectangle:", myRect.id);`);
   const clearShapes = () => {
     setShapes([]);
     replaceKernelGraph(null);
+    setTerrainModifiers([]);
+    setSelectedModifierId(null);
+    setActiveSplineDraft([]);
+    setActivePadDraft(null);
+    setSelectedFaceIds([]);
     setCurrentModelId(null);
     setCurrentModelName(null);
     setSyncStatus('unsaved');
@@ -1507,9 +1647,23 @@ console.log("Created rectangle:", myRect.id);`);
     setGridEnabled(true);
     setSunIntensity(1.0);
     setLightPosition([5, 5, 5]);
+    setActiveTool('select');
+    setCutFillMetrics({
+      cutVolume: 0,
+      fillVolume: 0,
+      netVolume: 0,
+      cutArea: 0,
+      fillArea: 0,
+      balancedElevation: null
+    });
+    setActiveCivilGrade(null);
+    setIsBakeModalOpen(false);
     
-    // Broadcast camera reset
+    // Broadcast camera reset and 3D space clear
     window.dispatchEvent(new CustomEvent('reset-camera'));
+    window.dispatchEvent(new CustomEvent('clear-3d-space'));
+    
+    recordAction(`sdk.clear();`);
   };
 
   const handleSetShadowsEnabled = (enabled: boolean) => {
@@ -1900,7 +2054,35 @@ console.log("Created rectangle:", myRect.id);`);
       floorTransparency,
       setFloorTransparency,
       fixturesTransparency,
-      setFixturesTransparency
+      setFixturesTransparency,
+      // Civil Toolset & Terrain Studio
+      terrainModifiers,
+      setTerrainModifiers,
+      selectedModifierId,
+      setSelectedModifierId,
+      isBakeModalOpen,
+      setIsBakeModalOpen,
+      civilRoadSettings,
+      setCivilRoadSettings,
+      civilPadSettings,
+      setCivilPadSettings,
+      civilStripingSettings,
+      setCivilStripingSettings,
+      activeCivilGrade,
+      setActiveCivilGrade,
+      cutFillMetrics,
+      setCutFillMetrics,
+      showCutFillOverlay,
+      setShowCutFillOverlay,
+      activeSplineDraft,
+      setActiveSplineDraft,
+      activePadDraft,
+      setActivePadDraft,
+      addTerrainModifier,
+      updateTerrainModifier,
+      removeTerrainModifier,
+      reorderTerrainModifiers,
+      bakeTerrainModifiers
     }}>
       {children}
     </AppContext.Provider>

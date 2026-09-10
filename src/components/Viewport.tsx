@@ -55,7 +55,14 @@ import {
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
-import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl } from '../types';
+import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier } from '../types';
+import CutFillVolumeOverlay from './terrain/CutFillVolumeOverlay';
+import RoadSplineOverlay from './terrain/RoadSplineOverlay';
+import ParametricPadOverlay from './terrain/ParametricPadOverlay';
+import { deduplicateKnots, clampSplineGradeWithTransitions, sanitizeElevation } from '../lib/terrain/math';
+import { applyPadGradingToTerrain } from '../lib/terrain/padGeometry';
+import { applyRoadGradingToTerrain } from '../lib/terrain/roadGeometry';
+import { createTerrainShape } from '../lib/terrain/terrainFactory';
 import { getLandscapeCanvas, LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { getRoofTileCanvas } from '../lib/roofTileGenerator';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
@@ -1357,7 +1364,20 @@ function Scene() {
     interiorWallTransparency,
     roofTransparency,
     floorTransparency,
-    fixturesTransparency
+    fixturesTransparency,
+    terrainModifiers,
+    setTerrainModifiers,
+    selectedModifierId,
+    setSelectedModifierId,
+    activeSplineDraft,
+    setActiveSplineDraft,
+    activePadDraft,
+    setActivePadDraft,
+    civilRoadSettings,
+    civilPadSettings,
+    civilStripingSettings,
+    addTerrainModifier,
+    updateTerrainModifier
   } = useApp();
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
@@ -2930,6 +2950,29 @@ function Scene() {
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleClearScene = () => {
+      setWallVertices([]);
+      setPolyVertices([]);
+      setBezierKnots([]);
+      setFenceVertices([]);
+      setRoadPoints([]);
+      setDrawingStart(null);
+      setPreviewShape(null);
+      setPushPullState(null);
+      pushPullStateRef.current = null;
+      setBevelState(null);
+      setHoveredFace(null);
+      setContextMenu(null);
+      setChamferPreview(null);
+      setFaceOffsetPreview(null);
+      setPushPullPreview(null);
+      setPlacingNotePos(null);
+    };
+    window.addEventListener('clear-3d-space', handleClearScene);
+    return () => window.removeEventListener('clear-3d-space', handleClearScene);
+  }, []);
+
 
   useEffect(() => {
     const handleExportAdvanced = (e: any) => {
@@ -3384,15 +3427,35 @@ function Scene() {
       }
     );
 
-    if (assembly.slabShape) {
-      addShape(assembly.slabShape);
-    }
-    if (assembly.foundationShape) {
-      addShape(assembly.foundationShape);
-    }
-
     setShapes(prevShapes => {
-      const oriented = orientRoomWallsToExterior(prevShapes, roomPoly2D);
+      let next = [...prevShapes];
+      if (assembly.slabShape) {
+        next.push(assembly.slabShape);
+      }
+      if (assembly.foundationShape) {
+        next.push(assembly.foundationShape);
+      }
+
+      // Re-align all room perimeter walls so their base sits precisely on the top of the floor slab (datumZ)
+      next = next.map(s => {
+        if (s.type === 'wall') {
+          const wPos = new THREE.Vector3(...s.position);
+          const isPartOfRoom = roomPoly2D.some(([rx, rz]) => {
+            const wLen = Array.isArray(s.args) ? (s.args[0] || 3.0) : 3.0;
+            return Math.hypot(wPos.x - rx, wPos.z - rz) < Math.max(2.5, wLen);
+          });
+          if (isPartOfRoom) {
+            const wallH = Array.isArray(s.args) ? (s.args[1] || 2.8) : 2.8;
+            return {
+              ...s,
+              position: [s.position[0], assembly.datumZ + wallH / 2, s.position[2]],
+            };
+          }
+        }
+        return s;
+      });
+
+      const oriented = orientRoomWallsToExterior(next, roomPoly2D);
       return assembly.updatedTerrainData && assembly.modifiedTerrainShapeId
         ? oriented.map(s => s.id === assembly.modifiedTerrainShapeId ? { ...s, terrainData: assembly.updatedTerrainData! } : s)
         : oriented;
@@ -3419,6 +3482,47 @@ function Scene() {
       window.removeEventListener('polyform:close-wall-room', handleCloseRoomEvent);
     };
   }, [activeTool, wallVertices, closeWallLoopAndAssembleRoom, finalizeWallChain]);
+
+  const finalizeCivilRoadDraft = useCallback(() => {
+    if (activeSplineDraft.length < 2) return;
+    const sanitizedDraft = activeSplineDraft.map(p => [p[0], sanitizeElevation(p[1]), p[2]] as [number, number, number]);
+    const deduped = deduplicateKnots(sanitizedDraft, 0.15);
+    if (deduped.length < 2) return;
+    const finalPoints = clampSplineGradeWithTransitions(deduped, civilRoadSettings.maxGradePercent);
+
+    const newRoad: RoadModifier = {
+      id: `road-${Date.now()}`,
+      name: `Road ${terrainModifiers.filter(m => m.type === 'road').length + 1}`,
+      type: 'road',
+      enabled: true,
+      points: finalPoints,
+      width: civilRoadSettings.width,
+      maxGradePercent: civilRoadSettings.maxGradePercent,
+      bankingAngle: 0,
+      profile: {
+        width: civilRoadSettings.curbWidth,
+        height: civilRoadSettings.curbHeight,
+        ditchWidth: civilRoadSettings.ditchWidth,
+        ditchDepth: civilRoadSettings.ditchDepth,
+        hasCurb: civilRoadSettings.hasCurb,
+        hasDitch: civilRoadSettings.hasDitch,
+      },
+      markings: civilRoadSettings.markings,
+    };
+    addTerrainModifier(newRoad);
+    setSelectedModifierId(newRoad.id);
+    setActiveSplineDraft([]);
+    setMeasurements(`Created Spline Road (${newRoad.points.length} alignment knots).`);
+
+    // Immediately grade terrain underneath the new road corridor to prevent clashes
+    const terrainShape = shapes.find(s => s.type === 'terrain' && s.terrainData);
+    if (terrainShape) {
+      const updated = applyRoadGradingToTerrain(terrainShape, newRoad);
+      if (updated) {
+        setShapes(prev => prev.map(s => s.id === terrainShape.id ? { ...s, terrainData: updated } : s));
+      }
+    }
+  }, [activeSplineDraft, civilRoadSettings, terrainModifiers, addTerrainModifier, setSelectedModifierId, setActiveSplineDraft, setMeasurements, shapes, setShapes]);
 
   const closeBezierLoop = useCallback(() => {
     const currentKnots = bezierKnots.length > 0 ? bezierKnots : bezierToolRef.current.getKnots();
@@ -3721,6 +3825,14 @@ function Scene() {
         if (activeTool === 'bezier' && bezierKnots.length > 0) {
           diagLog('TOOL', 'Bézier drawing cancelled', { knotCount: bezierKnots.length });
         }
+        if (activeTool === 'road' && activeSplineDraft.length > 0) {
+          setActiveSplineDraft([]);
+          setMeasurements('Road alignment draft cancelled.');
+        }
+        if ((activeTool === 'pad-rect' || activeTool === 'pad-circle') && activePadDraft) {
+          setActivePadDraft(null);
+        }
+        setSelectedModifierId(null);
         setRectangleInputState({ active: false, startPoint: null, width: '', depth: '' });
         setDrawingStart(null);
         setDrawingNormal(null);
@@ -3800,6 +3912,11 @@ function Scene() {
         if (activeTool === 'wall' && wallVertices.length > 0) {
           e.preventDefault();
           finalizeWallChain();
+          return;
+        }
+        if (activeTool === 'road' && activeSplineDraft.length >= 2) {
+          e.preventDefault();
+          finalizeCivilRoadDraft();
           return;
         }
         if ((activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0) {
@@ -4281,14 +4398,18 @@ function Scene() {
         if (!pointToPlace) {
           let basePlaneY = ((activeStory || 1) - 1) * 2.8;
           const intersects = raycaster.intersectObjects(scene.children, true);
-          const hitShapeObj = intersects.find(i => i.object.userData?.isShape);
-          if (hitShapeObj && hitShapeObj.object.userData?.id) {
-            const hitSh = shapes.find(s => s.id === hitShapeObj.object.userData.id);
+          const hitShapeObj = intersects.find(i => i.object.userData?.isShape || i.object.name?.includes('terrain') || (i.object as any).isMesh);
+          if (hitShapeObj) {
+            const hitId = hitShapeObj.object.userData?.id;
+            const hitSh = shapes.find(s => s.id === hitId);
             if (hitSh && hitSh.type === 'wall') {
               const wH = Array.isArray(hitSh.args) ? hitSh.args[1] || 2.8 : 2.8;
               basePlaneY = hitSh.position[1] - wH / 2;
             } else if (hitSh && (hitSh.type === 'poly' || hitSh.tags?.includes('floor-slab'))) {
               basePlaneY = hitSh.position[1];
+            } else if ((hitSh && hitSh.type === 'terrain') || hitShapeObj.object.name?.includes('terrain')) {
+              basePlaneY = hitShapeObj.point.y;
+              p = hitShapeObj.point.clone();
             }
           }
           const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), -basePlaneY);
@@ -4311,6 +4432,11 @@ function Scene() {
         diagLog("TOOL", "Wall started at point", { pos: [p.x, p.y, p.z] });
       } else {
         if (!pointToPlace) pointToPlace = e.point.clone();
+
+        // Enforce coplanarity with initial wall vertex
+        if (wallVertices.length > 0) {
+          pointToPlace.y = wallVertices[0].y;
+        }
 
         // Enforce: Interior wall vertices must remain inside the room
         if (wallJustification === 'interior') {
@@ -4438,6 +4564,145 @@ function Scene() {
         const nextPts = [...roadPoints, hitPoint];
         setRoadPoints(nextPts);
         setMeasurements(`Road Path: ${nextPts.length} points placed · Click to add curve points · Double click to finalize.`);
+      }
+      return;
+    }
+
+    if (activeTool === 'terrain') {
+      e.stopPropagation();
+      const existing = shapes.find(s => s.type === 'terrain' && !s.hidden);
+      if (existing) {
+        setSelectedId(existing.id);
+        setSelectedIds([existing.id]);
+        setMeasurements(`Base Terrain: ${existing.name || 'Site Terrain'} selected. Use Landscape Toolbar to configure dimensions, topography & textures.`);
+      } else {
+        const newTerrain = createTerrainShape({
+          width: 50,
+          depth: 50,
+          resolution: 32,
+          topography: 'flat',
+          position: [0, 0, 0]
+        });
+        addShape(newTerrain);
+        setSelectedId(newTerrain.id);
+        setSelectedIds([newTerrain.id]);
+        commitHistory();
+        setMeasurements(`Created Base Terrain Canvas (50m × 50m). Now use Spline Road and Building Pad tools to design site infrastructure.`);
+      }
+      return;
+    }
+
+    if (activeTool === 'road') {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      const pt: [number, number, number] = [hitPoint.x, hitPoint.y, hitPoint.z];
+
+      if (e.nativeEvent.detail === 2 || (activeSplineDraft.length > 0 && hitPoint.distanceTo(new THREE.Vector3(...activeSplineDraft[activeSplineDraft.length - 1])) < 0.25)) {
+        finalizeCivilRoadDraft();
+      } else {
+        const sanitizedPt: [number, number, number] = [hitPoint.x, sanitizeElevation(hitPoint.y, 0), hitPoint.z];
+        if (activeSplineDraft.length > 0) {
+          const lastPt = activeSplineDraft[activeSplineDraft.length - 1];
+          const dist = Math.hypot(sanitizedPt[0] - lastPt[0], sanitizedPt[2] - lastPt[2]);
+          if (dist < 0.15) {
+            // Coincident knot deduplication: ignore points closer than 0.15m
+            return;
+          }
+        }
+        const nextPts = [...activeSplineDraft, sanitizedPt];
+        setActiveSplineDraft(nextPts);
+        setMeasurements(`Civil Road Alignment: ${nextPts.length} knots placed · Click next knot · Double-click / Enter to finalize.`);
+      }
+      return;
+    }
+
+    if (activeTool === 'pad-rect' || activeTool === 'pad-circle') {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      const primitive = activeTool === 'pad-rect' ? 'rectangle' : 'circle';
+      const targetElev = sanitizeElevation(civilPadSettings.targetElevation, 0);
+
+      const padSpec: PadModifier = {
+        id: `pad-${Date.now()}`,
+        name: `${primitive === 'rectangle' ? 'Building' : 'Circular'} Pad`,
+        type: 'pad',
+        enabled: true,
+        center: [hitPoint.x, targetElev, hitPoint.z],
+        primitive,
+        dimensions: [civilPadSettings.dimensions[0], civilPadSettings.dimensions[1]],
+        rotationY: 0,
+        targetElevation: targetElev,
+        batterDistance: civilPadSettings.batterDistance,
+        batterProfile: civilPadSettings.batterProfile,
+      };
+
+      setActivePadDraft(null);
+      setSelectedModifierId(null);
+
+      // Immediately adjust terrain height to match placed pad footprint and batter slope
+      const terrainShape = shapes.find(s => s.type === 'terrain' && s.terrainData);
+      if (terrainShape) {
+        const updated = applyPadGradingToTerrain(terrainShape, padSpec);
+        if (updated) {
+          setShapes(prev => prev.map(s => s.id === terrainShape.id ? { ...s, terrainData: updated } : s));
+          commitHistory();
+          setMeasurements(`Graded terrain to ${primitive === 'rectangle' ? 'building' : 'circular'} pad platform (${civilPadSettings.dimensions[0]}m × ${civilPadSettings.dimensions[1]}m) at EL ${targetElev >= 0 ? '+' : ''}${targetElev}m.`);
+        } else {
+          setMeasurements(`Pad location is outside the terrain boundaries.`);
+        }
+      } else {
+        setMeasurements(`No terrain canvas found. Create or select a terrain canvas first.`);
+      }
+      return;
+    }
+
+    if (activeTool === 'striping') {
+      e.stopPropagation();
+      if (selectedModifierId) {
+        const targetPad = terrainModifiers.find(m => m.id === selectedModifierId && m.type === 'pad');
+        if (targetPad) {
+          updateTerrainModifier(targetPad.id, {
+            surfaceModifier: {
+              id: `surf-${targetPad.id}`,
+              name: `${targetPad.name} Striping`,
+              type: 'surface',
+              enabled: true,
+              hostPadId: targetPad.id,
+              pattern: 'parking-striping',
+              parkingConfig: { ...civilStripingSettings },
+            }
+          });
+          setMeasurements(`Applied parking stall striping to ${targetPad.name}.`);
+        }
+      } else {
+        // If clicking a pad without selecting first
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+        const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+        const nearestPad = terrainModifiers.find(m => {
+          if (m.type !== 'pad') return false;
+          const padCenter = new THREE.Vector3(m.center[0], m.targetElevation, m.center[2]);
+          return hitPoint.distanceTo(padCenter) < Math.max(m.dimensions[0], m.dimensions[1]);
+        });
+        if (nearestPad) {
+          updateTerrainModifier(nearestPad.id, {
+            surfaceModifier: {
+              id: `surf-${nearestPad.id}`,
+              name: `${nearestPad.name} Striping`,
+              type: 'surface',
+              enabled: true,
+              hostPadId: nearestPad.id,
+              pattern: 'parking-striping',
+              parkingConfig: { ...civilStripingSettings },
+            }
+          });
+          setSelectedModifierId(nearestPad.id);
+          setMeasurements(`Applied parking stall striping to ${nearestPad.name}.`);
+        }
       }
       return;
     }
@@ -5088,14 +5353,17 @@ function Scene() {
       let basePlaneY = ((activeStory || 1) - 1) * 2.8;
       if (!wallPlane) {
         const intersects = raycaster.intersectObjects(scene.children, true);
-        const hitShapeObj = intersects.find(i => i.object.userData?.isShape);
-        if (hitShapeObj && hitShapeObj.object.userData?.id) {
-          const hitSh = shapes.find(s => s.id === hitShapeObj.object.userData.id);
+        const hitShapeObj = intersects.find(i => i.object.userData?.isShape || i.object.name?.includes('terrain') || (i.object as any).isMesh);
+        if (hitShapeObj) {
+          const hitId = hitShapeObj.object.userData?.id;
+          const hitSh = shapes.find(s => s.id === hitId);
           if (hitSh && hitSh.type === 'wall') {
             const wH = Array.isArray(hitSh.args) ? hitSh.args[1] || 2.8 : 2.8;
             basePlaneY = hitSh.position[1] - wH / 2;
           } else if (hitSh && (hitSh.type === 'poly' || hitSh.tags?.includes('floor-slab'))) {
             basePlaneY = hitSh.position[1];
+          } else if ((hitSh && hitSh.type === 'terrain') || hitShapeObj.object.name?.includes('terrain')) {
+            basePlaneY = hitShapeObj.point.y;
           }
         }
       }
@@ -5697,6 +5965,39 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'pad-rect' || activeTool === 'pad-circle') {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      const primitive = activeTool === 'pad-rect' ? 'rectangle' : 'circle';
+      setActivePadDraft({
+        center: [hitPoint.x, civilPadSettings.targetElevation, hitPoint.z],
+        dimensions: [civilPadSettings.dimensions[0], civilPadSettings.dimensions[1]],
+        primitive,
+      });
+      setMeasurements(`Grading Pad: Click to place ${primitive} pad (${civilPadSettings.dimensions[0]}m × ${civilPadSettings.dimensions[1]}m) at EL ${civilPadSettings.targetElevation >= 0 ? '+' : ''}${civilPadSettings.targetElevation}m`);
+      return;
+    }
+
+    if (activeTool === 'road' && activeSplineDraft.length > 0) {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      const lastKnot = new THREE.Vector3(...activeSplineDraft[activeSplineDraft.length - 1]);
+      const dist = lastKnot.distanceTo(hitPoint);
+      setMeasurements(`Road Alignment: ${activeSplineDraft.length} knots · Span to cursor: ${dist.toFixed(2)}m · Click next knot · Double-click / Enter to finalize`);
+    }
+
+    if (activeTool === 'terrain') {
+      const existing = shapes.find(s => s.type === 'terrain' && !s.hidden);
+      if (existing) {
+        setMeasurements(`Base Terrain: Active (${existing.terrainData?.width || 50}m × ${existing.terrainData?.depth || 50}m) · Click to select · Configure in Landscape Toolbar`);
+      } else {
+        setMeasurements(`Base Terrain Canvas: Click in 3D viewport to add 50m × 50m site terrain · Or configure in Landscape Toolbar`);
+      }
+      return;
+    }
+
     // ---- Hover snapping, BEFORE a drag begins ----
     //
     // The snap pass below lives inside `if (drawingStart && drawingNormal)`,
@@ -6132,7 +6433,7 @@ function Scene() {
             args: [radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2]
           });
           setMeasurements(`Radius: ${formatValue(radius, unit, 1)}`);
-        } else if (activeTool === 'step') {
+        } else if ((activeTool as string) === 'step') {
           const stepPos = target.clone().add(drawingNormal.clone().multiplyScalar(0.09));
           setPreviewShape({
             type: 'step',
@@ -6141,7 +6442,7 @@ function Scene() {
             args: [1.0, 0.18, 0.30]
           });
           setMeasurements(`Step: 1.00m × 0.30m × 0.18m`);
-        } else if (activeTool === 'staircase') {
+        } else if ((activeTool as string) === 'staircase') {
           const stairPos = target.clone().add(drawingNormal.clone().multiplyScalar(1.08));
           setPreviewShape({
             type: 'staircase',
@@ -6879,6 +7180,7 @@ function Scene() {
         setSelectedSurface(null);
       }
       setSelectedLightId(null);
+      setSelectedModifierId(null);
     } else if (activeTool === 'paint') {
     if (!e.shiftKey && subFaceIndex !== undefined) {
       // Apply to sub-face
@@ -8147,7 +8449,7 @@ function Scene() {
               return;
             }
             if (placingLightId || activeTool === 'scale_figure') handlePointerDown(e);
-            else if (activeTool === 'select') {
+            else if (activeTool === 'select' || true) {
               if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
                 return;
               }
@@ -8156,6 +8458,7 @@ function Scene() {
               setSelectedFaceIds([]);
               setSelectedLightId(null);
               setSelectedSurface(null);
+              setSelectedModifierId(null);
             }
           }}
         >
@@ -8186,7 +8489,7 @@ function Scene() {
             handlePointerDown(e);
             return;
           }
-          if (activeTool === 'select') {
+          if (activeTool === 'select' || true) {
             if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
               return;
             }
@@ -8195,6 +8498,7 @@ function Scene() {
             setSelectedFaceIds([]);
             setSelectedLightId(null);
             setSelectedSurface(null);
+            setSelectedModifierId(null);
           }
         }}
       >
@@ -8202,7 +8506,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -8219,6 +8523,8 @@ function Scene() {
               finishBezierOpenPath();
             } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
               finalizeRoadCreation(roadPoints);
+            } else if (activeTool === 'road' && activeSplineDraft.length >= 2) {
+              finalizeCivilRoadDraft();
             }
           }}
         >
@@ -8227,7 +8533,7 @@ function Scene() {
         </mesh>
       )}
 
-      {(drawingStart || pushPullState || isSculptingDragRef.current || (activeTool === 'wall' && wallVertices.length > 0) || (activeTool === 'poly' && polyVertices.length > 0) || (activeTool === 'bezier' && bezierKnots.length > 0) || ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length > 0)) && (
+      {(drawingStart || pushPullState || isSculptingDragRef.current || (activeTool === 'wall' && wallVertices.length > 0) || (activeTool === 'poly' && polyVertices.length > 0) || (activeTool === 'bezier' && bezierKnots.length > 0) || ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length > 0) || (activeTool === 'road' && activeSplineDraft.length > 0)) && (
         <mesh 
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -8242,6 +8548,8 @@ function Scene() {
               finishBezierOpenPath();
             } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
               finalizeRoadCreation(roadPoints);
+            } else if (activeTool === 'road' && activeSplineDraft.length >= 2) {
+              finalizeCivilRoadDraft();
             }
           }}
         >
@@ -10037,6 +10345,11 @@ function Scene() {
           ))}
         </group>
       )}
+
+      {/* PolyForm Terrain Studio - Civil Overlays */}
+      <CutFillVolumeOverlay />
+      <RoadSplineOverlay />
+      <ParametricPadOverlay />
 
       {(ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))) && (
         <EffectComposer enableNormalPass={ambientOcclusionEnabled}>

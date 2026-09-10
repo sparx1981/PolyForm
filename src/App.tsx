@@ -33,6 +33,8 @@ import { DeveloperSuite } from './components/DeveloperSuite';
 import { CodeRecorder } from './components/CodeRecorder';
 import { CustomToolbarOverlay } from './components/CustomToolbarOverlay';
 import { ToolModifierPalette } from './components/ToolModifierPalette';
+import CivilGradeHUD from './components/terrain/CivilGradeHUD';
+import BakeModal from './components/terrain/BakeModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
 
@@ -525,6 +527,7 @@ function AppContent() {
           )}
 
           <Viewport />
+          <CivilGradeHUD />
 
           {!isToolModifierDocked && (
             <ErrorBoundary name="Tool Modifiers">
@@ -625,6 +628,7 @@ function AppContent() {
       <DeveloperSuite />
       <CodeRecorder />
       <CustomToolbarOverlay />
+      <BakeModal />
     </div>
   );
 }

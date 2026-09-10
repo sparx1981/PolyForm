@@ -1,16 +1,30 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
 export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1'); // Default region, change if you deployed elsewhere
 export const googleProvider = new GoogleAuthProvider();
+
+// Validate connection to Firestore on initialization
+export async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('the client is offline') || error.message.includes('unavailable'))) {
+      console.warn('[FIRESTORE] Connection check: client operating in offline mode or network delayed.');
+    }
+  }
+}
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',
@@ -73,6 +87,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
      quotaLockdownUntil = Date.now() + 600000; // 10 minute lockdown
      console.warn(`[QUOTA] Global lockdown initiated until ${new Date(quotaLockdownUntil).toLocaleTimeString()}`);
      return; // Silent fail for this specific call to prevent crash loops
+  }
+
+  // If offline or unavailable, prevent throwing fatal unhandled exceptions
+  if (errorMessage.includes('unavailable') || errorMessage.includes('client is offline') || errorMessage.includes('offline')) {
+    console.warn(`[FIRESTORE] Backend currently unreachable (${errorMessage}). Operating in offline mode.`);
+    return;
   }
   
   throw new Error(JSON.stringify(errInfo));

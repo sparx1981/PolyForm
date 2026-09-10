@@ -3,6 +3,8 @@ import type * as THREE from 'three';
 import type { FaceId } from './lib/geometry/types';
 import type { ToolbarKey, DockZone } from './AppContext';
 
+export type CivilToolMode = 'terrain' | 'road' | 'pad-rect' | 'pad-circle' | 'striping';
+
 export type ToolType = 
   | 'select' | 'lasso' | 'eraser' | 'paint' | 'component'
   | 'line' | 'poly' | 'bezier' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
@@ -14,7 +16,10 @@ export type ToolType =
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
   | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock'
-  | 'roof' | 'timber-frame' | 'scale_figure';
+  | 'roof' | 'timber-frame' | 'scale_figure'
+  | CivilToolMode;
+
+export type ToolMode = ToolType | CivilToolMode;
 
 export type SkyboxType = 'none' | 'golden-hour' | 'woodland' | 'sunrise' | 'twilight' | 'cyberspace-neon' | 'studio';
 
@@ -24,12 +29,15 @@ export interface TerrainData {
   width: number;
   depth: number;
   heights: number[];
+  baseHeights?: number[];
   masks?: number[];
   shadingMode?: 'default' | 'slope' | 'elevation' | 'aspect' | 'contours';
   contourInterval?: number;
   zones?: Array<{ id: string; name: string; color: string; polygon: [number, number][] }>;
   textureUrl?: string;
   textureScale?: number;
+  roughness?: number;
+  topography?: string;
 }
 
 const KNOWN_TEXTURE_IDS = new Set([
@@ -316,8 +324,8 @@ export interface AppState {
   setToolbarVisibility: (visibility: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void;
   panelVisibility: Record<string, boolean>;
   setPanelVisibility: (visibility: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void;
-  contextMenu: { x: number, y: number, type: 'surface' | 'multi' | 'light', data?: any } | null;
-  setContextMenu: (menu: { x: number, y: number, type: 'surface' | 'multi' | 'light', data?: any } | null) => void;
+  contextMenu: { x: number, y: number, type: 'surface' | 'multi' | 'light' | 'kernel', data?: any, faceId?: any } | null;
+  setContextMenu: (menu: { x: number, y: number, type: 'surface' | 'multi' | 'light' | 'kernel', data?: any, faceId?: any } | null) => void;
   undo: () => void;
   redo: () => void;
   recordAction: (code: string) => void;
@@ -591,6 +599,80 @@ export interface AppState {
   setFloorTransparency: (val: number | ((prev: number) => number)) => void;
   fixturesTransparency: number;
   setFixturesTransparency: (val: number | ((prev: number) => number)) => void;
+  // Civil Toolset & Terrain Studio
+  terrainModifiers: TerrainModifier[];
+  setTerrainModifiers: React.Dispatch<React.SetStateAction<TerrainModifier[]>>;
+  selectedModifierId: string | null;
+  setSelectedModifierId: (id: string | null) => void;
+  isBakeModalOpen: boolean;
+  setIsBakeModalOpen: (open: boolean) => void;
+  civilRoadSettings: {
+    width: number;
+    maxGradePercent: number;
+    hasCurb: boolean;
+    hasDitch: boolean;
+    curbWidth: number;
+    curbHeight: number;
+    ditchWidth: number;
+    ditchDepth: number;
+    markings: RoadMarkingPreset;
+    material?: string;
+  };
+  setCivilRoadSettings: React.Dispatch<React.SetStateAction<{
+    width: number;
+    maxGradePercent: number;
+    hasCurb: boolean;
+    hasDitch: boolean;
+    curbWidth: number;
+    curbHeight: number;
+    ditchWidth: number;
+    ditchDepth: number;
+    markings: RoadMarkingPreset;
+    material?: string;
+  }>>;
+  civilPadSettings: {
+    primitive: PadPrimitiveType;
+    batterDistance: number;
+    batterProfile: BatterFalloffType;
+    targetElevation: number;
+    dimensions: [number, number];
+  };
+  setCivilPadSettings: React.Dispatch<React.SetStateAction<{
+    primitive: PadPrimitiveType;
+    batterDistance: number;
+    batterProfile: BatterFalloffType;
+    targetElevation: number;
+    dimensions: [number, number];
+  }>>;
+  civilStripingSettings: {
+    angle: ParkingAngle;
+    stallWidth: number;
+    stallDepth: number;
+    stripeColor: string;
+    doubleRow: boolean;
+  };
+  setCivilStripingSettings: React.Dispatch<React.SetStateAction<{
+    angle: ParkingAngle;
+    stallWidth: number;
+    stallDepth: number;
+    stripeColor: string;
+    doubleRow: boolean;
+  }>>;
+  activeCivilGrade: number | null;
+  setActiveCivilGrade: (grade: number | null) => void;
+  cutFillMetrics: CutFillMetrics;
+  setCutFillMetrics: (metrics: CutFillMetrics | ((prev: CutFillMetrics) => CutFillMetrics)) => void;
+  showCutFillOverlay: boolean;
+  setShowCutFillOverlay: React.Dispatch<React.SetStateAction<boolean>>;
+  activeSplineDraft: [number, number, number][];
+  setActiveSplineDraft: React.Dispatch<React.SetStateAction<[number, number, number][]>>;
+  activePadDraft: { center: [number, number, number]; dimensions: [number, number]; primitive: 'rectangle' | 'circle' } | null;
+  setActivePadDraft: React.Dispatch<React.SetStateAction<{ center: [number, number, number]; dimensions: [number, number]; primitive: 'rectangle' | 'circle' } | null>>;
+  addTerrainModifier: (mod: TerrainModifier) => void;
+  updateTerrainModifier: (id: string, updates: Partial<TerrainModifier>) => void;
+  removeTerrainModifier: (id: string) => void;
+  reorderTerrainModifiers: (sourceIndex: number, destIndex: number) => void;
+  bakeTerrainModifiers: (mode: 'mesh' | 'glb' | 'obj') => Promise<void>;
 }
 
 export interface DiagLogEntry {
@@ -622,6 +704,7 @@ export interface SavedModel {
   customMaterials: any[];
   animations?: SceneAnimation[];
   notes?: SceneNote[];
+  terrainModifiers?: TerrainModifier[];
   previewUrl?: string;
   createdAt: any;
   updatedAt: any;
@@ -963,6 +1046,86 @@ export type CustomToolbarButton = CustomToolbarItem;
 export type CustomToolbarConfig = CustomToolbarDef & {
   buttons?: CustomToolbarItem[];
 };
+
+// =============================================================================
+// PolyForm Terrain Studio - Civil Objects & Modifiers
+// =============================================================================
+
+export type TerrainModifierType = 'pad' | 'road' | 'surface';
+export type PadPrimitiveType = 'rectangle' | 'circle';
+export type BatterFalloffType = 'linear' | 'curved' | 'stepped';
+
+export interface CurbDitchProfile {
+  width: number;
+  height: number;
+  ditchWidth: number;
+  ditchDepth: number;
+  hasCurb: boolean;
+  hasDitch: boolean;
+}
+
+export type RoadMarkingPreset = 'none' | 'center-dashed' | 'center-solid' | 'bike-lanes' | 'pedestrian-walkway';
+
+export type ParkingAngle = 0 | 30 | 45 | 60 | 90;
+
+export interface ParkingStallConfig {
+  angle: ParkingAngle;
+  stallWidth: number;
+  stallDepth: number;
+  stripeColor: string;
+  doubleRow: boolean;
+}
+
+export interface CutFillMetrics {
+  cutVolumeM3: number;
+  fillVolumeM3: number;
+  netVolumeM3: number;
+  cutAreaM2: number;
+  fillAreaM2: number;
+}
+
+export interface SurfaceModifier {
+  id: string;
+  name: string;
+  type: 'surface';
+  enabled: boolean;
+  hostPadId: string;
+  pattern: 'parking-striping' | 'hatch' | 'asphalt' | 'gravel';
+  parkingConfig?: ParkingStallConfig;
+}
+
+export interface PadModifier {
+  id: string;
+  name: string;
+  type: 'pad';
+  enabled: boolean;
+  primitive: PadPrimitiveType;
+  center: [number, number, number];
+  dimensions: [number, number];
+  rotationY: number;
+  targetElevation: number;
+  batterDistance: number;
+  batterProfile: BatterFalloffType;
+  surfaceModifier?: SurfaceModifier;
+}
+
+export interface RoadModifier {
+  id: string;
+  name: string;
+  type: 'road';
+  enabled: boolean;
+  points: Array<[number, number, number]>;
+  width: number;
+  maxGradePercent: number;
+  bankingAngle: number;
+  profile: CurbDitchProfile;
+  markings: RoadMarkingPreset;
+  material?: string;
+  batterDistance?: number;
+}
+
+export type TerrainModifier = PadModifier | RoadModifier | SurfaceModifier;
+
 
 
 

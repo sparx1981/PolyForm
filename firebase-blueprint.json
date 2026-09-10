@@ -109,6 +109,20 @@
             "required": ["id", "type", "position"]
           }
         },
+        "terrainModifiers": {
+          "type": "array",
+          "description": "Serialized Pad, Road, and Surface terrain modifiers in the scene",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["pad", "road", "surface"] },
+              "enabled": { "type": "boolean" }
+            },
+            "required": ["id", "name", "type", "enabled"]
+          }
+        },
         "previewUrl": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
