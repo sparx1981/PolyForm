@@ -161,12 +161,15 @@ export function calculateBalancedDatumElevation(
 
 /**
  * Performs terrain excavation with safety apron ($Z = Z_0$ with Buffer).
+ * Any terrain that clashes with a floor slab is automatically flattened so it does not protrude through.
+ * 1m of terrain around the floor slab is also flattened.
+ * Surrounding terrain beyond 1m is not affected.
  */
 export function excavateTerrainMesh(
   terrain: Shape,
   roomPolygon2D: Array<[number, number]>,
   datumZ: number,
-  apronMargin: number = 0.50
+  apronMargin: number = 1.0
 ): TerrainData | null {
   if (!terrain.terrainData) return null;
   const { gridX, gridY, width, depth, heights } = terrain.terrainData;
@@ -187,16 +190,16 @@ export function excavateTerrainMesh(
       const isInside = isPointInPolygon2D(worldX, worldZ, roomPolygon2D);
 
       if (isInside) {
-        // Flat excavation at datum elevation inside building footprint
-        newHeights[idx] = targetLocalDatum;
+        // Flat excavation at datum elevation inside building footprint so terrain does not protrude through slab
+        newHeights[idx] = Math.min(currentH, targetLocalDatum);
       } else {
-        // Within the excavation safety apron buffer
+        // Within the 1m excavation safety apron buffer around floor slab
         const edgeDist = distanceToPolygonBoundary2D(worldX, worldZ, roomPolygon2D);
         if (edgeDist <= apronMargin) {
-          // Smooth blend from datum elevation at room boundary to original slope at apron limit
-          const blendFactor = edgeDist / apronMargin; // 0 at wall edge -> 1 at apron boundary
-          newHeights[idx] = targetLocalDatum * (1 - blendFactor) + currentH * blendFactor;
+          // 1m of terrain around the floor slab is also flattened
+          newHeights[idx] = Math.min(currentH, targetLocalDatum);
         }
+        // Any other surrounding terrain (> 1m) is not affected
       }
     }
   }
@@ -205,6 +208,69 @@ export function excavateTerrainMesh(
     ...terrain.terrainData,
     heights: newHeights,
   };
+}
+
+/**
+ * Automatically flattens terrain for all floor slabs and foundations present in the shapes collection.
+ * Includes a 1m flattened safety apron around each slab.
+ * Can be applied regardless of whether terrain or floor slab was added first.
+ */
+export function flattenTerrainForFloorSlabs(
+  terrain: Shape,
+  allShapes: Shape[],
+  apronMargin: number = 1.0
+): TerrainData | null {
+  if (!terrain.terrainData) return null;
+
+  const slabs = allShapes.filter(s => 
+    s.id !== terrain.id && (
+      s.tags?.includes('floor-slab') ||
+      s.tags?.includes('foundation-skirt') ||
+      s.name?.toLowerCase().includes('floor slab') ||
+      s.name?.toLowerCase().includes('foundation') ||
+      (s.type === 'poly' && s.tags?.includes('architecture'))
+    )
+  );
+
+  if (slabs.length === 0) return null;
+
+  let currentTerrainData: TerrainData = { ...terrain.terrainData, heights: [...terrain.terrainData.heights] };
+  let modified = false;
+
+  for (const slab of slabs) {
+    let poly2D: Array<[number, number]> = [];
+    if (slab.type === 'poly' && slab.args?.vertices && Array.isArray(slab.args.vertices)) {
+      poly2D = slab.args.vertices.map((v: any) => {
+        const vx = Array.isArray(v) ? v[0] : (v.x ?? 0);
+        const vz = Array.isArray(v) ? v[1] : (v.y ?? v.z ?? 0);
+        return [slab.position[0] + vx, slab.position[2] + vz] as [number, number];
+      });
+    } else if (Array.isArray(slab.args)) {
+      const w = slab.args[0] || 2;
+      const d = slab.args[2] || slab.args[1] || 2;
+      const cx = slab.position[0];
+      const cz = slab.position[2];
+      poly2D = [
+        [cx - w / 2, cz - d / 2],
+        [cx + w / 2, cz - d / 2],
+        [cx + w / 2, cz + d / 2],
+        [cx - w / 2, cz + d / 2],
+      ];
+    }
+
+    if (poly2D.length < 3) continue;
+
+    const slabH = slab.type === 'poly' ? (slab.args?.height || 0.2) : (Array.isArray(slab.args) ? slab.args[1] || 0.2 : 0.2);
+    const datumZ = slab.position[1];
+
+    const res = excavateTerrainMesh({ ...terrain, terrainData: currentTerrainData }, poly2D, datumZ, apronMargin);
+    if (res) {
+      currentTerrainData = res;
+      modified = true;
+    }
+  }
+
+  return modified ? currentTerrainData : null;
 }
 
 /**
@@ -232,7 +298,7 @@ export function buildRoomAssembly(
   const wallHeight = options.wallHeight ?? settings.defaultWallHeight;
   const wallThickness = options.wallThickness ?? settings.defaultExteriorThickness;
   const slabThickness = options.slabThickness ?? settings.defaultSlabThickness;
-  const apronMargin = settings.terrainExcavationApron ?? 0.50;
+  const apronMargin = settings.terrainExcavationApron ?? 1.0;
   const story = options.story ?? 1;
 
   // 1. Calculate balanced datum elevation Z0

@@ -903,7 +903,7 @@ export function generateTimberFraming(
 
         const polyWidth = maxX - minX;
         const polyDepth = maxZ - minZ;
-        const spanAlongZ = polyWidth <= polyDepth;
+        const spanAlongZ = polyDepth <= polyWidth;
 
         // Detect stair openings or floor penetrations on this level
         const floorOpenings: FloorOpeningContract[] = [];

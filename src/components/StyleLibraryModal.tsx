@@ -8,6 +8,7 @@ import {
   WINDOW_STYLES, 
   STAIR_STYLES, 
   WALL_STYLES,
+  SCALE_FIGURE_STYLES,
   STAIR_STRUCTURE_OPTIONS, 
   RAILING_OPTIONS, 
   ArchStyleDef 
@@ -498,7 +499,195 @@ function StyleDiagram({ style }: { style: ArchStyleDef }) {
           <path d="M 105,50 L 125,20" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
         </svg>
       );
+    // Scale Figure Styles
+    case 'engineer-sam':
+    case 'architect_site':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.82m</text>
+          <path d="M 62,18 C 62,13 78,13 78,18 Z" fill="#facc15" stroke="#ca8a04" strokeWidth="1.5" />
+          <rect x="58" y="18" width="24" height="3" rx="1.5" fill="#facc15" stroke="#ca8a04" strokeWidth="1" />
+          <circle cx="70" cy="25" r="7" fill="#e0ac69" stroke="currentColor" strokeWidth="1" />
+          <path d="M 60,34 L 80,34 L 83,68 L 57,68 Z" fill="#ea580c" stroke="#c2410c" strokeWidth="1.5" />
+          <line x1="65" y1="34" x2="65" y2="68" stroke="#ffffff" strokeWidth="2" />
+          <line x1="75" y1="34" x2="75" y2="68" stroke="#ffffff" strokeWidth="2" />
+          <line x1="58" y1="52" x2="82" y2="52" stroke="#ffffff" strokeWidth="2" />
+          <path d="M 59,36 L 50,60" stroke="#ea580c" strokeWidth="4" strokeLinecap="round" />
+          <path d="M 81,36 L 90,56 L 86,60" stroke="#ea580c" strokeWidth="4" strokeLinecap="round" />
+          <rect x="84" y="56" width="10" height="14" rx="1" fill="#334155" stroke="#64748b" strokeWidth="1" />
+          <line x1="64" y1="68" x2="64" y2="102" stroke="#1e293b" strokeWidth="6" strokeLinecap="round" />
+          <line x1="76" y1="68" x2="76" y2="102" stroke="#1e293b" strokeWidth="6" strokeLinecap="round" />
+          <rect x="58" y="102" width="12" height="6" rx="2" fill="#78350f" />
+          <rect x="72" y="102" width="12" height="6" rx="2" fill="#78350f" />
+        </svg>
+      );
+    case 'designer-maya':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.68m</text>
+          <circle cx="70" cy="24" r="7" fill="#d4a373" stroke="currentColor" strokeWidth="1" />
+          <path d="M 61,33 L 79,33 L 81,66 L 59,66 Z" fill="#3f6212" stroke="#1a2e05" strokeWidth="1.5" />
+          <line x1="63" y1="33" x2="80" y2="60" stroke="#78350f" strokeWidth="2.5" />
+          <rect x="74" y="54" width="12" height="14" rx="2" fill="#78350f" stroke="#451a03" strokeWidth="1" />
+          <path d="M 60,35 L 52,60" stroke="#3f6212" strokeWidth="4" strokeLinecap="round" />
+          <path d="M 80,35 L 82,54" stroke="#3f6212" strokeWidth="4" strokeLinecap="round" />
+          <line x1="65" y1="66" x2="65" y2="102" stroke="#475569" strokeWidth="5" strokeLinecap="round" />
+          <line x1="75" y1="66" x2="75" y2="102" stroke="#475569" strokeWidth="5" strokeLinecap="round" />
+          <rect x="60" y="102" width="10" height="5" rx="2" fill="#1e293b" />
+          <rect x="72" y="102" width="10" height="5" rx="2" fill="#1e293b" />
+        </svg>
+      );
+    case 'surveyor-liam':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.76m</text>
+          <circle cx="70" cy="24" r="7" fill="#e5b88f" stroke="currentColor" strokeWidth="1" />
+          <path d="M 60,33 L 80,33 L 82,66 L 58,66 Z" fill="#f97316" stroke="#c2410c" strokeWidth="1.5" />
+          <line x1="59" y1="48" x2="81" y2="48" stroke="#ffffff" strokeWidth="2" />
+          <path d="M 80,35 L 92,48" stroke="#f97316" strokeWidth="4" strokeLinecap="round" />
+          <rect x="91" y="44" width="7" height="12" rx="1" fill="#dc2626" />
+          <line x1="98" y1="48" x2="125" y2="48" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="2 2" />
+          <path d="M 60,35 L 52,60" stroke="#f97316" strokeWidth="4" strokeLinecap="round" />
+          <line x1="64" y1="66" x2="64" y2="102" stroke="#1f2937" strokeWidth="6" strokeLinecap="round" />
+          <line x1="76" y1="66" x2="76" y2="102" stroke="#1f2937" strokeWidth="6" strokeLinecap="round" />
+          <rect x="58" y="102" width="12" height="6" rx="2" fill="#78350f" />
+          <rect x="72" y="102" width="12" height="6" rx="2" fill="#78350f" />
+        </svg>
+      );
+    case 'executive-elena':
+    case 'business_executive':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.72m</text>
+          <circle cx="70" cy="24" r="7" fill="#f5c6a5" stroke="currentColor" strokeWidth="1" />
+          <path d="M 61,33 L 79,33 L 83,72 L 57,72 Z" fill="#1e293b" stroke="#0f172a" strokeWidth="1.5" />
+          <line x1="70" y1="33" x2="70" y2="60" stroke="#cbd5e1" strokeWidth="1" />
+          <path d="M 80,35 L 86,62" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" />
+          <rect x="85" y="62" width="16" height="12" rx="1.5" fill="#78350f" stroke="#451a03" strokeWidth="1" />
+          <rect x="89" y="60" width="8" height="3" rx="1" fill="#d97706" />
+          <path d="M 60,35 L 53,60" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" />
+          <line x1="65" y1="72" x2="65" y2="104" stroke="#0f172a" strokeWidth="5" strokeLinecap="round" />
+          <line x1="75" y1="72" x2="75" y2="104" stroke="#0f172a" strokeWidth="5" strokeLinecap="round" />
+          <rect x="61" y="104" width="10" height="4" rx="1" fill="#020617" />
+          <rect x="73" y="104" width="10" height="4" rx="1" fill="#020617" />
+        </svg>
+      );
+    case 'commuter-leo':
+    case 'student_commuter':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.80m</text>
+          <circle cx="70" cy="22" r="7" fill="#c68642" stroke="currentColor" strokeWidth="1" />
+          <rect x="52" y="34" width="10" height="22" rx="3" fill="#1e293b" />
+          <path d="M 59,32 L 79,32 L 81,66 L 59,66 Z" fill="#047857" stroke="#065f46" strokeWidth="1.5" />
+          <path d="M 59,34 L 54,58" stroke="#047857" strokeWidth="4" strokeLinecap="round" />
+          <path d="M 79,34 L 84,58" stroke="#047857" strokeWidth="4" strokeLinecap="round" />
+          <line x1="64" y1="66" x2="64" y2="102" stroke="#374151" strokeWidth="6" strokeLinecap="round" />
+          <line x1="76" y1="66" x2="76" y2="102" stroke="#374151" strokeWidth="6" strokeLinecap="round" />
+          <rect x="58" y="102" width="12" height="6" rx="2" fill="#ffffff" stroke="#94a3b8" strokeWidth="1" />
+          <rect x="72" y="102" width="12" height="6" rx="2" fill="#ffffff" stroke="#94a3b8" strokeWidth="1" />
+        </svg>
+      );
+    case 'cyclist-emma':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.65m</text>
+          <path d="M 61,16 C 61,11 81,11 83,18 Z" fill="#06b6d4" stroke="#0891b2" strokeWidth="1.5" />
+          <circle cx="70" cy="24" r="6.5" fill="#fcd34d" stroke="currentColor" strokeWidth="1" />
+          <path d="M 61,32 L 79,32 L 81,64 L 59,64 Z" fill="#0891b2" stroke="#0e7490" strokeWidth="1.5" />
+          <path d="M 60,34 L 53,58" stroke="#0891b2" strokeWidth="4" strokeLinecap="round" />
+          <path d="M 80,34 L 87,58" stroke="#0891b2" strokeWidth="4" strokeLinecap="round" />
+          <line x1="65" y1="64" x2="63" y2="102" stroke="#1e1b4b" strokeWidth="5" strokeLinecap="round" />
+          <line x1="75" y1="64" x2="77" y2="102" stroke="#1e1b4b" strokeWidth="5" strokeLinecap="round" />
+          <rect x="58" y="102" width="10" height="5" rx="2" fill="#06b6d4" />
+          <rect x="74" y="102" width="10" height="5" rx="2" fill="#06b6d4" />
+        </svg>
+      );
+    case 'resident-arthur':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.70m</text>
+          <ellipse cx="70" cy="18" rx="9" ry="3.5" fill="#57534e" />
+          <circle cx="70" cy="23" r="6.5" fill="#f5c6a5" stroke="currentColor" strokeWidth="1" />
+          <path d="M 60,32 L 80,32 L 84,72 L 56,72 Z" fill="#78350f" stroke="#451a03" strokeWidth="1.5" />
+          <path d="M 80,34 L 88,54" stroke="#78350f" strokeWidth="4" strokeLinecap="round" />
+          <line x1="90" y1="52" x2="94" y2="110" stroke="#451a03" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M 87,52 C 87,48 93,48 93,52" fill="none" stroke="#d97706" strokeWidth="2.5" />
+          <path d="M 60,34 L 54,58" stroke="#78350f" strokeWidth="4" strokeLinecap="round" />
+          <line x1="64" y1="72" x2="64" y2="103" stroke="#292524" strokeWidth="5" strokeLinecap="round" />
+          <line x1="76" y1="72" x2="76" y2="103" stroke="#292524" strokeWidth="5" strokeLinecap="round" />
+          <rect x="59" y="103" width="11" height="5" rx="2" fill="#1c1917" />
+          <rect x="73" y="103" width="11" height="5" rx="2" fill="#1c1917" />
+        </svg>
+      );
+    case 'minimal_monochrome':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.75m</text>
+          <g fill="#94a3b8" stroke="none">
+            <circle cx="70" cy="22" r="7" />
+            <rect x="62" y="32" width="16" height="34" rx="4" />
+            <rect x="56" y="34" width="5" height="26" rx="2.5" />
+            <rect x="79" y="34" width="5" height="26" rx="2.5" />
+            <rect x="63" y="66" width="6" height="38" rx="2" />
+            <rect x="71" y="66" width="6" height="38" rx="2" />
+          </g>
+        </svg>
+      );
+    case 'dark_silhouette':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.76m</text>
+          <g fill="#0f172a" stroke="none">
+            <circle cx="70" cy="22" r="7" />
+            <rect x="62" y="32" width="16" height="34" rx="4" />
+            <rect x="56" y="34" width="5" height="26" rx="2.5" />
+            <rect x="79" y="34" width="5" height="26" rx="2.5" />
+            <rect x="63" y="66" width="6" height="38" rx="2" />
+            <rect x="71" y="66" width="6" height="38" rx="2" />
+          </g>
+        </svg>
+      );
+    case 'architect-alex':
+    case 'casual_standing':
+      return (
+        <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+          <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+          <text x="105" y="105" fontSize="8" fill="#94a3b8" fontFamily="monospace">1.78m</text>
+          <circle cx="70" cy="22" r="7" fill="#f3c7a2" stroke="currentColor" strokeWidth="1" />
+          <line x1="67" y1="21" x2="73" y2="21" stroke="#000" strokeWidth="1" />
+          <path d="M 60,32 L 80,32 L 82,66 L 58,66 Z" fill="#2b4c7e" stroke="#1e3a8a" strokeWidth="1.5" />
+          <line x1="70" y1="32" x2="70" y2="52" stroke="#ffffff" strokeWidth="1.5" />
+          <path d="M 59,34 L 52,58" stroke="#2b4c7e" strokeWidth="4" strokeLinecap="round" />
+          <path d="M 80,34 L 86,52" stroke="#2b4c7e" strokeWidth="4" strokeLinecap="round" />
+          <rect x="82" y="40" width="8" height="28" rx="2" fill="#f8fafc" stroke="#64748b" strokeWidth="1" transform="rotate(-20 86 54)" />
+          <line x1="64" y1="66" x2="64" y2="102" stroke="#334155" strokeWidth="6" strokeLinecap="round" />
+          <line x1="76" y1="66" x2="76" y2="102" stroke="#334155" strokeWidth="6" strokeLinecap="round" />
+          <rect x="58" y="102" width="12" height="6" rx="2" fill="#0f172a" />
+          <rect x="72" y="102" width="12" height="6" rx="2" fill="#0f172a" />
+        </svg>
+      );
     default:
+      if (style.type === 'scale_figure') {
+        return (
+          <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <line x1="20" y1="110" x2="120" y2="110" stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
+            <circle cx="70" cy="22" r="7" fill="#f3c7a2" stroke="currentColor" strokeWidth="1" />
+            <path d="M 60,32 L 80,32 L 82,66 L 58,66 Z" fill="#2b4c7e" stroke="#1e3a8a" strokeWidth="1.5" />
+            <line x1="64" y1="66" x2="64" y2="102" stroke="#334155" strokeWidth="6" strokeLinecap="round" />
+            <line x1="76" y1="66" x2="76" y2="102" stroke="#334155" strokeWidth="6" strokeLinecap="round" />
+          </svg>
+        );
+      }
       return (
         <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
           <path d="M 20,100 L 120,20" stroke="currentColor" strokeWidth="4" />
@@ -517,16 +706,21 @@ export default function StyleLibraryModal({
 }: StyleLibraryModalProps) {
   if (!isOpen || !targetShape) return null;
 
+  const isScaleFigure = targetShape.type === 'scale_figure';
   const isDoor = targetShape.type === 'door';
   const isStair = targetShape.type === 'staircase' || targetShape.type === 'step';
   const isWall = targetShape.type === 'wall';
-  const isWindow = !isDoor && !isStair && !isWall;
+  const isWindow = !isDoor && !isStair && !isWall && !isScaleFigure;
 
   let styles: ArchStyleDef[] = [];
   let defaultStyleId = 'flush';
   let title = 'Architectural Styles';
 
-  if (isDoor) {
+  if (isScaleFigure) {
+    styles = SCALE_FIGURE_STYLES;
+    defaultStyleId = 'architect-alex';
+    title = 'Scale Figure Character & Style';
+  } else if (isDoor) {
     styles = DOOR_STYLES;
     defaultStyleId = 'flush';
     title = 'Architectural Door Styles';
@@ -598,9 +792,9 @@ export default function StyleLibraryModal({
   }, [effectiveTargetHeight, idealStepHeight, targetShape.args, sceneScan]);
 
   // Dimensions
-  const defaultWidth = isDoor ? 0.9 : isStair ? 1.0 : isWall ? 3.0 : 1.2;
-  const defaultHeight = isDoor ? 2.1 : isStair ? (isParametric ? parametricCalc.targetHeight : 2.7) : isWall ? 2.8 : 1.2;
-  const defaultDepth = isDoor ? 0.15 : isStair ? (isParametric ? parametricCalc.totalRun : 3.6) : isWall ? 0.2 : 0.12;
+  const defaultWidth = isScaleFigure ? 0.52 : isDoor ? 0.9 : isStair ? 1.0 : isWall ? 3.0 : 1.2;
+  const defaultHeight = isScaleFigure ? 1.78 : isDoor ? 2.1 : isStair ? (isParametric ? parametricCalc.targetHeight : 2.7) : isWall ? 2.8 : 1.2;
+  const defaultDepth = isScaleFigure ? 0.32 : isDoor ? 0.15 : isStair ? (isParametric ? parametricCalc.totalRun : 3.6) : isWall ? 0.2 : 0.12;
 
   const [width, setWidth] = useState<number>(
     Array.isArray(targetShape.args) ? targetShape.args[0] || defaultWidth : defaultWidth
@@ -624,9 +818,7 @@ export default function StyleLibraryModal({
     }
   }, [isStair, isParametric, parametricCalc.targetHeight, parametricCalc.totalRun]);
 
-  const categories = ['All', 'Layout', 'Modern', 'Classic', 'Specialty', 'Commercial'].filter(cat => 
-    cat === 'All' || styles.some(s => s.category === cat)
-  );
+  const categories = ['All', ...Array.from(new Set(styles.map(s => s.category)))];
 
   const filteredStyles = activeCategory === 'All'
     ? styles

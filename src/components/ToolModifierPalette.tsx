@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal } from 'lucide-react';
+import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding } from 'lucide-react';
 import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { WallJustification } from '../tools/inference/types';
 import { NumberField, SectionLabel, EmptyState, Chip } from './ui/Surface';
 import { DEFAULT_TIMBER_FRAME_PARAMS, STRUCTURAL_VALIDATION_RULES } from '../constants/timberFrameDefaults';
-import { TimberFrameParams } from '../types';
+import { TimberFrameParams, Shape } from '../types';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RoofModifierSection } from './RoofModifierSection';
+import { ScaleFigureModifierSection } from './ScaleFigureModifierSection';
 
 export const ToolModifierPalette: React.FC = () => {
   const { 
@@ -63,6 +64,7 @@ export const ToolModifierPalette: React.FC = () => {
   const [fasciaColor, setFasciaColor] = useState<string>('#ffffff');
   const [showRoofSettings, setShowRoofSettings] = useState<boolean>(false);
   const [bezierSegments, setBezierSegments] = useState<number>(24);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const hasSettings = [
     'move', 
@@ -75,7 +77,8 @@ export const ToolModifierPalette: React.FC = () => {
     'select',
     'lasso',
     'timber-frame',
-    'roof'
+    'roof',
+    'scale_figure'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -138,9 +141,17 @@ export const ToolModifierPalette: React.FC = () => {
       fasciaColor: fasciaColor
     }, shapes);
     if (assembly) {
-      assembly.allShapes.forEach(s => addShape(s));
+      const isExistingRoof = (s: Shape) =>
+        s.type === 'roof' ||
+        s.tags?.some(t => t.startsWith('roof-') || t === 'roof') ||
+        s.name?.toLowerCase().includes('roof') ||
+        s.id.startsWith('roof_') ||
+        s.id.startsWith('tiles_roof_');
+      const nonRoofShapes = shapes.filter(s => !isExistingRoof(s));
+      setShapes([...nonRoofShapes, ...assembly.allShapes]);
       commitHistory();
-      setMeasurements(`Created detailed ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly.`);
+      if (setSelectedId) setSelectedId(assembly.roofShape.id);
+      setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly.`);
     }
   };
 
@@ -195,14 +206,14 @@ export const ToolModifierPalette: React.FC = () => {
       } : {}}
       exit={{ x: 300, opacity: 0 }}
       className={cn(
-        "z-30 rounded-xl border shadow-xl overflow-hidden transition-all duration-300",
+        "z-30 rounded-xl border shadow-xl overflow-hidden transition-all duration-300 flex flex-col",
         theme === 'dark' ? "bg-gray-900 border-gray-700 shadow-black/50" : "bg-white border-gray-200 shadow-xl",
-        isToolModifierDocked ? "relative w-full shadow-none border-none rounded-none" : "fixed w-64"
+        isToolModifierDocked ? "relative w-full shadow-none border-none rounded-none max-h-full" : "fixed w-64 max-h-[calc(100vh-100px)]"
       )}
     >
       <div 
         className={cn(
-          "px-3 h-10 border-b flex items-center justify-between select-none",
+          "px-3 h-10 border-b flex items-center justify-between select-none shrink-0",
           theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100",
           !isToolModifierDocked ? "cursor-move active:cursor-grabbing" : "cursor-default"
         )}
@@ -214,6 +225,8 @@ export const ToolModifierPalette: React.FC = () => {
             <Hammer size={14} className="text-amber-500" />
           ) : activeTool === 'roof' ? (
             <Home size={14} className="text-sky-500" />
+          ) : activeTool === 'scale_figure' ? (
+            <PersonStanding size={14} className="text-emerald-500" />
           ) : activeTool === 'bezier' ? (
             <Spline size={14} className="text-trimble-blue" />
           ) : (activeTool === 'select' || activeTool === 'lasso') ? (
@@ -222,13 +235,22 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-trimble-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <div className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded">
             {activeTool.toUpperCase()}
           </div>
+          {!isToolModifierDocked && (
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              title={isCollapsed ? "Expand Palette" : "Collapse Palette"}
+            >
+              {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            </button>
+          )}
           <button 
             onClick={() => setIsToolModifierDocked(!isToolModifierDocked)}
             className={cn(
@@ -242,7 +264,9 @@ export const ToolModifierPalette: React.FC = () => {
         </div>
       </div>
 
-      <div className="p-3 space-y-4">
+      {(!isCollapsed || isToolModifierDocked) && (
+        <>
+          <div className="p-3 space-y-4 overflow-y-auto flex-1 max-h-[calc(100vh-140px)] select-text">
         {activeTool === 'wall' && (
           <div className="space-y-3">
             {/* Justification Selector */}
@@ -430,6 +454,12 @@ export const ToolModifierPalette: React.FC = () => {
         {activeTool === 'roof' && (
           <ErrorBoundary name="Roof Modifiers Panel" compact>
             <RoofModifierSection />
+          </ErrorBoundary>
+        )}
+
+        {activeTool === 'scale_figure' && (
+          <ErrorBoundary name="Scale Figure Modifiers Panel" compact>
+            <ScaleFigureModifierSection />
           </ErrorBoundary>
         )}
 
@@ -906,12 +936,14 @@ export const ToolModifierPalette: React.FC = () => {
       </div>
 
       <div className={cn(
-        "px-3 py-1.5 flex items-center gap-2 border-t",
+        "px-3 py-1.5 flex items-center gap-2 border-t shrink-0",
         theme === 'dark' ? "bg-gray-900/50 border-gray-700" : "bg-gray-50/50 border-gray-100"
       )}>
         <Info size={10} className="text-gray-400" />
         <span className="text-[9px] text-gray-400 leading-none">Settings are saved automatically</span>
       </div>
+        </>
+      )}
     </motion.div>
   );
 };

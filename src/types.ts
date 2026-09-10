@@ -14,7 +14,7 @@ export type ToolType =
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
   | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock'
-  | 'roof' | 'timber-frame';
+  | 'roof' | 'timber-frame' | 'scale_figure';
 
 export type SkyboxType = 'none' | 'golden-hour' | 'woodland' | 'sunrise' | 'twilight' | 'cyberspace-neon' | 'studio';
 
@@ -53,7 +53,7 @@ export function isTextureUrl(val?: any): boolean {
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
@@ -505,6 +505,11 @@ export interface AppState {
   setActivePlantVariation: (variation: string) => void;
   activePlantScale: number;
   setActivePlantScale: (scale: number) => void;
+  // Scale Figures & Human Benchmark
+  activeScaleFigureCharacter: string;
+  setActiveScaleFigureCharacter: (charId: string) => void;
+  activeScaleFigureHeight: number;
+  setActiveScaleFigureHeight: (height: number) => void;
 
   // Architecture & Wall Tool Engine
   wallToolSettings: import('./tools/inference/types').WallToolSettings;
@@ -582,6 +587,10 @@ export interface AppState {
   setInteriorWallTransparency: (val: number | ((prev: number) => number)) => void;
   roofTransparency: number;
   setRoofTransparency: (val: number | ((prev: number) => number)) => void;
+  floorTransparency: number;
+  setFloorTransparency: (val: number | ((prev: number) => number)) => void;
+  fixturesTransparency: number;
+  setFixturesTransparency: (val: number | ((prev: number) => number)) => void;
 }
 
 export interface DiagLogEntry {

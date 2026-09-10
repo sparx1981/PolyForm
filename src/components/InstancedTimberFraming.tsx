@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Shape, Tag } from '../types';
+import { ThickLineSegments } from './ThickLineSegments';
 
 interface InstancedTimberFramingProps {
   shapes: Shape[];
@@ -9,6 +10,10 @@ interface InstancedTimberFramingProps {
   selectedIds?: string[];
   onSelectShape?: (id: string) => void;
   shadowsEnabled?: boolean;
+  edgeLinesEnabled?: boolean;
+  edgeLinesColor?: string;
+  edgeLinesOpacity?: number;
+  edgeLinesThickness?: number;
 }
 
 type TimberKind =
@@ -61,6 +66,24 @@ const tempQuaternion = new THREE.Quaternion();
 const tempScale = new THREE.Vector3();
 const tempColor = new THREE.Color();
 const highlightColor = new THREE.Color('#38bdf8');
+
+const UNIT_BOX_EDGES = new Float32Array([
+  // Bottom face (4 segments, 8 vertices)
+  -0.5, -0.5, -0.5,   0.5, -0.5, -0.5,
+   0.5, -0.5, -0.5,   0.5, -0.5,  0.5,
+   0.5, -0.5,  0.5,  -0.5, -0.5,  0.5,
+  -0.5, -0.5,  0.5,  -0.5, -0.5, -0.5,
+  // Top face (4 segments, 8 vertices)
+  -0.5,  0.5, -0.5,   0.5,  0.5, -0.5,
+   0.5,  0.5, -0.5,   0.5,  0.5,  0.5,
+   0.5,  0.5,  0.5,  -0.5,  0.5,  0.5,
+  -0.5,  0.5,  0.5,  -0.5,  0.5, -0.5,
+  // 4 Vertical corner edges (8 vertices)
+  -0.5, -0.5, -0.5,  -0.5,  0.5, -0.5,
+   0.5, -0.5, -0.5,   0.5,  0.5, -0.5,
+   0.5, -0.5,  0.5,   0.5,  0.5,  0.5,
+  -0.5, -0.5,  0.5,  -0.5,  0.5,  0.5,
+]);
 
 function InstancedMeshGroup({
   kind,
@@ -163,7 +186,11 @@ export function InstancedTimberFraming({
   selectedId,
   selectedIds,
   onSelectShape,
-  shadowsEnabled
+  shadowsEnabled,
+  edgeLinesEnabled = false,
+  edgeLinesColor = '#000000',
+  edgeLinesOpacity = 1,
+  edgeLinesThickness = 1,
 }: InstancedTimberFramingProps) {
   const selectedSet = useMemo(() => {
     const set = new Set<string>();
@@ -213,6 +240,49 @@ export function InstancedTimberFraming({
     return buckets;
   }, [visibleTimberShapes]);
 
+  const edgeLinePositions = useMemo(() => {
+    if (!edgeLinesEnabled || visibleTimberShapes.length === 0) return null;
+    const totalVerts = visibleTimberShapes.length * 24;
+    const posArray = new Float32Array(totalVerts * 3);
+    const v = new THREE.Vector3();
+    const mat = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scl = new THREE.Vector3();
+
+    let offset = 0;
+    for (let i = 0; i < visibleTimberShapes.length; i++) {
+      const item = visibleTimberShapes[i];
+      pos.set(item.position[0], item.position[1], item.position[2]);
+      if (item.quaternion) {
+        quat.set(item.quaternion[0], item.quaternion[1], item.quaternion[2], item.quaternion[3]);
+      } else if (item.rotation) {
+        quat.setFromEuler(new THREE.Euler(item.rotation[0], item.rotation[1], item.rotation[2]));
+      } else {
+        quat.identity();
+      }
+      const args = Array.isArray(item.args) ? item.args : [0.045, 2.4, 0.14];
+      const width = args[0] || 0.045;
+      const height = args[1] || 2.4;
+      const depth = args[2] || 0.14;
+      const sx = item.scale ? item.scale[0] * width : width;
+      const sy = item.scale ? item.scale[1] * height : height;
+      const sz = item.scale ? item.scale[2] * depth : depth;
+      scl.set(sx, sy, sz);
+
+      mat.compose(pos, quat, scl);
+
+      for (let j = 0; j < 24; j++) {
+        v.set(UNIT_BOX_EDGES[j * 3], UNIT_BOX_EDGES[j * 3 + 1], UNIT_BOX_EDGES[j * 3 + 2]);
+        v.applyMatrix4(mat);
+        posArray[offset++] = v.x;
+        posArray[offset++] = v.y;
+        posArray[offset++] = v.z;
+      }
+    }
+    return posArray;
+  }, [edgeLinesEnabled, visibleTimberShapes]);
+
   if (visibleTimberShapes.length === 0) return null;
 
   return (
@@ -227,6 +297,14 @@ export function InstancedTimberFraming({
           shadowsEnabled={shadowsEnabled}
         />
       ))}
+      {edgeLinesEnabled && edgeLinePositions && (
+        <ThickLineSegments
+          positions={edgeLinePositions}
+          color={edgeLinesColor}
+          opacity={edgeLinesOpacity}
+          linewidth={edgeLinesThickness}
+        />
+      )}
     </group>
   );
 }

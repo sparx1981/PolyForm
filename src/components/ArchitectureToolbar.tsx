@@ -14,7 +14,8 @@ import {
   Home,
   Check,
   Globe,
-  Hammer
+  Hammer,
+  PersonStanding
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
@@ -22,6 +23,7 @@ import { ToolType, Shape } from '../types';
 import { cn } from '../lib/utils';
 import { FlyoutPortal } from './ui/FlyoutPortal';
 import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel } from '../lib/archRoofGenerator';
+import { SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 
 /** Same pattern as LeftToolbar's own FlyoutSideContext — a context rather
  *  than threading a `side` prop through every ArchToolButton call site. */
@@ -102,10 +104,17 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
     activeStory,
     setActiveStory,
     shapes,
+    setShapes,
     addShape,
+    setSelectedId,
     commitHistory,
-    setMeasurements
+    setMeasurements,
+    activeScaleFigureCharacter,
+    activeScaleFigureHeight
   } = useApp();
+
+  const currentScaleChar = SCALE_FIGURE_CHARACTERS.find(c => c.id === activeScaleFigureCharacter) || SCALE_FIGURE_CHARACTERS[0];
+  const currentScaleHeight = activeScaleFigureHeight && activeScaleFigureHeight > 0.5 ? activeScaleFigureHeight : currentScaleChar.height;
 
   const [showWallOptions, setShowWallOptions] = useState(false);
   const [showRoofOptions, setShowRoofOptions] = useState(false);
@@ -133,7 +142,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
     setMeasurements(`Stacked new Story Level ${activeStory + 1} with floor slab and walls.`);
   };
 
-  // Handle Roof Generation action
+  // Handle Roof Generation action (replaces existing roof if one exists)
   const handleGenerateRoof = (roofType: 'gable' | 'hip' | 'parapet') => {
     const wallShapes = shapes.filter(s => s.type === 'wall');
     if (wallShapes.length === 0) {
@@ -149,9 +158,17 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
       tileShape: 'none',
     }, shapes);
     if (assembly) {
-      assembly.allShapes.forEach(s => addShape(s));
+      const isExistingRoof = (s: Shape) =>
+        s.type === 'roof' ||
+        s.tags?.some(t => t.startsWith('roof-') || t === 'roof') ||
+        s.name?.toLowerCase().includes('roof') ||
+        s.id.startsWith('roof_') ||
+        s.id.startsWith('tiles_roof_');
+      const nonRoofShapes = shapes.filter(s => !isExistingRoof(s));
+      setShapes([...nonRoofShapes, ...assembly.allShapes]);
       commitHistory();
-      setMeasurements(`Created detailed ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip Roof' : 'Gable Roof'} assembly.`);
+      if (setSelectedId) setSelectedId(assembly.roofShape.id);
+      setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip Roof' : 'Gable Roof'} assembly.`);
     }
   };
 
@@ -202,6 +219,13 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
         icon={<TrendingUp size={19} />} 
         label="Staircase Flight" 
         subtitle="12-step architectural staircase flight (Rise 2.16m, Run 3.6m)"
+      />
+
+      <ArchToolButton 
+        tool="scale_figure" 
+        icon={<PersonStanding size={19} />} 
+        label="Scale Figure (Person)" 
+        subtitle={`${currentScaleChar.name} (${currentScaleHeight.toFixed(2)}m eye-level datum)`}
       />
 
       <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />

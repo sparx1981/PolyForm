@@ -941,15 +941,17 @@ export function generateFloorTimberFrameFromContract(
     }
     const dir = delta.clone().normalize();
     const vUp = new THREE.Vector3(0, 1, 0);
-    const vRight = new THREE.Vector3().crossVectors(dir, vUp).normalize();
+    // Right-handed basis: Z is along dir (length), Y is along vActualUp (height), X is along vSide (width)
+    // Cross product order must be (vUp x dir) so that det([vSide, vActualUp, dir]) = +1
+    const vSide = new THREE.Vector3().crossVectors(vUp, dir).normalize();
     const qWorld = new THREE.Quaternion();
 
-    if (vRight.lengthSq() > 0.01) {
-      const vActualUp = new THREE.Vector3().crossVectors(vRight, dir).normalize();
-      const mat = new THREE.Matrix4().makeBasis(vRight, vActualUp, dir);
+    if (vSide.lengthSq() > 0.01) {
+      const vActualUp = new THREE.Vector3().crossVectors(dir, vSide).normalize();
+      const mat = new THREE.Matrix4().makeBasis(vSide, vActualUp, dir);
       qWorld.setFromRotationMatrix(mat);
     } else {
-      qWorld.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      qWorld.setFromAxisAngle(new THREE.Vector3(1, 0, 0), dir.y < 0 ? Math.PI / 2 : -Math.PI / 2);
     }
 
     const id = `FLOOR_${input.floor_id}_${code}_${Math.random().toString(36).substr(2, 6)}`;
@@ -979,8 +981,8 @@ export function generateFloorTimberFrameFromContract(
   };
 
   // 6. Perimeter Rim / Band Joists (§1, §4.1)
-  // Set back by epsilon from outer boundary to eliminate coplanar clashing
-  const edgeSetback = Math.max(COINCIDENCE_EPSILON_MM / 1000, 0.001);
+  // Inset rim joists by half their width so outer edge sits flush with the floor footprint
+  const edgeSetback = joistWidthM;
   const numVerts = boundary2D.length;
   for (let i = 0; i < numVerts; i++) {
     const p1 = boundary2D[i];
@@ -990,8 +992,17 @@ export function generateFloorTimberFrameFromContract(
     const edgeLen = v1.distanceTo(v2);
     if (edgeLen > 0.2) {
       const edgeDir = v2.clone().sub(v1).normalize();
-      const sStart = v1.clone().addScaledVector(edgeDir, edgeSetback);
-      const sEnd = v2.clone().addScaledVector(edgeDir, -edgeSetback);
+      let nX = -edgeDir.z;
+      let nZ = edgeDir.x;
+      const midX = (p1[0] + p2[0]) / 2;
+      const midZ = (p1[1] + p2[1]) / 2;
+      if (!isPointInsidePolygon(midX + nX * 0.02, midZ + nZ * 0.02, boundary2D)) {
+        nX = -nX;
+        nZ = -nZ;
+      }
+      const inVec = new THREE.Vector3(nX, 0, nZ).multiplyScalar(joistWidthM / 2);
+      const sStart = v1.clone().add(inVec).addScaledVector(edgeDir, joistWidthM / 2);
+      const sEnd = v2.clone().add(inVec).addScaledVector(edgeDir, -joistWidthM / 2);
       addFloorMember(`RIM_JOIST_EDGE_${i + 1}`, `RIM_${i + 1}`, sStart, sEnd, joistWidthM, joistDepthM, 'IfcBeam', 'timber-rim-joist');
     }
   }

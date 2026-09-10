@@ -8,6 +8,7 @@ import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
+import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
 import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimberFrameForRoof, generateTimberFrameForBuilding } from './lib/timberFrameGenerator';
 import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
 import { TimberFrameParams, TimberFrameRecomputeState } from './types';
@@ -273,6 +274,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [exteriorWallTransparency, setExteriorWallTransparency] = useState<number>(0);
   const [interiorWallTransparency, setInteriorWallTransparency] = useState<number>(0);
   const [roofTransparency, setRoofTransparency] = useState<number>(0);
+  const [floorTransparency, setFloorTransparency] = useState<number>(0);
+  const [fixturesTransparency, setFixturesTransparency] = useState<number>(0);
   
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [isMessagingCollapsed, setIsMessagingCollapsed] = useState(false);
@@ -665,6 +668,10 @@ console.log("Created rectangle:", myRect.id);`);
   const [activePlantSpecies, setActivePlantSpecies] = useState<string>('ribbon_grass');
   const [activePlantVariation, setActivePlantVariation] = useState<string>('VarA');
   const [activePlantScale, setActivePlantScale] = useState<number>(1.0);
+
+  // Scale Figure Selection
+  const [activeScaleFigureCharacter, setActiveScaleFigureCharacter] = useState<string>('architect-alex');
+  const [activeScaleFigureHeight, setActiveScaleFigureHeight] = useState<number>(1.78);
 
   // Persistence for user settings
   useEffect(() => {
@@ -1288,7 +1295,36 @@ console.log("Created rectangle:", myRect.id);`);
   };
 
   const addShape = (shape: Shape) => {
-    handleSetShapes(prev => [...prev, shape]);
+    handleSetShapes(prev => {
+      let nextShapes = [...prev, shape];
+
+      const isFloorSlabOrFoundation = (
+        shape.tags?.includes('floor-slab') ||
+        shape.tags?.includes('foundation-skirt') ||
+        shape.name?.toLowerCase().includes('floor slab') ||
+        shape.name?.toLowerCase().includes('foundation') ||
+        (shape.type === 'poly' && shape.tags?.includes('architecture'))
+      );
+
+      if (shape.type === 'terrain' && shape.terrainData) {
+        // Terrain added: flatten against any existing floor slabs
+        const updatedTerrainData = flattenTerrainForFloorSlabs(shape, prev, 1.0);
+        if (updatedTerrainData) {
+          nextShapes = nextShapes.map(s => s.id === shape.id ? { ...s, terrainData: updatedTerrainData } : s);
+        }
+      } else if (isFloorSlabOrFoundation) {
+        // Floor slab added: flatten any existing terrain
+        const terrainShape = prev.find(s => s.type === 'terrain');
+        if (terrainShape && terrainShape.terrainData) {
+          const updatedTerrainData = flattenTerrainForFloorSlabs(terrainShape, nextShapes, 1.0);
+          if (updatedTerrainData) {
+            nextShapes = nextShapes.map(s => s.id === terrainShape.id ? { ...s, terrainData: updatedTerrainData } : s);
+          }
+        }
+      }
+
+      return nextShapes;
+    });
     
     // Record action
     let sdkCall = '';
@@ -1791,6 +1827,11 @@ console.log("Created rectangle:", myRect.id);`);
       setActivePlantVariation,
       activePlantScale,
       setActivePlantScale,
+      // Scale Figure Selection
+      activeScaleFigureCharacter,
+      setActiveScaleFigureCharacter,
+      activeScaleFigureHeight,
+      setActiveScaleFigureHeight,
       contactFrictionEnabled,
       setContactFrictionEnabled,
       contactFrictionStrength,
@@ -1855,7 +1896,11 @@ console.log("Created rectangle:", myRect.id);`);
       interiorWallTransparency,
       setInteriorWallTransparency,
       roofTransparency,
-      setRoofTransparency
+      setRoofTransparency,
+      floorTransparency,
+      setFloorTransparency,
+      fixturesTransparency,
+      setFixturesTransparency
     }}>
       {children}
     </AppContext.Provider>

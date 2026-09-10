@@ -1571,6 +1571,7 @@ export class DeveloperSDK implements SDK {
     this.selection = {
       select: (idOrIds: string | string[]): void => {
         const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+        this.selectedId = ids[0] || null;
         if (this.extraSetters.setSelectedIds) {
           this.extraSetters.setSelectedIds(ids);
         }
@@ -2107,6 +2108,7 @@ export class DeveloperSDK implements SDK {
       args,
       color: '#ffffff'
     };
+    this.shapes.push(newShape);
     this.setShapes(prev => [...prev, newShape]);
     return newShape;
   }
@@ -2537,6 +2539,8 @@ export class DeveloperSDK implements SDK {
   isolateObject(id: string): void { this.selection.isolateObject(id); }
   unhideAll(): void { this.selection.unhideAll(); }
   transformObject(id: string, transform: any): void { this.selection.transformObject(id, transform); }
+  select(idOrIds: string | string[]): void { this.selection.select(idOrIds); }
+  selectObject(idOrIds: string | string[]): void { this.selection.select(idOrIds); }
   clearScene(confirm?: boolean): void { this.scene.clearScene(confirm); }
   exportScene(): string { return this.scene.exportJSON(); }
   getStats(): any { return this.scene.getStats(); }

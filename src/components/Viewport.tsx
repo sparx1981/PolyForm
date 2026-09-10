@@ -96,6 +96,7 @@ import { BezierTool } from '../tools/bezier/BezierTool';
 import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
 import { tessellateEntireCurve, tessellateBezierSpan } from '../tools/bezier/tessellate';
 import { BezierKnot, BezierCurveState } from '../tools/bezier/types';
+import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */
 const KERNEL_SNAP_TOOLS: string[] = [
@@ -842,6 +843,11 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
             strideConstant: shape.parametricData?.strideConstant
           }
         );
+      case 'scale_figure': {
+        const charId = shape.archStyle || 'architect-alex';
+        const customH = Array.isArray(shape.args) ? shape.args[1] : (typeof shape.args === 'number' ? shape.args : undefined);
+        return createScaleFigureGeometry(charId, customH);
+      }
       default:
         return new THREE.BoxGeometry(1, 1, 1);
     }
@@ -933,10 +939,11 @@ function MiniShapeMesh({ shape }: { shape: Shape }) {
     case 'window':
     case 'step':
     case 'staircase':
+    case 'scale_figure':
       return (
         <mesh position={pos} quaternion={quat}>
           <ArchGeometry shape={shape} />
-          <meshStandardMaterial {...materialProps} />
+          <meshStandardMaterial {...materialProps} vertexColors={shape.type === 'scale_figure'} />
         </mesh>
       );
     case 'circle':
@@ -1328,6 +1335,8 @@ function Scene() {
     activePlantSpecies,
     activePlantVariation,
     activePlantScale,
+    activeScaleFigureCharacter,
+    activeScaleFigureHeight,
     kernelHost,
     kernelRevision,
     bumpKernel,
@@ -1345,7 +1354,10 @@ function Scene() {
     cameraFar,
     wallTransparency,
     exteriorWallTransparency,
-    interiorWallTransparency
+    interiorWallTransparency,
+    roofTransparency,
+    floorTransparency,
+    fixturesTransparency
   } = useApp();
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
@@ -2870,7 +2882,9 @@ function Scene() {
     args: any,
     stairStyle?: string,
     stairStructure?: string,
-    railingMode?: string
+    railingMode?: string,
+    archStyle?: string,
+    color?: string
   } | null>(null);
   const [stairRotationAngle, setStairRotationAngle] = useState<number>(0);
   const [polygonSides, setPolygonSides] = useState<number>(6);
@@ -2921,10 +2935,21 @@ function Scene() {
     const handleExportAdvanced = (e: any) => {
       const { format } = e.detail;
       const exportScene = new THREE.Scene();
-      scene.children.forEach(child => {
-        if (child instanceof THREE.Mesh && child.userData.isShape) {
+      scene.traverse((child: any) => {
+        if (child.isMesh && (child.userData?.isShape || child.userData?.id)) {
           const clone = child.clone();
+          clone.applyMatrix4(child.matrixWorld);
           exportScene.add(clone);
+        } else if (child.isInstancedMesh) {
+          const count = child.count || 0;
+          const instMatrix = new THREE.Matrix4();
+          for (let i = 0; i < count; i++) {
+            child.getMatrixAt(i, instMatrix);
+            const m = new THREE.Mesh(child.geometry.clone(), child.material);
+            m.applyMatrix4(instMatrix);
+            m.applyMatrix4(child.matrixWorld);
+            exportScene.add(m);
+          }
         }
       });
 
@@ -2962,8 +2987,15 @@ function Scene() {
       handleExportAdvanced({ detail: { format: 'gltf' } });
     };
 
+    const handleRequestSceneRaw = (e: any) => {
+      if (e.detail && typeof e.detail.callback === 'function') {
+        e.detail.callback(scene);
+      }
+    };
+
     window.addEventListener('export-scene', handleExport);
     window.addEventListener('export-scene-advanced', handleExportAdvanced);
+    window.addEventListener('request-scene-raw', handleRequestSceneRaw);
     
     const handleSetCamera = (e: any) => {
       const { position, target, zoom } = e.detail;
@@ -2994,6 +3026,7 @@ function Scene() {
     return () => {
       window.removeEventListener('export-scene', handleExport);
       window.removeEventListener('export-scene-advanced', handleExportAdvanced);
+      window.removeEventListener('request-scene-raw', handleRequestSceneRaw);
       window.removeEventListener('set-camera', handleSetCamera);
       window.removeEventListener('capture-default-camera', handleCaptureDefaultCamera);
     };
@@ -4707,6 +4740,49 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'scale_figure') {
+      e.stopPropagation();
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => 
+        !i.object.userData.isHelper &&
+        !i.object.userData.isPreview &&
+        !i.object.userData.isGizmo &&
+        (i.object.userData.isShape || i.object.userData.isKernelGeometry)
+      );
+      let hitPoint = shapeIntersect ? shapeIntersect.point.clone() : (e.point ? e.point.clone() : new THREE.Vector3());
+      if (!shapeIntersect) {
+        const ray = raycaster.ray;
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+        if (ray.intersectPlane(groundPlane, groundHit)) {
+          hitPoint = groundHit;
+        }
+      }
+
+      const char = SCALE_FIGURE_CHARACTERS.find(c => c.id === activeScaleFigureCharacter) || SCALE_FIGURE_CHARACTERS[0];
+      const targetH = activeScaleFigureHeight && activeScaleFigureHeight > 0.5 ? activeScaleFigureHeight : char.height;
+
+      const newShape: Shape = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: `${char.name} (${targetH.toFixed(2)}m)`,
+        type: 'scale_figure',
+        position: [hitPoint.x, hitPoint.y, hitPoint.z],
+        quaternion: [0, 0, 0, 1],
+        args: [char.width, targetH, char.depth],
+        color: char.primaryColor,
+        roughness: 0.65,
+        metalness: 0.1,
+        archStyle: char.id,
+        tags: ['scale-figure', 'architecture', char.category.toLowerCase().replace(/\s+/g, '-')]
+      };
+
+      addShape(newShape);
+      commitHistory();
+      setMeasurements(`Placed ${char.name} at [${hitPoint.x.toFixed(2)}, ${hitPoint.y.toFixed(2)}, ${hitPoint.z.toFixed(2)}] (${targetH.toFixed(2)}m eye-level benchmark)`);
+      recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+      return;
+    }
+
     if (['tree', 'bush', 'lamp', 'bench', 'rock'].includes(activeTool)) {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
@@ -5499,6 +5575,44 @@ function Scene() {
           args: [width, height, depth]
         });
         setMeasurements(`Click on a wall or roof to insert ${activeTool}.`);
+      }
+      return;
+    }
+
+    if (activeTool === 'scale_figure') {
+      const ray = raycaster.ray;
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => 
+        !i.object.userData.isHelper &&
+        !i.object.userData.isPreview &&
+        !i.object.userData.isGizmo &&
+        (i.object.userData.isShape || i.object.userData.isKernelGeometry)
+      );
+
+      let hitPoint: THREE.Vector3 | null = null;
+      if (shapeIntersect) {
+        hitPoint = shapeIntersect.point.clone();
+      } else {
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+        if (ray.intersectPlane(groundPlane, groundHit)) {
+          hitPoint = groundHit;
+        }
+      }
+
+      if (hitPoint) {
+        const char = SCALE_FIGURE_CHARACTERS.find(c => c.id === activeScaleFigureCharacter) || SCALE_FIGURE_CHARACTERS[0];
+        const targetH = activeScaleFigureHeight && activeScaleFigureHeight > 0.5 ? activeScaleFigureHeight : char.height;
+
+        setPreviewShape({
+          type: 'scale_figure',
+          position: [hitPoint.x, hitPoint.y, hitPoint.z],
+          quaternion: [0, 0, 0, 1],
+          args: [char.width, targetH, char.depth],
+          archStyle: char.id,
+          color: char.primaryColor
+        });
+        setMeasurements(`Scale Figure: ${char.name} (${targetH.toFixed(2)}m eye-level) — Click to place benchmark`);
       }
       return;
     }
@@ -7302,7 +7416,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
@@ -8032,7 +8146,7 @@ function Scene() {
               pickSunCenter(e.point);
               return;
             }
-            if (placingLightId) handlePointerDown(e);
+            if (placingLightId || activeTool === 'scale_figure') handlePointerDown(e);
             else if (activeTool === 'select') {
               if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
                 return;
@@ -8068,6 +8182,10 @@ function Scene() {
             pickSunCenter(e.point);
             return;
           }
+          if (activeTool === 'scale_figure') {
+            handlePointerDown(e);
+            return;
+          }
           if (activeTool === 'select') {
             if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
               return;
@@ -8084,7 +8202,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -8372,8 +8490,14 @@ function Scene() {
         onSelectShape={(id) => {
           setSelectedId(id);
           setSelectedIds([id]);
+          setSelectedSurface(null);
+          setSelectedFaceIds([]);
         }}
         shadowsEnabled={shadowsEnabled}
+        edgeLinesEnabled={edgeLinesEnabled}
+        edgeLinesColor={edgeLinesColor}
+        edgeLinesOpacity={edgeLinesOpacity}
+        edgeLinesThickness={edgeLinesThickness}
       />
 
       {shapes.map((shape) => {
@@ -8689,6 +8813,29 @@ function Scene() {
         };
 
         const isWallShape = shape.type === 'wall' || (shape.type !== 'door' && shape.type !== 'window' && (shape.tags?.some(t => t.includes('wall')) || shape.name?.toLowerCase().includes('wall')));
+        const isRoofShape = (
+          shape.tags?.some(t => t.includes('roof') && !t.includes('timber')) ||
+          (shape.name?.toLowerCase().includes('roof') || shape.name?.toLowerCase().includes('gable') || shape.name?.toLowerCase().includes('hip')) ||
+          shape.roofData !== undefined ||
+          shape.roofTileData !== undefined
+        ) && !shape.tags?.includes('timber-frame') && !shape.tags?.includes('timber-framing') && !shape.name?.toLowerCase().startsWith('timber ');
+
+        const isFloorShape = (
+          shape.tags?.some(t => t.includes('floor') || t.includes('slab') || t.includes('deck')) ||
+          shape.name?.toLowerCase().includes('floor') ||
+          shape.name?.toLowerCase().includes('slab') ||
+          shape.name?.toLowerCase().includes('deck') ||
+          (shape.type === 'poly' && !isWallShape && !isRoofShape)
+        ) && !isWallShape && !isRoofShape && !shape.tags?.includes('timber-frame');
+
+        const isFixtureShape = (
+          shape.type === 'door' ||
+          shape.type === 'window' ||
+          shape.tags?.some(t => t.includes('door') || t.includes('window') || t.includes('fixture')) ||
+          shape.name?.toLowerCase().includes('door') ||
+          shape.name?.toLowerCase().includes('window')
+        );
+
         let effectiveOpacity = shape.opacity ?? 1;
         if (isWallShape) {
           const isInterior = shape.tags?.includes('interior-wall') ||
@@ -8706,6 +8853,39 @@ function Scene() {
             maxTransparency = Math.max(maxTransparency, interiorWallTransparency);
           } else if (!isInterior && exteriorWallTransparency > 0) {
             maxTransparency = Math.max(maxTransparency, exteriorWallTransparency);
+          }
+          if (shape.opacity !== undefined && shape.opacity < 1) {
+            maxTransparency = Math.max(maxTransparency, 1 - shape.opacity);
+          }
+          if (maxTransparency > 0) {
+            effectiveOpacity = Math.max(0, Math.min(1, 1 - maxTransparency));
+          }
+        } else if (isRoofShape) {
+          let maxTransparency = 0;
+          if (roofTransparency > 0) {
+            maxTransparency = Math.max(maxTransparency, roofTransparency);
+          }
+          if (shape.opacity !== undefined && shape.opacity < 1) {
+            maxTransparency = Math.max(maxTransparency, 1 - shape.opacity);
+          }
+          if (maxTransparency > 0) {
+            effectiveOpacity = Math.max(0, Math.min(1, 1 - maxTransparency));
+          }
+        } else if (isFloorShape) {
+          let maxTransparency = 0;
+          if (floorTransparency > 0) {
+            maxTransparency = Math.max(maxTransparency, floorTransparency);
+          }
+          if (shape.opacity !== undefined && shape.opacity < 1) {
+            maxTransparency = Math.max(maxTransparency, 1 - shape.opacity);
+          }
+          if (maxTransparency > 0) {
+            effectiveOpacity = Math.max(0, Math.min(1, 1 - maxTransparency));
+          }
+        } else if (isFixtureShape) {
+          let maxTransparency = 0;
+          if (fixturesTransparency > 0) {
+            maxTransparency = Math.max(maxTransparency, fixturesTransparency);
           }
           if (shape.opacity !== undefined && shape.opacity < 1) {
             maxTransparency = Math.max(maxTransparency, 1 - shape.opacity);
@@ -8872,7 +9052,7 @@ function Scene() {
             <sphereGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 32, 32]) as any} />
           ) : shape.type === 'poly' ? (
             <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={computeHolesForSlab(shape, shapes)} />
-          ) : ['wall', 'door', 'window', 'step', 'staircase'].includes(shape.type) ? (
+          ) : ['wall', 'door', 'window', 'step', 'staircase', 'scale_figure'].includes(shape.type) ? (
             <ArchGeometry shape={shape} shapes={shapes} />
           ) : ['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(shape.type) ? (
             <LandscapeFeatureGeometry shape={shape} />
@@ -8891,8 +9071,8 @@ function Scene() {
                 color={shape.color || '#ffffff'} 
                 roughness={shape.roughness ?? 0.4}
                 metalness={shape.metalness ?? 0.05}
-                transparent={shape.opacity !== undefined && shape.opacity < 1}
-                opacity={shape.opacity ?? 1}
+                transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+                opacity={effectiveOpacity}
                 side={THREE.DoubleSide}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.35 : 0}
@@ -8904,7 +9084,7 @@ function Scene() {
                 roughness={0.05}
                 metalness={0.1}
                 transparent={true}
-                opacity={0.20}
+                opacity={Math.min(0.20, effectiveOpacity * 0.20)}
                 depthWrite={false}
                 side={THREE.DoubleSide}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
@@ -8916,6 +9096,8 @@ function Scene() {
                 color="#94a3b8" 
                 roughness={0.2}
                 metalness={0.85}
+                transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
+                opacity={effectiveOpacity}
                 side={THREE.DoubleSide}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.35 : 0}
@@ -8979,7 +9161,7 @@ function Scene() {
                 );
               }
 
-              const hasVertexColors = isTerrainHeatmap || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0);
+              const hasVertexColors = isTerrainHeatmap || shape.type === 'scale_figure' || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0);
 
               return (
                 <meshStandardMaterial 
@@ -9111,7 +9293,7 @@ function Scene() {
             <torusGeometry args={previewShape.args} />
           ) : previewShape.type === 'dome' ? (
             <sphereGeometry args={previewShape.args} />
-          ) : ['wall', 'door', 'window', 'step', 'staircase'].includes(previewShape.type) ? (
+          ) : ['wall', 'door', 'window', 'step', 'staircase', 'scale_figure'].includes(previewShape.type) ? (
             <ArchGeometry shape={previewShape as any} shapes={shapes} />
           ) : (
             <boxGeometry args={previewShape.args} />
@@ -9136,6 +9318,14 @@ function Scene() {
               <meshBasicMaterial attach="material-1" color="#bae6fd" transparent opacity={0.25} depthTest={false} />
               <meshBasicMaterial attach="material-2" color="#cbd5e1" transparent opacity={0.7} depthTest={false} />
             </>
+          ) : previewShape.type === 'scale_figure' ? (
+            <meshBasicMaterial 
+              vertexColors={true}
+              transparent 
+              opacity={0.8} 
+              side={THREE.DoubleSide} 
+              depthTest={false} 
+            />
           ) : previewShape.type === 'staircase' || previewShape.type === 'step' ? (
             <meshBasicMaterial 
               color="#0284c7" 
@@ -12303,9 +12493,12 @@ export default function Viewport() {
           const nextShapes = shapes.map(s => {
             if (s.id === styleLibraryTargetId) {
               const updatedArgs = dims || s.args;
+              const targetChar = s.type === 'scale_figure' ? SCALE_FIGURE_CHARACTERS.find(c => c.id === styleId) : undefined;
               return {
                 ...s,
                 archStyle: styleId,
+                color: targetChar ? targetChar.primaryColor : s.color,
+                name: targetChar ? `${targetChar.name} (${(Array.isArray(updatedArgs) ? updatedArgs[1] : targetChar.height).toFixed(2)}m)` : s.name,
                 stairStyle: styleId,
                 wallStyle: styleId,
                 stairStructure: extraOptions?.stairStructure || s.stairStructure,

@@ -389,16 +389,23 @@ export const RoofModifierSection: React.FC = () => {
         seed: seed,
       };
 
-      assembly.allShapes.forEach(s => addShape(s));
+      const isExistingRoof = (s: Shape) =>
+        s.type === 'roof' ||
+        s.tags?.some(t => t.startsWith('roof-') || t === 'roof') ||
+        s.name?.toLowerCase().includes('roof') ||
+        s.id.startsWith('roof_') ||
+        s.id.startsWith('tiles_roof_');
+      const nonRoofShapes = shapes.filter(s => !isExistingRoof(s));
+      const finalShapes = [...nonRoofShapes, ...assembly.allShapes];
+      setShapes(finalShapes);
       commitHistory();
       setSelectedId(assembly.roofShape.id);
 
       if (hasTimberFraming) {
-        const updatedCandidates = [...shapes, ...assembly.allShapes];
-        commitUpdatedFraming(updatedCandidates);
+        commitUpdatedFraming(finalShapes);
       }
 
-      setMeasurements(`Created ${roofType === 'hip' ? 'Hip' : roofType === 'parapet' ? 'Parapet' : 'Gable'} Roof (${roofHeight.toFixed(2)}m height).`);
+      setMeasurements(`Replaced roof with ${roofType === 'hip' ? 'Hip' : roofType === 'parapet' ? 'Parapet' : 'Gable'} Roof (${roofHeight.toFixed(2)}m height).`);
     }
   };
 

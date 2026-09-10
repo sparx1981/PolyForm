@@ -30,7 +30,8 @@ import {
   AlertTriangle,
   Sliders,
   ZoomIn,
-  Layout
+  Layout,
+  Cloud
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
@@ -76,6 +77,18 @@ function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.B
   return merged;
 }
 
+// Helper to sanitize objects for Firestore (removes undefined values that cause writes to fail)
+const cleanFirestoreData = (obj: any): any => {
+  if (Array.isArray(obj)) return obj.map(cleanFirestoreData);
+  if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc: any, [key, value]) => {
+      if (value !== undefined) acc[key] = cleanFirestoreData(value);
+      return acc;
+    }, {});
+  }
+  return obj;
+};
+
 export default function TopBar() {
     const { 
       user, 
@@ -103,7 +116,9 @@ export default function TopBar() {
       animations,
       setAnimations,
       notes,
+      setNotes,
       customLights,
+      setCustomLights,
       undo,
       redo,
       setIsDeveloperConsoleOpen,
@@ -171,208 +186,297 @@ export default function TopBar() {
     setIsMenuOpen(false);
   };
 
+  const downloadProjectFile = (name?: string) => {
+    const modelName = (name || currentModelName || newModelName || 'PolyForm-Design').trim();
+    const safeFilename = modelName.replace(/[^a-zA-Z0-9_\- ]/g, '_').trim() || 'PolyForm-Design';
+    const projectData = {
+      format: 'polyform',
+      version: 2,
+      appName: 'PolyForm 3D',
+      name: modelName,
+      shapes: shapes || [],
+      tags: tags || [],
+      scenes: scenes || [],
+      customMaterials: customMaterials || [],
+      animations: animations || [],
+      notes: notes || [],
+      customLights: customLights || [],
+      savedAt: new Date().toISOString()
+    };
+    const jsonString = JSON.stringify(projectData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${safeFilename}.polyform`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    diagLog('Save', 'Project file downloaded successfully', { filename: `${safeFilename}.polyform`, shapes: shapes.length });
+  };
+
   const handleSave = async () => {
-    if (!user) return;
-    
-    if (!currentModelId) {
+    if (!currentModelName && !currentModelId) {
       setIsSaveAsOpen(true);
       setIsMenuOpen(false);
       return;
     }
 
+    const modelName = currentModelName || 'PolyForm-Design';
     setLoading(true);
-    diagLog('Save', 'Initiating save for model', { modelId: currentModelId });
-    try {
-      // Request snapshot
-      window.dispatchEvent(new CustomEvent('request-snapshot', { 
-        detail: { 
-          callback: async (dataUrl: string) => {
-            diagLog('Save', 'Snapshot received, starting storage upload');
-            try {
-              // Upload to storage with fallback and timeout
+    diagLog('Save', 'Initiating save', { modelName, currentModelId });
+
+    // 1. Always save the project file locally to guarantee safety
+    downloadProjectFile(modelName);
+
+    // 2. If user is authenticated and this model has an ID, also sync to Firestore & Storage
+    if (user && currentModelId) {
+      try {
+        let snapshotHandled = false;
+        const fallbackTimer = setTimeout(async () => {
+          if (!snapshotHandled) {
+            snapshotHandled = true;
+            await updateFirestoreModel('');
+          }
+        }, 3000);
+
+        const updateFirestoreModel = async (previewUrl: string) => {
+          try {
+            await updateDoc(doc(db, 'models', currentModelId), {
+              id: currentModelId,
+              name: modelName,
+              shapes: cleanFirestoreData(shapes || []),
+              tags: cleanFirestoreData(tags || []),
+              scenes: cleanFirestoreData(scenes || []),
+              customMaterials: cleanFirestoreData(customMaterials || []),
+              animations: cleanFirestoreData(animations || []),
+              notes: cleanFirestoreData(notes || []),
+              customLights: cleanFirestoreData(customLights || []),
+              ...(previewUrl ? { previewUrl } : {}),
+              updatedAt: serverTimestamp()
+            });
+            diagLog('Save', 'Cloud document updated', { modelId: currentModelId });
+            setSavedModels(prev => prev.map(m => m.id === currentModelId ? {
+              ...m,
+              name: modelName,
+              shapes,
+              tags,
+              scenes,
+              customMaterials,
+              notes,
+              customLights,
+              ...(previewUrl ? { previewUrl } : {}),
+              updatedAt: new Date()
+            } : m));
+          } catch (fsErr) {
+            handleFirestoreError(fsErr, OperationType.UPDATE, `models/${currentModelId}`);
+          }
+        };
+
+        window.dispatchEvent(new CustomEvent('request-snapshot', {
+          detail: {
+            callback: async (dataUrl: string) => {
+              if (snapshotHandled) return;
+              snapshotHandled = true;
+              clearTimeout(fallbackTimer);
               let previewUrl = '';
-              const uploadWithTimeout = async () => {
-                try {
-                  const storageRef = ref(storage, `previews/${user.uid}/${currentModelId}.jpg`);
-                  diagLog('Save', 'Attempting storage upload...', { path: `previews/${user.uid}/${currentModelId}.jpg` });
-                  
-                  // Create a 30s timeout for storage upload
-                  const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Storage upload timed out')), 30000)
-                  );
-                  
-                  await Promise.race([
-                    uploadString(storageRef, dataUrl, 'data_url'),
-                    timeoutPromise
-                  ]);
-                  
-                  previewUrl = await getDownloadURL(storageRef);
-                  diagLog('Save', 'Preview uploaded successfully', { url: previewUrl });
-                  return previewUrl;
-                } catch (err) {
-                  throw err;
-                }
-              };
-
               try {
-                previewUrl = await uploadWithTimeout();
+                const storageRef = ref(storage, `previews/${user.uid}/${currentModelId}.jpg`);
+                await uploadString(storageRef, dataUrl, 'data_url');
+                previewUrl = await getDownloadURL(storageRef);
               } catch (storageErr) {
-                diagLog('Save', 'Storage upload skipped or failed', { error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
-                console.warn("[Save] Storage upload failed, updating without preview:", storageErr);
+                console.warn("[Save] Storage upload skipped, using fallback snapshot:", storageErr);
+                if (dataUrl && dataUrl.startsWith('data:image')) {
+                  previewUrl = dataUrl;
+                }
               }
-
-              try {
-                diagLog('Save', 'Updating Firestore document');
-                await updateDoc(doc(db, 'models', currentModelId), {
-                  id: currentModelId,
-                  shapes: shapes,
-                  tags: tags,
-                  scenes: scenes,
-                  customMaterials: customMaterials,
-                  animations: animations,
-                  notes: notes,
-                  customLights: customLights,
-                  ...(previewUrl ? { previewUrl } : {}),
-                  updatedAt: serverTimestamp()
-                });
-              } catch (error) {
-                handleFirestoreError(error, OperationType.UPDATE, `models/${currentModelId}`);
+              if (!previewUrl && dataUrl && dataUrl.startsWith('data:image')) {
+                previewUrl = dataUrl;
               }
-              diagLog('Save', 'Model saved successfully', { modelId: currentModelId });
-              
-              // Update local state so the UI reflects the save
-              setSavedModels(prev => prev.map(m => m.id === currentModelId ? {
-                ...m,
-                shapes,
-                tags,
-                scenes,
-                customMaterials,
-                notes,
-                customLights,
-                previewUrl,
-                updatedAt: new Date() // Approximate for local UI
-              } : m));
-
-              setIsMenuOpen(false);
-              setTimeout(() => {
-                alert('Model saved successfully!');
-              }, 100);
-            } catch (err) {
-              console.error('Save error:', err);
-              alert('Failed to save model.');
-            } finally {
-              setLoading(false);
-              setIsMenuOpen(false);
+              await updateFirestoreModel(previewUrl);
             }
           }
-        } 
-      }));
-    } catch (err) {
-      console.error('Save error:', err);
-      alert('Failed to save model.');
-      setLoading(false);
+        }));
+      } catch (err) {
+        console.error('Cloud save error:', err);
+      }
     }
+
+    setLoading(false);
+    setIsMenuOpen(false);
+    setTimeout(() => {
+      alert(`Model "${modelName}" saved successfully!`);
+    }, 100);
   };
 
   const handleSaveAs = async () => {
-    if (!user || !newModelName.trim()) return;
+    const modelName = (newModelName || currentModelName || 'PolyForm-Design').trim();
+    if (!modelName) return;
 
     setLoading(true);
-    console.log(`[SaveAs] Creating new model: ${newModelName}`);
-    diagLog('SaveAs', 'Started', { name: newModelName });
-    try {
-      // Request snapshot
-      window.dispatchEvent(new CustomEvent('request-snapshot', { 
-        detail: { 
-          callback: async (dataUrl: string) => {
-            diagLog('SaveAs', 'Snapshot received, starting storage upload');
-            try {
+    diagLog('SaveAs', 'Saving model as new file', { name: modelName });
+
+    // 1. Always save the project file
+    downloadProjectFile(modelName);
+    setCurrentModelName(modelName);
+
+    // 2. If user is authenticated, create in Firestore & Storage
+    if (user) {
+      try {
+        let snapshotHandled = false;
+        const fallbackTimer = setTimeout(async () => {
+          if (!snapshotHandled) {
+            snapshotHandled = true;
+            await createFirestoreDoc('');
+          }
+        }, 3000);
+
+        const createFirestoreDoc = async (previewUrl: string) => {
+          try {
+            const docRef = await addDoc(collection(db, 'models'), {
+              id: '',
+              name: modelName,
+              userId: user.uid,
+              userName: user.displayName || 'Anonymous User',
+              shapes: cleanFirestoreData(shapes || []),
+              tags: cleanFirestoreData(tags || []),
+              scenes: cleanFirestoreData(scenes || []),
+              customMaterials: cleanFirestoreData(customMaterials || []),
+              animations: cleanFirestoreData(animations || []),
+              notes: cleanFirestoreData(notes || []),
+              customLights: cleanFirestoreData(customLights || []),
+              updatedAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              previewUrl: previewUrl || '',
+              isPublic: false,
+              hasPassword: false,
+              password: ''
+            });
+            await updateDoc(doc(db, 'models', docRef.id), { id: docRef.id });
+            setCurrentModelId(docRef.id);
+            fetchModels();
+          } catch (fsErr) {
+            handleFirestoreError(fsErr, OperationType.WRITE, 'models');
+          }
+        };
+
+        window.dispatchEvent(new CustomEvent('request-snapshot', {
+          detail: {
+            callback: async (dataUrl: string) => {
+              if (snapshotHandled) return;
+              snapshotHandled = true;
+              clearTimeout(fallbackTimer);
               let previewUrl = '';
-              const uploadWithTimeout = async () => {
-                try {
-                  const tempId = Math.random().toString(36).substr(2, 9);
-                  const storageRef = ref(storage, `previews/${user.uid}/${tempId}.jpg`);
-                  diagLog('SaveAs', 'Attempting storage upload...', { path: `previews/${user.uid}/${tempId}.jpg` });
-
-                  // Create a 30s timeout for storage upload
-                  const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Storage upload timed out')), 30000)
-                  );
-
-                  await Promise.race([
-                    uploadString(storageRef, dataUrl, 'data_url'),
-                    timeoutPromise
-                  ]);
-
-                  previewUrl = await getDownloadURL(storageRef);
-                  diagLog('SaveAs', 'Preview uploaded', { url: previewUrl });
-                  return previewUrl;
-                } catch (err) {
-                  throw err;
-                }
-              };
-
               try {
-                previewUrl = await uploadWithTimeout();
+                const tempId = Math.random().toString(36).substr(2, 9);
+                const storageRef = ref(storage, `previews/${user.uid}/${tempId}.jpg`);
+                await uploadString(storageRef, dataUrl, 'data_url');
+                previewUrl = await getDownloadURL(storageRef);
               } catch (storageErr) {
-                diagLog('SaveAs', 'Storage upload skipped or failed', { error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
-                console.warn("[SaveAs] Storage upload failed, saving without preview:", storageErr);
+                console.warn("[SaveAs] Storage upload skipped, using fallback snapshot:", storageErr);
+                if (dataUrl && dataUrl.startsWith('data:image')) {
+                  previewUrl = dataUrl;
+                }
               }
-
-              let docRef;
-              try {
-                diagLog('SaveAs', 'Creating Firestore document');
-                docRef = await addDoc(collection(db, 'models'), {
-                  id: '', // Will update after creation
-                  name: newModelName || 'Untitled Model',
-                  userId: user.uid,
-                  userName: user.displayName || 'Anonymous User',
-                  shapes: shapes || [],
-                  tags: tags || [],
-                  scenes: scenes || [],
-                  customMaterials: customMaterials || [],
-                  animations: animations || [],
-                  notes: notes || [],
-                  customLights: customLights || [],
-                  updatedAt: serverTimestamp(),
-                  createdAt: serverTimestamp(),
-                  previewUrl: previewUrl || '',
-                  isPublic: false,
-                  hasPassword: false,
-                  password: ''
-                });
-                console.log("[SaveAs] Firestore document created:", docRef.id);
-                
-                // Update with real ID for data consistency
-                await updateDoc(doc(db, 'models', docRef.id), { id: docRef.id });
-              } catch (error) {
-                handleFirestoreError(error, OperationType.WRITE, 'models');
+              if (!previewUrl && dataUrl && dataUrl.startsWith('data:image')) {
+                previewUrl = dataUrl;
               }
-              diagLog('SaveAs', 'Model created and synced successfully', { modelId: docRef.id });
-
-              setCurrentModelId(docRef.id);
-              setCurrentModelName(newModelName);
-              fetchModels(); 
-              
-              // Close modal BEFORE showing alert to avoid blocking the state transition
-              setIsSaveAsOpen(false);
-              setTimeout(() => {
-                alert('Model saved successfully!');
-              }, 100);
-            } catch (err) {
-              console.error('Save As error:', err);
-              alert('Failed to save model.');
-            } finally {
-              setLoading(false);
+              await createFirestoreDoc(previewUrl);
             }
           }
-        } 
-      }));
-    } catch (err) {
-      console.error('Save As error:', err);
-      alert('Failed to save model.');
-      setLoading(false);
+        }));
+      } catch (err) {
+        console.error('Cloud save as error:', err);
+      }
     }
+
+    setLoading(false);
+    setIsSaveAsOpen(false);
+    setTimeout(() => {
+      alert(`Model "${modelName}" saved successfully!`);
+    }, 100);
+  };
+
+  const handleOpenLocalFile = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.polyform,.json,.skp,.gltf';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      diagLog('Import', 'Opening local model file', { name: file.name, size: file.size });
+      const lowerName = file.name.toLowerCase();
+
+      // First try to parse as .polyform or JSON project
+      if (lowerName.endsWith('.polyform') || lowerName.endsWith('.json')) {
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          if (parsed && (parsed.format === 'polyform' || Array.isArray(parsed.shapes))) {
+            loadModel({
+              ...parsed,
+              id: null,
+              name: parsed.name || file.name.replace(/\.[^/.]+$/, "")
+            });
+            alert(`Loaded "${parsed.name || file.name}" successfully!`);
+            setIsMenuOpen(false);
+            return;
+          }
+        } catch (jsonErr) {
+          console.warn('[Open] JSON parse failed, trying 3D importer fallback', jsonErr);
+        }
+      }
+
+      // If it's a 3D file or other geometry format
+      try {
+        const group = await SketchupService.importSKP(file);
+        group.updateMatrixWorld(true);
+        const meshGeometries: THREE.BufferGeometry[] = [];
+        group.traverse((child: any) => {
+          if (child.isMesh && child.geometry) {
+            let geo = child.geometry.clone();
+            geo.applyMatrix4(child.matrixWorld);
+            if (geo.index) geo = geo.toNonIndexed();
+            if (!geo.attributes.normal) geo.computeVertexNormals();
+            meshGeometries.push(geo);
+          }
+        });
+        if (meshGeometries.length === 0) {
+          throw new Error('No mesh geometry found in the file.');
+        }
+        const commonAttrs = ['position', 'normal', 'uv'].filter(key =>
+          meshGeometries.every(geo => !!geo.attributes[key])
+        );
+        meshGeometries.forEach(geo => {
+          Object.keys(geo.attributes).forEach(key => {
+            if (!commonAttrs.includes(key)) geo.deleteAttribute(key);
+          });
+        });
+        const mergedGeo = meshGeometries.length === 1
+          ? meshGeometries[0]
+          : mergeBufferGeometriesLocal(meshGeometries);
+        const id = Math.random().toString(36).substr(2, 9);
+        const newShape: any = {
+          id,
+          name: file.name.split('.')[0],
+          type: 'custom',
+          position: [0, 0, 0],
+          args: {},
+          color: '#ffffff',
+          geometryData: mergedGeo.toJSON()
+        };
+        setShapes(prev => [...prev, newShape]);
+        alert(`Imported ${file.name} successfully!`);
+      } catch (err) {
+        console.error('Import error:', err);
+        alert('Failed to import file. Ensure it is a valid .polyform, .skp, or .json file.');
+      }
+      setIsMenuOpen(false);
+    };
+    input.click();
+    setIsMenuOpen(false);
   };
 
   const fetchModels = async () => {
@@ -415,8 +519,11 @@ export default function TopBar() {
     setTags(model.tags || []);
     setScenes(model.scenes || []);
     if (model.customMaterials) setCustomMaterials(model.customMaterials);
-    setCurrentModelId(model.id);
-    setCurrentModelName(model.name);
+    if (model.animations) setAnimations(model.animations);
+    if (model.notes) setNotes(model.notes);
+    if (model.customLights) setCustomLights(model.customLights);
+    setCurrentModelId(model.id || null);
+    setCurrentModelName(model.name || null);
     setIsSavedModelsOpen(false);
   };
 
@@ -564,8 +671,10 @@ export default function TopBar() {
                 className="absolute left-0 top-full mt-2 w-56 bg-white rounded-lg shadow-modus-4 border border-gray-200 py-2 text-gray-700"
               >
                 <MenuButton icon={<FilePlus size={16} />} label="New" onClick={handleNew} />
-                <MenuButton icon={<FolderOpen size={16} />} label="Open" onClick={handleOpen} />
+                <MenuButton icon={<FolderOpen size={16} />} label="Open File..." onClick={handleOpenLocalFile} />
+                <MenuButton icon={<Cloud size={16} />} label="Cloud Models..." onClick={handleOpen} />
                 <MenuButton icon={<Save size={16} />} label="Save" onClick={handleSave} />
+                <MenuButton icon={<Save size={16} />} label="Save As..." onClick={() => { setIsSaveAsOpen(true); setIsMenuOpen(false); }} />
                 
                 <div className="h-px bg-gray-100 my-1" />
                 
@@ -580,10 +689,13 @@ export default function TopBar() {
                     <ChevronRight size={14} className="text-gray-400" />
                   </div>
                   
-                  <div className="absolute left-full top-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/export:block z-[150]">
+                  <div className="absolute left-full top-0 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/export:block z-[150]">
                     <div className="absolute -left-2 top-0 w-2 h-full" />
-                    <MenuButton icon={<Download size={14} />} label="Import SKP" onClick={handleImportSKP} />
-              <MenuButton icon={<Camera size={14} />} label="Photo to 3D (AI)" onClick={handlePhotoTo3D} />
+                    <MenuButton icon={<Download size={14} />} label="Save File (.polyform)" onClick={() => { downloadProjectFile(); setIsMenuOpen(false); }} />
+                    <MenuButton icon={<FolderOpen size={14} />} label="Open File (.polyform)" onClick={handleOpenLocalFile} />
+                    <div className="h-px bg-gray-100 my-1" />
+                    <MenuButton icon={<Download size={14} />} label="Import SKP / 3D" onClick={handleImportSKP} />
+                    <MenuButton icon={<Camera size={14} />} label="Photo to 3D (AI)" onClick={handlePhotoTo3D} />
                     <div className="h-px bg-gray-100 my-1" />
                     <MenuButton icon={<Share2 size={14} />} label="Export GLTF" onClick={() => handleExport('gltf')} />
                     <MenuButton icon={<Share2 size={14} />} label="Export STL" onClick={() => handleExport('stl')} />
@@ -699,7 +811,7 @@ export default function TopBar() {
           <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
             <Save className="text-trimble-blue shrink-0" size={24} />
             <p className="text-sm text-gray-600 dark:text-gray-300">
-              Give your model a name to save it to your library.
+              Give your model a name to save the design file (.polyform) and sync to your library.
             </p>
           </div>
           
@@ -709,6 +821,11 @@ export default function TopBar() {
               type="text" 
               value={newModelName || ''}
               onChange={(e) => setNewModelName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newModelName.trim() && !loading) {
+                  handleSaveAs();
+                }
+              }}
               placeholder="Enter model name..."
               className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none transition-all text-gray-900 dark:text-white"
               autoFocus

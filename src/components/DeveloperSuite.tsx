@@ -562,7 +562,11 @@ console.log("Landscape elements placed!");`
     },
     {
       name: 'PBR Material & Edges',
-      code: `// Apply architectural preset & enable linework outlines
+      code: `// Create and select an architectural volume to demonstrate material and edges
+const box = sdk.createBox({ width: 3, height: 3, depth: 3, position: [0, 1.5, 0] });
+sdk.select(box.id);
+
+// Apply architectural preset & enable linework outlines
 const obj = sdk.getSelectedObject();
 if (obj) {
   sdk.materials.applyMaterial(obj.id, "vertical-timber");
@@ -1372,7 +1376,11 @@ console.log(\`Generated \${framing.length} structural timber members.\`);`
     {
       title: "Architectural PBR Cladding & Edge Outlines",
       description: "Applies architectural material presets (vertical timber, stone, brick) and configures high-contrast linework outlines.",
-      code: `// Apply architectural material to selection
+      code: `// Create a building mass and select it
+const building = sdk.createBox({ width: 4, height: 3, depth: 4, position: [0, 1.5, 0] });
+sdk.select(building.id);
+
+// Apply architectural material to selection
 const obj = sdk.getSelectedObject();
 if (obj) {
   sdk.materials.applyMaterial(obj.id, "vertical-timber", {
@@ -1493,6 +1501,7 @@ console.log(\`Exported JSON size: \${(sceneData.length / 1024).toFixed(1)} KB\`)
 
 function FullDocumentation() {
   const { setActiveDeveloperTab, setDeveloperCode } = useApp();
+  const [openCategories, setOpenCategories] = useState<Record<number, boolean>>({});
 
   const categories = [
     {
@@ -1727,7 +1736,11 @@ console.log("Available plants:", catalog.map(p => p.commonName).join(", "));`
       items: [
         {
           name: "Apply Architectural Material Preset",
-          code: `// Presets: 'red-brick', 'coursed-stone', 'polished-concrete', 'stucco-white', 'vertical-timber', 'architectural-glass', 'slate-tile'
+          code: `// Create and select an architectural block first
+const block = sdk.createBox({ width: 3, height: 3, depth: 3, position: [0, 1.5, 0] });
+sdk.select(block.id);
+
+// Presets: 'red-brick', 'coursed-stone', 'polished-concrete', 'stucco-white', 'vertical-timber', 'architectural-glass', 'slate-tile'
 const obj = sdk.getSelectedObject();
 if (obj) {
   sdk.materials.applyMaterial(obj.id, "red-brick", {
@@ -1799,10 +1812,14 @@ if (selected.length > 1) {
         },
         {
           name: "Duplicate Object with Offset",
-          code: `const obj = sdk.getSelectedObject();
+          code: `// Add a massing block to the scene and select it
+const original = sdk.createBox({ width: 2, height: 2, depth: 2, position: [-2, 1, 0] });
+sdk.select(original.id);
+
+const obj = sdk.getSelectedObject();
 if (obj) {
   const copy = sdk.selection.duplicateObject(obj.id, [2.5, 0, 0]);
-  console.log("Duplicated object:", copy.id);
+  console.log("Duplicated object:", copy?.id);
 }`
         },
         {
@@ -1815,7 +1832,12 @@ if (ids.length > 1) {
         },
         {
           name: "Hide, Isolate & Unhide",
-          code: `const obj = sdk.getSelectedObject();
+          code: `// Create two buildings so isolation can be visualized
+const mainBuilding = sdk.createBox({ width: 3, height: 3, depth: 3, position: [-2.5, 1.5, 0] });
+sdk.createBox({ width: 2, height: 2, depth: 2, position: [2.5, 1, 0] });
+sdk.select(mainBuilding.id);
+
+const obj = sdk.getSelectedObject();
 if (obj) {
   sdk.selection.isolateObject(obj.id); // Hides all other objects
   // sdk.selection.unhideAll();       // Restores visibility
@@ -1823,7 +1845,11 @@ if (obj) {
         },
         {
           name: "Transform Object",
-          code: `const obj = sdk.getSelectedObject();
+          code: `// Add an architectural form and select it
+const form = sdk.createBox({ width: 2, height: 2, depth: 2, position: [0, 1, 0] });
+sdk.select(form.id);
+
+const obj = sdk.getSelectedObject();
 if (obj) {
   sdk.selection.transformObject(obj.id, {
     position: [0, 2, 0],
@@ -1854,14 +1880,22 @@ sdk.pushPull(rect, 2.5); // Extrudes 2D shape into 3D volume`
         },
         {
           name: "Divide Surface / Paneling",
-          code: `const obj = sdk.getSelectedObject();
+          code: `// Add a wall surface and select it
+const wall = sdk.createBox({ width: 4, height: 3, depth: 0.2, position: [0, 1.5, 0] });
+sdk.select(wall.id);
+
+const obj = sdk.getSelectedObject();
 if (obj) {
   sdk.divideSurface(obj.id, 0, [4, 4]); // 4x4 panel grid
 }`
         },
         {
           name: "Set Edge Bevel & Chamfer",
-          code: `const obj = sdk.getSelectedObject();
+          code: `// Add a solid massing block and select it
+const mass = sdk.createBox({ width: 3, height: 3, depth: 3, position: [0, 1.5, 0] });
+sdk.select(mass.id);
+
+const obj = sdk.getSelectedObject();
 if (obj) {
   sdk.setBevel(obj, { amount: 0.15, type: "radius", segments: 8 });
 }`
@@ -1917,7 +1951,11 @@ sdk.camera.setAutoOrbit(true, 1.2);`
         },
         {
           name: "Focus on Object",
-          code: `const obj = sdk.getSelectedObject();
+          code: `// Add a landmark tower and select it
+const tower = sdk.createBox({ width: 2, height: 6, depth: 2, position: [5, 3, 5] });
+sdk.select(tower.id);
+
+const obj = sdk.getSelectedObject();
 if (obj) sdk.camera.focusObject(obj.id);`
         }
       ]
@@ -2025,38 +2063,55 @@ console.log("Stats:", stats);`
           <p className="text-sm text-gray-500">Comprehensive reference guide for all DraftUp Developer SDK functions, options, and subsystems.</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6">
-          {categories.map((cat, i) => (
-            <section key={i} className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-              <h3 className="text-md font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-3">
-                {cat.icon}
-                {cat.title}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {cat.items.map((item, j) => (
-                  <div key={j} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{item.name}</span>
-                        <button 
-                          onClick={() => {
-                            setDeveloperCode(item.code);
-                            setActiveDeveloperTab('console');
-                          }}
-                          className="text-[9px] font-bold text-trimble-blue hover:underline uppercase shrink-0 ml-2"
-                        >
-                          Try Now
-                        </button>
-                      </div>
-                    </div>
-                    <pre className="p-2.5 bg-gray-900 text-gray-300 rounded text-[9.5px] font-mono overflow-x-auto max-h-40 leading-relaxed">
-                      {item.code}
-                    </pre>
+        <div className="grid grid-cols-1 gap-4">
+          {categories.map((cat, i) => {
+            const isOpen = Boolean(openCategories[i]);
+            return (
+              <section key={i} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => setOpenCategories(prev => ({ ...prev, [i]: !prev[i] }))}
+                  className="w-full text-md font-bold flex items-center justify-between text-gray-900 dark:text-white cursor-pointer select-none text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    {cat.icon}
+                    {cat.title}
+                  </span>
+                  <div className="flex items-center gap-2 text-xs font-normal text-gray-400 shrink-0 ml-3">
+                    <span className="bg-gray-100 dark:bg-gray-700/60 px-2 py-0.5 rounded-full text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                      {cat.items.length} examples
+                    </span>
+                    <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform duration-200", isOpen ? "rotate-180" : "rotate-0")} />
                   </div>
-                ))}
-              </div>
-            </section>
-          ))}
+                </button>
+                {isOpen && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/60">
+                    {cat.items.map((item, j) => (
+                      <div key={j} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{item.name}</span>
+                            <button 
+                              onClick={() => {
+                                setDeveloperCode(item.code);
+                                setActiveDeveloperTab('console');
+                              }}
+                              className="text-[9px] font-bold text-trimble-blue hover:underline uppercase shrink-0 ml-2 cursor-pointer"
+                            >
+                              Try Now
+                            </button>
+                          </div>
+                        </div>
+                        <pre className="p-2.5 bg-gray-900 text-gray-300 rounded text-[9.5px] font-mono overflow-x-auto max-h-40 leading-relaxed">
+                          {item.code}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
 
         {/* Deprecated Notice */}

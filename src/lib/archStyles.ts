@@ -1,8 +1,8 @@
 export interface ArchStyleDef {
   id: string;
-  type: 'door' | 'window' | 'staircase' | 'wall';
+  type: 'door' | 'window' | 'staircase' | 'wall' | 'scale_figure';
   name: string;
-  category: 'Modern' | 'Classic' | 'Commercial' | 'Specialty' | 'Layout' | 'Structure' | 'Overlapping' | 'Interlocking' | 'Inline / Flush' | 'Masonry';
+  category: 'Modern' | 'Classic' | 'Commercial' | 'Specialty' | 'Layout' | 'Structure' | 'Overlapping' | 'Interlocking' | 'Inline / Flush' | 'Masonry' | 'Professional' | 'Site & Construction' | 'Casual & Public' | 'Minimal & Silhouette';
   description: string;
   defaultDimensions: [number, number, number]; // [width, height, depth/length]
   hasGlass: boolean;
@@ -497,4 +497,108 @@ export const WALL_STYLES: ArchStyleDef[] = [
     features: ['Dressed Ashlar Blocks', 'Fine Mortar Joints', 'Luxury Stone Facade', 'Substantial Architectural Mass']
   }
 ];
+
+export const SCALE_FIGURE_STYLES: ArchStyleDef[] = [
+  {
+    id: 'architect-alex',
+    type: 'scale_figure',
+    name: 'Architect Alex',
+    category: 'Professional',
+    description: 'Modern architect wearing charcoal tailored blazer, dark trousers, designer glasses, holding rolled A1 drawing set.',
+    defaultDimensions: [0.55, 1.78, 0.35],
+    hasGlass: false,
+    features: ['1.78m Standard Eye-Level', 'A1 Drawing Scroll', 'Charcoal Tailored Blazer', 'Modern Eyewear']
+  },
+  {
+    id: 'engineer-sam',
+    type: 'scale_figure',
+    name: 'Site Engineer Sam',
+    category: 'Site & Construction',
+    description: 'Field civil engineer equipped with safety yellow hardhat, fluorescent hi-vis vest, heavy-duty work boots, and digital tablet.',
+    defaultDimensions: [0.60, 1.82, 0.40],
+    hasGlass: false,
+    features: ['1.82m Structural Height', 'Safety Yellow Hardhat', 'Hi-Vis Fluorescent Vest', 'Rugged Steel-Toe Boots']
+  },
+  {
+    id: 'designer-maya',
+    type: 'scale_figure',
+    name: 'Landscape Architect Maya',
+    category: 'Professional',
+    description: 'Site designer in olive utility jacket with cross-body messenger bag, clipboard, and field planting notes.',
+    defaultDimensions: [0.50, 1.68, 0.32],
+    hasGlass: false,
+    features: ['1.68m Human Scale', 'Olive Utility Jacket', 'Field Clipboard', 'Cross-Body Messenger Bag']
+  },
+  {
+    id: 'surveyor-liam',
+    type: 'scale_figure',
+    name: 'Land Surveyor Liam',
+    category: 'Site & Construction',
+    description: 'Geomatics surveyor in bright orange safety gear holding an electronic laser disto rangefinder and field survey book.',
+    defaultDimensions: [0.58, 1.76, 0.36],
+    hasGlass: false,
+    features: ['1.76m Elevation Datum', 'Hi-Vis Safety Gear', 'Laser Disto Rangefinder', 'Field Logbook']
+  },
+  {
+    id: 'executive-elena',
+    type: 'scale_figure',
+    name: 'Project Director Elena',
+    category: 'Professional',
+    description: 'Design executive in tailored camel coat carrying a slim portfolio briefcase and smartphone.',
+    defaultDimensions: [0.52, 1.72, 0.30],
+    hasGlass: false,
+    features: ['1.72m Design Stature', 'Tailored Long Coat', 'Slim Executive Briefcase', 'Minimalist Silhouette']
+  },
+  {
+    id: 'commuter-leo',
+    type: 'scale_figure',
+    name: 'Urban Commuter Leo',
+    category: 'Casual & Public',
+    description: 'City pedestrian wearing casual denim jacket, carrying an everyday commuter backpack and coffee tumbler.',
+    defaultDimensions: [0.54, 1.80, 0.38],
+    hasGlass: false,
+    features: ['1.80m Public Scale', 'Commuter Daypack', 'Casual Jacket & Sneakers', 'Travel Tumbler']
+  },
+  {
+    id: 'cyclist-emma',
+    type: 'scale_figure',
+    name: 'Urban Cyclist Emma',
+    category: 'Casual & Public',
+    description: 'Active urban commuter in sporty cyan windbreaker with cycling helmet and shoulder courier bag.',
+    defaultDimensions: [0.52, 1.65, 0.34],
+    hasGlass: false,
+    features: ['1.65m Athletic Proportion', 'Aerodynamic Helmet', 'High-Vis Cycling Windbreaker', 'Messenger Bag']
+  },
+  {
+    id: 'resident-arthur',
+    type: 'scale_figure',
+    name: 'Elderly Resident Arthur',
+    category: 'Casual & Public',
+    description: 'Senior community resident wearing wool overcoat, classic flat cap, and holding a polished wooden walking cane.',
+    defaultDimensions: [0.52, 1.70, 0.35],
+    hasGlass: false,
+    features: ['1.70m Community Scale', 'Classic Wool Overcoat', 'Traditional Flat Cap', 'Wooden Walking Cane']
+  },
+  {
+    id: 'minimal_monochrome',
+    type: 'scale_figure',
+    name: 'Architectural Matte Cutout',
+    category: 'Minimal & Silhouette',
+    description: '1.75m clean matte white/light slate monochrome cutout silhouette for conceptual architectural drawings.',
+    defaultDimensions: [0.48, 1.75, 0.26],
+    hasGlass: false,
+    features: ['1.75m Conceptual Scale', 'Matte Slate Monochrome', 'Minimalist Cutout', 'Neutral Proportion']
+  },
+  {
+    id: 'dark_silhouette',
+    type: 'scale_figure',
+    name: 'Charcoal Silhouette',
+    category: 'Minimal & Silhouette',
+    description: '1.76m dark charcoal silhouette providing crisp optical scale and strong contrast against sunlit facades.',
+    defaultDimensions: [0.48, 1.76, 0.26],
+    hasGlass: false,
+    features: ['1.76m Elevation Datum', 'Deep Charcoal Finish', 'High Contrast Silhouette', 'Pure Graphic Profile']
+  }
+];
+
 

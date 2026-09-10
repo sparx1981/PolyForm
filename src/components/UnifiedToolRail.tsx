@@ -58,6 +58,7 @@ import {
   X,
   Sliders,
   Wand2,
+  PersonStanding,
   Check,
   Image as ImageIcon,
   AlertTriangle,
@@ -965,6 +966,16 @@ export default function UnifiedToolRail() {
           isActive: (s) => s.activeTool === 'staircase',
           onClick: (s) => s.setActiveTool('staircase'),
           keywords: ['staircase', 'stairs', 'flight', 'steps', 'levels']
+        },
+        {
+          id: 'scale_figure',
+          tool: 'scale_figure',
+          label: 'Scale Figure (Person)',
+          subtitle: 'Place architectural scale figure benchmark in 3D space',
+          icon: <PersonStanding size={19} />,
+          isActive: (s) => s.activeTool === 'scale_figure',
+          onClick: (s) => s.setActiveTool('scale_figure'),
+          keywords: ['scale figure', 'person', 'human', 'figure', 'character', 'entourage', 'height', 'benchmark']
         },
         {
           id: 'worldview',

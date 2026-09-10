@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, RotateCcw, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, Users, Wand2, X } from 'lucide-react';
+import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Palette, PenTool, Plus, RotateCcw, Search, Send, Settings, Settings2, Sparkles, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
@@ -258,6 +258,12 @@ export default function RightPanelStack() {
     setExteriorWallTransparency,
     interiorWallTransparency,
     setInteriorWallTransparency,
+    roofTransparency,
+    setRoofTransparency,
+    floorTransparency,
+    setFloorTransparency,
+    fixturesTransparency,
+    setFixturesTransparency,
     selectedLightId,
     setSelectedLightId,
     activeTool,
@@ -363,11 +369,14 @@ export default function RightPanelStack() {
     commitHistory();
   };
 
-  const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers']);
+  const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame']);
 
   useEffect(() => {
     if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit'].includes(activeTool)) {
       setOpenPanels(prev => prev.includes('toolModifiers') ? prev : [...prev, 'toolModifiers']);
+    }
+    if (activeTool === 'timber-frame') {
+      setOpenPanels(prev => prev.includes('timberFrame') ? prev : [...prev, 'timberFrame']);
     }
   }, [activeTool]);
 
@@ -800,10 +809,10 @@ export default function RightPanelStack() {
   // needing to know about it in advance — including groups created later,
   // as the user keeps drawing.
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set());
-  const [expandedOutlinerLevels, setExpandedOutlinerLevels] = React.useState<Set<string>>(new Set(['level-1', 'level-2', 'level-3', 'level-4']));
-  const [expandedOutlinerRoofs, setExpandedOutlinerRoofs] = React.useState<Set<string>>(new Set(['all-roofs']));
-  const [expandedOutlinerTimber, setExpandedOutlinerTimber] = React.useState<boolean>(true);
-  const [expandedTimberSubgroups, setExpandedTimberSubgroups] = React.useState<Set<string>>(new Set(['walls', 'floors', 'roofs']));
+  const [expandedOutlinerLevels, setExpandedOutlinerLevels] = React.useState<Set<string>>(new Set());
+  const [expandedOutlinerRoofs, setExpandedOutlinerRoofs] = React.useState<Set<string>>(new Set());
+  const [expandedOutlinerTimber, setExpandedOutlinerTimber] = React.useState<boolean>(false);
+  const [expandedTimberSubgroups, setExpandedTimberSubgroups] = React.useState<Set<string>>(new Set());
   const selectedLight = customLights.find(l => l.id === selectedLightId);
   
   // Local state for editing in real-time
@@ -1637,7 +1646,7 @@ export default function RightPanelStack() {
                         </div>
 
                         {roofShapes.map(roof => {
-                          const isRoofExpanded = expandedOutlinerRoofs.has(roof.id) || expandedOutlinerRoofs.has('all-roofs');
+                          const isRoofExpanded = expandedOutlinerRoofs.has(roof.id);
                           const isSelected = selectedId === roof.id || selectedIds.includes(roof.id);
                           const children = shapes.filter(s => s.parentShapeId === roof.id || (s.tags?.includes('roof-fascia') && !s.parentShapeId && s.id !== roof.id));
                           const allRoofShapeIds = [roof.id, ...children.map(c => c.id)];
@@ -1806,14 +1815,78 @@ export default function RightPanelStack() {
                       const anyTimberVisible = timberShapes.some(s => !s.hidden);
                       const allTimberSelected = allTimberIds.length > 0 && allTimberIds.every(id => selectedIds.includes(id));
 
-                      const wallMembers = timberShapes.filter(s => s.tags?.includes('timber-wall') || s.name?.includes('Stud') || s.name?.includes('Plate') || s.name?.includes('Header'));
-                      const floorMembers = timberShapes.filter(s => s.tags?.includes('timber-floor') || s.name?.includes('Joist') || s.name?.includes('Sill'));
-                      const roofMembers = timberShapes.filter(s => s.tags?.includes('timber-roof') || s.name?.includes('Rafter') || s.name?.includes('Ridge') || s.name?.includes('Tie'));
+                      const wallMembers = timberShapes.filter(s => 
+                        s.tags?.includes('timber-wall') || 
+                        s.tags?.includes('timber-stud-wall') || 
+                        s.tags?.includes('timber-noggin') || 
+                        s.tags?.includes('timber-plate') || 
+                        s.tags?.includes('timber-stud') || 
+                        s.tags?.includes('timber-lintel') || 
+                        s.tags?.includes('timber-sill') || 
+                        s.tags?.includes('timber-jack-stud') || 
+                        s.tags?.includes('timber-king-stud') || 
+                        s.tags?.includes('timber-blocking') || 
+                        s.name?.includes('Stud') || 
+                        s.name?.includes('Plate') || 
+                        s.name?.includes('Header') || 
+                        s.name?.includes('Lintel') || 
+                        s.name?.includes('Noggin') || 
+                        s.name?.includes('NOGGIN') || 
+                        s.name?.includes('Blocking') || 
+                        s.name?.includes('Cripple') ||
+                        s.name?.startsWith('WALL_')
+                      );
+
+                      const floorMembers = timberShapes.filter(s => 
+                        s.tags?.includes('timber-floor') || 
+                        s.tags?.includes('timber-floor-joist') || 
+                        s.tags?.includes('timber-rim-joist') || 
+                        s.tags?.includes('timber-trimmer-joist') || 
+                        s.tags?.includes('timber-header-joist') || 
+                        s.tags?.includes('timber-strutting') || 
+                        s.tags?.includes('timber-bearing-blocking') || 
+                        s.tags?.includes('timber-joist') || 
+                        s.name?.includes('Joist') || 
+                        s.name?.includes('JOIST') || 
+                        s.name?.includes('Rim') || 
+                        s.name?.includes('RIM') || 
+                        s.name?.includes('Trimmer') || 
+                        s.name?.includes('TRIMMER') || 
+                        s.name?.includes('Header') || 
+                        s.name?.includes('HEADER_') || 
+                        s.name?.includes('Strut') || 
+                        s.name?.includes('STRUT') || 
+                        s.name?.includes('Bearing') || 
+                        s.name?.includes('BEARING') || 
+                        s.name?.includes('Sill') || 
+                        s.name?.startsWith('FLOOR_')
+                      );
+
+                      const roofMembers = timberShapes.filter(s => 
+                        s.tags?.includes('timber-roof') || 
+                        s.tags?.includes('timber-roof-rafter') || 
+                        s.tags?.includes('timber-rafter') || 
+                        s.tags?.includes('timber-purlin') || 
+                        s.tags?.includes('timber-ridge-beam') || 
+                        s.tags?.includes('timber-collar-tie') || 
+                        s.name?.includes('Rafter') || 
+                        s.name?.includes('Ridge') || 
+                        s.name?.includes('Tie') || 
+                        s.name?.includes('Purlin') || 
+                        s.name?.startsWith('ROOF_')
+                      );
+
+                      const otherMembers = timberShapes.filter(s => 
+                        !wallMembers.some(m => m.id === s.id) && 
+                        !floorMembers.some(m => m.id === s.id) && 
+                        !roofMembers.some(m => m.id === s.id)
+                      );
 
                       const categories = [
-                        { key: 'walls', label: 'Wall Framing (Studs, Plates, Headers)', members: wallMembers, color: 'bg-amber-600' },
-                        { key: 'floors', label: 'Floor Framing (Joists & Rims)', members: floorMembers, color: 'bg-amber-700' },
-                        { key: 'roofs', label: 'Roof Framing (Rafters, Ridges & Ties)', members: roofMembers, color: 'bg-amber-800' }
+                        { key: 'walls', label: 'Wall Framing (Studs, Plates, Headers, Noggins)', members: wallMembers, color: 'bg-amber-600' },
+                        { key: 'floors', label: 'Floor Framing (Joists, Rims, Trimmers, Struts)', members: floorMembers, color: 'bg-amber-700' },
+                        { key: 'roofs', label: 'Roof Framing (Rafters, Ridges & Ties)', members: roofMembers, color: 'bg-amber-800' },
+                        ...(otherMembers.length > 0 ? [{ key: 'other', label: 'Other Framing Members', members: otherMembers, color: 'bg-amber-900' }] : [])
                       ].filter(c => c.members.length > 0);
 
                       return (
@@ -2052,6 +2125,9 @@ export default function RightPanelStack() {
                               )}
                             >
                               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: shape.color || '#94a3b8' }} />
+                              {shape.type === 'scale_figure' && (
+                                <User size={12} className="text-trimble-blue shrink-0 -ml-0.5" />
+                              )}
                               <span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span>
 
                               <button
@@ -2551,22 +2627,6 @@ export default function RightPanelStack() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">See Lightsource</span>
-                  <button 
-                    onClick={() => setShowLightsource(!showLightsource)}
-                    className={cn(
-                      "w-8 h-4 rounded-full relative transition-colors",
-                      showLightsource ? "bg-trimble-blue" : "bg-gray-300"
-                    )}
-                  >
-                    <div className={cn(
-                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
-                      showLightsource ? "left-4.5" : "left-0.5"
-                    )} />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Ambient Occlusion</span>
                   <button 
                     onClick={() => setAmbientOcclusionEnabled(!ambientOcclusionEnabled)}
@@ -2583,86 +2643,175 @@ export default function RightPanelStack() {
                 </div>
               </div>
 
-              <div className="space-y-3 px-2 py-1 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">Edge Lines</span>
-                  <button
-                    onClick={() => setEdgeLinesEnabled(!edgeLinesEnabled)}
-                    className={cn(
-                      "w-8 h-4 rounded-full relative transition-colors",
-                      edgeLinesEnabled ? "bg-trimble-blue" : "bg-gray-300"
-                    )}
+              <SubSection title="Animations" defaultOpen={false}>
+                <div className="space-y-4">
+                  <button 
+                    onClick={() => {
+                      const id = Math.random().toString(36).substr(2, 9);
+                      const newAnim: SceneAnimation = {
+                        id,
+                        type: 'confetti',
+                        position: [0, 0, 0],
+                        density: 1000,
+                        scale: 1,
+                        looping: true,
+                        playing: true
+                      };
+                      setAnimations([...animations, newAnim]);
+                      setPlacingAnimationId(id);
+                      setActiveTool('select');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-trimble-blue text-white rounded-md text-[10px] font-bold uppercase transition-all hover:bg-trimble-dark-blue shadow-sm"
                   >
-                    <div className={cn(
-                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
-                      edgeLinesEnabled ? "left-4.5" : "left-0.5"
-                    )} />
+                    <Plus size={14} />
+                    Add Animation
                   </button>
-                </div>
-                {edgeLinesEnabled && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase">Line Color</span>
-                      <input
-                        type="color"
-                        value={edgeLinesColor}
-                        onChange={(e) => setEdgeLinesColor(e.target.value)}
-                        className="w-6 h-6 rounded cursor-pointer border-none p-0"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[8px] font-bold text-gray-400 uppercase">Opacity</label>
-                        <span className="text-[8px] text-gray-400">{Math.round(edgeLinesOpacity * 100)}%</span>
-                      </div>
-                      <input
-                        type="range" min="0.1" max="1" step="0.05"
-                        value={edgeLinesOpacity}
-                        onChange={(e) => setEdgeLinesOpacity(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[8px] font-bold text-gray-400 uppercase">Thickness</label>
-                        <span className="text-[8px] text-gray-400">{edgeLinesThickness}px</span>
-                      </div>
-                      <input
-                        type="range" min="1" max="5" step="0.5"
-                        value={edgeLinesThickness}
-                        onChange={(e) => setEdgeLinesThickness(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
 
-              <SubSection title="Architecture" defaultOpen={true}>
+                  <div className="space-y-3">
+                    {animations.map((anim) => (
+                      <div 
+                        key={anim.id}
+                        className={cn(
+                          "p-3 rounded-lg border space-y-3 transition-all",
+                          theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase">{anim.type.replace('_', ' ')}</span>
+                          <button 
+                            onClick={() => setAnimations(prev => prev.filter(a => a.id !== anim.id))}
+                            className="p-1 hover:bg-red-50 text-red-400 hover:text-red-500 rounded transition-colors"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[8px] text-gray-400 uppercase font-bold">Effect Type</label>
+                          <div className="grid grid-cols-2 gap-1 px-1">
+                            {['confetti', 'fire', 'smoke', 'sparks', 'magic_aura'].map((type) => (
+                              <button
+                                key={type}
+                                onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, type: type as any } : a))}
+                                className={cn(
+                                  "py-1 text-[8px] font-bold rounded border transition-all truncate px-1",
+                                  anim.type === type 
+                                    ? "bg-trimble-blue text-white border-trimble-blue" 
+                                    : "bg-transparent text-gray-500 border-gray-200 hover:border-gray-300 dark:border-gray-600"
+                                )}
+                              >
+                                {type.split('_').join(' ').toUpperCase()}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
+                            <span>Density</span>
+                            <span>{anim.density}</span>
+                          </div>
+                          <input 
+                            type="range" min="100" max="5000" step="100"
+                            value={anim.density}
+                            onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, density: parseInt(e.target.value) } : a))}
+                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
+                            <span>Scale (Size)</span>
+                            <span>{(anim.scale || 1).toFixed(1)}</span>
+                          </div>
+                          <input 
+                            type="range" min="0.1" max="100" step="0.1"
+                            value={anim.scale || 1}
+                            onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, scale: parseFloat(e.target.value) } : a))}
+                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[8px] font-bold text-gray-400 uppercase">Loop Effect</span>
+                            <button 
+                              onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, looping: !a.looping } : a))}
+                              className={cn(
+                                "w-6 h-3 rounded-full relative transition-colors",
+                                anim.looping ? "bg-trimble-blue" : "bg-gray-300"
+                              )}
+                            >
+                              <div className={cn(
+                                "absolute top-0.5 w-2 h-2 bg-white rounded-full shadow-sm transition-all",
+                                anim.looping ? "left-3.5" : "left-0.5"
+                              )} />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded p-0.5">
+                            <button
+                              onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, playing: true } : a))}
+                              className={cn(
+                                "px-2 py-0.5 text-[8px] font-bold rounded transition-all",
+                                anim.playing ? "bg-white dark:bg-gray-600 text-green-500 shadow-sm" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                              )}
+                            >
+                              PLAY
+                            </button>
+                            <button
+                              onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, playing: false } : a))}
+                              className={cn(
+                                "px-2 py-0.5 text-[8px] font-bold rounded transition-all",
+                                !anim.playing ? "bg-white dark:bg-gray-600 text-red-500 shadow-sm" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                              )}
+                            >
+                              STOP
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[8px] text-gray-400 font-bold uppercase">Position</span>
+                          <button 
+                            onClick={() => setPlacingAnimationId(placingAnimationId === anim.id ? null : anim.id)}
+                            className={cn(
+                              "px-2 py-0.5 rounded text-[8px] font-bold transition-colors",
+                              placingAnimationId === anim.id ? "bg-trimble-blue text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                            )}
+                          >
+                            {placingAnimationId === anim.id ? 'Click in Scene' : 'Set Position'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </SubSection>
+
+              <SubSection title="Architecture" defaultOpen={false}>
                 <div className="space-y-3 px-1 py-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Building2 size={13} className="text-trimble-blue" />
-                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Wall Transparency</span>
+                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Transparency</span>
                     </div>
-                    {(wallTransparency > 0 || exteriorWallTransparency > 0 || interiorWallTransparency > 0) && (
+                    {(wallTransparency > 0 || exteriorWallTransparency > 0 || interiorWallTransparency > 0 || roofTransparency > 0 || floorTransparency > 0 || fixturesTransparency > 0) && (
                       <button
                         onClick={() => {
                           setWallTransparency(0);
                           setExteriorWallTransparency(0);
                           setInteriorWallTransparency(0);
+                          setRoofTransparency(0);
+                          setFloorTransparency(0);
+                          setFixturesTransparency(0);
                         }}
                         className="text-[9px] text-trimble-blue hover:underline cursor-pointer flex items-center gap-1 font-medium"
-                        title="Reset all walls to fully opaque"
+                        title="Reset all elements to fully opaque"
                       >
                         <RotateCcw size={9} />
                         <span>Reset Opaque</span>
                       </button>
                     )}
-                  </div>
-
-                  <div className="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 p-2 rounded border border-gray-100 dark:border-gray-700">
-                    Adjust wall transparency sliders to reveal structural timber framing, view interior floor plans, and navigate room layouts.
                   </div>
 
                   {/* 1. All Walls Transparency Slider */}
@@ -2787,7 +2936,107 @@ export default function RightPanelStack() {
                     />
                   </div>
 
-                  {/* 4. Selected Wall Slider (if a wall is selected) */}
+                  {/* 4. Roof Transparency Slider */}
+                  <div className="space-y-1.5 pt-1 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Roof</span>
+                        <span className="text-[8px] text-gray-400 font-mono">(Planes & Coverings)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={Math.round(roofTransparency * 100)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) setRoofTransparency(Math.max(0, Math.min(100, val)) / 100);
+                          }}
+                          className="w-12 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.02"
+                      value={roofTransparency}
+                      onChange={(e) => setRoofTransparency(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                  </div>
+
+                  {/* 5. Floor Transparency Slider */}
+                  <div className="space-y-1.5 pt-1 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Floor</span>
+                        <span className="text-[8px] text-gray-400 font-mono">(Slabs & Decks)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={Math.round(floorTransparency * 100)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) setFloorTransparency(Math.max(0, Math.min(100, val)) / 100);
+                          }}
+                          className="w-12 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.02"
+                      value={floorTransparency}
+                      onChange={(e) => setFloorTransparency(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                  </div>
+
+                  {/* 6. Fixtures Transparency Slider (for windows and doors) */}
+                  <div className="space-y-1.5 pt-1 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Fixtures</span>
+                        <span className="text-[8px] text-gray-400 font-mono">(Windows & Doors)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={Math.round(fixturesTransparency * 100)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) setFixturesTransparency(Math.max(0, Math.min(100, val)) / 100);
+                          }}
+                          className="w-12 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">%</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.02"
+                      value={fixturesTransparency}
+                      onChange={(e) => setFixturesTransparency(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                  </div>
                   {(() => {
                     const selectedShape = shapes.find(s => s.id === selectedId);
                     const isSelectedWall = selectedShape && (
@@ -2846,9 +3095,188 @@ export default function RightPanelStack() {
                 </div>
               </SubSection>
 
-              <SubSection title="Skybox">
+              <SubSection title="Camera" defaultOpen={false}>
+                <div className="space-y-3 px-1 py-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Enable Depth Clipping</span>
+                      <span className="text-[9px] text-gray-400">Near & Far Frustum Planes</span>
+                    </div>
+                    <button 
+                      id="toggle-camera-depth-clipping"
+                      onClick={() => setCameraDepthClippingEnabled(!cameraDepthClippingEnabled)}
+                      className={cn(
+                        "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                        cameraDepthClippingEnabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                      )}
+                      title={cameraDepthClippingEnabled ? "Disable Camera Depth Clipping" : "Enable Camera Depth Clipping"}
+                    >
+                      <div className={cn(
+                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                        cameraDepthClippingEnabled ? "left-4.5" : "left-0.5"
+                      )} />
+                    </button>
+                  </div>
+
+                  {/* Near Clipping Plane */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Near Plane</span>
+                        <span className="text-[9px] text-gray-400">(Min Distance)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0.01"
+                          max="100"
+                          step="0.05"
+                          value={cameraNear}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= 0.01) {
+                              setCameraNear(val);
+                              if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                            }
+                          }}
+                          className="w-16 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">m</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0.01" 
+                      max="25" 
+                      step="0.05"
+                      value={Math.min(cameraNear, 25)}
+                      onChange={(e) => {
+                        setCameraNear(parseFloat(e.target.value));
+                        if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                      }}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                    <div className="text-[9px] text-gray-400 leading-normal">
+                      Hides any geometry that falls between the camera lens and this minimum distance. Critical for navigating tight interior spaces, allowing the camera to see through objects (like a wall directly behind the lens) without them blocking the viewport.
+                    </div>
+                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                      <span className="text-[8px] uppercase font-bold text-gray-400 mr-1">Presets:</span>
+                      {[
+                        { label: '0.1m', val: 0.1 },
+                        { label: '0.8m', val: 0.8 },
+                        { label: '1.5m', val: 1.5 },
+                        { label: '3.0m', val: 3.0 },
+                        { label: '5.0m', val: 5.0 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          onClick={() => {
+                            setCameraNear(preset.val);
+                            if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                          }}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
+                            cameraNear === preset.val
+                              ? "bg-trimble-blue text-white border-trimble-blue"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Far Clipping Plane */}
+                  <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700/60">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Far Plane</span>
+                        <span className="text-[9px] text-gray-400">(Max Distance)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="10000"
+                          step="1"
+                          value={cameraFar}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= 1) {
+                              setCameraFar(val);
+                              if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                            }
+                          }}
+                          className="w-16 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">m</span>
+                      </div>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="5" 
+                      max="3000" 
+                      step="5"
+                      value={Math.min(cameraFar, 3000)}
+                      onChange={(e) => {
+                        setCameraFar(parseFloat(e.target.value));
+                        if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                      }}
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    />
+                    <div className="text-[9px] text-gray-400 leading-normal">
+                      Culls and hides any geometry that sits beyond this maximum distance. Primarily used to optimize rendering performance in massive scenes or fade out distant background clutter.
+                    </div>
+                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                      <span className="text-[8px] uppercase font-bold text-gray-400 mr-1">Presets:</span>
+                      {[
+                        { label: '25m', val: 25 },
+                        { label: '100m', val: 100 },
+                        { label: '500m', val: 500 },
+                        { label: '2000m', val: 2000 },
+                        { label: '5000m', val: 5000 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          onClick={() => {
+                            setCameraFar(preset.val);
+                            if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
+                          }}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
+                            cameraFar === preset.val
+                              ? "bg-trimble-blue text-white border-trimble-blue"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Reset Button */}
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        setCameraNear(0.1);
+                        setCameraFar(2000);
+                        setCameraDepthClippingEnabled(false);
+                      }}
+                      className="w-full py-1.5 px-2 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      title="Reset Near and Far clipping planes to default camera settings"
+                    >
+                      <RotateCcw size={12} />
+                      <span>Reset to Camera Defaults (0.1m / 2000m)</span>
+                    </button>
+                  </div>
+                </div>
+              </SubSection>
+
+              <SubSection title="Environment">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Environment</label>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Environment Map</label>
                   <select 
                     value={skybox}
                     onChange={(e) => setSkybox(e.target.value as any)}
@@ -2902,10 +3330,213 @@ export default function RightPanelStack() {
                     className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
                   />
                 </div>
+
+                {/* Fog controls moved inside Environment */}
+                <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Fog</span>
+                    <button 
+                      onClick={() => setFogSettings({ ...fogSettings, enabled: !fogSettings.enabled })}
+                      className={cn(
+                        "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                        fogSettings.enabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                        fogSettings.enabled ? "left-4.5" : "left-0.5"
+                      )} />
+                    </button>
+                  </div>
+
+                  {fogSettings.enabled && (
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Animate Fog</span>
+                      <button 
+                        onClick={() => setFogSettings({ ...fogSettings, animate: !fogSettings.animate })}
+                        className={cn(
+                          "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                          fogSettings.animate ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                          fogSettings.animate ? "left-4.5" : "left-0.5"
+                        )} />
+                      </button>
+                    </div>
+                  )}
+
+                  {fogSettings.enabled && fogSettings.animate && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                        <span>Animation Speed</span>
+                        <span>{fogSettings.speed}</span>
+                      </div>
+                      <input 
+                        type="range" min="0" max="100" step="1"
+                        value={fogSettings.speed}
+                        onChange={(e) => setFogSettings({ ...fogSettings, speed: parseInt(e.target.value) })}
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      />
+                    </div>
+                  )}
+
+                  {fogSettings.enabled && (
+                    <div className="space-y-4 pt-2">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Fog Type</label>
+                        <div className="flex bg-gray-100 dark:bg-gray-800 rounded p-0.5">
+                          {['standard', 'super-mega'].map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => setFogSettings({ ...fogSettings, type: type as 'standard' | 'super-mega' })}
+                              className={cn(
+                                "flex-1 py-1 text-[10px] font-bold rounded transition-all cursor-pointer",
+                                fogSettings.type === type ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                              )}
+                            >
+                              {type === 'standard' ? 'Standard' : 'Super Mega'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {fogSettings.type === 'super-mega' ? (
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                              <span>Mega Density</span>
+                              <span>{fogSettings.superMegaDensity.toFixed(3)}</span>
+                            </div>
+                            <input 
+                              type="range" min="0.001" max="0.1" step="0.001"
+                              value={fogSettings.superMegaDensity}
+                              onChange={(e) => setFogSettings({ ...fogSettings, superMegaDensity: parseFloat(e.target.value) })}
+                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Fog Color</label>
+                            <div className="space-y-1">
+                              <input 
+                                type="color" 
+                                value={fogSettings.colors[0]}
+                                onChange={(e) => {
+                                  const newColors = [...fogSettings.colors];
+                                  newColors[0] = e.target.value;
+                                  setFogSettings({ ...fogSettings, colors: newColors });
+                                }}
+                                className="w-full h-8 rounded cursor-pointer border border-gray-200 p-0.5"
+                              />
+                              <div className="text-[8px] text-gray-400 text-center font-mono">{fogSettings.colors[0].toUpperCase()}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Complexity</label>
+                            <div className="flex bg-gray-100 dark:bg-gray-800 rounded p-0.5">
+                              {[1, 2, 3].map((count) => (
+                                <button
+                                  key={count}
+                                  onClick={() => setFogSettings({ ...fogSettings, colorCount: count as 1 | 2 | 3 })}
+                                  className={cn(
+                                    "flex-1 py-1 text-[10px] font-bold rounded transition-all cursor-pointer",
+                                    fogSettings.colorCount === count ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                  )}
+                                >
+                                  {count} Color{count > 1 ? 's' : ''}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Styling</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              {Array.from({ length: fogSettings.colorCount }).map((_, i) => (
+                                <div key={i} className="space-y-1">
+                                  <input 
+                                    type="color" 
+                                    value={fogSettings.colors[i]}
+                                    onChange={(e) => {
+                                      const newColors = [...fogSettings.colors];
+                                      newColors[i] = e.target.value;
+                                      setFogSettings({ ...fogSettings, colors: newColors });
+                                    }}
+                                    className="w-full h-8 rounded cursor-pointer border border-gray-200 p-0.5"
+                                  />
+                                  <div className="text-[8px] text-gray-400 text-center font-mono">{fogSettings.colors[i].toUpperCase()}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                                <span>Density</span>
+                                <span>{fogSettings.density.toFixed(3)}</span>
+                              </div>
+                              <input 
+                                type="range" min="0.001" max="0.1" step="0.001"
+                                value={fogSettings.density}
+                                onChange={(e) => setFogSettings({ ...fogSettings, density: parseFloat(e.target.value) })}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                                <span>Height (Start)</span>
+                                <span>{fogSettings.height.toFixed(1)}</span>
+                              </div>
+                              <input 
+                                type="range" min="-10" max="10" step="0.5"
+                                value={fogSettings.height}
+                                onChange={(e) => setFogSettings({ ...fogSettings, height: parseFloat(e.target.value) })}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                                <span>Height (End)</span>
+                                <span>{fogSettings.heightEnd.toFixed(1)}</span>
+                              </div>
+                              <input 
+                                type="range" min="-10" max="50" step="0.5"
+                                value={fogSettings.heightEnd}
+                                onChange={(e) => setFogSettings({ ...fogSettings, heightEnd: parseFloat(e.target.value) })}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               </SubSection>
 
-              <SubSection title="Sunlight">
+              <SubSection title="Lighting">
                 <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">See Light Source</span>
+                    <button 
+                      onClick={() => setShowLightsource(!showLightsource)}
+                      className={cn(
+                        "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                        showLightsource ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                        showLightsource ? "left-4.5" : "left-0.5"
+                      )} />
+                    </button>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-gray-400 uppercase">Animate Sun Rotation</span>
                     <button 
@@ -3011,13 +3642,11 @@ export default function RightPanelStack() {
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
                     />
                   </div>
-                </div>
-              </SubSection>
 
-              <SubSection title="Custom Lights">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">Lights List</span>
-                  <button 
+                  <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Custom Lights</span>
+                      <button 
                     onClick={() => {
                       const newLight: any = {
                         id: Math.random().toString(36).substr(2, 9),
@@ -3366,519 +3995,64 @@ export default function RightPanelStack() {
                     </div>
                   ))}
                 </div>
-              </SubSection>
+              </div>
+            </div>
+          </SubSection>
 
-              <SubSection title="Fog">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">Enabled</span>
-                  <button 
-                    onClick={() => setFogSettings({ ...fogSettings, enabled: !fogSettings.enabled })}
-                    className={cn(
-                      "w-8 h-4 rounded-full relative transition-colors",
-                      fogSettings.enabled ? "bg-trimble-blue" : "bg-gray-300"
-                    )}
-                  >
-                    <div className={cn(
-                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
-                      fogSettings.enabled ? "left-4.5" : "left-0.5"
-                    )} />
-                  </button>
-                </div>
-
-                {fogSettings.enabled && (
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Animate Fog</span>
-                    <button 
-                      onClick={() => setFogSettings({ ...fogSettings, animate: !fogSettings.animate })}
+              <SubSection title="Edge Lines" defaultOpen={false}>
+                <div className="space-y-3 px-2 py-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Edge Lines</span>
+                    <button
+                      onClick={() => setEdgeLinesEnabled(!edgeLinesEnabled)}
                       className={cn(
                         "w-8 h-4 rounded-full relative transition-colors",
-                        fogSettings.animate ? "bg-trimble-blue" : "bg-gray-300"
+                        edgeLinesEnabled ? "bg-trimble-blue" : "bg-gray-300"
                       )}
                     >
                       <div className={cn(
                         "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
-                        fogSettings.animate ? "left-4.5" : "left-0.5"
+                        edgeLinesEnabled ? "left-4.5" : "left-0.5"
                       )} />
                     </button>
                   </div>
-                )}
-
-                {fogSettings.enabled && fogSettings.animate && (
-                  <div className="space-y-1 pt-1">
-                    <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
-                      <span>Animation Speed</span>
-                      <span>{fogSettings.speed}</span>
-                    </div>
-                    <input 
-                      type="range" min="0" max="100" step="1"
-                      value={fogSettings.speed}
-                      onChange={(e) => setFogSettings({ ...fogSettings, speed: parseInt(e.target.value) })}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
-                    />
-                  </div>
-                )}
-
-                {fogSettings.enabled && (
-                  <div className="space-y-4 pt-2">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Fog Type</label>
-                      <div className="flex bg-gray-100 rounded p-0.5">
-                        {['standard', 'super-mega'].map((type) => (
-                          <button
-                            key={type}
-                            onClick={() => setFogSettings({ ...fogSettings, type: type as 'standard' | 'super-mega' })}
-                            className={cn(
-                              "flex-1 py-1 text-[10px] font-bold rounded transition-all",
-                              fogSettings.type === type ? "bg-white shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700"
-                            )}
-                          >
-                            {type === 'standard' ? 'Standard' : 'Super Mega'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {fogSettings.type === 'super-mega' ? (
-                      <div className="space-y-4">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
-                            <span>Mega Density</span>
-                            <span>{fogSettings.superMegaDensity.toFixed(3)}</span>
-                          </div>
-                          <input 
-                            type="range" min="0.001" max="0.1" step="0.001"
-                            value={fogSettings.superMegaDensity}
-                            onChange={(e) => setFogSettings({ ...fogSettings, superMegaDensity: parseFloat(e.target.value) })}
-                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Fog Color</label>
-                          <div className="space-y-1">
-                            <input 
-                              type="color" 
-                              value={fogSettings.colors[0]}
-                              onChange={(e) => {
-                                const newColors = [...fogSettings.colors];
-                                newColors[0] = e.target.value;
-                                setFogSettings({ ...fogSettings, colors: newColors });
-                              }}
-                              className="w-full h-8 rounded cursor-pointer border border-gray-200 p-0.5"
-                            />
-                            <div className="text-[8px] text-gray-400 text-center font-mono">{fogSettings.colors[0].toUpperCase()}</div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Complexity</label>
-                          <div className="flex bg-gray-100 rounded p-0.5">
-                            {[1, 2, 3].map((count) => (
-                              <button
-                                key={count}
-                                onClick={() => setFogSettings({ ...fogSettings, colorCount: count as 1 | 2 | 3 })}
-                                className={cn(
-                                  "flex-1 py-1 text-[10px] font-bold rounded transition-all",
-                                  fogSettings.colorCount === count ? "bg-white shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700"
-                                )}
-                              >
-                                {count} Color{count > 1 ? 's' : ''}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Styling</label>
-                          <div className="grid grid-cols-3 gap-2">
-                            {Array.from({ length: fogSettings.colorCount }).map((_, i) => (
-                              <div key={i} className="space-y-1">
-                                <input 
-                                  type="color" 
-                                  value={fogSettings.colors[i]}
-                                  onChange={(e) => {
-                                    const newColors = [...fogSettings.colors];
-                                    newColors[i] = e.target.value;
-                                    setFogSettings({ ...fogSettings, colors: newColors });
-                                  }}
-                                  className="w-full h-8 rounded cursor-pointer border border-gray-200 p-0.5"
-                                />
-                                <div className="text-[8px] text-gray-400 text-center font-mono">{fogSettings.colors[i].toUpperCase()}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
-                              <span>Density</span>
-                              <span>{fogSettings.density.toFixed(3)}</span>
-                            </div>
-                            <input 
-                              type="range" min="0.001" max="0.1" step="0.001"
-                              value={fogSettings.density}
-                              onChange={(e) => setFogSettings({ ...fogSettings, density: parseFloat(e.target.value) })}
-                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
-                              <span>Height (Start)</span>
-                              <span>{fogSettings.height.toFixed(1)}</span>
-                            </div>
-                            <input 
-                              type="range" min="-10" max="10" step="0.5"
-                              value={fogSettings.height}
-                              onChange={(e) => setFogSettings({ ...fogSettings, height: parseFloat(e.target.value) })}
-                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
-                              <span>Height (End)</span>
-                              <span>{fogSettings.heightEnd.toFixed(1)}</span>
-                            </div>
-                            <input 
-                              type="range" min="-10" max="50" step="0.5"
-                              value={fogSettings.heightEnd}
-                              onChange={(e) => setFogSettings({ ...fogSettings, heightEnd: parseFloat(e.target.value) })}
-                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </SubSection>
-
-              <SubSection title="Camera Depth Clipping">
-                <div className="space-y-3 px-1 py-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Enable Depth Clipping</span>
-                      <span className="text-[9px] text-gray-400">Near & Far Frustum Planes</span>
-                    </div>
-                    <button 
-                      id="toggle-camera-depth-clipping"
-                      onClick={() => setCameraDepthClippingEnabled(!cameraDepthClippingEnabled)}
-                      className={cn(
-                        "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                        cameraDepthClippingEnabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
-                      )}
-                      title={cameraDepthClippingEnabled ? "Disable Camera Depth Clipping" : "Enable Camera Depth Clipping"}
-                    >
-                      <div className={cn(
-                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
-                        cameraDepthClippingEnabled ? "left-4.5" : "left-0.5"
-                      )} />
-                    </button>
-                  </div>
-
-                  <div className="text-[10px] leading-relaxed text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 p-2 rounded border border-gray-100 dark:border-gray-700">
-                    Controls visibility within the camera's view frustum. Unlike fixed section cuts that slice at a physical coordinate, depth clipping acts as an invisible boundary that moves dynamically with your viewpoint.
-                  </div>
-
-                  {/* Near Clipping Plane */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Near Plane</span>
-                        <span className="text-[9px] text-gray-400">(Min Distance)</span>
-                      </div>
-                      <div className="flex items-center gap-1">
+                  {edgeLinesEnabled && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">Line Color</span>
                         <input
-                          type="number"
-                          min="0.01"
-                          max="100"
-                          step="0.05"
-                          value={cameraNear}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val) && val >= 0.01) {
-                              setCameraNear(val);
-                              if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
-                            }
-                          }}
-                          className="w-16 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                          type="color"
+                          value={edgeLinesColor}
+                          onChange={(e) => setEdgeLinesColor(e.target.value)}
+                          className="w-6 h-6 rounded cursor-pointer border-none p-0"
                         />
-                        <span className="text-[10px] text-gray-400 font-mono">m</span>
                       </div>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="0.01" 
-                      max="25" 
-                      step="0.05"
-                      value={Math.min(cameraNear, 25)}
-                      onChange={(e) => {
-                        setCameraNear(parseFloat(e.target.value));
-                        if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
-                      }}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
-                    />
-                    <div className="text-[9px] text-gray-400 leading-normal">
-                      Hides any geometry that falls between the camera lens and this minimum distance. Critical for navigating tight interior spaces, allowing the camera to see through objects (like a wall directly behind the lens) without them blocking the viewport.
-                    </div>
-                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
-                      <span className="text-[8px] uppercase font-bold text-gray-400 mr-1">Presets:</span>
-                      {[
-                        { label: '0.1m', val: 0.1 },
-                        { label: '0.8m', val: 0.8 },
-                        { label: '1.5m', val: 1.5 },
-                        { label: '3.0m', val: 3.0 },
-                        { label: '5.0m', val: 5.0 },
-                      ].map((preset) => (
-                        <button
-                          key={preset.label}
-                          onClick={() => {
-                            setCameraNear(preset.val);
-                            if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
-                          }}
-                          className={cn(
-                            "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
-                            cameraNear === preset.val
-                              ? "bg-trimble-blue text-white border-trimble-blue"
-                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
-                          )}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Far Clipping Plane */}
-                  <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-700/60">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Far Plane</span>
-                        <span className="text-[9px] text-gray-400">(Max Distance)</span>
-                      </div>
-                      <div className="flex items-center gap-1">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[8px] font-bold text-gray-400 uppercase">Opacity</label>
+                          <span className="text-[8px] text-gray-400">{Math.round(edgeLinesOpacity * 100)}%</span>
+                        </div>
                         <input
-                          type="number"
-                          min="1"
-                          max="10000"
-                          step="1"
-                          value={cameraFar}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val) && val >= 1) {
-                              setCameraFar(val);
-                              if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
-                            }
-                          }}
-                          className="w-16 px-1.5 py-0.5 text-right font-mono text-[10px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                          type="range" min="0.1" max="1" step="0.05"
+                          value={edgeLinesOpacity}
+                          onChange={(e) => setEdgeLinesOpacity(parseFloat(e.target.value))}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
                         />
-                        <span className="text-[10px] text-gray-400 font-mono">m</span>
                       </div>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="5" 
-                      max="3000" 
-                      step="5"
-                      value={Math.min(cameraFar, 3000)}
-                      onChange={(e) => {
-                        setCameraFar(parseFloat(e.target.value));
-                        if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
-                      }}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
-                    />
-                    <div className="text-[9px] text-gray-400 leading-normal">
-                      Culls and hides any geometry that sits beyond this maximum distance. Primarily used to optimize rendering performance in massive scenes or fade out distant background clutter.
-                    </div>
-                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
-                      <span className="text-[8px] uppercase font-bold text-gray-400 mr-1">Presets:</span>
-                      {[
-                        { label: '25m', val: 25 },
-                        { label: '100m', val: 100 },
-                        { label: '500m', val: 500 },
-                        { label: '2000m', val: 2000 },
-                        { label: '5000m', val: 5000 },
-                      ].map((preset) => (
-                        <button
-                          key={preset.label}
-                          onClick={() => {
-                            setCameraFar(preset.val);
-                            if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
-                          }}
-                          className={cn(
-                            "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
-                            cameraFar === preset.val
-                              ? "bg-trimble-blue text-white border-trimble-blue"
-                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
-                          )}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Reset Button */}
-                  <div className="pt-2">
-                    <button
-                      onClick={() => {
-                        setCameraNear(0.1);
-                        setCameraFar(2000);
-                        setCameraDepthClippingEnabled(false);
-                      }}
-                      className="w-full py-1.5 px-2 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                      title="Reset Near and Far clipping planes to default camera settings"
-                    >
-                      <RotateCcw size={12} />
-                      <span>Reset to Camera Defaults (0.1m / 2000m)</span>
-                    </button>
-                  </div>
-                </div>
-              </SubSection>
-
-              <SubSection title="Animations">
-                <div className="space-y-4">
-                  <button 
-                    onClick={() => {
-                      const id = Math.random().toString(36).substr(2, 9);
-                      const newAnim: SceneAnimation = {
-                        id,
-                        type: 'confetti',
-                        position: [0, 0, 0],
-                        density: 1000,
-                        scale: 1,
-                        looping: true,
-                        playing: true
-                      };
-                      setAnimations([...animations, newAnim]);
-                      setPlacingAnimationId(id);
-                      setActiveTool('select');
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2 bg-trimble-blue text-white rounded-md text-[10px] font-bold uppercase transition-all hover:bg-trimble-dark-blue shadow-sm"
-                  >
-                    <Plus size={14} />
-                    Add Animation
-                  </button>
-
-                  <div className="space-y-3">
-                    {animations.map((anim) => (
-                      <div 
-                        key={anim.id}
-                        className={cn(
-                          "p-3 rounded-lg border space-y-3 transition-all",
-                          theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"
-                        )}
-                      >
+                      <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-gray-500 uppercase">{anim.type.replace('_', ' ')}</span>
-                          <button 
-                            onClick={() => setAnimations(prev => prev.filter(a => a.id !== anim.id))}
-                            className="p-1 hover:bg-red-50 text-red-400 hover:text-red-500 rounded transition-colors"
-                          >
-                            <X size={12} />
-                          </button>
+                          <label className="text-[8px] font-bold text-gray-400 uppercase">Thickness</label>
+                          <span className="text-[8px] text-gray-400">{edgeLinesThickness}px</span>
                         </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[8px] text-gray-400 uppercase font-bold">Effect Type</label>
-                          <div className="grid grid-cols-2 gap-1 px-1">
-                            {['confetti', 'fire', 'smoke', 'sparks', 'magic_aura'].map((type) => (
-                              <button
-                                key={type}
-                                onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, type: type as any } : a))}
-                                className={cn(
-                                  "py-1 text-[8px] font-bold rounded border transition-all truncate px-1",
-                                  anim.type === type 
-                                    ? "bg-trimble-blue text-white border-trimble-blue" 
-                                    : "bg-transparent text-gray-500 border-gray-200 hover:border-gray-300 dark:border-gray-600"
-                                )}
-                              >
-                                {type.split('_').join(' ').toUpperCase()}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
-                            <span>Density</span>
-                            <span>{anim.density}</span>
-                          </div>
-                          <input 
-                            type="range" min="100" max="5000" step="100"
-                            value={anim.density}
-                            onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, density: parseInt(e.target.value) } : a))}
-                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
-                            <span>Scale (Size)</span>
-                            <span>{(anim.scale || 1).toFixed(1)}</span>
-                          </div>
-                          <input 
-                            type="range" min="0.1" max="100" step="0.1"
-                            value={anim.scale || 1}
-                            onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, scale: parseFloat(e.target.value) } : a))}
-                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[8px] font-bold text-gray-400 uppercase">Loop Effect</span>
-                            <button 
-                              onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, looping: !a.looping } : a))}
-                              className={cn(
-                                "w-6 h-3 rounded-full relative transition-colors",
-                                anim.looping ? "bg-trimble-blue" : "bg-gray-300"
-                              )}
-                            >
-                              <div className={cn(
-                                "absolute top-0.5 w-2 h-2 bg-white rounded-full shadow-sm transition-all",
-                                anim.looping ? "left-3.5" : "left-0.5"
-                              )} />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded p-0.5">
-                            <button
-                              onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, playing: true } : a))}
-                              className={cn(
-                                "px-2 py-0.5 text-[8px] font-bold rounded transition-all",
-                                anim.playing ? "bg-white dark:bg-gray-600 text-green-500 shadow-sm" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                              )}
-                            >
-                              PLAY
-                            </button>
-                            <button
-                              onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, playing: false } : a))}
-                              className={cn(
-                                "px-2 py-0.5 text-[8px] font-bold rounded transition-all",
-                                !anim.playing ? "bg-white dark:bg-gray-600 text-red-500 shadow-sm" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                              )}
-                            >
-                              STOP
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-[8px] text-gray-400 font-bold uppercase">Position</span>
-                          <button 
-                            onClick={() => setPlacingAnimationId(placingAnimationId === anim.id ? null : anim.id)}
-                            className={cn(
-                              "px-2 py-0.5 rounded text-[8px] font-bold transition-colors",
-                              placingAnimationId === anim.id ? "bg-trimble-blue text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-                            )}
-                          >
-                            {placingAnimationId === anim.id ? 'Click in Scene' : 'Set Position'}
-                          </button>
-                        </div>
+                        <input
+                          type="range" min="1" max="5" step="0.5"
+                          value={edgeLinesThickness}
+                          onChange={(e) => setEdgeLinesThickness(parseFloat(e.target.value))}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                        />
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  )}
                 </div>
               </SubSection>
 
@@ -4120,20 +4294,6 @@ export default function RightPanelStack() {
           >
             <ErrorBoundary name="Tool Modifiers" compact>
               <ToolModifierPalette />
-            </ErrorBoundary>
-          </Panel>
-        )}
-
-        {((panelVisibility['timberFrame'] !== false && (activeTool === 'timber-frame' || openPanels.includes('timberFrame')))) && (
-          <Panel 
-            id="timberFrame" 
-            title="Timber Frame Engine" 
-            icon={<Hammer size={16} />} 
-            isOpen={openPanels.includes('timberFrame') || activeTool === 'timber-frame'}
-            onToggle={() => togglePanel('timberFrame')}
-          >
-            <ErrorBoundary name="Timber Frame Panel" compact>
-              <TimberFrameModifierSection />
             </ErrorBoundary>
           </Panel>
         )}
