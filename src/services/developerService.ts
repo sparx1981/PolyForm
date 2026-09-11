@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Shape, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
+import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 
 export interface RoofConfigDefaults {
   roofType?: RoofType;
@@ -220,6 +221,8 @@ export interface SDK {
   setContactFriction: (enabled: boolean) => void;
   generateModel: (prompt: string) => void;
   selectBlockPart: (partId: string, color?: string) => void;
+  getBlockGeometry: (partId: string) => { positions: number[]; normals: number[]; uvs?: number[] } | null;
+  listBlockParts: () => { id: string; label: string; category: string }[];
   openWebpage: (url: string) => void;
   log: (message: string) => void;
 
@@ -2566,10 +2569,10 @@ export class DeveloperSDK implements SDK {
   /**
    * Arms the built-in block-placement tool for a given catalog part
    * (see the 'Basics' | 'Plates & Jumpers' | 'Tiles' | 'Slopes & Angles' |
-   * 'Round & Curved' | 'Arches' | 'Bow & Wedge' catalog). The user then
-   * clicks in the viewport to position it (snapping to the stud grid and
-   * to existing blocks), uses arrow keys to rotate 90° at a time, and
-   * presses Enter to confirm placement or Escape to cancel. This is a
+   * 'Round & Curved' | 'Arches' | 'Bow & Wedge' catalog). A ghost preview
+   * then follows the cursor (snapping to the stud grid and to existing
+   * blocks), arrow keys rotate it 90° at a time, and clicking places it -
+   * clicking again places another of the same part, Escape stops. This is a
    * placement primitive, not a UI - build your own picker panel around it
    * with sdk.toolbars.create().
    */
@@ -2581,6 +2584,21 @@ export class DeveloperSDK implements SDK {
       this.extraSetters.setActiveTool('block_picker');
     }
     this.log(`Armed block placement: ${partId} (${color}).`);
+  }
+
+  /**
+   * Returns raw geometry data (positions/normals/uvs) for a stud-block
+   * catalog part, so a custom toolbar tile can render an accurate 3D
+   * thumbnail of the actual block shape instead of a flat color swatch.
+   */
+  getBlockGeometry(partId: string): { positions: number[]; normals: number[]; uvs?: number[] } | null {
+    const part = getBlockPart(partId);
+    if (!part) return null;
+    return geometryToData(buildBlockGeometry(part));
+  }
+
+  listBlockParts(): { id: string; label: string; category: string }[] {
+    return BLOCK_CATALOG.map(p => ({ id: p.id, label: p.label, category: p.category }));
   }
 
   openWebpage(url: string): void {

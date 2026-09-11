@@ -2567,11 +2567,12 @@ console.log("Brick Picker toolbar ready:", brickPicker.id);`
 // not just plain icon buttons.
 //
 // Placing an actual block uses sdk.selectBlockPart(partId, color), which
-// arms PolyForm's built-in placement tool: click in the viewport to
-// position it (snapping to the stud grid and to existing blocks), arrow
-// keys rotate it 90° at a time, Enter confirms, Escape cancels. Every
-// placed block is a single grouped object - it appears as one Outliner
-// entry, exactly like a box.
+// arms PolyForm's built-in placement tool: a ghost preview follows the
+// cursor (snapping to the stud grid and to existing blocks), arrow keys
+// rotate it 90° at a time, and clicking places it - click again to place
+// another of the same part, or Escape to stop. Every placed block is a
+// single grouped object - it appears as one Outliner entry, exactly like
+// a box.
 
 // 1. Category -> real catalog part IDs (see sdk.materials-style catalogs -
 // these correspond to PolyForm's built-in block catalog).
@@ -2598,6 +2599,7 @@ function buildBlockTiles(category) {
     label: partId.replace(/^[a-z]+-/, ""),
     icon: "Box",
     color,
+    previewGeometry: sdk.getBlockGeometry(partId),
     tooltip: "Place a " + partId,
     code: \`sdk.selectBlockPart("\${partId}", "\${color}");\`
   }));
@@ -2665,7 +2667,7 @@ const panel = sdk.toolbars.create({
         const name = window.prompt("Build which assembly? (" + Object.keys(library).join(", ") + ")", "Garden Planter");
         const plan = library[name];
         if (!plan) { console.log("Unknown assembly:", name); return; }
-        console.log("This places each part with sdk.selectBlockPart() one at a time - click in the viewport, then Enter, for each piece:");
+        console.log("This places each part with sdk.selectBlockPart() one at a time - click in the viewport for each piece:");
         plan.forEach((step, i) => console.log((i + 1) + ". " + step.part + " at offset " + JSON.stringify(step.offset)));
         sdk.selectBlockPart(plan[0].part, "#94a3b8");
       \`
@@ -2716,6 +2718,7 @@ const panel = sdk.toolbars.create({
             label: partId.replace(/^[a-z]+-/, ""),
             icon: "Box",
             color,
+            previewGeometry: sdk.getBlockGeometry(partId),
             tooltip: "Place a " + partId,
             code: 'sdk.selectBlockPart("' + partId + '", "' + color + '");'
           }));

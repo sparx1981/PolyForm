@@ -1,10 +1,44 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import * as THREE from 'three';
+import { Canvas } from '@react-three/fiber';
 import { useApp } from '../AppContext';
 import { CustomToolbarDef, CustomToolbarItem } from '../types';
 import { DynamicIcon } from './ui/DynamicIcon';
 import { DeveloperSDK } from '../services/developerService';
 import { cn } from '../lib/utils';
 import { GripVertical, X, ChevronUp, ChevronDown, Sparkles, Loader2, PanelRightClose } from 'lucide-react';
+
+/** Small static 3D thumbnail of a toolbar tile's real geometry, so a "tile"
+ * variant button can show an accurate preview instead of a flat color swatch. */
+function TilePreviewThumbnail({ geometry, color }: { geometry: { positions: number[]; normals: number[]; uvs?: number[] }; color: string }) {
+  const bufferGeometry = useMemo(() => {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(geometry.positions, 3));
+    if (geometry.normals?.length) geom.setAttribute('normal', new THREE.Float32BufferAttribute(geometry.normals, 3));
+    else geom.computeVertexNormals();
+    if (geometry.uvs?.length) geom.setAttribute('uv', new THREE.Float32BufferAttribute(geometry.uvs, 2));
+    geom.computeBoundingSphere();
+    return geom;
+  }, [geometry]);
+
+  const radius = bufferGeometry.boundingSphere?.radius || 1;
+  const center = bufferGeometry.boundingSphere?.center || new THREE.Vector3();
+  const dist = Math.max(radius, 0.01) * 2.6;
+
+  return (
+    <Canvas
+      className="w-8 h-8 rounded pointer-events-none"
+      gl={{ antialias: true, alpha: true }}
+      camera={{ position: [dist * 0.7, dist * 0.7, dist * 0.7], fov: 35 }}
+    >
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[3, 5, 2]} intensity={0.8} />
+      <mesh geometry={bufferGeometry} position={[-center.x, -center.y, -center.z]}>
+        <meshStandardMaterial color={color} roughness={0.4} metalness={0.05} />
+      </mesh>
+    </Canvas>
+  );
+}
 
 interface RunningItemState {
   [itemId: string]: boolean;
@@ -496,8 +530,14 @@ export const CustomToolbarOverlay: React.FC = () => {
             theme === 'dark' ? "border-gray-700 hover:bg-gray-800" : "border-gray-200 hover:bg-gray-50"
           )}
         >
-          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: item.color || '#94a3b8' }}>
-            {isRunning ? <Loader2 size={14} className="animate-spin text-white" /> : <DynamicIcon nameOrEmoji={item.icon} size={14} className="text-white" />}
+          <div className="w-8 h-8 rounded flex items-center justify-center overflow-hidden" style={{ backgroundColor: item.previewGeometry ? 'transparent' : (item.color || '#94a3b8') }}>
+            {isRunning ? (
+              <Loader2 size={14} className="animate-spin text-white" />
+            ) : item.previewGeometry ? (
+              <TilePreviewThumbnail geometry={item.previewGeometry} color={item.color || '#94a3b8'} />
+            ) : (
+              <DynamicIcon nameOrEmoji={item.icon} size={14} className="text-white" />
+            )}
           </div>
           <span className="text-[10px] font-medium">{item.label}</span>
         </button>

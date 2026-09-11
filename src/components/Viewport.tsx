@@ -3753,8 +3753,9 @@ function Scene() {
       
       const key = e.key.toLowerCase();
 
-      // Arrow keys rotate the pending block 90° at a time before it's placed;
-      // Enter confirms, Escape cancels.
+      // Arrow keys rotate the pending block 90° at a time before it's placed
+      // (the ghost under the cursor updates live); a click places it.
+      // Escape exits block-placement mode entirely.
       if (activeTool === 'block_picker' && blockPlacementDraft) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault();
@@ -3762,37 +3763,11 @@ function Scene() {
           setBlockPlacementDraft(prev => prev ? { ...prev, rotationSteps: (prev.rotationSteps + dir + 4) % 4 } : prev);
           return;
         }
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          if (activeBlockPart) {
-            const part = getBlockPart(activeBlockPart.partId);
-            if (part) {
-              const geom = buildBlockGeometry(part);
-              const newShape: Shape = {
-                id: Math.random().toString(36).substr(2, 9),
-                name: part.label,
-                type: 'custom',
-                position: blockPlacementDraft.position,
-                rotation: [0, blockPlacementDraft.rotationSteps * (Math.PI / 2), 0],
-                quaternion: [0, 0, 0, 1],
-                args: [1, 1, 1],
-                color: activeBlockPart.color,
-                roughness: 0.4,
-                metalness: 0.02,
-                tags: ['block-kit', part.id, `block-category-${part.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`],
-                geometryData: bufferGeometryToShapeData(geom)
-              };
-              addShape(newShape);
-              commitHistory();
-              setMeasurements(`Placed ${part.label}.`);
-            }
-          }
-          setBlockPlacementDraft(null);
-          return;
-        }
         if (e.key === 'Escape') {
           e.preventDefault();
           setBlockPlacementDraft(null);
+          setActiveBlockPart(null);
+          setActiveTool('select');
           setMeasurements('Block placement cancelled.');
           return;
         }
@@ -5216,12 +5191,27 @@ function Scene() {
       // Grid snap: round the footprint center to the nearest stud-grid cell.
       const snappedX = Math.round(hitPoint.x / STUD_UNIT) * STUD_UNIT;
       const snappedZ = Math.round(hitPoint.z / STUD_UNIT) * STUD_UNIT;
+      const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
 
-      setBlockPlacementDraft(prev => ({
+      const geom = buildBlockGeometry(part);
+      const newShape: Shape = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: part.label,
+        type: 'custom',
         position: [snappedX, snappedY, snappedZ],
-        rotationSteps: prev?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0
-      }));
-      setMeasurements(`Positioning ${part.label} - arrow keys to rotate, Enter to place, Esc to cancel.`);
+        rotation: [0, rotationSteps * (Math.PI / 2), 0],
+        quaternion: [0, 0, 0, 1],
+        args: [1, 1, 1],
+        color: activeBlockPart.color,
+        roughness: 0.4,
+        metalness: 0.02,
+        tags: ['block-kit', part.id, `block-category-${part.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`],
+        geometryData: bufferGeometryToShapeData(geom)
+      };
+      addShape(newShape);
+      commitHistory();
+      setBlockPlacementDraft({ position: [snappedX, snappedY, snappedZ], rotationSteps });
+      setMeasurements(`Placed ${part.label}. Arrow keys rotate the next block - click to place another, Esc to stop.`);
       return;
     }
 
@@ -5303,6 +5293,32 @@ function Scene() {
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (activeTool === 'block_picker' && activeBlockPart) {
+      const part = getBlockPart(activeBlockPart.partId);
+      if (part) {
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+        let hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+        let snappedY = 0;
+        if (!shapeIntersect) {
+          const ray = raycaster.ray;
+          const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          const groundHit = new THREE.Vector3();
+          if (ray.intersectPlane(groundPlane, groundHit)) hitPoint = groundHit;
+        } else {
+          const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
+          if (hitShape?.tags?.includes('block-kit')) { snappedY = hitPoint.y; }
+        }
+        const snappedX = Math.round(hitPoint.x / STUD_UNIT) * STUD_UNIT;
+        const snappedZ = Math.round(hitPoint.z / STUD_UNIT) * STUD_UNIT;
+        setBlockPlacementDraft(prev => ({
+          position: [snappedX, snappedY, snappedZ],
+          rotationSteps: prev?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0
+        }));
+      }
+      return;
+    }
+
     if (activeTool === 'landscape_sculpt' || activeTool === 'landscape_mask') {
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
@@ -7836,7 +7852,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
@@ -8624,7 +8640,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 

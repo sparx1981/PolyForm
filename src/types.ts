@@ -1055,6 +1055,7 @@ export interface CustomToolbarItem {
   action?: (sdk: any) => void | Promise<void>; // In-memory callback function
   variant?: 'default' | 'tile'; // 'tile' renders a larger icon-over-label button, for grid-style pickers
   description?: string; // Small helper text rendered under the control
+  previewGeometry?: { positions: number[]; normals: number[]; uvs?: number[] }; // 'tile' variant: renders a real 3D thumbnail of this geometry instead of a flat color swatch
 
   // type: 'slider'
   value?: number;
