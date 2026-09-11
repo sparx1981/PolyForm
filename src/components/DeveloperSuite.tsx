@@ -2529,6 +2529,172 @@ const brickPicker = sdk.toolbars.create({
 });
 
 console.log("Brick Picker toolbar ready:", brickPicker.id);`
+        },
+        {
+          name: "Full Block-Kit Extension (Catalog, Assemblies, Parts List & AI Concept)",
+          code: `// A complete, original block-building toolset built entirely on the PolyForm
+// SDK - a parts catalog, saved multi-brick assemblies, a bill-of-materials
+// report, and a toolbar, in the same spirit as a SketchUp stud-block add-on
+// but implemented from scratch for PolyForm.
+
+const STUD_UNIT = 0.08, BRICK_HEIGHT = 0.096, STUD_RADIUS = 0.024, STUD_HEIGHT = 0.017;
+
+// 1. Parts catalog - every standard brick size this kit knows how to place
+const PARTS_CATALOG = [
+  { id: "1x1", studsX: 1, studsZ: 1 },
+  { id: "1x2", studsX: 2, studsZ: 1 },
+  { id: "2x2", studsX: 2, studsZ: 2 },
+  { id: "2x4", studsX: 4, studsZ: 2 }
+];
+
+function createBrick(partId, position, color) {
+  const part = PARTS_CATALOG.find(p => p.id === partId) || PARTS_CATALOG[0];
+  const width = part.studsX * STUD_UNIT, depth = part.studsZ * STUD_UNIT;
+  const body = sdk.createBox({ width, height: BRICK_HEIGHT, depth, position: [position[0], position[1] + BRICK_HEIGHT / 2, position[2]] });
+  sdk.applyColor(body, color);
+  sdk.setTag(body, "brickPart", partId);
+  sdk.setTag(body, "brickColor", color);
+  for (let x = 0; x < part.studsX; x++) {
+    for (let z = 0; z < part.studsZ; z++) {
+      const studX = position[0] - width / 2 + STUD_UNIT * (x + 0.5);
+      const studZ = position[2] - depth / 2 + STUD_UNIT * (z + 0.5);
+      sdk.createCylinder({ radius: STUD_RADIUS, height: STUD_HEIGHT, position: [studX, position[1] + BRICK_HEIGHT + STUD_HEIGHT / 2, studZ] });
+    }
+  }
+  return body;
+}
+
+// 2. Assemblies - a small library of preset multi-brick builds, each just a
+// list of (part, offset, color) placements. Add your own the same way.
+const ASSEMBLY_LIBRARY = {
+  "Garden Planter": [
+    { part: "2x4", offset: [0, 0, 0], color: "#78716c" },
+    { part: "2x4", offset: [0, BRICK_HEIGHT, 0], color: "#78716c" },
+    { part: "1x2", offset: [0, BRICK_HEIGHT * 2, -STUD_UNIT], color: "#65a30d" }
+  ],
+  "Signal Tower": [
+    { part: "2x2", offset: [0, 0, 0], color: "#dc2626" },
+    { part: "2x2", offset: [0, BRICK_HEIGHT, 0], color: "#f8fafc" },
+    { part: "2x2", offset: [0, BRICK_HEIGHT * 2, 0], color: "#dc2626" },
+    { part: "1x1", offset: [0, BRICK_HEIGHT * 3, 0], color: "#facc15" }
+  ]
+};
+
+function buildAssembly(name, basePosition) {
+  const plan = ASSEMBLY_LIBRARY[name];
+  if (!plan) { console.log("Unknown assembly:", name); return []; }
+  return plan.map(step => createBrick(
+    step.part,
+    [basePosition[0] + step.offset[0], basePosition[1] + step.offset[1], basePosition[2] + step.offset[2]],
+    step.color
+  ));
+}
+
+// 3. Bill of materials - tallies every placed brick in the scene by part + color.
+// exportJSON() returns the scene's shape array as a JSON string, which is the
+// simplest way to inspect every shape's tags/color at once.
+function getPartsList() {
+  const shapes = JSON.parse(sdk.scene.exportJSON());
+  const counts = {};
+  for (const shape of shapes) {
+    const part = shape.tags?.find(t => PARTS_CATALOG.some(p => p.id === t));
+    if (!part) continue;
+    const key = \`\${part} (\${shape.color})\`;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  console.log("--- Bill of Materials ---");
+  Object.entries(counts).forEach(([key, qty]) => console.log(\`\${qty} x \${key}\`));
+  return counts;
+}
+
+// 4. Build one of everything in the library, then report the BOM
+buildAssembly("Garden Planter", [0, 0, 0]);
+buildAssembly("Signal Tower", [0.5, 0, 0]);
+getPartsList();
+
+// 5. A "Block Kit" toolbar: pick a part to place, build an assembly, run the
+// BOM report, or generate an original concept build from a text prompt via
+// the AI subsystem (the closest built-in equivalent to an AI-assisted
+// "build from a prompt" feature).
+const blockKit = sdk.toolbars.create({
+  title: "Block Kit",
+  position: "floating",
+  floatPosition: { x: 80, y: 480 },
+  items: [
+    {
+      id: "bk-place-2x4",
+      label: "Place 2x4",
+      icon: "Box",
+      tooltip: "Places a single 2x4 brick at the origin",
+      color: "#2563eb",
+      code: \`
+        const u=0.08,h=0.096,sr=0.024,sh=0.017;
+        const b=sdk.createBox({width:u*4,height:h,depth:u*2,position:[0,h/2,0]});
+        sdk.applyColor(b,"#2563eb");
+        sdk.setTag(b,"brickPart","2x4");
+        for(let x=0;x<4;x++) for(let z=0;z<2;z++){
+          sdk.createCylinder({radius:sr,height:sh,position:[-u*2+u*(x+0.5),h+sh/2,-u+u*(z+0.5)]});
+        }
+      \`
+    },
+    {
+      id: "bk-build-planter",
+      label: "Planter",
+      icon: "Group",
+      tooltip: "Builds the 'Garden Planter' preset assembly",
+      color: "#65a30d",
+      code: \`
+        const u=0.08,h=0.096,sr=0.024,sh=0.017;
+        function brick(w,d,pos,color){
+          const b=sdk.createBox({width:w*u,height:h,depth:d*u,position:[pos[0],pos[1]+h/2,pos[2]]});
+          sdk.applyColor(b,color);
+          for(let x=0;x<w;x++) for(let z=0;z<d;z++){
+            sdk.createCylinder({radius:sr,height:sh,position:[pos[0]-w*u/2+u*(x+0.5),pos[1]+h+sh/2,pos[2]-d*u/2+u*(z+0.5)]});
+          }
+        }
+        brick(4,2,[0,0,0],"#78716c");
+        brick(4,2,[0,h,0],"#78716c");
+        brick(2,1,[0,h*2,-u],"#65a30d");
+        console.log("Garden Planter assembled.");
+      \`
+    },
+    {
+      id: "bk-parts-list",
+      label: "BOM",
+      icon: "FileText",
+      tooltip: "Logs a bill-of-materials for every tagged brick in the scene",
+      color: "#f59e0b",
+      code: \`
+        const shapes = JSON.parse(sdk.scene.exportJSON());
+        const counts = {};
+        for (const shape of shapes) {
+          const part = shape.tags?.find(t => ["1x1","1x2","2x2","2x4"].includes(t));
+          if (!part) continue;
+          const key = part + " (" + shape.color + ")";
+          counts[key] = (counts[key] || 0) + 1;
+        }
+        console.log("--- Bill of Materials ---");
+        Object.entries(counts).forEach(([k, q]) => console.log(q + " x " + k));
+      \`
+    },
+    {
+      id: "bk-ai-concept",
+      label: "AI Concept",
+      icon: "Sparkles",
+      tooltip: "Prompts for an idea and asks the AI subsystem to generate a massing concept for it",
+      color: "#8b5cf6",
+      code: \`
+        const idea = window.prompt("Describe a build concept (e.g. 'a small lighthouse'):");
+        if (idea) {
+          sdk.ai.generateModel("A blocky, low-poly stud-brick-style model of: " + idea);
+          console.log("Requested AI concept build for:", idea);
+        }
+      \`
+    }
+  ]
+});
+
+console.log("Block Kit ready:", blockKit.id);`
         }
       ]
     }
