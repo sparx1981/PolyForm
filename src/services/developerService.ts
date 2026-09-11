@@ -219,7 +219,7 @@ export interface SDK {
   diagLog: (category: string, message: string, values?: Record<string, unknown>) => void;
   setContactFriction: (enabled: boolean) => void;
   generateModel: (prompt: string) => void;
-  openBlockPicker: () => void;
+  selectBlockPart: (partId: string, color?: string) => void;
   openWebpage: (url: string) => void;
   log: (message: string) => void;
 
@@ -2563,11 +2563,24 @@ export class DeveloperSDK implements SDK {
     this.ai.generateModel(prompt);
   }
 
-  openBlockPicker(): void {
-    if (this.extraSetters.setIsBlockPickerOpen) {
-      this.extraSetters.setIsBlockPickerOpen(true);
+  /**
+   * Arms the built-in block-placement tool for a given catalog part
+   * (see the 'Basics' | 'Plates & Jumpers' | 'Tiles' | 'Slopes & Angles' |
+   * 'Round & Curved' | 'Arches' | 'Bow & Wedge' catalog). The user then
+   * clicks in the viewport to position it (snapping to the stud grid and
+   * to existing blocks), uses arrow keys to rotate 90° at a time, and
+   * presses Enter to confirm placement or Escape to cancel. This is a
+   * placement primitive, not a UI - build your own picker panel around it
+   * with sdk.toolbars.create().
+   */
+  selectBlockPart(partId: string, color: string = '#dc2626'): void {
+    if (this.extraSetters.setActiveBlockPart) {
+      this.extraSetters.setActiveBlockPart({ partId, color, rotationSteps: 0 });
     }
-    this.log(`Opened Block Picker.`);
+    if (this.extraSetters.setActiveTool) {
+      this.extraSetters.setActiveTool('block_picker');
+    }
+    this.log(`Armed block placement: ${partId} (${color}).`);
   }
 
   openWebpage(url: string): void {

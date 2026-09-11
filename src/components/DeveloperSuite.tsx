@@ -72,7 +72,7 @@ export function DeveloperSuite() {
     setIsAIRendererOpen,
     isAIQueryOpen,
     setIsAIQueryOpen,
-    setIsBlockPickerOpen,
+    setActiveBlockPart,
     timberFrameParams,
     setTimberFrameParams,
     commitUpdatedFraming,
@@ -201,7 +201,7 @@ export function DeveloperSuite() {
         setIsAIRendererOpen,
         isAIQueryOpen,
         setIsAIQueryOpen,
-        setIsBlockPickerOpen,
+        setActiveBlockPart,
         timberFrameParams,
         setTimberFrameParams,
         commitUpdatedFraming,
@@ -2560,157 +2560,92 @@ console.log("Brick Picker toolbar ready:", brickPicker.id);`
         },
         {
           name: "Full Block-Kit Extension (Catalog, Assemblies, Parts List & AI Concept)",
-          code: `// A complete, original block-building toolset built entirely on the PolyForm
-// SDK - a parts catalog, saved multi-brick assemblies, a bill-of-materials
-// report, and a toolbar, in the same spirit as a SketchUp stud-block add-on
-// but implemented from scratch for PolyForm.
+          code: `// A complete, original Block Picker built entirely with sdk.toolbars - no
+// hardcoded app panel involved. This is the pattern for building ANY richly
+// styled custom toolbar: sliders, checkboxes, colour swatches, tabs and
+// collapsible sections are all real widget types (see item.type below),
+// not just plain icon buttons.
+//
+// Placing an actual block uses sdk.selectBlockPart(partId, color), which
+// arms PolyForm's built-in placement tool: click in the viewport to
+// position it (snapping to the stud grid and to existing blocks), arrow
+// keys rotate it 90° at a time, Enter confirms, Escape cancels. Every
+// placed block is a single grouped object - it appears as one Outliner
+// entry, exactly like a box.
 
-const STUD_UNIT = 0.08, BRICK_HEIGHT = 0.096, STUD_RADIUS = 0.024, STUD_HEIGHT = 0.017;
+// 1. Category -> real catalog part IDs (see sdk.materials-style catalogs -
+// these correspond to PolyForm's built-in block catalog).
+const CATEGORIES = {
+  "Basics": ["brick-1x1", "brick-1x2", "brick-1x4", "brick-2x2", "brick-2x4", "brick-2x8"],
+  "Plates & Jumpers": ["plate-1x1", "plate-1x2", "plate-2x2", "plate-2x4"],
+  "Tiles": ["tile-1x1", "tile-2x2", "tile-2x4"],
+  "Slopes & Angles": ["slope-1x2", "slope-2x2", "slope-2x3"],
+  "Round & Curved": ["round-1x1", "round-2x2", "round-4x4"],
+  "Arches": ["arch-2x1", "arch-4x1"],
+  "Bow & Wedge": ["bow-4x2"]
+};
 
-// 1. Parts catalog - every standard brick size this kit knows how to place
-const PARTS_CATALOG = [
-  { id: "1x1", studsX: 1, studsZ: 1 },
-  { id: "1x2", studsX: 2, studsZ: 1 },
-  { id: "2x2", studsX: 2, studsZ: 2 },
-  { id: "2x4", studsX: 4, studsZ: 2 }
-];
-
-function createBrick(partId, position, color) {
-  const part = PARTS_CATALOG.find(p => p.id === partId) || PARTS_CATALOG[0];
-  const width = part.studsX * STUD_UNIT, depth = part.studsZ * STUD_UNIT;
-  const body = sdk.createBox({ width, height: BRICK_HEIGHT, depth, position: [position[0], position[1] + BRICK_HEIGHT / 2, position[2]] });
-  sdk.applyColor(body, color);
-  sdk.setTag(body, "brickPart", partId);
-  sdk.setTag(body, "brickColor", color);
-  for (let x = 0; x < part.studsX; x++) {
-    for (let z = 0; z < part.studsZ; z++) {
-      const studX = position[0] - width / 2 + STUD_UNIT * (x + 0.5);
-      const studZ = position[2] - depth / 2 + STUD_UNIT * (z + 0.5);
-      sdk.createCylinder({ radius: STUD_RADIUS, height: STUD_HEIGHT, position: [studX, position[1] + BRICK_HEIGHT + STUD_HEIGHT / 2, studZ] });
-    }
-  }
-  return body;
+// Builds the tile-button items for one category, using whatever colour is
+// currently picked in the "Colour" swatch widget (read back via
+// sdk.toolbars.getButton - any widget's live value can be read this way).
+function buildBlockTiles(category) {
+  const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
+  const color = colourWidget?.selectedColor || "#dc2626";
+  return (CATEGORIES[category] || []).map(partId => ({
+    id: "bk-part-" + partId,
+    type: "button",
+    variant: "tile",
+    label: partId.replace(/^[a-z]+-/, ""),
+    icon: "Box",
+    color,
+    tooltip: "Place a " + partId,
+    code: \`sdk.selectBlockPart("\${partId}", "\${color}");\`
+  }));
 }
 
-// 2. Assemblies - a small library of preset multi-brick builds, each just a
-// list of (part, offset, color) placements. Add your own the same way.
+// 2. A small assembly library - each just a list of (part, offset) placements.
 const ASSEMBLY_LIBRARY = {
   "Garden Planter": [
-    { part: "2x4", offset: [0, 0, 0], color: "#78716c" },
-    { part: "2x4", offset: [0, BRICK_HEIGHT, 0], color: "#78716c" },
-    { part: "1x2", offset: [0, BRICK_HEIGHT * 2, -STUD_UNIT], color: "#65a30d" }
+    { part: "brick-2x4", offset: [0, 0, 0] },
+    { part: "brick-2x4", offset: [0, 0.096, 0] },
+    { part: "plate-1x2", offset: [0, 0.192, -0.08] }
   ],
   "Signal Tower": [
-    { part: "2x2", offset: [0, 0, 0], color: "#dc2626" },
-    { part: "2x2", offset: [0, BRICK_HEIGHT, 0], color: "#f8fafc" },
-    { part: "2x2", offset: [0, BRICK_HEIGHT * 2, 0], color: "#dc2626" },
-    { part: "1x1", offset: [0, BRICK_HEIGHT * 3, 0], color: "#facc15" }
+    { part: "brick-2x2", offset: [0, 0, 0] },
+    { part: "brick-2x2", offset: [0, 0.096, 0] },
+    { part: "brick-2x2", offset: [0, 0.192, 0] },
+    { part: "brick-1x1", offset: [0, 0.288, 0] }
   ]
 };
 
-function buildAssembly(name, basePosition) {
-  const plan = ASSEMBLY_LIBRARY[name];
-  if (!plan) { console.log("Unknown assembly:", name); return []; }
-  return plan.map(step => createBrick(
-    step.part,
-    [basePosition[0] + step.offset[0], basePosition[1] + step.offset[1], basePosition[2] + step.offset[2]],
-    step.color
-  ));
-}
-
-// 3. Bill of materials - tallies every placed brick in the scene by part + color.
-// exportJSON() returns the scene's shape array as a JSON string, which is the
-// simplest way to inspect every shape's tags/color at once.
-function getPartsList() {
-  const shapes = JSON.parse(sdk.scene.exportJSON());
-  const counts = {};
-  for (const shape of shapes) {
-    const part = shape.tags?.find(t => PARTS_CATALOG.some(p => p.id === t));
-    if (!part) continue;
-    const key = \`\${part} (\${shape.color})\`;
-    counts[key] = (counts[key] || 0) + 1;
-  }
-  console.log("--- Bill of Materials ---");
-  Object.entries(counts).forEach(([key, qty]) => console.log(\`\${qty} x \${key}\`));
-  return counts;
-}
-
-// 4. Build one of everything in the library, then report the BOM
-buildAssembly("Garden Planter", [0, 0, 0]);
-buildAssembly("Signal Tower", [0.5, 0, 0]);
-getPartsList();
-
-// 5. A "Block Kit" toolbar: pick a part to place, build an assembly, run the
-// BOM report, or generate an original concept build from a text prompt via
-// the AI subsystem (the closest built-in equivalent to an AI-assisted
-// "build from a prompt" feature).
-const blockKit = sdk.toolbars.create({
-  title: "Block Kit",
+const panel = sdk.toolbars.create({
+  id: "block-kit-panel",
+  title: "Block Picker",
   position: "floating",
-  floatPosition: { x: 80, y: 480 },
+  floatPosition: { x: 80, y: 96 },
   items: [
     {
-      id: "bk-place-2x4",
-      label: "Place 2x4",
-      icon: "Box",
-      tooltip: "Places a single 2x4 brick at the origin",
-      color: "#2563eb",
-      code: \`
-        const u=0.08,h=0.096,sr=0.024,sh=0.017;
-        const b=sdk.createBox({width:u*4,height:h,depth:u*2,position:[0,h/2,0]});
-        sdk.applyColor(b,"#2563eb");
-        sdk.setTag(b,"brickPart","2x4");
-        for(let x=0;x<4;x++) for(let z=0;z<2;z++){
-          sdk.createCylinder({radius:sr,height:sh,position:[-u*2+u*(x+0.5),h+sh/2,-u+u*(z+0.5)]});
-        }
-      \`
+      id: "bk-scale", type: "slider", label: "Scale",
+      min: 1, max: 16, step: 1, value: 8,
+      description: "Adjusts the informational pitch/brick/plate readout below - the physical stud grid PolyForm places on is fixed.",
+      code: \`console.log("Scale factor set to " + value + "x (" + (80 * value / 8).toFixed(1) + "mm pitch).");\`
     },
     {
-      id: "bk-build-planter",
-      label: "Planter",
-      icon: "Group",
-      tooltip: "Builds the 'Garden Planter' preset assembly",
-      color: "#65a30d",
-      code: \`
-        const u=0.08,h=0.096,sr=0.024,sh=0.017;
-        function brick(w,d,pos,color){
-          const b=sdk.createBox({width:w*u,height:h,depth:d*u,position:[pos[0],pos[1]+h/2,pos[2]]});
-          sdk.applyColor(b,color);
-          for(let x=0;x<w;x++) for(let z=0;z<d;z++){
-            sdk.createCylinder({radius:sr,height:sh,position:[pos[0]-w*u/2+u*(x+0.5),pos[1]+h+sh/2,pos[2]-d*u/2+u*(z+0.5)]});
-          }
-        }
-        brick(4,2,[0,0,0],"#78716c");
-        brick(4,2,[0,h,0],"#78716c");
-        brick(2,1,[0,h*2,-u],"#65a30d");
-        console.log("Garden Planter assembled.");
-      \`
+      id: "bk-prevent-overlap", type: "checkbox", label: "Prevent overlaps",
+      checked: true,
+      description: "Blocks can't merge; studs still nest as normal.",
+      code: \`console.log("Prevent overlaps: " + (value ? "ON" : "OFF"));\`
     },
     {
-      id: "bk-parts-list",
-      label: "BOM",
-      icon: "FileText",
-      tooltip: "Logs a bill-of-materials for every tagged brick in the scene",
-      color: "#f59e0b",
-      code: \`
-        const shapes = JSON.parse(sdk.scene.exportJSON());
-        const counts = {};
-        for (const shape of shapes) {
-          const part = shape.tags?.find(t => ["1x1","1x2","2x2","2x4"].includes(t));
-          if (!part) continue;
-          const key = part + " (" + shape.color + ")";
-          counts[key] = (counts[key] || 0) + 1;
-        }
-        console.log("--- Bill of Materials ---");
-        Object.entries(counts).forEach(([k, q]) => console.log(q + " x " + k));
-      \`
+      id: "bk-colour", type: "color-swatch", label: "Colour",
+      colors: ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"],
+      selectedColor: "#dc2626",
+      allowCustomColor: true,
+      code: \`console.log("Active colour:", value);\`
     },
     {
-      id: "bk-ai-concept",
-      label: "AI Concept",
-      icon: "Sparkles",
-      tooltip: "Prompts for an idea and asks the AI subsystem to generate a massing concept for it",
-      color: "#8b5cf6",
+      id: "bk-ai-build", label: "AI Build", icon: "Sparkles", color: "#8b5cf6",
+      tooltip: "Generate a massing concept for a build idea via the AI subsystem",
       code: \`
         const idea = window.prompt("Describe a build concept (e.g. 'a small lighthouse'):");
         if (idea) {
@@ -2718,22 +2653,84 @@ const blockKit = sdk.toolbars.create({
           console.log("Requested AI concept build for:", idea);
         }
       \`
+    },
+    {
+      id: "bk-assemblies", label: "Assemblies / Groups", icon: "Layers", color: "#f59e0b",
+      tooltip: "Build one of the saved multi-block assemblies",
+      code: \`
+        const library = {
+          "Garden Planter": [{ part: "brick-2x4", offset: [0, 0, 0] }, { part: "brick-2x4", offset: [0, 0.096, 0] }, { part: "plate-1x2", offset: [0, 0.192, -0.08] }],
+          "Signal Tower": [{ part: "brick-2x2", offset: [0, 0, 0] }, { part: "brick-2x2", offset: [0, 0.096, 0] }, { part: "brick-2x2", offset: [0, 0.192, 0] }, { part: "brick-1x1", offset: [0, 0.288, 0] }]
+        };
+        const name = window.prompt("Build which assembly? (" + Object.keys(library).join(", ") + ")", "Garden Planter");
+        const plan = library[name];
+        if (!plan) { console.log("Unknown assembly:", name); return; }
+        console.log("This places each part with sdk.selectBlockPart() one at a time - click in the viewport, then Enter, for each piece:");
+        plan.forEach((step, i) => console.log((i + 1) + ". " + step.part + " at offset " + JSON.stringify(step.offset)));
+        sdk.selectBlockPart(plan[0].part, "#94a3b8");
+      \`
+    },
+    {
+      id: "bk-parts-list", label: "Used Parts List", icon: "FileText", color: "#10b981",
+      tooltip: "Logs a bill-of-materials for every block placed so far",
+      code: \`
+        const shapes = JSON.parse(sdk.scene.exportJSON());
+        const counts = {};
+        for (const shape of shapes) {
+          const part = shape.tags?.find(t => t.startsWith("brick-") || t.startsWith("plate-") || t.startsWith("tile-") || t.startsWith("slope-") || t.startsWith("round-") || t.startsWith("arch-") || t.startsWith("bow-"));
+          if (!part) continue;
+          const key = part + " (" + shape.color + ")";
+          counts[key] = (counts[key] || 0) + 1;
+        }
+        console.log("--- Used Parts List ---");
+        const entries = Object.entries(counts);
+        if (entries.length === 0) console.log("(no blocks placed yet)");
+        entries.forEach(([k, q]) => console.log(q + " x " + k));
+      \`
+    },
+    {
+      id: "bk-model-library", label: "Model Library", icon: "Library", color: "#0891b2",
+      tooltip: "Lists the saved assemblies available to build",
+      code: \`console.log("Model Library:", Object.keys({"Garden Planter":1,"Signal Tower":1}).join(", "));\`
+    },
+    {
+      id: "bk-tabs", type: "tabs", label: "Category",
+      options: Object.keys(CATEGORIES), selected: "Basics",
+      code: \`
+        const tiles = (function buildTiles(category) {
+          const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
+          const color = colourWidget?.selectedColor || "#dc2626";
+          const catalog = ${JSON.stringify({
+            'Basics': ["brick-1x1", "brick-1x2", "brick-1x4", "brick-2x2", "brick-2x4", "brick-2x8"],
+            'Plates & Jumpers': ["plate-1x1", "plate-1x2", "plate-2x2", "plate-2x4"],
+            'Tiles': ["tile-1x1", "tile-2x2", "tile-2x4"],
+            'Slopes & Angles': ["slope-1x2", "slope-2x2", "slope-2x3"],
+            'Round & Curved': ["round-1x1", "round-2x2", "round-4x4"],
+            'Arches': ["arch-2x1", "arch-4x1"],
+            'Bow & Wedge': ["bow-4x2"]
+          })};
+          return (catalog[category] || []).map(partId => ({
+            id: "bk-part-" + partId,
+            type: "button",
+            variant: "tile",
+            label: partId.replace(/^[a-z]+-/, ""),
+            icon: "Box",
+            color,
+            tooltip: "Place a " + partId,
+            code: 'sdk.selectBlockPart("' + partId + '", "' + color + '");'
+          }));
+        })(value);
+        sdk.toolbars.configureButton("block-kit-panel", "bk-blocks", { items: tiles });
+      \`
+    },
+    {
+      id: "bk-blocks", type: "section", label: "Blocks", icon: "Box", collapsed: false,
+      items: buildBlockTiles("Basics")
     }
   ]
 });
 
-console.log("Block Kit ready:", blockKit.id);`
-        },
-        {
-          name: "Open the Interactive Block Picker",
-          code: `// Opens PolyForm's native Block Picker panel: a categorized, scrollable
-// library of stud-block parts (Basics, Plates & Jumpers, Tiles, Slopes &
-// Angles, Round & Curved, Arches, Bow & Wedge). Selecting a part arms
-// placement in the viewport - arrow keys rotate the pending block 90° at a
-// time, Enter confirms (snapping to the stud grid and to existing blocks),
-// Escape cancels. Every placed block is a single grouped object, exactly
-// like any other primitive shape, so it appears as one Outliner entry.
-sdk.openBlockPicker();`
+console.log("Block Picker panel ready:", panel.id);`
         }
       ]
     }

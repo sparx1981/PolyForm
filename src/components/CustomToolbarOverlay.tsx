@@ -38,7 +38,7 @@ export const CustomToolbarOverlay: React.FC = () => {
     setIsAIRendererOpen,
     isAIQueryOpen,
     setIsAIQueryOpen,
-    setIsBlockPickerOpen,
+    setActiveBlockPart,
     timberFrameParams,
     setTimberFrameParams,
     commitUpdatedFraming,
@@ -107,8 +107,10 @@ export const CustomToolbarOverlay: React.FC = () => {
   const [collapsedToolbars, setCollapsedToolbars] = useState<Record<string, boolean>>({});
   const draggingToolbarRef = useRef<{ id: string; startX: number; startY: number; initX: number; initY: number } | null>(null);
 
-  // Execute extension action, code string, or scriptId
-  const executeItem = async (item: CustomToolbarItem, toolbarTitle?: string) => {
+  // Execute extension action, code string, or scriptId. `value` is only
+  // meaningful for non-button widgets (slider/checkbox/color-swatch/tabs) -
+  // it's the new value the user just picked, exposed to the code as `value`.
+  const executeItem = async (item: CustomToolbarItem, toolbarTitle?: string, value?: any) => {
     setRunningItems(prev => ({ ...prev, [item.id]: true }));
     setMeasurements(`Executing extension "${item.label}"...`);
 
@@ -128,7 +130,7 @@ export const CustomToolbarOverlay: React.FC = () => {
       setIsAIRendererOpen,
       isAIQueryOpen,
       setIsAIQueryOpen,
-      setIsBlockPickerOpen,
+      setActiveBlockPart,
       timberFrameParams,
       setTimberFrameParams,
       commitUpdatedFraming,
@@ -224,7 +226,7 @@ export const CustomToolbarOverlay: React.FC = () => {
       if (typeof item.action === 'function') {
         await item.action(sdk);
       } else if (item.code && item.code.trim()) {
-        const fn = new Function('sdk', 'console', `
+        const fn = new Function('sdk', 'console', 'value', `
           return (async () => {
             try {
               ${item.code}
@@ -234,7 +236,7 @@ export const CustomToolbarOverlay: React.FC = () => {
             }
           })();
         `);
-        await fn(sdk, customConsole);
+        await fn(sdk, customConsole, value);
       } else if (item.scriptId) {
         const script = developerScripts.find(s => s.id === item.scriptId);
         if (script) {
@@ -310,6 +312,18 @@ export const CustomToolbarOverlay: React.FC = () => {
     setCollapsedToolbars(prev => ({ ...prev, [toolbarId]: !prev[toolbarId] }));
   };
 
+  // Patches one widget item (anywhere in a toolbar, including inside a
+  // 'section' item's nested list) so sliders/checkboxes/color-swatches/tabs
+  // visually reflect the user's last interaction.
+  const updateItemState = (toolbarId: string, itemId: string, patch: Partial<CustomToolbarItem>) => {
+    const applyToItems = (items: CustomToolbarItem[]): CustomToolbarItem[] => items.map(it => {
+      if (it.id === itemId) return { ...it, ...patch };
+      if (it.items) return { ...it, items: applyToItems(it.items) };
+      return it;
+    });
+    setCustomToolbars(prev => prev.map(t => t.id === toolbarId ? { ...t, items: applyToItems(t.items) } : t));
+  };
+
   // Lets the user switch a custom toolbar between floating (draggable) and
   // docked (fixed to a side of the viewport) directly from its own header,
   // independent of whatever position the script that created it specified.
@@ -319,6 +333,221 @@ export const CustomToolbarOverlay: React.FC = () => {
       const isCurrentlyFloating = (t.position || 'top-center') === 'floating' || (t.position || '').startsWith('custom');
       return { ...t, position: isCurrentlyFloating ? 'top-center' : 'floating' };
     }));
+  };
+
+  // A toolbar containing any rich widget (anything beyond a plain icon
+  // button) renders as a vertical panel instead of a row of icons, since
+  // sliders/checkboxes/swatches/tabs/sections need real width to be usable.
+  const hasRichWidgets = (items: CustomToolbarItem[]): boolean =>
+    items.some(it => (it.type && it.type !== 'button') || (it.items && it.items.length > 0));
+
+  const renderToolbarItem = (item: CustomToolbarItem, toolbar: CustomToolbarDef, isHorizontal: boolean): React.ReactNode => {
+    const type = item.type || 'button';
+    const isRunning = runningItems[item.id] || false;
+
+    if (type === 'label') {
+      return (
+        <div key={item.id} className="px-1 py-1 text-[11px] text-gray-500 dark:text-gray-400">
+          {item.label}
+        </div>
+      );
+    }
+
+    if (type === 'slider') {
+      return (
+        <div key={item.id} className="w-full px-1 py-1">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">
+            <span>{item.label}</span>
+            <span className="font-mono text-trimble-blue">{item.value ?? item.min ?? 0}</span>
+          </div>
+          <input
+            type="range"
+            min={item.min ?? 0}
+            max={item.max ?? 100}
+            step={item.step ?? 1}
+            value={item.value ?? item.min ?? 0}
+            onChange={e => {
+              const v = parseFloat(e.target.value);
+              updateItemState(toolbar.id, item.id, { value: v });
+              executeItem(item, toolbar.title, v);
+            }}
+            className="w-full h-1 accent-trimble-blue"
+          />
+          {item.description && <p className="text-[10px] text-gray-400 mt-0.5">{item.description}</p>}
+        </div>
+      );
+    }
+
+    if (type === 'checkbox') {
+      return (
+        <label key={item.id} className="w-full flex items-start gap-2 px-1 py-1 text-[11px] text-gray-600 dark:text-gray-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!item.checked}
+            onChange={e => {
+              const v = e.target.checked;
+              updateItemState(toolbar.id, item.id, { checked: v });
+              executeItem(item, toolbar.title, v);
+            }}
+            className="accent-trimble-blue mt-0.5"
+          />
+          <span>
+            {item.label}
+            {item.description && <div className="text-[10px] text-gray-400">{item.description}</div>}
+          </span>
+        </label>
+      );
+    }
+
+    if (type === 'color-swatch') {
+      return (
+        <div key={item.id} className="w-full px-1 py-1">
+          {item.label && <div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">{item.label}</div>}
+          <div className="grid grid-cols-9 gap-1.5">
+            {(item.colors || []).map(c => (
+              <button
+                key={c}
+                type="button"
+                title={c}
+                onClick={() => {
+                  updateItemState(toolbar.id, item.id, { selectedColor: c });
+                  executeItem(item, toolbar.title, c);
+                }}
+                className={cn(
+                  "w-6 h-6 rounded-md border-2 transition-transform hover:scale-110",
+                  item.selectedColor === c ? "border-trimble-blue" : "border-transparent"
+                )}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+            {item.allowCustomColor && (
+              <input
+                type="color"
+                value={item.selectedColor || '#ffffff'}
+                onChange={e => {
+                  const v = e.target.value;
+                  updateItemState(toolbar.id, item.id, { selectedColor: v });
+                  executeItem(item, toolbar.title, v);
+                }}
+                className="w-6 h-6 rounded-md border-2 border-gray-300 dark:border-gray-600 cursor-pointer bg-transparent"
+                title="Custom colour"
+              />
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (type === 'tabs') {
+      return (
+        <div key={item.id} className="w-full px-1 py-1 flex flex-wrap gap-1">
+          {(item.options || []).map(opt => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => {
+                updateItemState(toolbar.id, item.id, { selected: opt });
+                executeItem(item, toolbar.title, opt);
+              }}
+              className={cn(
+                "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap",
+                item.selected === opt ? "bg-trimble-blue text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+              )}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    if (type === 'section') {
+      const isOpen = !item.collapsed;
+      return (
+        <div key={item.id} className="w-full border-t border-gray-100 dark:border-gray-800 first:border-t-0 pt-1">
+          <button
+            type="button"
+            onClick={() => updateItemState(toolbar.id, item.id, { collapsed: isOpen })}
+            className="w-full flex items-center justify-between px-1 py-1 text-[11px] font-bold text-gray-700 dark:text-gray-200"
+          >
+            <span className="flex items-center gap-1.5"><DynamicIcon nameOrEmoji={item.icon} size={13} />{item.label}</span>
+            {isOpen ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
+          </button>
+          {isOpen && (
+            <div className="flex flex-col gap-1 pb-1">
+              {(item.items || []).map(child => renderToolbarItem(child, toolbar, isHorizontal))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Default: 'button' (including variant: 'tile')
+    if (item.variant === 'tile') {
+      return (
+        <button
+          key={item.id}
+          id={`toolbar-btn-${item.id}`}
+          onClick={() => executeItem(item, toolbar.title)}
+          disabled={isRunning}
+          title={item.tooltip || item.label}
+          className={cn(
+            "flex flex-col items-center gap-1 p-2 rounded-lg border text-center transition-all w-full",
+            theme === 'dark' ? "border-gray-700 hover:bg-gray-800" : "border-gray-200 hover:bg-gray-50"
+          )}
+        >
+          <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: item.color || '#94a3b8' }}>
+            {isRunning ? <Loader2 size={14} className="animate-spin text-white" /> : <DynamicIcon nameOrEmoji={item.icon} size={14} className="text-white" />}
+          </div>
+          <span className="text-[10px] font-medium">{item.label}</span>
+        </button>
+      );
+    }
+
+    return (
+      <button
+        key={item.id}
+        id={`toolbar-btn-${item.id}`}
+        onClick={() => executeItem(item, toolbar.title)}
+        disabled={isRunning}
+        title={item.tooltip || item.label}
+        className={cn(
+          "relative group flex items-center justify-center p-2 rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-60",
+          theme === 'dark'
+            ? "hover:bg-gray-800 text-gray-200 hover:text-white"
+            : "hover:bg-slate-100 text-gray-700 hover:text-gray-900"
+        )}
+        style={item.color ? { color: item.color } : undefined}
+      >
+        {isRunning ? (
+          <Loader2 size={18} className="animate-spin text-trimble-blue" />
+        ) : (
+          <DynamicIcon nameOrEmoji={item.icon} size={18} />
+        )}
+
+        {item.badge && (
+          <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-trimble-blue text-white rounded text-[9px] font-bold leading-none shadow">
+            {item.badge}
+          </span>
+        )}
+
+        <div
+          className={cn(
+            "absolute z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[11px] px-2 py-1 rounded shadow-lg",
+            isHorizontal ? "top-full mt-1.5 left-1/2 -translate-x-1/2" : "left-full ml-1.5 top-1/2 -translate-y-1/2",
+            theme === 'dark' ? "bg-gray-800 text-white border border-gray-700" : "bg-gray-900 text-white"
+          )}
+        >
+          <div className="font-semibold">{item.label}</div>
+          {item.tooltip && item.tooltip !== item.label && (
+            <div className="text-[10px] text-gray-300 font-normal">{item.tooltip}</div>
+          )}
+          {item.hotkey && (
+            <div className="text-[9px] text-gray-400 font-mono mt-0.5">Hotkey: {item.hotkey}</div>
+          )}
+        </div>
+      </button>
+    );
   };
 
   if (!customToolbars || customToolbars.length === 0) return null;
@@ -440,12 +669,12 @@ export const CustomToolbarOverlay: React.FC = () => {
               </div>
             </div>
 
-            {/* Toolbar Buttons List */}
+            {/* Toolbar Content */}
             {!isCollapsed && (
-              <div 
+              <div
                 className={cn(
                   "p-1.5 gap-1.5 flex",
-                  isHorizontal ? "flex-row items-center" : "flex-col items-center"
+                  hasRichWidgets(toolbar.items) ? "flex-col w-64 max-h-[70vh] overflow-y-auto" : (isHorizontal ? "flex-row items-center" : "flex-col items-center")
                 )}
               >
                 {toolbar.items.length === 0 ? (
@@ -453,55 +682,7 @@ export const CustomToolbarOverlay: React.FC = () => {
                     No buttons registered
                   </div>
                 ) : (
-                  toolbar.items.map(item => {
-                    const isRunning = runningItems[item.id] || false;
-                    return (
-                      <button
-                        key={item.id}
-                        id={`toolbar-btn-${item.id}`}
-                        onClick={() => executeItem(item, toolbar.title)}
-                        disabled={isRunning}
-                        title={item.tooltip || item.label}
-                        className={cn(
-                          "relative group flex items-center justify-center p-2 rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-60",
-                          theme === 'dark' 
-                            ? "hover:bg-gray-800 text-gray-200 hover:text-white" 
-                            : "hover:bg-slate-100 text-gray-700 hover:text-gray-900"
-                        )}
-                        style={item.color ? { color: item.color } : undefined}
-                      >
-                        {isRunning ? (
-                          <Loader2 size={18} className="animate-spin text-trimble-blue" />
-                        ) : (
-                          <DynamicIcon nameOrEmoji={item.icon} size={18} />
-                        )}
-
-                        {/* Optional badge */}
-                        {item.badge && (
-                          <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-trimble-blue text-white rounded text-[9px] font-bold leading-none shadow">
-                            {item.badge}
-                          </span>
-                        )}
-
-                        {/* Hover Tooltip */}
-                        <div 
-                          className={cn(
-                            "absolute z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[11px] px-2 py-1 rounded shadow-lg",
-                            isHorizontal ? "top-full mt-1.5 left-1/2 -translate-x-1/2" : "left-full ml-1.5 top-1/2 -translate-y-1/2",
-                            theme === 'dark' ? "bg-gray-800 text-white border border-gray-700" : "bg-gray-900 text-white"
-                          )}
-                        >
-                          <div className="font-semibold">{item.label}</div>
-                          {item.tooltip && item.tooltip !== item.label && (
-                            <div className="text-[10px] text-gray-300 font-normal">{item.tooltip}</div>
-                          )}
-                          {item.hotkey && (
-                            <div className="text-[9px] text-gray-400 font-mono mt-0.5">Hotkey: {item.hotkey}</div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })
+                  toolbar.items.map(item => renderToolbarItem(item, toolbar, isHorizontal))
                 )}
               </div>
             )}

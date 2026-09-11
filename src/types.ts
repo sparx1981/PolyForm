@@ -274,8 +274,6 @@ export interface AppState {
   setIsAIRendererOpen: (open: boolean) => void;
   isAIQueryOpen: boolean;
   setIsAIQueryOpen: (open: boolean) => void;
-  isBlockPickerOpen: boolean;
-  setIsBlockPickerOpen: (open: boolean) => void;
   activeBlockPart: { partId: string; color: string; rotationSteps: number } | null;
   setActiveBlockPart: (part: { partId: string; color: string; rotationSteps: number } | null | ((prev: { partId: string; color: string; rotationSteps: number } | null) => { partId: string; color: string; rotationSteps: number } | null)) => void;
   blockPlacementDraft: { position: [number, number, number]; rotationSteps: number } | null;
@@ -1041,17 +1039,44 @@ export interface TimberGenerationReport {
   conflicts?: string[];
 }
 
+export type CustomToolbarWidgetType = 'button' | 'slider' | 'checkbox' | 'color-swatch' | 'tabs' | 'label' | 'section';
+
 export interface CustomToolbarItem {
   id: string;
   label: string;
+  type?: CustomToolbarWidgetType; // Defaults to 'button' when omitted, for backwards compatibility
   icon?: string; // Lucide icon name (e.g. 'Home', 'Hammer', 'TreePine', 'Sparkles'), emoji, or text
   tooltip?: string;
   color?: string;
   badge?: string;
   hotkey?: string;
-  code?: string; // JavaScript code to execute
+  code?: string; // JavaScript code to execute. For non-button widgets, the new value is in scope as `value`.
   scriptId?: string; // Reference to existing saved script
   action?: (sdk: any) => void | Promise<void>; // In-memory callback function
+  variant?: 'default' | 'tile'; // 'tile' renders a larger icon-over-label button, for grid-style pickers
+  description?: string; // Small helper text rendered under the control
+
+  // type: 'slider'
+  value?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+
+  // type: 'checkbox'
+  checked?: boolean;
+
+  // type: 'color-swatch'
+  colors?: string[];
+  selectedColor?: string;
+  allowCustomColor?: boolean;
+
+  // type: 'tabs'
+  options?: string[];
+  selected?: string;
+
+  // type: 'section' (collapsible group of nested items)
+  items?: CustomToolbarItem[];
+  collapsed?: boolean;
 }
 
 export interface CustomToolbarDef {
