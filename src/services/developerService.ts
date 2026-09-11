@@ -219,6 +219,7 @@ export interface SDK {
   diagLog: (category: string, message: string, values?: Record<string, unknown>) => void;
   setContactFriction: (enabled: boolean) => void;
   generateModel: (prompt: string) => void;
+  openBlockPicker: () => void;
   openWebpage: (url: string) => void;
   log: (message: string) => void;
 
@@ -2560,6 +2561,13 @@ export class DeveloperSDK implements SDK {
 
   generateModel(prompt: string): void {
     this.ai.generateModel(prompt);
+  }
+
+  openBlockPicker(): void {
+    if (this.extraSetters.setIsBlockPickerOpen) {
+      this.extraSetters.setIsBlockPickerOpen(true);
+    }
+    this.log(`Opened Block Picker.`);
   }
 
   openWebpage(url: string): void {

@@ -17,6 +17,7 @@ export type ToolType =
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
   | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock'
   | 'roof' | 'timber-frame' | 'scale_figure'
+  | 'block_picker'
   | CivilToolMode;
 
 export type ToolMode = ToolType | CivilToolMode;
@@ -273,6 +274,12 @@ export interface AppState {
   setIsAIRendererOpen: (open: boolean) => void;
   isAIQueryOpen: boolean;
   setIsAIQueryOpen: (open: boolean) => void;
+  isBlockPickerOpen: boolean;
+  setIsBlockPickerOpen: (open: boolean) => void;
+  activeBlockPart: { partId: string; color: string; rotationSteps: number } | null;
+  setActiveBlockPart: (part: { partId: string; color: string; rotationSteps: number } | null | ((prev: { partId: string; color: string; rotationSteps: number } | null) => { partId: string; color: string; rotationSteps: number } | null)) => void;
+  blockPlacementDraft: { position: [number, number, number]; rotationSteps: number } | null;
+  setBlockPlacementDraft: (draft: { position: [number, number, number]; rotationSteps: number } | null | ((prev: { position: [number, number, number]; rotationSteps: number } | null) => { position: [number, number, number]; rotationSteps: number } | null)) => void;
   user: any | null;
   setUser: (user: any | null) => void;
   theme: 'light' | 'dark';

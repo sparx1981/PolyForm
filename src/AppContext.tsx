@@ -170,6 +170,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [shapes, setShapes] = useState<Shape[]>(INITIAL_SHAPES);
   const [isAIRendererOpen, setIsAIRendererOpen] = useState(false);
   const [isAIQueryOpen, setIsAIQueryOpen] = useState(false);
+  const [isBlockPickerOpen, setIsBlockPickerOpen] = useState(false);
+  const [activeBlockPart, setActiveBlockPart] = useState<{ partId: string; color: string; rotationSteps: number } | null>(null);
+  const [blockPlacementDraft, setBlockPlacementDraft] = useState<{ position: [number, number, number]; rotationSteps: number } | null>(null);
   const [user, setUser] = useState<any | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   /*
@@ -1811,6 +1814,12 @@ console.log("Created rectangle:", myRect.id);`);
       updateShapeColor,
       updateShapeDimensions,
       isAIRendererOpen,
+      isBlockPickerOpen,
+      setIsBlockPickerOpen,
+      activeBlockPart,
+      setActiveBlockPart,
+      blockPlacementDraft,
+      setBlockPlacementDraft,
       setIsAIRendererOpen,
       isAIQueryOpen,
       setIsAIQueryOpen,

@@ -32,6 +32,7 @@ import AIDiagnosticLog from './components/AIDiagnosticLog';
 import { DeveloperSuite } from './components/DeveloperSuite';
 import { CodeRecorder } from './components/CodeRecorder';
 import { CustomToolbarOverlay } from './components/CustomToolbarOverlay';
+import BlockPickerPanel from './components/BlockPickerPanel';
 import { ToolModifierPalette } from './components/ToolModifierPalette';
 import CivilGradeHUD from './components/terrain/CivilGradeHUD';
 import BakeModal from './components/terrain/BakeModal';
@@ -628,6 +629,7 @@ function AppContent() {
       <DeveloperSuite />
       <CodeRecorder />
       <CustomToolbarOverlay />
+      <BlockPickerPanel />
       <BakeModal />
     </div>
   );

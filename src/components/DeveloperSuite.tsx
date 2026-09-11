@@ -72,6 +72,7 @@ export function DeveloperSuite() {
     setIsAIRendererOpen,
     isAIQueryOpen,
     setIsAIQueryOpen,
+    setIsBlockPickerOpen,
     timberFrameParams,
     setTimberFrameParams,
     commitUpdatedFraming,
@@ -200,6 +201,7 @@ export function DeveloperSuite() {
         setIsAIRendererOpen,
         isAIQueryOpen,
         setIsAIQueryOpen,
+        setIsBlockPickerOpen,
         timberFrameParams,
         setTimberFrameParams,
         commitUpdatedFraming,
@@ -2721,6 +2723,17 @@ const blockKit = sdk.toolbars.create({
 });
 
 console.log("Block Kit ready:", blockKit.id);`
+        },
+        {
+          name: "Open the Interactive Block Picker",
+          code: `// Opens PolyForm's native Block Picker panel: a categorized, scrollable
+// library of stud-block parts (Basics, Plates & Jumpers, Tiles, Slopes &
+// Angles, Round & Curved, Arches, Bow & Wedge). Selecting a part arms
+// placement in the viewport - arrow keys rotate the pending block 90° at a
+// time, Enter confirms (snapping to the stud grid and to existing blocks),
+// Escape cancels. Every placed block is a single grouped object, exactly
+// like any other primitive shape, so it appears as one Outliner entry.
+sdk.openBlockPicker();`
         }
       ]
     }

@@ -53,12 +53,14 @@ import {
   createRockGeometry
 } from '../lib/landscapeGeometry';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
+import { getBlockPart, buildBlockGeometry, STUD_UNIT, BlockPart } from '../lib/blockKitGeometry';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
 import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier } from '../types';
 import CutFillVolumeOverlay from './terrain/CutFillVolumeOverlay';
 import RoadSplineOverlay from './terrain/RoadSplineOverlay';
 import ParametricPadOverlay from './terrain/ParametricPadOverlay';
+import BlockPickerOverlay from './BlockPickerOverlay';
 import { deduplicateKnots, clampSplineGradeWithTransitions, sanitizeElevation } from '../lib/terrain/math';
 import { applyPadGradingToTerrain } from '../lib/terrain/padGeometry';
 import { applyRoadGradingToTerrain } from '../lib/terrain/roadGeometry';
@@ -127,6 +129,14 @@ const _polyformNoteZIndexRange: [number, number] = [1000, 2000];
 const _polyformTextureCache = new Map<string, THREE.Texture>();
 const _polyformTextureLoader = new THREE.TextureLoader();
 _polyformTextureLoader.setCrossOrigin('anonymous');
+
+function bufferGeometryToShapeData(geom: THREE.BufferGeometry): { positions: number[]; normals: number[]; uvs?: number[] } {
+  return {
+    positions: Array.from(geom.attributes.position?.array || []),
+    normals: geom.attributes.normal?.array ? Array.from(geom.attributes.normal.array) : [],
+    uvs: geom.attributes.uv?.array ? Array.from(geom.attributes.uv.array) : undefined,
+  };
+}
 
 function createFallbackTexture(): THREE.Texture {
   const canvas = document.createElement('canvas');
@@ -1366,6 +1376,10 @@ function Scene() {
     activePlantScale,
     activeScaleFigureCharacter,
     activeScaleFigureHeight,
+    activeBlockPart,
+    setActiveBlockPart,
+    blockPlacementDraft,
+    setBlockPlacementDraft,
     kernelHost,
     kernelRevision,
     bumpKernel,
@@ -3739,6 +3753,51 @@ function Scene() {
       
       const key = e.key.toLowerCase();
 
+      // Arrow keys rotate the pending block 90° at a time before it's placed;
+      // Enter confirms, Escape cancels.
+      if (activeTool === 'block_picker' && blockPlacementDraft) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          const dir = e.key === 'ArrowLeft' ? -1 : 1;
+          setBlockPlacementDraft(prev => prev ? { ...prev, rotationSteps: (prev.rotationSteps + dir + 4) % 4 } : prev);
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (activeBlockPart) {
+            const part = getBlockPart(activeBlockPart.partId);
+            if (part) {
+              const geom = buildBlockGeometry(part);
+              const newShape: Shape = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: part.label,
+                type: 'custom',
+                position: blockPlacementDraft.position,
+                rotation: [0, blockPlacementDraft.rotationSteps * (Math.PI / 2), 0],
+                quaternion: [0, 0, 0, 1],
+                args: [1, 1, 1],
+                color: activeBlockPart.color,
+                roughness: 0.4,
+                metalness: 0.02,
+                tags: ['block-kit', part.id, `block-category-${part.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`],
+                geometryData: bufferGeometryToShapeData(geom)
+              };
+              addShape(newShape);
+              commitHistory();
+              setMeasurements(`Placed ${part.label}.`);
+            }
+          }
+          setBlockPlacementDraft(null);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setBlockPlacementDraft(null);
+          setMeasurements('Block placement cancelled.');
+          return;
+        }
+      }
+
       // Arrow keys to adjust polygon sides when polygon tool is active
       if (activeTool === 'polygon') {
         if (e.key === 'ArrowUp') {
@@ -5128,6 +5187,41 @@ function Scene() {
       addShape(newShape);
       commitHistory();
       setMeasurements(`Placed ${newShape.name} at [${hitPoint.x.toFixed(1)}, ${hitPoint.y.toFixed(1)}, ${hitPoint.z.toFixed(1)}]`);
+      return;
+    }
+
+    if (activeTool === 'block_picker' && activeBlockPart) {
+      e.stopPropagation();
+      const part = getBlockPart(activeBlockPart.partId);
+      if (!part) return;
+
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      let hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
+      let snappedY = 0;
+      if (!shapeIntersect) {
+        const ray = raycaster.ray;
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+        if (ray.intersectPlane(groundPlane, groundHit)) hitPoint = groundHit;
+      } else {
+        // Block-to-block snap: land on top of whatever block was clicked,
+        // matching how a stud-block extension stacks new pieces on existing ones.
+        const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
+        if (hitShape?.tags?.includes('block-kit')) {
+          snappedY = hitPoint.y;
+        }
+      }
+
+      // Grid snap: round the footprint center to the nearest stud-grid cell.
+      const snappedX = Math.round(hitPoint.x / STUD_UNIT) * STUD_UNIT;
+      const snappedZ = Math.round(hitPoint.z / STUD_UNIT) * STUD_UNIT;
+
+      setBlockPlacementDraft(prev => ({
+        position: [snappedX, snappedY, snappedZ],
+        rotationSteps: prev?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0
+      }));
+      setMeasurements(`Positioning ${part.label} - arrow keys to rotate, Enter to place, Esc to cancel.`);
       return;
     }
 
@@ -10395,6 +10489,7 @@ function Scene() {
       <CutFillVolumeOverlay />
       <RoadSplineOverlay />
       <ParametricPadOverlay />
+      <BlockPickerOverlay />
 
       {(ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))) && (
         <EffectComposer enableNormalPass={ambientOcclusionEnabled}>
