@@ -58,7 +58,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
       <div className="space-y-2">
         <div className="flex items-center justify-between text-[11px]">
           <span className="font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
-            <Ruler size={13} className="text-emerald-600 dark:text-emerald-400" />
+            <Ruler size={13} className="text-trimble-blue" />
             <span>Scale Height</span>
           </span>
           <div className="flex items-center gap-1">
@@ -69,7 +69,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
               max="2.5"
               value={currentHeight}
               onChange={(e) => handleHeightChange(parseFloat(e.target.value) || activeChar.height)}
-              className="w-16 h-6 px-1.5 text-right font-mono text-xs rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-16 h-6 px-1.5 text-right font-mono text-xs rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-trimble-blue"
             />
             <span className="text-xs text-gray-400 font-mono">m</span>
           </div>
@@ -82,7 +82,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
           step="0.01"
           value={currentHeight}
           onChange={(e) => handleHeightChange(parseFloat(e.target.value))}
-          className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+          className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
         />
 
         {/* Quick Presets */}
@@ -96,7 +96,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
                 className={cn(
                   "py-1 px-1 rounded text-[10px] font-medium transition-all text-center",
                   isSelected
-                    ? "bg-emerald-600 text-white shadow-xs font-semibold"
+                    ? "bg-trimble-blue text-white shadow-xs font-semibold"
                     : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 )}
               >
@@ -123,7 +123,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
               className={cn(
                 "px-2 py-1 rounded-md text-[10px] font-medium whitespace-nowrap transition-all",
                 selectedCategory === cat
-                  ? "bg-emerald-600 text-white shadow-xs"
+                  ? "bg-trimble-blue text-white shadow-xs"
                   : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
               )}
             >
@@ -143,7 +143,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
                 className={cn(
                   "w-full text-left p-2 rounded-lg border transition-all flex items-center justify-between gap-2.5",
                   isSelected
-                    ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
+                    ? "border-trimble-blue bg-trimble-blue/10 ring-1 ring-trimble-blue"
                     : "border-gray-200 dark:border-gray-800 hover:bg-gray-100/60 dark:hover:bg-gray-800/60"
                 )}
               >
@@ -164,7 +164,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
                   </div>
                 </div>
                 {isSelected && (
-                  <Check size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <Check size={14} className="text-trimble-blue shrink-0" />
                 )}
               </button>
             );

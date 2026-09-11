@@ -224,7 +224,7 @@ export const ToolModifierPalette: React.FC = () => {
           ) : activeTool === 'roof' ? (
             <Home size={14} className="text-sky-500" />
           ) : activeTool === 'scale_figure' ? (
-            <PersonStanding size={14} className="text-emerald-500" />
+            <PersonStanding size={14} className="text-trimble-blue" />
           ) : activeTool === 'bezier' ? (
             <Spline size={14} className="text-trimble-blue" />
           ) : (activeTool === 'select' || activeTool === 'lasso') ? (
