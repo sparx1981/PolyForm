@@ -204,23 +204,62 @@ function blockPlacementOverlaps(
 }
 
 /**
- * Where a block being placed should land vertically, given what its
- * raycast landed on. Hitting the TOP of another block-kit piece keeps the
- * existing, working "stack on top" behavior unchanged (snappedY = the hit
- * point's own height) - that's deliberately untouched here. Hitting a
- * SIDE (or bottom) face instead means attaching alongside at that piece's
- * own base height, not at the arbitrary height the ray happened to hit
- * partway up its side - which is what parts with a horizontal primary
- * stud (brackets, a tree's side branch) need in order to sit flush next
- * to what they're plugging into, the same way real interlocking pieces do.
+ * Of the 4 Y-axis rotation steps, which one points `part`'s primary stud
+ * as close as possible to directly opposite `worldNormal` - i.e. plugging
+ * INTO the face that normal belongs to, the way a real interlocking piece
+ * has to be turned to face what it's attaching to.
  */
-function resolveBlockTargetY(intersect: THREE.Intersection, hitShape: Shape, hitPointY: number): number {
+function bestAutoRotationSteps(part: BlockPart, worldNormal: THREE.Vector3): number {
+  const localDir = new THREE.Vector3(...primaryStudDirection(part));
+  const targetDir = worldNormal.clone().negate();
+  const up = new THREE.Vector3(0, 1, 0);
+  let bestSteps = 0;
+  let bestDot = -Infinity;
+  for (let steps = 0; steps < 4; steps++) {
+    const rotated = localDir.clone().applyAxisAngle(up, steps * (Math.PI / 2));
+    const dot = rotated.dot(targetDir);
+    if (dot > bestDot) { bestDot = dot; bestSteps = steps; }
+  }
+  return bestSteps;
+}
+
+/**
+ * Where a block being placed should land, and how it should be rotated,
+ * given what its raycast landed on. Hitting the TOP of another block-kit
+ * piece keeps the existing, working "stack on top" behavior completely
+ * unchanged (snappedY = the hit point's own height, rotation left up to
+ * the user) - that's deliberately untouched here.
+ *
+ * Hitting a SIDE (or bottom) face instead means attaching alongside at
+ * that piece's own base height rather than at the arbitrary height the
+ * ray happened to hit partway up its side. And for a part whose primary
+ * connecting stud ISN'T a plain top stud (brackets, a tree's branch
+ * stud), it also auto-rotates the piece so that stud faces directly into
+ * the hit surface - the same "full auto-alignment" a real interlocking
+ * piece gets from physically only fitting one way against what it's
+ * plugging into, rather than requiring the user to manually spin it with
+ * arrow keys until it happens to line up.
+ */
+function resolveBlockAttachment(
+  intersect: THREE.Intersection,
+  hitShape: Shape,
+  hitPointY: number,
+  part: BlockPart,
+  currentRotationSteps: number
+): { y: number; rotationSteps: number } {
   let worldNormal = new THREE.Vector3(0, 1, 0);
   if (intersect.face) {
     worldNormal = intersect.face.normal.clone().transformDirection(intersect.object.matrixWorld).normalize();
   }
   const isTopHit = worldNormal.y > 0.7;
-  return isTopHit ? hitPointY : hitShape.position[1];
+  if (isTopHit) {
+    return { y: hitPointY, rotationSteps: currentRotationSteps };
+  }
+  const isDirectionalPart = Math.abs(primaryStudDirection(part)[1]) < 0.9;
+  return {
+    y: hitShape.position[1],
+    rotationSteps: isDirectionalPart ? bestAutoRotationSteps(part, worldNormal) : currentRotationSteps
+  };
 }
 
 function createFallbackTexture(): THREE.Texture {
@@ -5265,6 +5304,7 @@ function Scene() {
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
       let hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
       let snappedY = 0;
+      let rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
       if (!shapeIntersect) {
         const ray = raycaster.ray;
         const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -5273,17 +5313,19 @@ function Scene() {
       } else {
         // Block-to-block snap: land on top of whatever block was clicked
         // (or, for a side-face hit, attach alongside it at its own base
-        // height instead) - see resolveBlockTargetY.
+        // height and auto-rotated to face it, for parts with a
+        // horizontal/angled primary stud) - see resolveBlockAttachment.
         const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
         if (hitShape?.tags?.includes('block-kit')) {
-          snappedY = resolveBlockTargetY(shapeIntersect, hitShape, hitPoint.y);
+          const attachment = resolveBlockAttachment(shapeIntersect, hitShape, hitPoint.y, part, rotationSteps);
+          snappedY = attachment.y;
+          rotationSteps = attachment.rotationSteps;
         }
       }
 
       // Grid snap: align the footprint's CORNER to the stud grid (not its
       // center - see snapBlockFootprintCenter) so blocks of different
       // sizes still sit flush against each other.
-      const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
       const [snappedX, snappedZ] = snapBlockFootprintCenter(part, rotationSteps, hitPoint.x, hitPoint.z);
       const placementPosition: [number, number, number] = [snappedX, snappedY, snappedZ];
 
@@ -5321,13 +5363,7 @@ function Scene() {
       addShape(newShape);
       commitHistory();
       setBlockPlacementDraft({ position: placementPosition, rotationSteps });
-      // Parts whose primary connector isn't a plain top stud (brackets, a
-      // tree's branch stud) need to be manually rotated to face whatever
-      // they're plugging into - arrow keys do that, same as any block.
-      const isDirectionalPart = Math.abs(primaryStudDirection(part)[1]) < 0.5;
-      setMeasurements(isDirectionalPart
-        ? `Placed ${part.label}. Arrow keys rotate it so its stud faces the right way - click to place another, Esc to stop.`
-        : `Placed ${part.label}. Arrow keys rotate the next block - click to place another, Esc to stop.`);
+      setMeasurements(`Placed ${part.label}. Arrow keys rotate the next block - click to place another, Esc to stop.`);
       return;
     }
 
@@ -5416,6 +5452,7 @@ function Scene() {
         const shapeIntersect = intersects.find(i => i.object.userData.isShape);
         let hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
         let snappedY = 0;
+        let rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
         if (!shapeIntersect) {
           const ray = raycaster.ray;
           const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -5423,9 +5460,16 @@ function Scene() {
           if (ray.intersectPlane(groundPlane, groundHit)) hitPoint = groundHit;
         } else {
           const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
-          if (hitShape?.tags?.includes('block-kit')) { snappedY = resolveBlockTargetY(shapeIntersect, hitShape, hitPoint.y); }
+          if (hitShape?.tags?.includes('block-kit')) {
+            // Full auto-alignment: as the ghost hovers near a side face,
+            // it snaps its rotation to face that surface automatically
+            // (see resolveBlockAttachment) for parts with a horizontal or
+            // angled primary stud - no manual rotation needed for those.
+            const attachment = resolveBlockAttachment(shapeIntersect, hitShape, hitPoint.y, part, rotationSteps);
+            snappedY = attachment.y;
+            rotationSteps = attachment.rotationSteps;
+          }
         }
-        const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
         const [snappedX, snappedZ] = snapBlockFootprintCenter(part, rotationSteps, hitPoint.x, hitPoint.z);
         const candidatePosition: [number, number, number] = [snappedX, snappedY, snappedZ];
 
