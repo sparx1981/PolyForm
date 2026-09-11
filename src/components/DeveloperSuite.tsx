@@ -2566,7 +2566,7 @@ console.log("Brick Picker toolbar ready:", brickPicker.id);`
 // collapsible sections are all real widget types (see item.type below),
 // not just plain icon buttons.
 //
-// Placing an actual block uses sdk.selectBlockPart(partId, color), which
+// Placing an actual block uses sdk.blockKit.place(partId, color), which
 // arms PolyForm's built-in placement tool: a ghost preview follows the
 // cursor (snapping to the stud grid and to existing blocks), arrow keys
 // rotate it 90° at a time, and clicking places it - click again to place
@@ -2599,9 +2599,9 @@ function buildBlockTiles(category) {
     label: partId.replace(/^[a-z]+-/, ""),
     icon: "Box",
     color,
-    previewGeometry: sdk.getBlockGeometry(partId),
+    previewGeometry: sdk.blockKit.getGeometry(partId),
     tooltip: "Place a " + partId,
-    code: \`sdk.selectBlockPart("\${partId}", "\${color}");\`
+    code: \`sdk.blockKit.place("\${partId}", "\${color}");\`
   }));
 }
 
@@ -2667,27 +2667,30 @@ const panel = sdk.toolbars.create({
         const name = window.prompt("Build which assembly? (" + Object.keys(library).join(", ") + ")", "Garden Planter");
         const plan = library[name];
         if (!plan) { console.log("Unknown assembly:", name); return; }
-        console.log("This places each part with sdk.selectBlockPart() one at a time - click in the viewport for each piece:");
+        console.log("This places each part with sdk.blockKit.place() one at a time - click in the viewport for each piece:");
         plan.forEach((step, i) => console.log((i + 1) + ". " + step.part + " at offset " + JSON.stringify(step.offset)));
-        sdk.selectBlockPart(plan[0].part, "#94a3b8");
+        sdk.blockKit.place(plan[0].part, "#94a3b8");
       \`
     },
     {
       id: "bk-parts-list", label: "Used Parts List", icon: "FileText", color: "#10b981",
       tooltip: "Logs a bill-of-materials for every block placed so far",
       code: \`
-        const shapes = JSON.parse(sdk.scene.exportJSON());
+        // sdk.outliner.list() is generic - it returns the id/name/type/tags
+        // of every entry the Outliner panel shows, for ANY kind of shape,
+        // not just blocks. Handy any time an extension needs to look up
+        // what's in the scene by id without keeping its own bookkeeping.
+        const entries = sdk.outliner.list();
         const counts = {};
-        for (const shape of shapes) {
-          const part = shape.tags?.find(t => t.startsWith("brick-") || t.startsWith("plate-") || t.startsWith("tile-") || t.startsWith("slope-") || t.startsWith("round-") || t.startsWith("arch-") || t.startsWith("bow-"));
+        for (const entry of entries) {
+          const part = entry.tags?.find(t => t.startsWith("brick-") || t.startsWith("plate-") || t.startsWith("tile-") || t.startsWith("slope-") || t.startsWith("round-") || t.startsWith("arch-") || t.startsWith("bow-"));
           if (!part) continue;
-          const key = part + " (" + shape.color + ")";
-          counts[key] = (counts[key] || 0) + 1;
+          counts[part] = (counts[part] || 0) + 1;
         }
         console.log("--- Used Parts List ---");
-        const entries = Object.entries(counts);
-        if (entries.length === 0) console.log("(no blocks placed yet)");
-        entries.forEach(([k, q]) => console.log(q + " x " + k));
+        const rows = Object.entries(counts);
+        if (rows.length === 0) console.log("(no blocks placed yet)");
+        rows.forEach(([k, q]) => console.log(q + " x " + k));
       \`
     },
     {
@@ -2718,9 +2721,9 @@ const panel = sdk.toolbars.create({
             label: partId.replace(/^[a-z]+-/, ""),
             icon: "Box",
             color,
-            previewGeometry: sdk.getBlockGeometry(partId),
+            previewGeometry: sdk.blockKit.getGeometry(partId),
             tooltip: "Place a " + partId,
-            code: 'sdk.selectBlockPart("' + partId + '", "' + color + '");'
+            code: 'sdk.blockKit.place("' + partId + '", "' + color + '");'
           }));
         })(value);
         sdk.toolbars.configureButton("block-kit-panel", "bk-blocks", { items: tiles });

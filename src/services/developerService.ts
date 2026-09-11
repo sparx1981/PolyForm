@@ -220,9 +220,6 @@ export interface SDK {
   diagLog: (category: string, message: string, values?: Record<string, unknown>) => void;
   setContactFriction: (enabled: boolean) => void;
   generateModel: (prompt: string) => void;
-  selectBlockPart: (partId: string, color?: string) => void;
-  getBlockGeometry: (partId: string) => { positions: number[]; normals: number[]; uvs?: number[] } | null;
-  listBlockParts: () => { id: string; label: string; category: string }[];
   openWebpage: (url: string) => void;
   log: (message: string) => void;
 
@@ -489,6 +486,29 @@ export interface SDK {
     undo: () => void;
     redo: () => void;
     saveScene: (name: string) => void;
+    // Raw geometry (positions/normals/uvs) for any shape currently in the
+    // scene, by id - useful for thumbnails, measurement, cloning geometry
+    // into a new shape, etc. Works for every shape type, not just one
+    // feature's own catalog.
+    getShapeGeometry: (id: string) => { positions: number[]; normals: number[]; uvs?: number[] } | null;
+  };
+
+  // Outliner Subsystem - introspect the grouping/hierarchy the Outliner
+  // panel shows, so an extension can look up the id of any element or
+  // group without needing its own bookkeeping.
+  outliner: {
+    list: () => { id: string; name: string; type: string; tags?: string[] }[];
+    find: (predicate: (entry: { id: string; name: string; type: string; tags?: string[] }) => boolean) => { id: string; name: string; type: string; tags?: string[] } | null;
+  };
+
+  // Stud-Block Kit Subsystem - PolyForm's built-in LEGO-style block catalog
+  // and placement tool. Namespaced like `ai`/`landscape`/`worldView` so any
+  // extension (not just one example script) can build its own picker UI
+  // around it.
+  blockKit: {
+    list: () => { id: string; label: string; category: string }[];
+    getGeometry: (partId: string) => { positions: number[]; normals: number[]; uvs?: number[] } | null;
+    place: (partId: string, color?: string) => void;
   };
 
   // WorldView Subsystem
@@ -539,6 +559,8 @@ export class DeveloperSDK implements SDK {
   public camera: any;
   public ai: any;
   public scene: any;
+  public outliner: any;
+  public blockKit: any;
   public worldView: any;
   public toolbars: any;
 
@@ -1956,6 +1978,70 @@ export class DeveloperSDK implements SDK {
 
       saveScene: (name: string): void => {
         this.saveScene(name);
+      },
+
+      getShapeGeometry: (id: string): { positions: number[]; normals: number[]; uvs?: number[] } | null => {
+        const shape = this.shapes.find(s => s.id === id);
+        if (!shape) return null;
+        if (shape.geometryData?.positions?.length) {
+          return {
+            positions: shape.geometryData.positions,
+            normals: shape.geometryData.normals || [],
+            uvs: shape.geometryData.uvs
+          };
+        }
+        // Built-in primitives (box, sphere, cone, ...) are meshed directly
+        // by the viewport and don't carry raw geometryData - only shapes
+        // built from explicit geometry (custom meshes, imported/exported
+        // shapes, block-kit parts, etc.) can be read back this way.
+        this.log(`getShapeGeometry: "${id}" (${shape.type}) has no stored geometry data.`);
+        return null;
+      }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // OUTLINER SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.outliner = {
+      list: (): { id: string; name: string; type: string; tags?: string[] }[] => {
+        return this.shapes.map(s => ({ id: s.id, name: s.name || s.type, type: s.type, tags: s.tags }));
+      },
+      find: (predicate: (entry: { id: string; name: string; type: string; tags?: string[] }) => boolean): { id: string; name: string; type: string; tags?: string[] } | null => {
+        return this.outliner.list().find(predicate) || null;
+      }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // BLOCK-KIT SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.blockKit = {
+      list: (): { id: string; label: string; category: string }[] => {
+        return BLOCK_CATALOG.map(p => ({ id: p.id, label: p.label, category: p.category }));
+      },
+
+      getGeometry: (partId: string): { positions: number[]; normals: number[]; uvs?: number[] } | null => {
+        const part = getBlockPart(partId);
+        if (!part) return null;
+        return geometryToData(buildBlockGeometry(part));
+      },
+
+      /**
+       * Arms the built-in block-placement tool for a given catalog part id
+       * (see blockKit.list() for every available id/category). A ghost
+       * preview then follows the cursor (snapping to the stud grid and to
+       * existing blocks), arrow keys rotate it 90° at a time, and clicking
+       * places it - clicking again places another of the same part,
+       * Escape stops. This is a placement primitive, not a UI - build your
+       * own picker panel around it with sdk.toolbars.create().
+       */
+      place: (partId: string, color: string = '#dc2626'): void => {
+        if (this.extraSetters.setActiveBlockPart) {
+          this.extraSetters.setActiveBlockPart({ partId, color, rotationSteps: 0 });
+        }
+        if (this.extraSetters.setActiveTool) {
+          this.extraSetters.setActiveTool('block_picker');
+        }
+        this.log(`Armed block placement: ${partId} (${color}).`);
       }
     };
 
@@ -2564,41 +2650,6 @@ export class DeveloperSDK implements SDK {
 
   generateModel(prompt: string): void {
     this.ai.generateModel(prompt);
-  }
-
-  /**
-   * Arms the built-in block-placement tool for a given catalog part
-   * (see the 'Basics' | 'Plates & Jumpers' | 'Tiles' | 'Slopes & Angles' |
-   * 'Round & Curved' | 'Arches' | 'Bow & Wedge' catalog). A ghost preview
-   * then follows the cursor (snapping to the stud grid and to existing
-   * blocks), arrow keys rotate it 90° at a time, and clicking places it -
-   * clicking again places another of the same part, Escape stops. This is a
-   * placement primitive, not a UI - build your own picker panel around it
-   * with sdk.toolbars.create().
-   */
-  selectBlockPart(partId: string, color: string = '#dc2626'): void {
-    if (this.extraSetters.setActiveBlockPart) {
-      this.extraSetters.setActiveBlockPart({ partId, color, rotationSteps: 0 });
-    }
-    if (this.extraSetters.setActiveTool) {
-      this.extraSetters.setActiveTool('block_picker');
-    }
-    this.log(`Armed block placement: ${partId} (${color}).`);
-  }
-
-  /**
-   * Returns raw geometry data (positions/normals/uvs) for a stud-block
-   * catalog part, so a custom toolbar tile can render an accurate 3D
-   * thumbnail of the actual block shape instead of a flat color swatch.
-   */
-  getBlockGeometry(partId: string): { positions: number[]; normals: number[]; uvs?: number[] } | null {
-    const part = getBlockPart(partId);
-    if (!part) return null;
-    return geometryToData(buildBlockGeometry(part));
-  }
-
-  listBlockParts(): { id: string; label: string; category: string }[] {
-    return BLOCK_CATALOG.map(p => ({ id: p.id, label: p.label, category: p.category }));
   }
 
   openWebpage(url: string): void {
