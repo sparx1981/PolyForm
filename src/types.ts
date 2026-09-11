@@ -458,6 +458,8 @@ export interface AppState {
   };
   setRectangleInputState: (state: any | ((prev: any) => any)) => void;
   syncStatus: 'synced' | 'syncing' | 'error' | 'offline' | 'unsaved';
+  syncErrorMessage: string | null;
+  retrySync: () => void;
   isDiagnosticLogOpen: boolean;
   setIsDiagnosticLogOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   lastInteractionData: any;

@@ -49,11 +49,20 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     incrementReads
   } = useApp();
 
-  const [models, setModels] = useState<SavedModel[]>([]);
+  type ModelFilter = 'recent' | 'all' | 'me' | 'shared';
+
+  // Kept as one bucket per filter tab (not a single shared list) so switching
+  // tabs never discards another tab's already-fetched results, and an
+  // in-flight fetch for one filter can never clobber a different filter's
+  // data if the user switches tabs before it resolves.
+  const [modelsByFilter, setModelsByFilter] = useState<Record<ModelFilter, SavedModel[]>>({
+    recent: [], all: [], me: [], shared: []
+  });
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [filter, setFilter] = useState<'recent' | 'all' | 'me' | 'shared'>('recent');
+  const [filter, setFilter] = useState<ModelFilter>('recent');
   const [searchQuery, setSearchQuery] = useState('');
+  const models = modelsByFilter[filter];
   
   // Password protection states
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -85,16 +94,19 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
 
   const fetchModels = async (force = false) => {
     if (!user) return;
-    
+
+    // Capture which filter this fetch is FOR, independent of whatever the
+    // user has selected by the time the query resolves.
+    const requestedFilter = filter;
     const now = Date.now();
-    const lastFetchTime = lastFetched[filter] || 0;
-    
+    const lastFetchTime = lastFetched[requestedFilter] || 0;
+
     // Use cache if fresh, or if quota is locked and we have data
     if (!force && lastFetchTime && now - lastFetchTime < CACHE_TIME) {
       return;
     }
 
-    if (isQuotaLocked() && models.length > 0) {
+    if (isQuotaLocked() && modelsByFilter[requestedFilter].length > 0) {
       console.warn('[QUOTA] Using existing model cache during lockdown');
       return;
     }
@@ -109,26 +121,26 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
       let q;
       const modelsRef = collection(db, 'models');
 
-      if (filter === 'recent') {
+      if (requestedFilter === 'recent') {
         // Your models
         q = query(
-          modelsRef, 
+          modelsRef,
           where('userId', '==', user.uid)
         );
-      } else if (filter === 'me') {
+      } else if (requestedFilter === 'me') {
         q = query(
-          modelsRef, 
+          modelsRef,
           where('userId', '==', user.uid)
         );
-      } else if (filter === 'shared') {
+      } else if (requestedFilter === 'shared') {
         q = query(
-          modelsRef, 
+          modelsRef,
           where('isPublic', '==', true)
         );
       } else {
         // All models (mine + public)
         q = query(
-          modelsRef, 
+          modelsRef,
           or(
             where('userId', '==', user.uid),
             where('isPublic', '==', true)
@@ -140,12 +152,12 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
       incrementReads(querySnapshot.size || 1);
       const fetchedModels = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        return { 
-          id: doc.id, 
+        return {
+          id: doc.id,
           ...data as any
         } as SavedModel;
       });
-      
+
       // Secondary client-side sort
       fetchedModels.sort((a, b) => {
         const dateA = safelyToDate(a.updatedAt);
@@ -155,8 +167,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         return timeB - timeA;
       });
 
-      setModels(fetchedModels);
-      setLastFetched(prev => ({ ...prev, [filter]: now }));
+      // Written into this filter's own bucket, so a fetch that resolves
+      // after the user has switched tabs still lands in the right place
+      // instead of overwriting whatever tab is currently selected.
+      setModelsByFilter(prev => ({ ...prev, [requestedFilter]: fetchedModels }));
+      setLastFetched(prev => ({ ...prev, [requestedFilter]: now }));
     } catch (err) {
       console.error('Fetch models error:', err);
       handleFirestoreError(err, OperationType.LIST, 'models');
@@ -176,7 +191,14 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     setIsDeleting(true);
     try {
       await deleteDoc(doc(db, 'models', id));
-      setModels(prev => prev.filter(m => m.id !== id));
+      // A deleted model can appear in more than one tab's bucket (e.g. both
+      // "Recent"/"My Models" and "All Models"), so remove it from all of them.
+      setModelsByFilter(prev => ({
+        recent: prev.recent.filter(m => m.id !== id),
+        all: prev.all.filter(m => m.id !== id),
+        me: prev.me.filter(m => m.id !== id),
+        shared: prev.shared.filter(m => m.id !== id)
+      }));
       
       // If the deleted model was the current one, reset state
       if (currentModelId === id) {
@@ -262,7 +284,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
 
       await addDoc(collection(db, 'models'), newModel);
       alert('Model copied to your library!');
-      fetchModels();
+      fetchModels(true);
     } catch (err) {
       console.error('Copy error:', err);
       handleFirestoreError(err, OperationType.CREATE, 'models');
@@ -288,7 +310,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         updatedAt: serverTimestamp()
       });
       setIsShareModalOpen(false);
-      fetchModels();
+      fetchModels(true);
       alert('Model is now public!');
     } catch (err) {
       console.error('Share error:', err);
@@ -305,7 +327,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
             isPublic: false,
             updatedAt: serverTimestamp()
           });
-          fetchModels();
+          fetchModels(true);
         } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, `models/${model.id}`);
         }

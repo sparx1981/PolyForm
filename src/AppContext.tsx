@@ -242,6 +242,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [history, setHistory] = useState<Shape[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline' | 'unsaved'>('unsaved');
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const [quotaLockdownTime, setQuotaLockdownTime] = useState<number>(0);
   const [totalReads, setTotalReads] = useState(0);
   
@@ -340,6 +341,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const pushInProgress = useRef(false);
   const needsSync = useRef(false);
   const lastStateHash = useRef('');
+  const syncRetryTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncRetryCount = useRef(0);
+  const retrySyncRef = useRef<(() => void) | null>(null);
 
   // Developer Suite
   const [isDeveloperConsoleOpen, setIsDeveloperConsoleOpen] = useState(false);
@@ -834,8 +838,8 @@ console.log("Created rectangle:", myRect.id);`);
       incrementReads(snapshot.size || 1);
       setCollaborators(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Collaborator[]);
     }, (error) => {
-       handleFirestoreError(error, OperationType.GET, 'collaborations');
-       setQuotaLockdownTime(Date.now() + 600000);
+       const result = handleFirestoreError(error, OperationType.GET, 'collaborations');
+       if (result.isQuotaError) setQuotaLockdownTime(Date.now() + 600000);
     });
 
     // 2. Sync Chat Messages
@@ -893,14 +897,16 @@ console.log("Created rectangle:", myRect.id);`);
         if (data.timberFrameParams) setTimberFrameParams(data.timberFrameParams);
         if (data.terrainModifiers && Array.isArray(data.terrainModifiers)) setTerrainModifiers(data.terrainModifiers.filter((m: any) => m.type !== 'pad'));
         if (data.name) setCurrentModelName(data.name);
-        
+
         setSyncStatus('synced');
+        setSyncErrorMessage(null);
       }
     }, (error) => {
       console.error('[Model Sync] Error:', error);
       setSyncStatus('error');
-      handleFirestoreError(error, OperationType.GET, `models/${currentModelId}`);
-      setQuotaLockdownTime(Date.now() + 600000);
+      const result = handleFirestoreError(error, OperationType.GET, `models/${currentModelId}`);
+      setSyncErrorMessage(result.message);
+      if (result.isQuotaError) setQuotaLockdownTime(Date.now() + 600000);
     });
 
     // Ensure we have a collaboration document for presence
@@ -977,22 +983,30 @@ console.log("Created rectangle:", myRect.id);`);
       return;
     }
 
+    // A genuinely new local edit - drop any backoff retry left over from a
+    // previous failure and start counting fresh for this attempt.
+    if (syncRetryTimeoutId.current) {
+      clearTimeout(syncRetryTimeoutId.current);
+      syncRetryTimeoutId.current = null;
+    }
+    syncRetryCount.current = 0;
+
     const sync = async () => {
       if (checkQuota()) return;
       if (pushInProgress.current) {
         needsSync.current = true;
         return;
       }
-      
+
       pushInProgress.current = true;
       setSyncStatus('syncing');
-      
+
       try {
-        const stateToPush = cleanData({ 
-          shapes, 
-          tags, 
-          scenes, 
-          customMaterials, 
+        const stateToPush = cleanData({
+          shapes,
+          tags,
+          scenes,
+          customMaterials,
           animations,
           notes,
           customLights,
@@ -1003,16 +1017,31 @@ console.log("Created rectangle:", myRect.id);`);
           // unmount when you switch documents it also leaks between them:
           // the previous model's surfaces appear in the next one.
           kernel: serializeGraph(kernelHost.graph),
-          updatedAt: serverTimestamp() 
+          updatedAt: serverTimestamp()
         });
-        
+
         await updateDoc(doc(db, 'models', currentModelId), stateToPush);
         lastStateHash.current = currentStateHash;
         setSyncStatus('synced');
+        setSyncErrorMessage(null);
+        syncRetryCount.current = 0;
       } catch (error: any) {
         console.error('[Sync] Error pushing to Firestore:', error);
         setSyncStatus('error');
-        handleFirestoreError(error, OperationType.UPDATE, `models/${currentModelId}`);
+        const result = handleFirestoreError(error, OperationType.UPDATE, `models/${currentModelId}`);
+        setSyncErrorMessage(result.message);
+
+        // Auto-retry with exponential backoff. Quota lockdowns are skipped
+        // here since checkQuota() already blocks pushes until it clears -
+        // retrying immediately would just fail the same way.
+        if (!result.isQuotaError && syncRetryCount.current < 5) {
+          const delay = Math.min(60000, 10000 * Math.pow(2, syncRetryCount.current));
+          syncRetryCount.current += 1;
+          syncRetryTimeoutId.current = setTimeout(() => {
+            syncRetryTimeoutId.current = null;
+            sync();
+          }, delay);
+        }
       } finally {
         pushInProgress.current = false;
         if (needsSync.current) {
@@ -1022,9 +1051,29 @@ console.log("Created rectangle:", myRect.id);`);
       }
     };
 
+    // Lets the "Sync Error" status badge trigger an immediate manual retry.
+    retrySyncRef.current = () => {
+      if (syncRetryTimeoutId.current) {
+        clearTimeout(syncRetryTimeoutId.current);
+        syncRetryTimeoutId.current = null;
+      }
+      syncRetryCount.current = 0;
+      sync();
+    };
+
     const timeoutId = setTimeout(sync, 5000); // 5 second debounce for model synchronization
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+      if (syncRetryTimeoutId.current) {
+        clearTimeout(syncRetryTimeoutId.current);
+        syncRetryTimeoutId.current = null;
+      }
+    };
   }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers]);
+
+  const retrySync = useCallback(() => {
+    retrySyncRef.current?.();
+  }, []);
 
   // Service Worker
 
@@ -1955,6 +2004,8 @@ console.log("Created rectangle:", myRect.id);`);
       zoom,
       setZoom,
       syncStatus,
+      syncErrorMessage,
+      retrySync,
       isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
       // Architecture & Landscapes Toolbars

@@ -53,7 +53,7 @@ deform: 'Click and drag on the surface to deform it.',
 };
 
 export default function StatusBar() {
-const { measurements, setMeasurements, activeTool, unit, zoom, rectangleInputState, setRectangleInputState, syncStatus, isQuotaLocked } = useApp();
+const { measurements, setMeasurements, activeTool, unit, zoom, rectangleInputState, setRectangleInputState, syncStatus, syncErrorMessage, retrySync, isQuotaLocked } = useApp();
 
 const defaultVal = unit === 'mm' ? '0.0 mm' : unit === 'cm' ? '0.00 cm' : '0.000 m';
 const quotaLocked = isQuotaLocked();
@@ -92,10 +92,15 @@ return (
 </div>
 )}
 {syncStatus === 'error' && (
-<div className="flex items-center gap-1.5 text-red-500">
+<button
+  type="button"
+  onClick={retrySync}
+  title={`${syncErrorMessage || 'Cloud save failed.'} Click to retry now.`}
+  className="flex items-center gap-1.5 text-red-500 hover:text-red-600 cursor-pointer"
+>
 <AlertTriangle size={12} />
-<span className="font-bold uppercase tracking-widest text-[9px]">Sync Error</span>
-</div>
+<span className="font-bold uppercase tracking-widest text-[9px]">Sync Error - Retry</span>
+</button>
 )}
 {syncStatus === 'offline' && (
 <div className="flex items-center gap-1.5 text-gray-400">
