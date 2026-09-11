@@ -181,6 +181,7 @@ export interface SDK {
   createPyramid: (args: { radius: number, height: number, position?: [number, number, number] }) => Shape;
   createDonut: (args: { radius: number, tube: number, position?: [number, number, number] }) => Shape;
   createDome: (args: { radius: number, position?: [number, number, number] }) => Shape;
+  createCylinder: (args: { radius: number, height: number, radiusTop?: number, position?: [number, number, number] }) => Shape;
   createPoly: (args: { vertices: [number, number, number][], position?: [number, number, number] }) => Shape;
   addObject: (type: Shape['type'], props: Partial<Shape>) => Shape;
   pushPull: (shape: Shape, amount: number) => Shape;
@@ -2173,6 +2174,10 @@ export class DeveloperSDK implements SDK {
 
   createDome(args: { radius: number, position?: [number, number, number] }): Shape {
     return this._createShape('dome', [args.radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2], args.position);
+  }
+
+  createCylinder(args: { radius: number, height: number, radiusTop?: number, position?: [number, number, number] }): Shape {
+    return this._createShape('cylinder', [args.radiusTop ?? args.radius, args.radius, args.height, 32], args.position);
   }
 
   createPoly(args: { vertices: [number, number, number][], position?: [number, number, number] }): Shape {

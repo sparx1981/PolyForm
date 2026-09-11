@@ -9360,6 +9360,8 @@ function Scene() {
             <torusGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 0.4, 16, 100]) as any} />
           ) : shape.type === 'dome' ? (
             <sphereGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 32, 32]) as any} />
+          ) : shape.type === 'cylinder' ? (
+            <cylinderGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 1, 1, 32]) as any} />
           ) : shape.type === 'poly' ? (
             <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={computeHolesForSlab(shape, shapes)} />
           ) : ['wall', 'door', 'window', 'step', 'staircase', 'scale_figure'].includes(shape.type) ? (

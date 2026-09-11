@@ -1965,8 +1965,12 @@ if (obj) {
         },
         {
           name: "Create Cylinder / Sphere / Cone",
-          code: `sdk.createSphere({ radius: 1.5, position: [3, 1.5, 0] });
-sdk.createCone({ radius: 1.2, height: 2.5, position: [-3, 1.25, 0] });`
+          code: `sdk.createCylinder({ radius: 1.0, height: 2.5, position: [0, 1.25, 0] });
+sdk.createSphere({ radius: 1.5, position: [3, 1.5, 0] });
+sdk.createCone({ radius: 1.2, height: 2.5, position: [-3, 1.25, 0] });
+
+// radiusTop lets you taper a cylinder (e.g. a truncated cone / bucket shape)
+sdk.createCylinder({ radius: 1.2, radiusTop: 0.6, height: 1.5, position: [6, 0.75, 0] });`
         },
         {
           name: "Push-Pull Face Extrusion",
@@ -2365,6 +2369,166 @@ sdk.selection.setMode("marquee");`
           name: "Save a Named Scene Snapshot",
           code: `// Snapshots the current scene under a name you can reload later from the Scenes panel
 sdk.scene.saveScene("Pre-Renovation Baseline");`
+        }
+      ]
+    },
+    {
+      title: "Example: Parametric Stud-Block Builder (LEGO-style)",
+      icon: <Box className="w-4 h-4 text-red-500" />,
+      items: [
+        {
+          name: "Generate a Single Stud Brick",
+          code: `// A reusable "brick" generator built entirely from primitives -
+// the same approach a SketchUp-style stud-block extension uses,
+// just expressed with the PolyForm SDK instead of Ruby.
+//
+// Brick geometry uses standard interlocking-block proportions, scaled to meters:
+const STUD_UNIT = 0.08;      // Width/depth of one stud cell
+const BRICK_HEIGHT = 0.096;  // One standard brick course (3 plates)
+const STUD_RADIUS = 0.024;
+const STUD_HEIGHT = 0.017;
+
+// Builds a studsX x studsZ brick at "position" (its base center) and returns the body Shape.
+function createBrick(studsX, studsZ, position, color) {
+  const width = studsX * STUD_UNIT;
+  const depth = studsZ * STUD_UNIT;
+
+  const body = sdk.createBox({
+    width, height: BRICK_HEIGHT, depth,
+    position: [position[0], position[1] + BRICK_HEIGHT / 2, position[2]]
+  });
+  sdk.applyColor(body, color);
+  sdk.setTag(body, "brickSize", \`\${studsX}x\${studsZ}\`);
+
+  // One cylindrical stud per 1x1 cell, centered on top of the brick
+  for (let x = 0; x < studsX; x++) {
+    for (let z = 0; z < studsZ; z++) {
+      const studX = position[0] - width / 2 + STUD_UNIT * (x + 0.5);
+      const studZ = position[2] - depth / 2 + STUD_UNIT * (z + 0.5);
+      const stud = sdk.createCylinder({
+        radius: STUD_RADIUS,
+        height: STUD_HEIGHT,
+        position: [studX, position[1] + BRICK_HEIGHT + STUD_HEIGHT / 2, studZ]
+      });
+      sdk.applyColor(stud, color);
+    }
+  }
+  return body;
+}
+
+// Place a single 2x4 brick at the origin
+createBrick(4, 2, [0, 0, 0], "#dc2626");`
+        },
+        {
+          name: "Assemble a Small Brick Wall (Stacked Courses)",
+          code: `// Re-declare the brick generator from "Generate a Single Stud Brick"
+const STUD_UNIT = 0.08;
+const BRICK_HEIGHT = 0.096;
+const STUD_RADIUS = 0.024;
+const STUD_HEIGHT = 0.017;
+
+function createBrick(studsX, studsZ, position, color) {
+  const width = studsX * STUD_UNIT;
+  const depth = studsZ * STUD_UNIT;
+  const body = sdk.createBox({ width, height: BRICK_HEIGHT, depth, position: [position[0], position[1] + BRICK_HEIGHT / 2, position[2]] });
+  sdk.applyColor(body, color);
+  for (let x = 0; x < studsX; x++) {
+    for (let z = 0; z < studsZ; z++) {
+      const studX = position[0] - width / 2 + STUD_UNIT * (x + 0.5);
+      const studZ = position[2] - depth / 2 + STUD_UNIT * (z + 0.5);
+      const stud = sdk.createCylinder({ radius: STUD_RADIUS, height: STUD_HEIGHT, position: [studX, position[1] + BRICK_HEIGHT + STUD_HEIGHT / 2, studZ] });
+      sdk.applyColor(stud, color);
+    }
+  }
+  return body;
+}
+
+// Stack 3 courses of 2x4 bricks, offset each row like a real brick bond
+// (a "Model Library" preset build would just call helpers like this in sequence)
+const palette = ["#dc2626", "#facc15", "#2563eb"];
+for (let row = 0; row < 3; row++) {
+  const rowOffset = (row % 2 === 0) ? 0 : STUD_UNIT * 2; // Stagger alternating rows
+  createBrick(4, 2, [rowOffset, row * BRICK_HEIGHT, 0], palette[row % palette.length]);
+}
+
+console.log("Brick wall assembled: 3 courses.");`
+        },
+        {
+          name: "Brick Picker Toolbar (Pick a Size, Click to Place)",
+          code: `// Mirrors a SketchUp-style "block picker" dialog: a small floating toolbar
+// where each button places a different standard brick size at the origin.
+const STUD_UNIT = 0.08;
+const BRICK_HEIGHT = 0.096;
+const STUD_RADIUS = 0.024;
+const STUD_HEIGHT = 0.017;
+
+function createBrick(studsX, studsZ, position, color) {
+  const width = studsX * STUD_UNIT;
+  const depth = studsZ * STUD_UNIT;
+  const body = sdk.createBox({ width, height: BRICK_HEIGHT, depth, position: [position[0], position[1] + BRICK_HEIGHT / 2, position[2]] });
+  sdk.applyColor(body, color);
+  for (let x = 0; x < studsX; x++) {
+    for (let z = 0; z < studsZ; z++) {
+      const studX = position[0] - width / 2 + STUD_UNIT * (x + 0.5);
+      const studZ = position[2] - depth / 2 + STUD_UNIT * (z + 0.5);
+      const stud = sdk.createCylinder({ radius: STUD_RADIUS, height: STUD_HEIGHT, position: [studX, position[1] + BRICK_HEIGHT + STUD_HEIGHT / 2, studZ] });
+      sdk.applyColor(stud, color);
+    }
+  }
+  return body;
+}
+
+// Each button's "code" redefines the helper for itself since toolbar button
+// scripts run independently and don't share variables with this outer script.
+const brickPicker = sdk.toolbars.create({
+  title: "Brick Picker",
+  position: "floating",
+  floatPosition: { x: 80, y: 120 },
+  items: [
+    {
+      id: "brick-1x1",
+      label: "1x1",
+      icon: "Box",
+      color: "#dc2626",
+      code: \`
+        const u=0.08,h=0.096,sr=0.024,sh=0.017;
+        const b=sdk.createBox({width:u,height:h,depth:u,position:[0,h/2,0]});
+        sdk.applyColor(b,"#dc2626");
+        sdk.createCylinder({radius:sr,height:sh,position:[0,h+sh/2,0]});
+      \`
+    },
+    {
+      id: "brick-2x2",
+      label: "2x2",
+      icon: "Box",
+      color: "#facc15",
+      code: \`
+        const u=0.08,h=0.096,sr=0.024,sh=0.017;
+        const b=sdk.createBox({width:u*2,height:h,depth:u*2,position:[0.3,h/2,0]});
+        sdk.applyColor(b,"#facc15");
+        for(let x=0;x<2;x++) for(let z=0;z<2;z++){
+          sdk.createCylinder({radius:sr,height:sh,position:[0.3-u+u*(x+0.5),h+sh/2,-u+u*(z+0.5)]});
+        }
+      \`
+    },
+    {
+      id: "brick-2x4",
+      label: "2x4",
+      icon: "Box",
+      color: "#2563eb",
+      code: \`
+        const u=0.08,h=0.096,sr=0.024,sh=0.017;
+        const b=sdk.createBox({width:u*4,height:h,depth:u*2,position:[0.9,h/2,0]});
+        sdk.applyColor(b,"#2563eb");
+        for(let x=0;x<4;x++) for(let z=0;z<2;z++){
+          sdk.createCylinder({radius:sr,height:sh,position:[0.9-u*2+u*(x+0.5),h+sh/2,-u+u*(z+0.5)]});
+        }
+      \`
+    }
+  ]
+});
+
+console.log("Brick Picker toolbar ready:", brickPicker.id);`
         }
       ]
     }
