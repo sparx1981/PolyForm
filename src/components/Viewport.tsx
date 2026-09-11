@@ -5194,13 +5194,18 @@ function Scene() {
       const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
 
       const geom = buildBlockGeometry(part);
+      // Shape rendering prefers `quaternion` over `rotation` whenever a
+      // quaternion is present (even an identity one), so the placed block's
+      // orientation must be expressed as a quaternion here to actually match
+      // the ghost preview, which rotates via a plain Euler `rotation` prop.
+      const placementQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationSteps * (Math.PI / 2), 0));
       const newShape: Shape = {
         id: Math.random().toString(36).substr(2, 9),
         name: part.label,
         type: 'custom',
         position: [snappedX, snappedY, snappedZ],
         rotation: [0, rotationSteps * (Math.PI / 2), 0],
-        quaternion: [0, 0, 0, 1],
+        quaternion: [placementQuat.x, placementQuat.y, placementQuat.z, placementQuat.w],
         args: [1, 1, 1],
         color: activeBlockPart.color,
         roughness: 0.4,

@@ -2559,7 +2559,7 @@ const brickPicker = sdk.toolbars.create({
 console.log("Brick Picker toolbar ready:", brickPicker.id);`
         },
         {
-          name: "Full Block-Kit Extension (Catalog, Assemblies, Parts List & AI Concept)",
+          name: "Full Block-Kit Extension (Catalog & Parts List)",
           code: `// A complete, original Block Picker built entirely with sdk.toolbars - no
 // hardcoded app panel involved. This is the pattern for building ANY richly
 // styled custom toolbar: sliders, checkboxes, colour swatches, tabs and
@@ -2586,9 +2586,14 @@ const CATEGORIES = {
   "Bow & Wedge": ["bow-4x2"]
 };
 
-// Builds the tile-button items for one category, using whatever colour is
-// currently picked in the "Colour" swatch widget (read back via
-// sdk.toolbars.getButton - any widget's live value can be read this way).
+const SWATCH_PALETTE = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"];
+
+// Builds the tile-button items for one category. Each tile's own code
+// resolves the placement colour LIVE, at the moment it's clicked (reading
+// the "Colour" swatch, or picking randomly from the palette when "Random
+// colour" is checked) rather than baking in whatever colour was selected
+// back when the tile button was built - otherwise placed blocks would
+// keep using a stale colour after the user changes the swatch.
 function buildBlockTiles(category) {
   const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
   const color = colourWidget?.selectedColor || "#dc2626";
@@ -2601,24 +2606,15 @@ function buildBlockTiles(category) {
     color,
     previewGeometry: sdk.blockKit.getGeometry(partId),
     tooltip: "Place a " + partId,
-    code: \`sdk.blockKit.place("\${partId}", "\${color}");\`
+    code: \`
+      var rnd = sdk.toolbars.getButton("block-kit-panel", "bk-random-colour");
+      var swatch = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
+      var palette = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"];
+      var c = (rnd && rnd.checked) ? palette[Math.floor(Math.random() * palette.length)] : ((swatch && swatch.selectedColor) || "#dc2626");
+      sdk.blockKit.place("\${partId}", c);
+    \`
   }));
 }
-
-// 2. A small assembly library - each just a list of (part, offset) placements.
-const ASSEMBLY_LIBRARY = {
-  "Garden Planter": [
-    { part: "brick-2x4", offset: [0, 0, 0] },
-    { part: "brick-2x4", offset: [0, 0.096, 0] },
-    { part: "plate-1x2", offset: [0, 0.192, -0.08] }
-  ],
-  "Signal Tower": [
-    { part: "brick-2x2", offset: [0, 0, 0] },
-    { part: "brick-2x2", offset: [0, 0.096, 0] },
-    { part: "brick-2x2", offset: [0, 0.192, 0] },
-    { part: "brick-1x1", offset: [0, 0.288, 0] }
-  ]
-};
 
 const panel = sdk.toolbars.create({
   id: "block-kit-panel",
@@ -2646,35 +2642,14 @@ const panel = sdk.toolbars.create({
       code: \`console.log("Active colour:", value);\`
     },
     {
-      id: "bk-ai-build", label: "AI Build", icon: "Sparkles", color: "#8b5cf6",
-      tooltip: "Generate a massing concept for a build idea via the AI subsystem",
-      code: \`
-        const idea = window.prompt("Describe a build concept (e.g. 'a small lighthouse'):");
-        if (idea) {
-          sdk.ai.generateModel("A blocky, low-poly stud-brick-style model of: " + idea);
-          console.log("Requested AI concept build for:", idea);
-        }
-      \`
-    },
-    {
-      id: "bk-assemblies", label: "Assemblies / Groups", icon: "Layers", color: "#f59e0b",
-      tooltip: "Build one of the saved multi-block assemblies",
-      code: \`
-        const library = {
-          "Garden Planter": [{ part: "brick-2x4", offset: [0, 0, 0] }, { part: "brick-2x4", offset: [0, 0.096, 0] }, { part: "plate-1x2", offset: [0, 0.192, -0.08] }],
-          "Signal Tower": [{ part: "brick-2x2", offset: [0, 0, 0] }, { part: "brick-2x2", offset: [0, 0.096, 0] }, { part: "brick-2x2", offset: [0, 0.192, 0] }, { part: "brick-1x1", offset: [0, 0.288, 0] }]
-        };
-        const name = window.prompt("Build which assembly? (" + Object.keys(library).join(", ") + ")", "Garden Planter");
-        const plan = library[name];
-        if (!plan) { console.log("Unknown assembly:", name); return; }
-        console.log("This places each part with sdk.blockKit.place() one at a time - click in the viewport for each piece:");
-        plan.forEach((step, i) => console.log((i + 1) + ". " + step.part + " at offset " + JSON.stringify(step.offset)));
-        sdk.blockKit.place(plan[0].part, "#94a3b8");
-      \`
+      id: "bk-random-colour", type: "checkbox", label: "Random colour",
+      checked: false,
+      description: "Each block placed gets a random colour from the palette instead of the swatch above.",
+      code: \`console.log("Random colour: " + (value ? "ON" : "OFF"));\`
     },
     {
       id: "bk-parts-list", label: "Used Parts List", icon: "FileText", color: "#10b981",
-      tooltip: "Logs a bill-of-materials for every block placed so far",
+      tooltip: "Shows a bill-of-materials for every block placed so far",
       code: \`
         // sdk.outliner.list() is generic - it returns the id/name/type/tags
         // of every entry the Outliner panel shows, for ANY kind of shape,
@@ -2687,24 +2662,21 @@ const panel = sdk.toolbars.create({
           if (!part) continue;
           counts[part] = (counts[part] || 0) + 1;
         }
-        console.log("--- Used Parts List ---");
         const rows = Object.entries(counts);
-        if (rows.length === 0) console.log("(no blocks placed yet)");
-        rows.forEach(([k, q]) => console.log(q + " x " + k));
+        const summary = rows.length === 0
+          ? "No blocks placed yet."
+          : rows.map(([k, q]) => q + " x " + k).join("\\n");
+        console.log("--- Used Parts List ---\\n" + summary);
+        // Also shown as an alert so the result is visible even with the
+        // Developer Console panel closed.
+        window.alert("Used Parts List:\\n\\n" + summary);
       \`
-    },
-    {
-      id: "bk-model-library", label: "Model Library", icon: "Library", color: "#0891b2",
-      tooltip: "Lists the saved assemblies available to build",
-      code: \`console.log("Model Library:", Object.keys({"Garden Planter":1,"Signal Tower":1}).join(", "));\`
     },
     {
       id: "bk-tabs", type: "tabs", label: "Category",
       options: Object.keys(CATEGORIES), selected: "Basics",
       code: \`
         const tiles = (function buildTiles(category) {
-          const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
-          const color = colourWidget?.selectedColor || "#dc2626";
           const catalog = ${JSON.stringify({
             'Basics': ["brick-1x1", "brick-1x2", "brick-1x4", "brick-2x2", "brick-2x4", "brick-2x8"],
             'Plates & Jumpers': ["plate-1x1", "plate-1x2", "plate-2x2", "plate-2x4"],
@@ -2714,6 +2686,8 @@ const panel = sdk.toolbars.create({
             'Arches': ["arch-2x1", "arch-4x1"],
             'Bow & Wedge': ["bow-4x2"]
           })};
+          const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
+          const color = colourWidget?.selectedColor || "#dc2626";
           return (catalog[category] || []).map(partId => ({
             id: "bk-part-" + partId,
             type: "button",
@@ -2723,7 +2697,7 @@ const panel = sdk.toolbars.create({
             color,
             previewGeometry: sdk.blockKit.getGeometry(partId),
             tooltip: "Place a " + partId,
-            code: 'sdk.blockKit.place("' + partId + '", "' + color + '");'
+            code: 'var rnd = sdk.toolbars.getButton("block-kit-panel", "bk-random-colour"); var swatch = sdk.toolbars.getButton("block-kit-panel", "bk-colour"); var palette = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"]; var c = (rnd && rnd.checked) ? palette[Math.floor(Math.random() * palette.length)] : ((swatch && swatch.selectedColor) || "#dc2626"); sdk.blockKit.place("' + partId + '", c);'
           }));
         })(value);
         sdk.toolbars.configureButton("block-kit-panel", "bk-blocks", { items: tiles });
