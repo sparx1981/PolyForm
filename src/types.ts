@@ -96,6 +96,20 @@ export interface Shape {
   roofData?: any;
   roofTileData?: any;
   textureUrl?: string;
+  // Additional PBR texture map URLs, layered on top of `textureUrl` (the
+  // albedo/diffuse map) and the scalar `roughness`/`metalness` above, which
+  // remain the fallback whenever a given map is not supplied. Albedo is the
+  // only map that should ever be sRGB-decoded - all of these must be loaded
+  // as linear data or they will visibly distort (see getCachedPBRTexture).
+  normalMapUrl?: string;
+  normalScale?: number;
+  roughnessMapUrl?: string;
+  metalnessMapUrl?: string;
+  aoMapUrl?: string;
+  aoMapIntensity?: number;
+  displacementMapUrl?: string;
+  displacementScale?: number;
+  materialPreset?: string;
   isParametric?: boolean;
   parametricData?: any;
   customData?: any;

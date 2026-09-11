@@ -144,6 +144,7 @@ import {
 } from '../lib/landscapeGeometry';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
+import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
 import { createTerrainShape } from '../lib/terrain/terrainFactory';
 import { generateTimberFraming, TimberFrameOptions } from '../lib/timberFrameGenerator';
 import {
@@ -1449,7 +1450,14 @@ export class DeveloperSDK implements SDK {
         metalness?: number;
         opacity?: number;
         textureUrl?: string;
+        normalMapUrl?: string;
         normalScale?: number;
+        roughnessMapUrl?: string;
+        metalnessMapUrl?: string;
+        aoMapUrl?: string;
+        aoMapIntensity?: number;
+        displacementMapUrl?: string;
+        displacementScale?: number;
         uvScale?: number;
       }): void => {
         const targetId = typeof target === 'string' ? target : target.id;
@@ -1459,23 +1467,46 @@ export class DeveloperSDK implements SDK {
             if (material.startsWith('#') || material.startsWith('rgb')) {
               return { ...s, color: material };
             }
+            // Named preset (e.g. 'red-brick') - apply its real color/roughness/
+            // metalness and whatever real texture maps it carries, and clear any
+            // maps a previous preset left behind that this one doesn't supply.
+            const preset = getMaterialPreset(material);
+            if (!preset) {
+              this.log(`Unknown material preset "${material}" - see sdk.materials.listPresets().`);
+              return s;
+            }
             return {
               ...s,
-              material: { name: material, preset: material },
-              tags: [...(s.tags || []).filter(t => !t.startsWith('material-')), `material-${material}`]
+              color: preset.color,
+              roughness: preset.roughness,
+              metalness: preset.metalness,
+              opacity: preset.opacity ?? 1.0,
+              materialPreset: preset.id,
+              textureUrl: preset.textureUrl,
+              normalMapUrl: preset.normalMapUrl,
+              roughnessMapUrl: preset.roughnessMapUrl,
+              metalnessMapUrl: preset.metalnessMapUrl,
+              aoMapUrl: preset.aoMapUrl,
+              displacementMapUrl: preset.displacementMapUrl,
+              tags: [...(s.tags || []).filter(t => !t.startsWith('material-')), `material-${preset.id}`]
             };
           }
           return {
             ...s,
-            color: material.color || s.color,
-            pbr: {
-              roughness: material.roughness ?? 0.5,
-              metalness: material.metalness ?? 0.0,
-              opacity: material.opacity ?? 1.0,
-              normalScale: material.normalScale ?? 1.0,
-              uvScale: material.uvScale ?? 1.0,
-              textureUrl: material.textureUrl
-            }
+            color: material.color ?? s.color,
+            roughness: material.roughness ?? s.roughness ?? 0.5,
+            metalness: material.metalness ?? s.metalness ?? 0.0,
+            opacity: material.opacity ?? s.opacity ?? 1.0,
+            textureUrl: material.textureUrl ?? s.textureUrl,
+            normalMapUrl: material.normalMapUrl ?? s.normalMapUrl,
+            normalScale: material.normalScale ?? s.normalScale,
+            roughnessMapUrl: material.roughnessMapUrl ?? s.roughnessMapUrl,
+            metalnessMapUrl: material.metalnessMapUrl ?? s.metalnessMapUrl,
+            aoMapUrl: material.aoMapUrl ?? s.aoMapUrl,
+            aoMapIntensity: material.aoMapIntensity ?? s.aoMapIntensity,
+            displacementMapUrl: material.displacementMapUrl ?? s.displacementMapUrl,
+            displacementScale: material.displacementScale ?? s.displacementScale,
+            materialPreset: undefined
           };
         }));
         this.log(`Applied material to ${targetId}: ${typeof material === 'string' ? material : JSON.stringify(material)}`);
@@ -1498,11 +1529,7 @@ export class DeveloperSDK implements SDK {
       },
 
       listPresets: (): string[] => {
-        return [
-          'red-brick', 'coursed-stone', 'polished-concrete', 'stucco-white', 
-          'vertical-timber', 'architectural-glass', 'standing-seam-zinc',
-          'weathered-steel', 'travertine-marble', 'terracotta-tile', 'black-granite'
-        ];
+        return MATERIAL_PRESETS.map(p => p.id);
       },
 
       configureMaterialDefaults: (settings: MaterialConfigDefaults): void => {

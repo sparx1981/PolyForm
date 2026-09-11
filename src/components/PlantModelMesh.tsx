@@ -123,10 +123,10 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
 
         // Load 2K Botanical PBR Texture maps
         const albedoTex = getCachedPlantTexture(`${textureBase}BaseColor.jpg`);
-        const opacityTex = getCachedPlantTexture(`${textureBase}Opacity.jpg`);
-        const normalTex = getCachedPlantTexture(`${textureBase}Normal.jpg`);
-        const roughnessTex = getCachedPlantTexture(`${textureBase}Roughness.jpg`);
-        const aoTex = getCachedPlantTexture(`${textureBase}AO.jpg`);
+        const opacityTex = getCachedPlantTexture(`${textureBase}Opacity.jpg`, false);
+        const normalTex = getCachedPlantTexture(`${textureBase}Normal.jpg`, false);
+        const roughnessTex = getCachedPlantTexture(`${textureBase}Roughness.jpg`, false);
+        const aoTex = getCachedPlantTexture(`${textureBase}AO.jpg`, false);
 
         // Compute bounding box and normalize grass scale
         const box = new THREE.Box3().setFromObject(cloned);
@@ -152,6 +152,13 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
             // Remove any vertex colors that could tint or conflict with the albedo texture
             if (mesh.geometry.attributes.color) {
               mesh.geometry.deleteAttribute('color');
+            }
+
+            // aoMap requires a second UV channel - reuse the primary UVs since
+            // this geometry has no separate lightmap UVs of its own.
+            const uvAttr = mesh.geometry.attributes.uv;
+            if (uvAttr && !mesh.geometry.attributes.uv2) {
+              mesh.geometry.setAttribute('uv2', uvAttr);
             }
 
             mesh.material = new THREE.MeshStandardMaterial({

@@ -29,10 +29,10 @@ export function PlantFBXMesh({ shape, selectedId, meshProps, selectionHighlight 
 
       // Load PBR Texture maps
       const albedoTex = getCachedPlantTexture(`${textureBase}BaseColor.jpg`);
-      const opacityTex = getCachedPlantTexture(`${textureBase}Opacity.jpg`);
-      const normalTex = getCachedPlantTexture(`${textureBase}Normal.jpg`);
-      const roughnessTex = getCachedPlantTexture(`${textureBase}Roughness.jpg`);
-      const aoTex = getCachedPlantTexture(`${textureBase}AO.jpg`);
+      const opacityTex = getCachedPlantTexture(`${textureBase}Opacity.jpg`, false);
+      const normalTex = getCachedPlantTexture(`${textureBase}Normal.jpg`, false);
+      const roughnessTex = getCachedPlantTexture(`${textureBase}Roughness.jpg`, false);
+      const aoTex = getCachedPlantTexture(`${textureBase}AO.jpg`, false);
 
       // Scale model appropriately based on shape scale and botanical dimensions (FBX units are cm -> 0.015m)
       const scaleMultiplier = (shape.scale ? shape.scale[0] : 1) * 0.015;
@@ -45,6 +45,12 @@ export function PlantFBXMesh({ shape, selectedId, meshProps, selectionHighlight 
           const mesh = child as THREE.Mesh;
           mesh.castShadow = true;
           mesh.receiveShadow = true;
+          // aoMap requires a second UV channel - reuse the primary UVs since
+          // this geometry has no separate lightmap UVs of its own.
+          const uvAttr = mesh.geometry.attributes.uv;
+          if (uvAttr && !mesh.geometry.attributes.uv2) {
+            mesh.geometry.setAttribute('uv2', uvAttr);
+          }
           mesh.material = new THREE.MeshStandardMaterial({
             map: albedoTex,
             alphaMap: opacityTex,

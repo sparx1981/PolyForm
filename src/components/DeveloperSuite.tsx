@@ -1826,6 +1826,32 @@ if (obj) {
 }`
         },
         {
+          name: "Apply a Full Multi-Map PBR Material (Normal / Roughness / AO)",
+          code: `// Supply real texture map URLs (e.g. files placed under public/textures/...,
+// such as a downloaded Poly Haven texture set) for a physically-based look
+// beyond flat color + scalar roughness/metalness. Only "textureUrl" (the
+// diffuse/albedo map) should ever be a color image - normal/roughness/
+// metalness/AO maps store linear data and are handled correctly as such.
+const block = sdk.createBox({ width: 3, height: 3, depth: 3, position: [8, 1.5, 0] });
+sdk.select(block.id);
+
+const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.materials.applyMaterial(obj.id, {
+    textureUrl: "/textures/materials/red-brick/diffuse.jpg",
+    normalMapUrl: "/textures/materials/red-brick/normal.jpg",
+    normalScale: 1.0,
+    roughnessMapUrl: "/textures/materials/red-brick/roughness.jpg",
+    aoMapUrl: "/textures/materials/red-brick/ao.jpg",
+    aoMapIntensity: 1.0
+  });
+}
+
+// Any map you omit simply falls back to the shape's existing scalar
+// roughness/metalness/color, so you can supply just a normal map, just an
+// AO map, or all of them together.`
+        },
+        {
           name: "Configure Architectural Edge Lines",
           code: `// Crisp outlines highlight model contours and massing
 sdk.materials.setEdgeLines({

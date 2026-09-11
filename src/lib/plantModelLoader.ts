@@ -8,15 +8,19 @@ const modelCache = new Map<string, THREE.Group>();
 const loadingPromises = new Map<string, Promise<THREE.Group>>();
 const textureCache = new Map<string, THREE.Texture>();
 
-export function getCachedPlantTexture(url: string): THREE.Texture {
-  if (textureCache.has(url)) {
-    return textureCache.get(url)!;
+// isColorData: true for albedo/emissive maps (sRGB-encoded), false for
+// normal/roughness/metalness/AO/displacement maps, which store linear data
+// and must NOT be sRGB-decoded or their values come out visibly wrong.
+export function getCachedPlantTexture(url: string, isColorData: boolean = true): THREE.Texture {
+  const cacheKey = `${url}|${isColorData ? 'srgb' : 'linear'}`;
+  if (textureCache.has(cacheKey)) {
+    return textureCache.get(cacheKey)!;
   }
   const texture = new THREE.TextureLoader().load(url);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.colorSpace = isColorData ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  textureCache.set(url, texture);
+  textureCache.set(cacheKey, texture);
   return texture;
 }
 

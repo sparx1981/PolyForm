@@ -279,6 +279,28 @@ function getCachedTexture(url: string): THREE.Texture {
   return tex;
 }
 
+// Loader for the non-albedo PBR map slots (normal/roughness/metalness/AO/
+// displacement). These store linear data, not color, so unlike
+// getCachedTexture() above this must never set SRGBColorSpace - doing so
+// would visibly distort normals and mis-scale roughness/metalness/AO values.
+const _polyformPBRMapCache = new Map<string, THREE.Texture>();
+function getCachedPBRMapTexture(url?: string): THREE.Texture | undefined {
+  if (!url) return undefined;
+  let tex = _polyformPBRMapCache.get(url);
+  if (tex) return tex;
+  tex = _polyformTextureLoader.load(url, (loaded) => {
+    loaded.wrapS = THREE.RepeatWrapping;
+    loaded.wrapT = THREE.RepeatWrapping;
+    loaded.colorSpace = THREE.NoColorSpace;
+    loaded.needsUpdate = true;
+  });
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.NoColorSpace;
+  _polyformPBRMapCache.set(url, tex);
+  return tex;
+}
+
 const fogFragmentShader = `
   uniform vec3 color1;
   uniform vec3 color2;
@@ -9205,17 +9227,31 @@ function Scene() {
           }
         }
 
+        // Optional PBR map slots beyond the diffuse/albedo map. Spread onto
+        // every meshStandardMaterial below - undefined props are no-ops.
+        const pbrMapProps = {
+          normalMap: getCachedPBRMapTexture(shape.normalMapUrl),
+          normalScale: shape.normalMapUrl ? new THREE.Vector2(shape.normalScale ?? 1, shape.normalScale ?? 1) : undefined,
+          roughnessMap: getCachedPBRMapTexture(shape.roughnessMapUrl),
+          metalnessMap: getCachedPBRMapTexture(shape.metalnessMapUrl),
+          aoMap: getCachedPBRMapTexture(shape.aoMapUrl),
+          aoMapIntensity: shape.aoMapUrl ? (shape.aoMapIntensity ?? 1) : undefined,
+          displacementMap: getCachedPBRMapTexture(shape.displacementMapUrl),
+          displacementScale: shape.displacementMapUrl ? (shape.displacementScale ?? 0.1) : undefined,
+        };
+
         const materialElements = shape.type === 'box' && shape.surfaceMaterials && !shape.bevelAmount ? (
           [0, 2, 4, 6, 8, 10].map((idx) => {
             const mat = shape.surfaceMaterials?.[idx] || shape.color;
             return isTextureUrl(mat) ? (
-              <meshStandardMaterial 
+              <meshStandardMaterial
                 key={idx}
                 attach={`material-${idx/2}`}
-                map={getCachedTexture(mat)} 
+                map={getCachedTexture(mat)}
                 color="#ffffff"
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
+                {...pbrMapProps}
                 transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
                 opacity={effectiveOpacity}
                 depthWrite={effectiveOpacity >= 0.85}
@@ -9224,12 +9260,13 @@ function Scene() {
                 emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
               />
             ) : (
-              <meshStandardMaterial 
+              <meshStandardMaterial
                 key={idx}
                 attach={`material-${idx/2}`}
-                color={mat} 
+                color={mat}
                 roughness={shape.roughness ?? 0.5}
                 metalness={shape.metalness ?? 0}
+                {...pbrMapProps}
                 transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
                 opacity={effectiveOpacity}
                 depthWrite={effectiveOpacity >= 0.85}
@@ -9241,11 +9278,12 @@ function Scene() {
           })
         ) : (
           isTextureUrl(shape.color) ? (
-            <meshStandardMaterial 
-              map={getCachedTexture(shape.color)} 
+            <meshStandardMaterial
+              map={getCachedTexture(shape.color)}
               color="#ffffff"
               roughness={shape.roughness ?? 0.5}
               metalness={shape.metalness ?? 0}
+              {...pbrMapProps}
               transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
               opacity={effectiveOpacity}
               depthWrite={effectiveOpacity >= 0.85}
@@ -9254,10 +9292,11 @@ function Scene() {
               emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
             />
           ) : (
-            <meshStandardMaterial 
-              color={shape.color} 
+            <meshStandardMaterial
+              color={shape.color}
               roughness={shape.roughness || 0.5}
               metalness={shape.metalness || 0}
+              {...pbrMapProps}
               transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
               opacity={effectiveOpacity}
               depthWrite={effectiveOpacity >= 0.85}
@@ -9458,11 +9497,12 @@ function Scene() {
 
               if (resolvedTexUrl) {
                 return (
-                  <meshStandardMaterial 
-                    map={getCachedTexture(resolvedTexUrl)} 
+                  <meshStandardMaterial
+                    map={getCachedTexture(resolvedTexUrl)}
                     color="#ffffff"
                     roughness={shape.roughness ?? 0.8}
                     metalness={shape.metalness ?? 0.05}
+                    {...pbrMapProps}
                     transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
                     opacity={effectiveOpacity}
                     depthWrite={effectiveOpacity >= 0.85}
@@ -9476,11 +9516,12 @@ function Scene() {
               const hasVertexColors = isTerrainHeatmap || shape.type === 'scale_figure' || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0);
 
               return (
-                <meshStandardMaterial 
-                  color={hasVertexColors ? '#ffffff' : (shape.color || '#ffffff')} 
+                <meshStandardMaterial
+                  color={hasVertexColors ? '#ffffff' : (shape.color || '#ffffff')}
                   vertexColors={hasVertexColors}
                   roughness={shape.roughness ?? 0.8}
                   metalness={shape.metalness ?? 0.05}
+                  {...(hasVertexColors ? {} : pbrMapProps)}
                   transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
                   opacity={effectiveOpacity}
                   depthWrite={effectiveOpacity >= 0.85}
