@@ -10,7 +10,7 @@ export const PLATE_HEIGHT = BRICK_HEIGHT / 3;
 export const STUD_RADIUS = 0.024;
 export const STUD_HEIGHT = 0.017;
 
-export type BlockShapeKind = 'rect' | 'round' | 'slope' | 'arch' | 'bow';
+export type BlockShapeKind = 'rect' | 'round' | 'slope' | 'arch' | 'bow' | 'dome';
 export type BlockHeightKind = 'brick' | 'plate' | 'tile';
 
 export interface BlockPart {
@@ -21,6 +21,10 @@ export interface BlockPart {
   studsZ: number;
   heightKind: BlockHeightKind;
   shapeKind: BlockShapeKind;
+  // "Side / SNOT" (studs-not-on-top) pieces: a single stud on the front
+  // vertical face instead of (or as well as) the top, for building
+  // perpendicular to the main stud direction.
+  sideStud?: boolean;
 }
 
 function heightFor(heightKind: BlockHeightKind): number {
@@ -111,6 +115,13 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
       bodyGeo.translate(0, 0, -(bb.min.z + bb.max.z) / 2);
       break;
     }
+    case 'dome': {
+      // A rounded foliage/nature piece - a hemisphere sitting on the
+      // footprint, roughly the same overall proportions as a round brick.
+      const domeRadius = Math.min(width, depth) / 2;
+      bodyGeo = new THREE.SphereGeometry(domeRadius, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+      break;
+    }
     case 'rect':
     default: {
       bodyGeo = new THREE.BoxGeometry(width, height, depth);
@@ -119,8 +130,12 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
     }
   }
   if (part.shapeKind === 'round') {
+    // CylinderGeometry is centered on its own origin by default; shift it
+    // up so its base sits at y=0 like every other part.
     bodyGeo.translate(0, height / 2, 0);
   }
+  // The 'dome' hemisphere (thetaLength = PI/2, i.e. only the top half of
+  // the sphere) already has its flat cut at y=0, so it needs no shift.
   geoms.push(bodyGeo);
 
   // Only flat-topped rectangular blocks get a full grid of studs - a slope
@@ -143,6 +158,15 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
     const studGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
     studGeo.translate(0, height + STUD_HEIGHT / 2, 0);
     geoms.push(studGeo);
+  }
+
+  if (part.sideStud) {
+    // A single stud on the front (+Z) vertical face, laid on its side, for
+    // building perpendicular to the normal stud direction ("SNOT" pieces).
+    const sideStudGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
+    sideStudGeo.rotateX(Math.PI / 2);
+    sideStudGeo.translate(0, height / 2, depth / 2 + STUD_HEIGHT / 2);
+    geoms.push(sideStudGeo);
   }
 
   const normalized = geoms.map(g => {
@@ -222,8 +246,25 @@ function bows(): BlockPart[] {
   }));
 }
 
+function nature(): BlockPart[] {
+  const sizes: [number, number][] = [[1, 1], [2, 2], [4, 4]];
+  return sizes.map(([x, z]) => ({
+    id: `leaf-${x}x${z}`, label: `${x}x${z} Foliage`, category: 'Nature',
+    studsX: x, studsZ: z, heightKind: 'brick', shapeKind: 'dome'
+  }));
+}
+
+function sideSnot(): BlockPart[] {
+  const sizes: [number, number][] = [[1, 1], [1, 2]];
+  return sizes.map(([x, z]) => ({
+    id: `bracket-${x}x${z}`, label: `${x}x${z} Bracket`, category: 'Side / SNOT',
+    studsX: x, studsZ: z, heightKind: 'plate', shapeKind: 'rect', sideStud: true
+  }));
+}
+
 export const BLOCK_CATALOG: BlockPart[] = [
-  ...basics(), ...plates(), ...tiles(), ...slopes(), ...round(), ...arches(), ...bows()
+  ...basics(), ...plates(), ...tiles(), ...slopes(), ...round(), ...arches(), ...bows(),
+  ...nature(), ...sideSnot()
 ];
 
 export function getBlockPart(id: string): BlockPart | undefined {

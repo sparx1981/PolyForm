@@ -1054,6 +1054,14 @@ export interface CustomToolbarItem {
   hotkey?: string;
   code?: string; // JavaScript code to execute. For non-button widgets, the new value is in scope as `value`.
   scriptId?: string; // Reference to existing saved script
+  // Runs when the pointer hovers the button (before any click), so a
+  // button can compute fresh info to show in a formatted popout rather
+  // than requiring a click. Typically ends with a call to
+  // sdk.toolbars.configureButton(toolbarId, itemId, { previewContent }).
+  hoverCode?: string;
+  // Multi-line formatted text (newlines preserved) shown in a popout
+  // panel while hovering - set directly, or refreshed live via hoverCode.
+  previewContent?: string;
   action?: (sdk: any) => void | Promise<void>; // In-memory callback function
   variant?: 'default' | 'tile'; // 'tile' renders a larger icon-over-label button, for grid-style pickers
   description?: string; // Small helper text rendered under the control

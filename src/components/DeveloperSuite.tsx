@@ -2585,7 +2585,9 @@ const CATEGORIES = {
   "Slopes & Angles": ["slope-1x2", "slope-2x2", "slope-2x3"],
   "Round & Curved": ["round-1x1", "round-2x2", "round-4x4"],
   "Arches": ["arch-2x1", "arch-4x1"],
-  "Bow & Wedge": ["bow-4x2"]
+  "Bow & Wedge": ["bow-4x2"],
+  "Nature": ["leaf-1x1", "leaf-2x2", "leaf-4x4"],
+  "Side / SNOT": ["bracket-1x1", "bracket-1x2"]
 };
 
 const SWATCH_PALETTE = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"];
@@ -2648,8 +2650,11 @@ const panel = sdk.toolbars.create({
     },
     {
       id: "bk-parts-list", label: "Used Parts List", icon: "FileText", color: "#10b981",
-      tooltip: "Shows a bill-of-materials for every block placed so far",
-      code: \`
+      tooltip: "Bill of materials - hover to preview, click to log it",
+      // Hovering refreshes a nicely formatted popout right on the button
+      // (see previewContent below) so the user doesn't have to click or
+      // open the Developer Console just to check the tally.
+      hoverCode: \`
         // sdk.outliner.list() is generic - it returns the id/name/type/tags
         // of every entry the Outliner panel shows, for ANY kind of shape,
         // not just blocks. Handy any time an extension needs to look up
@@ -2657,7 +2662,13 @@ const panel = sdk.toolbars.create({
         const entries = sdk.outliner.list();
         const counts = {};
         for (const entry of entries) {
-          const part = entry.tags?.find(t => t.startsWith("brick-") || t.startsWith("plate-") || t.startsWith("tile-") || t.startsWith("slope-") || t.startsWith("round-") || t.startsWith("arch-") || t.startsWith("bow-"));
+          // Every block-kit placement is tagged ["block-kit", partId,
+          // "block-category-..."] - reading tags[1] directly (rather than
+          // matching prefixes like "brick-"/"plate-"/...) means this still
+          // works for every current AND future catalog category without
+          // needing its own list kept in sync.
+          if (entry.tags?.[0] !== "block-kit") continue;
+          const part = entry.tags[1];
           if (!part) continue;
           counts[part] = (counts[part] || 0) + 1;
         }
@@ -2671,10 +2682,12 @@ const panel = sdk.toolbars.create({
         const summary = rows.length === 0
           ? "No blocks placed yet."
           : rows.map(([k, q]) => q + " x " + k).join(NL);
-        console.log("--- Used Parts List ---" + NL + summary);
-        // Also shown as an alert so the result is visible even with the
-        // Developer Console panel closed.
-        window.alert("Used Parts List:" + NL + NL + summary);
+        sdk.toolbars.configureButton("block-kit-panel", "bk-parts-list", { previewContent: summary });
+      \`,
+      code: \`
+        const btn = sdk.toolbars.getButton("block-kit-panel", "bk-parts-list");
+        console.log("--- Used Parts List ---");
+        console.log(btn?.previewContent || "No blocks placed yet.");
       \`
     },
     {
@@ -2689,7 +2702,9 @@ const panel = sdk.toolbars.create({
             'Slopes & Angles': ["slope-1x2", "slope-2x2", "slope-2x3"],
             'Round & Curved': ["round-1x1", "round-2x2", "round-4x4"],
             'Arches': ["arch-2x1", "arch-4x1"],
-            'Bow & Wedge': ["bow-4x2"]
+            'Bow & Wedge': ["bow-4x2"],
+            'Nature': ["leaf-1x1", "leaf-2x2", "leaf-4x4"],
+            'Side / SNOT': ["bracket-1x1", "bracket-1x2"]
           })};
           const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
           const color = colourWidget?.selectedColor || "#dc2626";

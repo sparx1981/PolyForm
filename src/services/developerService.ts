@@ -2186,16 +2186,13 @@ export class DeveloperSDK implements SDK {
 
       configureButton: (toolbarId: string, buttonId: string, settings: Partial<CustomToolbarButton>): void => {
         if (this.extraSetters.setCustomToolbars) {
+          const applyToItems = (items: CustomToolbarButton[]): CustomToolbarButton[] => items.map(b => {
+            if (b.id === buttonId) return { ...b, ...settings };
+            if ((b as any).items) return { ...b, items: applyToItems((b as any).items) } as any;
+            return b;
+          });
           this.extraSetters.setCustomToolbars((prev: CustomToolbarDef[] = []) => {
-            return prev.map(tb => {
-              if (tb.id === toolbarId) {
-                return {
-                  ...tb,
-                  items: tb.items.map(b => b.id === buttonId ? { ...b, ...settings } : b)
-                };
-              }
-              return tb;
-            });
+            return prev.map(tb => tb.id === toolbarId ? { ...tb, items: applyToItems(tb.items) } : tb);
           });
         }
         this.log(`Configured button "${buttonId}" on toolbar "${toolbarId}": ${JSON.stringify(settings)}`);
@@ -2216,7 +2213,21 @@ export class DeveloperSDK implements SDK {
 
       getButton: (toolbarId: string, buttonId: string): CustomToolbarButton | undefined => {
         const tb = (this.extraSetters.customToolbars || []).find((t: CustomToolbarDef) => t.id === toolbarId);
-        return tb?.items.find((b: CustomToolbarButton) => b.id === buttonId);
+        if (!tb) return undefined;
+        // Searches into 'section' items' nested children too, not just the
+        // toolbar's top-level items - a button built inside a collapsible
+        // section (like the block-kit tiles) is just as findable this way.
+        const find = (items: CustomToolbarButton[]): CustomToolbarButton | undefined => {
+          for (const b of items) {
+            if (b.id === buttonId) return b;
+            if ((b as any).items) {
+              const nested = find((b as any).items);
+              if (nested) return nested;
+            }
+          }
+          return undefined;
+        };
+        return find(tb.items);
       },
 
       removeButton: (toolbarId: string, buttonId: string): void => {

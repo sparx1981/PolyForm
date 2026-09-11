@@ -145,9 +145,11 @@ export const CustomToolbarOverlay: React.FC = () => {
   // Execute extension action, code string, or scriptId. `value` is only
   // meaningful for non-button widgets (slider/checkbox/color-swatch/tabs) -
   // it's the new value the user just picked, exposed to the code as `value`.
-  const executeItem = async (item: CustomToolbarItem, toolbarTitle?: string, value?: any) => {
-    setRunningItems(prev => ({ ...prev, [item.id]: true }));
-    setMeasurements(`Executing extension "${item.label}"...`);
+  const executeItem = async (item: CustomToolbarItem, toolbarTitle?: string, value?: any, silent?: boolean) => {
+    if (!silent) {
+      setRunningItems(prev => ({ ...prev, [item.id]: true }));
+      setMeasurements(`Executing extension "${item.label}"...`);
+    }
 
     const extraSetters: any = {
       selectedIds,
@@ -258,14 +260,32 @@ export const CustomToolbarOverlay: React.FC = () => {
       }
     };
 
+    const codeToRun = silent ? item.hoverCode : item.code;
+
     try {
+      if (silent) {
+        if (codeToRun && codeToRun.trim()) {
+          const fn = new Function('sdk', 'console', `
+            return (async () => {
+              try {
+                ${codeToRun}
+              } catch (e) {
+                console.error(e.message || String(e));
+                throw e;
+              }
+            })();
+          `);
+          await fn(sdk, customConsole);
+        }
+        return;
+      }
       if (typeof item.action === 'function') {
         await item.action(sdk);
-      } else if (item.code && item.code.trim()) {
+      } else if (codeToRun && codeToRun.trim()) {
         const fn = new Function('sdk', 'console', 'value', `
           return (async () => {
             try {
-              ${item.code}
+              ${codeToRun}
             } catch (e) {
               console.error(e.message || String(e));
               throw e;
@@ -301,7 +321,7 @@ export const CustomToolbarOverlay: React.FC = () => {
       setConsoleOutput(prev => [...prev, `[ERROR] In ${item.label}: ${err.message || String(err)}`]);
       setMeasurements(`Error in "${item.label}": ${err.message || 'Check developer console'}`);
     } finally {
-      setRunningItems(prev => ({ ...prev, [item.id]: false }));
+      if (!silent) setRunningItems(prev => ({ ...prev, [item.id]: false }));
     }
   };
 
@@ -560,8 +580,9 @@ export const CustomToolbarOverlay: React.FC = () => {
         key={item.id}
         id={`toolbar-btn-${item.id}`}
         onClick={() => executeItem(item, toolbar.title)}
+        onMouseEnter={() => { if (item.hoverCode) executeItem(item, toolbar.title, undefined, true); }}
         disabled={isRunning}
-        title={item.tooltip || item.label}
+        title={item.hoverCode || item.previewContent ? undefined : (item.tooltip || item.label)}
         className={cn(
           "relative group flex items-center justify-center p-2 rounded-lg transition-all duration-150 active:scale-95 disabled:opacity-60",
           theme === 'dark'
@@ -582,21 +603,37 @@ export const CustomToolbarOverlay: React.FC = () => {
           </span>
         )}
 
-        <div
-          className={cn(
-            "absolute z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[11px] px-2 py-1 rounded shadow-lg",
-            isHorizontal ? "top-full mt-1.5 left-1/2 -translate-x-1/2" : "left-full ml-1.5 top-1/2 -translate-y-1/2",
-            theme === 'dark' ? "bg-gray-800 text-white border border-gray-700" : "bg-gray-900 text-white"
-          )}
-        >
-          <div className="font-semibold">{item.label}</div>
-          {item.tooltip && item.tooltip !== item.label && (
-            <div className="text-[10px] text-gray-300 font-normal">{item.tooltip}</div>
-          )}
-          {item.hotkey && (
-            <div className="text-[9px] text-gray-400 font-mono mt-0.5">Hotkey: {item.hotkey}</div>
-          )}
-        </div>
+        {item.previewContent ? (
+          // A richer, formatted popout (multi-line content preserved) for
+          // buttons that compute something worth showing on hover - e.g. a
+          // bill-of-materials - rather than the plain single-line tooltip.
+          <div
+            className={cn(
+              "absolute z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-pre-line text-[11px] px-3 py-2 rounded-lg shadow-xl min-w-[160px] max-w-[260px]",
+              isHorizontal ? "top-full mt-1.5 left-1/2 -translate-x-1/2" : "left-full ml-1.5 top-1/2 -translate-y-1/2",
+              theme === 'dark' ? "bg-gray-800 text-white border border-gray-700" : "bg-white text-gray-800 border border-gray-200"
+            )}
+          >
+            <div className="font-semibold mb-1">{item.tooltip || item.label}</div>
+            <div className={theme === 'dark' ? "text-gray-300" : "text-gray-600"}>{item.previewContent}</div>
+          </div>
+        ) : (
+          <div
+            className={cn(
+              "absolute z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[11px] px-2 py-1 rounded shadow-lg",
+              isHorizontal ? "top-full mt-1.5 left-1/2 -translate-x-1/2" : "left-full ml-1.5 top-1/2 -translate-y-1/2",
+              theme === 'dark' ? "bg-gray-800 text-white border border-gray-700" : "bg-gray-900 text-white"
+            )}
+          >
+            <div className="font-semibold">{item.label}</div>
+            {item.tooltip && item.tooltip !== item.label && (
+              <div className="text-[10px] text-gray-300 font-normal">{item.tooltip}</div>
+            )}
+            {item.hotkey && (
+              <div className="text-[9px] text-gray-400 font-mono mt-0.5">Hotkey: {item.hotkey}</div>
+            )}
+          </div>
+        )}
       </button>
     );
   };

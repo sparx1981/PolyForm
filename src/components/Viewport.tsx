@@ -156,6 +156,26 @@ function blockWorldBounds(part: BlockPart, position: [number, number, number], r
   );
 }
 
+/**
+ * Snaps a block's footprint CENTER so that its CORNER lands on the world
+ * stud grid, not so that the center itself lands on a grid line. Real
+ * interlocking-block snapping aligns edges, not centers: since every
+ * footprint is an integer number of studs wide, corner-snapping is what
+ * makes two DIFFERENT-sized blocks (e.g. a 1-wide next to a 2-wide) sit
+ * flush against each other. Center-snapping only works when both blocks'
+ * widths have the same odd/even parity - otherwise it leaves a gap or
+ * forces an overlap, since half of an odd stud count isn't a whole
+ * multiple of the grid.
+ */
+function snapBlockFootprintCenter(part: BlockPart, rotationSteps: number, hitX: number, hitZ: number): [number, number] {
+  const swapped = ((rotationSteps % 4) + 4) % 4 % 2 === 1;
+  const width = (swapped ? part.studsZ : part.studsX) * STUD_UNIT;
+  const depth = (swapped ? part.studsX : part.studsZ) * STUD_UNIT;
+  const minX = Math.round((hitX - width / 2) / STUD_UNIT) * STUD_UNIT;
+  const minZ = Math.round((hitZ - depth / 2) / STUD_UNIT) * STUD_UNIT;
+  return [minX + width / 2, minZ + depth / 2];
+}
+
 /** Whether a candidate block placement would overlap an already-placed
  * block-kit shape. Uses a small inward epsilon so blocks that are merely
  * touching edge-to-edge (the normal, desired case when stacking/butting
@@ -5239,10 +5259,11 @@ function Scene() {
         }
       }
 
-      // Grid snap: round the footprint center to the nearest stud-grid cell.
-      const snappedX = Math.round(hitPoint.x / STUD_UNIT) * STUD_UNIT;
-      const snappedZ = Math.round(hitPoint.z / STUD_UNIT) * STUD_UNIT;
+      // Grid snap: align the footprint's CORNER to the stud grid (not its
+      // center - see snapBlockFootprintCenter) so blocks of different
+      // sizes still sit flush against each other.
       const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
+      const [snappedX, snappedZ] = snapBlockFootprintCenter(part, rotationSteps, hitPoint.x, hitPoint.z);
       const placementPosition: [number, number, number] = [snappedX, snappedY, snappedZ];
 
       if (blockPreventOverlap && blockPlacementOverlaps(part, placementPosition, rotationSteps, shapes)) {
@@ -5377,10 +5398,9 @@ function Scene() {
           const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
           if (hitShape?.tags?.includes('block-kit')) { snappedY = hitPoint.y; }
         }
-        const snappedX = Math.round(hitPoint.x / STUD_UNIT) * STUD_UNIT;
-        const snappedZ = Math.round(hitPoint.z / STUD_UNIT) * STUD_UNIT;
-        const candidatePosition: [number, number, number] = [snappedX, snappedY, snappedZ];
         const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
+        const [snappedX, snappedZ] = snapBlockFootprintCenter(part, rotationSteps, hitPoint.x, hitPoint.z);
+        const candidatePosition: [number, number, number] = [snappedX, snappedY, snappedZ];
 
         // Friction: a candidate cell that would overlap an existing block
         // is rejected and the ghost "sticks" at the last non-overlapping
