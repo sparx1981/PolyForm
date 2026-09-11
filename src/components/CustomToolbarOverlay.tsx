@@ -73,6 +73,7 @@ export const CustomToolbarOverlay: React.FC = () => {
     isAIQueryOpen,
     setIsAIQueryOpen,
     setActiveBlockPart,
+    setBlockPreventOverlap,
     timberFrameParams,
     setTimberFrameParams,
     commitUpdatedFraming,
@@ -165,6 +166,7 @@ export const CustomToolbarOverlay: React.FC = () => {
       isAIQueryOpen,
       setIsAIQueryOpen,
       setActiveBlockPart,
+      setBlockPreventOverlap,
       timberFrameParams,
       setTimberFrameParams,
       commitUpdatedFraming,
@@ -365,7 +367,11 @@ export const CustomToolbarOverlay: React.FC = () => {
     setCustomToolbars(prev => prev.map(t => {
       if (t.id !== toolbarId) return t;
       const isCurrentlyFloating = (t.position || 'top-center') === 'floating' || (t.position || '').startsWith('custom');
-      return { ...t, position: isCurrentlyFloating ? 'top-center' : 'floating' };
+      // Dock to a corner, not 'top-center' - centered docking sits directly
+      // over the middle of the viewport, which reads as "docked to the
+      // center of the screen" rather than tucked out of the way like a
+      // real docked toolbar.
+      return { ...t, position: isCurrentlyFloating ? 'top-left' : 'floating' };
     }));
   };
 
@@ -508,7 +514,12 @@ export const CustomToolbarOverlay: React.FC = () => {
             {isOpen ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
           </button>
           {isOpen && (
-            <div className="flex flex-col gap-1 pb-1">
+            <div className={cn(
+              "pb-1",
+              (item.items || []).length > 0 && (item.items || []).every(it => it.variant === 'tile')
+                ? "grid grid-cols-2 gap-1.5"
+                : "flex flex-col gap-1"
+            )}>
               {(item.items || []).map(child => renderToolbarItem(child, toolbar, isHorizontal))}
             </div>
           )}

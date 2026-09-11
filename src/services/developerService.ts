@@ -508,7 +508,13 @@ export interface SDK {
   blockKit: {
     list: () => { id: string; label: string; category: string }[];
     getGeometry: (partId: string) => { positions: number[]; normals: number[]; uvs?: number[] } | null;
-    place: (partId: string, color?: string) => void;
+    // color can be a single hex string, or an array of hex strings - when
+    // an array is given, a fresh random colour from it is picked for EACH
+    // block placed (not just once when the tool is armed).
+    place: (partId: string, color?: string | string[]) => void;
+    // Whether the placement tool refuses to place a block that would
+    // overlap an existing one (on by default).
+    setPreventOverlap: (enabled: boolean) => void;
   };
 
   // WorldView Subsystem
@@ -2033,15 +2039,32 @@ export class DeveloperSDK implements SDK {
        * places it - clicking again places another of the same part,
        * Escape stops. This is a placement primitive, not a UI - build your
        * own picker panel around it with sdk.toolbars.create().
+       *
+       * Pass an array of hex colours instead of a single one to get a
+       * fresh random pick from that array for every block placed (not
+       * just once when the tool is armed).
        */
-      place: (partId: string, color: string = '#dc2626'): void => {
+      place: (partId: string, color: string | string[] = '#dc2626'): void => {
         if (this.extraSetters.setActiveBlockPart) {
-          this.extraSetters.setActiveBlockPart({ partId, color, rotationSteps: 0 });
+          const isPalette = Array.isArray(color);
+          this.extraSetters.setActiveBlockPart({
+            partId,
+            color: isPalette ? (color[0] || '#dc2626') : color,
+            rotationSteps: 0,
+            randomPalette: isPalette ? color : undefined
+          });
         }
         if (this.extraSetters.setActiveTool) {
           this.extraSetters.setActiveTool('block_picker');
         }
-        this.log(`Armed block placement: ${partId} (${color}).`);
+        this.log(`Armed block placement: ${partId} (${Array.isArray(color) ? 'random colour' : color}).`);
+      },
+
+      setPreventOverlap: (enabled: boolean): void => {
+        if (this.extraSetters.setBlockPreventOverlap) {
+          this.extraSetters.setBlockPreventOverlap(enabled);
+        }
+        this.log(`Block overlap prevention: ${enabled ? 'ON' : 'OFF'}.`);
       }
     };
 

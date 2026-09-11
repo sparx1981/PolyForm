@@ -68,7 +68,11 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
       break;
     }
     case 'arch': {
-      // A block with a semicircular archway cut through its depth.
+      // A block with a semicircular archway cut through its depth. The 2D
+      // profile is drawn directly in the block's own X (width) / Y (height)
+      // plane and extruded along Z (depth), so no post-extrude rotation is
+      // needed - an earlier version rotated this into place, which actually
+      // swapped the block's height and depth extents.
       const shape = new THREE.Shape();
       shape.moveTo(-hwSafe(width), 0);
       shape.lineTo(hwSafe(width), 0);
@@ -82,12 +86,16 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
       holePath.lineTo(-archRadius, 0);
       shape.holes.push(holePath);
       bodyGeo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-      bodyGeo.rotateX(-Math.PI / 2);
       bodyGeo.translate(0, 0, -depth / 2);
       break;
     }
     case 'bow': {
-      // A gently curved wall segment (a shallow arc extruded upward).
+      // A gently curved wall segment (a shallow arc extruded upward). The
+      // footprint curve is drawn in X/Y then rotated so the extrusion axis
+      // becomes the vertical (Y) axis; the curve isn't symmetric about its
+      // own origin (it bulges further forward than it recesses at the
+      // back), so it's re-centered on Z afterwards to sit correctly in its
+      // stud-grid footprint cell.
       const segments = 8;
       const bowDepth = depth * 0.5;
       const bowShape = new THREE.Shape();
@@ -98,6 +106,9 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
       bowShape.closePath();
       bodyGeo = new THREE.ExtrudeGeometry(bowShape, { depth: height, bevelEnabled: false, curveSegments: segments });
       bodyGeo.rotateX(-Math.PI / 2);
+      bodyGeo.computeBoundingBox();
+      const bb = bodyGeo.boundingBox!;
+      bodyGeo.translate(0, 0, -(bb.min.z + bb.max.z) / 2);
       break;
     }
     case 'rect':
@@ -112,7 +123,11 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
   }
   geoms.push(bodyGeo);
 
-  if (hasStuds(part.heightKind) && part.shapeKind !== 'round' && part.shapeKind !== 'arch' && part.shapeKind !== 'bow') {
+  // Only flat-topped rectangular blocks get a full grid of studs - a slope
+  // has no flat top to put them on (its top IS the sloped face, so a full
+  // grid would float in mid-air over the lower rows), and round/arch/bow
+  // are specialty pieces without a working stud face.
+  if (hasStuds(part.heightKind) && part.shapeKind === 'rect') {
     for (let x = 0; x < part.studsX; x++) {
       for (let z = 0; z < part.studsZ; z++) {
         const studGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
@@ -122,6 +137,12 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
         geoms.push(studGeo);
       }
     }
+  } else if (hasStuds(part.heightKind) && part.shapeKind === 'round') {
+    // Round bricks get a single centered stud, as classic round 1x1-style
+    // pieces do, rather than a grid that wouldn't fit the circular top.
+    const studGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
+    studGeo.translate(0, height + STUD_HEIGHT / 2, 0);
+    geoms.push(studGeo);
   }
 
   const normalized = geoms.map(g => {

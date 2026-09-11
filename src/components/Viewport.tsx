@@ -53,7 +53,7 @@ import {
   createRockGeometry
 } from '../lib/landscapeGeometry';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
-import { getBlockPart, buildBlockGeometry, STUD_UNIT, BlockPart } from '../lib/blockKitGeometry';
+import { getBlockPart, buildBlockGeometry, STUD_UNIT, BRICK_HEIGHT, PLATE_HEIGHT, BlockPart } from '../lib/blockKitGeometry';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
 import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier } from '../types';
@@ -136,6 +136,51 @@ function bufferGeometryToShapeData(geom: THREE.BufferGeometry): { positions: num
     normals: geom.attributes.normal?.array ? Array.from(geom.attributes.normal.array) : [],
     uvs: geom.attributes.uv?.array ? Array.from(geom.attributes.uv.array) : undefined,
   };
+}
+
+function blockPartHeight(part: BlockPart): number {
+  return part.heightKind === 'brick' ? BRICK_HEIGHT : PLATE_HEIGHT;
+}
+
+/** World-space AABB for a block, given its footprint part, base position and
+ * 90°-step rotation (rotation only ever swaps X/Z extents at these steps). */
+function blockWorldBounds(part: BlockPart, position: [number, number, number], rotationSteps: number): THREE.Box3 {
+  const swapped = ((rotationSteps % 4) + 4) % 4 % 2 === 1;
+  const width = (swapped ? part.studsZ : part.studsX) * STUD_UNIT;
+  const depth = (swapped ? part.studsX : part.studsZ) * STUD_UNIT;
+  const height = blockPartHeight(part);
+  const [x, y, z] = position;
+  return new THREE.Box3(
+    new THREE.Vector3(x - width / 2, y, z - depth / 2),
+    new THREE.Vector3(x + width / 2, y + height, z + depth / 2)
+  );
+}
+
+/** Whether a candidate block placement would overlap an already-placed
+ * block-kit shape. Uses a small inward epsilon so blocks that are merely
+ * touching edge-to-edge (the normal, desired case when stacking/butting
+ * blocks together) are never flagged as overlapping. */
+function blockPlacementOverlaps(
+  candidatePart: BlockPart,
+  candidatePosition: [number, number, number],
+  candidateRotationSteps: number,
+  shapes: Shape[]
+): boolean {
+  const EPS = 0.004; // ~4mm inward tolerance
+  const candidateBox = blockWorldBounds(candidatePart, candidatePosition, candidateRotationSteps);
+  for (const other of shapes) {
+    if (!other.tags?.includes('block-kit')) continue;
+    const otherPartId = other.tags.find(t => t !== 'block-kit' && !t.startsWith('block-category-'));
+    const otherPart = otherPartId ? getBlockPart(otherPartId) : undefined;
+    if (!otherPart) continue;
+    const otherRotationSteps = Math.round(((other.rotation?.[1] || 0) / (Math.PI / 2)));
+    const otherBox = blockWorldBounds(otherPart, other.position, otherRotationSteps);
+    const overlapX = Math.min(candidateBox.max.x, otherBox.max.x) - Math.max(candidateBox.min.x, otherBox.min.x);
+    const overlapY = Math.min(candidateBox.max.y, otherBox.max.y) - Math.max(candidateBox.min.y, otherBox.min.y);
+    const overlapZ = Math.min(candidateBox.max.z, otherBox.max.z) - Math.max(candidateBox.min.z, otherBox.min.z);
+    if (overlapX > EPS && overlapY > EPS && overlapZ > EPS) return true;
+  }
+  return false;
 }
 
 function createFallbackTexture(): THREE.Texture {
@@ -1380,6 +1425,7 @@ function Scene() {
     setActiveBlockPart,
     blockPlacementDraft,
     setBlockPlacementDraft,
+    blockPreventOverlap,
     kernelHost,
     kernelRevision,
     bumpKernel,
@@ -2040,6 +2086,7 @@ function Scene() {
   const pointerUpHandledRef = useRef<boolean>(false);
   const hasReachedFrictionRef = useRef<boolean>(false);
   const lastValidPosRef = useRef<THREE.Vector3 | null>(null);
+  const blockLastValidDraftRef = useRef<{ position: [number, number, number]; rotationSteps: number } | null>(null);
 
   /**
    * Push/pull starts on PRESS, not click.
@@ -2797,6 +2844,10 @@ function Scene() {
       timestamp: Date.now()
     });
   };
+
+  useEffect(() => {
+    blockLastValidDraftRef.current = null;
+  }, [activeBlockPart?.partId, activeTool]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -5192,6 +5243,12 @@ function Scene() {
       const snappedX = Math.round(hitPoint.x / STUD_UNIT) * STUD_UNIT;
       const snappedZ = Math.round(hitPoint.z / STUD_UNIT) * STUD_UNIT;
       const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
+      const placementPosition: [number, number, number] = [snappedX, snappedY, snappedZ];
+
+      if (blockPreventOverlap && blockPlacementOverlaps(part, placementPosition, rotationSteps, shapes)) {
+        setMeasurements(`Can't place ${part.label} here - it would overlap another block.`);
+        return;
+      }
 
       const geom = buildBlockGeometry(part);
       // Shape rendering prefers `quaternion` over `rotation` whenever a
@@ -5199,15 +5256,21 @@ function Scene() {
       // orientation must be expressed as a quaternion here to actually match
       // the ghost preview, which rotates via a plain Euler `rotation` prop.
       const placementQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotationSteps * (Math.PI / 2), 0));
+      // Random-colour mode (sdk.blockKit.place(partId, [colours])) rerolls
+      // a fresh pick for every block actually placed, not just once when
+      // the tool was armed.
+      const placementColor = activeBlockPart.randomPalette && activeBlockPart.randomPalette.length > 0
+        ? activeBlockPart.randomPalette[Math.floor(Math.random() * activeBlockPart.randomPalette.length)]
+        : activeBlockPart.color;
       const newShape: Shape = {
         id: Math.random().toString(36).substr(2, 9),
         name: part.label,
         type: 'custom',
-        position: [snappedX, snappedY, snappedZ],
+        position: placementPosition,
         rotation: [0, rotationSteps * (Math.PI / 2), 0],
         quaternion: [placementQuat.x, placementQuat.y, placementQuat.z, placementQuat.w],
         args: [1, 1, 1],
-        color: activeBlockPart.color,
+        color: placementColor,
         roughness: 0.4,
         metalness: 0.02,
         tags: ['block-kit', part.id, `block-category-${part.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`],
@@ -5215,7 +5278,7 @@ function Scene() {
       };
       addShape(newShape);
       commitHistory();
-      setBlockPlacementDraft({ position: [snappedX, snappedY, snappedZ], rotationSteps });
+      setBlockPlacementDraft({ position: placementPosition, rotationSteps });
       setMeasurements(`Placed ${part.label}. Arrow keys rotate the next block - click to place another, Esc to stop.`);
       return;
     }
@@ -5316,10 +5379,21 @@ function Scene() {
         }
         const snappedX = Math.round(hitPoint.x / STUD_UNIT) * STUD_UNIT;
         const snappedZ = Math.round(hitPoint.z / STUD_UNIT) * STUD_UNIT;
-        setBlockPlacementDraft(prev => ({
-          position: [snappedX, snappedY, snappedZ],
-          rotationSteps: prev?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0
-        }));
+        const candidatePosition: [number, number, number] = [snappedX, snappedY, snappedZ];
+        const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
+
+        // Friction: a candidate cell that would overlap an existing block
+        // is rejected and the ghost "sticks" at the last non-overlapping
+        // cell instead of jumping through - so blocks feel like they're
+        // touching rather than passing through each other while dragging.
+        const wouldOverlap = blockPreventOverlap && blockPlacementOverlaps(part, candidatePosition, rotationSteps, shapes);
+        const resolvedPosition = wouldOverlap && blockLastValidDraftRef.current
+          ? blockLastValidDraftRef.current.position
+          : candidatePosition;
+        if (!wouldOverlap) {
+          blockLastValidDraftRef.current = { position: candidatePosition, rotationSteps };
+        }
+        setBlockPlacementDraft({ position: resolvedPosition, rotationSteps, blocked: wouldOverlap });
       }
       return;
     }

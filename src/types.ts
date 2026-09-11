@@ -274,10 +274,12 @@ export interface AppState {
   setIsAIRendererOpen: (open: boolean) => void;
   isAIQueryOpen: boolean;
   setIsAIQueryOpen: (open: boolean) => void;
-  activeBlockPart: { partId: string; color: string; rotationSteps: number } | null;
-  setActiveBlockPart: (part: { partId: string; color: string; rotationSteps: number } | null | ((prev: { partId: string; color: string; rotationSteps: number } | null) => { partId: string; color: string; rotationSteps: number } | null)) => void;
-  blockPlacementDraft: { position: [number, number, number]; rotationSteps: number } | null;
-  setBlockPlacementDraft: (draft: { position: [number, number, number]; rotationSteps: number } | null | ((prev: { position: [number, number, number]; rotationSteps: number } | null) => { position: [number, number, number]; rotationSteps: number } | null)) => void;
+  activeBlockPart: { partId: string; color: string; rotationSteps: number; randomPalette?: string[] } | null;
+  setActiveBlockPart: (part: { partId: string; color: string; rotationSteps: number; randomPalette?: string[] } | null | ((prev: { partId: string; color: string; rotationSteps: number; randomPalette?: string[] } | null) => { partId: string; color: string; rotationSteps: number; randomPalette?: string[] } | null)) => void;
+  blockPlacementDraft: { position: [number, number, number]; rotationSteps: number; blocked?: boolean } | null;
+  setBlockPlacementDraft: (draft: { position: [number, number, number]; rotationSteps: number; blocked?: boolean } | null | ((prev: { position: [number, number, number]; rotationSteps: number; blocked?: boolean } | null) => { position: [number, number, number]; rotationSteps: number; blocked?: boolean } | null)) => void;
+  blockPreventOverlap: boolean;
+  setBlockPreventOverlap: (enabled: boolean) => void;
   user: any | null;
   setUser: (user: any | null) => void;
   theme: 'light' | 'dark';

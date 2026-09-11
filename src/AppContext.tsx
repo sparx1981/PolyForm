@@ -170,8 +170,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [shapes, setShapes] = useState<Shape[]>(INITIAL_SHAPES);
   const [isAIRendererOpen, setIsAIRendererOpen] = useState(false);
   const [isAIQueryOpen, setIsAIQueryOpen] = useState(false);
-  const [activeBlockPart, setActiveBlockPart] = useState<{ partId: string; color: string; rotationSteps: number } | null>(null);
-  const [blockPlacementDraft, setBlockPlacementDraft] = useState<{ position: [number, number, number]; rotationSteps: number } | null>(null);
+  const [activeBlockPart, setActiveBlockPart] = useState<{ partId: string; color: string; rotationSteps: number; randomPalette?: string[] } | null>(null);
+  const [blockPlacementDraft, setBlockPlacementDraft] = useState<{ position: [number, number, number]; rotationSteps: number; blocked?: boolean } | null>(null);
+  const [blockPreventOverlap, setBlockPreventOverlap] = useState<boolean>(true);
   const [user, setUser] = useState<any | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   /*
@@ -1817,6 +1818,8 @@ console.log("Created rectangle:", myRect.id);`);
       setActiveBlockPart,
       blockPlacementDraft,
       setBlockPlacementDraft,
+      blockPreventOverlap,
+      setBlockPreventOverlap,
       setIsAIRendererOpen,
       isAIQueryOpen,
       setIsAIQueryOpen,

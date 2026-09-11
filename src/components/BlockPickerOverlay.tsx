@@ -27,7 +27,7 @@ export default function BlockPickerOverlay() {
       geometry={geometry}
     >
       <meshStandardMaterial
-        color={activeBlockPart?.color || '#38bdf8'}
+        color={blockPlacementDraft.blocked ? '#ef4444' : (activeBlockPart?.color || '#38bdf8')}
         transparent
         opacity={0.55}
         depthWrite={false}

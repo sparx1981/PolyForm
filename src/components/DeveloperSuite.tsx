@@ -73,6 +73,7 @@ export function DeveloperSuite() {
     isAIQueryOpen,
     setIsAIQueryOpen,
     setActiveBlockPart,
+    setBlockPreventOverlap,
     timberFrameParams,
     setTimberFrameParams,
     commitUpdatedFraming,
@@ -202,6 +203,7 @@ export function DeveloperSuite() {
         isAIQueryOpen,
         setIsAIQueryOpen,
         setActiveBlockPart,
+        setBlockPreventOverlap,
         timberFrameParams,
         setTimberFrameParams,
         commitUpdatedFraming,
@@ -2606,12 +2608,15 @@ function buildBlockTiles(category) {
     color,
     previewGeometry: sdk.blockKit.getGeometry(partId),
     tooltip: "Place a " + partId,
+    // Passing the whole palette array (instead of one colour string) to
+    // sdk.blockKit.place tells the placement tool to pick a fresh random
+    // colour from it for EVERY block placed, not just once.
     code: \`
       var rnd = sdk.toolbars.getButton("block-kit-panel", "bk-random-colour");
       var swatch = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
       var palette = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"];
-      var c = (rnd && rnd.checked) ? palette[Math.floor(Math.random() * palette.length)] : ((swatch && swatch.selectedColor) || "#dc2626");
-      sdk.blockKit.place("\${partId}", c);
+      var choice = (rnd && rnd.checked) ? palette : ((swatch && swatch.selectedColor) || "#dc2626");
+      sdk.blockKit.place("\${partId}", choice);
     \`
   }));
 }
@@ -2623,16 +2628,10 @@ const panel = sdk.toolbars.create({
   floatPosition: { x: 80, y: 96 },
   items: [
     {
-      id: "bk-scale", type: "slider", label: "Scale",
-      min: 1, max: 16, step: 1, value: 8,
-      description: "Adjusts the informational pitch/brick/plate readout below - the physical stud grid PolyForm places on is fixed.",
-      code: \`console.log("Scale factor set to " + value + "x (" + (80 * value / 8).toFixed(1) + "mm pitch).");\`
-    },
-    {
       id: "bk-prevent-overlap", type: "checkbox", label: "Prevent overlaps",
       checked: true,
-      description: "Blocks can't merge; studs still nest as normal.",
-      code: \`console.log("Prevent overlaps: " + (value ? "ON" : "OFF"));\`
+      description: "Blocks refuse to place where they'd overlap another - the ghost preview turns red and resists dragging through existing blocks.",
+      code: \`sdk.blockKit.setPreventOverlap(value); console.log("Prevent overlaps: " + (value ? "ON" : "OFF"));\`
     },
     {
       id: "bk-colour", type: "color-swatch", label: "Colour",
@@ -2663,13 +2662,19 @@ const panel = sdk.toolbars.create({
           counts[part] = (counts[part] || 0) + 1;
         }
         const rows = Object.entries(counts);
+        // Built via String.fromCharCode(10) rather than a backslash-n
+        // newline escape - this code string is itself embedded inside a
+        // template literal one level up, and that outer level would cook
+        // away a backslash-n escape before this code ever runs, breaking
+        // this string's own syntax. fromCharCode sidesteps that entirely.
+        const NL = String.fromCharCode(10);
         const summary = rows.length === 0
           ? "No blocks placed yet."
-          : rows.map(([k, q]) => q + " x " + k).join("\\n");
-        console.log("--- Used Parts List ---\\n" + summary);
+          : rows.map(([k, q]) => q + " x " + k).join(NL);
+        console.log("--- Used Parts List ---" + NL + summary);
         // Also shown as an alert so the result is visible even with the
         // Developer Console panel closed.
-        window.alert("Used Parts List:\\n\\n" + summary);
+        window.alert("Used Parts List:" + NL + NL + summary);
       \`
     },
     {
@@ -2697,7 +2702,7 @@ const panel = sdk.toolbars.create({
             color,
             previewGeometry: sdk.blockKit.getGeometry(partId),
             tooltip: "Place a " + partId,
-            code: 'var rnd = sdk.toolbars.getButton("block-kit-panel", "bk-random-colour"); var swatch = sdk.toolbars.getButton("block-kit-panel", "bk-colour"); var palette = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"]; var c = (rnd && rnd.checked) ? palette[Math.floor(Math.random() * palette.length)] : ((swatch && swatch.selectedColor) || "#dc2626"); sdk.blockKit.place("' + partId + '", c);'
+            code: 'var rnd = sdk.toolbars.getButton("block-kit-panel", "bk-random-colour"); var swatch = sdk.toolbars.getButton("block-kit-panel", "bk-colour"); var palette = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"]; var choice = (rnd && rnd.checked) ? palette : ((swatch && swatch.selectedColor) || "#dc2626"); sdk.blockKit.place("' + partId + '", choice);'
           }));
         })(value);
         sdk.toolbars.configureButton("block-kit-panel", "bk-blocks", { items: tiles });
