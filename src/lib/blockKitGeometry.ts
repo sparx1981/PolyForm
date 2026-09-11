@@ -10,7 +10,7 @@ export const PLATE_HEIGHT = BRICK_HEIGHT / 3;
 export const STUD_RADIUS = 0.024;
 export const STUD_HEIGHT = 0.017;
 
-export type BlockShapeKind = 'rect' | 'round' | 'slope' | 'arch' | 'bow' | 'dome';
+export type BlockShapeKind = 'rect' | 'round' | 'slope' | 'arch' | 'bow' | 'dome' | 'cone' | 'curve' | 'wedge';
 export type BlockHeightKind = 'brick' | 'plate' | 'tile';
 
 export interface BlockPart {
@@ -25,6 +25,17 @@ export interface BlockPart {
   // vertical face instead of (or as well as) the top, for building
   // perpendicular to the main stud direction.
   sideStud?: boolean;
+  // 'wedge': which corner the diagonal cut leaves pointed - flips the
+  // triangular footprint left-to-right.
+  mirror?: boolean;
+  // Overrides the single top stud (used by 'round'/'dome'/'cone' pieces)
+  // with one stud pointing in this direction instead of straight up -
+  // e.g. horizontal for a piece that plugs into the SIDE of another block,
+  // or an angled unit vector for a diagonal branch/connector stud. This is
+  // the piece's PRIMARY connection point, and the placement tool (see
+  // Viewport.tsx) uses it to decide how the piece should attach to
+  // whatever it's being placed against.
+  customStudDirection?: [number, number, number];
 }
 
 function heightFor(heightKind: BlockHeightKind): number {
@@ -33,6 +44,15 @@ function heightFor(heightKind: BlockHeightKind): number {
 
 function hasStuds(heightKind: BlockHeightKind): boolean {
   return heightKind !== 'tile';
+}
+
+/** A stud/peg mesh, oriented so it points along `direction` from `origin`. */
+function buildStud(origin: THREE.Vector3, direction: THREE.Vector3): THREE.BufferGeometry {
+  const stud = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
+  const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+  stud.applyQuaternion(quat);
+  stud.translate(origin.x, origin.y, origin.z);
+  return stud;
 }
 
 /** Builds one part's geometry, centered on the origin with its base at y=0. */
@@ -66,6 +86,35 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
         -hw, 0, -hd,  -hw, height, -hd,  -hw, 0, hd,
         // Right face
         hw, 0, -hd,  hw, 0, hd,  hw, height, -hd,
+      ]);
+      bodyGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      bodyGeo.computeVertexNormals();
+      break;
+    }
+    case 'wedge': {
+      // A triangular-footprint corner ramp: full height along the back
+      // edge, tapering down to a single point at one front corner (the
+      // OTHER front corner is cut away entirely - that's the diagonal
+      // "wedge" cut). `mirror` flips which side the point ends up on.
+      bodyGeo = new THREE.BufferGeometry();
+      const hw = width / 2, hd = depth / 2;
+      const sx = part.mirror ? -1 : 1;
+      // P1 = back corner nearest the point's side (height h)
+      // P2 = back corner on the far side (height h)
+      // P3 = the pointed front corner (height 0) - on the same side as P1
+      const p1 = [sx * hw, 0, -hd], p1h = [sx * hw, height, -hd];
+      const p2 = [-sx * hw, 0, -hd], p2h = [-sx * hw, height, -hd];
+      const p3 = [sx * hw, 0, hd];
+      const positions = new Float32Array([
+        // Bottom
+        ...p1, ...p2, ...p3,
+        // Back face (full height)
+        ...p1, ...p2, ...p2h,
+        ...p1, ...p2h, ...p1h,
+        // Sloped top (tapers to the point)
+        ...p1h, ...p2h, ...p3,
+        // Diagonal cut face (the point's own side wall)
+        ...p1, ...p1h, ...p3,
       ]);
       bodyGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       bodyGeo.computeVertexNormals();
@@ -115,11 +164,36 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
       bodyGeo.translate(0, 0, -(bb.min.z + bb.max.z) / 2);
       break;
     }
+    case 'curve': {
+      // A quarter-round corner plate/block: straight along two edges, a
+      // smooth arc across the far corner. Only meaningful for a square
+      // footprint (studsX === studsZ); the arc radius is that side length.
+      const radius = Math.min(width, depth);
+      const hw = width / 2, hd = depth / 2;
+      const cx = -hw, cz = -hd; // the inside (square) corner the arc sweeps around
+      const shape = new THREE.Shape();
+      shape.moveTo(cx, cz);
+      shape.lineTo(cx + radius, cz);
+      shape.absarc(cx, cz, radius, 0, Math.PI / 2, false);
+      shape.lineTo(cx, cz);
+      shape.closePath();
+      bodyGeo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, curveSegments: 12 });
+      bodyGeo.rotateX(-Math.PI / 2);
+      bodyGeo.translate(0, height, 0);
+      break;
+    }
     case 'dome': {
       // A rounded foliage/nature piece - a hemisphere sitting on the
       // footprint, roughly the same overall proportions as a round brick.
       const domeRadius = Math.min(width, depth) / 2;
       bodyGeo = new THREE.SphereGeometry(domeRadius, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+      break;
+    }
+    case 'cone': {
+      // A pointed pine-tree-style foliage piece.
+      const coneRadius = Math.min(width, depth) / 2;
+      bodyGeo = new THREE.ConeGeometry(coneRadius, coneRadius * 2.2, 12);
+      bodyGeo.translate(0, coneRadius * 1.1, 0);
       break;
     }
     case 'rect':
@@ -134,8 +208,8 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
     // up so its base sits at y=0 like every other part.
     bodyGeo.translate(0, height / 2, 0);
   }
-  // The 'dome' hemisphere (thetaLength = PI/2, i.e. only the top half of
-  // the sphere) already has its flat cut at y=0, so it needs no shift.
+  // 'dome' (thetaLength = PI/2, only the sphere's top half) and 'curve'
+  // (already translated above) already have their base at y=0.
   geoms.push(bodyGeo);
 
   // Only flat-topped rectangular blocks get a full grid of studs - a slope
@@ -145,28 +219,34 @@ export function buildBlockGeometry(part: BlockPart): THREE.BufferGeometry {
   if (hasStuds(part.heightKind) && part.shapeKind === 'rect') {
     for (let x = 0; x < part.studsX; x++) {
       for (let z = 0; z < part.studsZ; z++) {
-        const studGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
         const sx = -width / 2 + STUD_UNIT * (x + 0.5);
         const sz = -depth / 2 + STUD_UNIT * (z + 0.5);
-        studGeo.translate(sx, height + STUD_HEIGHT / 2, sz);
-        geoms.push(studGeo);
+        geoms.push(buildStud(new THREE.Vector3(sx, height + STUD_HEIGHT / 2, sz), new THREE.Vector3(0, 1, 0)));
       }
     }
-  } else if (hasStuds(part.heightKind) && part.shapeKind === 'round') {
-    // Round bricks get a single centered stud, as classic round 1x1-style
-    // pieces do, rather than a grid that wouldn't fit the circular top.
-    const studGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
-    studGeo.translate(0, height + STUD_HEIGHT / 2, 0);
-    geoms.push(studGeo);
+  } else if (hasStuds(part.heightKind) && (part.shapeKind === 'round' || part.shapeKind === 'dome' || part.shapeKind === 'cone')) {
+    // These get a single centered stud, as classic round 1x1-style pieces
+    // do, rather than a grid that wouldn't fit the circular top - UNLESS
+    // customStudDirection says the piece's real connector points somewhere
+    // else entirely (a side-facing or diagonal branch stud), in which case
+    // it's positioned on the part's own mid-height "waist" instead of its
+    // apex, so it reads as a branch rather than a second treetop.
+    if (part.customStudDirection) {
+      const dir = new THREE.Vector3(...part.customStudDirection).normalize();
+      const origin = new THREE.Vector3(0, height / 2, 0).addScaledVector(dir, Math.min(width, depth) / 2);
+      geoms.push(buildStud(origin, dir));
+    } else {
+      const apexY = part.shapeKind === 'round' ? height
+        : part.shapeKind === 'cone' ? Math.min(width, depth) * 1.1
+        : Math.min(width, depth) / 2; // 'dome'
+      geoms.push(buildStud(new THREE.Vector3(0, apexY + STUD_HEIGHT / 2, 0), new THREE.Vector3(0, 1, 0)));
+    }
   }
 
   if (part.sideStud) {
     // A single stud on the front (+Z) vertical face, laid on its side, for
     // building perpendicular to the normal stud direction ("SNOT" pieces).
-    const sideStudGeo = new THREE.CylinderGeometry(STUD_RADIUS, STUD_RADIUS, STUD_HEIGHT, 16);
-    sideStudGeo.rotateX(Math.PI / 2);
-    sideStudGeo.translate(0, height / 2, depth / 2 + STUD_HEIGHT / 2);
-    geoms.push(sideStudGeo);
+    geoms.push(buildStud(new THREE.Vector3(0, height / 2, depth / 2 + STUD_HEIGHT / 2), new THREE.Vector3(0, 0, 1)));
   }
 
   const normalized = geoms.map(g => {
@@ -185,6 +265,20 @@ function hwSafe(width: number): number {
   return width / 2;
 }
 
+/**
+ * The direction (in the part's own local space, before any placement
+ * rotation) that this part's PRIMARY connecting stud points. Every regular
+ * block's primary connector points straight up (0,1,0) - the placement
+ * tool in Viewport.tsx only changes its "land on top" behavior for parts
+ * whose primary direction is NOT mostly vertical (side brackets, angled
+ * branch studs), so normal block placement/stacking is unaffected.
+ */
+export function primaryStudDirection(part: BlockPart): [number, number, number] {
+  if (part.sideStud) return [0, 0, 1];
+  if (part.customStudDirection) return part.customStudDirection;
+  return [0, 1, 0];
+}
+
 export const BLOCK_CATEGORIES = [
   'Basics', 'Plates & Jumpers', 'Tiles', 'Slopes & Angles', 'Round & Curved',
   'Arches', 'Bow & Wedge', 'Nature', 'Side / SNOT'
@@ -199,7 +293,11 @@ function basics(): BlockPart[] {
 }
 
 function plates(): BlockPart[] {
-  const sizes: [number, number][] = [[1, 1], [1, 2], [1, 4], [2, 2], [2, 4], [2, 6]];
+  const sizes: [number, number][] = [
+    [1, 1], [1, 2], [1, 4], [2, 2], [2, 4], [2, 6],
+    // Large baseplate-style plates.
+    [10, 10], [16, 16], [20, 20], [32, 32]
+  ];
   return sizes.map(([x, z]) => ({
     id: `plate-${x}x${z}`, label: `${x}x${z} Plate`, category: 'Plates & Jumpers',
     studsX: x, studsZ: z, heightKind: 'plate', shapeKind: 'rect'
@@ -224,10 +322,15 @@ function slopes(): BlockPart[] {
 
 function round(): BlockPart[] {
   const sizes: [number, number][] = [[1, 1], [2, 2], [4, 4]];
-  return sizes.map(([x, z]) => ({
+  const roundParts: BlockPart[] = sizes.map(([x, z]) => ({
     id: `round-${x}x${z}`, label: `${x}x${z} Round`, category: 'Round & Curved',
     studsX: x, studsZ: z, heightKind: 'brick', shapeKind: 'round'
   }));
+  const curveParts: BlockPart[] = [[2, 2]].map(([x, z]) => ({
+    id: `curve-${x}x${z}`, label: `${x}x${z} Curve`, category: 'Round & Curved',
+    studsX: x, studsZ: z, heightKind: 'brick', shapeKind: 'curve'
+  }));
+  return [...roundParts, ...curveParts];
 }
 
 function arches(): BlockPart[] {
@@ -239,19 +342,30 @@ function arches(): BlockPart[] {
 }
 
 function bows(): BlockPart[] {
-  const sizes: [number, number][] = [[4, 2]];
-  return sizes.map(([x, z]) => ({
+  const sizes: [number, number][] = [[1, 2], [2, 2], [4, 2]];
+  const bowParts: BlockPart[] = sizes.map(([x, z]) => ({
     id: `bow-${x}x${z}`, label: `${x}x${z} Bow`, category: 'Bow & Wedge',
     studsX: x, studsZ: z, heightKind: 'brick', shapeKind: 'bow'
   }));
+  const wedgeParts: BlockPart[] = [
+    { id: 'wedge-2x2-left', label: '2x2 Wedge Left', category: 'Bow & Wedge', studsX: 2, studsZ: 2, heightKind: 'brick', shapeKind: 'wedge', mirror: true },
+    { id: 'wedge-2x2-right', label: '2x2 Wedge Right', category: 'Bow & Wedge', studsX: 2, studsZ: 2, heightKind: 'brick', shapeKind: 'wedge', mirror: false }
+  ];
+  return [...bowParts, ...wedgeParts];
 }
 
 function nature(): BlockPart[] {
-  const sizes: [number, number][] = [[1, 1], [2, 2], [4, 4]];
-  return sizes.map(([x, z]) => ({
-    id: `leaf-${x}x${z}`, label: `${x}x${z} Foliage`, category: 'Nature',
-    studsX: x, studsZ: z, heightKind: 'brick', shapeKind: 'dome'
-  }));
+  return [
+    { id: 'tree-1x1-1', label: '1x1 Tree 1', category: 'Nature', studsX: 1, studsZ: 1, heightKind: 'brick', shapeKind: 'dome' },
+    { id: 'tree-1x1-2', label: '1x1 Tree 2', category: 'Nature', studsX: 1, studsZ: 1, heightKind: 'brick', shapeKind: 'cone' },
+    // A branch stud facing sideways - lets a tree piece connect to
+    // something beside it rather than only stacking straight up.
+    { id: 'tree-1x1-3', label: '1x1 Tree 3', category: 'Nature', studsX: 1, studsZ: 1, heightKind: 'brick', shapeKind: 'cone', customStudDirection: [0, 0, 1] },
+    // A branch stud at a 45-degree angle (up and outward).
+    { id: 'tree-1x1-4', label: '1x1 Tree 4', category: 'Nature', studsX: 1, studsZ: 1, heightKind: 'brick', shapeKind: 'dome', customStudDirection: [0.7071, 0.7071, 0] },
+    { id: 'leaf-2x2', label: '2x2 Foliage', category: 'Nature', studsX: 2, studsZ: 2, heightKind: 'brick', shapeKind: 'dome' },
+    { id: 'leaf-4x4', label: '4x4 Foliage', category: 'Nature', studsX: 4, studsZ: 4, heightKind: 'brick', shapeKind: 'dome' }
+  ];
 }
 
 function sideSnot(): BlockPart[] {

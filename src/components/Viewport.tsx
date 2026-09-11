@@ -53,7 +53,7 @@ import {
   createRockGeometry
 } from '../lib/landscapeGeometry';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
-import { getBlockPart, buildBlockGeometry, STUD_UNIT, BRICK_HEIGHT, PLATE_HEIGHT, BlockPart } from '../lib/blockKitGeometry';
+import { getBlockPart, buildBlockGeometry, primaryStudDirection, STUD_UNIT, BRICK_HEIGHT, PLATE_HEIGHT, BlockPart } from '../lib/blockKitGeometry';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
 import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier } from '../types';
@@ -201,6 +201,26 @@ function blockPlacementOverlaps(
     if (overlapX > EPS && overlapY > EPS && overlapZ > EPS) return true;
   }
   return false;
+}
+
+/**
+ * Where a block being placed should land vertically, given what its
+ * raycast landed on. Hitting the TOP of another block-kit piece keeps the
+ * existing, working "stack on top" behavior unchanged (snappedY = the hit
+ * point's own height) - that's deliberately untouched here. Hitting a
+ * SIDE (or bottom) face instead means attaching alongside at that piece's
+ * own base height, not at the arbitrary height the ray happened to hit
+ * partway up its side - which is what parts with a horizontal primary
+ * stud (brackets, a tree's side branch) need in order to sit flush next
+ * to what they're plugging into, the same way real interlocking pieces do.
+ */
+function resolveBlockTargetY(intersect: THREE.Intersection, hitShape: Shape, hitPointY: number): number {
+  let worldNormal = new THREE.Vector3(0, 1, 0);
+  if (intersect.face) {
+    worldNormal = intersect.face.normal.clone().transformDirection(intersect.object.matrixWorld).normalize();
+  }
+  const isTopHit = worldNormal.y > 0.7;
+  return isTopHit ? hitPointY : hitShape.position[1];
 }
 
 function createFallbackTexture(): THREE.Texture {
@@ -5251,11 +5271,12 @@ function Scene() {
         const groundHit = new THREE.Vector3();
         if (ray.intersectPlane(groundPlane, groundHit)) hitPoint = groundHit;
       } else {
-        // Block-to-block snap: land on top of whatever block was clicked,
-        // matching how a stud-block extension stacks new pieces on existing ones.
+        // Block-to-block snap: land on top of whatever block was clicked
+        // (or, for a side-face hit, attach alongside it at its own base
+        // height instead) - see resolveBlockTargetY.
         const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
         if (hitShape?.tags?.includes('block-kit')) {
-          snappedY = hitPoint.y;
+          snappedY = resolveBlockTargetY(shapeIntersect, hitShape, hitPoint.y);
         }
       }
 
@@ -5300,7 +5321,13 @@ function Scene() {
       addShape(newShape);
       commitHistory();
       setBlockPlacementDraft({ position: placementPosition, rotationSteps });
-      setMeasurements(`Placed ${part.label}. Arrow keys rotate the next block - click to place another, Esc to stop.`);
+      // Parts whose primary connector isn't a plain top stud (brackets, a
+      // tree's branch stud) need to be manually rotated to face whatever
+      // they're plugging into - arrow keys do that, same as any block.
+      const isDirectionalPart = Math.abs(primaryStudDirection(part)[1]) < 0.5;
+      setMeasurements(isDirectionalPart
+        ? `Placed ${part.label}. Arrow keys rotate it so its stud faces the right way - click to place another, Esc to stop.`
+        : `Placed ${part.label}. Arrow keys rotate the next block - click to place another, Esc to stop.`);
       return;
     }
 
@@ -5396,7 +5423,7 @@ function Scene() {
           if (ray.intersectPlane(groundPlane, groundHit)) hitPoint = groundHit;
         } else {
           const hitShape = shapes.find(s => s.id === shapeIntersect.object.userData.id);
-          if (hitShape?.tags?.includes('block-kit')) { snappedY = hitPoint.y; }
+          if (hitShape?.tags?.includes('block-kit')) { snappedY = resolveBlockTargetY(shapeIntersect, hitShape, hitPoint.y); }
         }
         const rotationSteps = blockPlacementDraft?.rotationSteps ?? activeBlockPart.rotationSteps ?? 0;
         const [snappedX, snappedZ] = snapBlockFootprintCenter(part, rotationSteps, hitPoint.x, hitPoint.z);

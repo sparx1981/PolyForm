@@ -2576,21 +2576,15 @@ console.log("Brick Picker toolbar ready:", brickPicker.id);`
 // single grouped object - it appears as one Outliner entry, exactly like
 // a box.
 
-// 1. Category -> real catalog part IDs (see sdk.materials-style catalogs -
-// these correspond to PolyForm's built-in block catalog).
-const CATEGORIES = {
-  "Basics": ["brick-1x1", "brick-1x2", "brick-1x4", "brick-2x2", "brick-2x4", "brick-2x8"],
-  "Plates & Jumpers": ["plate-1x1", "plate-1x2", "plate-2x2", "plate-2x4"],
-  "Tiles": ["tile-1x1", "tile-2x2", "tile-2x4"],
-  "Slopes & Angles": ["slope-1x2", "slope-2x2", "slope-2x3"],
-  "Round & Curved": ["round-1x1", "round-2x2", "round-4x4"],
-  "Arches": ["arch-2x1", "arch-4x1"],
-  "Bow & Wedge": ["bow-4x2"],
-  "Nature": ["leaf-1x1", "leaf-2x2", "leaf-4x4"],
-  "Side / SNOT": ["bracket-1x1", "bracket-1x2"]
-};
-
-const SWATCH_PALETTE = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"];
+// The full block catalog, straight from the SDK - sdk.blockKit.list() is
+// always in sync with whatever parts PolyForm's Block Picker tool actually
+// supports, so this example never needs its own hand-maintained copy of
+// the category/part-id lists (which would only go stale as parts are
+// added). Each category gets its OWN collapsible section (matching the
+// original SketchUp-style layout - a stack of sections, not a single
+// tab-switched list).
+const CATALOG = sdk.blockKit.list();
+const CATEGORY_NAMES = [...new Set(CATALOG.map(p => p.category))];
 
 // Builds the tile-button items for one category. Each tile's own code
 // resolves the placement colour LIVE, at the moment it's clicked (reading
@@ -2601,15 +2595,15 @@ const SWATCH_PALETTE = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "
 function buildBlockTiles(category) {
   const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
   const color = colourWidget?.selectedColor || "#dc2626";
-  return (CATEGORIES[category] || []).map(partId => ({
-    id: "bk-part-" + partId,
+  return CATALOG.filter(p => p.category === category).map(p => ({
+    id: "bk-part-" + p.id,
     type: "button",
     variant: "tile",
-    label: partId.replace(/^[a-z]+-/, ""),
+    label: p.label,
     icon: "Box",
     color,
-    previewGeometry: sdk.blockKit.getGeometry(partId),
-    tooltip: "Place a " + partId,
+    previewGeometry: sdk.blockKit.getGeometry(p.id),
+    tooltip: "Place a " + p.label,
     // Passing the whole palette array (instead of one colour string) to
     // sdk.blockKit.place tells the placement tool to pick a fresh random
     // colour from it for EVERY block placed, not just once.
@@ -2618,7 +2612,7 @@ function buildBlockTiles(category) {
       var swatch = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
       var palette = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"];
       var choice = (rnd && rnd.checked) ? palette : ((swatch && swatch.selectedColor) || "#dc2626");
-      sdk.blockKit.place("\${partId}", choice);
+      sdk.blockKit.place("\${p.id}", choice);
     \`
   }));
 }
@@ -2690,43 +2684,18 @@ const panel = sdk.toolbars.create({
         console.log(btn?.previewContent || "No blocks placed yet.");
       \`
     },
-    {
-      id: "bk-tabs", type: "tabs", label: "Category",
-      options: Object.keys(CATEGORIES), selected: "Basics",
-      code: \`
-        const tiles = (function buildTiles(category) {
-          const catalog = ${JSON.stringify({
-            'Basics': ["brick-1x1", "brick-1x2", "brick-1x4", "brick-2x2", "brick-2x4", "brick-2x8"],
-            'Plates & Jumpers': ["plate-1x1", "plate-1x2", "plate-2x2", "plate-2x4"],
-            'Tiles': ["tile-1x1", "tile-2x2", "tile-2x4"],
-            'Slopes & Angles': ["slope-1x2", "slope-2x2", "slope-2x3"],
-            'Round & Curved': ["round-1x1", "round-2x2", "round-4x4"],
-            'Arches': ["arch-2x1", "arch-4x1"],
-            'Bow & Wedge': ["bow-4x2"],
-            'Nature': ["leaf-1x1", "leaf-2x2", "leaf-4x4"],
-            'Side / SNOT': ["bracket-1x1", "bracket-1x2"]
-          })};
-          const colourWidget = sdk.toolbars.getButton("block-kit-panel", "bk-colour");
-          const color = colourWidget?.selectedColor || "#dc2626";
-          return (catalog[category] || []).map(partId => ({
-            id: "bk-part-" + partId,
-            type: "button",
-            variant: "tile",
-            label: partId.replace(/^[a-z]+-/, ""),
-            icon: "Box",
-            color,
-            previewGeometry: sdk.blockKit.getGeometry(partId),
-            tooltip: "Place a " + partId,
-            code: 'var rnd = sdk.toolbars.getButton("block-kit-panel", "bk-random-colour"); var swatch = sdk.toolbars.getButton("block-kit-panel", "bk-colour"); var palette = ["#dc2626", "#2563eb", "#facc15", "#16a34a", "#f1f5f9", "#18181b", "#78350f", "#94a3b8"]; var choice = (rnd && rnd.checked) ? palette : ((swatch && swatch.selectedColor) || "#dc2626"); sdk.blockKit.place("' + partId + '", choice);'
-          }));
-        })(value);
-        sdk.toolbars.configureButton("block-kit-panel", "bk-blocks", { items: tiles });
-      \`
-    },
-    {
-      id: "bk-blocks", type: "section", label: "Blocks", icon: "Box", collapsed: false,
-      items: buildBlockTiles("Basics")
-    }
+    // One collapsible section per category (Basics, Plates & Jumpers, Tiles,
+    // ...) instead of a single tab-switched list - matches the original
+    // SketchUp-style layout, and means every category's blocks are always
+    // just a click-to-expand away rather than hidden behind a tab switch.
+    ...CATEGORY_NAMES.map((category, i) => ({
+      id: "bk-section-" + category.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      type: "section",
+      label: category,
+      icon: "Box",
+      collapsed: i !== 0,
+      items: buildBlockTiles(category)
+    }))
   ]
 });
 
