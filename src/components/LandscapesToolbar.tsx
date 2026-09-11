@@ -28,11 +28,19 @@ import {
   MousePointer2,
   PanelRightClose,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Trees,
+  Sprout,
+  Fence,
+  SlidersHorizontal,
+  Lamp,
+  Armchair,
+  Disc
 } from 'lucide-react';
 import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape } from '../types';
 import { createTerrainShape, generateTerrainHeights, TopographyPreset } from '../lib/terrain/terrainFactory';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
+import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { applyPadGradingToTerrain } from '../lib/terrain/padGeometry';
 import { flattenTerrainForFloorSlabs } from '../lib/archRoomAssembly';
 import { ROAD_MATERIALS } from '../lib/terrain/roadMaterials';
@@ -153,7 +161,9 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     theme,
     rightPanelVisible,
     isToolModifierDocked,
-    setIsToolModifierDocked
+    setIsToolModifierDocked,
+    activePlantSpecies,
+    setActivePlantSpecies
   } = useApp();
 
   const [isCivilPanelCollapsed, setIsCivilPanelCollapsed] = useState(false);
@@ -507,11 +517,12 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     setMeasurements?.('Selection, alignment drafts, and earthwork highlights cleared.');
   };
 
-  const [activeTier, setActiveTier] = useState<'terrain' | 'sculpt' | 'corridors' | 'pads' | null>(() => {
+  const [activeTier, setActiveTier] = useState<'terrain' | 'sculpt' | 'corridors' | 'pads' | 'vegetation' | null>(() => {
     if (activeTool === 'terrain') return 'terrain';
     if (activeTool === 'landscape_sculpt') return 'sculpt';
     if (activeTool === 'road') return 'corridors';
     if (activeTool === 'pad-rect' || activeTool === 'pad-circle' || activeTool === 'striping') return 'pads';
+    if (activeTool === 'tree' || activeTool === 'bush') return 'vegetation';
     return null;
   });
 
@@ -525,6 +536,11 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     } else if (activeTool === 'striping') {
       setActiveTier('pads');
       setPadSubTab('surface');
+    } else if (activeTool === 'tree' || activeTool === 'bush') {
+      setActiveTier('vegetation');
+    } else {
+      // Any other tool is active (wall, select, fence, railing, etc.) - hide all civil panels
+      setActiveTier(null);
     }
   }, [activeTool]);
 
@@ -625,6 +641,118 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
           />
         </div>
 
+        {/* Divider between Tier 2 and Vegetation & Site Furniture */}
+        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
+
+        {/* Vegetation & Site Furniture: Trees, Bushes/Shrubs, Fence, Railing, Lamp, Bench, Boulder */}
+        <div className="relative group">
+          <CivilToolButton
+            tool="tree"
+            label="Plant Tree"
+            subtitle="Place 3D architectural trees with natural canopy & species selection"
+            icon={<Trees size={20} />}
+            active={activeTool === 'tree'}
+            onClick={() => {
+              setActiveTool('tree');
+              setActiveTier(prev => prev === 'vegetation' && activeTool === 'tree' ? null : 'vegetation');
+              const defaultTree = PLANT_SPECIES_CATALOG.find(species => species.category === 'tree');
+              if (defaultTree && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'tree')) {
+                setActivePlantSpecies(defaultTree.id);
+              }
+              setConsoleOutput(c => [...c, '[Landscapes] Tree Placement active: select species and click terrain or ground to place.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="bush"
+            label="Plant Bush / Shrub"
+            subtitle="Place garden bushes, grasses, and foliage clusters"
+            icon={<Sprout size={20} />}
+            active={activeTool === 'bush'}
+            onClick={() => {
+              setActiveTool('bush');
+              setActiveTier(prev => prev === 'vegetation' && activeTool === 'bush' ? null : 'vegetation');
+              const defaultBush = PLANT_SPECIES_CATALOG.find(species => species.id === 'ribbon_grass') || PLANT_SPECIES_CATALOG.find(species => species.category === 'bush');
+              if (defaultBush && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'bush')) {
+                setActivePlantSpecies(defaultBush.id);
+              }
+              setConsoleOutput(c => [...c, '[Landscapes] Bush Placement active: select plant species and click terrain to place.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="fence"
+            label="Post & Rail Fence"
+            subtitle="Draw path-following perimeter fencing (click points, Enter to finish)"
+            icon={<Fence size={20} />}
+            active={activeTool === 'fence'}
+            onClick={() => {
+              setActiveTool('fence');
+              setConsoleOutput(c => [...c, '[Landscapes] Fence Tool active: click along path to place fence sections, click start point or press Enter to finish.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="railing"
+            label="Safety Railing"
+            subtitle="Draw path-following guardrails (click points, Enter to finish)"
+            icon={<SlidersHorizontal size={20} />}
+            active={activeTool === 'railing'}
+            onClick={() => {
+              setActiveTool('railing');
+              setConsoleOutput(c => [...c, '[Landscapes] Railing Tool active: click along path to place guardrails, click start point or press Enter to finish.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="lamp"
+            label="Street / Path Lamp"
+            subtitle="Place outdoor lantern & architectural light post (3.2m)"
+            icon={<Lamp size={20} />}
+            active={activeTool === 'lamp'}
+            onClick={() => {
+              setActiveTool('lamp');
+              setConsoleOutput(c => [...c, '[Landscapes] Lamp Post Tool active: click to place path light.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="bench"
+            label="Park / Garden Bench"
+            subtitle="Place outdoor wooden slat seating bench (1.8m)"
+            icon={<Armchair size={20} />}
+            active={activeTool === 'bench'}
+            onClick={() => {
+              setActiveTool('bench');
+              setConsoleOutput(c => [...c, '[Landscapes] Bench Tool active: click to place park bench.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="rock"
+            label="Landscape Boulder"
+            subtitle="Place natural faceted garden rock & boulder feature"
+            icon={<Disc size={20} />}
+            active={activeTool === 'rock'}
+            onClick={() => {
+              setActiveTool('rock');
+              setConsoleOutput(c => [...c, '[Landscapes] Boulder Tool active: click to place rock.']);
+            }}
+          />
+        </div>
+
         {/* Additional Civil Actions & Inspection Tools */}
         <div className={horizontal ? "ml-auto flex items-center gap-1" : "mt-auto flex flex-col items-center gap-1"}>
           {/* Earthwork Cut/Fill Volume Overlay Toggle */}
@@ -718,10 +846,16 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                     <span>Grading Pads</span>
                   </>
                 )}
+                {activeTier === 'vegetation' && (
+                  <>
+                    {activeTool === 'bush' ? <Sprout size={14} className="text-trimble-blue" /> : <Trees size={14} className="text-trimble-blue" />}
+                    <span>{activeTool === 'bush' ? 'Bushes & Flora' : 'Tree Species'}</span>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded font-bold">
-                  {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : 'PAD'}
+                  {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : activeTier === 'pads' ? 'PAD' : 'PLANT'}
                 </span>
                 {!isToolModifierDocked && (
                   <button
@@ -1739,6 +1873,78 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 5. Vegetation & Flora Species Picker (Trees / Bushes & Shrubs) */}
+            {activeTier === 'vegetation' && (
+              <div className="space-y-3.5">
+                <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTool('tree');
+                      const defaultTree = PLANT_SPECIES_CATALOG.find(species => species.category === 'tree');
+                      if (defaultTree && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'tree')) {
+                        setActivePlantSpecies(defaultTree.id);
+                      }
+                    }}
+                    className={cn(
+                      "flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
+                      activeTool === 'tree' ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    )}
+                  >
+                    Trees
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTool('bush');
+                      const defaultBush = PLANT_SPECIES_CATALOG.find(species => species.id === 'ribbon_grass') || PLANT_SPECIES_CATALOG.find(species => species.category === 'bush');
+                      if (defaultBush && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'bush')) {
+                        setActivePlantSpecies(defaultBush.id);
+                      }
+                    }}
+                    className={cn(
+                      "flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
+                      activeTool === 'bush' ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    )}
+                  >
+                    Bushes & Shrubs
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 max-h-72 overflow-y-auto pr-0.5">
+                  {PLANT_SPECIES_CATALOG
+                    .filter(species => activeTool === 'tree' ? species.category === 'tree' : species.category !== 'tree')
+                    .map(species => (
+                      <button
+                        key={species.id}
+                        type="button"
+                        onClick={() => setActivePlantSpecies(species.id)}
+                        title={species.description}
+                        className={cn(
+                          "p-2 rounded-lg border text-left transition-all cursor-pointer",
+                          activePlantSpecies === species.id
+                            ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-xs font-semibold"
+                            : "bg-gray-50 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
+                        )}
+                      >
+                        <div
+                          className="w-full h-2 rounded mb-1.5"
+                          style={{ backgroundColor: species.thumbnailColor || species.foliageColor }}
+                        />
+                        <div className="font-bold text-[11px] leading-tight truncate">{species.name}</div>
+                        <div className="text-[9px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          {species.defaultHeight.toFixed(1)}m &times; {species.defaultSpread.toFixed(1)}m
+                        </div>
+                      </button>
+                    ))}
+                </div>
+
+                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/60 text-[11px] text-gray-600 dark:text-gray-400">
+                  Click on terrain or ground to place a <strong>{PLANT_SPECIES_CATALOG.find(s => s.id === activePlantSpecies)?.name || 'plant'}</strong>.
+                </div>
               </div>
             )}
             </div>

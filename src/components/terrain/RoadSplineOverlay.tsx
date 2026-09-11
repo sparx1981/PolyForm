@@ -11,7 +11,7 @@ import { useApp } from '../../AppContext';
 import { RoadModifier, RoadMarkingPreset } from '../../types';
 import { generateRoadRibbonGeometry, applyRoadGradingToTerrain } from '../../lib/terrain/roadGeometry';
 import { evaluateCatmullRomSpline, calculateGradePercentage, validateSplineAlignment } from '../../lib/terrain/math';
-import { getRoadMaterial } from '../../lib/terrain/roadMaterials';
+import { getRoadMaterial, getCachedRoadTexture } from '../../lib/terrain/roadMaterials';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export default function RoadSplineOverlay() {
@@ -127,10 +127,20 @@ export default function RoadSplineOverlay() {
             {/* Road Corridor Surface Mesh */}
             {(() => {
               const roadMat = getRoadMaterial(road.material);
+              const roadTexture = getCachedRoadTexture(road.material);
+              if (roadTexture) {
+                // UVs are physically scaled: u spans 0..1 across road.width, v is cumulative
+                // station distance in meters - so repeat directly yields real-world tiling.
+                roadTexture.repeat.set(
+                  road.width / roadMat.tileSizeMeters,
+                  1 / roadMat.tileSizeMeters
+                );
+              }
               return (
                 <mesh geometry={roadGeo}>
                   <meshStandardMaterial
-                    color={roadMat.color}
+                    map={roadTexture || undefined}
+                    color={roadTexture ? '#ffffff' : roadMat.color}
                     roughness={roadMat.roughness}
                     metalness={roadMat.metalness}
                     emissive={isSelected ? '#0284c7' : '#000000'}
