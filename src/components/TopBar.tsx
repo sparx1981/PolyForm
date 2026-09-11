@@ -237,13 +237,19 @@ export default function TopBar() {
     // 2. If user is authenticated and this model has an ID, also sync to Firestore & Storage
     if (user && currentModelId) {
       try {
-        let snapshotHandled = false;
+        // Only guards the fallback itself from firing twice - the real
+        // snapshot callback below is always allowed to run and update the
+        // preview once it resolves, even if the fallback already fired.
+        // Storage upload round-trips routinely take longer than a few
+        // seconds, and previously this timer blocked the real preview from
+        // ever being saved once it lost the race, leaving previewUrl empty.
+        let fallbackFired = false;
         const fallbackTimer = setTimeout(async () => {
-          if (!snapshotHandled) {
-            snapshotHandled = true;
+          if (!fallbackFired) {
+            fallbackFired = true;
             await updateFirestoreModel('');
           }
-        }, 3000);
+        }, 8000);
 
         const updateFirestoreModel = async (previewUrl: string) => {
           try {
@@ -281,8 +287,6 @@ export default function TopBar() {
         window.dispatchEvent(new CustomEvent('request-snapshot', {
           detail: {
             callback: async (dataUrl: string) => {
-              if (snapshotHandled) return;
-              snapshotHandled = true;
               clearTimeout(fallbackTimer);
               let previewUrl = '';
               try {
@@ -328,15 +332,35 @@ export default function TopBar() {
     // 2. If user is authenticated, create in Firestore & Storage
     if (user) {
       try {
-        let snapshotHandled = false;
+        // The doc must only ever be created once (addDoc creates a new
+        // document each call), but the fallback and the real snapshot
+        // callback can both fire - whichever runs first creates the doc;
+        // if the fallback wins that race, the real callback backfills the
+        // preview onto the doc that already exists instead of creating a
+        // duplicate. Storage upload round-trips routinely take longer than
+        // a few seconds, so previously the loser was silently dropped and
+        // the model was left with no preview at all.
+        let docCreated = false;
+        let createdDocId: string | null = null;
         const fallbackTimer = setTimeout(async () => {
-          if (!snapshotHandled) {
-            snapshotHandled = true;
+          if (!docCreated) {
             await createFirestoreDoc('');
           }
-        }, 3000);
+        }, 8000);
 
         const createFirestoreDoc = async (previewUrl: string) => {
+          if (docCreated) {
+            if (createdDocId && previewUrl) {
+              try {
+                await updateDoc(doc(db, 'models', createdDocId), { previewUrl });
+                fetchModels();
+              } catch (fsErr) {
+                handleFirestoreError(fsErr, OperationType.UPDATE, `models/${createdDocId}`);
+              }
+            }
+            return;
+          }
+          docCreated = true;
           try {
             const docRef = await addDoc(collection(db, 'models'), {
               id: '',
@@ -357,6 +381,7 @@ export default function TopBar() {
               hasPassword: false,
               password: ''
             });
+            createdDocId = docRef.id;
             await updateDoc(doc(db, 'models', docRef.id), { id: docRef.id });
             setCurrentModelId(docRef.id);
             fetchModels();
@@ -368,8 +393,6 @@ export default function TopBar() {
         window.dispatchEvent(new CustomEvent('request-snapshot', {
           detail: {
             callback: async (dataUrl: string) => {
-              if (snapshotHandled) return;
-              snapshotHandled = true;
               clearTimeout(fallbackTimer);
               let previewUrl = '';
               try {

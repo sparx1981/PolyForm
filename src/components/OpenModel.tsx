@@ -28,6 +28,20 @@ import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, addDoc, s
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
 
+// Local, dependency-free placeholder - no network round-trip, so it can never
+// itself fail to load the way an external image URL (or an expired/blocked
+// Firebase Storage preview) can.
+const FALLBACK_PREVIEW = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 225"><rect width="400" height="225" fill="#e5e7eb"/><path d="M150 140 L180 100 L210 130 L240 90 L270 140 Z" fill="#9ca3af"/><circle cx="160" cy="90" r="14" fill="#9ca3af"/></svg>`
+);
+
+function handlePreviewError(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (img.src !== FALLBACK_PREVIEW) {
+    img.src = FALLBACK_PREVIEW;
+  }
+}
+
 interface OpenModelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -677,11 +691,12 @@ function ModelCard({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePub
       className="group relative bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-trimble-blue dark:hover:border-trimble-blue shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col"
     >
       <div className="relative aspect-video bg-gray-100 dark:bg-gray-900 overflow-hidden">
-        <img 
-          src={model.previewUrl || 'https://picsum.photos/seed/model/400/225'} 
-          alt={model.name} 
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-          referrerPolicy="no-referrer" 
+        <img
+          src={model.previewUrl || FALLBACK_PREVIEW}
+          alt={model.name}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          referrerPolicy="no-referrer"
+          onError={handlePreviewError}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
           <button className="w-full py-2 bg-white text-gray-900 rounded-xl text-xs font-bold shadow-lg flex items-center justify-center gap-2">
@@ -774,11 +789,12 @@ function ModelRow({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePubl
       <td className="px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900 shrink-0">
-            <img 
-              src={model.previewUrl || 'https://picsum.photos/seed/model/100/100'} 
-              alt={model.name} 
-              className="w-full h-full object-cover" 
-              referrerPolicy="no-referrer" 
+            <img
+              src={model.previewUrl || FALLBACK_PREVIEW}
+              alt={model.name}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              onError={handlePreviewError}
             />
           </div>
           <span className="font-bold text-gray-900 dark:text-white truncate">{model.name}</span>

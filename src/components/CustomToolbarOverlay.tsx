@@ -4,7 +4,7 @@ import { CustomToolbarDef, CustomToolbarItem } from '../types';
 import { DynamicIcon } from './ui/DynamicIcon';
 import { DeveloperSDK } from '../services/developerService';
 import { cn } from '../lib/utils';
-import { GripVertical, X, ChevronUp, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
+import { GripVertical, X, ChevronUp, ChevronDown, Sparkles, Loader2, PanelRightClose } from 'lucide-react';
 
 interface RunningItemState {
   [itemId: string]: boolean;
@@ -308,6 +308,17 @@ export const CustomToolbarOverlay: React.FC = () => {
     setCollapsedToolbars(prev => ({ ...prev, [toolbarId]: !prev[toolbarId] }));
   };
 
+  // Lets the user switch a custom toolbar between floating (draggable) and
+  // docked (fixed to a side of the viewport) directly from its own header,
+  // independent of whatever position the script that created it specified.
+  const toggleDock = (toolbarId: string) => {
+    setCustomToolbars(prev => prev.map(t => {
+      if (t.id !== toolbarId) return t;
+      const isCurrentlyFloating = (t.position || 'top-center') === 'floating' || (t.position || '').startsWith('custom');
+      return { ...t, position: isCurrentlyFloating ? 'top-center' : 'floating' };
+    }));
+  };
+
   if (!customToolbars || customToolbars.length === 0) return null;
 
   return (
@@ -395,6 +406,17 @@ export const CustomToolbarOverlay: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => toggleDock(toolbar.id)}
+                  className={cn(
+                    "p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors",
+                    isFloating ? "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" : "text-trimble-blue bg-trimble-blue/10"
+                  )}
+                  title={isFloating ? "Dock Toolbar" : "Undock Toolbar (Make Floating)"}
+                >
+                  <PanelRightClose size={13} />
+                </button>
                 <button
                   type="button"
                   onClick={() => toggleCollapse(toolbar.id)}
