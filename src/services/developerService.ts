@@ -144,6 +144,7 @@ import {
 } from '../lib/landscapeGeometry';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
+import { createTerrainShape } from '../lib/terrain/terrainFactory';
 import { generateTimberFraming, TimberFrameOptions } from '../lib/timberFrameGenerator';
 import {
   createWallGeometry,
@@ -185,14 +186,17 @@ export interface SDK {
   pushPull: (shape: Shape, amount: number) => Shape;
   applyColor: (shape: Shape, color: string) => void;
   setTag: (shape: Shape, key: string, value: string) => void;
+  setName: (shape: Shape, name: string) => void;
   getObjectByName: (name: string) => Shape | undefined;
   getSelectedObject: () => Shape | null;
+  select: (idOrIds: string | string[]) => void;
   deleteObject: (id: string) => void;
   saveScene: (name: string) => void;
   setSkybox: (type: any, blur?: number, rotation?: number, intensity?: number) => void;
   setFog: (settings: any) => void;
   addLight: (lightData: any) => void;
   setBevelType: (type: 'radius' | 'chamfer') => void;
+  setBevel: (shape: Shape, settings: { amount?: number, type?: 'radius' | 'chamfer', segments?: number }) => void;
   divideSurface: (shapeId: string, faceIndex: number, divisions?: number | [number, number]) => void;
   addProjectorLight: (lightData: any) => void;
   performCSG: (targetId: string, cutterId: string, operation: 'SUBTRACTION' | 'UNION' | 'INTERSECTION') => void;
@@ -336,6 +340,18 @@ export interface SDK {
       length?: number;
       height?: number;
       size?: number;
+    }) => Shape;
+    createTerrain: (options: {
+      width: number;
+      depth: number;
+      resolution: number;
+      topography: 'flat' | 'rolling' | 'ridge' | 'terraced';
+      roughness?: number;
+      heightScale?: number;
+      textureId?: string;
+      textureScale?: number;
+      position?: [number, number, number];
+      name?: string;
     }) => Shape;
     applyTerrainTexture: (textureId: string) => void;
     listPlantCatalog: () => PlantSpecies[];
@@ -1340,6 +1356,24 @@ export class DeveloperSDK implements SDK {
         this.setShapes(prev => [...prev, furnShape]);
         this.log(`Added site furniture: ${type} at [${pos.join(', ')}].`);
         return furnShape;
+      },
+
+      createTerrain: (options: {
+        width: number;
+        depth: number;
+        resolution: number;
+        topography: 'flat' | 'rolling' | 'ridge' | 'terraced';
+        roughness?: number;
+        heightScale?: number;
+        textureId?: string;
+        textureScale?: number;
+        position?: [number, number, number];
+        name?: string;
+      }): Shape => {
+        const terrainShape = createTerrainShape(options);
+        this.setShapes(prev => [...prev, terrainShape]);
+        this.log(`Created terrain canvas (${options.width}m x ${options.depth}m, ${options.topography}).`);
+        return terrainShape;
       },
 
       applyTerrainTexture: (textureId: string): void => {

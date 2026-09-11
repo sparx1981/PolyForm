@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LAYER } from './ui/Surface';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Upload, Plus, AlertCircle, Globe, User, Users, Settings, Circle as CircleIcon, Square as SquareIcon, Box as BoxIcon, Triangle as TriangleIcon, Cone as ConeIcon, Pyramid as PyramidIcon, Torus as TorusIcon, CircleDot, MousePointer2, Eraser, PaintBucket, Move, ArrowUpFromLine, RotateCw, Maximize, CornerUpRight, Orbit, Hand, ZoomIn, Sparkles, Search, MoreHorizontal, Video, Image, Palette, Layers, Box, PenLine, Radio, Zap, Disc, Hexagon, FileCode, FileText, Scissors, Trees, Ruler, Compass, Eye, EyeOff, Copy, Group, Undo, Redo, Hammer, Building, Home, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react';
+import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Upload, Plus, AlertCircle, Globe, User, Users, Settings, Circle as CircleIcon, Square as SquareIcon, Box as BoxIcon, Triangle as TriangleIcon, Cone as ConeIcon, Pyramid as PyramidIcon, Torus as TorusIcon, CircleDot, MousePointer2, Eraser, PaintBucket, Move, ArrowUpFromLine, RotateCw, Maximize, CornerUpRight, Orbit, Hand, ZoomIn, Sparkles, Search, MoreHorizontal, Video, Image, Palette, Layers, Box, PenLine, Radio, Zap, Disc, Hexagon, FileCode, FileText, Scissors, Trees, Ruler, Compass, Eye, EyeOff, Copy, Group, Undo, Redo, Hammer, Building, Home, CheckCircle2, ChevronDown, RefreshCw, LayoutGrid, StickyNote, Lightbulb, SlidersHorizontal } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
@@ -1346,7 +1346,11 @@ console.log("Staircase generated:", stairs.id);`
     {
       title: "Site Planning, Specimen Trees & Urban Furniture",
       description: "Populates the site with botanical specimens from the 3D plant catalog, site furniture, and terrain ground textures.",
-      code: `// Place specimen trees and flowering shrubs
+      code: `// Create a terrain canvas first - applyTerrainTexture only re-textures an
+// EXISTING terrain shape, it does not create one on its own.
+sdk.landscape.createTerrain({ width: 30, depth: 30, resolution: 24, topography: "flat" });
+
+// Place specimen trees and flowering shrubs
 sdk.landscape.addPlant("english_oak", { position: [-5, 0, -4], scale: 1.2 });
 sdk.landscape.addPlant("scots_pine", { position: [6, 0, -4], scale: 1.1 });
 sdk.landscape.addPlant("hydrangea_bush", { position: [-3, 0, 2], scale: 0.9 });
@@ -1355,14 +1359,19 @@ sdk.landscape.addPlant("hydrangea_bush", { position: [-3, 0, 2], scale: 0.9 });
 sdk.landscape.addSiteFurniture("bench", { position: [-1, 0, 4], rotation: 0.3 });
 sdk.landscape.addSiteFurniture("lamp", { position: [4, 0, 4] });
 
-// Apply terrain texture
-sdk.landscape.applyTerrainTexture("grass");
+// Apply a real terrain texture preset id (see sdk.landscape.listTerrainTextures())
+sdk.landscape.applyTerrainTexture("manicured_turf");
 console.log("Site planning completed successfully!");`
     },
     {
       title: "Automated Structural Timber Framing",
       description: "Generates structural studs, sole/top plates, and roof rafters with standard 600mm spacing and timber member sizing.",
-      code: `// Generate studs, plates, and rafters
+      code: `// Timber framing is derived from existing walls/roof geometry, so build a
+// room and roof first (generateTimberFraming does nothing on an empty scene).
+sdk.architecture.createRoom({ width: 8, length: 10, height: 3.0, wallThickness: 0.20 });
+sdk.architecture.createRoof({ roofType: "gable", width: 8, depth: 10, pitchAngleDeg: 28, position: [0, 3.0, 0] });
+
+// Generate studs, plates, and rafters from that envelope
 const framing = sdk.architecture.generateTimberFraming({
   spacing: 0.60,
   rafterWidth: 0.045,
@@ -1380,13 +1389,12 @@ console.log(\`Generated \${framing.length} structural timber members.\`);`
 const building = sdk.createBox({ width: 4, height: 3, depth: 4, position: [0, 1.5, 0] });
 sdk.select(building.id);
 
-// Apply architectural material to selection
+// Apply architectural material to selection.
+// applyMaterial(target, material) takes EITHER a preset name OR a PBR options
+// object - not both combined - so pick one form per call.
 const obj = sdk.getSelectedObject();
 if (obj) {
-  sdk.materials.applyMaterial(obj.id, "vertical-timber", {
-    roughness: 0.7,
-    metalness: 0.05
-  });
+  sdk.materials.applyMaterial(obj.id, "vertical-timber");
 }
 
 // Enable crisp architectural linework
@@ -1408,7 +1416,7 @@ sdk.measurement.addDimension([0, 0, 0], [8, 0, 0], "Building Span: 8.00m");
 // Calculate 3D distance, run, rise, and slope pitch
 const m = sdk.measurement.measureDistance([0, 0, 0], [0, 3.2, 4.0]);
 console.log("Vector Distance:", m.formatted);
-console.log("Horizontal Run:", m.run.toFixed(2) + "m");
+console.log("Horizontal Run:", m.horizontalRun.toFixed(2) + "m");
 console.log("Vertical Rise:", m.rise.toFixed(2) + "m");
 console.log("Roof Pitch Angle:", m.pitchDeg.toFixed(1) + "°");`
     },
@@ -1432,11 +1440,51 @@ setTimeout(() => {
 const stats = sdk.scene.getStats();
 console.log("Total Shapes:", stats.shapeCount);
 console.log("Estimated Vertices:", stats.estimatedVertices);
-console.log("Bounding Box:", JSON.stringify(stats.boundingBox));
+console.log("Bounding Box:", JSON.stringify(stats.bounds));
 
 // Export full project JSON
 const sceneData = sdk.scene.exportJSON();
 console.log(\`Exported JSON size: \${(sceneData.length / 1024).toFixed(1)} KB\`);`
+    },
+    {
+      title: "Custom Toolbar with a One-Click Action",
+      description: "Creates a brand-new floating toolbar with a button, then attaches the button's click behavior to a piece of code (and shows adding a second button afterward).",
+      code: `// sdk.toolbars.create() adds a new toolbar to the viewport. Each button's
+// "code" string is its own independent script that runs only when that
+// button is clicked - it does NOT run when the toolbar itself is created.
+const toolbar = sdk.toolbars.create({
+  title: "My Site Tools",
+  position: "floating",       // or 'dock-left', 'top-left', 'bottom-right', ...
+  floatPosition: { x: 80, y: 120 },
+  items: [
+    {
+      id: "btn-plant-tree",
+      label: "Plant Tree",
+      icon: "Trees",           // Any Lucide icon name (or an emoji/short text)
+      tooltip: "Places an English oak at the origin",
+      color: "#16a34a",
+      code: \`
+        const tree = sdk.landscape.addPlant("english_oak", { position: [0, 0, 0] });
+        console.log("Planted:", tree.id);
+      \`
+    }
+  ]
+});
+
+// You can keep adding buttons to the same toolbar later
+sdk.toolbars.addButton(toolbar.id, {
+  id: "btn-add-bench",
+  label: "Add Bench",
+  icon: "Armchair",
+  tooltip: "Places a bench near the tree",
+  color: "#854d0e",
+  code: \`
+    const bench = sdk.landscape.addSiteFurniture("bench", { position: [2, 0, 0] });
+    console.log("Placed bench:", bench.id);
+  \`
+});
+
+console.log("Custom toolbar ready:", toolbar.id);`
     }
   ];
 
@@ -1663,12 +1711,12 @@ sdk.architecture.createStairs({
         },
         {
           name: "Create Architectural Railing",
-          code: `// Add standalone railing / balustrade
+          code: `// Add a standalone railing / balustrade segment.
+// createRailing takes a length (not start/end points) plus a position offset.
 sdk.architecture.createRailing({
-  start: [0, 3.0, 0],
-  end: [5, 3.0, 0],
+  length: 5.0,
   height: 1.0,
-  style: "glass-metal",
+  position: [0, 3.0, 0],
   color: "#94a3b8"
 });`
         }
@@ -1704,7 +1752,8 @@ console.log("Timber framing cleared.");`
       items: [
         {
           name: "Place Botanical Plant / Tree",
-          code: `// Species: 'english_oak', 'mediterranean_cypress', 'scots_pine', 'japanese_maple', 'boxwood_shrub', 'hydrangea_bush', 'ribbon_grass'
+          code: `// Species: 'english_oak', 'silver_birch', 'scots_pine', 'japanese_maple', 'mediterranean_cypress',
+// 'olive_tree', 'weeping_willow', 'boxwood_hedge_bush', 'hydrangea_bush', 'lavender_shrub', 'ribbon_grass'
 sdk.landscape.addPlant("english_oak", {
   position: [-4, 0, -3],
   scale: 1.25,
@@ -1713,20 +1762,32 @@ sdk.landscape.addPlant("english_oak", {
         },
         {
           name: "Place Site Furniture & Fixtures",
-          code: `// Types: 'bench', 'lamp', 'fence', 'rock', 'planter'
+          code: `// Types: 'bench', 'lamp', 'fence', 'rock', 'railing'
 sdk.landscape.addSiteFurniture("bench", { position: [0, 0, 3] });
 sdk.landscape.addSiteFurniture("lamp", { position: [3, 0, 3] });`
         },
         {
-          name: "Apply Terrain Surface Texture",
-          code: `// Textures: 'grass', 'gravel', 'paving', 'mulch', 'flagstone'
-sdk.landscape.applyTerrainTexture("grass");`
+          name: "Create Terrain & Apply a Surface Texture",
+          code: `// applyTerrainTexture only re-textures an EXISTING terrain shape, so create
+// one first via sdk.landscape.createTerrain(). Grid resolution must be >= 8.
+const terrain = sdk.landscape.createTerrain({
+  width: 40,
+  depth: 40,
+  resolution: 24,
+  topography: "flat" // 'flat' | 'rolling' | 'ridge' | 'terraced'
+});
+
+// Texture ids: 'lush_grass', 'manicured_turf', 'alpine_rock', 'forest_mulch',
+// 'desert_sand', 'cobblestone', 'crushed_gravel', 'fresh_snow',
+// 'weathered_asphalt', 'terracotta_clay'
+sdk.landscape.applyTerrainTexture("manicured_turf");
+console.log("Terrain created and textured:", terrain.id);`
         },
         {
           name: "List Plant Catalog Species",
-          code: `// Inspect all available species in catalog
+          code: `// Inspect all available species in the catalog
 const catalog = sdk.landscape.listPlantCatalog();
-console.log("Available plants:", catalog.map(p => p.commonName).join(", "));`
+console.log("Available plants:", catalog.map(p => p.name).join(", "));`
         }
       ]
     },
@@ -1740,13 +1801,27 @@ console.log("Available plants:", catalog.map(p => p.commonName).join(", "));`
 const block = sdk.createBox({ width: 3, height: 3, depth: 3, position: [0, 1.5, 0] });
 sdk.select(block.id);
 
-// Presets: 'red-brick', 'coursed-stone', 'polished-concrete', 'stucco-white', 'vertical-timber', 'architectural-glass', 'slate-tile'
+// applyMaterial(target, material) takes EITHER a preset name string OR a
+// { color?, roughness?, metalness?, opacity?, textureUrl?, normalScale?, uvScale? }
+// options object - not both combined. See sdk.materials.listPresets() for all ids.
 const obj = sdk.getSelectedObject();
 if (obj) {
-  sdk.materials.applyMaterial(obj.id, "red-brick", {
-    roughness: 0.8,
-    metalness: 0.0,
-    uvScale: [2, 2]
+  sdk.materials.applyMaterial(obj.id, "red-brick");
+}`
+        },
+        {
+          name: "Apply Custom PBR Material (No Preset)",
+          code: `// Pass an options object instead of a preset name for full custom PBR control
+const block = sdk.createBox({ width: 3, height: 3, depth: 3, position: [4, 1.5, 0] });
+sdk.select(block.id);
+
+const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.materials.applyMaterial(obj.id, {
+    color: "#8b5e3c",
+    roughness: 0.7,
+    metalness: 0.05,
+    uvScale: 2
   });
 }`
         },
@@ -1797,17 +1872,30 @@ console.log("Active unit is now:", sdk.measurement.getUnit());`
       items: [
         {
           name: "Select / Deselect Objects",
-          code: `// Select single or multiple IDs
-sdk.selection.select(["id-1", "id-2"]);
-// Or clear selection:
+          code: `// Create a couple of objects so there is something real to select
+const a = sdk.createBox({ width: 1, height: 1, depth: 1, position: [-2, 0.5, 0] });
+const b = sdk.createBox({ width: 1, height: 1, depth: 1, position: [2, 0.5, 0] });
+
+// Select both by ID
+sdk.selection.select([a.id, b.id]);
+console.log("Selected:", sdk.selection.getSelected().length, "objects");
+
+// Or clear the selection:
 // sdk.selection.deselectAll();`
         },
         {
           name: "Group & Ungroup",
-          code: `const selected = sdk.selection.getSelected();
+          code: `// Create two objects and select them together first
+const a = sdk.createBox({ width: 1.5, height: 1.5, depth: 1.5, position: [-2, 0.75, 0] });
+const b = sdk.createBox({ width: 1.5, height: 1.5, depth: 1.5, position: [2, 0.75, 0] });
+sdk.selection.select([a.id, b.id]);
+
+const selected = sdk.selection.getSelected();
 if (selected.length > 1) {
-  const group = sdk.selection.group(selected.map(s => s.id), "Facade Bay");
-  console.log("Created group:", group.id);
+  // group() returns the new group's ID as a string
+  const groupId = sdk.selection.group(selected.map(s => s.id), "Facade Bay");
+  console.log("Created group:", groupId);
+  // sdk.selection.ungroup(groupId); // Splits the group back into individual objects
 }`
         },
         {
@@ -1824,10 +1912,17 @@ if (obj) {
         },
         {
           name: "Align Objects Along Axis",
-          code: `// Axis: 'x'|'y'|'z', Alignment: 'min'|'center'|'max'
+          code: `// Create three objects at different offsets along Z, then select them
+const a = sdk.createBox({ width: 1, height: 1, depth: 1, position: [0, 0.5, -3] });
+const b = sdk.createBox({ width: 1, height: 1, depth: 1, position: [0, 0.5, 0] });
+const c = sdk.createBox({ width: 1, height: 1, depth: 1, position: [0, 0.5, 4] });
+sdk.selection.select([a.id, b.id, c.id]);
+
+// Axis: 'x'|'y'|'z', Alignment: 'min'|'center'|'max'
 const ids = sdk.selection.getSelected().map(s => s.id);
 if (ids.length > 1) {
   sdk.selection.alignObjects(ids, "z", "center");
+  console.log("Aligned", ids.length, "objects along Z (centered).");
 }`
         },
         {
@@ -1941,8 +2036,8 @@ sdk.camera.resetView("plan"); // Top-down architectural plan`
         },
         {
           name: "Set Section Depth Clipping",
-          code: `// Cut section planes across the building
-sdk.camera.setDepthClipping(true, 5.0, 50.0);`
+          code: `// Cut section planes across the building - takes a single settings object
+sdk.camera.setDepthClipping({ enabled: true, near: 5.0, far: 50.0 });`
         },
         {
           name: "Start Cinematic Auto-Orbit",
@@ -1966,8 +2061,9 @@ if (obj) sdk.camera.focusObject(obj.id);`
       items: [
         {
           name: "Set Skybox Environment",
-          code: `// Presets: 'golden-hour', 'studio', 'cloudy', 'sunset', 'night'
-sdk.setSkybox("golden-hour", { intensity: 1.5, blur: 0.1, rotation: 45 });`
+          code: `// setSkybox(type, blur?, rotation?, intensity?) - positional arguments, not an options object
+// Presets: 'golden-hour', 'studio', 'cloudy', 'sunset', 'night'
+sdk.setSkybox("golden-hour", 0.1, 45, 1.5);`
         },
         {
           name: "Configure Atmospheric Fog",
@@ -2052,6 +2148,225 @@ console.log("Stats:", stats);`
           code: `sdk.diagLog("SDK", "Script executed successfully", { timestamp: Date.now() });`
         }
       ]
+    },
+    {
+      title: "Custom Toolbars & Extensibility",
+      icon: <LayoutGrid className="w-4 h-4 text-fuchsia-500" />,
+      items: [
+        {
+          name: "Create a New Floating Toolbar",
+          code: `// sdk.toolbars.create() adds a brand-new toolbar to the viewport.
+// Each item's "code" string runs standalone (it gets its own "sdk" in scope)
+// whenever that button is clicked - it is NOT run when the toolbar is created.
+const toolbar = sdk.toolbars.create({
+  id: "site-tools",              // Optional - auto-generated if omitted
+  title: "Site Tools",
+  position: "floating",          // or 'top-left' | 'dock-left' | 'dock-top' | ...
+  orientation: "horizontal",
+  floatPosition: { x: 80, y: 120 },
+  items: [
+    {
+      id: "btn-add-bench",
+      label: "Bench",
+      icon: "Armchair",           // Any Lucide icon name, or an emoji/short text
+      tooltip: "Place a park bench at the origin",
+      color: "#854d0e",
+      code: \`
+        const bench = sdk.landscape.addSiteFurniture("bench", { position: [0, 0, 0] });
+        console.log("Placed bench:", bench.id);
+      \`
+    },
+    {
+      id: "btn-add-tree",
+      label: "Tree",
+      icon: "Trees",
+      tooltip: "Plant an English oak at the origin",
+      color: "#16a34a",
+      code: \`
+        const tree = sdk.landscape.addPlant("english_oak", { position: [2, 0, 0] });
+        console.log("Planted tree:", tree.id);
+      \`
+    }
+  ]
+});
+
+console.log("Created toolbar:", toolbar.id);`
+        },
+        {
+          name: "Add a Button to an Existing Toolbar",
+          code: `// Create a toolbar with one button, then attach a second button afterward -
+// this is exactly how you'd extend a toolbar your script (or another script) already made.
+const toolbar = sdk.toolbars.create({
+  title: "Measurement Kit",
+  position: "floating",
+  floatPosition: { x: 80, y: 240 },
+  items: [
+    {
+      id: "btn-span",
+      label: "8m Span",
+      icon: "Ruler",
+      tooltip: "Add an 8m dimension line",
+      code: \`sdk.measurement.addDimension([0, 0, 0], [8, 0, 0], "Span: 8.00m");\`
+    }
+  ]
+});
+
+// Attach another button to the toolbar we just created
+sdk.toolbars.addButton(toolbar.id, {
+  id: "btn-pitch-check",
+  label: "Pitch Check",
+  icon: "TrendingUp",
+  tooltip: "Measure rise/run/pitch between two points",
+  code: \`
+    const m = sdk.measurement.measureDistance([0, 0, 0], [0, 3.2, 4.0]);
+    console.log("Pitch:", m.pitchDeg.toFixed(1) + "°, Run:", m.horizontalRun.toFixed(2) + "m");
+  \`
+});`
+        },
+        {
+          name: "Attach a Button to the Built-in Basic Toolbar",
+          code: `// addToBasicToolbar() pins a button straight onto the app's own left tool rail,
+// instead of spawning a separate floating toolbar. hotkey is optional.
+sdk.toolbars.addToBasicToolbar({
+  id: "ext-quick-stairs",
+  label: "Floating Stairs",
+  icon: "Layers",
+  tooltip: "Quickly generate a parametric floating staircase",
+  color: "#f59e0b",
+  hotkey: "Ctrl+Alt+S",
+  code: \`
+    const stairs = sdk.architecture.createStairs({
+      style: "straight",
+      width: 1.2,
+      height: 3.0,
+      length: 4.2,
+      structure: "floating",
+      railing: "both",
+      position: [0, 0, 0]
+    });
+    console.log("Floating stairs placed:", stairs.id);
+  \`
+});`
+        },
+        {
+          name: "Configure or Remove a Toolbar / Button",
+          code: `// Create a toolbar to configure/remove
+const toolbar = sdk.toolbars.create({
+  title: "Temp Toolbar",
+  position: "floating",
+  floatPosition: { x: 80, y: 360 },
+  items: [{ id: "btn-a", label: "A", code: \`console.log("A clicked");\` }]
+});
+
+// Rename it and update a button's label/color after creation
+sdk.toolbars.configureToolbar(toolbar.id, { title: "Renamed Toolbar" });
+sdk.toolbars.configureButton(toolbar.id, "btn-a", { label: "A (Updated)", color: "#ef4444" });
+
+// Inspect what's registered
+console.log("All custom toolbars:", sdk.toolbars.list().map(t => t.title));
+console.log("Basic toolbar extensions:", sdk.toolbars.getBasicToolbarButtons().map(b => b.label));
+
+// Remove a single button, or the whole toolbar
+sdk.toolbars.removeButton(toolbar.id, "btn-a");
+sdk.toolbars.removeToolbar(toolbar.id);
+// sdk.toolbars.clear(); // Removes ALL custom toolbars and basic-toolbar extensions`
+        }
+      ]
+    },
+    {
+      title: "Scene Utilities: Notes, Extra Lights & Deformation",
+      icon: <StickyNote className="w-4 h-4 text-lime-500" />,
+      items: [
+        {
+          name: "Add a Sticky Note Annotation",
+          code: `// Pins a text note at a 3D position (visible in the Notes panel)
+sdk.addNote("Confirm structural bay spacing with engineer.", [0, 2, 0]);
+
+// Show or hide every note in the scene at once
+sdk.toggleAllNotes(true);`
+        },
+        {
+          name: "Add a Custom Rect Light",
+          code: `// A soft rectangular area light, e.g. simulating a window or light panel
+sdk.addRectLight("#ffedd5", 3.0, [0, 4, 0], [2, 1]);`
+        },
+        {
+          name: "Add a Projector Light",
+          code: `// A focused projector-style light - a thin wrapper around addLight()
+sdk.addProjectorLight({ color: "#ffffff", intensity: 4, position: [0, 5, 0] });`
+        },
+        {
+          name: "Deform an Object (Push/Pull Radial Sculpt)",
+          code: `// Create a sphere and select it first - deformObject acts on an existing shape
+const blob = sdk.createSphere({ radius: 1.5, position: [0, 1.5, 0] });
+sdk.select(blob.id);
+
+const obj = sdk.getSelectedObject();
+if (obj) {
+  sdk.deformObject(obj.id, { radius: 0.8, strength: 0.5, direction: "outward" });
+}`
+        },
+        {
+          name: "Rename an Object",
+          code: `// setName() renames a shape (shown in the Outliner) without changing geometry
+const mass = sdk.createBox({ width: 2, height: 2, depth: 2, position: [0, 1, 0] });
+sdk.setName(mass, "East Wing Massing");`
+        },
+        {
+          name: "Toggle Floor & Grid, Check Sync Status",
+          code: `sdk.toggleFloor(true);
+sdk.toggleGrid(false);
+sdk.setContactFriction(true); // Objects rest on the floor/each other instead of clipping through
+
+console.log("Sync status:", sdk.getSyncStatus());
+console.log("Collaborators online:", sdk.getCollaborators().length);`
+        }
+      ]
+    },
+    {
+      title: "Configuration Defaults: Doors, Windows, Stories, Sculpt & Roads",
+      icon: <SlidersHorizontal className="w-4 h-4 text-slate-500" />,
+      items: [
+        {
+          name: "Configure Door & Window Defaults",
+          code: `// New sdk.architecture.createDoor()/createWindow() calls fall back to these
+// defaults for any option you don't explicitly pass.
+sdk.architecture.configureDoorDefaults({ width: 0.90, height: 2.05 });
+sdk.architecture.configureWindowDefaults({ width: 1.20, height: 1.40 });
+
+console.log("Door defaults:", sdk.architecture.getDoorDefaults());
+console.log("Window defaults:", sdk.architecture.getWindowDefaults());`
+        },
+        {
+          name: "Set the Active Building Story",
+          code: `// Controls which floor level new walls/doors/windows are added to
+sdk.architecture.setActiveStory(2);
+console.log("Active story is now:", sdk.architecture.getActiveStory());`
+        },
+        {
+          name: "Configure Terrain Sculpt Brush Defaults",
+          code: `// Defaults used by the in-app sculpting brush (push/pull/smooth/flatten)
+sdk.landscape.configureSculptSettings({ radius: 4, strength: 0.6, mode: "smooth" });
+console.log("Sculpt settings:", sdk.landscape.getSculptSettings());`
+        },
+        {
+          name: "Configure Road/Path Defaults",
+          code: `sdk.landscape.configureRoadSettings({ width: 6, curbHeight: 0.15, material: "asphalt-weathered" });
+console.log("Road settings:", sdk.landscape.getRoadSettings());`
+        },
+        {
+          name: "Filter & Mode for Interactive Selection",
+          code: `// Filter: 'all' | 'shapes' | 'surfaces' - restricts what click/marquee selection can pick up
+// Mode: 'lasso' | 'marquee' - controls the interactive selection tool's drag behavior
+sdk.selection.setFilter("shapes");
+sdk.selection.setMode("marquee");`
+        },
+        {
+          name: "Save a Named Scene Snapshot",
+          code: `// Snapshots the current scene under a name you can reload later from the Scenes panel
+sdk.scene.saveScene("Pre-Renovation Baseline");`
+        }
+      ]
     }
   ];
 
@@ -2060,7 +2375,7 @@ console.log("Stats:", stats);`
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">Full API Documentation</h2>
-          <p className="text-sm text-gray-500">Comprehensive reference guide for all DraftUp Developer SDK functions, options, and subsystems.</p>
+          <p className="text-sm text-gray-500">Comprehensive reference guide for all PolyForm Developer SDK functions, options, and subsystems.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-4">
