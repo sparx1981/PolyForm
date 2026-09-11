@@ -2,18 +2,11 @@ import React, { useState } from 'react';
 import { useApp } from '../AppContext';
 import { SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 import { cn } from '../lib/utils';
-import { 
-  PersonStanding, 
-  Ruler, 
-  Check, 
-  Sparkles, 
-  MapPin, 
-  Eye, 
-  Tag, 
-  RotateCcw,
-  Layers
+import {
+  PersonStanding,
+  Ruler,
+  Check
 } from 'lucide-react';
-import { Shape } from '../types';
 
 export const ScaleFigureModifierSection: React.FC = () => {
   const {
@@ -21,8 +14,6 @@ export const ScaleFigureModifierSection: React.FC = () => {
     setActiveScaleFigureCharacter,
     activeScaleFigureHeight,
     setActiveScaleFigureHeight,
-    addShape,
-    commitHistory,
     setMeasurements,
     theme
   } = useApp();
@@ -43,7 +34,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
     const char = SCALE_FIGURE_CHARACTERS.find(c => c.id === charId);
     if (char) {
       setActiveScaleFigureHeight(char.height);
-      setMeasurements(`Selected scale figure archetype: ${char.name} (${char.height.toFixed(2)}m)`);
+      setMeasurements(`Selected scale figure: ${char.name} (${char.height.toFixed(2)}m)`);
     }
   };
 
@@ -51,29 +42,6 @@ export const ScaleFigureModifierSection: React.FC = () => {
     const clamped = Math.max(0.6, Math.min(2.5, Number(newHeight.toFixed(2))));
     setActiveScaleFigureHeight(clamped);
     setMeasurements(`Scale figure height set to ${clamped.toFixed(2)}m (Eye-level ${(clamped * 0.93).toFixed(2)}m)`);
-  };
-
-  const handlePlaceAtOrigin = () => {
-    const char = activeChar;
-    const targetH = currentHeight;
-
-    const newShape: Shape = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: `${char.name} (${targetH.toFixed(2)}m)`,
-      type: 'scale_figure',
-      position: [0, 0, 0],
-      quaternion: [0, 0, 0, 1],
-      args: [char.width, targetH, char.depth],
-      color: char.primaryColor,
-      roughness: 0.65,
-      metalness: 0.1,
-      archStyle: char.id,
-      tags: ['scale-figure', 'architecture', char.category.toLowerCase().replace(/\s+/g, '-')]
-    };
-
-    addShape(newShape);
-    commitHistory();
-    setMeasurements(`Placed ${char.name} at origin [0.00, 0.00, 0.00] (${targetH.toFixed(2)}m datum reference)`);
   };
 
   const heightPresets = [
@@ -84,63 +52,8 @@ export const ScaleFigureModifierSection: React.FC = () => {
     { label: 'Tall', height: 1.92 }
   ];
 
-  const eyeLevelDatum = (currentHeight * 0.93).toFixed(2);
-  const doorMargin = (2.10 - currentHeight).toFixed(2);
-
   return (
     <div className="space-y-4">
-      {/* Active Character Summary Card */}
-      <div className={cn(
-        "p-3 rounded-xl border transition-all",
-        theme === 'dark' ? "bg-gray-800/70 border-gray-700" : "bg-emerald-50/50 border-emerald-200/80"
-      )}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div 
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold shadow-xs shrink-0"
-              style={{ backgroundColor: activeChar.primaryColor }}
-            >
-              <PersonStanding size={18} />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-                <span>{activeChar.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-medium bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300">
-                  {currentHeight.toFixed(2)}m
-                </span>
-              </div>
-              <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                {activeChar.category} • {activeChar.propName}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => handleSelectCharacter(activeChar.id)}
-            title="Reset height to character archetype default"
-            className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-          >
-            <RotateCcw size={13} />
-          </button>
-        </div>
-
-        <p className="mt-2 text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
-          {activeChar.description}
-        </p>
-
-        {/* Feature Badges */}
-        <div className="mt-2.5 flex flex-wrap gap-1">
-          {activeChar.features.map((feat, idx) => (
-            <span 
-              key={idx}
-              className="text-[9px] px-1.5 py-0.5 rounded-full bg-white dark:bg-gray-700/80 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 flex items-center gap-1"
-            >
-              <Tag size={9} className="text-emerald-600 dark:text-emerald-400" />
-              <span>{feat}</span>
-            </span>
-          ))}
-        </div>
-      </div>
-
       {/* Height Adjustment Slider & Presets */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-[11px]">
@@ -195,30 +108,10 @@ export const ScaleFigureModifierSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Architectural Ergonomic Datums */}
-      <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700/60 space-y-1.5 text-[11px]">
-        <div className="font-bold text-[10px] uppercase tracking-wider text-gray-500 flex items-center gap-1">
-          <Eye size={12} className="text-emerald-600" />
-          <span>Ergonomic Benchmarks</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-[10px]">
-          <div className="bg-white dark:bg-gray-800 p-1.5 rounded border border-gray-200 dark:border-gray-700">
-            <span className="text-gray-400 block">Eye-Level Sightline</span>
-            <span className="font-mono font-bold text-gray-900 dark:text-gray-100">{eyeLevelDatum} m</span>
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-1.5 rounded border border-gray-200 dark:border-gray-700">
-            <span className="text-gray-400 block">Standard Door Head (2.1m)</span>
-            <span className="font-mono font-bold text-gray-900 dark:text-gray-100">
-              +{doorMargin} m clear
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* Category Tabs */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-gray-500">
-          <span>Character Archetypes</span>
+          <span>Characters</span>
           <span className="text-[10px] font-mono text-gray-400">{filteredCharacters.length} Models</span>
         </div>
 
@@ -279,19 +172,9 @@ export const ScaleFigureModifierSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Place Actions */}
-      <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
-        <button
-          onClick={handlePlaceAtOrigin}
-          className="w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white"
-        >
-          <MapPin size={14} />
-          <span>Place Benchmark at Origin [0, 0, 0]</span>
-        </button>
-        <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-1.5">
-          Tip: You can also hover & click anywhere on 3D slabs, roofs, or ground
-        </p>
-      </div>
+      <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center pt-2 border-t border-gray-200 dark:border-gray-800">
+        Tip: Hover & click anywhere on 3D slabs, roofs, or ground to place a scale figure
+      </p>
     </div>
   );
 };

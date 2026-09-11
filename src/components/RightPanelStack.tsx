@@ -7,7 +7,6 @@ import { useApp } from '../AppContext';
 import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
-import TerrainModifierStack from './terrain/TerrainModifierStack';
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier } from '../types';
@@ -375,7 +374,7 @@ export default function RightPanelStack() {
     commitHistory();
   };
 
-  const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame', 'terrainModifiers']);
+  const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame']);
 
   useEffect(() => {
     if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit'].includes(activeTool)) {
@@ -383,9 +382,6 @@ export default function RightPanelStack() {
     }
     if (activeTool === 'timber-frame') {
       setOpenPanels(prev => prev.includes('timberFrame') ? prev : [...prev, 'timberFrame']);
-    }
-    if (['road', 'pad-rect', 'pad-circle', 'striping'].includes(activeTool)) {
-      setOpenPanels(prev => prev.includes('terrainModifiers') ? prev : [...prev, 'terrainModifiers']);
     }
   }, [activeTool]);
 
@@ -4475,18 +4471,6 @@ export default function RightPanelStack() {
             </ErrorBoundary>
           </Panel>
         )}
-
-        <Panel 
-          id="terrainModifiers" 
-          title="Terrain Modifiers" 
-          icon={<Layers size={16} />} 
-          isOpen={openPanels.includes('terrainModifiers')}
-          onToggle={() => togglePanel('terrainModifiers')}
-        >
-          <ErrorBoundary name="Terrain Modifiers" compact>
-            <TerrainModifierStack />
-          </ErrorBoundary>
-        </Panel>
 
         {isMessagingDocked && isMessagingOpen && (
           <Panel 

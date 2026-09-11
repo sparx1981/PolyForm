@@ -925,10 +925,10 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                   <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 block mb-1.5">Topography Preset</label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {[
-                      { id: 'flat', label: 'Flat Site', desc: '0m Civil Grade' },
-                      { id: 'rolling', label: 'Rolling Hills', desc: 'Gentle Organic' },
-                      { id: 'ridge', label: 'Ridge / Slope', desc: 'Hillside' },
-                      { id: 'terraced', label: 'Terraced', desc: 'Stepped Benches' }
+                      { id: 'flat', label: 'Flat Site' },
+                      { id: 'rolling', label: 'Rolling Hills' },
+                      { id: 'ridge', label: 'Ridge / Slope' },
+                      { id: 'terraced', label: 'Terraced' }
                     ].map((t) => (
                       <button
                         key={t.id}
@@ -942,7 +942,6 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                         )}
                       >
                         <div className="font-bold text-xs">{t.label}</div>
-                        <div className="text-[9px] text-gray-500 dark:text-gray-400">{t.desc}</div>
                       </button>
                     ))}
                   </div>
@@ -1121,10 +1120,10 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                   </label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {[
-                      { mode: 'push', label: 'Push (Depress)', icon: <ArrowDownToLine size={13} />, desc: 'Excavate down' },
-                      { mode: 'pull', label: 'Pull (Elevate)', icon: <ArrowUpFromLine size={13} />, desc: 'Raise mound' },
-                      { mode: 'smooth', label: 'Smooth (Relax)', icon: <Waves size={13} />, desc: 'Blend surface' },
-                      { mode: 'flatten', label: 'Flatten (Level)', icon: <MinusSquare size={13} />, desc: 'Level to plane' },
+                      { mode: 'push', label: 'Push (Depress)', icon: <ArrowDownToLine size={13} /> },
+                      { mode: 'pull', label: 'Pull (Elevate)', icon: <ArrowUpFromLine size={13} /> },
+                      { mode: 'smooth', label: 'Smooth (Relax)', icon: <Waves size={13} /> },
+                      { mode: 'flatten', label: 'Flatten (Level)', icon: <MinusSquare size={13} /> },
                     ].map(item => {
                       const isSelected = landscapeSculptSettings.mode === item.mode;
                       return (
@@ -1146,9 +1145,6 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                             {item.icon}
                             <span>{item.label}</span>
                           </div>
-                          <span className={cn("text-[9px]", isSelected ? "text-blue-100" : "text-gray-500 dark:text-gray-400")}>
-                            {item.desc}
-                          </span>
                         </button>
                       );
                     })}
@@ -1221,7 +1217,6 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
 
                 {/* Global Utilities */}
                 <div className="pt-2 border-t border-gray-200 dark:border-gray-800 space-y-1.5">
-                  <div className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 mb-1">Quick Mesh Utilities</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
