@@ -12,15 +12,17 @@ interface Props {
 interface State {
   hasError: boolean;
   error?: Error;
+  resetKey: number;
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
-    hasError: false
+    hasError: false,
+    resetKey: 0
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { hasError: true, error, resetKey: 0 };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -29,7 +31,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public handleReset = () => {
     this.props.onReset?.();
-    this.setState({ hasError: false, error: undefined });
+    // Most callers don't pass onReset, and even when they do, flipping
+    // hasError back to false alone re-renders the SAME child element —
+    // if the crash came from bad local state inside that child rather
+    // than props/context, it hits the identical state on the very next
+    // render and immediately re-throws, leaving "Attempt Recovery"
+    // permanently unable to actually recover. Bumping resetKey as this
+    // boundary's own React `key` forces a full unmount/remount of the
+    // subtree, discarding whatever local state caused the crash.
+    this.setState((prev) => ({ hasError: false, error: undefined, resetKey: prev.resetKey + 1 }));
   };
 
   public render() {
@@ -64,6 +74,6 @@ export class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return <React.Fragment key={this.state.resetKey}>{this.props.children}</React.Fragment>;
   }
 }

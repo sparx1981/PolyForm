@@ -176,7 +176,11 @@ export function pointInPolygon2D(p: Vec2, poly: readonly Vec2[]): boolean {
   for (let i = 0, j = n - 1; i < n; j = i++) {
     const a = poly[i]!;
     const b = poly[j]!;
-    const intersects = a.y > p.y !== b.y > p.y &&
+    // b.y !== a.y is implied whenever the XOR condition holds, but only in
+    // exact arithmetic — guard explicitly against a 0/0 -> NaN comparison
+    // (always false, silently treating a real intersection as "none") if
+    // rounding ever produces an edge that's exactly horizontal at p.y.
+    const intersects = a.y > p.y !== b.y > p.y && b.y !== a.y &&
       p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x;
     if (intersects) inside = !inside;
   }

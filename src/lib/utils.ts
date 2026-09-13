@@ -42,6 +42,23 @@ export async function runToolboxScript(code: string, paramNames: string[], param
   ]);
 }
 
+/**
+ * The Gemini API key. `process.env.GEMINI_API_KEY` is not a bug — this app's
+ * primary deployment target (AI Studio) injects it at runtime specifically
+ * under that name (see .env.example), so that has to stay the first choice.
+ * The problem it had was reading `process.env` unconditionally: outside AI
+ * Studio (a plain `vite build` / static host), `process` itself is
+ * undefined, so `process.env.GEMINI_API_KEY` throws a ReferenceError before
+ * the `|| ''` fallback ever runs. Guarded here, with a `VITE_`-prefixed
+ * fallback so a plain Vite deployment has a way to supply the key too.
+ */
+export function getGeminiApiKey(): string {
+  if (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
+  }
+  return import.meta.env.VITE_GEMINI_API_KEY || '';
+}
+
 export function safelyToDate(val: any): Date {
   if (!val) return new Date(0);
   if (typeof val.toDate === 'function') return val.toDate();

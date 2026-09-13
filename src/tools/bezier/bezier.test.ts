@@ -60,6 +60,32 @@ describe('Bézier Curve Engine (v2.0)', () => {
       expect(points.length).toBe(31);
       expect(points[points.length - 1].distanceTo(knots[0].point)).toBeCloseTo(0);
     });
+
+    it('collapses a degenerate span (all four control points coincident) to a single point instead of duplicates', () => {
+      const samePoint = new THREE.Vector3(5, 5, 5);
+      const k0: BezierKnot = { point: samePoint.clone(), handleIn: null, handleOut: samePoint.clone(), mode: 'mirrored' };
+      const k1: BezierKnot = { point: samePoint.clone(), handleIn: samePoint.clone(), handleOut: null, mode: 'mirrored' };
+
+      const points = tessellateBezierSpan(k0, k1, 24);
+      expect(points.length).toBe(1);
+      expect(points[0].distanceTo(samePoint)).toBeCloseTo(0);
+    });
+
+    it('two coincident knots placed back-to-back tessellate to a single extra point, not a run of duplicates', () => {
+      const samePoint = new THREE.Vector3(5, 5, 5);
+      const knots: BezierKnot[] = [
+        { point: new THREE.Vector3(0, 0, 0), handleIn: null, handleOut: new THREE.Vector3(1, 0, 0), mode: 'mirrored' },
+        { point: samePoint.clone(), handleIn: null, handleOut: null, mode: 'mirrored' },
+        { point: samePoint.clone(), handleIn: null, handleOut: null, mode: 'mirrored' },
+      ];
+      const points = tessellateEntireCurve(knots, false, 10);
+      // Span 0->1 is a normal 11-point curve; span 1->2 is fully degenerate
+      // (both endpoints and both handles fall back to the same coincident
+      // point) and its first point is dropped as the overlap with span
+      // 0->1's own last point, so it contributes nothing further.
+      expect(points.length).toBe(11);
+      expect(points[points.length - 1].distanceTo(samePoint)).toBeCloseTo(0);
+    });
   });
 
   describe('Bézier Tool State Machine & Vector Mechanics', () => {

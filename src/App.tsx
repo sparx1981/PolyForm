@@ -246,6 +246,21 @@ function AppContent() {
     } = useApp();
   
     const quotaLocked = isQuotaLocked();
+
+    // The quota-lockdown countdown below derives its text from
+    // `Date.now()` at render time, so without something to force a
+    // re-render while nothing else changes, it only ever updates whenever
+    // some unrelated state happens to re-render this component — from the
+    // user's point of view the "paused for the next M:SS" text just sits
+    // there looking frozen. Ticks once a second only while the red banner
+    // would actually be shown.
+    const [, forceCountdownTick] = useState(0);
+    useEffect(() => {
+      if (!quotaLocked) return;
+      const interval = setInterval(() => forceCountdownTick((n) => n + 1), 1000);
+      return () => clearInterval(interval);
+    }, [quotaLocked]);
+
     const [draggedToolbarKey, setDraggedToolbarKey] = useState<ToolbarKey | null>(null);
     const [dragOverToolbarKey, setDragOverToolbarKey] = useState<ToolbarKey | null>(null);
     // A function, not a static map: each toolbar needs to know which edge

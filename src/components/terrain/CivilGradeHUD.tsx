@@ -34,10 +34,18 @@ export default function CivilGradeHUD() {
     return null;
   }
 
-  const { cutVolumeM3 = 142.5, fillVolumeM3 = 138.0, netVolumeM3 = -4.5, cutAreaM2 = 240.0, fillAreaM2 = 232.0 } = cutFillMetrics || {};
-  const currentGrade = activeCivilGrade ?? 5.2;
+  // Defaults to 0 (not a plausible-looking fabricated reading like the
+  // 142.5/138.0/etc this used to fall back to) for the rare case
+  // cutFillMetrics is missing a field — normal operation never hits these,
+  // since AppContext always initializes/resets it with every field zeroed.
+  const { cutVolumeM3 = 0, fillVolumeM3 = 0, netVolumeM3 = 0, cutAreaM2 = 0, fillAreaM2 = 0 } = cutFillMetrics || {};
+  // activeCivilGrade is genuinely null whenever no alignment segment is
+  // actively selected/being edited — showing a fabricated "5.2%" in that
+  // state looked like a real reading of nothing in particular.
+  const hasActiveGrade = activeCivilGrade !== null && activeCivilGrade !== undefined;
+  const currentGrade = activeCivilGrade ?? 0;
   const maxGrade = civilRoadSettings?.maxGradePercent ?? 8.0;
-  const isGradeViolated = currentGrade > maxGrade;
+  const isGradeViolated = hasActiveGrade && currentGrade > maxGrade;
 
   // Net balance description
   const absNet = Math.abs(netVolumeM3);
@@ -131,25 +139,35 @@ export default function CivilGradeHUD() {
           </div>
 
           {/* Active Segment Slope Grade Pill */}
-          <div 
+          <div
             id="civil-hud-grade-pill"
             className={cn(
               "flex items-center gap-1.5 px-2.5 py-1 rounded-xl border font-mono text-[11px] transition-colors",
-              isGradeViolated
+              !hasActiveGrade
+                ? "bg-zinc-800/60 text-zinc-400 border-zinc-700"
+                : isGradeViolated
                 ? "bg-amber-500/30 text-amber-200 border-amber-400 animate-pulse font-bold"
                 : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
             )}
             title={`Active Alignment Longitudinal Slope (Max threshold: ${maxGrade}%)`}
           >
-            {isGradeViolated ? (
+            {!hasActiveGrade ? (
+              <Info size={12} className="text-zinc-500" />
+            ) : isGradeViolated ? (
               <AlertTriangle size={12} className="text-amber-400" />
             ) : (
               <CheckCircle2 size={12} className="text-emerald-400" />
             )}
-            <span>Grade: {currentGrade.toFixed(1)}%</span>
-            <span className="text-[10px] opacity-80 hidden lg:inline">
-              — {isGradeViolated ? `Exceeds ${maxGrade}% Max` : 'Optimal'}
-            </span>
+            {hasActiveGrade ? (
+              <>
+                <span>Grade: {currentGrade.toFixed(1)}%</span>
+                <span className="text-[10px] opacity-80 hidden lg:inline">
+                  — {isGradeViolated ? `Exceeds ${maxGrade}% Max` : 'Optimal'}
+                </span>
+              </>
+            ) : (
+              <span>No active segment</span>
+            )}
           </div>
 
           {/* Action buttons: Expand details / minimize */}

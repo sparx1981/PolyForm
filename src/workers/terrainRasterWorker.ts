@@ -47,8 +47,15 @@ export function computeTerrainRaster(input: TerrainRasterWorkerInput): TerrainRa
   const modifiedHeights = new Float32Array(totalCells);
   const diffHeights = new Float32Array(totalCells);
 
-  const rangeX = bounds.maxX - bounds.minX;
-  const rangeZ = bounds.maxZ - bounds.minZ;
+  // Guards against inverted (minX > maxX) or NaN bounds — from a caller
+  // bug or malformed terrain shape — silently propagating NaN through
+  // every cell and out to the HUD as "NaN m³" with no way to recover.
+  const minX = Number.isFinite(bounds.minX) ? bounds.minX : 0;
+  const minZ = Number.isFinite(bounds.minZ) ? bounds.minZ : 0;
+  const rawRangeX = bounds.maxX - bounds.minX;
+  const rawRangeZ = bounds.maxZ - bounds.minZ;
+  const rangeX = Number.isFinite(rawRangeX) ? Math.max(0, rawRangeX) : 0;
+  const rangeZ = Number.isFinite(rawRangeZ) ? Math.max(0, rawRangeZ) : 0;
   const stepX = rangeX / Math.max(1, gridWidth - 1);
   const stepZ = rangeZ / Math.max(1, gridDepth - 1);
   const cellArea = stepX * stepZ;
@@ -83,11 +90,11 @@ export function computeTerrainRaster(input: TerrainRasterWorkerInput): TerrainRa
   let totalFillArea = 0;
 
   for (let iz = 0; iz < gridDepth; iz++) {
-    const wz = bounds.minZ + iz * stepZ;
+    const wz = minZ + iz * stepZ;
     const rowOffset = iz * gridWidth;
 
     for (let ix = 0; ix < gridWidth; ix++) {
-      const wx = bounds.minX + ix * stepX;
+      const wx = minX + ix * stepX;
       const idx = rowOffset + ix;
       const baseH = baseHeights[idx] !== undefined ? baseHeights[idx] : 0;
       let currentH = baseH;

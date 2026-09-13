@@ -6,6 +6,8 @@ import {
   clampSplineGrade,
   distancePointToLineSegment2D,
   pointInPolygon2D,
+  calculateTurningRadius2D,
+  deduplicateKnotsWithIndices,
 } from './math';
 import { calculatePadElevationAtPoint, calculateCutFillForPad } from './padGeometry';
 import { generateRoadRibbonGeometry } from './roadGeometry';
@@ -248,5 +250,40 @@ describe('Terrain Studio - Road Ribbon Geometry', () => {
 
     const singleGeo = generateRoadRibbonGeometry([[0, 0, 0]], 6, profile);
     expect(singleGeo.getAttribute('position').count).toBe(0);
+  });
+
+  it('calculateTurningRadius2D treats a road-scale near-straight run as straight, not a hairpin', () => {
+    // Coordinates in the tens/hundreds of meters, as real roads use. A
+    // fixed absolute cross-product threshold (the old 1e-6) is only tight
+    // enough at unit scale — at this scale ordinary floating-point
+    // rounding on a genuinely straight-ish run would previously flip this
+    // between "straight" (Infinity) and a false hairpin-turn warning.
+    const p1: [number, number, number] = [0, 0, 0];
+    const p2: [number, number, number] = [100, 0, 0];
+    // A sub-millimeter deviation off the straight line at road scale.
+    const p3: [number, number, number] = [200, 0, 0.0000001];
+    expect(calculateTurningRadius2D(p1, p2, p3)).toBe(Infinity);
+  });
+
+  it('calculateTurningRadius2D still reports a small radius for a genuine sharp turn at road scale', () => {
+    const p1: [number, number, number] = [0, 0, 0];
+    const p2: [number, number, number] = [10, 0, 0];
+    const p3: [number, number, number] = [10, 0, 1];
+    const r = calculateTurningRadius2D(p1, p2, p3);
+    expect(r).toBeGreaterThan(0);
+    expect(r).toBeLessThan(10);
+  });
+
+  it('deduplicateKnotsWithIndices maps surviving points back to their original array index', () => {
+    const points: [number, number, number][] = [
+      [0, 0, 0],
+      [0.01, 0, 0], // within 0.15m of the previous point — merged away
+      [5, 0, 0],
+      [5.02, 0, 0], // within 0.15m of the previous point — merged away
+      [10, 0, 0],
+    ];
+    const { points: deduped, originalIndices } = deduplicateKnotsWithIndices(points, 0.15);
+    expect(deduped.length).toBe(3);
+    expect(originalIndices).toEqual([0, 2, 4]);
   });
 });

@@ -11,6 +11,21 @@ export function tessellateBezierSpan(
   const p2 = k1.handleIn ?? k1.point;
   const p3 = k1.point;
 
+  // A degenerate span (e.g. double-clicking to place two knots at the same
+  // screen pixel, with no handles) has all four control points coincident.
+  // THREE.CubicBezierCurve3 doesn't special-case this — it still returns
+  // `divisions + 1` identical points, which downstream code (session
+  // .drawChain) then has to tolerate/dedupe. Collapse it to a single point
+  // instead of doing that wasted work and forwarding duplicate points.
+  const EPS_SQ = 1e-12;
+  if (
+    p0.distanceToSquared(p1) < EPS_SQ &&
+    p0.distanceToSquared(p2) < EPS_SQ &&
+    p0.distanceToSquared(p3) < EPS_SQ
+  ) {
+    return [p0.clone()];
+  }
+
   const curve = new THREE.CubicBezierCurve3(p0, p1, p2, p3);
   return curve.getPoints(divisions);
 }

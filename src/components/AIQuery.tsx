@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, Sparkles, Loader2 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { GoogleGenAI } from "@google/genai";
+import { getGeminiApiKey } from '../lib/utils';
 
 export default function AIQuery() {
   const { isAIQueryOpen, setIsAIQueryOpen, shapes, tags } = useApp();
@@ -16,7 +17,7 @@ export default function AIQuery() {
     setResponse('');
 
     try {
-      const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+      const genAI = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
       const modelMetadata = JSON.stringify(shapes.map(s => ({
         type: s.type,

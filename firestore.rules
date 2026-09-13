@@ -180,7 +180,11 @@ service cloud.firestore {
       );
     }
 
-    match /test/{testId} {
+    // Scoped to the one fixed doc id firebase.ts's testConnection() actually
+    // probes (doc(db, 'test', 'connection')) rather than the whole
+    // collection — an intentionally open rule left as `match
+    // /test/{testId}` is easy to widen further by accident later.
+    match /test/connection {
       allow read: if true;
     }
   }

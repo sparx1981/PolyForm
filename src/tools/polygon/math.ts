@@ -1,5 +1,24 @@
 import * as THREE from 'three';
 
+export const MIN_POLYGON_RADIUS = 1e-5;
+
+/**
+ * Why generatePolygonVertices returned no vertices for this input, so a
+ * caller can tell "the radius drag hasn't moved far enough from the
+ * center yet" apart from "sides is configured below the minimum of 3" —
+ * generatePolygonVertices itself returns an empty array for both, which
+ * looks identical to a caller with no way to distinguish them.
+ */
+export function getPolygonVertexIssue(
+  center: THREE.Vector3,
+  radiusPoint: THREE.Vector3,
+  sides: number
+): 'too-few-sides' | 'radius-too-small' | null {
+  if (sides < 3) return 'too-few-sides';
+  if (center.distanceTo(radiusPoint) < MIN_POLYGON_RADIUS) return 'radius-too-small';
+  return null;
+}
+
 /**
  * Generates the vertices for a circumscribed regular polygon.
  */
@@ -12,7 +31,7 @@ export function generatePolygonVertices(
   if (sides < 3) return [];
 
   const radius = center.distanceTo(radiusPoint);
-  if (radius < 1e-5) return [];
+  if (radius < MIN_POLYGON_RADIUS) return [];
 
   const localX = new THREE.Vector3().subVectors(radiusPoint, center).normalize();
   const normal = plane.normal.clone().normalize();

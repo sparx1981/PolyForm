@@ -172,4 +172,20 @@ describe('computeTerrainRaster', () => {
     expect(out.modifiedHeights[idx]).toBeCloseTo(1, 6);
     expect(Array.from(out.modifiedHeights).every(h => Number.isFinite(h))).toBe(true);
   });
+
+  it('inverted (minX > maxX) bounds do not propagate NaN through heights or metrics', () => {
+    const invertedBounds = { minX: 5, maxX: -5, minZ: 5, maxZ: -5 };
+    const out = computeTerrainRaster(flatInput({ bounds: invertedBounds }));
+    expect(Array.from(out.modifiedHeights).every(h => Number.isFinite(h))).toBe(true);
+    expect(Array.from(out.diffHeights).every(h => Number.isFinite(h))).toBe(true);
+    expect(Number.isFinite(out.metrics.cutVolumeM3)).toBe(true);
+    expect(Number.isFinite(out.metrics.fillVolumeM3)).toBe(true);
+  });
+
+  it('NaN bounds do not propagate NaN through heights or metrics', () => {
+    const nanBounds = { minX: NaN, maxX: NaN, minZ: -5, maxZ: 5 };
+    const out = computeTerrainRaster(flatInput({ bounds: nanBounds }));
+    expect(Array.from(out.modifiedHeights).every(h => Number.isFinite(h))).toBe(true);
+    expect(Array.from(out.diffHeights).every(h => Number.isFinite(h))).toBe(true);
+  });
 });

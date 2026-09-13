@@ -85,6 +85,8 @@ export default function Login() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'login-error' : undefined}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none transition-all"
                   placeholder="name@example.com"
                 />
@@ -100,6 +102,8 @@ export default function Login() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'login-error' : undefined}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none transition-all"
                   placeholder="••••••••"
                 />
@@ -107,7 +111,7 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
+              <div id="login-error" role="alert" aria-live="assertive" className="p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
                 {error}
               </div>
             )}

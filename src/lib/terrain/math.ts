@@ -23,16 +23,26 @@ export function sanitizeElevation(
 /**
  * Merges consecutive spline knots closer than minDistance (default 0.15m)
  * to prevent zero-length division, tangent singularity, or normal blowups.
+ * Also returns which original index each surviving point came from, so a
+ * caller that reports a warning by index into the DEDUPLICATED array (e.g.
+ * a hairpin/bowtie violation's knotIndex) can map it back to the index the
+ * UI is actually tracking in the array the user edited — without this, a
+ * user placing several near-identical points (a jittery mouse, or a very
+ * zoomed-in view) gets warnings that silently point at the wrong knot.
  */
-export function deduplicateKnots(
+export function deduplicateKnotsWithIndices(
   points: [number, number, number][],
   minDistance: number = 0.15
-): [number, number, number][] {
+): { points: [number, number, number][]; originalIndices: number[] } {
   if (!points || points.length <= 1) {
-    return points ? points.map(p => [p[0], sanitizeElevation(p[1]), p[2]]) : [];
+    return {
+      points: points ? points.map(p => [p[0], sanitizeElevation(p[1]), p[2]]) : [],
+      originalIndices: points ? points.map((_, i) => i) : [],
+    };
   }
 
   const result: [number, number, number][] = [];
+  const originalIndices: number[] = [];
   for (let i = 0; i < points.length; i++) {
     const pt = points[i];
     const sanitizedY = sanitizeElevation(pt[1]);
@@ -40,6 +50,7 @@ export function deduplicateKnots(
 
     if (result.length === 0) {
       result.push(curr);
+      originalIndices.push(i);
     } else {
       const prev = result[result.length - 1];
       const dx = curr[0] - prev[0];
@@ -47,11 +58,25 @@ export function deduplicateKnots(
       const horizontalDist = Math.hypot(dx, dz);
       if (horizontalDist >= minDistance) {
         result.push(curr);
+        originalIndices.push(i);
       }
     }
   }
 
-  return result;
+  return { points: result, originalIndices };
+}
+
+/**
+ * Merges consecutive spline knots closer than minDistance (default 0.15m)
+ * to prevent zero-length division, tangent singularity, or normal blowups.
+ * Use deduplicateKnotsWithIndices instead if the caller needs to map a
+ * warning's index in the result back to the original array.
+ */
+export function deduplicateKnots(
+  points: [number, number, number][],
+  minDistance: number = 0.15
+): [number, number, number][] {
+  return deduplicateKnotsWithIndices(points, minDistance).points;
 }
 
 /**
@@ -343,7 +368,17 @@ export function calculateTurningRadius2D(
   if (a < 1e-5 || b < 1e-5 || c < 1e-5) return 0;
 
   const cross = Math.abs((x2 - x1) * (z3 - z1) - (z2 - z1) * (x3 - x1));
-  if (cross < 1e-6) {
+  // cross has units of length^2, so a fixed absolute threshold is only
+  // "straight enough" for coordinates near unit scale — at road-scale
+  // coordinates (tens/hundreds of meters) it's tight enough that ordinary
+  // floating-point rounding can flip the hairpin-turn warning on/off for
+  // the same visual road shape as a point is dragged by sub-millimeter
+  // amounts. Normalizing by a*c (dividing out the length^2 units) gives
+  // sin(angle) — a dimensionless, scale-invariant measure of "how far from
+  // straight" the three points are — so the same relative threshold works
+  // regardless of how large the coordinates are.
+  const sinAngle = cross / (a * c);
+  if (sinAngle < 1e-6) {
     const dot = (x2 - x1) * (x3 - x2) + (z2 - z1) * (z3 - z2);
     return dot < 0 ? 0 : Infinity;
   }
@@ -524,8 +559,13 @@ export function pointInPolygon2D(
     const xj = polygon[j][0];
     const zj = polygon[j][1];
 
+    // zi !== zj is implied whenever the XOR condition holds, but only in
+    // exact arithmetic — defend explicitly against a 0/0 -> NaN comparison
+    // (which `x < NaN` always reads as false, silently treating a real
+    // intersection as "none") if floating-point rounding ever produces an
+    // edge that's exactly horizontal at the test row.
     const intersect =
-      zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi;
+      zi > z !== zj > z && zj !== zi && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi;
     if (intersect) {
       inside = !inside;
     }

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Sparkles, Loader2, Wand2, AlertCircle, Box, Info } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { GoogleGenAI, Type } from "@google/genai";
-import { cn } from '../lib/utils';
+import { cn, getGeminiApiKey } from '../lib/utils';
 import { Shape } from '../types';
 
 export default function AIGenerate() {
@@ -19,7 +19,7 @@ export default function AIGenerate() {
     setError(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+      const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
       
       const systemInstruction = `You are a 3D architectural design assistant. Your task is to generate 3D models based on user prompts.
       You must return a JSON array of Shape objects that will be added to the scene.

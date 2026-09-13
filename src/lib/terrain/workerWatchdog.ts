@@ -106,6 +106,14 @@ export function dispatchTerrainRasterCancellable(
           resolve(result);
         };
 
+        // input.baseHeights is deliberately NOT passed in a transfer list.
+        // The only current caller (CutFillVolumeOverlay) reads it again
+        // itself, after dispatch, to build the cut/fill mesh geometry —
+        // transferring would detach its buffer (leaving it a zero-length
+        // view) the instant postMessage returns, silently corrupting that
+        // read. The grid this ships is also capped small (max 64x64, i.e.
+        // <=16KB of floats), so the structured-clone copy this avoids by
+        // transferring is not a meaningful cost at this size anyway.
         worker.postMessage(input);
       } else {
         // Environment without Web Workers (e.g. Node/SSR/Vitest)

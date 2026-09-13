@@ -6,7 +6,7 @@ import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './
 import { KernelArcHost } from './tools/kernelArcHost';
 import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
 import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimberFrameForRoof, generateTimberFrameForBuilding } from './lib/timberFrameGenerator';
@@ -404,7 +404,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         or(
           where('userId', '==', user.uid),
           where('isPublic', '==', true)
-        )
+        ),
+        limit(200)
       );
       const snapshot = await getDocs(q);
       incrementReads(snapshot.size || 1);
@@ -434,7 +435,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const q = query(
         collection(db, 'materials'),
-        where('userId', '==', user.uid)
+        where('userId', '==', user.uid),
+        limit(500)
       );
       const snapshot = await getDocs(q);
       incrementReads(snapshot.size || 1);
@@ -947,38 +949,47 @@ console.log("Created rectangle:", myRect.id);`);
     // Ensure we have a collaboration document for presence
     const ensurePresence = async () => {
       if (!user?.email || currentModelId.startsWith('new') || checkQuota()) return;
-      
-      const collabId = `${currentModelId}_${user.email.toLowerCase()}`;
+
+      const email = user.email;
+      const uid = user.uid;
+      const displayName = user.displayName;
+      const collabId = `${currentModelId}_${email.toLowerCase()}`;
       const collabRef = doc(db, 'collaborations', collabId);
-      
+      const modelRef = doc(db, 'models', currentModelId);
+
       try {
-        const path = `collaborations/${collabId}`;
-        const snap = await getDoc(collabRef);
-        if (!snap.exists()) {
-          // If we are the owner, create our own presence doc
-          const modelSnap = await getDoc(doc(db, 'models', currentModelId));
-          if (modelSnap.exists() && modelSnap.data().userId === user.uid) {
-            await setDoc(collabRef, {
-              modelId: currentModelId,
-              email: user.email.toLowerCase(),
-              uid: user.uid,
-              displayName: user.displayName || user.email.split('@')[0],
-              role: 'owner',
+        // Two tabs/devices opening the same model at once could both read
+        // "no presence doc yet" and both try to create the owner's own
+        // presence doc, racing on createdAt/role. A transaction makes the
+        // check-then-write atomic: Firestore retries the whole callback if
+        // another write lands on collabRef in between its read and write.
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(collabRef);
+          if (!snap.exists()) {
+            // If we are the owner, create our own presence doc
+            const modelSnap = await transaction.get(modelRef);
+            if (modelSnap.exists() && modelSnap.data().userId === uid) {
+              transaction.set(collabRef, {
+                modelId: currentModelId,
+                email: email.toLowerCase(),
+                uid,
+                displayName: displayName || email.split('@')[0],
+                role: 'owner',
+                status: 'active',
+                lastSeen: Date.now(),
+                createdAt: serverTimestamp()
+              });
+            }
+          } else {
+            // Invited or returning, update status
+            transaction.update(collabRef, {
+              uid,
               status: 'active',
-              lastSeen: Date.now(),
-              createdAt: serverTimestamp()
+              lastSeen: Date.now()
             });
-            console.log('[Collab] Created owner presence document');
           }
-        } else {
-          // Invited or returning, update status
-          await updateDoc(collabRef, {
-            uid: user.uid,
-            status: 'active',
-            lastSeen: Date.now()
-          });
-          console.log('[Collab] Joined as active');
-        }
+        });
+        console.log('[Collab] Presence ensured');
       } catch (err: any) {
         console.warn('[Collab] Presence init error:', err);
         handleFirestoreError(err, OperationType.WRITE, `collaborations/${collabId}`);
@@ -1628,7 +1639,7 @@ console.log("Created rectangle:", myRect.id);`);
 
     const newShape = {
       ...shape,
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       position: [shape.position[0] + 1, shape.position[1], shape.position[2] + 1] as [number, number, number],
       name: `${shape.name || shape.type} (Copy)`
     };
@@ -1645,7 +1656,7 @@ console.log("Created rectangle:", myRect.id);`);
       if (shape) {
         newShapes.push({
           ...shape,
-          id: Math.random().toString(36).substr(2, 9),
+          id: crypto.randomUUID(),
           position: [shape.position[0] + 1, shape.position[1], shape.position[2] + 1] as [number, number, number],
           name: `${shape.name || shape.type} (Copy)`
         });

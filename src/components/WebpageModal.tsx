@@ -62,7 +62,14 @@ export default function WebpageModal() {
               src={embeddedWebpageUrl}
               className="w-full h-full border-none"
               title="Embedded Resource"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              // allow-scripts + allow-same-origin together is a known sandbox
+              // escape: a framed page granted both can script its way out of
+              // the sandbox restrictions entirely. embeddedWebpageUrl is an
+              // arbitrary, potentially-untrusted external URL (reachable via
+              // the app's own scriptable SDK), so allow-same-origin is
+              // deliberately left out even though it means a framed site
+              // can't read its own cookies/localStorage in this embed.
+              sandbox="allow-scripts allow-forms allow-popups"
             />
           </div>
           

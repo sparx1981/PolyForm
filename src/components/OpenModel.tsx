@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { db, handleFirestoreError, OperationType, isQuotaLocked } from '../firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy, writeBatch, limit } from 'firebase/firestore';
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
 import { useModalA11y } from './ui/useModalA11y';
@@ -135,22 +135,31 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     try {
       let q;
       const modelsRef = collection(db, 'models');
+      // Caps the read regardless of how large the public-model/own-model
+      // corpus grows — an unbounded query here scales with total documents
+      // in the collection on every panel open, not with what's actually
+      // shown, and feeds directly into the app's own Firestore quota
+      // lockdown as that corpus grows.
+      const MODELS_QUERY_LIMIT = 50;
 
       if (requestedFilter === 'recent') {
         // Your models
         q = query(
           modelsRef,
-          where('userId', '==', user.uid)
+          where('userId', '==', user.uid),
+          limit(MODELS_QUERY_LIMIT)
         );
       } else if (requestedFilter === 'me') {
         q = query(
           modelsRef,
-          where('userId', '==', user.uid)
+          where('userId', '==', user.uid),
+          limit(MODELS_QUERY_LIMIT)
         );
       } else if (requestedFilter === 'shared') {
         q = query(
           modelsRef,
-          where('isPublic', '==', true)
+          where('isPublic', '==', true),
+          limit(MODELS_QUERY_LIMIT)
         );
       } else {
         // All models (mine + public)
@@ -159,7 +168,8 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
           or(
             where('userId', '==', user.uid),
             where('isPublic', '==', true)
-          )
+          ),
+          limit(MODELS_QUERY_LIMIT)
         );
       }
 
