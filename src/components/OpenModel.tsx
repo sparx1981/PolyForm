@@ -27,6 +27,7 @@ import { db, handleFirestoreError, OperationType, isQuotaLocked } from '../fireb
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy } from 'firebase/firestore';
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
+import { useModalA11y } from './ui/useModalA11y';
 
 // Local, dependency-free placeholder - no network round-trip, so it can never
 // itself fail to load the way an external image URL (or an expired/blocked
@@ -195,11 +196,16 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
   };
 
   const filteredModels = useMemo(() => {
-    return models.filter(m => 
+    return models.filter(m =>
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.userName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [models, searchQuery]);
+
+  const mainModalRef = useModalA11y<HTMLDivElement>(isOpen, onClose);
+  const passwordModalRef = useModalA11y<HTMLDivElement>(isPasswordModalOpen, () => setIsPasswordModalOpen(false));
+  const deleteModalRef = useModalA11y<HTMLDivElement>(!!deleteConfirmId, () => setDeleteConfirmId(null));
+  const shareModalRef = useModalA11y<HTMLDivElement>(isShareModalOpen, () => setIsShareModalOpen(false));
 
   const handleDelete = async (id: string) => {
     setIsDeleting(true);
@@ -384,6 +390,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     <AnimatePresence>
       <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
         <motion.div
+          ref={mainModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Open Model"
+          tabIndex={-1}
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -537,6 +548,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
           {isPasswordModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
               <motion.div
+                ref={passwordModalRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Protected Model"
+                tabIndex={-1}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -588,6 +604,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
           {deleteConfirmId && (
             <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
               <motion.div
+                ref={deleteModalRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Delete Model?"
+                tabIndex={-1}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -626,6 +647,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
           {isShareModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
               <motion.div
+                ref={shareModalRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Share Model"
+                tabIndex={-1}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}

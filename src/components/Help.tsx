@@ -5,9 +5,11 @@ import { useApp } from '../AppContext';
 import { CHANGELOG_DATA } from '../constants/changelog';
 import { HELP_DOCS } from '../constants/helpDocs';
 import { cn } from '../lib/utils';
+import { useModalA11y } from './ui/useModalA11y';
 
 export default function Help() {
   const { isChangelogOpen, setIsChangelogOpen } = useApp();
+  const modalRef = useModalA11y<HTMLDivElement>(isChangelogOpen, () => setIsChangelogOpen(false));
   const [activeTab, setActiveTab] = useState<'docs' | 'changelog'>('docs');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>(HELP_DOCS[0].id);
@@ -30,6 +32,11 @@ export default function Help() {
     <AnimatePresence>
       <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
         <motion.div
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Support Center"
+          tabIndex={-1}
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}

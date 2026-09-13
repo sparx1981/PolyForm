@@ -2,9 +2,12 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ExternalLink, Globe } from 'lucide-react';
 import { useApp } from '../AppContext';
+import { useModalA11y } from './ui/useModalA11y';
 
 export default function WebpageModal() {
   const { embeddedWebpageUrl, setEmbeddedWebpageUrl, theme } = useApp();
+  const isOpen = !!embeddedWebpageUrl;
+  const modalRef = useModalA11y<HTMLDivElement>(isOpen, () => setEmbeddedWebpageUrl(null));
 
   if (!embeddedWebpageUrl) return null;
 
@@ -12,6 +15,11 @@ export default function WebpageModal() {
     <AnimatePresence>
       <div className="fixed inset-0 z-[1001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
         <motion.div
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Embedded Webpage"
+          tabIndex={-1}
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}

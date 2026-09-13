@@ -24,6 +24,7 @@ import {
   DEFAULT_STAIRCASE_HEIGHT
 } from '../lib/parametricStairs';
 import { getParamDefsForStyle, isParamActiveForStyle, ALL_STAIR_PARAM_DEFS } from '../lib/stairs/styleParamSchema';
+import { useModalA11y } from './ui/useModalA11y';
 
 interface StyleLibraryModalProps {
   isOpen: boolean;
@@ -696,6 +697,11 @@ function StyleDiagram({ style }: { style: ArchStyleDef }) {
   }
 }
 
+// Used only while targetShape is null so every hook below always runs —
+// see the doc comment further down on why the early "not open" return had
+// to move below all of them.
+const FALLBACK_TARGET_SHAPE: Shape = { id: '', type: 'box', position: [0, 0, 0], args: [1, 1, 1], color: '#ffffff' };
+
 export default function StyleLibraryModal({
   isOpen,
   onClose,
@@ -704,12 +710,21 @@ export default function StyleLibraryModal({
   theme = 'light',
   allShapes
 }: StyleLibraryModalProps) {
-  if (!isOpen || !targetShape) return null;
+  // `targetShape` can be null while `isOpen` is still true — the two are
+  // computed independently by the caller (isOpen from a target id, this
+  // shape from a live shapes-array lookup by that id), so a shape removed
+  // out from under an open modal (e.g. an undo) hits this exact gap. An
+  // early `return null` here, before the hooks below, changes how many
+  // hooks run between renders and crashes React's "Rules of Hooks" check —
+  // so instead this guard only runs the shape's own fields through a
+  // harmless fallback for as long as any hook needs `targetShape`, and the
+  // real "should this render at all" decision moves below every hook.
+  const targetShapeOrFallback = targetShape ?? FALLBACK_TARGET_SHAPE;
 
-  const isScaleFigure = targetShape.type === 'scale_figure';
-  const isDoor = targetShape.type === 'door';
-  const isStair = targetShape.type === 'staircase' || targetShape.type === 'step';
-  const isWall = targetShape.type === 'wall';
+  const isScaleFigure = targetShapeOrFallback.type === 'scale_figure';
+  const isDoor = targetShapeOrFallback.type === 'door';
+  const isStair = targetShapeOrFallback.type === 'staircase' || targetShapeOrFallback.type === 'step';
+  const isWall = targetShapeOrFallback.type === 'wall';
   const isWindow = !isDoor && !isStair && !isWall && !isScaleFigure;
 
   let styles: ArchStyleDef[] = [];
@@ -741,40 +756,40 @@ export default function StyleLibraryModal({
   const appContext = useApp();
   const shapes = allShapes || appContext.shapes || [];
 
-  const currentStyleId = targetShape.wallStyle || targetShape.stairStyle || targetShape.archStyle || defaultStyleId;
+  const currentStyleId = targetShapeOrFallback.wallStyle || targetShapeOrFallback.stairStyle || targetShapeOrFallback.archStyle || defaultStyleId;
   const [selectedStyleId, setSelectedStyleId] = useState<string>(currentStyleId);
   const [activeCategory, setActiveCategory] = useState<string>('All');
 
   // Staircase specific structural & railing state
   const [stairStructure, setStairStructure] = useState<'closed' | 'open' | 'floating' | 'mono-stringer'>(
-    targetShape.stairStructure || 'closed'
+    targetShapeOrFallback.stairStructure || 'closed'
   );
   const [railingMode, setRailingMode] = useState<'none' | 'left' | 'right' | 'both'>(
-    targetShape.railingMode || 'both'
+    targetShapeOrFallback.railingMode || 'both'
   );
 
   // Parametric Stair Tool State
   const [isParametric, setIsParametric] = useState<boolean>(
-    targetShape.isParametric !== undefined ? targetShape.isParametric : true
+    targetShapeOrFallback.isParametric !== undefined ? targetShapeOrFallback.isParametric : true
   );
   const [idealStepHeight, setIdealStepHeight] = useState<number>(
-    targetShape.parametricData?.idealStepHeight || DEFAULT_IDEAL_STEP_HEIGHT
+    targetShapeOrFallback.parametricData?.idealStepHeight || DEFAULT_IDEAL_STEP_HEIGHT
   );
   const [targetHeightOverride, setTargetHeightOverride] = useState<number | null>(
-    targetShape.isParametric && targetShape.parametricData?.targetHeight
-      ? targetShape.parametricData.targetHeight
+    targetShapeOrFallback.isParametric && targetShapeOrFallback.parametricData?.targetHeight
+      ? targetShapeOrFallback.parametricData.targetHeight
       : null
   );
   const [scanRefreshKey, setScanRefreshKey] = useState<number>(0);
 
   // Calculate base elevation of the staircase
-  const initialH = Array.isArray(targetShape.args) ? targetShape.args[1] || 2.7 : 2.7;
-  const baseElevation = targetShape.position[1] - initialH / 2;
+  const initialH = Array.isArray(targetShapeOrFallback.args) ? targetShapeOrFallback.args[1] || 2.7 : 2.7;
+  const baseElevation = targetShapeOrFallback.position[1] - initialH / 2;
 
   // Scene scanning to detect walls or upper floors
   const sceneScan = useMemo(() => {
-    return scanSceneForTargetHeight(shapes, baseElevation, targetShape.position);
-  }, [shapes, baseElevation, targetShape.position, scanRefreshKey]);
+    return scanSceneForTargetHeight(shapes, baseElevation, targetShapeOrFallback.position);
+  }, [shapes, baseElevation, targetShapeOrFallback.position, scanRefreshKey]);
 
   // Determine effective target height
   const effectiveTargetHeight = targetHeightOverride ?? sceneScan.targetHeight;
@@ -785,11 +800,11 @@ export default function StyleLibraryModal({
       targetHeight: effectiveTargetHeight,
       idealStepHeight,
       strideConstant: DEFAULT_STRIDE_CONSTANT,
-      width: Array.isArray(targetShape.args) ? targetShape.args[0] || 1.0 : 1.0,
+      width: Array.isArray(targetShapeOrFallback.args) ? targetShapeOrFallback.args[0] || 1.0 : 1.0,
       source: sceneScan.source,
       sourceDescription: sceneScan.description
     });
-  }, [effectiveTargetHeight, idealStepHeight, targetShape.args, sceneScan]);
+  }, [effectiveTargetHeight, idealStepHeight, targetShapeOrFallback.args, sceneScan]);
 
   // Dimensions
   const defaultWidth = isScaleFigure ? 0.52 : isDoor ? 0.9 : isStair ? 1.0 : isWall ? 3.0 : 1.2;
@@ -797,17 +812,17 @@ export default function StyleLibraryModal({
   const defaultDepth = isScaleFigure ? 0.32 : isDoor ? 0.15 : isStair ? (isParametric ? parametricCalc.totalRun : 3.6) : isWall ? 0.2 : 0.12;
 
   const [width, setWidth] = useState<number>(
-    Array.isArray(targetShape.args) ? targetShape.args[0] || defaultWidth : defaultWidth
+    Array.isArray(targetShapeOrFallback.args) ? targetShapeOrFallback.args[0] || defaultWidth : defaultWidth
   );
   const [height, setHeight] = useState<number>(
-    isStair && isParametric 
-      ? parametricCalc.targetHeight 
-      : (Array.isArray(targetShape.args) ? targetShape.args[1] || defaultHeight : defaultHeight)
+    isStair && isParametric
+      ? parametricCalc.targetHeight
+      : (Array.isArray(targetShapeOrFallback.args) ? targetShapeOrFallback.args[1] || defaultHeight : defaultHeight)
   );
   const [depth, setDepth] = useState<number>(
-    isStair && isParametric 
-      ? parametricCalc.totalRun 
-      : (Array.isArray(targetShape.args) ? targetShape.args[2] || defaultDepth : defaultDepth)
+    isStair && isParametric
+      ? parametricCalc.totalRun
+      : (Array.isArray(targetShapeOrFallback.args) ? targetShapeOrFallback.args[2] || defaultDepth : defaultDepth)
   );
 
   // Keep height and depth in sync when parametric calculation updates
@@ -817,6 +832,10 @@ export default function StyleLibraryModal({
       setDepth(parametricCalc.totalRun);
     }
   }, [isStair, isParametric, parametricCalc.targetHeight, parametricCalc.totalRun]);
+
+  const modalRef = useModalA11y<HTMLDivElement>(isOpen && !!targetShape, onClose);
+
+  if (!isOpen || !targetShape) return null;
 
   const categories = ['All', ...Array.from(new Set(styles.map(s => s.category)))];
 
@@ -861,7 +880,12 @@ export default function StyleLibraryModal({
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
-      <div 
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
         className={cn(
           "w-full max-w-4xl max-h-[92vh] flex flex-col rounded-xl shadow-2xl border overflow-hidden",
           theme === 'dark' ? "bg-gray-900 border-gray-700 text-gray-100" : "bg-white border-gray-200 text-gray-900"

@@ -341,12 +341,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Sync Guards
   const isRemoteUpdate = useRef(false);
-  const pushInProgress = useRef(false);
-  const needsSync = useRef(false);
-  const lastStateHash = useRef('');
-  const syncRetryTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncRetryCount = useRef(0);
   const retrySyncRef = useRef<(() => void) | null>(null);
+
+  /**
+   * Push-sync bookkeeping (in-flight flag, pending-retry flag, last-pushed
+   * hash, retry backoff state), keyed by model id. A single set of shared
+   * refs here used to mean that a slow push for model A still in flight
+   * when the user switched to model B would have B's own edits queue up
+   * behind A's `pushInProgress`/`needsSync` flags — and when A's push
+   * finally settled, its own `finally` block would re-invoke ITS OWN
+   * closure (over A's stale data and A's document id), silently dropping
+   * B's pending edit rather than ever pushing it. Scoping this state per
+   * model makes each model's push queue fully independent, so a slow or
+   * retrying push for one model can never block, drop, or misdirect
+   * another model's sync.
+   */
+  interface ModelSyncState {
+    pushInProgress: boolean;
+    needsSync: boolean;
+    lastStateHash: string;
+    retryCount: number;
+    retryTimeoutId: ReturnType<typeof setTimeout> | null;
+  }
+  const syncStatesRef = useRef<Map<string, ModelSyncState>>(new Map());
+  // Kept in sync with currentModelId on every render (see assignment below,
+  // right after currentModelId itself is declared) so the *Silent setters
+  // just below — which intentionally use an empty useCallback dependency
+  // array — can reset the right model's sync state instead of a stale one
+  // captured from their first render.
+  const currentModelIdRef = useRef<string | null>(null);
+  currentModelIdRef.current = currentModelId;
+  const getSyncState = (modelId: string): ModelSyncState => {
+    let s = syncStatesRef.current.get(modelId);
+    if (!s) {
+      s = { pushInProgress: false, needsSync: false, lastStateHash: '', retryCount: 0, retryTimeoutId: null };
+      syncStatesRef.current.set(modelId, s);
+    }
+    return s;
+  };
 
   // Developer Suite
   const [isDeveloperConsoleOpen, setIsDeveloperConsoleOpen] = useState(false);
@@ -882,7 +914,7 @@ console.log("Created rectangle:", myRect.id);`);
           timberFrameParams: data.timberFrameParams || null,
           terrainModifiers: data.terrainModifiers || []
         };
-        lastStateHash.current = JSON.stringify(newState);
+        getSyncState(currentModelId).lastStateHash = JSON.stringify(newState);
 
         // Replace the kernel graph wholesale, and ALWAYS — including when the
         // document has none. Skipping the empty case is what leaks the
@@ -975,33 +1007,37 @@ console.log("Created rectangle:", myRect.id);`);
       return;
     }
 
+    // Per-model push state — see its own doc comment above for why this
+    // must not be shared across models.
+    const syncState = getSyncState(currentModelId);
+
     // Check if state actually changed
     // kernelRevision stands in for the graph itself: the graph is mutated in
     // place, so hashing it by reference would never change and a
     // geometry-only edit would never be saved.
     const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision, timberFrameParams, terrainModifiers };
     const currentStateHash = JSON.stringify(currentState);
-    
-    if (currentStateHash === lastStateHash.current) {
+
+    if (currentStateHash === syncState.lastStateHash) {
       return;
     }
 
     // A genuinely new local edit - drop any backoff retry left over from a
     // previous failure and start counting fresh for this attempt.
-    if (syncRetryTimeoutId.current) {
-      clearTimeout(syncRetryTimeoutId.current);
-      syncRetryTimeoutId.current = null;
+    if (syncState.retryTimeoutId) {
+      clearTimeout(syncState.retryTimeoutId);
+      syncState.retryTimeoutId = null;
     }
-    syncRetryCount.current = 0;
+    syncState.retryCount = 0;
 
     const sync = async () => {
       if (checkQuota()) return;
-      if (pushInProgress.current) {
-        needsSync.current = true;
+      if (syncState.pushInProgress) {
+        syncState.needsSync = true;
         return;
       }
 
-      pushInProgress.current = true;
+      syncState.pushInProgress = true;
       setSyncStatus('syncing');
 
       try {
@@ -1024,10 +1060,10 @@ console.log("Created rectangle:", myRect.id);`);
         });
 
         await updateDoc(doc(db, 'models', currentModelId), stateToPush);
-        lastStateHash.current = currentStateHash;
+        syncState.lastStateHash = currentStateHash;
         setSyncStatus('synced');
         setSyncErrorMessage(null);
-        syncRetryCount.current = 0;
+        syncState.retryCount = 0;
       } catch (error: any) {
         console.error('[Sync] Error pushing to Firestore:', error);
         setSyncStatus('error');
@@ -1037,18 +1073,18 @@ console.log("Created rectangle:", myRect.id);`);
         // Auto-retry with exponential backoff. Quota lockdowns are skipped
         // here since checkQuota() already blocks pushes until it clears -
         // retrying immediately would just fail the same way.
-        if (!result.isQuotaError && syncRetryCount.current < 5) {
-          const delay = Math.min(60000, 10000 * Math.pow(2, syncRetryCount.current));
-          syncRetryCount.current += 1;
-          syncRetryTimeoutId.current = setTimeout(() => {
-            syncRetryTimeoutId.current = null;
+        if (!result.isQuotaError && syncState.retryCount < 5) {
+          const delay = Math.min(60000, 10000 * Math.pow(2, syncState.retryCount));
+          syncState.retryCount += 1;
+          syncState.retryTimeoutId = setTimeout(() => {
+            syncState.retryTimeoutId = null;
             sync();
           }, delay);
         }
       } finally {
-        pushInProgress.current = false;
-        if (needsSync.current) {
-          needsSync.current = false;
+        syncState.pushInProgress = false;
+        if (syncState.needsSync) {
+          syncState.needsSync = false;
           sync(); // Clear the backlog
         }
       }
@@ -1056,20 +1092,20 @@ console.log("Created rectangle:", myRect.id);`);
 
     // Lets the "Sync Error" status badge trigger an immediate manual retry.
     retrySyncRef.current = () => {
-      if (syncRetryTimeoutId.current) {
-        clearTimeout(syncRetryTimeoutId.current);
-        syncRetryTimeoutId.current = null;
+      if (syncState.retryTimeoutId) {
+        clearTimeout(syncState.retryTimeoutId);
+        syncState.retryTimeoutId = null;
       }
-      syncRetryCount.current = 0;
+      syncState.retryCount = 0;
       sync();
     };
 
     const timeoutId = setTimeout(sync, 5000); // 5 second debounce for model synchronization
     return () => {
       clearTimeout(timeoutId);
-      if (syncRetryTimeoutId.current) {
-        clearTimeout(syncRetryTimeoutId.current);
-        syncRetryTimeoutId.current = null;
+      if (syncState.retryTimeoutId) {
+        clearTimeout(syncState.retryTimeoutId);
+        syncState.retryTimeoutId = null;
       }
     };
   }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers]);
@@ -1299,9 +1335,18 @@ console.log("Created rectangle:", myRect.id);`);
     };
   }, []);
 
-  const handleSetShapes = (newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
-    setShapes(prev => {
-      const rawShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
+  /**
+   * The derived-state pipeline every shape mutation goes through: re-derives
+   * stairwell cutouts against floor slabs, re-flattens terrain under floor
+   * slabs, and schedules a timber-frame recompute for whatever walls/roofs/
+   * openings changed between `prev` and the incoming shapes. Pulled out of
+   * handleSetShapes so undo/redo can run the exact same reconciliation on
+   * the historic snapshot they restore — they used to call setShapes(...)
+   * directly, skipping all of this, which could leave terrain excavation,
+   * floor-slab cutouts, or timber framing out of sync with the shapes an
+   * undo/redo had just restored until the user made another edit.
+   */
+  const deriveShapesState = (rawShapes: Shape[], prev: Shape[]): Shape[] => {
       const withCutouts = applyStairwellHolesToSlabs(rawShapes);
 
       // Ensure terrain excavation with 1m safety apron is maintained for all floor slabs
@@ -1367,49 +1412,62 @@ console.log("Created rectangle:", myRect.id);`);
 
         if (affected.size > 0) {
           scheduleScopedTimberRecompute(Array.from(affected));
-          saveToHistory(workingShapes);
           return workingShapes;
         }
       }
 
-      const nextShapes = updateTimberFramesIfPresent(workingShapes);
+      return updateTimberFramesIfPresent(workingShapes);
+  };
+
+  const handleSetShapes = (newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
+    setShapes(prev => {
+      const rawShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
+      const nextShapes = deriveShapesState(rawShapes, prev);
       saveToHistory(nextShapes);
       return nextShapes;
     });
   };
 
+  // Force next push to re-evaluate if needed, but not immediately. Reads
+  // currentModelIdRef (not the currentModelId closed over here) since these
+  // callbacks intentionally keep an empty dependency array.
+  const resetSyncHashForCurrentModel = () => {
+    const modelId = currentModelIdRef.current;
+    if (modelId) getSyncState(modelId).lastStateHash = '';
+  };
+
   const setShapesSilent = useCallback((newShapesOrFn: Shape[] | ((prev: Shape[]) => Shape[])) => {
-    lastStateHash.current = ''; // Force next push to re-evaluate if needed, but not immediately
+    resetSyncHashForCurrentModel();
     setShapes(newShapesOrFn);
   }, []);
 
   const setTagsSilent = useCallback((newTagsOrFn: Tag[] | ((prev: Tag[]) => Tag[])) => {
-    lastStateHash.current = '';
+    resetSyncHashForCurrentModel();
     setTags(newTagsOrFn);
   }, []);
-  
+
   const setScenesSilent = useCallback((newScenesOrFn: SceneState[] | ((prev: SceneState[]) => SceneState[])) => {
-    lastStateHash.current = '';
+    resetSyncHashForCurrentModel();
     setScenes(newScenesOrFn);
   }, []);
 
   const setCustomMaterialsSilent = useCallback((newMaterialsOrFn: any[] | ((prev: any[]) => any[])) => {
-    lastStateHash.current = '';
+    resetSyncHashForCurrentModel();
     setCustomMaterials(newMaterialsOrFn);
   }, []);
 
   const setAnimationsSilent = useCallback((newAnimationsOrFn: SceneAnimation[] | ((prev: SceneAnimation[]) => SceneAnimation[])) => {
-    lastStateHash.current = '';
+    resetSyncHashForCurrentModel();
     setAnimations(newAnimationsOrFn);
   }, []);
 
   const setCustomLightsSilent = useCallback((newLightsOrFn: CustomLight[] | ((prev: CustomLight[]) => CustomLight[])) => {
-    lastStateHash.current = '';
+    resetSyncHashForCurrentModel();
     setCustomLights(newLightsOrFn);
   }, []);
 
   const setNotesSilent = useCallback((newNotesOrFn: SceneNote[] | ((prev: SceneNote[]) => SceneNote[])) => {
-    lastStateHash.current = '';
+    resetSyncHashForCurrentModel();
     setNotes(newNotesOrFn);
   }, []);
 
@@ -1467,16 +1525,23 @@ console.log("Created rectangle:", myRect.id);`);
 
   const undo = () => {
     if (historyIndex > 0) {
-      const prevShapes = history[historyIndex - 1];
-      setShapes(prevShapes);
+      const targetShapes = history[historyIndex - 1];
+      // Runs the restored snapshot through the same reconciliation
+      // handleSetShapes uses (stairwell cutouts, terrain flattening under
+      // floor slabs, timber-frame recompute) instead of setShapes(target)
+      // directly — undoing/redoing past an architecture edit used to leave
+      // those derived states stale until the next unrelated edit forced a
+      // recompute. Does not call saveToHistory: undo/redo navigate the
+      // existing history stack, they don't extend it.
+      setShapes(prev => deriveShapesState(targetShapes, prev));
       setHistoryIndex(historyIndex - 1);
     }
   };
 
   const redo = () => {
     if (historyIndex < history.length - 1) {
-      const nextShapes = history[historyIndex + 1];
-      setShapes(nextShapes);
+      const targetShapes = history[historyIndex + 1];
+      setShapes(prev => deriveShapesState(targetShapes, prev));
       setHistoryIndex(historyIndex + 1);
     }
   };
