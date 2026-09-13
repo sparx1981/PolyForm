@@ -34,6 +34,8 @@ export const defaultAttributes = (): FaceAttributes => ({
   layer: null,
   orientationLocked: false,
   custom: {},
+  hidden: false,
+  name: null,
 });
 
 // ---------------------------------------------------------------------------

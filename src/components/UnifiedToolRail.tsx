@@ -68,7 +68,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType, Shape, TerrainData } from '../types';
-import { cn } from '../lib/utils';
+import { cn, runToolboxScript } from '../lib/utils';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { DeveloperSDK } from '../services/developerService';
@@ -508,17 +508,7 @@ export default function UnifiedToolRail() {
         }
       };
 
-      const fn = new Function('sdk', 'console', `
-        return (async () => {
-          try {
-            ${script.code}
-          } catch (e) {
-            console.error(e.message);
-          }
-        })();
-      `);
-
-      await fn(sdk, customConsole);
+      await runToolboxScript(script.code, ['sdk', 'console'], [sdk, customConsole]);
     } catch (err: any) {
       setConsoleOutput(prev => [...prev, `[ERROR] ${err.message}`]);
     }

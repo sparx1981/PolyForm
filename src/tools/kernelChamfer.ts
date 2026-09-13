@@ -101,7 +101,7 @@ export function createChamferBinding(
       }
 
       const validated = validateSolid(host.graph, faces);
-      if (!validated.ok) return { ok: false, reason: validated.reason };
+      if (!validated.ok) return { ok: false, reason: (validated as { ok: false; reason: string }).reason };
       session = { faces: [...faces], distance: 0 };
       return { ok: true };
     },

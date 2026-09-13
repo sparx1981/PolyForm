@@ -574,7 +574,7 @@ export interface AppState {
   // not new functionality. Types match AppContext.tsx's own useState/
   // wrapper-function declarations exactly.
   viewportToast: string | null;
-  setViewportToast: (msg: string | null) => void;
+  setViewportToast: (msg: string | null | ((current: string | null) => string | null)) => void;
   placingNotePos: THREE.Vector3 | null;
   setPlacingNotePos: (pos: THREE.Vector3 | null) => void;
   sunOrbitCenter: [number, number, number];
@@ -732,7 +732,6 @@ export interface SavedModel {
   createdAt: any;
   updatedAt: any;
   isPublic?: boolean;
-  password?: string;
   hasPassword?: boolean;
 }
 

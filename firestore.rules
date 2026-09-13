@@ -44,8 +44,20 @@ service cloud.firestore {
       return isCollaborator(modelId);
     }
 
+    function isModelOwner(modelId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/models/$(modelId)) &&
+        get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
+    }
+
+    function isOwnCollaborationEmail(data) {
+      return isAuthenticated() && ('email' in request.auth.token) &&
+        data.email == request.auth.token.email.lower();
+    }
+
     function isValidModel(data) {
       return data.keys().hasAll(['name', 'userId', 'shapes']) &&
+             !('password' in data) &&
              data.name is string && data.name.size() > 0 &&
              data.userId is string &&
              data.shapes is list &&
@@ -104,30 +116,57 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isInvited(modelId));
       allow delete: if isDocOwner();
 
+      // Password-protected sharing: the plaintext password lives only here,
+      // never on the parent /models/{modelId} doc (which is world-readable
+      // by anyone browsing public models). Only the owner, an invited
+      // collaborator, or someone who can already see the model (isPublic)
+      // may fetch it to verify a password attempt.
+      match /secure/{docId} {
+        allow get: if isAuthenticated() && (
+          get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/models/$(modelId)).data.isPublic == true ||
+          isInvited(modelId)
+        );
+        allow write: if isAuthenticated() &&
+          get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
+      }
+
       match /messages/{messageId} {
-        allow read, list: if isAuthenticated();
+        allow read, list: if isAuthenticated() && (
+          get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/models/$(modelId)).data.isPublic == true ||
+          isInvited(modelId)
+        );
         allow create: if isAuthenticated() && isValidChatMessage(request.resource.data);
       }
     }
 
     match /materials/{materialId} {
-      allow read, list: if isAuthenticated();
+      allow get, list: if isDocOwner();
       allow create: if isNewDocOwner() && isValidMaterial(request.resource.data);
       allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isInvited(resource.data.modelId)) && isValidMaterial(request.resource.data);
       allow delete: if isDocOwner();
     }
 
     match /scripts/{scriptId} {
-      allow read, list: if isAuthenticated();
+      allow get, list: if isDocOwner() || resource.data.isPublic == true;
       allow create: if isNewDocOwner() && isValidScript(request.resource.data);
       allow update: if isDocOwner() && isValidScript(request.resource.data);
       allow delete: if isDocOwner();
     }
 
     match /collaborations/{collabId} {
-      allow read, list, get: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidCollaboration(request.resource.data);
-      allow update, delete: if isAuthenticated();
+      allow get, list: if isAuthenticated() && (
+        isOwnCollaborationEmail(resource.data) || isModelOwner(resource.data.modelId) || isInvited(resource.data.modelId)
+      );
+      allow create: if isAuthenticated() && isValidCollaboration(request.resource.data) &&
+        isModelOwner(request.resource.data.modelId);
+      allow update: if isAuthenticated() && (
+        isOwnCollaborationEmail(resource.data) || isModelOwner(resource.data.modelId)
+      );
+      allow delete: if isAuthenticated() && (
+        isOwnCollaborationEmail(resource.data) || isModelOwner(resource.data.modelId)
+      );
     }
 
     match /test/{testId} {

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
+import { Line } from '@react-three/drei';
 import { PolygonState } from '../tools/polygon/types';
 import { generatePolygonVertices } from '../tools/polygon/math';
 
@@ -10,18 +11,18 @@ interface PolygonOverlayProps {
 export const PolygonOverlay: React.FC<PolygonOverlayProps> = ({ state }) => {
   const { center, radiusPoint, sides, activePlane, isCommitted } = state;
 
-  // 1. Polygon Perimeter Geometry
-  const perimeterGeometry = useMemo(() => {
+  // 1. Polygon Perimeter Points (closed loop)
+  const perimeterPoints = useMemo(() => {
     if (!center || !radiusPoint || !activePlane || isCommitted) return null;
     const vertices = generatePolygonVertices(center, radiusPoint, sides, activePlane);
     if (vertices.length === 0) return null;
-    return new THREE.BufferGeometry().setFromPoints(vertices);
+    return vertices;
   }, [center, radiusPoint, sides, activePlane, isCommitted]);
 
-  // 2. Dashed Radius Reference Line Geometry
-  const radiusLineGeometry = useMemo(() => {
+  // 2. Dashed Radius Reference Line Points
+  const radiusLinePoints = useMemo(() => {
     if (!center || !radiusPoint || isCommitted) return null;
-    return new THREE.BufferGeometry().setFromPoints([center, radiusPoint]);
+    return [center, radiusPoint];
   }, [center, radiusPoint, isCommitted]);
 
   if (isCommitted || !center || !radiusPoint) return null;
@@ -29,24 +30,29 @@ export const PolygonOverlay: React.FC<PolygonOverlayProps> = ({ state }) => {
   return (
     <group>
       {/* Perimeter Outline */}
-      {perimeterGeometry && (
-        <line geometry={perimeterGeometry}>
-          <lineBasicMaterial color="#0063A3" linewidth={2} depthTest={false} transparent opacity={0.8} />
-        </line>
+      {perimeterPoints && (
+        <Line
+          points={perimeterPoints}
+          color="#0063A3"
+          lineWidth={2}
+          depthTest={false}
+          transparent
+          opacity={0.8}
+        />
       )}
 
       {/* Faint Dashed Radius Indicator */}
-      {radiusLineGeometry && (
-        <line geometry={radiusLineGeometry}>
-          <lineDashedMaterial 
-            color="#6A6E79" 
-            dashSize={0.1} 
-            gapSize={0.1} 
-            depthTest={false} 
-            transparent 
-            opacity={0.6} 
-          />
-        </line>
+      {radiusLinePoints && (
+        <Line
+          points={radiusLinePoints}
+          color="#6A6E79"
+          dashed
+          dashSize={0.1}
+          gapSize={0.1}
+          depthTest={false}
+          transparent
+          opacity={0.6}
+        />
       )}
     </group>
   );

@@ -343,7 +343,7 @@ export class ArcTool {
     const text = this.state.fieldText;
     if (text === '') return this.state;
     const parsed = parseMeasurement(text, this.docUnit);
-    if (!parsed.ok) return this.set({ lastError: parsed.reason });
+    if (!parsed.ok) return this.set({ lastError: (parsed as { ok: false; reason: string }).reason });
     return this.apply(parsed.value);
   }
 

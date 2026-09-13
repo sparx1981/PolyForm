@@ -361,8 +361,17 @@ export function chamferSolid(
 
   const g = ctx.graph;
   const validated = validateSolid(g, faceIds);
-  if (!validated.ok) return { ok: false, reason: validated.reason, touched: new Set() };
+  if (!validated.ok) return { ok: false, reason: (validated as { ok: false; reason: string }).reason, touched: new Set() };
   const { vertexFaces } = validated;
+
+  // See computeSafeMaxAmount's own doc comment: strictly past this, the
+  // face-shrink math can push an inset vertex past the polygon's opposite
+  // side (miter overshoot in offsetPolygon2D), silently producing a self-
+  // intersecting or inverted-normal face instead of a rejected operation.
+  const safeMax = computeSafeMaxAmount(g, faceIds);
+  if (amount > safeMax) {
+    return { ok: false, reason: `amount must not exceed ${safeMax.toFixed(4)} (half the shortest touched edge)`, touched: new Set() };
+  }
 
   const { originalNormal, insetPoint } = computeChamferInsets(g, faceIds, amount);
 

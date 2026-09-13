@@ -1685,7 +1685,7 @@ function Scene() {
         deleteGroupFacesAndEdges(kernelHost.graph, group);
         bumpKernel();
         const groupSet = new Set(group);
-        setSelectedFaceIds(prev => prev.filter(f => !groupSet.has(f)));
+        setSelectedFaceIds(prev => prev.filter(f => !groupSet.has(f as FaceId)));
       }
       return;
     }
@@ -2168,6 +2168,27 @@ function Scene() {
   const blockLastValidDraftRef = useRef<{ position: [number, number, number]; rotationSteps: number } | null>(null);
 
   /**
+   * Fillet/chamfer/offset/push-pull drags attach their pointermove/pointerup
+   * listeners to `window` (see handleKernelFacePointerDown below) so the
+   * drag tracks correctly even once the cursor leaves the canvas. Each
+   * drag's own `finish()` removes them on a normal pointerup, but nothing
+   * previously ran that cleanup if this component unmounted mid-drag
+   * (switching views, an error boundary trip) — the listener, and every
+   * closure it holds over kernel/session state, would leak indefinitely.
+   * Each drag registers its own removal function here and unregisters it
+   * from inside `finish()`; this effect's cleanup catches whatever is still
+   * outstanding on unmount.
+   */
+  const activeDragCleanupsRef = useRef<Set<() => void>>(new Set());
+  useEffect(() => {
+    const cleanups = activeDragCleanupsRef.current;
+    return () => {
+      cleanups.forEach((fn) => fn());
+      cleanups.clear();
+    };
+  }, []);
+
+  /**
    * Push/pull starts on PRESS, not click.
    *
    * onClick fires on release, so beginning there started the drag after the
@@ -2628,9 +2649,17 @@ function Scene() {
           );
         };
 
-        const finish = () => {
+        // Only removes the window listeners — no state updates, no commit.
+        // Registered so an unmount mid-drag (not a normal pointerup) can
+        // stop the listener without touching React state on an unmounting
+        // component or silently committing a still-in-progress edit.
+        const removeListeners = () => {
           window.removeEventListener('pointermove', onMove);
           window.removeEventListener('pointerup', finish);
+          activeDragCleanupsRef.current.delete(removeListeners);
+        };
+        const finish = () => {
+          removeListeners();
           setChamferPreview(null);
           const result = filletRef.current.commit();
           if (!result.ok) {
@@ -2641,6 +2670,7 @@ function Scene() {
 
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', finish, { once: true });
+        activeDragCleanupsRef.current.add(removeListeners);
         return true;
       }
 
@@ -2690,9 +2720,13 @@ function Scene() {
         );
       };
 
-      const finish = () => {
+      const removeListeners = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', finish);
+        activeDragCleanupsRef.current.delete(removeListeners);
+      };
+      const finish = () => {
+        removeListeners();
         setChamferPreview(null);
         const result = chamferRef.current.commit();
         if (!result.ok) {
@@ -2703,6 +2737,7 @@ function Scene() {
 
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', finish, { once: true });
+      activeDragCleanupsRef.current.add(removeListeners);
       return true;
     }
 
@@ -2746,9 +2781,13 @@ function Scene() {
         setFaceOffsetPreview({ faceId, distance: dist });
       };
 
-      const finish = () => {
+      const removeListeners = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', finish);
+        activeDragCleanupsRef.current.delete(removeListeners);
+      };
+      const finish = () => {
+        removeListeners();
         faceOffsetRef.current.commit();
         setFaceOffsetPreview(null);
         setMeasurements('');
@@ -2756,6 +2795,7 @@ function Scene() {
 
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', finish, { once: true });
+      activeDragCleanupsRef.current.add(removeListeners);
       return true;
     }
 
@@ -2796,9 +2836,13 @@ function Scene() {
       }
     };
 
-    const finish = () => {
+    const removeListeners = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', finish);
+      activeDragCleanupsRef.current.delete(removeListeners);
+    };
+    const finish = () => {
+      removeListeners();
       pushPullRef.current.commit();
       setPushPullPreview(null);
       setMeasurements('');
@@ -2806,6 +2850,7 @@ function Scene() {
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', finish, { once: true });
+    activeDragCleanupsRef.current.add(removeListeners);
     return true;
     } catch (err) {
       console.error('[handleKernelFacePointerDown] uncaught error:', err);

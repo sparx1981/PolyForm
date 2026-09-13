@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Upload, Plus, AlertCircle, Globe, User, Users, Settings, Circle as CircleIcon, Square as SquareIcon, Box as BoxIcon, Triangle as TriangleIcon, Cone as ConeIcon, Pyramid as PyramidIcon, Torus as TorusIcon, CircleDot, MousePointer2, Eraser, PaintBucket, Move, ArrowUpFromLine, RotateCw, Maximize, CornerUpRight, Orbit, Hand, ZoomIn, Sparkles, Search, MoreHorizontal, Video, Image, Palette, Layers, Box, PenLine, Radio, Zap, Disc, Hexagon, FileCode, FileText, Scissors, Trees, Ruler, Compass, Eye, EyeOff, Copy, Group, Undo, Redo, Hammer, Building, Home, CheckCircle2, ChevronDown, RefreshCw, LayoutGrid, StickyNote, Lightbulb, SlidersHorizontal } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useApp } from '../AppContext';
-import { cn } from '../lib/utils';
+import { cn, runToolboxScript } from '../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import SpecPage from './DeveloperPanel/SpecPage';
@@ -843,17 +843,7 @@ console.log("All tool parameters and variables successfully configured!");`
       };
 
       // Simple execution for now (not in worker yet)
-      const fn = new Function('sdk', 'scene', 'console', `
-        return (async () => {
-          try {
-            ${developerCode}
-          } catch (e) {
-            console.error(e.message);
-          }
-        })();
-      `);
-
-      await fn((window as any).sdk, (window as any).sdk, customConsole);
+      await runToolboxScript(developerCode, ['sdk', 'scene', 'console'], [(window as any).sdk, (window as any).sdk, customConsole]);
       setConsoleOutput(prev => [...prev, `[${new Date().toLocaleTimeString()}] Execution completed successfully.`]);
     } catch (err: any) {
       setConsoleOutput(prev => [...prev, `[ERROR] ${err.message}`]);

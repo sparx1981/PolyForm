@@ -44,7 +44,7 @@ export function generateTerrainHeights(options: {
       const microRoughness = (r1 + r2 + r3) * roughness * 0.45;
 
       if (topography === 'flat') {
-        heights.push(Math.max(0, microRoughness * 0.4));
+        heights.push(0);
       } else {
         if (topography === 'rolling') {
           const dist = Math.sqrt(nx * nx + ny * ny);

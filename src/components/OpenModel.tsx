@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { db, handleFirestoreError, OperationType, isQuotaLocked } from '../firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, or, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy } from 'firebase/firestore';
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
 
@@ -234,6 +234,20 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     }
   };
 
+  // The plaintext password never lives on the /models/{id} document (that
+  // doc is world-readable by anyone browsing public models); it's kept in
+  // an owner-scoped /models/{id}/secure/gate doc, fetched on demand only
+  // when someone actually attempts to open/copy/edit-share that one model.
+  const fetchModelPassword = async (modelId: string): Promise<string> => {
+    try {
+      const snap = await getDoc(doc(db, 'models', modelId, 'secure', 'gate'));
+      return snap.exists() ? (snap.data().password || '') : '';
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, `models/${modelId}/secure/gate`);
+      return '';
+    }
+  };
+
   const handleOpenRequest = (model: SavedModel) => {
     if (model.userId !== user?.uid && model.hasPassword) {
       setModelToOpen(model);
@@ -245,10 +259,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     }
   };
 
-  const handlePasswordSubmit = () => {
+  const handlePasswordSubmit = async () => {
     if (!modelToOpen) return;
-    
-    if (passwordToTry === modelToOpen.password) {
+
+    const actualPassword = await fetchModelPassword(modelToOpen.id);
+    if (passwordToTry === actualPassword) {
       loadModel(modelToOpen);
       setIsPasswordModalOpen(false);
       setModelToOpen(null);
@@ -275,7 +290,8 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     // Check password if needed
     if (model.userId !== user.uid && model.hasPassword) {
       const pwd = window.prompt('This model is password protected. Enter password to copy:');
-      if (pwd !== model.password) {
+      const actualPassword = await fetchModelPassword(model.id);
+      if (pwd !== actualPassword) {
         alert('Incorrect password.');
         return;
       }
@@ -291,10 +307,10 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         isPublic: false,
-        password: '',
         hasPassword: false
       };
       delete (newModel as any).id;
+      delete (newModel as any).password;
 
       await addDoc(collection(db, 'models'), newModel);
       alert('Model copied to your library!');
@@ -305,11 +321,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     }
   };
 
-  const openShareModal = (e: React.MouseEvent, model: SavedModel) => {
+  const openShareModal = async (e: React.MouseEvent, model: SavedModel) => {
     e.stopPropagation();
     setModelToShare(model);
     setUsePassword(model.hasPassword || false);
-    setSharePassword(model.password || '');
+    setSharePassword(model.hasPassword ? await fetchModelPassword(model.id) : '');
     setIsShareModalOpen(true);
   };
 
@@ -320,9 +336,13 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
       await updateDoc(doc(db, 'models', modelToShare.id), {
         isPublic: true,
         hasPassword: usePassword,
-        password: usePassword ? sharePassword : '',
         updatedAt: serverTimestamp()
       });
+      if (usePassword) {
+        await setDoc(doc(db, 'models', modelToShare.id, 'secure', 'gate'), {
+          password: sharePassword
+        });
+      }
       setIsShareModalOpen(false);
       fetchModels(true);
       alert('Model is now public!');

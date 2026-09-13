@@ -413,30 +413,17 @@ describe('computeSafeMaxAmount', () => {
     expect(checkIntegrity(s.graph)).toEqual([]);
   });
 
-  it('an amount past the safe max inverts a face — confirms the actual bug this exists to prevent', () => {
+  it('an amount past the safe max is rejected instead of inverting a face', () => {
+    // chamferSolid now enforces computeSafeMaxAmount itself: strictly past
+    // it, the face-shrink math would push an inset vertex past the
+    // polygon's opposite side (miter overshoot in offsetPolygon2D),
+    // silently mirroring the face instead of shrinking it. That used to
+    // succeed "cleanly" with corrupted geometry; it's now a rejected
+    // operation instead.
     const s = scene(); box(s, 4, 2);
     const safeMax = computeSafeMaxAmount(s.graph, [...s.graph.faces.keys()]);
     const result = chamferSolid(s.ctx, [...s.graph.faces.keys()], safeMax * 1.5);
-    expect(result.ok).toBe(true); // succeeds "cleanly" — this IS the bug
-    // A side face's own Y-extent should span [0, 2] narrowing inward from
-    // both ends by the same amount — if inverted, the resulting interval
-    // is reversed (this reproduces the exact side-face points found
-    // during investigation: min > raw-max before taking abs, i.e. the
-    // face is mirrored rather than simply shrunk).
-    const sideFace = [...s.graph.faces.values()].find(
-      (f) => Math.abs(f.plane.normal.x) > 0.9,
-    )!;
-    const pts = loopVertexIds(s.graph, sideFace.outerLoop).map(
-      (vid) => getVertex(s.graph, vid).position,
-    );
-    const ys = pts.map((p) => p.y);
-    const rawMin = 0 + safeMax * 1.5; // where "min" WOULD be if not inverted
-    const rawMax = 2 - safeMax * 1.5; // where "max" WOULD be if not inverted
-    // If genuinely inverted, rawMin > rawMax, and the actual points span
-    // [rawMax, rawMin] (the physically-correct absolute range) rather than
-    // the intended [rawMin, rawMax] — confirming the face is mirrored.
-    expect(rawMin).toBeGreaterThan(rawMax);
-    expect(Math.min(...ys)).toBeCloseTo(rawMax, 5);
-    expect(Math.max(...ys)).toBeCloseTo(rawMin, 5);
+    expect(result.ok).toBe(false);
+    expect(checkIntegrity(s.graph)).toEqual([]);
   });
 });

@@ -355,7 +355,8 @@ function AppContent() {
         } catch (err) {
           console.error('[Join] Error:', err);
           // Only alert if it's not a quota error which is already handled globally
-          if (!err.message.includes('Quota exceeded')) {
+          const errMessage = err instanceof Error ? err.message : String(err);
+          if (!errMessage.includes('Quota exceeded')) {
             alert("Failed to join design session.");
           }
         }

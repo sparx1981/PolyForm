@@ -424,13 +424,18 @@ function RoadMarkingsOverlay({
   width: number;
   preset: RoadMarkingPreset;
 }) {
-  if (preset === 'none' || !sampledPoints || sampledPoints.length < 2) return null;
-
   const halfW = width * 0.5;
   const up = new THREE.Vector3(0, 1, 0);
 
-  // Compute 3D frames (tangent, right, normal) and cumulative distance along spline
+  // Compute 3D frames (tangent, right, normal) and cumulative distance along spline.
+  // Guarded internally (rather than an early `return null` above the hooks)
+  // so every hook in this component always runs regardless of preset/point
+  // count — an early return before hooks here would change the number of
+  // hooks executed between renders and crash React's "Rules of Hooks" check.
   const { frames } = useMemo(() => {
+    if (preset === 'none' || !sampledPoints || sampledPoints.length < 2) {
+      return { frames: [] as Array<{ pos: THREE.Vector3; tangent: THREE.Vector3; right: THREE.Vector3; normal: THREE.Vector3; s: number; }> };
+    }
     const list: Array<{
       pos: THREE.Vector3;
       tangent: THREE.Vector3;
@@ -470,7 +475,7 @@ function RoadMarkingsOverlay({
     }
 
     return { frames: list };
-  }, [sampledPoints]);
+  }, [sampledPoints, preset]);
 
   // Centerline points elevated above road pavement (45mm above subgrade)
   const centerlinePoints = useMemo(() => {
@@ -613,6 +618,8 @@ function RoadMarkingsOverlay({
     wg.computeVertexNormals();
     return wg;
   }, [frames, halfW, preset]);
+
+  if (preset === 'none' || !sampledPoints || sampledPoints.length < 2) return null;
 
   return (
     <group name="road-markings-overlay">

@@ -70,7 +70,7 @@ import { getVertex, loopEdgeIds, loopVertexIds, removeFace, removeEdge, removeOr
 import { planeBasis, projectToBasis, unprojectFromBasis, dot, add, scale, sub, tryNormalize } from './math';
 import { offsetPolygon2D } from './faceOffset';
 import type { InsertContext } from './insert';
-import { createDirectFace } from './chamfer';
+import { createDirectFace, computeSafeMaxAmount } from './chamfer';
 
 export interface FilletResult {
   readonly ok: boolean;
@@ -170,8 +170,13 @@ export function filletSolid(
 
   const g = ctx.graph;
   const validated = validateBox(g, faceIds);
-  if (!validated.ok) return { ok: false, reason: validated.reason, touched: new Set() };
+  if (!validated.ok) return { ok: false, reason: (validated as { ok: false; reason: string }).reason, touched: new Set() };
   const { vertexFaces } = validated;
+
+  const safeMax = computeSafeMaxAmount(g, faceIds);
+  if (radius > safeMax) {
+    return { ok: false, reason: `radius must not exceed ${safeMax.toFixed(4)} (half the shortest touched edge)`, touched: new Set() };
+  }
 
   // The box's own centroid — used below to verify each face's stored
   // normal genuinely points outward, not just to trust it blindly.

@@ -3,7 +3,7 @@ import { parseMeasurement, formatLength, convert, isMeasurementKey } from './mea
 
 const val = (s: string, u: Parameters<typeof parseMeasurement>[1] = 'm') => {
   const r = parseMeasurement(s, u);
-  if (!r.ok) throw new Error(`expected success for "${s}": ${r.reason}`);
+  if (!r.ok) throw new Error(`expected success for "${s}": ${(r as { ok: false; reason: string }).reason}`);
   return r.value;
 };
 
@@ -125,7 +125,7 @@ describe('rejections', () => {
   it('gives a reason', () => {
     const r = parseMeasurement('nonsense');
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toContain('nonsense');
+    if (!r.ok) expect((r as { ok: false; reason: string }).reason).toContain('nonsense');
   });
 });
 

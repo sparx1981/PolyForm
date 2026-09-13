@@ -104,7 +104,7 @@ describe('Terrain Exporter & Watchdog Suite', () => {
       maxGradePercent: 8,
       bankingAngle: 0,
       markings: 'center-dashed',
-      profile: 'crowned',
+      profile: { width: 0.15, height: 0.15, ditchWidth: 1.2, ditchDepth: 0.35, hasCurb: true, hasDitch: false },
     };
 
     const glbBlob = await exportTerrainToGLB(geo, [pad, road], { includeCutFill: true });

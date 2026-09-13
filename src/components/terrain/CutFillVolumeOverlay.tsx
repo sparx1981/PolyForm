@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useApp } from '../../AppContext';
 import { TerrainRasterWorkerInput, TerrainRasterWorkerOutput } from '../../workers/terrainRasterWorker';
-import { dispatchTerrainRasterWithWatchdog } from '../../lib/terrain/workerWatchdog';
+import { dispatchTerrainRasterCancellable } from '../../lib/terrain/workerWatchdog';
 
 export default function CutFillVolumeOverlay() {
   const { 
@@ -21,17 +21,19 @@ export default function CutFillVolumeOverlay() {
     showCutFillOverlay
   } = useApp();
 
-  if (!showCutFillOverlay) {
-    return null;
-  }
-
   // Find terrain mesh if one exists in the scene
   const terrainShape = useMemo(() => {
     return shapes.find((s) => s.type === 'terrain' && !s.hidden);
   }, [shapes]);
 
-  // Determine computation grid bounds and base elevations
+  // Determine computation grid bounds and base elevations.
+  // Guarded internally (rather than an early `return null` above the
+  // hooks) so every hook in this component always runs regardless of the
+  // showCutFillOverlay toggle — an early return before hooks here would
+  // change the number of hooks executed between renders and crash React's
+  // "Rules of Hooks" check.
   const rasterInput = useMemo<TerrainRasterWorkerInput | null>(() => {
+    if (!showCutFillOverlay) return null;
     const activeMods = terrainModifiers.filter((m) => m.enabled);
     if (activeMods.length === 0) return null;
 
@@ -74,7 +76,7 @@ export default function CutFillVolumeOverlay() {
       baseHeights: baseH,
       modifiers: activeMods,
     };
-  }, [terrainShape, terrainModifiers]);
+  }, [terrainShape, terrainModifiers, showCutFillOverlay]);
 
   // Compute terrain rasterization using 4-second watchdog
   const [rasterResult, setRasterResult] = useState<TerrainRasterWorkerOutput | null>(null);
@@ -86,11 +88,12 @@ export default function CutFillVolumeOverlay() {
     }
 
     let isMounted = true;
-    dispatchTerrainRasterWithWatchdog(rasterInput, (warningMsg) => {
+    const { promise, cancel } = dispatchTerrainRasterCancellable(rasterInput, (warningMsg) => {
       if (isMounted) {
         setViewportToast(warningMsg);
       }
-    }).then((result) => {
+    });
+    promise.then((result) => {
       if (isMounted) {
         setRasterResult(result);
       }
@@ -98,6 +101,7 @@ export default function CutFillVolumeOverlay() {
 
     return () => {
       isMounted = false;
+      cancel();
     };
   }, [rasterInput, setViewportToast]);
 
@@ -301,11 +305,21 @@ export default function CutFillVolumeOverlay() {
     };
   }, [rasterInput, rasterResult]);
 
+  // cutGeo/fillGeo are freshly allocated GPU buffers on every recompute;
+  // dispose whichever pair they replace (and the final pair on unmount) so
+  // repeated terrain edits don't leak GPU memory.
+  useEffect(() => {
+    return () => {
+      cutGeo?.dispose();
+      fillGeo?.dispose();
+    };
+  }, [cutGeo, fillGeo]);
+
   const terrainPos: [number, number, number] = terrainShape
     ? [terrainShape.position[0], terrainShape.position[1], terrainShape.position[2]]
     : [0, 0, 0];
 
-  if (!cutGeo && !fillGeo) {
+  if (!showCutFillOverlay || (!cutGeo && !fillGeo)) {
     return null;
   }
 

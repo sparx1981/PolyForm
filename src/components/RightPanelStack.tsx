@@ -6,6 +6,7 @@ import { HuggingFaceService } from '../services/sketchupService';
 import { useApp } from '../AppContext';
 import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
+import type { FaceId } from '../lib/geometry/types';
 import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
@@ -2416,7 +2417,7 @@ export default function RightPanelStack() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deleteGroupFacesAndEdges(kernelHost.graph, group.faces);
-                                setSelectedFaceIds(prev => prev.filter(f => !group.faces.includes(f)));
+                                setSelectedFaceIds(prev => prev.filter(f => !group.faces.includes(f as FaceId)));
                                 bumpKernel();
                               }}
                               className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"

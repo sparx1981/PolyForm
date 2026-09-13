@@ -192,6 +192,13 @@ export interface FaceAttributes {
   /** True when the stored winding puts the front where the user expects it. §6.4 */
   orientationLocked: boolean;
   custom: Record<string, unknown>;
+  /**
+   * Hidden from rendering. Distinct from deleted: the face still exists, still
+   * bounds its edges, and still participates in derivation.
+   */
+  hidden: boolean;
+  /** User-facing label. Null means the UI falls back to a generated one. */
+  name: string | null;
 }
 
 // ---------------------------------------------------------------------------

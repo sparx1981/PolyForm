@@ -53,7 +53,7 @@ const FlyoutSideContext = createContext<'right' | 'bottom'>('right');
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
-import { cn } from '../lib/utils';
+import { cn, runToolboxScript } from '../lib/utils';
 import { DeveloperSDK } from '../services/developerService';
 
 interface ToolButtonProps {
@@ -185,17 +185,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         }
       };
 
-      const fn = new Function('sdk', 'console', `
-        return (async () => {
-          try {
-            ${script.code}
-          } catch (e) {
-            console.error(e.message);
-          }
-        })();
-      `);
-
-      await fn(sdk, customConsole);
+      await runToolboxScript(script.code, ['sdk', 'console'], [sdk, customConsole]);
     } catch (err: any) {
       setConsoleOutput(prev => [...prev, `[ERROR] ${err.message}`]);
     }
@@ -224,28 +214,10 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       } else if (item.scriptId) {
         const found = developerScripts.find(s => s.id === item.scriptId);
         if (found) {
-          const fn = new Function('sdk', 'console', `
-            return (async () => {
-              try {
-                ${found.code}
-              } catch (e) {
-                console.error(e.message);
-              }
-            })();
-          `);
-          await fn(sdk, customConsole);
+          await runToolboxScript(found.code, ['sdk', 'console'], [sdk, customConsole]);
         }
       } else if (item.code) {
-        const fn = new Function('sdk', 'console', `
-          return (async () => {
-            try {
-              ${item.code}
-            } catch (e) {
-              console.error(e.message);
-            }
-          })();
-        `);
-        await fn(sdk, customConsole);
+        await runToolboxScript(item.code, ['sdk', 'console'], [sdk, customConsole]);
       }
     } catch (err: any) {
       setConsoleOutput(prev => [...prev, `[ERROR] ${err.message}`]);
@@ -900,7 +872,7 @@ function CustomExtensionButton({ button, onClick }: { button: CustomToolbarButto
       style={button.color ? { color: button.color } : undefined}
       title={button.tooltip || button.label}
     >
-      <DynamicIcon name={button.icon || 'Code'} size={19} className="shrink-0" />
+      <DynamicIcon nameOrEmoji={button.icon || 'Code'} size={19} className="shrink-0" />
       {button.badge && (
         <span className="absolute -top-1 -right-1 px-1 min-w-3.5 h-3.5 text-[9px] font-bold bg-amber-500 text-white rounded-full flex items-center justify-center pointer-events-none">
           {button.badge}

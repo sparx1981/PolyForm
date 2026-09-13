@@ -1701,12 +1701,11 @@ console.log("Created rectangle:", myRect.id);`);
     setLightPosition([5, 5, 5]);
     setActiveTool('select');
     setCutFillMetrics({
-      cutVolume: 0,
-      fillVolume: 0,
-      netVolume: 0,
-      cutArea: 0,
-      fillArea: 0,
-      balancedElevation: null
+      cutVolumeM3: 0,
+      fillVolumeM3: 0,
+      netVolumeM3: 0,
+      cutAreaM2: 0,
+      fillAreaM2: 0
     });
     setActiveCivilGrade(null);
     setIsBakeModalOpen(false);

@@ -237,7 +237,7 @@ export class LineTool {
     if (text === '') return this.state;
 
     const parsed = parseMeasurement(text, this.docUnit);
-    if (!parsed.ok) return this.set({ lastError: parsed.reason });
+    if (!parsed.ok) return this.set({ lastError: (parsed as { ok: false; reason: string }).reason });
 
     // Re-solve takes precedence over starting a new segment. After a commit
     // the tool is still 'drawing' — the chain continues from the new anchor —

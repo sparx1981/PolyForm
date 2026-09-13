@@ -18,11 +18,26 @@ const WATCHDOG_TIMEOUT_MS = 4000;
  * @param input Computation grid, bounds, base heights, and active modifiers.
  * @param onWarning Optional non-blocking toast callback invoked if fallback occurs.
  */
-export async function dispatchTerrainRasterWithWatchdog(
+export function dispatchTerrainRasterWithWatchdog(
   input: TerrainRasterWorkerInput,
   onWarning?: (message: string) => void
 ): Promise<TerrainRasterWorkerOutput> {
-  return new Promise<TerrainRasterWorkerOutput>((resolve) => {
+  return dispatchTerrainRasterCancellable(input, onWarning).promise;
+}
+
+/**
+ * Same as dispatchTerrainRasterWithWatchdog, but also exposes a `cancel()`
+ * handle so a caller (e.g. a React effect) can terminate the worker and
+ * clear the watchdog timer immediately on unmount/re-run instead of letting
+ * them keep running to completion in the background with their result
+ * silently discarded.
+ */
+export function dispatchTerrainRasterCancellable(
+  input: TerrainRasterWorkerInput,
+  onWarning?: (message: string) => void
+): { promise: Promise<TerrainRasterWorkerOutput>; cancel: () => void } {
+  let cleanupRef: () => void = () => {};
+  const promise = new Promise<TerrainRasterWorkerOutput>((resolve) => {
     let worker: Worker | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let settled = false;
@@ -40,6 +55,7 @@ export async function dispatchTerrainRasterWithWatchdog(
         worker = null;
       }
     };
+    cleanupRef = cleanup;
 
     // Watchdog timer (4.0s)
     timer = setTimeout(() => {
@@ -104,4 +120,6 @@ export async function dispatchTerrainRasterWithWatchdog(
       resolve(result);
     }
   });
+
+  return { promise, cancel: () => cleanupRef() };
 }

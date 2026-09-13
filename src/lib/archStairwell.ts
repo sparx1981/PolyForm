@@ -248,7 +248,7 @@ export function computeStairHoleForSlab(
     const worldPt = c.clone().applyQuaternion(stairQuat).add(stairPos);
     const relWorld = worldPt.clone().sub(slabPos);
     const localPt = relWorld.applyQuaternion(invSlabQuat);
-    return [localPt.x, localPt.y];
+    return [localPt.x, localPt.z];
   });
 
   const worldExitA = exitLocalStart.clone().applyQuaternion(stairQuat).add(stairPos);
