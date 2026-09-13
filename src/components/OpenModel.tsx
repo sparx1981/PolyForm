@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { db, handleFirestoreError, OperationType, isQuotaLocked } from '../firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy, writeBatch } from 'firebase/firestore';
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
 import { useModalA11y } from './ui/useModalA11y';
@@ -207,9 +207,43 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
   const deleteModalRef = useModalA11y<HTMLDivElement>(!!deleteConfirmId, () => setDeleteConfirmId(null));
   const shareModalRef = useModalA11y<HTMLDivElement>(isShareModalOpen, () => setIsShareModalOpen(false));
 
+  /**
+   * Deleting a model used to only remove the parent /models/{id} doc,
+   * leaving its `messages` and `secure` subcollections, and any
+   * `collaborations` docs referencing it, orphaned — live forever and (per
+   * the Firestore rules governing those collections) still readable by
+   * anyone who was ever invited to or could see the model. Firestore has
+   * no "delete with subcollections" call, so each has to be queried and
+   * deleted explicitly, and it has to happen BEFORE the parent model doc
+   * is removed: the rules for all three collections authorize this delete
+   * by checking `get(models/{id}).data.userId == request.auth.uid`, which
+   * stops resolving the instant the model doc itself is gone.
+   */
+  const purgeModelData = async (id: string) => {
+    const refsToDelete: ReturnType<typeof doc>[] = [];
+
+    const [messagesSnap, secureSnap, collabSnap] = await Promise.all([
+      getDocs(collection(db, 'models', id, 'messages')),
+      getDocs(collection(db, 'models', id, 'secure')),
+      getDocs(query(collection(db, 'collaborations'), where('modelId', '==', id))),
+    ]);
+    messagesSnap.forEach((d) => refsToDelete.push(d.ref));
+    secureSnap.forEach((d) => refsToDelete.push(d.ref));
+    collabSnap.forEach((d) => refsToDelete.push(d.ref));
+
+    // Firestore batches cap at 500 operations; chunk well under that.
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < refsToDelete.length; i += CHUNK_SIZE) {
+      const batch = writeBatch(db);
+      for (const ref of refsToDelete.slice(i, i + CHUNK_SIZE)) batch.delete(ref);
+      await batch.commit();
+    }
+  };
+
   const handleDelete = async (id: string) => {
     setIsDeleting(true);
     try {
+      await purgeModelData(id);
       await deleteDoc(doc(db, 'models', id));
       // A deleted model can appear in more than one tab's bucket (e.g. both
       // "Recent"/"My Models" and "All Models"), so remove it from all of them.

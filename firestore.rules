@@ -127,6 +127,11 @@ service cloud.firestore {
           get(/databases/$(database)/documents/models/$(modelId)).data.isPublic == true ||
           isInvited(modelId)
         );
+        // Listing (rather than fetching the one known "gate" doc) is
+        // owner-only — needed so handleDelete's cleanup can enumerate and
+        // purge this subcollection before deleting the parent model.
+        allow list: if isAuthenticated() &&
+          get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
         allow write: if isAuthenticated() &&
           get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
       }
@@ -138,6 +143,12 @@ service cloud.firestore {
           isInvited(modelId)
         );
         allow create: if isAuthenticated() && isValidChatMessage(request.resource.data);
+        // Lets the model owner purge chat history when deleting the model
+        // itself (see handleDelete in OpenModel.tsx) — otherwise these
+        // would be orphaned, world-readable-to-collaborators documents
+        // with no parent model left to scope access to.
+        allow delete: if isAuthenticated() &&
+          get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
       }
     }
 
