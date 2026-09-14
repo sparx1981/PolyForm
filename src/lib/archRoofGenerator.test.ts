@@ -156,4 +156,77 @@ describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () =
     expect(assembly.tilesShape).toBeDefined();
     expect(assembly.tilesShape!.geometryData!.positions.length).toBeGreaterThan(0);
   });
+
+  it('places tiles on the real facets of a general (non-rectangular, non-L-shaped) polygon roof', () => {
+    // Diamond (45deg-rotated square) footprint: a convex quadrilateral,
+    // but its area is far below its axis-aligned bounding box area, so
+    // extractRoomFootprintPolygon's isRectangular check (n===4 AND
+    // polyArea >= 0.92*bboxArea) correctly rejects it, and it isn't the
+    // 6-vertex L-shape case either - so it must fall through to the
+    // general-polygon tiling branch.
+    const len = Math.sqrt(18);
+    const diamondRoomWalls: Shape[] = [
+      { id: 'w1', type: 'wall', position: [4.5, 1.4, 1.5], rotation: [0, -Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w2', type: 'wall', position: [4.5, 1.4, 4.5], rotation: [0, -3 * Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w3', type: 'wall', position: [1.5, 1.4, 4.5], rotation: [0, 3 * Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w4', type: 'wall', position: [1.5, 1.4, 1.5], rotation: [0, Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+    ];
+
+    const assembly = buildRoofAssemblyForRoom(diamondRoomWalls, {
+      roofType: 'hip',
+      pitchAngleDeg: 35,
+      eaveOverhang: 0.35,
+      fasciaHeight: 0.18,
+      tileShape: 'flat',
+      tileSize: 0.35,
+    });
+
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+    expect(assembly.tilesShape).toBeDefined();
+    const positions = assembly.tilesShape!.geometryData!.positions;
+    expect(positions.length).toBeGreaterThan(0);
+
+    // localEavePoly is in the same local coordinate frame as the tile
+    // shape's own geometryData (both centered on the roof's world center).
+    const localEavePoly = assembly.roofShape.roofData?.localEavePoly as [number, number][] | undefined;
+    expect(localEavePoly).toBeDefined();
+    if (!localEavePoly) return;
+
+    // Point-in-polygon (ray casting) with a small tolerance for the edge
+    // itself, since tile-grid quantization can place a tile fractionally
+    // past the true boundary.
+    const pointInPoly = (x: number, z: number, poly: [number, number][], tol = 0.15): boolean => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, zi] = poly[i];
+        const [xj, zj] = poly[j];
+        if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
+          inside = !inside;
+        }
+      }
+      if (inside) return true;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, zi] = poly[i];
+        const [xj, zj] = poly[j];
+        const dx = xj - xi, dz = zj - zi;
+        const len2 = dx * dx + dz * dz || 1e-9;
+        const t = Math.max(0, Math.min(1, ((x - xi) * dx + (z - zi) * dz) / len2));
+        const px = xi + t * dx, pz = zi + t * dz;
+        if (Math.hypot(x - px, z - pz) < tol) return true;
+      }
+      return false;
+    };
+
+    let outsideCount = 0;
+    for (let i = 0; i < positions.length; i += 3) {
+      if (!pointInPoly(positions[i], positions[i + 2], localEavePoly)) outsideCount++;
+    }
+    // Before general-polygon tiling, this diamond-shaped roof got a
+    // single rectangular tile grid sized to its axis-aligned bounding
+    // box - most of that grid falls in the four corner void triangles
+    // outside the diamond, so this assertion would fail against that
+    // old behavior.
+    expect(outsideCount).toBe(0);
+  });
 });

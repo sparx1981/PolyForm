@@ -1813,6 +1813,8 @@ export function buildRoofAssemblyForRoom(
       localWallPoly,
       localEavePoly,
       reflexIndex,
+      isGeneralPolygon: !isRectangular && !(isLShape && reflexIndex !== undefined),
+      pitchAngleDeg: params.pitchAngleDeg,
     });
 
     if (tilesGeom.attributes.position && tilesGeom.attributes.position.count > 0) {
@@ -2157,6 +2159,12 @@ export function create3DRoofTilesGeometry(options: {
   localWallPoly?: [number, number][];
   localEavePoly?: [number, number][];
   reflexIndex?: number;
+  // When set (and neither rectangular nor L-shaped), tiles fan out per
+  // eave-edge facet up to the same skeleton apex point that
+  // createGeneralPolygonalRoofSlopesGeometry uses for the real slope mesh,
+  // instead of falling back to the plain rectangular bounding-box grid.
+  isGeneralPolygon?: boolean;
+  pitchAngleDeg?: number;
 }): THREE.BufferGeometry {
   const {
     roofType,
@@ -2174,6 +2182,8 @@ export function create3DRoofTilesGeometry(options: {
     localWallPoly,
     localEavePoly,
     reflexIndex,
+    isGeneralPolygon = false,
+    pitchAngleDeg = 35,
   } = options;
 
   const geom = new THREE.BufferGeometry();
@@ -2345,6 +2355,31 @@ export function create3DRoofTilesGeometry(options: {
       slopes.push(makeTrapezoidSlopeDef(1, e3, e2, r1, rJ));
       slopes.push(makeTrapezoidSlopeDef(2, e4, e3, rJ, r2));
       slopes.push(makeTrapezoidSlopeDef(3, e0, e5, r2, rJ));
+    }
+  } else if (isGeneralPolygon && localWallPoly && localEavePoly) {
+    // Matches createGeneralPolygonalRoofSlopesGeometry's fan triangulation:
+    // one facet per eave-polygon edge, all rising to the same skeleton
+    // apex point above the polygon's centroid.
+    const n = localEavePoly.length;
+    let cx = 0, cz = 0;
+    for (const p of localEavePoly) {
+      cx += p[0];
+      cz += p[1];
+    }
+    cx /= n;
+    cz /= n;
+    const rad = THREE.MathUtils.degToRad(pitchAngleDeg);
+    const slope = Math.tan(rad);
+    const centerDist = distToPolygonBoundary2D(cx, cz, localEavePoly);
+    const centerH = Math.min(ridgeHeight, Math.max(0.6, centerDist * slope));
+    const center3D: [number, number, number] = [cx, centerH, cz];
+
+    for (let i = 0; i < n; i++) {
+      const p1 = localEavePoly[i];
+      const p2 = localEavePoly[(i + 1) % n];
+      const p1_3d: [number, number, number] = [p1[0], 0, p1[1]];
+      const p2_3d: [number, number, number] = [p2[0], 0, p2[1]];
+      slopes.push(makeTrapezoidSlopeDef(i, p2_3d, p1_3d, center3D, center3D));
     }
   } else if (isWidthLonger) {
     const run = hd_eave;
@@ -3107,11 +3142,9 @@ export function updateRoofAssembly(
     soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
   }
 
-  // Generate 3D Tile Models. Only the rectangular and L-shaped cases have
-  // per-facet tile support (matching the slopesGeom branches above); the
-  // general-polygon branch still falls back to the plain rectangular tile
-  // grid below, which will not correctly follow an arbitrary polygon's
-  // real facets - a known remaining gap.
+  // Generate 3D Tile Models - rectangular, L-shaped, and general-polygon
+  // roofs each get per-facet tile placement matching their slopesGeom
+  // branch above.
   const tilesGeom = create3DRoofTilesGeometry({
     roofType: isHip ? 'hip' : 'gable',
     width,
@@ -3128,6 +3161,8 @@ export function updateRoofAssembly(
     localWallPoly,
     localEavePoly,
     reflexIndex,
+    isGeneralPolygon: !(isRectangular || !roofData.localWallPoly) && !(isLShape && reflexIndex !== undefined),
+    pitchAngleDeg,
   });
 
   const updatedRoofShape: Shape = {
