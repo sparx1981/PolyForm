@@ -2294,7 +2294,13 @@ export class DeveloperSDK implements SDK {
       args,
       color: '#ffffff'
     };
-    this.shapes.push(newShape);
+    // `this.shapes` is the same array reference as the live React state
+    // (see DeveloperSuite.tsx's `new DeveloperSDK(shapes, setShapes, ...)`).
+    // Pushing onto it directly, in addition to the setShapes() call below,
+    // used to mutate that array in place before setShapes's own updater
+    // spread it - so every primitive created through this method (every
+    // sdk.createBox/createRectangle/createSphere/... call) was added to
+    // the scene twice.
     this.setShapes(prev => [...prev, newShape]);
     return newShape;
   }
