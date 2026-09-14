@@ -15,8 +15,18 @@ jobs:
         with:
           node-version: 20
 
+      # actions/setup-node@v4 with node-version: 20 bundles npm ~10.x, whose
+      # peer-dependency resolver either hard-fails or crashes on this repo's
+      # dependency graph (three-bvh-csg's peer three-mesh-bvh range vs.
+      # @react-three/drei's own three-mesh-bvh dependency) - see the
+      # "engines.npm" field in package.json. npm 11+ resolves it correctly
+      # by nesting the two conflicting versions, so no --legacy-peer-deps is
+      # needed once npm itself is current.
+      - name: Update npm
+        run: npm install -g npm@11
+
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install
 
       - name: Type check
         run: npm run lint
