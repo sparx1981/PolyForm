@@ -1425,7 +1425,13 @@ console.log("Created rectangle:", myRect.id);`);
             const posChanged = old.position[0] !== next.position[0] || old.position[1] !== next.position[1] || old.position[2] !== next.position[2];
             const argsChanged = JSON.stringify(old.args) !== JSON.stringify(next.args);
             const hostChanged = old.hostWallId !== next.hostWallId;
-            if (posChanged || argsChanged || hostChanged) {
+            // A roof edit that changes eaveOverhang/pitchAngleDeg/roofType
+            // without changing its compact [width, ridgeHeight, depth]
+            // args tuple used to leave argsChanged false, so the roof
+            // never made it into `affected` and its timber framing was
+            // never recomputed against the new roof shape.
+            const roofDataChanged = JSON.stringify(old.roofData || old.customData || null) !== JSON.stringify(next.roofData || next.customData || null);
+            if (posChanged || argsChanged || hostChanged || roofDataChanged) {
               if (isWallOrRoof(next)) affected.add(next.id);
               else if (isOpening(next)) {
                 if (next.hostWallId) affected.add(next.hostWallId);

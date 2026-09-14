@@ -1020,8 +1020,20 @@ export function generateTimberFraming(
       const roofQuat = new THREE.Quaternion(...(roof.quaternion || [0, 0, 0, 1]));
       const args = Array.isArray(roof.args) ? roof.args : [6.0, 2.0, 6.0];
       const roofW = args[0] || 6.0;
-      const roofH = args[1] || 2.2;
       const roofD = args[2] || 6.0;
+      // roofData is the actual roof generator's own record of its shape
+      // (ridgeHeight, eaveOverhang, roofType, ...) - args[1] is kept in
+      // sync with roofData.ridgeHeight by convention wherever
+      // archRoofGenerator.ts writes a roof shape, but nothing enforces
+      // that. Most of the framing below used to read args[1] directly
+      // (roofH) while only the L-shape branch read roofData.ridgeHeight
+      // (as a separate `ridgeH`); reading it here once, with args[1] only
+      // as the fallback for a roof with no roofData at all, makes
+      // roofData.ridgeHeight - the real source of truth - the value every
+      // branch actually uses.
+      const roofData = roof.roofData || roof.customData;
+      const roofH = roofData?.ridgeHeight ?? (args[1] || 2.2);
+      const eaveOverhang = roofData?.eaveOverhang ?? 0.35;
 
       const rafterWidth = 0.045; // 45mm
       const rafterDepth = 0.145; // 145mm
@@ -1032,6 +1044,19 @@ export function generateTimberFraming(
 
       const halfW = roofW / 2;
       const halfD = roofD / 2;
+      // The rectangular gable/hip roof mesh (archRoofGenerator.ts's
+      // createGableRoofSlopesGeometry/createHipRoofSlopesGeometry) extends
+      // its eave line out to half-wall + eaveOverhang before reaching
+      // y=0, not to the bare wall line - rafter framing below used to
+      // treat halfW/halfD themselves as the eave, giving every common
+      // rafter and hip corner a steeper run than the real roof slope and
+      // leaving it misaligned with the actual roof surface it's meant to
+      // sit under. Used for the common-rafter and hip-corner endpoints
+      // below; jack-rafter interpolation along the hip lines still uses
+      // the plain wall-line halfW/halfD for its stud-spacing layout, which
+      // is a plan-position ratio independent of how far the eave overhangs.
+      const halfW_eave = halfW + eaveOverhang;
+      const halfD_eave = halfD + eaveOverhang;
       const isWidthLonger = roofW >= roofD;
 
       // Detect roof style: Hip vs Gable vs L-Shape
@@ -1056,21 +1081,54 @@ export function generateTimberFraming(
         const midLocal = pStartLocal.clone().lerp(pEndLocal, 0.5);
         const dirLocal = pEndLocal.clone().sub(pStartLocal).normalize();
 
-        // Inset placement for roof members: apply revealDistance as inward offset beneath cladding
-        if (revealDistance > 0) {
-          const horizontal = new THREE.Vector3(-dirLocal.z, 0, dirLocal.x);
-          if (horizontal.lengthSq() > 1e-4) {
-            horizontal.normalize();
-            const slopeNormal = new THREE.Vector3().crossVectors(dirLocal, horizontal).normalize();
-            if (slopeNormal.y < 0) slopeNormal.negate();
-            midLocal.addScaledVector(slopeNormal, -revealDistance);
-          } else {
-            midLocal.y -= revealDistance;
-          }
+        // Build a full basis for the member instead of leaving its roll
+        // around dirLocal arbitrary (THREE.Quaternion.setFromUnitVectors
+        // only fixes the beam's length axis, not the rotation around it).
+        // yAxis becomes the member's "depth" axis (args[1] below) and is
+        // defined as the roof-surface outward normal, so the box's flat
+        // depth-wise face actually sits parallel to the roof plane instead
+        // of at an unpredictable roll - previously this meant the reveal
+        // offset below (along this same normal) didn't reliably match how
+        // the box's own faces were oriented, worsening the clash on some
+        // members more than others.
+        const zAxis = dirLocal.clone();
+        let xAxisRaw = new THREE.Vector3(-dirLocal.z, 0, dirLocal.x);
+        let yAxis: THREE.Vector3;
+        if (xAxisRaw.lengthSq() > 1e-4) {
+          xAxisRaw.normalize();
+          yAxis = new THREE.Vector3().crossVectors(zAxis, xAxisRaw).normalize();
+        } else {
+          // dirLocal is (near-)vertical - no natural horizontal reference,
+          // so fall back to a fixed one rather than leaving yAxis undefined.
+          xAxisRaw = new THREE.Vector3(1, 0, 0);
+          yAxis = new THREE.Vector3().crossVectors(zAxis, xAxisRaw).normalize();
+        }
+        if (yAxis.y < 0) yAxis.negate();
+        // Re-derive xAxis from the (possibly just negated) yAxis so the
+        // three axes stay an exact right-handed orthonormal basis - negating
+        // yAxis alone would otherwise flip the basis into a reflection,
+        // which setFromRotationMatrix cannot turn into a valid rotation.
+        const xAxis = new THREE.Vector3().crossVectors(yAxis, zAxis).normalize();
+
+        // Inset placement for roof members: pull the member's CENTER in from
+        // the theoretical roof-surface line (which pStartLocal/pEndLocal sit
+        // on) by revealDistance PLUS half its own depth. Rafter-type members
+        // (subTag containing "rafter") represent the outer roof surface
+        // itself, so without the depth/2 term only revealDistance (a small
+        // fixed reveal, e.g. 25mm) separated the member's CENTERLINE from
+        // that surface - leaving roughly (depth/2 - revealDistance) of the
+        // member's own outer face poking through the roof above it. Ridge
+        // beams/collar ties/ceiling joists already bake their own vertical
+        // offset into the pStartLocal/pEndLocal points passed in above them,
+        // so they keep the original, smaller reveal-only behavior.
+        const isRafterMember = subTag.includes('rafter');
+        const inset = revealDistance + (isRafterMember ? depth / 2 : 0);
+        if (inset > 0) {
+          midLocal.addScaledVector(yAxis, -inset);
         }
 
-        // Local Z along the beam direction
-        const qLocal = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dirLocal);
+        const basisMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+        const qLocal = new THREE.Quaternion().setFromRotationMatrix(basisMatrix);
         const qWorld = qLocal.clone().premultiply(roofQuat);
         const worldPos = midLocal.clone().applyQuaternion(roofQuat).add(roofPos);
         const memberId = `tf-roof-${roof.id}-${roofRafterCount}-${Math.random().toString(36).substr(2, 6)}`;
@@ -1102,15 +1160,13 @@ export function generateTimberFraming(
         });
       };
 
-      // 1. Check for attached roofData or customData
-      const roofData = roof.roofData || roof.customData;
+      // 1. Check for attached roofData or customData (roofData itself,
+      // and roofH/eaveOverhang from it, are already resolved above)
       let isLShape = Boolean(roofData?.isLShape);
       let isRectangular = Boolean(roofData?.isRectangular);
       let reflexIndex = roofData?.reflexIndex as number | undefined;
       let localWallPoly: [number, number][] | undefined = roofData?.localWallPoly;
       let localEavePoly: [number, number][] | undefined = roofData?.localEavePoly;
-      const ridgeH = roofData?.ridgeHeight ?? roofH;
-      const eaveOverhang = roofData?.eaveOverhang ?? 0.35;
 
       // If roofData is not attached, check if there are room walls under this roof
       if (!roofData) {
@@ -1137,7 +1193,7 @@ export function generateTimberFraming(
         // =========================================================================
         const V = getCanonicalLPolygon(localWallPoly, reflexIndex);
         const E = getCanonicalLPolygon(localEavePoly, reflexIndex);
-        const { rJunc, rEnd1, rEnd2 } = computeLRidgeNodes(V, E, ridgeH, isHip);
+        const { rJunc, rEnd1, rEnd2 } = computeLRidgeNodes(V, E, roofH, isHip);
 
         const e0 = new THREE.Vector3(E[0][0], 0, E[0][1]); // Reflex inside corner
         const e1 = new THREE.Vector3(E[1][0], 0, E[1][1]); // Wing 1 eave end 1
@@ -1376,10 +1432,10 @@ export function generateTimberFraming(
             );
           }
 
-          const cornerNW = new THREE.Vector3(-halfW, 0, -halfD);
-          const cornerSW = new THREE.Vector3(-halfW, 0, halfD);
-          const cornerNE = new THREE.Vector3(halfW, 0, -halfD);
-          const cornerSE = new THREE.Vector3(halfW, 0, halfD);
+          const cornerNW = new THREE.Vector3(-halfW_eave, 0, -halfD_eave);
+          const cornerSW = new THREE.Vector3(-halfW_eave, 0, halfD_eave);
+          const cornerNE = new THREE.Vector3(halfW_eave, 0, -halfD_eave);
+          const cornerSE = new THREE.Vector3(halfW_eave, 0, halfD_eave);
 
           addBeamSegment('Hip Rafter (North-West)', apexLeft, cornerNW, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
           addBeamSegment('Hip Rafter (South-West)', apexLeft, cornerSW, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
@@ -1389,8 +1445,8 @@ export function generateTimberFraming(
           let currX = -ridgeHalfLen + 0.15;
           while (currX <= ridgeHalfLen - 0.15) {
             const topPt = new THREE.Vector3(currX, roofH, 0);
-            const frontEave = new THREE.Vector3(currX, 0, halfD);
-            const backEave = new THREE.Vector3(currX, 0, -halfD);
+            const frontEave = new THREE.Vector3(currX, 0, halfD_eave);
+            const backEave = new THREE.Vector3(currX, 0, -halfD_eave);
 
             addBeamSegment('Common Rafter (Front)', topPt, frontEave, rafterWidth, rafterDepth, 'timber-rafter');
             addBeamSegment('Common Rafter (Back)', topPt, backEave, rafterWidth, rafterDepth, 'timber-rafter');
@@ -1473,10 +1529,10 @@ export function generateTimberFraming(
             );
           }
 
-          const cornerNW = new THREE.Vector3(-halfW, 0, -halfD);
-          const cornerSW = new THREE.Vector3(-halfW, 0, halfD);
-          const cornerNE = new THREE.Vector3(halfW, 0, -halfD);
-          const cornerSE = new THREE.Vector3(halfW, 0, halfD);
+          const cornerNW = new THREE.Vector3(-halfW_eave, 0, -halfD_eave);
+          const cornerSW = new THREE.Vector3(-halfW_eave, 0, halfD_eave);
+          const cornerNE = new THREE.Vector3(halfW_eave, 0, -halfD_eave);
+          const cornerSE = new THREE.Vector3(halfW_eave, 0, halfD_eave);
 
           addBeamSegment('Hip Rafter (North-West)', apexNorth, cornerNW, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
           addBeamSegment('Hip Rafter (North-East)', apexNorth, cornerNE, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
@@ -1486,8 +1542,8 @@ export function generateTimberFraming(
           let currZ = -ridgeHalfLen + 0.15;
           while (currZ <= ridgeHalfLen - 0.15) {
             const topPt = new THREE.Vector3(0, roofH, currZ);
-            const leftEave = new THREE.Vector3(-halfW, 0, currZ);
-            const rightEave = new THREE.Vector3(halfW, 0, currZ);
+            const leftEave = new THREE.Vector3(-halfW_eave, 0, currZ);
+            const rightEave = new THREE.Vector3(halfW_eave, 0, currZ);
 
             addBeamSegment('Common Rafter (Left)', topPt, leftEave, rafterWidth, rafterDepth, 'timber-rafter');
             addBeamSegment('Common Rafter (Right)', topPt, rightEave, rafterWidth, rafterDepth, 'timber-rafter');
@@ -1617,8 +1673,8 @@ export function generateTimberFraming(
           let currX = -halfW;
           while (currX <= halfW + 0.02) {
             const topPt = new THREE.Vector3(currX, roofH, 0);
-            const frontEave = new THREE.Vector3(currX, 0, halfD);
-            const backEave = new THREE.Vector3(currX, 0, -halfD);
+            const frontEave = new THREE.Vector3(currX, 0, halfD_eave);
+            const backEave = new THREE.Vector3(currX, 0, -halfD_eave);
 
             addBeamSegment('Common Rafter (Front)', topPt, frontEave, rafterWidth, rafterDepth, 'timber-rafter');
             addBeamSegment('Common Rafter (Back)', topPt, backEave, rafterWidth, rafterDepth, 'timber-rafter');
@@ -1661,8 +1717,8 @@ export function generateTimberFraming(
           let currZ = -halfD;
           while (currZ <= halfD + 0.02) {
             const topPt = new THREE.Vector3(0, roofH, currZ);
-            const leftEave = new THREE.Vector3(-halfW, 0, currZ);
-            const rightEave = new THREE.Vector3(halfW, 0, currZ);
+            const leftEave = new THREE.Vector3(-halfW_eave, 0, currZ);
+            const rightEave = new THREE.Vector3(halfW_eave, 0, currZ);
 
             addBeamSegment('Common Rafter (Left)', topPt, leftEave, rafterWidth, rafterDepth, 'timber-rafter');
             addBeamSegment('Common Rafter (Right)', topPt, rightEave, rafterWidth, rafterDepth, 'timber-rafter');
@@ -1793,7 +1849,14 @@ function getArchFingerprint(shapes: Shape[]): string {
     !s.name?.toLowerCase().startsWith('timber ') &&
     (s.type === 'wall' || s.type === 'door' || s.type === 'window' || s.tags?.includes('wall') || s.tags?.includes('roof') || s.tags?.includes('floor') || s.tags?.includes('slab'))
   );
-  return archShapes.map(s => `${s.id}:${s.type}:${s.position.map(p => p.toFixed(2)).join(',')}:${JSON.stringify(s.args)}:${(s.quaternion || []).map(q => q.toFixed(2)).join(',')}`).join('|');
+  // Includes roofData/customData (ridgeHeight, eaveOverhang, pitchAngleDeg,
+  // roofType, ...) alongside position/args/quaternion - a roof edit that
+  // changes one of those without changing its compact [width, ridgeHeight,
+  // depth] args tuple (e.g. adjusting eaveOverhang or pitch in a way that
+  // keeps the same ridge height) used to leave this fingerprint unchanged,
+  // so framing generated for the OLD roof shape was never recomputed for
+  // the new one.
+  return archShapes.map(s => `${s.id}:${s.type}:${s.position.map(p => p.toFixed(2)).join(',')}:${JSON.stringify(s.args)}:${(s.quaternion || []).map(q => q.toFixed(2)).join(',')}:${JSON.stringify(s.roofData || s.customData || null)}`).join('|');
 }
 
 let lastArchFingerprint = '';

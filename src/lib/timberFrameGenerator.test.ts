@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { generateTimberFraming, updateTimberFramesIfPresent } from './timberFrameGenerator';
+import { generateTimberFraming, generateTimberFrameForRoof, updateTimberFramesIfPresent } from './timberFrameGenerator';
 import { buildRoofAssemblyForRoom } from './archRoofGenerator';
 import { Shape } from '../types';
 import { DEFAULT_TIMBER_FRAME_PARAMS } from '../constants/timberFrameDefaults';
@@ -395,5 +395,89 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
     expect(res.instancedMembers.jackStud.length).toBeGreaterThan(0);
     expect(res.instancedMembers.header.length).toBeGreaterThan(0);
     expect(res.instancedMembers.sill.length).toBeGreaterThan(0);
+  });
+
+  describe('Roof/timber-frame reliability fixes (rafter clearance, roofData as source of truth, eave overhang, recompute on roofData change)', () => {
+    const rectRoof = (overrides: Partial<Shape> = {}): Shape => ({
+      id: 'roof1',
+      name: 'Rect Gable Roof',
+      type: 'roof',
+      position: [0, 0, 0],
+      args: [6, 2.4, 6],
+      color: '#a85a44',
+      roofData: { ridgeHeight: 2.4, eaveOverhang: 0.3 },
+      ...overrides,
+    });
+
+    it('reads roof height from roofData.ridgeHeight, not a stale args[1]', () => {
+      // args[1] intentionally disagrees with roofData.ridgeHeight - only
+      // one of them can be the "real" roof height, and it must be
+      // roofData.ridgeHeight (the value archRoofGenerator.ts itself uses
+      // to build the visible roof mesh), not the compact args tuple which
+      // nothing enforces staying in sync with it.
+      const roof = rectRoof({ args: [6, 999, 6], roofData: { ridgeHeight: 2.4, eaveOverhang: 0.3 } });
+      const members = generateTimberFrameForRoof(roof, []);
+      const ridgeBeam = members.find(s => s.tags?.includes('timber-ridge-beam'));
+      expect(ridgeBeam).toBeDefined();
+      // Ridge beam sits just below the apex (roofH - ridgeBeamDepth/2);
+      // if it had used args[1]=999 this would be nowhere close to 2.4.
+      expect(ridgeBeam!.position[1]).toBeGreaterThan(1.5);
+      expect(ridgeBeam!.position[1]).toBeLessThan(2.4);
+    });
+
+    it('extends common-rafter eave endpoints by eaveOverhang, matching the actual roof mesh', () => {
+      const smallOverhang = generateTimberFrameForRoof(rectRoof({ roofData: { ridgeHeight: 2.4, eaveOverhang: 0.1 } }), []);
+      const bigOverhang = generateTimberFrameForRoof(rectRoof({ roofData: { ridgeHeight: 2.4, eaveOverhang: 1.0 } }), []);
+
+      const smallRafter = smallOverhang.find(s => s.name?.includes('Common Rafter (Front)'));
+      const bigRafter = bigOverhang.find(s => s.name?.includes('Common Rafter (Front)'));
+      expect(smallRafter).toBeDefined();
+      expect(bigRafter).toBeDefined();
+
+      // args[2] is the member's span (its length) - a bigger eave overhang
+      // must produce a longer common rafter. Before this fix, eaveOverhang
+      // was ignored entirely for rectangular roofs and both spans would be
+      // identical regardless of the overhang setting.
+      expect(bigRafter!.args[2]).toBeGreaterThan(smallRafter!.args[2]);
+    });
+
+    it('insets rafter members below the theoretical roof surface by at least half their own depth', () => {
+      const roof = rectRoof();
+      const members = generateTimberFrameForRoof(roof, []);
+      const rafter = members.find(s => s.name?.includes('Common Rafter (Front)'));
+      expect(rafter).toBeDefined();
+
+      // Theoretical (un-inset) midpoint of this rafter's run, from apex
+      // (currX, roofH, 0) to the eave point (currX, 0, halfD + eaveOverhang):
+      // halfD = 3, eaveOverhang = 0.3 -> eave Z = 3.3.
+      const roofH = 2.4;
+      const eaveZ = 3 + 0.3;
+      const theoreticalMid = new THREE.Vector3(rafter!.position[0], roofH / 2, eaveZ / 2);
+      const actualPos = new THREE.Vector3(...rafter!.position);
+      const insetDistance = theoreticalMid.distanceTo(actualPos);
+
+      // rafterDepth is 0.145m (half = 0.0725m); the old behavior only
+      // inset by revealDistance (0.025m default), leaving ~0.0475m of the
+      // rafter's outer face above the theoretical roof surface.
+      expect(insetDistance).toBeGreaterThan(0.08);
+    });
+
+    it('recomputes roof timber framing when only roofData changes (eaveOverhang), not just args', () => {
+      const roof = rectRoof({ roofData: { ridgeHeight: 2.4, eaveOverhang: 0.3 } });
+      const initialFrame = generateTimberFrameForRoof(roof, []);
+      const shapesWithTimber = [roof, ...initialFrame.map(s => ({ ...s, tags: [...(s.tags || []), 'timber-frame'] }))];
+
+      // Same args, only roofData.eaveOverhang changes.
+      const editedRoof = { ...roof, roofData: { ridgeHeight: 2.4, eaveOverhang: 1.2 } };
+      const updatedShapes = updateTimberFramesIfPresent([editedRoof, ...shapesWithTimber.slice(1)]);
+
+      const updatedRafter = updatedShapes.find(s => s.name?.includes('Common Rafter (Front)') && s.tags?.includes('timber-frame'));
+      const originalRafter = initialFrame.find(s => s.name?.includes('Common Rafter (Front)'));
+      expect(updatedRafter).toBeDefined();
+      expect(originalRafter).toBeDefined();
+      // If the fingerprint didn't pick up the roofData change, the old
+      // (shorter-eave) rafter shapes would have been left untouched.
+      expect(updatedRafter!.args[2]).toBeGreaterThan(originalRafter!.args[2]);
+    });
   });
 });
