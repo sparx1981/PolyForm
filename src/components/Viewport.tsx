@@ -11483,6 +11483,25 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
 
 function CustomGeometry({ shape }: { shape: Shape }) {
   const { shapes } = useApp();
+
+  // The roof-cutout CSG branch below needs to know about hosted Velux
+  // windows, but depending on the whole `shapes` array (as this memo used
+  // to) reran that CSG evaluation for EVERY roof on EVERY shape edit
+  // anywhere in the scene - moving an unrelated box triggered the same
+  // Evaluator/Brush work as actually moving a hosted window. This
+  // fingerprint changes only when a window relevant to THIS shape
+  // actually changes, so it can be used as the memo's real dependency
+  // instead of the raw array.
+  const hostedWindowsFingerprint = useMemo(() => {
+    if (!shapes || shapes.length === 0) return '';
+    const hosted = shapes.filter(s =>
+      s.type === 'window' && !s.hidden &&
+      (s.hostWallId === shape.id || s.archStyle === 'velux-roof' || s.name?.toLowerCase().includes('velux'))
+    );
+    if (hosted.length === 0) return '';
+    return JSON.stringify(hosted.map(w => [w.id, w.position, w.quaternion, w.rotation, w.args]));
+  }, [shapes, shape.id]);
+
   const geometry = useMemo(() => {
     // 1. Roadway Strip 3D Geometry
     if (shape.args?.isRoad && Array.isArray(shape.args?.path) && shape.args.path.length >= 2) {
@@ -11671,7 +11690,7 @@ function CustomGeometry({ shape }: { shape: Shape }) {
 
     // Fallback
     return new THREE.BoxGeometry(1, 1, 1);
-  }, [shape.args, shape.geometryData, shape.position, shape.quaternion, shape.rotation, shapes]);
+  }, [shape.args, shape.geometryData, shape.position, shape.quaternion, shape.rotation, shape.id, hostedWindowsFingerprint]);
 
   useEffect(() => {
     return () => {

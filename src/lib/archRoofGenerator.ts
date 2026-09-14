@@ -1075,20 +1075,19 @@ export function computeLRidgeNodes(
   const E = eavePolyCanon;
   const V = wallPolyCanon;
 
-  // E[0] is the reflex inside corner
-  // E[3] is the outer corner opposite reflex corner
-  const isWing1AlongX = Math.abs(E[1][0] - E[0][0]) > Math.abs(E[1][1] - E[0][1]);
-
-  let xRidge: number;
-  let zRidge: number;
-
-  if (isWing1AlongX) {
-    zRidge = (E[0][1] + E[3][1]) / 2;
-    xRidge = (E[0][0] + E[3][0]) / 2;
-  } else {
-    xRidge = (E[0][0] + E[3][0]) / 2;
-    zRidge = (E[0][1] + E[3][1]) / 2;
-  }
+  // E[0] is the reflex inside corner, E[3] is the outer corner opposite
+  // it - the ridge junction is placed at the midpoint of that diagonal.
+  // This used to branch on wing orientation (isWing1AlongX), but both
+  // branches computed the exact same xRidge/zRidge (just assigned in a
+  // different order) - a no-op left over from an orientation-aware fix
+  // that was apparently never actually implemented. A simple diagonal
+  // midpoint happens to be orientation-independent, so this collapses
+  // the dead branch rather than inventing new asymmetric-wing behavior
+  // with no test coverage to validate it against. If unequal-width L-wing
+  // roofs are ever reported with an off-center hip/valley junction, that
+  // asymmetric case is where to add real orientation-aware logic.
+  const xRidge = (E[0][0] + E[3][0]) / 2;
+  const zRidge = (E[0][1] + E[3][1]) / 2;
 
   const rJunc: [number, number, number] = [xRidge, ridgeHeight, zRidge];
 

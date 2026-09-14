@@ -419,6 +419,15 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         await setDoc(doc(db, 'models', modelToShare.id, 'secure', 'gate'), {
           password: sharePassword
         });
+      } else if (modelToShare.hasPassword) {
+        // Turning the password toggle off while re-sharing used to leave
+        // the old plaintext password doc behind - hasPassword said false,
+        // but the secret was still sitting in Firestore indefinitely.
+        try {
+          await deleteDoc(doc(db, 'models', modelToShare.id, 'secure', 'gate'));
+        } catch (gateErr) {
+          handleFirestoreError(gateErr, OperationType.DELETE, `models/${modelToShare.id}/secure/gate`);
+        }
       }
       setIsShareModalOpen(false);
       invalidateAllModelCaches();
@@ -437,8 +446,19 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         try {
           await updateDoc(doc(db, 'models', model.id), {
             isPublic: false,
+            hasPassword: false,
             updatedAt: serverTimestamp()
           });
+          if (model.hasPassword) {
+            // A private model doesn't need a password gate - it's already
+            // restricted to its owner - so clear the old gate doc instead
+            // of leaving a plaintext password orphaned in Firestore forever.
+            try {
+              await deleteDoc(doc(db, 'models', model.id, 'secure', 'gate'));
+            } catch (gateErr) {
+              handleFirestoreError(gateErr, OperationType.DELETE, `models/${model.id}/secure/gate`);
+            }
+          }
           invalidateAllModelCaches();
           fetchModels(true);
         } catch (err) {
@@ -756,7 +776,13 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                     >
                       <div className={cn(
                         "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
-                        usePassword ? "left-5.5" : "left-0.5"
+                        // "left-5.5" isn't a real Tailwind class (5.5 isn't
+                        // one of the fractional steps Tailwind generates by
+                        // default), so the knob never actually moved to
+                        // this position - left-[22px] is the same offset
+                        // (track width 40px - knob 16px - matching 2px
+                        // inset) via Tailwind's arbitrary-value syntax.
+                        usePassword ? "left-[22px]" : "left-0.5"
                       )} />
                     </button>
                   </div>

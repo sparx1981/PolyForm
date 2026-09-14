@@ -547,7 +547,11 @@ export function generateTimberFraming(
       }
 
       // 3. Regular Vertical Studs (spaced at 400mm / 600mm centers)
-      const usableHeight = wallHeight - plateThick * 3; // between sole plate and double top plate
+      // Clamped like jackHeight below: a wall shorter than the plate
+      // stack (~0.135m) is degenerate, but without a floor here it would
+      // silently produce a negative-height BoxGeometry (inverted normals,
+      // self-intersecting studs) instead of just being visibly too short.
+      const usableHeight = Math.max(0.05, wallHeight - plateThick * 3); // between sole plate and double top plate
       const studCenterY = -halfH + plateThick + usableHeight / 2;
 
       // Start stud at left end (set back by endSetbackM from wall edge)
