@@ -6,6 +6,7 @@ import {
   buildRoofShapeForRoom,
   buildCeilingSlabForRoom,
   buildNextFloorLevel,
+  buildRoofAssemblyForRoom,
 } from './archRoofGenerator';
 import { Shape } from '../types';
 
@@ -71,5 +72,88 @@ describe('ArchRoofGenerator & Multi-Story Stacking', () => {
     expect(newOpenings.length).toBe(1);
     expect(newOpenings[0].hostWallId).toBe(newWalls[0].id);
     expect(newSlab).not.toBeNull();
+  });
+});
+
+describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () => {
+  // Same L-shaped room footprint already used and verified in
+  // timberFrameGenerator.test.ts - its courtyard/notch void is at
+  // x in [0.5, 3.5], z in [-3.5, -0.5].
+  const lShapeRoomWalls: Shape[] = [
+    { id: 'w1', type: 'wall', position: [2, 1.4, 0], args: [4, 2.8, 0.2], color: '#ffffff' },
+    { id: 'w2', type: 'wall', position: [4, 1.4, 3], args: [0.2, 2.8, 6], color: '#ffffff' },
+    { id: 'w3', type: 'wall', position: [0, 1.4, 6], args: [8, 2.8, 0.2], color: '#ffffff' },
+    { id: 'w4', type: 'wall', position: [-4, 1.4, 1], args: [0.2, 2.8, 10], color: '#ffffff' },
+    { id: 'w5', type: 'wall', position: [-2, 1.4, -4], args: [4, 2.8, 0.2], color: '#ffffff' },
+    { id: 'w6', type: 'wall', position: [0, 1.4, -2], args: [0.2, 2.8, 4], color: '#ffffff' },
+  ];
+
+  function expectNoTileVerticesInVoid(assembly: ReturnType<typeof buildRoofAssemblyForRoom>) {
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+    expect(assembly.tilesShape).toBeDefined();
+    const positions = assembly.tilesShape!.geometryData!.positions;
+    // Before per-facet tiling, an L-shaped roof got a single rectangular
+    // tile grid sized to its bounding box - that grid necessarily covers
+    // the courtyard/notch void too, so this assertion would fail against
+    // the old behavior.
+    expect(positions.length).toBeGreaterThan(0);
+    // geometryData vertices are local to the tile shape's own position
+    // (the roof's world center) - offset back to world space before
+    // comparing against the void region, which is expressed in the same
+    // world coordinates as the wall shapes above.
+    const [centerX, , centerZ] = assembly.tilesShape!.position;
+    let voidVertexCount = 0;
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i] + centerX;
+      const z = positions[i + 2] + centerZ;
+      if (x > 0.8 && x < 3.5 && z > -3.5 && z < -0.8) voidVertexCount++;
+    }
+    expect(voidVertexCount).toBe(0);
+  }
+
+  it('places gable roof tiles on the real L-shaped facets, not the bounding-box rectangle', () => {
+    const assembly = buildRoofAssemblyForRoom(lShapeRoomWalls, {
+      roofType: 'gable',
+      pitchAngleDeg: 35,
+      eaveOverhang: 0.35,
+      fasciaHeight: 0.18,
+      tileShape: 'flat',
+      tileSize: 0.35,
+    });
+    expectNoTileVerticesInVoid(assembly);
+  });
+
+  it('places hip roof tiles on the real L-shaped facets, not the bounding-box rectangle', () => {
+    const assembly = buildRoofAssemblyForRoom(lShapeRoomWalls, {
+      roofType: 'hip',
+      pitchAngleDeg: 35,
+      eaveOverhang: 0.35,
+      fasciaHeight: 0.18,
+      tileShape: 'flat',
+      tileSize: 0.35,
+    });
+    expectNoTileVerticesInVoid(assembly);
+  });
+
+  it('still tiles a plain rectangular roof correctly (no regression for the common case)', () => {
+    const rectWalls: Shape[] = [
+      { id: 'w1', type: 'wall', position: [0, 1.4, -3], args: [8, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w2', type: 'wall', position: [4, 1.4, 0], args: [0.2, 2.8, 6], color: '#ffffff' },
+      { id: 'w3', type: 'wall', position: [0, 1.4, 3], args: [8, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w4', type: 'wall', position: [-4, 1.4, 0], args: [0.2, 2.8, 6], color: '#ffffff' },
+    ];
+    const assembly = buildRoofAssemblyForRoom(rectWalls, {
+      roofType: 'gable',
+      pitchAngleDeg: 35,
+      eaveOverhang: 0.35,
+      fasciaHeight: 0.18,
+      tileShape: 'flat',
+      tileSize: 0.35,
+    });
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+    expect(assembly.tilesShape).toBeDefined();
+    expect(assembly.tilesShape!.geometryData!.positions.length).toBeGreaterThan(0);
   });
 });

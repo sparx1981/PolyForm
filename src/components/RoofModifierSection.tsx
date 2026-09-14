@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useApp } from '../AppContext';
 import { 
   Home, 
@@ -233,10 +233,36 @@ export const RoofModifierSection: React.FC = () => {
     seed, 
     hasTimberFraming, 
     setShapes, 
-    commitUpdatedFraming, 
-    commitHistory, 
+    commitUpdatedFraming,
+    commitHistory,
     setMeasurements
   ]);
+
+  // Native <input type="range"> fires its change handler on every
+  // intermediate value while dragging, not just on release. Each call
+  // above rebuilds the ENTIRE roof assembly (slopes, pediment, ridge cap,
+  // fascia, soffit, and - for roofs with 3D tiles enabled - potentially
+  // thousands of tile vertices) and pushes a full undo-history snapshot,
+  // so an undebounced drag on the Height/Tile Size/Eave Overhang/Fascia
+  // Height sliders could trigger dozens of complete rebuilds and history
+  // entries per second. Debouncing so only the last value in a burst
+  // actually triggers the rebuild keeps the slider's displayed number
+  // (updated synchronously via setRoofHeight/etc., outside this debounce)
+  // responsive while the expensive 3D work only runs once the user pauses.
+  const roofAssemblyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedApplyRoofAssemblyModifications = useCallback((params: Parameters<typeof applyRoofAssemblyModifications>[0]) => {
+    if (roofAssemblyDebounceRef.current) clearTimeout(roofAssemblyDebounceRef.current);
+    roofAssemblyDebounceRef.current = setTimeout(() => {
+      roofAssemblyDebounceRef.current = null;
+      applyRoofAssemblyModifications(params);
+    }, 120);
+  }, [applyRoofAssemblyModifications]);
+
+  useEffect(() => {
+    return () => {
+      if (roofAssemblyDebounceRef.current) clearTimeout(roofAssemblyDebounceRef.current);
+    };
+  }, []);
 
   // Handler for Tile Shape selection
   const handleSelectShape = (shapeId: RoofTileShape) => {
@@ -253,7 +279,7 @@ export const RoofModifierSection: React.FC = () => {
   const handleSizeChange = (newSize: number) => {
     const clamped = Math.max(0.15, Math.min(0.80, newSize));
     setTileSize(clamped);
-    applyRoofAssemblyModifications({ size: clamped });
+    debouncedApplyRoofAssemblyModifications({ size: clamped });
   };
 
   // Handler for Base Tile Color change
@@ -327,21 +353,21 @@ export const RoofModifierSection: React.FC = () => {
   const handleRoofHeightChange = (newHeight: number) => {
     const clampedHeight = Math.max(0.60, Math.min(4.50, Number(newHeight.toFixed(2))));
     setRoofHeight(clampedHeight);
-    applyRoofAssemblyModifications({ height: clampedHeight });
+    debouncedApplyRoofAssemblyModifications({ height: clampedHeight });
   };
 
   // 5. Handlers for Eave Overhang and Fascia Board Trim
   const handleEaveOverhangChange = (newOverhang: number) => {
     const clamped = Math.max(0.05, Math.min(1.20, Number(newOverhang.toFixed(2))));
     setEaveOverhang(clamped);
-    applyRoofAssemblyModifications({ eaveOverhang: clamped });
+    debouncedApplyRoofAssemblyModifications({ eaveOverhang: clamped });
     setMeasurements(`Eave overhang updated to ${(clamped * 100).toFixed(0)} cm.`);
   };
 
   const handleFasciaHeightChange = (newFascia: number) => {
     const clamped = Math.max(0.06, Math.min(0.50, Number(newFascia.toFixed(2))));
     setFasciaHeight(clamped);
-    applyRoofAssemblyModifications({ fasciaHeight: clamped });
+    debouncedApplyRoofAssemblyModifications({ fasciaHeight: clamped });
     setMeasurements(`Fascia board trim height updated to ${(clamped * 100).toFixed(0)} cm.`);
   };
 

@@ -1809,6 +1809,10 @@ export function buildRoofAssemblyForRoom(
       randomizeColor: params.randomizeColor,
       colorPalette: params.colorPalette,
       seed: params.seed,
+      isLShape,
+      localWallPoly,
+      localEavePoly,
+      reflexIndex,
     });
 
     if (tilesGeom.attributes.position && tilesGeom.attributes.position.count > 0) {
@@ -2141,6 +2145,18 @@ export function create3DRoofTilesGeometry(options: {
   randomizeColor?: boolean;
   colorPalette?: RoofTilePaletteItem[];
   seed?: number;
+  // When set, tiles are laid out per-facet on the room's ACTUAL L-shaped
+  // footprint (mirroring createLShapedGableRoofSlopesGeometry/
+  // createLShapedHipRoofSlopesGeometry) instead of the plain rectangular
+  // width x depth bounding box below. Without this, an L-shaped roof got
+  // a single rectangular tile grid sized to its bounding box - tiles
+  // floated over the L's cut-out notch and didn't cover both wings
+  // correctly, since nothing about the room's real polygon was ever
+  // passed to this function.
+  isLShape?: boolean;
+  localWallPoly?: [number, number][];
+  localEavePoly?: [number, number][];
+  reflexIndex?: number;
 }): THREE.BufferGeometry {
   const {
     roofType,
@@ -2154,6 +2170,10 @@ export function create3DRoofTilesGeometry(options: {
     randomizeColor = false,
     colorPalette = DEFAULT_ROOF_TILE_SETTINGS.colorPalette,
     seed = 42,
+    isLShape = false,
+    localWallPoly,
+    localEavePoly,
+    reflexIndex,
   } = options;
 
   const geom = new THREE.BufferGeometry();
@@ -2239,7 +2259,94 @@ export function create3DRoofTilesGeometry(options: {
 
   const slopes: SlopeDef[] = [];
 
-  if (isWidthLonger) {
+  // Builds a SlopeDef for one planar trapezoidal roof facet from its 4
+  // corners (pLow1->pLow2 the low/eave edge, pHigh1->pHigh2 the high/ridge
+  // edge - pass pHigh1===pHigh2 for a triangular hip-end facet, which this
+  // degenerates to correctly). Mirrors the shape every L-shaped roof facet
+  // actually has (createLShapedGableRoofSlopesGeometry/
+  // createLShapedHipRoofSlopesGeometry build exactly these same quads/
+  // triangles), so tiles end up on the real facet instead of a rectangular
+  // approximation of it.
+  const makeTrapezoidSlopeDef = (
+    slopeIdx: number,
+    pLow1: [number, number, number],
+    pLow2: [number, number, number],
+    pHigh1: [number, number, number],
+    pHigh2: [number, number, number],
+  ): SlopeDef => {
+    const lowMid: [number, number, number] = [(pLow1[0] + pLow2[0]) / 2, (pLow1[1] + pLow2[1]) / 2, (pLow1[2] + pLow2[2]) / 2];
+    const highMid: [number, number, number] = [(pHigh1[0] + pHigh2[0]) / 2, (pHigh1[1] + pHigh2[1]) / 2, (pHigh1[2] + pHigh2[2]) / 2];
+
+    const uVec: [number, number, number] = [pLow2[0] - pLow1[0], pLow2[1] - pLow1[1], pLow2[2] - pLow1[2]];
+    const uLen = Math.hypot(...uVec) || 1e-6;
+    const uDir: [number, number, number] = [uVec[0] / uLen, uVec[1] / uLen, uVec[2] / uLen];
+
+    const vVec: [number, number, number] = [highMid[0] - lowMid[0], highMid[1] - lowMid[1], highMid[2] - lowMid[2]];
+    const slopeLen = Math.hypot(...vVec) || 1e-6;
+    const vDir: [number, number, number] = [vVec[0] / slopeLen, vVec[1] / slopeLen, vVec[2] / slopeLen];
+
+    let nDir: [number, number, number] = [
+      uDir[1] * vDir[2] - uDir[2] * vDir[1],
+      uDir[2] * vDir[0] - uDir[0] * vDir[2],
+      uDir[0] * vDir[1] - uDir[1] * vDir[0],
+    ];
+    const nLen = Math.hypot(...nDir) || 1e-6;
+    nDir = [nDir[0] / nLen, nDir[1] / nLen, nDir[2] / nLen];
+    // Roof facets always face outward-and-up; a downward-facing normal
+    // means the cross product picked the inward side, so flip it.
+    if (nDir[1] < 0) nDir = [-nDir[0], -nDir[1], -nDir[2]];
+
+    const hwLow = uLen / 2;
+    const highVec: [number, number, number] = [pHigh2[0] - pHigh1[0], pHigh2[1] - pHigh1[1], pHigh2[2] - pHigh1[2]];
+    const hwHigh = Math.hypot(...highVec) / 2;
+
+    return {
+      slopeIdx,
+      origin: lowMid,
+      uDir,
+      vDir,
+      nDir,
+      slopeLen,
+      hwEave: hwLow,
+      getHalfWidthAt: (s: number) => {
+        const t = slopeLen > 1e-6 ? Math.min(1, Math.max(0, s / slopeLen)) : 0;
+        return Math.max(0.05, hwLow + (hwHigh - hwLow) * t);
+      },
+    };
+  };
+
+  if (isLShape && localWallPoly && localEavePoly && reflexIndex !== undefined) {
+    const V = getCanonicalLPolygon(localWallPoly, reflexIndex);
+    const E = getCanonicalLPolygon(localEavePoly, reflexIndex);
+    const { rJunc, rEnd1, rEnd2 } = computeLRidgeNodes(V, E, ridgeHeight, isHip);
+
+    const e0: [number, number, number] = [E[0][0], 0, E[0][1]];
+    const e1: [number, number, number] = [E[1][0], 0, E[1][1]];
+    const e2: [number, number, number] = [E[2][0], 0, E[2][1]];
+    const e3: [number, number, number] = [E[3][0], 0, E[3][1]];
+    const e4: [number, number, number] = [E[4][0], 0, E[4][1]];
+    const e5: [number, number, number] = [E[5][0], 0, E[5][1]];
+    const rJ: [number, number, number] = [rJunc[0], rJunc[1], rJunc[2]];
+    const r1: [number, number, number] = [rEnd1[0], rEnd1[1], rEnd1[2]];
+    const r2: [number, number, number] = [rEnd2[0], rEnd2[1], rEnd2[2]];
+
+    if (isHip) {
+      // Matches createLShapedHipRoofSlopesGeometry's 6 facets exactly:
+      // a valley slope + far-end hip triangle + outer slope per wing.
+      slopes.push(makeTrapezoidSlopeDef(0, e1, e0, r1, rJ));
+      slopes.push(makeTrapezoidSlopeDef(1, e2, e1, r1, r1));
+      slopes.push(makeTrapezoidSlopeDef(2, e3, e2, rJ, r1));
+      slopes.push(makeTrapezoidSlopeDef(3, e4, e3, r2, rJ));
+      slopes.push(makeTrapezoidSlopeDef(4, e5, e4, r2, r2));
+      slopes.push(makeTrapezoidSlopeDef(5, e0, e5, rJ, r2));
+    } else {
+      // Matches createLShapedGableRoofSlopesGeometry's 4 facets exactly.
+      slopes.push(makeTrapezoidSlopeDef(0, e1, e0, rJ, r1));
+      slopes.push(makeTrapezoidSlopeDef(1, e3, e2, r1, rJ));
+      slopes.push(makeTrapezoidSlopeDef(2, e4, e3, rJ, r2));
+      slopes.push(makeTrapezoidSlopeDef(3, e0, e5, r2, rJ));
+    }
+  } else if (isWidthLonger) {
     const run = hd_eave;
     const slopeLen = Math.hypot(run, ridgeHeight);
     const cosP = run / slopeLen;
@@ -3000,7 +3107,11 @@ export function updateRoofAssembly(
     soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
   }
 
-  // Generate 3D Tile Models
+  // Generate 3D Tile Models. Only the rectangular and L-shaped cases have
+  // per-facet tile support (matching the slopesGeom branches above); the
+  // general-polygon branch still falls back to the plain rectangular tile
+  // grid below, which will not correctly follow an arbitrary polygon's
+  // real facets - a known remaining gap.
   const tilesGeom = create3DRoofTilesGeometry({
     roofType: isHip ? 'hip' : 'gable',
     width,
@@ -3013,6 +3124,10 @@ export function updateRoofAssembly(
     randomizeColor,
     colorPalette,
     seed,
+    isLShape: isLShape && reflexIndex !== undefined,
+    localWallPoly,
+    localEavePoly,
+    reflexIndex,
   });
 
   const updatedRoofShape: Shape = {
