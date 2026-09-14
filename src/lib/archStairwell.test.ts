@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeStairHoleForSlab } from './archStairwell';
+import * as THREE from 'three';
+import { computeStairHoleForSlab, applyStairwellHolesToSlabs } from './archStairwell';
 import type { Shape } from '../types';
 
 // computeStairHoleForSlab (src/lib/archStairwell.ts) is the geometry that
@@ -30,13 +31,24 @@ function stairShape(overrides: Partial<Shape> = {}): Shape {
   };
 }
 
+// Real floor slabs that can actually have a stair hole cut into them are
+// always 'poly'-typed with this exact rotation/quaternion — a plain 'box'
+// can't render a hole at all (BoxGeometry has no holes support), and both
+// real call sites (archRoofGenerator's slab generation, and
+// applyStairwellHolesToSlabs's box->poly conversion) apply this specific
+// rotation before/when computing or rendering the hole. Matching it here
+// is what makes this test representative of production instead of
+// exercising an axis convention no real slab ever actually has.
+const SLAB_QUAT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+
 function slabShape(overrides: Partial<Shape> = {}): Shape {
   return {
     id: 'slab-1',
-    type: 'box',
+    type: 'poly',
     position: [0, STAIR_TOP_Y, 0],
-    rotation: [0, 0, 0],
-    args: [10, 0.2, 10], // width, thickness, depth
+    rotation: [Math.PI / 2, 0, 0],
+    quaternion: [SLAB_QUAT.x, SLAB_QUAT.y, SLAB_QUAT.z, SLAB_QUAT.w],
+    args: { vertices: [[-5, -5], [5, -5], [5, 5], [-5, 5]], height: 0.2 },
     color: '#cccccc',
     ...overrides,
   };
@@ -66,27 +78,34 @@ describe('computeStairHoleForSlab', () => {
     expect(Math.min(...zs)).toBeCloseTo(-hl, 6);
   });
 
-  it('hole2D should describe a real 2D footprint, not a degenerate line, for a slab directly above the stair', () => {
-    // With an unrotated slab sitting flat above an unrotated stair, the
-    // slab-local 2D hole coordinates should trace out the SAME rectangle
-    // (up to translation) as worldPolygon's [x, z] footprint — both are
-    // just the horizontal projection of the same four corners.
+  it('hole2D describes a real 2D footprint matching worldPolygon, for a slab at the standard floor-slab rotation', () => {
+    // Every real floor slab that can have a stair hole cut into it carries
+    // this exact rotation (see slabShape's own comment) — PolyGeometry
+    // builds `holes` as a THREE.Shape in the slab's own LOCAL X/Y plane,
+    // extruded along local Z, with this rotation/quaternion applied
+    // afterward as the mesh's own outer transform. Inverting that specific
+    // rotation sends a point's world Z offset into localPt.y (not
+    // localPt.z) — so with the slab centered at the same (x=0, z=0) as the
+    // stair, hole2D's [x, y] should equal worldPolygon's [x, z] exactly.
     //
-    // Regression test for a real bug found during audit: computeStairHoleForSlab
-    // used to build hole2D from `localPt.x, localPt.y` (the WORLD vertical
-    // axis) instead of `localPt.x, localPt.z` (the horizontal plane
-    // worldPolygon uses). For an unrotated slab, localPt.y was just a
-    // near-constant vertical offset unrelated to the stair's footprint, so
-    // every corner collapsed to ~the same value and the "hole" used to cut
-    // the floor slab had ~zero area. Now fixed to use `localPt.z`.
+    // Regression coverage: computeStairHoleForSlab briefly built hole2D
+    // from `localPt.x, localPt.z` instead, which — for this rotation —
+    // collapsed every corner to the extrusion's near-zero Z thickness,
+    // giving the "hole" used to cut the floor slab ~zero area (visible as
+    // stairs cutting no hole at all, while guard railings, computed from
+    // worldPolygon and unaffected by this bug, stayed correctly placed).
     const stair = stairShape();
     const slab = slabShape();
     const result = computeStairHoleForSlab(stair, slab);
     expect(result).not.toBeNull();
 
+    for (let i = 0; i < result!.hole2D.length; i++) {
+      expect(result!.hole2D[i][0]).toBeCloseTo(result!.worldPolygon[i][0], 6);
+      expect(result!.hole2D[i][1]).toBeCloseTo(result!.worldPolygon[i][1], 6);
+    }
+
     const secondCoords = result!.hole2D.map(p => p[1]);
     const spread = Math.max(...secondCoords) - Math.min(...secondCoords);
-
     // The stair is 3.6m long, so a correct footprint spans roughly that
     // much in its long axis — well above a rounding-level spread.
     expect(spread).toBeGreaterThan(1.0);
@@ -109,7 +128,7 @@ describe('computeStairHoleForSlab', () => {
   it('reports floorY as the top surface of the slab, not its centre', () => {
     const stair = stairShape();
     const slabThickness = 0.3;
-    const slab = slabShape({ position: [0, STAIR_TOP_Y, 0], args: [10, slabThickness, 10] });
+    const slab = slabShape({ position: [0, STAIR_TOP_Y, 0], args: { vertices: [[-5, -5], [5, -5], [5, 5], [-5, 5]], height: slabThickness } });
     const result = computeStairHoleForSlab(stair, slab);
     expect(result).not.toBeNull();
     expect(result!.floorY).toBeCloseTo(STAIR_TOP_Y + slabThickness / 2, 6);
@@ -121,5 +140,68 @@ describe('computeStairHoleForSlab', () => {
     const result = computeStairHoleForSlab(stair, slab);
     expect(result).not.toBeNull();
     expect(result!.worldPolygon.length).toBe(5);
+  });
+
+  function shoelaceArea(poly: [number, number][]): number {
+    let sum = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const [x1, y1] = poly[i];
+      const [x2, y2] = poly[(i + 1) % poly.length];
+      sum += x1 * y2 - x2 * y1;
+    }
+    return Math.abs(sum) / 2;
+  }
+
+  it('applyStairwellHolesToSlabs cuts a real (non-degenerate) hole when converting a box slab to a poly', () => {
+    // This is the actual end-to-end path a user hits: a plain 'box' floor
+    // slab (BoxGeometry can't render holes at all) gets converted to a
+    // 'poly' with a fixed [Math.PI/2, 0, 0] rotation so it CAN show a
+    // stair cutout. Regression coverage for a bug where the hole was
+    // computed against the box's own (identity) rotation instead of the
+    // rotation the resulting poly actually ends up with — the two calling
+    // conventions disagreed on which local axis was which, so the box path
+    // and the "already a poly" path (the test above) needed opposite fixes
+    // and one of them was always broken.
+    const stair = stairShape();
+    const boxSlab: Shape = {
+      id: 'slab-box-1',
+      type: 'box',
+      name: 'Floor Slab',
+      position: [0, STAIR_TOP_Y, 0],
+      rotation: [0, 0, 0],
+      args: [10, 0.2, 10],
+      color: '#cccccc',
+      tags: ['floor-slab'],
+    };
+
+    const result = applyStairwellHolesToSlabs([stair, boxSlab]);
+    const convertedSlab = result.find(s => s.id === 'slab-box-1');
+    expect(convertedSlab).toBeDefined();
+    expect(convertedSlab!.type).toBe('poly');
+
+    const holes = (convertedSlab!.args as any).holes as [number, number][][];
+    expect(holes).toBeDefined();
+    expect(holes.length).toBe(1);
+
+    const area = shoelaceArea(holes[0]);
+    // The stair is 1m x 3.6m plus clearance, so a correctly-cut hole has an
+    // area around 1.16 * 3.76 ≈ 4.4 m². A degenerate (collapsed) hole from
+    // an axis mismatch has an area near zero.
+    expect(area).toBeGreaterThan(1.0);
+
+    // Area alone can't catch an axis mismatch that happens to preserve
+    // area (e.g. a hole rotated/mirrored into a different quadrant than
+    // the outer boundary uses) — also check every hole vertex falls
+    // within the outer boundary's own bounds, i.e. the hole and the
+    // outline actually agree on which axis is which.
+    const outerVertices = (convertedSlab!.args as any).vertices as [number, number][];
+    const outerXs = outerVertices.map(v => v[0]);
+    const outerYs = outerVertices.map(v => v[1]);
+    for (const [hx, hy] of holes[0]) {
+      expect(hx).toBeGreaterThanOrEqual(Math.min(...outerXs));
+      expect(hx).toBeLessThanOrEqual(Math.max(...outerXs));
+      expect(hy).toBeGreaterThanOrEqual(Math.min(...outerYs));
+      expect(hy).toBeLessThanOrEqual(Math.max(...outerYs));
+    }
   });
 });

@@ -248,7 +248,20 @@ export function computeStairHoleForSlab(
     const worldPt = c.clone().applyQuaternion(stairQuat).add(stairPos);
     const relWorld = worldPt.clone().sub(slabPos);
     const localPt = relWorld.applyQuaternion(invSlabQuat);
-    return [localPt.x, localPt.z];
+    // hole2D feeds a 'poly' shape's `holes` array, which PolyGeometry
+    // (Viewport.tsx) builds as a THREE.Shape in the shape's own LOCAL X/Y
+    // plane, extruded along local Z — the slab's rotation/quaternion
+    // (captured by slabQuat above) is applied afterward as the mesh's own
+    // outer transform, not baked into the extrusion. So localPt.y (not
+    // .z) is the correct second in-plane coordinate here: for the common
+    // case of a box slab auto-converted to a poly (applyStairwellHolesToSlabs
+    // below always sets that poly's rotation to the fixed
+    // [Math.PI/2, 0, 0]), inverting that rotation sends a point's world Z
+    // offset into localPt.y, not localPt.z — confirmed against
+    // PolyGeometry's own vertex convention (`vertices[i][0], vertices[i][1]`)
+    // and matching the box path's own `vertices` array below, whose second
+    // coordinate is the slab's world-Z depth (slabD).
+    return [localPt.x, localPt.y];
   });
 
   const worldExitA = exitLocalStart.clone().applyQuaternion(stairQuat).add(stairPos);
@@ -520,8 +533,21 @@ export function applyStairwellHolesToSlabs(allShapes: Shape[]): Shape[] {
 
     const holesToAdd: [number, number][][] = [];
 
+    // computeStairHoleForSlab's hole2D is expressed in whatever local
+    // frame `shape.rotation`/`quaternion` describes — but a 'box'-type
+    // slab here is about to be CONVERTED to a 'poly' with a fixed
+    // [Math.PI/2, 0, 0] rotation (below), not left at its own (typically
+    // identity) rotation. Computing the hole against the box's original
+    // rotation and then attaching it to a poly with a different rotation
+    // silently cuts the hole in the wrong local axes. Pass a shape that
+    // already reflects the rotation the poly will actually end up with,
+    // so hole2D lines up with the geometry that actually gets rendered.
+    const shapeForHoleCalc = shape.type === 'box'
+      ? { ...shape, rotation: [Math.PI / 2, 0, 0] as [number, number, number], quaternion: undefined }
+      : shape;
+
     for (const stair of staircases) {
-      const stairData = computeStairHoleForSlab(stair, shape);
+      const stairData = computeStairHoleForSlab(stair, shapeForHoleCalc);
       if (stairData) {
         holesToAdd.push(stairData.hole2D);
 
