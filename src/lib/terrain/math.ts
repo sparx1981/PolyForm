@@ -521,8 +521,17 @@ export function distancePointToLineSegment2D(
   const lenSq = vx * vx + vz * vz;
 
   if (lenSq < 1e-12) {
+    // Both endpoints sit at (effectively) the same (x, z) — a duplicate
+    // point from an un-deduplicated edit — so there's no spatial basis to
+    // prefer one over the other for the returned distance/projection.
+    // t matters beyond that: callers (e.g. terrainRasterWorker.ts's road
+    // elevation blend) interpolate OTHER per-endpoint data — elevation —
+    // by this t, and p0/p1 can carry different elevations even though
+    // they land on the same (x, z). t: 0 always favored p0's data
+    // regardless of where the query point actually was; t: 0.5 splits the
+    // difference instead of silently always picking a side.
     const d = Math.hypot(px - x1, pz - z1);
-    return { distance: d, projection: [x1, z1], t: 0 };
+    return { distance: d, projection: [x1, z1], t: 0.5 };
   }
 
   let t = ((px - x1) * vx + (pz - z1) * vz) / lenSq;

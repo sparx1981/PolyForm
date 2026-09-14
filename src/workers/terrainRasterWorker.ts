@@ -202,8 +202,21 @@ export function computeTerrainRaster(input: TerrainRasterWorkerInput): TerrainRa
   };
 }
 
-// Worker message listener if in Web Worker context
-if (typeof self !== 'undefined' && typeof (self as any).postMessage === 'function' && typeof window === 'undefined') {
+// Worker message listener if in Web Worker context. Checks the standard
+// `importScripts` existence (present, even in module workers, as a
+// property that throws only if actually CALLED there — see MDN) in
+// addition to `typeof window === 'undefined'`, rather than relying on the
+// latter alone: that's an implicit assumption that `window` is never
+// defined in a worker scope, which happens to hold today but isn't itself
+// a worker-context test — a bundler or polyfill that shims `window` in
+// worker scope would otherwise silently break self.onmessage registration
+// here, degrading (not crashing) to the watchdog's onerror/timeout
+// fallback on every single dispatch, only after its full 4s wait.
+if (
+  typeof self !== 'undefined' &&
+  typeof (self as any).postMessage === 'function' &&
+  (typeof (self as any).importScripts === 'function' || typeof window === 'undefined')
+) {
   self.onmessage = (e: MessageEvent<TerrainRasterWorkerInput>) => {
     try {
       const result = computeTerrainRaster(e.data);

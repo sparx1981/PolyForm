@@ -41,6 +41,25 @@ describe('Terrain Studio - Math Utilities', () => {
     expect(spline[0][1]).toBeCloseTo(0);
   });
 
+  it('evaluateCatmullRomSpline produces no redundant seam vertex for a closed loop of exactly 2 points', () => {
+    // Flagged during audit as a suspected edge case worth explicit
+    // coverage: a closed spline reduced to exactly 2 knots visits the
+    // same two points twice (out and back), and the two segments meet at
+    // a seam where a naive implementation could sample the same location
+    // from both sides. The isLastSegment && !closed truncation (count =
+    // samples - 1 for every segment when closed) already prevents that —
+    // this test locks that behavior in rather than assuming it.
+    const closedTwoPt = evaluateCatmullRomSpline([[0, 0, 0], [10, 0, 0]], 4, true);
+    for (let i = 1; i < closedTwoPt.length; i++) {
+      const [ax, ay, az] = closedTwoPt[i - 1];
+      const [bx, by, bz] = closedTwoPt[i];
+      const dist = Math.hypot(ax - bx, ay - by, az - bz);
+      expect(dist).toBeGreaterThan(1e-6);
+    }
+    // The loop still closes back to its own start point.
+    expect(closedTwoPt[closedTwoPt.length - 1]).toEqual(closedTwoPt[0]);
+  });
+
   it('calculateGradePercentage computes rise over run percentage correctly', () => {
     // 100m run, 8m rise -> 8%
     const grade1 = calculateGradePercentage([0, 0, 0], [100, 8, 0]);
@@ -88,6 +107,17 @@ describe('Terrain Studio - Math Utilities', () => {
     expect(res3.projection).toEqual([10, 0]);
     expect(res3.distance).toBeCloseTo(5);
     expect(res3.t).toBe(1);
+  });
+
+  it('distancePointToLineSegment2D returns t=0.5 (not always p0) for a degenerate zero-length segment', () => {
+    // Both endpoints at the same (x, z) — e.g. two un-deduplicated
+    // duplicate road points that can still carry different elevations.
+    // There's no spatial basis to prefer p0 over p1, so t should split
+    // the difference rather than always resolving to p0's own data.
+    const res = distancePointToLineSegment2D(3, 4, 5, 5, 5, 5);
+    expect(res.projection).toEqual([5, 5]);
+    expect(res.distance).toBeCloseTo(Math.hypot(3 - 5, 4 - 5));
+    expect(res.t).toBe(0.5);
   });
 
   it('pointInPolygon2D identifies points inside and outside polygon', () => {

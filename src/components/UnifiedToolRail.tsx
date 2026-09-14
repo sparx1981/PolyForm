@@ -155,6 +155,14 @@ export default function UnifiedToolRail() {
 
   const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
+  // Mirrors railWidth on every render so handleMouseUp can read the
+  // latest value without needing railWidth in this effect's dependency
+  // array — that dependency was the only reason this effect re-ran (and
+  // tore down + re-registered both window listeners) on every single
+  // pixel of a drag, since handleMouseMove calls setRailWidth on every
+  // mousemove event.
+  const railWidthRef = useRef(railWidth);
+  railWidthRef.current = railWidth;
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -171,7 +179,7 @@ export default function UnifiedToolRail() {
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         try {
-          localStorage.setItem('polyform_unified_rail_width', railWidth.toString());
+          localStorage.setItem('polyform_unified_rail_width', railWidthRef.current.toString());
         } catch (e) {}
       }
     };
@@ -182,7 +190,7 @@ export default function UnifiedToolRail() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [railWidth]);
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();

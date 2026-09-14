@@ -219,5 +219,37 @@ describe('Bézier Curve Engine (v2.0)', () => {
       // Undo depth should remain 1 instead of growing to 2
       expect(host.undoDepth).toBe(1);
     });
+
+    it('returns ok:false instead of throwing if the session is left in a partial state mid-commit', () => {
+      const session = new KernelSession();
+      const onChange = vi.fn();
+      const host = new KernelBezierHost(session, onChange);
+
+      const state: BezierCurveState = {
+        knots: [
+          { point: new THREE.Vector3(0, 0, 0), handleIn: null, handleOut: new THREE.Vector3(0, 0, 1), mode: 'mirrored' },
+          { point: new THREE.Vector3(2, 0, 0), handleIn: new THREE.Vector3(2, 0, 1), handleOut: null, mode: 'mirrored' }
+        ],
+        segmentsPerSpan: 12,
+        isClosed: false,
+        activePlane: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      };
+
+      // First commit establishes an undo entry so replaceUndo's undo()
+      // branch actually runs on the second commit below.
+      host.commitCurve(state, false);
+      expect(session.canUndo).toBe(true);
+
+      const undoSpy = vi.spyOn(session, 'undo').mockImplementation(() => {
+        throw new Error('simulated partial-state failure');
+      });
+
+      state.segmentsPerSpan = 16;
+      const res = host.commitCurve(state, true);
+
+      expect(res.ok).toBe(false);
+      expect(res.points).toEqual([]);
+      undoSpy.mockRestore();
+    });
   });
 });
