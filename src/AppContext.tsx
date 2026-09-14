@@ -1086,6 +1086,21 @@ console.log("Created rectangle:", myRect.id);`);
         setSyncStatus('error');
         const result = handleFirestoreError(error, OperationType.UPDATE, `models/${currentModelId}`);
         setSyncErrorMessage(result.message);
+        // This auto-save path only otherwise surfaces as a small hover
+        // tooltip on the status bar's sync icon (see StatusBar.tsx) - easy
+        // to miss, and gone the moment the tab closes. Recording it here
+        // too means a failed background save is still visible afterwards
+        // in the AI Diagnostic Log, with the actual Firestore error code
+        // attached, instead of just "a save didn't happen" with no trace
+        // of why.
+        diagLog('Sync', 'Auto-save to Firestore FAILED', {
+          modelId: currentModelId,
+          code: error?.code,
+          message: error?.message,
+          isQuotaError: result.isQuotaError,
+          isOfflineError: result.isOfflineError,
+          retryCount: syncState.retryCount,
+        });
 
         // Auto-retry with exponential backoff. Quota lockdowns are skipped
         // here since checkQuota() already blocks pushes until it clears -

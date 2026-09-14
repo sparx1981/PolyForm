@@ -238,7 +238,7 @@ export default function TopBar() {
     downloadProjectFile(modelName);
 
     // 2. If user is authenticated and this model has an ID, also sync to Firestore & Storage
-    let cloudSaveError: unknown = null;
+    let cloudSaveErrorDetail: string | null = null;
     if (user && currentModelId) {
       try {
         // Only guards the fallback itself from firing twice - the real
@@ -277,9 +277,11 @@ export default function TopBar() {
               ...(previewUrl ? { previewUrl } : {}),
               updatedAt: new Date()
             } : m));
-          } catch (fsErr) {
-            cloudSaveError = fsErr;
-            handleFirestoreError(fsErr, OperationType.UPDATE, `models/${currentModelId}`);
+          } catch (fsErr: any) {
+            const result = handleFirestoreError(fsErr, OperationType.UPDATE, `models/${currentModelId}`);
+            const code = fsErr?.code ? ` [${fsErr.code}]` : '';
+            cloudSaveErrorDetail = `${result.message}${code}`;
+            diagLog('Save', 'Cloud save FAILED', { modelId: currentModelId, code: fsErr?.code, message: fsErr?.message });
           }
         };
 
@@ -323,17 +325,18 @@ export default function TopBar() {
             }
           }));
         });
-      } catch (err) {
-        cloudSaveError = err;
+      } catch (err: any) {
+        cloudSaveErrorDetail = err?.message || String(err);
         console.error('Cloud save error:', err);
+        diagLog('Save', 'Cloud save FAILED', { modelId: currentModelId, message: cloudSaveErrorDetail });
       }
     }
 
     setLoading(false);
     setIsMenuOpen(false);
     setTimeout(() => {
-      if (cloudSaveError) {
-        alert(`Model "${modelName}" was downloaded locally, but the cloud save failed - your changes have not been synced. Please try saving again.`);
+      if (cloudSaveErrorDetail) {
+        alert(`Model "${modelName}" was downloaded locally, but the cloud save failed - your changes have not been synced.\n\nReason: ${cloudSaveErrorDetail}\n\nSee the AI Diagnostic Log (menu → AI Diagnostic Log) for details, and try saving again.`);
       } else {
         alert(`Model "${modelName}" saved successfully!`);
       }
@@ -352,7 +355,7 @@ export default function TopBar() {
     setCurrentModelName(modelName);
 
     // 2. If user is authenticated, create in Firestore & Storage
-    let cloudSaveError: unknown = null;
+    let cloudSaveErrorDetail: string | null = null;
     if (user) {
       try {
         // The doc must only ever be created once (addDoc creates a new
@@ -372,9 +375,11 @@ export default function TopBar() {
               try {
                 await updateDoc(doc(db, 'models', createdDocId), { previewUrl });
                 fetchModels();
-              } catch (fsErr) {
-                cloudSaveError = fsErr;
-                handleFirestoreError(fsErr, OperationType.UPDATE, `models/${createdDocId}`);
+              } catch (fsErr: any) {
+                const result = handleFirestoreError(fsErr, OperationType.UPDATE, `models/${createdDocId}`);
+                const code = fsErr?.code ? ` [${fsErr.code}]` : '';
+                cloudSaveErrorDetail = `${result.message}${code}`;
+                diagLog('SaveAs', 'Cloud save FAILED (preview update)', { modelId: createdDocId, code: fsErr?.code, message: fsErr?.message });
               }
             }
             return;
@@ -404,9 +409,11 @@ export default function TopBar() {
             await updateDoc(doc(db, 'models', docRef.id), { id: docRef.id });
             setCurrentModelId(docRef.id);
             fetchModels();
-          } catch (fsErr) {
-            cloudSaveError = fsErr;
-            handleFirestoreError(fsErr, OperationType.WRITE, 'models');
+          } catch (fsErr: any) {
+            const result = handleFirestoreError(fsErr, OperationType.WRITE, 'models');
+            const code = fsErr?.code ? ` [${fsErr.code}]` : '';
+            cloudSaveErrorDetail = `${result.message}${code}`;
+            diagLog('SaveAs', 'Cloud save FAILED (doc create)', { code: fsErr?.code, message: fsErr?.message });
           }
         };
 
@@ -448,17 +455,18 @@ export default function TopBar() {
             }
           }));
         });
-      } catch (err) {
-        cloudSaveError = err;
+      } catch (err: any) {
+        cloudSaveErrorDetail = err?.message || String(err);
         console.error('Cloud save as error:', err);
+        diagLog('SaveAs', 'Cloud save FAILED', { message: cloudSaveErrorDetail });
       }
     }
 
     setLoading(false);
     setIsSaveAsOpen(false);
     setTimeout(() => {
-      if (cloudSaveError) {
-        alert(`Model "${modelName}" was downloaded locally, but the cloud save failed - your changes have not been synced. Please try saving again.`);
+      if (cloudSaveErrorDetail) {
+        alert(`Model "${modelName}" was downloaded locally, but the cloud save failed - your changes have not been synced.\n\nReason: ${cloudSaveErrorDetail}\n\nSee the AI Diagnostic Log (menu → AI Diagnostic Log) for details, and try saving again.`);
       } else {
         alert(`Model "${modelName}" saved successfully!`);
       }
