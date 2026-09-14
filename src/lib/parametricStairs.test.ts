@@ -168,6 +168,22 @@ describe('Parametric Stair Tool Core Logic & Constraints', () => {
       expect(calc.stepCount).toBe(20); // 3.0 / 0.15 = 20
       expect(calc.actualStepHeight).toBeCloseTo(0.15, 5);
     });
+
+    it('clamps a zero or negative idealStepHeight instead of producing an unbounded step count', () => {
+      // idealStepHeight=0 used to divide targetHeight by zero, making
+      // stepCount === Infinity - harmless in this calculation function
+      // itself, but fatal downstream in createParametricStaircaseGeometry's
+      // 'straight'-style loop (`for (let i = 0; i < stepCount; i++)`),
+      // which would never terminate and hang the tab.
+      const zero = calculateParametricStairs({ targetHeight: 2.8, idealStepHeight: 0 });
+      expect(Number.isFinite(zero.stepCount)).toBe(true);
+      expect(zero.stepCount).toBeLessThanOrEqual(500);
+      expect(zero.stepCount).toBeGreaterThanOrEqual(2);
+
+      const negative = calculateParametricStairs({ targetHeight: 2.8, idealStepHeight: -1 });
+      expect(Number.isFinite(negative.stepCount)).toBe(true);
+      expect(negative.stepCount).toBeLessThanOrEqual(500);
+    });
   });
 
   describe('Slope & Depth Adjustment via Ergonomic Formula', () => {
@@ -252,6 +268,26 @@ describe('Parametric Stair Tool Core Logic & Constraints', () => {
       // Run length check (Z span) - within 0.2m accounting for nosing overhangs and railing newel posts
       const runSpan = bbox.max.z - bbox.min.z;
       expect(Math.abs(runSpan - result.calculation.totalRun)).toBeLessThan(0.2);
+    });
+
+    it('does not hang when idealStepHeight is 0 (regression: unbounded stepCount hung the straight-style construction loop)', () => {
+      // Reachable via the dev-console SDK (sdk.createStairs({ idealStepHeight: 0 }))
+      // or a style preset with a zeroed field - the HTML `min` on the
+      // corresponding number input doesn't actually block a scripted/pasted 0.
+      // Without the clamp in calculateParametricStairs, stepCount became
+      // Infinity and `for (let i = 0; i < stepCount; i++)` never terminated.
+      const result = createParametricStaircaseGeometry({
+        targetHeight: 2.80,
+        idealStepHeight: 0,
+        stairStyle: 'straight',
+        width: 1.0,
+        stairStructure: 'closed',
+        railingMode: 'both'
+      });
+
+      expect(Number.isFinite(result.calculation.stepCount)).toBe(true);
+      expect(result.calculation.stepCount).toBeLessThanOrEqual(500);
+      expect(result.geometry).toBeDefined();
     });
 
     it('generates open, floating, and mono-stringer structures iteratively with equal risers', () => {

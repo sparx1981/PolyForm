@@ -178,12 +178,15 @@ export default function TopBar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleNew = () => {
+  const handleNew = async () => {
     const hasKernelContent = kernelHost?.graph && (kernelHost.graph.faces.size > 0 || kernelHost.graph.vertices.size > 0);
     const hasContent = shapes.length > 0 || (terrainModifiers && terrainModifiers.length > 0) || Boolean(hasKernelContent) || (notes && notes.length > 0);
     if (hasContent) {
       if (window.confirm('Do you want to save your current design before starting a new one?')) {
-        handleSave();
+        // Awaited so the design isn't cleared until the save (including its
+        // cloud sync) has actually finished - previously this fired the
+        // save and immediately cleared the canvas without waiting for it.
+        await handleSave();
       }
     }
     clearShapes();
@@ -235,6 +238,7 @@ export default function TopBar() {
     downloadProjectFile(modelName);
 
     // 2. If user is authenticated and this model has an ID, also sync to Firestore & Storage
+    let cloudSaveError: unknown = null;
     if (user && currentModelId) {
       try {
         // Only guards the fallback itself from firing twice - the real
@@ -244,12 +248,6 @@ export default function TopBar() {
         // seconds, and previously this timer blocked the real preview from
         // ever being saved once it lost the race, leaving previewUrl empty.
         let fallbackFired = false;
-        const fallbackTimer = setTimeout(async () => {
-          if (!fallbackFired) {
-            fallbackFired = true;
-            await updateFirestoreModel('');
-          }
-        }, 8000);
 
         const updateFirestoreModel = async (previewUrl: string) => {
           try {
@@ -280,33 +278,53 @@ export default function TopBar() {
               updatedAt: new Date()
             } : m));
           } catch (fsErr) {
+            cloudSaveError = fsErr;
             handleFirestoreError(fsErr, OperationType.UPDATE, `models/${currentModelId}`);
           }
         };
 
-        window.dispatchEvent(new CustomEvent('request-snapshot', {
-          detail: {
-            callback: async (dataUrl: string) => {
-              clearTimeout(fallbackTimer);
-              let previewUrl = '';
-              try {
-                const storageRef = ref(storage, `previews/${user.uid}/${currentModelId}.jpg`);
-                await uploadString(storageRef, dataUrl, 'data_url');
-                previewUrl = await getDownloadURL(storageRef);
-              } catch (storageErr) {
-                console.warn("[Save] Storage upload skipped, using fallback snapshot:", storageErr);
-                if (dataUrl && dataUrl.startsWith('data:image')) {
+        // window.dispatchEvent doesn't await the listener's own async work,
+        // so without this wrapper promise the function below would move on
+        // to the "saved successfully" alert before the Firestore write it
+        // just kicked off had actually run - a failed cloud save (offline,
+        // quota lockdown) still told the user it succeeded.
+        await new Promise<void>((resolve) => {
+          const fallbackTimer = setTimeout(async () => {
+            if (!fallbackFired) {
+              fallbackFired = true;
+              await updateFirestoreModel('');
+            }
+            resolve();
+          }, 8000);
+
+          window.dispatchEvent(new CustomEvent('request-snapshot', {
+            detail: {
+              callback: async (dataUrl: string) => {
+                if (fallbackFired) return; // fallback already resolved this save
+                fallbackFired = true;
+                clearTimeout(fallbackTimer);
+                let previewUrl = '';
+                try {
+                  const storageRef = ref(storage, `previews/${user.uid}/${currentModelId}.jpg`);
+                  await uploadString(storageRef, dataUrl, 'data_url');
+                  previewUrl = await getDownloadURL(storageRef);
+                } catch (storageErr) {
+                  console.warn("[Save] Storage upload skipped, using fallback snapshot:", storageErr);
+                  if (dataUrl && dataUrl.startsWith('data:image')) {
+                    previewUrl = dataUrl;
+                  }
+                }
+                if (!previewUrl && dataUrl && dataUrl.startsWith('data:image')) {
                   previewUrl = dataUrl;
                 }
+                await updateFirestoreModel(previewUrl);
+                resolve();
               }
-              if (!previewUrl && dataUrl && dataUrl.startsWith('data:image')) {
-                previewUrl = dataUrl;
-              }
-              await updateFirestoreModel(previewUrl);
             }
-          }
-        }));
+          }));
+        });
       } catch (err) {
+        cloudSaveError = err;
         console.error('Cloud save error:', err);
       }
     }
@@ -314,7 +332,11 @@ export default function TopBar() {
     setLoading(false);
     setIsMenuOpen(false);
     setTimeout(() => {
-      alert(`Model "${modelName}" saved successfully!`);
+      if (cloudSaveError) {
+        alert(`Model "${modelName}" was downloaded locally, but the cloud save failed - your changes have not been synced. Please try saving again.`);
+      } else {
+        alert(`Model "${modelName}" saved successfully!`);
+      }
     }, 100);
   };
 
@@ -330,6 +352,7 @@ export default function TopBar() {
     setCurrentModelName(modelName);
 
     // 2. If user is authenticated, create in Firestore & Storage
+    let cloudSaveError: unknown = null;
     if (user) {
       try {
         // The doc must only ever be created once (addDoc creates a new
@@ -342,11 +365,6 @@ export default function TopBar() {
         // the model was left with no preview at all.
         let docCreated = false;
         let createdDocId: string | null = null;
-        const fallbackTimer = setTimeout(async () => {
-          if (!docCreated) {
-            await createFirestoreDoc('');
-          }
-        }, 8000);
 
         const createFirestoreDoc = async (previewUrl: string) => {
           if (docCreated) {
@@ -355,6 +373,7 @@ export default function TopBar() {
                 await updateDoc(doc(db, 'models', createdDocId), { previewUrl });
                 fetchModels();
               } catch (fsErr) {
+                cloudSaveError = fsErr;
                 handleFirestoreError(fsErr, OperationType.UPDATE, `models/${createdDocId}`);
               }
             }
@@ -386,34 +405,51 @@ export default function TopBar() {
             setCurrentModelId(docRef.id);
             fetchModels();
           } catch (fsErr) {
+            cloudSaveError = fsErr;
             handleFirestoreError(fsErr, OperationType.WRITE, 'models');
           }
         };
 
-        window.dispatchEvent(new CustomEvent('request-snapshot', {
-          detail: {
-            callback: async (dataUrl: string) => {
-              clearTimeout(fallbackTimer);
-              let previewUrl = '';
-              try {
-                const tempId = Math.random().toString(36).substr(2, 9);
-                const storageRef = ref(storage, `previews/${user.uid}/${tempId}.jpg`);
-                await uploadString(storageRef, dataUrl, 'data_url');
-                previewUrl = await getDownloadURL(storageRef);
-              } catch (storageErr) {
-                console.warn("[SaveAs] Storage upload skipped, using fallback snapshot:", storageErr);
-                if (dataUrl && dataUrl.startsWith('data:image')) {
+        // window.dispatchEvent doesn't await the listener's own async work,
+        // so without this wrapper promise the function below would move on
+        // to the "saved successfully" alert before the Firestore doc it
+        // just kicked off creating had actually been written - a failed
+        // cloud save still told the user it succeeded.
+        await new Promise<void>((resolve) => {
+          const fallbackTimer = setTimeout(async () => {
+            if (!docCreated) {
+              await createFirestoreDoc('');
+            }
+            resolve();
+          }, 8000);
+
+          window.dispatchEvent(new CustomEvent('request-snapshot', {
+            detail: {
+              callback: async (dataUrl: string) => {
+                clearTimeout(fallbackTimer);
+                let previewUrl = '';
+                try {
+                  const tempId = Math.random().toString(36).substr(2, 9);
+                  const storageRef = ref(storage, `previews/${user.uid}/${tempId}.jpg`);
+                  await uploadString(storageRef, dataUrl, 'data_url');
+                  previewUrl = await getDownloadURL(storageRef);
+                } catch (storageErr) {
+                  console.warn("[SaveAs] Storage upload skipped, using fallback snapshot:", storageErr);
+                  if (dataUrl && dataUrl.startsWith('data:image')) {
+                    previewUrl = dataUrl;
+                  }
+                }
+                if (!previewUrl && dataUrl && dataUrl.startsWith('data:image')) {
                   previewUrl = dataUrl;
                 }
+                await createFirestoreDoc(previewUrl);
+                resolve();
               }
-              if (!previewUrl && dataUrl && dataUrl.startsWith('data:image')) {
-                previewUrl = dataUrl;
-              }
-              await createFirestoreDoc(previewUrl);
             }
-          }
-        }));
+          }));
+        });
       } catch (err) {
+        cloudSaveError = err;
         console.error('Cloud save as error:', err);
       }
     }
@@ -421,7 +457,11 @@ export default function TopBar() {
     setLoading(false);
     setIsSaveAsOpen(false);
     setTimeout(() => {
-      alert(`Model "${modelName}" saved successfully!`);
+      if (cloudSaveError) {
+        alert(`Model "${modelName}" was downloaded locally, but the cloud save failed - your changes have not been synced. Please try saving again.`);
+      } else {
+        alert(`Model "${modelName}" saved successfully!`);
+      }
     }, 100);
   };
 

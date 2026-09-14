@@ -555,9 +555,13 @@ export default function RightPanelStack() {
     );
   };
 
-  if (panelVisibility['entity'] === false && panelVisibility['outliner'] === false && panelVisibility['materials'] === false && panelVisibility['styles'] === false && panelVisibility['tags'] === false && panelVisibility['scenes'] === false && panelVisibility['shadows'] === false && panelVisibility['components'] === false) {
-    return null;
-  }
+  // Checked below, right before the final JSX return, rather than as an
+  // early return here - hooks are declared all the way down to that
+  // return (React.useMemo/useState/useEffect calls below this point), and
+  // bailing out this early would skip them on a render where every panel
+  // is hidden, then run them again once one is shown - a
+  // "Rendered more hooks than during the previous render" crash.
+  const allPanelsHidden = panelVisibility['entity'] === false && panelVisibility['outliner'] === false && panelVisibility['materials'] === false && panelVisibility['styles'] === false && panelVisibility['tags'] === false && panelVisibility['scenes'] === false && panelVisibility['shadows'] === false && panelVisibility['components'] === false;
 
   const handleAddColor = async () => {
     const materialId = Math.random().toString(36).substr(2, 9);
@@ -876,9 +880,9 @@ export default function RightPanelStack() {
   };
 
   const hasSettings = [
-    'move', 
-    'bevel', 
-    'deform', 
+    'move',
+    'bevel',
+    'deform',
     'orbit',
     'wall',
     'fence',
@@ -886,6 +890,8 @@ export default function RightPanelStack() {
     'timber-frame',
     'roof'
   ].includes(activeTool);
+
+  if (allPanelsHidden) return null;
 
   return (
     <aside className={cn(

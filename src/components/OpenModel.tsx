@@ -288,13 +288,19 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
   // doc is world-readable by anyone browsing public models); it's kept in
   // an owner-scoped /models/{id}/secure/gate doc, fetched on demand only
   // when someone actually attempts to open/copy/edit-share that one model.
-  const fetchModelPassword = async (modelId: string): Promise<string> => {
+  // Returns null (rather than '') when the gate doc couldn't be read or
+  // doesn't exist, so callers can tell "verification failed / no password
+  // is actually set" apart from "the stored password genuinely is an empty
+  // string" - conflating the two used to mean a transient fetch error (or
+  // model.hasPassword being stale/inconsistent) made an empty password
+  // field compare equal to the fetch result and silently grant access.
+  const fetchModelPassword = async (modelId: string): Promise<string | null> => {
     try {
       const snap = await getDoc(doc(db, 'models', modelId, 'secure', 'gate'));
-      return snap.exists() ? (snap.data().password || '') : '';
+      return snap.exists() ? (snap.data().password || '') : null;
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, `models/${modelId}/secure/gate`);
-      return '';
+      return null;
     }
   };
 
@@ -313,7 +319,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     if (!modelToOpen) return;
 
     const actualPassword = await fetchModelPassword(modelToOpen.id);
-    if (passwordToTry === actualPassword) {
+    if (actualPassword !== null && passwordToTry === actualPassword) {
       loadModel(modelToOpen);
       setIsPasswordModalOpen(false);
       setModelToOpen(null);
@@ -341,7 +347,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     if (model.userId !== user.uid && model.hasPassword) {
       const pwd = window.prompt('This model is password protected. Enter password to copy:');
       const actualPassword = await fetchModelPassword(model.id);
-      if (pwd !== actualPassword) {
+      if (actualPassword === null || pwd !== actualPassword) {
         alert('Incorrect password.');
         return;
       }
@@ -375,7 +381,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     e.stopPropagation();
     setModelToShare(model);
     setUsePassword(model.hasPassword || false);
-    setSharePassword(model.hasPassword ? await fetchModelPassword(model.id) : '');
+    setSharePassword(model.hasPassword ? (await fetchModelPassword(model.id)) ?? '' : '');
     setIsShareModalOpen(true);
   };
 

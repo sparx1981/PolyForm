@@ -12,6 +12,17 @@ export const DEFAULT_IDEAL_STEP_HEIGHT = 0.1778; // 0.1778 meters (7.0 inches - 
 export const DEFAULT_STRIDE_CONSTANT = 0.63; // 0.63 meters (~24.8 inches, Blondel's 2R + T = 62-64cm standard)
 export const MIN_TREAD_DEPTH = 0.22; // 22 cm safe minimum tread depth
 export const MAX_TREAD_DEPTH = 0.38; // 38 cm maximum ergonomic tread depth
+// A zero or near-zero idealStepHeight divides targetHeight into an
+// effectively infinite stepCount below, which then hangs the tab in the
+// 'straight' style's step-by-step geometry loop rather than producing bad
+// geometry. 5mm is well below any real riser height, so it only ever
+// clamps genuinely degenerate input (0, negative, or a stray unit-
+// conversion bug), not a legitimate small step.
+export const MIN_IDEAL_STEP_HEIGHT = 0.005;
+// Matches no real staircase (the tallest realistic multi-storey flight is
+// a few hundred steps), so this only ever catches the degenerate-input
+// case above and never clips a legitimate design.
+export const MAX_STEP_COUNT = 500;
 
 export interface SceneScanResult {
   targetHeight: number;
@@ -226,12 +237,12 @@ export function calculateParametricStairs(params: {
   sourceDescription?: string;
 }): ParametricCalculationResult {
   const targetHeight = Math.max(0.4, params.targetHeight);
-  const idealStepHeight = params.idealStepHeight ?? DEFAULT_IDEAL_STEP_HEIGHT;
+  const idealStepHeight = Math.max(MIN_IDEAL_STEP_HEIGHT, params.idealStepHeight ?? DEFAULT_IDEAL_STEP_HEIGHT);
   const strideConstant = params.strideConstant ?? DEFAULT_STRIDE_CONSTANT;
   const width = params.width ?? 1.0;
 
   // 1. Calculate step count by dividing target height by ideal step height, rounded to nearest whole number
-  const stepCount = Math.max(2, Math.round(targetHeight / idealStepHeight));
+  const stepCount = Math.min(MAX_STEP_COUNT, Math.max(2, Math.round(targetHeight / idealStepHeight)));
 
   // 2. Divide target height by step count to determine the exact actual step height (riser height)
   // Equal riser height for every single step

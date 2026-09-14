@@ -2884,6 +2884,8 @@ function Scene() {
   const selectedIdRef = useRef(selectedId);
   const selectedLightIdRef = useRef(selectedLightId);
   const isDraggingRef = useRef(false);
+  const kernelSelectedSetRef = useRef(kernelSelectedSet);
+  const blockPlacementDraftRef = useRef(blockPlacementDraft);
 
   const captureDiagnosticData = (sIdOverride?: string | null) => {
     const sId = sIdOverride === undefined ? selectedIdRef.current : sIdOverride;
@@ -2983,6 +2985,14 @@ function Scene() {
     captureDiagnosticData();
   }, [selectedLightId]);
 
+  useEffect(() => {
+    kernelSelectedSetRef.current = kernelSelectedSet;
+  }, [kernelSelectedSet]);
+
+  useEffect(() => {
+    blockPlacementDraftRef.current = blockPlacementDraft;
+  }, [blockPlacementDraft]);
+
   // Middle mouse button shortcut to orbit
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
@@ -3072,6 +3082,25 @@ function Scene() {
   const awakenedRefPointsRef = useRef<Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; time: number; screenPos: { x: number; y: number } }>>([]);
   const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
+  // The global keydown handler below is a single useEffect whose own
+  // dependency array only lists a handful of the values it actually reads
+  // (activeTool, a few vertex-array lengths, etc.) - widening it to cover
+  // everything the handler branches on would tear down and re-add a
+  // window-level listener on every keystroke while typing a length or
+  // every vertex added while drawing, which is exactly the listener-churn
+  // problem already fixed elsewhere in this file (see selectedIdRef
+  // above it). These refs mirror the remaining values that handler needs
+  // but doesn't declare, kept fresh every render, so its closure always
+  // reads the current value instead of whatever was current when the
+  // effect last re-ran.
+  const typedLengthRef = useRef(typedLength);
+  const drawingStartRef = useRef(drawingStart);
+  useEffect(() => {
+    typedLengthRef.current = typedLength;
+  }, [typedLength]);
+  useEffect(() => {
+    drawingStartRef.current = drawingStart;
+  }, [drawingStart]);
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
   // placingNotePos/setPlacingNotePos now come from context (see
@@ -3931,7 +3960,7 @@ function Scene() {
       // Arrow keys rotate the pending block 90° at a time before it's placed
       // (the ghost under the cursor updates live); a click places it.
       // Escape exits block-placement mode entirely.
-      if (activeTool === 'block_picker' && blockPlacementDraft) {
+      if (activeTool === 'block_picker' && blockPlacementDraftRef.current) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault();
           const dir = e.key === 'ArrowLeft' ? -1 : 1;
@@ -3952,26 +3981,32 @@ function Scene() {
       if (activeTool === 'polygon') {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          setPolygonSides(prev => Math.min(64, prev + 1));
-          setMeasurements(`Polygon sides: ${Math.min(64, polygonSides + 1)}`);
+          setPolygonSides(prev => {
+            const next = Math.min(64, prev + 1);
+            setMeasurements(`Polygon sides: ${next}`);
+            return next;
+          });
           return;
         }
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setPolygonSides(prev => Math.max(3, prev - 1));
-          setMeasurements(`Polygon sides: ${Math.max(3, polygonSides - 1)}`);
+          setPolygonSides(prev => {
+            const next = Math.max(3, prev - 1);
+            setMeasurements(`Polygon sides: ${next}`);
+            return next;
+          });
           return;
         }
       }
 
       // Numeric length entry while drawing a line or shape (SketchUp-style inference)
-      if (['line', 'circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStart && !e.ctrlKey && !e.metaKey) { 
+      if (['line', 'circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStartRef.current && !e.ctrlKey && !e.metaKey) {
         if (/^[0-9.sS]$/.test(e.key)) {
           e.preventDefault();
           setTypedLength(prev => prev + e.key);
           return;
         }
-        if (e.key === 'Backspace' && typedLength.length > 0) {
+        if (e.key === 'Backspace' && typedLengthRef.current.length > 0) {
           e.preventDefault();
           setTypedLength(prev => prev.slice(0, -1));
           return;
@@ -3982,17 +4017,17 @@ function Scene() {
       // Backspace handling above, and gated on nothing being actively
       // drawn — Backspace's OTHER job (erasing a typed length mid-gesture)
       // takes priority and returns before this is ever reached.
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !drawingStart) {
-        if (kernelSelectedSet.size > 0) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !drawingStartRef.current) {
+        if (kernelSelectedSetRef.current.size > 0) {
           e.preventDefault();
-          deleteGroupFacesAndEdges(kernelHost.graph, [...kernelSelectedSet]);
+          deleteGroupFacesAndEdges(kernelHost.graph, [...kernelSelectedSetRef.current]);
           setSelectedFaceIds([]);
           bumpKernel();
           return;
         }
-        if (selectedId) {
+        if (selectedIdRef.current) {
           e.preventDefault();
-          removeShape(selectedId);
+          removeShape(selectedIdRef.current);
           setSelectedId(null);
           setSelectedIds([]);
           return;
