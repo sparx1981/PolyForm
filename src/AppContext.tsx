@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics } from './types';
+import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
@@ -42,8 +42,14 @@ const cleanData = (obj: any): any => {
   return obj;
 };
 
-export type ToolbarKey = 'left' | 'architecture' | 'landscapes';
-export type DockZone = 'left' | 'top' | 'bottom';
+// Re-exported for existing importers (e.g. App.tsx's `import { ... type
+// ToolbarKey, type DockZone } from './AppContext'`) — the actual
+// definitions live in types.ts now. See types.ts's own comment on why:
+// this file is not part of the geometry kernel, but types.ts is imported
+// by all of it, and tsconfig.kernel.json's strict settings used to get
+// applied to this entire file's dependency graph as a result of the
+// reverse import that used to live in types.ts.
+export type { ToolbarKey, DockZone };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   // --- Geometry kernel -----------------------------------------------------

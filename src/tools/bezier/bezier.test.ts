@@ -24,13 +24,13 @@ describe('Bézier Curve Engine (v2.0)', () => {
 
       const points = tessellateBezierSpan(k0, k1, 24);
       expect(points.length).toBe(25); // 24 divisions = 25 points
-      expect(points[0].x).toBeCloseTo(0);
-      expect(points[0].y).toBeCloseTo(0);
-      expect(points[24].x).toBeCloseTo(4);
-      expect(points[24].y).toBeCloseTo(0);
+      expect(points[0]!.x).toBeCloseTo(0);
+      expect(points[0]!.y).toBeCloseTo(0);
+      expect(points[24]!.x).toBeCloseTo(4);
+      expect(points[24]!.y).toBeCloseTo(0);
 
       // Apex should be raised due to control handles at y=2
-      const midPoint = points[12];
+      const midPoint = points[12]!;
       expect(midPoint.y).toBeGreaterThan(1.0);
     });
 
@@ -44,8 +44,8 @@ describe('Bézier Curve Engine (v2.0)', () => {
       const points = tessellateEntireCurve(knots, false, 12);
       // 2 spans of 12 divisions: span 1 has 13 points, span 2 adds 12 = 25 points total
       expect(points.length).toBe(25);
-      expect(points[0].distanceTo(knots[0].point)).toBeCloseTo(0);
-      expect(points[points.length - 1].distanceTo(knots[2].point)).toBeCloseTo(0);
+      expect(points[0]!.distanceTo(knots[0]!.point)).toBeCloseTo(0);
+      expect(points[points.length - 1]!.distanceTo(knots[2]!.point)).toBeCloseTo(0);
     });
 
     it('tessellates closed curve connecting back to start knot', () => {
@@ -58,7 +58,7 @@ describe('Bézier Curve Engine (v2.0)', () => {
       const points = tessellateEntireCurve(knots, true, 10);
       // 3 spans of 10 divisions: 1 + 3 * 10 = 31 points (last point lands back on knot 0)
       expect(points.length).toBe(31);
-      expect(points[points.length - 1].distanceTo(knots[0].point)).toBeCloseTo(0);
+      expect(points[points.length - 1]!.distanceTo(knots[0]!.point)).toBeCloseTo(0);
     });
 
     it('collapses a degenerate span (all four control points coincident) to a single point instead of duplicates', () => {
@@ -68,7 +68,7 @@ describe('Bézier Curve Engine (v2.0)', () => {
 
       const points = tessellateBezierSpan(k0, k1, 24);
       expect(points.length).toBe(1);
-      expect(points[0].distanceTo(samePoint)).toBeCloseTo(0);
+      expect(points[0]!.distanceTo(samePoint)).toBeCloseTo(0);
     });
 
     it('two coincident knots placed back-to-back tessellate to a single extra point, not a run of duplicates', () => {
@@ -84,7 +84,7 @@ describe('Bézier Curve Engine (v2.0)', () => {
       // point) and its first point is dropped as the overlap with span
       // 0->1's own last point, so it contributes nothing further.
       expect(points.length).toBe(11);
-      expect(points[points.length - 1].distanceTo(samePoint)).toBeCloseTo(0);
+      expect(points[points.length - 1]!.distanceTo(samePoint)).toBeCloseTo(0);
     });
   });
 
@@ -99,12 +99,12 @@ describe('Bézier Curve Engine (v2.0)', () => {
 
       const knots = tool.getKnots();
       expect(knots.length).toBe(1);
-      expect(knots[0].point.x).toBeCloseTo(1);
-      expect(knots[0].handleOut).toBeNull();
-      expect(knots[0].handleIn).toBeNull();
+      expect(knots[0]!.point.x).toBeCloseTo(1);
+      expect(knots[0]!.handleOut).toBeNull();
+      expect(knots[0]!.handleIn).toBeNull();
 
       tool.onPointerUp();
-      expect(tool.getKnots()[0].handleOut).toBeNull();
+      expect(tool.getKnots()[0]!.handleOut).toBeNull();
     });
 
     it('creates symmetric C1 continuous tangent handles on click & drag', () => {
@@ -115,7 +115,7 @@ describe('Bézier Curve Engine (v2.0)', () => {
       tool.onPointerMove(new THREE.Vector3(1, 0, 2), false); // drag handle to (1, 0, 2)
       tool.onPointerUp();
 
-      const knot = tool.getKnots()[0];
+      const knot = tool.getKnots()[0]!;
       expect(knot.mode).toBe('mirrored');
       expect(knot.handleOut).not.toBeNull();
       expect(knot.handleOut?.x).toBeCloseTo(1);
@@ -135,7 +135,7 @@ describe('Bézier Curve Engine (v2.0)', () => {
       tool.onPointerMove(new THREE.Vector3(1, 0, 2), true); // Alt pressed -> broken mode
       tool.onPointerUp();
 
-      const knot = tool.getKnots()[0];
+      const knot = tool.getKnots()[0]!;
       expect(knot.mode).toBe('broken');
       expect(knot.handleOut?.x).toBeCloseTo(1);
       expect(knot.handleOut?.z).toBeCloseTo(2);
@@ -185,7 +185,7 @@ describe('Bézier Curve Engine (v2.0)', () => {
       tool.onPointerUp();
 
       tool.setTangentLength(2.5);
-      const knot = tool.getKnots()[0];
+      const knot = tool.getKnots()[0]!;
       expect(knot.handleOut?.distanceTo(knot.point)).toBeCloseTo(2.5);
       expect(knot.handleIn?.distanceTo(knot.point)).toBeCloseTo(2.5);
     });

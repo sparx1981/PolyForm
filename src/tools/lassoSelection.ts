@@ -46,10 +46,10 @@ export function isPointInPolygon(point: Point2D, polygon: readonly Point2D[]): b
   let inside = false;
   const n = polygon.length;
   for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
+    const xi = polygon[i]!.x;
+    const yi = polygon[i]!.y;
+    const xj = polygon[j]!.x;
+    const yj = polygon[j]!.y;
 
     const intersect = ((yi > point.y) !== (yj > point.y)) &&
       (point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi);
@@ -148,11 +148,11 @@ export function doPolygonsOverlap(
   const nA = polyA.length;
   const nB = polyB.length;
   for (let i = 0; i < nA; i++) {
-    const a1 = polyA[i];
-    const a2 = polyA[(i + 1) % nA];
+    const a1 = polyA[i]!;
+    const a2 = polyA[(i + 1) % nA]!;
     for (let j = 0; j < nB; j++) {
-      const b1 = polyB[j];
-      const b2 = polyB[(j + 1) % nB];
+      const b1 = polyB[j]!;
+      const b2 = polyB[(j + 1) % nB]!;
       if (doLineSegmentsIntersect(a1, a2, b1, b2)) return true;
     }
   }
@@ -230,6 +230,10 @@ export function isShapeInLasso(
   viewportHeight: number
 ): boolean {
   if (shape.hidden) return false;
+  // An empty lasso can't contain anything, and code below (the "is the
+  // lasso itself inside the shape's box" check) indexes lassoPolygon[0]
+  // assuming at least one point.
+  if (lassoPolygon.length === 0) return false;
 
   // Gather candidate 3D sample points (bounding box corners + center)
   let corners3D: THREE.Vector3[] = [];
@@ -307,7 +311,7 @@ export function isShapeInLasso(
     }
 
     // Check if lasso is inside the shape's projected 2D box/hull
-    if (isPointInPolygon(lassoPolygon[0], [
+    if (isPointInPolygon(lassoPolygon[0]!, [
       { x: shape2DBox.minX, y: shape2DBox.minY },
       { x: shape2DBox.maxX, y: shape2DBox.minY },
       { x: shape2DBox.maxX, y: shape2DBox.maxY },
@@ -465,11 +469,11 @@ export function evaluateLassoSelection(params: EvaluateLassoParams): EvaluateLas
   // Convert points to polygon based on mode
   let polygon: Point2D[];
   if (options.mode === 'marquee') {
-    polygon = marqueeToPolygon(rawPoints[0], rawPoints[rawPoints.length - 1]);
+    polygon = marqueeToPolygon(rawPoints[0]!, rawPoints[rawPoints.length - 1]!);
   } else {
     // In lasso mode, at least 3 points are needed for a polygon
     if (rawPoints.length < 3) {
-      polygon = marqueeToPolygon(rawPoints[0], rawPoints[rawPoints.length - 1]);
+      polygon = marqueeToPolygon(rawPoints[0]!, rawPoints[rawPoints.length - 1]!);
     } else {
       polygon = [...rawPoints];
     }

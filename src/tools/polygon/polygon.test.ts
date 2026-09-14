@@ -12,8 +12,8 @@ describe('Polygon Tool math & state', () => {
     // 6-sided hexagon
     const hexVertices = generatePolygonVertices(center, radiusPoint, 6, plane);
     expect(hexVertices.length).toBe(7); // 6 vertices + 1 closing vertex matching first
-    expect(hexVertices[0].distanceTo(radiusPoint)).toBeLessThan(1e-4);
-    expect(hexVertices[0].distanceTo(hexVertices[6])).toBeLessThan(1e-4);
+    expect(hexVertices[0]!.distanceTo(radiusPoint)).toBeLessThan(1e-4);
+    expect(hexVertices[0]!.distanceTo(hexVertices[6]!)).toBeLessThan(1e-4);
 
     // Check all vertices have radius 2
     for (const v of hexVertices) {

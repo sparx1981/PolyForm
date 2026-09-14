@@ -52,7 +52,7 @@ export function generatePolygonVertices(
     vertices.push(vertex);
   }
 
-  vertices.push(vertices[0].clone()); // Close the loop
+  vertices.push(vertices[0]!.clone()); // Close the loop — sides >= 3 guarantees at least one element above
   
   return vertices;
 }

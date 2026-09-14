@@ -1,7 +1,17 @@
 import type { KernelArcHost } from './tools/kernelArcHost';
 import type * as THREE from 'three';
 import type { FaceId } from './lib/geometry/types';
-import type { ToolbarKey, DockZone } from './AppContext';
+
+// Defined here (not in AppContext.tsx, which re-exports them for existing
+// importers) because types.ts is imported by the entire geometry
+// kernel/tools layer, and tsconfig.kernel.json type-checks whatever those
+// files transitively import. types.ts importing FROM AppContext.tsx used
+// to drag AppContext's own full dependency graph — the rest of the
+// application, well outside the kernel — into that strict-mode kernel
+// compilation, which is where most of tsconfig.kernel.json's several
+// hundred errors were actually coming from.
+export type ToolbarKey = 'left' | 'architecture' | 'landscapes';
+export type DockZone = 'left' | 'top' | 'bottom';
 
 export type CivilToolMode = 'terrain' | 'road' | 'pad-rect' | 'pad-circle' | 'striping';
 
@@ -734,8 +744,6 @@ export interface SavedModel {
   isPublic?: boolean;
   hasPassword?: boolean;
 }
-
-export * from './lib/PolyformInferenceEngine';
 
 // =============================================================================
 // Reactive Timber Frame Engine Types
