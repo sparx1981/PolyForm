@@ -3095,13 +3095,29 @@ function Scene() {
   // effect last re-ran.
   const typedLengthRef = useRef(typedLength);
   const drawingStartRef = useRef(drawingStart);
+  const drawingNormalRef = useRef(drawingNormal);
+  const drawingStepRef = useRef(drawingStep);
+  const activeSplineDraftRef = useRef(activeSplineDraft);
   useEffect(() => {
     typedLengthRef.current = typedLength;
   }, [typedLength]);
   useEffect(() => {
     drawingStartRef.current = drawingStart;
   }, [drawingStart]);
+  useEffect(() => {
+    drawingNormalRef.current = drawingNormal;
+  }, [drawingNormal]);
+  useEffect(() => {
+    drawingStepRef.current = drawingStep;
+  }, [drawingStep]);
+  useEffect(() => {
+    activeSplineDraftRef.current = activeSplineDraft;
+  }, [activeSplineDraft]);
   const [lastDrawTarget, setLastDrawTarget] = useState<THREE.Vector3 | null>(null);
+  const lastDrawTargetRef = useRef(lastDrawTarget);
+  useEffect(() => {
+    lastDrawTargetRef.current = lastDrawTarget;
+  }, [lastDrawTarget]);
   const [faceEditMode, setFaceEditMode] = useState<string | null>(null); // shapeId
   // placingNotePos/setPlacingNotePos now come from context (see
   // AppContext.tsx's own doc comment) — Scene() still SETS this on click
@@ -3116,6 +3132,10 @@ function Scene() {
   // Bézier Curve Tool State
   const bezierToolRef = useRef<BezierTool>(new BezierTool());
   const [bezierKnots, setBezierKnots] = useState<BezierKnot[]>([]);
+  const bezierKnotsRef = useRef(bezierKnots);
+  useEffect(() => {
+    bezierKnotsRef.current = bezierKnots;
+  }, [bezierKnots]);
   const [bezierResolution, setBezierResolution] = useState<number>(24);
   const [bezierActivePlane, setBezierActivePlane] = useState<THREE.Plane | null>(null);
   const [bezierHoveredKnotIndex, setBezierHoveredKnotIndex] = useState<number | null>(null);
@@ -3146,6 +3166,10 @@ function Scene() {
     archStyle?: string,
     color?: string
   } | null>(null);
+  const previewShapeRef = useRef(previewShape);
+  useEffect(() => {
+    previewShapeRef.current = previewShape;
+  }, [previewShape]);
   const [stairRotationAngle, setStairRotationAngle] = useState<number>(0);
   const [polygonSides, setPolygonSides] = useState<number>(6);
   
@@ -4057,8 +4081,8 @@ function Scene() {
               setPolyPlane(null);
               setPolyNormal(null);
             }
-          } else if (activeTool === 'bezier' && bezierKnots.length > 0) {
-            const next = bezierKnots.slice(0, -1);
+          } else if (activeTool === 'bezier' && bezierKnotsRef.current.length > 0) {
+            const next = bezierKnotsRef.current.slice(0, -1);
             setBezierKnots(next);
             bezierToolRef.current.setState({ ...bezierToolRef.current.getState(), knots: next });
             if (next.length === 0) {
@@ -4088,10 +4112,10 @@ function Scene() {
         if (activeTool === 'poly' && polyVertices.length > 0) {
           diagLog('TOOL', 'Poly drawing cancelled', { vertexCount: polyVertices.length });
         }
-        if (activeTool === 'bezier' && bezierKnots.length > 0) {
-          diagLog('TOOL', 'Bézier drawing cancelled', { knotCount: bezierKnots.length });
+        if (activeTool === 'bezier' && bezierKnotsRef.current.length > 0) {
+          diagLog('TOOL', 'Bézier drawing cancelled', { knotCount: bezierKnotsRef.current.length });
         }
-        if (activeTool === 'road' && activeSplineDraft.length > 0) {
+        if (activeTool === 'road' && activeSplineDraftRef.current.length > 0) {
           setActiveSplineDraft([]);
           setMeasurements('Road alignment draft cancelled.');
         }
@@ -4143,6 +4167,26 @@ function Scene() {
       }
 
       if (e.key === 'Enter') {
+        // Shadows the closed-over state below with the refs' current
+        // values for the rest of this block. This handler is one big
+        // useEffect whose own dependency array only lists a handful of
+        // the values it reads (see the comment by typedLengthRef above),
+        // so a bare read of typedLength/drawingStart/drawingNormal/
+        // lastDrawTarget/drawingStep/previewShape/bezierKnots/
+        // activeSplineDraft here would reflect whatever was current the
+        // last time the effect itself re-ran (typically on activeTool
+        // change) rather than the actual state at the moment Enter
+        // confirms a typed length mid-drawing. Shadowing once up front
+        // means every existing read below - already correct in its own
+        // logic - picks up the live value with no other changes needed.
+        const typedLength = typedLengthRef.current;
+        const drawingStart = drawingStartRef.current;
+        const drawingNormal = drawingNormalRef.current;
+        const lastDrawTarget = lastDrawTargetRef.current;
+        const drawingStep = drawingStepRef.current;
+        const previewShape = previewShapeRef.current;
+        const bezierKnots = bezierKnotsRef.current;
+        const activeSplineDraft = activeSplineDraftRef.current;
         if (activeTool === 'bezier') {
           e.preventDefault();
           if (typedLength.trim()) {
@@ -4363,7 +4407,7 @@ function Scene() {
         if (key === 'x') setAxisLock(prev => prev === 'x' ? null : 'x');
         if (key === 'y') setAxisLock(prev => prev === 'y' ? null : 'y');
         if (key === 'z') setAxisLock(prev => prev === 'z' ? null : 'z');
-      } else if (drawingStart && ['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && (key === 'x' || key === 'y' || key === 'z')) {
+      } else if (drawingStartRef.current && ['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && (key === 'x' || key === 'y' || key === 'z')) {
         setAxisLock(prev => prev === key ? null : (key as 'x' | 'y' | 'z'));
         return;
       }
@@ -4371,7 +4415,7 @@ function Scene() {
       // Tool Shortcuts
       if (activeTool === 'bezier' && (key === 'c' || key === 'C')) {
         e.preventDefault();
-        if (bezierKnots.length >= 2) {
+        if (bezierKnotsRef.current.length >= 2) {
           closeBezierLoop();
         }
         return;
