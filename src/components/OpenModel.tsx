@@ -205,6 +205,15 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     }
   };
 
+  // fetchModels(true) only forces a refetch of whichever tab is currently
+  // selected - share/unshare/copy can change which OTHER tabs a model
+  // belongs in (e.g. sharing it while on "Recent" adds it to "Shared
+  // Models"), and those other tabs' buckets would otherwise keep serving
+  // their up-to-10-minute-old cache the next time the user switches to
+  // them. Clearing every tab's timestamp makes the next visit to any of
+  // them refetch instead.
+  const invalidateAllModelCaches = () => setLastFetched({});
+
   const filteredModels = useMemo(() => {
     return models.filter(m =>
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -252,8 +261,16 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
 
   const handleDelete = async (id: string) => {
     setIsDeleting(true);
+    // Tracked separately from the outer catch so a failure after the
+    // subcollection purge has already committed gets a message telling the
+    // user to retry, rather than reading as a generic, unexplained error.
+    // Retrying is safe either way: purgeModelData is a no-op on an
+    // already-empty set of subcollections, and deleteDoc on an
+    // already-missing document succeeds silently rather than erroring.
+    let purgeSucceeded = false;
     try {
       await purgeModelData(id);
+      purgeSucceeded = true;
       await deleteDoc(doc(db, 'models', id));
       // A deleted model can appear in more than one tab's bucket (e.g. both
       // "Recent"/"My Models" and "All Models"), so remove it from all of them.
@@ -279,6 +296,9 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     } catch (err) {
       console.error('Delete error:', err);
       handleFirestoreError(err, OperationType.DELETE, `models/${id}`);
+      if (purgeSucceeded) {
+        alert('This model\'s associated data was cleaned up, but removing the model itself failed. Please try deleting it again to finish.');
+      }
     } finally {
       setIsDeleting(false);
     }
@@ -370,6 +390,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
 
       await addDoc(collection(db, 'models'), newModel);
       alert('Model copied to your library!');
+      invalidateAllModelCaches();
       fetchModels(true);
     } catch (err) {
       console.error('Copy error:', err);
@@ -400,6 +421,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         });
       }
       setIsShareModalOpen(false);
+      invalidateAllModelCaches();
       fetchModels(true);
       alert('Model is now public!');
     } catch (err) {
@@ -413,10 +435,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     if (model.isPublic) {
       if (window.confirm('Make this model private?')) {
         try {
-          await updateDoc(doc(db, 'models', model.id), { 
+          await updateDoc(doc(db, 'models', model.id), {
             isPublic: false,
             updatedAt: serverTimestamp()
           });
+          invalidateAllModelCaches();
           fetchModels(true);
         } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, `models/${model.id}`);

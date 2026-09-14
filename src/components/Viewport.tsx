@@ -10912,6 +10912,16 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
 
   useEffect(() => {
     diagLog("EFFECT", "projectorMode/map change", { mode: light.projectorMode, map: light.map });
+
+    // Guards the async TextureLoader callback below: if light.map/mode
+    // changes again before a load resolves, this run's callback must not
+    // overwrite whatever a LATER run already set - without this, two
+    // loads racing (e.g. the user picks two images in quick succession)
+    // let whichever happens to resolve last win, regardless of which one
+    // is actually still selected.
+    let cancelled = false;
+    let createdVideo: HTMLVideoElement | null = null;
+
     if (light.projectorMode === 'texture' && light.map) {
       setError(false);
       const loader = new THREE.TextureLoader();
@@ -10919,6 +10929,11 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
       loader.load(
         light.map,
         (tex) => {
+          if (cancelled) {
+            // Superseded by a newer map/mode change before this resolved.
+            tex.dispose();
+            return;
+          }
           diagLog("TEXTURE", "Texture loaded successfully", {
             uuid: tex.uuid,
             src: light.map,
@@ -10934,6 +10949,7 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
         },
         undefined,
         (err) => {
+          if (cancelled) return;
           diagLog("ERROR", "Failed to load projector texture", { error: String(err) });
           console.error("Failed to load projector texture:", err);
           setError(true);
@@ -10944,27 +10960,28 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
       setError(false);
       try {
         const video = document.createElement('video');
+        createdVideo = video;
         video.src = light.map;
         video.crossOrigin = 'anonymous';
         video.loop = true;
         video.muted = true;
-        
+
         diagLog("TEXTURE", "VideoTexture creation started", { src: light.map });
-        
+
         video.play().then(() => {
           diagLog("TEXTURE", "Video playing", { src: light.map });
         }).catch(e => {
           diagLog("ERROR", "Video play failed", { error: String(e) });
           console.error("Video play failed:", e);
         });
-        
+
         const vTex = new THREE.VideoTexture(video);
-        diagLog("TEXTURE", "VideoTexture created", { 
-          src: video.src, 
+        diagLog("TEXTURE", "VideoTexture created", {
+          src: video.src,
           readyState: video.readyState,
           uuid: vTex.uuid
         });
-        
+
         vTex.colorSpace = THREE.SRGBColorSpace;
         vTex.center.set(0.5, 0.5);
         setVideoTexture(vTex);
@@ -10980,6 +10997,23 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
       setVideoTexture(null);
       setError(false);
     }
+
+    // Disposes whatever THIS run created, on the next map/mode change or
+    // unmount - without it, switching a projector light's image or video
+    // (or clearing it) left the previous texture/video decoding and
+    // holding GPU/network resources indefinitely, since neither
+    // setTexture/setVideoTexture nor a plain state overwrite ever called
+    // .dispose() on what they replaced.
+    return () => {
+      cancelled = true;
+      textureRef.current?.dispose();
+      videoTextureRef.current?.dispose();
+      if (createdVideo) {
+        createdVideo.pause();
+        createdVideo.removeAttribute('src');
+        createdVideo.load();
+      }
+    };
   }, [light.map, light.projectorMode]);
 
   // Animation loop — reads from refs, never stale state
