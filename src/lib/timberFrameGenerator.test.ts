@@ -51,6 +51,21 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
     const ridgeBeams = members.filter(s => s.tags?.includes('timber-ridge-beam') || s.name?.includes('Ridge Beam'));
     expect(ridgeBeams.length).toBeGreaterThanOrEqual(2);
 
+    // The L-shape branch used to pass the raw ridge nodes (which sit
+    // exactly ON the theoretical ridge line, at ridgeHeight) straight into
+    // addBeamSegment. Since a ridge beam isn't tagged "rafter", it only
+    // got the small fixed revealDistance inset (~2.5cm) instead of the
+    // rafter-style half-depth inset, leaving roughly half the beam's own
+    // 22cm thickness sticking up through the roof surface above it - the
+    // ridge-line clash reported after the previous timber-frame fix.
+    // ridgeHeight here is 2.0 (buildRoofAssemblyForRoom's default, since
+    // this call doesn't set usePitchAngle/ridgeHeight explicitly), and the
+    // walls sit at y=1.4 with height 2.8, so the wall top / roof base is
+    // at world y=2.8 and the true ridge apex at 2.8 + 2.0 = 4.8.
+    for (const beam of ridgeBeams) {
+      expect(beam.position[1]).toBeLessThan(4.8 - 0.08);
+    }
+
     // Check for Valley Jack Rafters
     const valleyJackRafters = members.filter(s => s.tags?.includes('timber-valley-jack-rafter') || s.name?.includes('Valley Jack'));
     expect(valleyJackRafters.length).toBeGreaterThan(0);
@@ -527,6 +542,30 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
       expect(rafter.position[1]).toBeGreaterThanOrEqual(0);
       expect(rafter.position[1]).toBeLessThanOrEqual(0.6);
       expect((rafter.args as number[])[2]).toBeGreaterThan(0);
+    });
+
+    it('insets roof noggins below the theoretical roof surface, same as rafters', () => {
+      // Roof noggins connect two adjacent rafters' own (un-inset) surface
+      // points at mid-span - since a noggin isn't tagged "rafter", it only
+      // got the small fixed revealDistance inset instead of the deeper
+      // rafter-style inset, leaving it sitting almost exactly on the
+      // theoretical roof surface (unlike the rafters on either side of
+      // it, which are properly tucked underneath).
+      const roof = rectRoof();
+      const members = generateTimberFrameForRoof(roof, []);
+      const noggin = members.find(s => s.tags?.includes('timber-roof-noggin'));
+      expect(noggin).toBeDefined();
+
+      const rafter = members.find(s => s.name?.includes('Common Rafter (Front)'));
+      expect(rafter).toBeDefined();
+
+      // A properly-inset noggin should sit close to its neighboring
+      // rafters' own (also inset) height, not up near the raw surface -
+      // the rafter's own regression test above already establishes an
+      // un-inset vs. inset gap of 0.08m+, so a noggin within that same
+      // tolerance of its neighbor rafter confirms it got the same
+      // treatment rather than sitting nearly on the raw surface.
+      expect(Math.abs(noggin!.position[1] - rafter!.position[1])).toBeLessThan(0.03);
     });
 
     it('recomputes roof timber framing when only roofData changes (eaveOverhang), not just args', () => {

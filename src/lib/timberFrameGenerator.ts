@@ -1117,11 +1117,14 @@ export function generateTimberFraming(
         // itself, so without the depth/2 term only revealDistance (a small
         // fixed reveal, e.g. 25mm) separated the member's CENTERLINE from
         // that surface - leaving roughly (depth/2 - revealDistance) of the
-        // member's own outer face poking through the roof above it. Ridge
-        // beams/collar ties/ceiling joists already bake their own vertical
-        // offset into the pStartLocal/pEndLocal points passed in above them,
-        // so they keep the original, smaller reveal-only behavior.
-        const isRafterMember = subTag.includes('rafter');
+        // member's own outer face poking through the roof above it. Roof
+        // noggins have the same problem: both endpoints are lerped directly
+        // between two rafters' own (un-inset) surface points, so they also
+        // sit exactly on the theoretical roof surface rather than baking in
+        // their own offset the way ridge beams/collar ties/ceiling joists
+        // do (each of those computes an already-lowered/mid-height point
+        // before calling this function).
+        const isRafterMember = subTag.includes('rafter') || subTag.includes('noggin');
         // Clamp to a fraction of the member's own span: for a very small
         // room (or the roof height floor) this inset could otherwise
         // exceed a large share of the member's total rise, pulling its
@@ -1211,9 +1214,25 @@ export function generateTimberFraming(
         const r1 = new THREE.Vector3(rEnd1[0], rEnd1[1], rEnd1[2]);
         const r2 = new THREE.Vector3(rEnd2[0], rEnd2[1], rEnd2[2]);
 
-        // 1. Primary Ridge Beams for both wings
-        addBeamSegment('Ridge Beam (Wing 1)', rJ, r1, ridgeBeamWidth, ridgeBeamDepth, 'timber-ridge-beam');
-        addBeamSegment('Ridge Beam (Wing 2)', rJ, r2, ridgeBeamWidth, ridgeBeamDepth, 'timber-ridge-beam');
+        // 1. Primary Ridge Beams for both wings. Both rectangular branches
+        // below place their own ridge beam at `roofH - ridgeBeamDepth / 2`
+        // - pre-lowered by half the beam's own thickness so its TOP face
+        // sits flush with the ridge line, not poking through the roof
+        // deck above it. This branch instead passed the raw ridge nodes
+        // (which sit exactly ON the ridge line) straight into
+        // addBeamSegment, which only insets non-rafter members by the
+        // small fixed revealDistance - leaving roughly
+        // (ridgeBeamDepth / 2 - revealDistance), about 8.5cm with the
+        // current member sizes, of the beam sticking up through the roof
+        // surface. Lowering the ridge points by the same half-depth here
+        // matches the rectangular branches' convention; rJ/r1/r2
+        // themselves stay at the true ridge apex for every other member
+        // below that needs to reach the actual ridge line (rafters, jacks).
+        const rJBeam = rJ.clone().setY(rJ.y - ridgeBeamDepth / 2);
+        const r1Beam = r1.clone().setY(r1.y - ridgeBeamDepth / 2);
+        const r2Beam = r2.clone().setY(r2.y - ridgeBeamDepth / 2);
+        addBeamSegment('Ridge Beam (Wing 1)', rJBeam, r1Beam, ridgeBeamWidth, ridgeBeamDepth, 'timber-ridge-beam');
+        addBeamSegment('Ridge Beam (Wing 2)', rJBeam, r2Beam, ridgeBeamWidth, ridgeBeamDepth, 'timber-ridge-beam');
 
         // 2. Structural Inside Corner Valley Rafter (E[0] -> rJunc)
         addBeamSegment('Valley Rafter (Inside Corner)', e0, rJ, hipRafterWidth, hipRafterDepth, 'timber-valley-rafter');
