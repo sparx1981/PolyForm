@@ -3299,12 +3299,23 @@ export default function RightPanelStack() {
                     </button>
                   </div>
 
+                  {activeTool === 'teleport' && (
+                    <button
+                      onClick={() => window.dispatchEvent(new CustomEvent('reset-camera'))}
+                      className="w-full py-1.5 px-2 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      title="Return the camera to its default starting position and view"
+                    >
+                      <RotateCcw size={12} />
+                      <span>Reset to Default Position</span>
+                    </button>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Enable Depth Clipping</span>
                       <span className="text-[9px] text-gray-400">Near & Far Frustum Planes</span>
                     </div>
-                    <button 
+                    <button
                       id="toggle-camera-depth-clipping"
                       onClick={() => setCameraDepthClippingEnabled(!cameraDepthClippingEnabled)}
                       className={cn(

@@ -1391,6 +1391,22 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
   );
 }
 
+// Shared by the Teleport tool's click handler and its live preview: keeps
+// the camera's current compass heading (yaw) but levels off any pitch, so
+// arriving at a new spot looks straight ahead at eye level rather than
+// wherever an orbiting camera happened to be angled (steeply down at the
+// ground, say) - which otherwise reads as "teleported somewhere wrong"
+// even when the landing position itself is correct.
+function levelTeleportTarget(newPos: THREE.Vector3, camera: THREE.Camera, scene: THREE.Scene): THREE.Vector3 {
+  const controls = (scene.userData as any).controls;
+  const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0, 0);
+  const lookDir = prevTarget.clone().sub(camera.position);
+  const levelDir = new THREE.Vector3(lookDir.x, 0, lookDir.z);
+  if (levelDir.lengthSq() < 1e-6) levelDir.set(0, 0, -1);
+  levelDir.normalize();
+  return newPos.clone().addScaledVector(levelDir, 5);
+}
+
 // Live look-through preview for the Teleport tool: a circular "window"
 // hovering over the cursor's hit point, rendered from a second camera
 // positioned where a click would actually send the viewer - so you see
@@ -1405,9 +1421,10 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
     portalCameraRef.current = new THREE.PerspectiveCamera(65, 1, 0.1, 2000);
   }
   const renderTarget = useMemo(
-    () => new THREE.WebGLRenderTarget(512, 512, { generateMipmaps: false }),
+    () => new THREE.WebGLRenderTarget(384, 384, { generateMipmaps: false }),
     []
   );
+  const frameCountRef = useRef(0);
 
   useEffect(() => {
     return () => { renderTarget.dispose(); };
@@ -1419,46 +1436,65 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
     const portalCam = portalCameraRef.current;
     if (!disc || !ring || !portalCam) return;
 
-    const eyeHeight = 1.7;
-    const dest = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + eyeHeight, hoverPoint[2]);
+    // Re-rendering the whole scene from a second camera every animation
+    // frame is expensive - only refresh the portal's own view every other
+    // frame (it still tracks the cursor and updates size/position every
+    // frame; only the rendered contents lag by one tick, imperceptible for
+    // a preview) to keep this from dragging down overall framerate on
+    // large models.
+    frameCountRef.current++;
+    const shouldRenderThisFrame = frameCountRef.current % 2 === 0;
 
-    // Same "keep current facing direction" convention as the actual
-    // teleport click handler, so the preview matches what you'll get.
-    const controls = scene.userData.controls;
-    const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0, 0);
-    const lookDir = prevTarget.clone().sub(camera.position);
-    if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);
-    lookDir.normalize();
+    const eyeHeight = 1.7;
+    const hp = new THREE.Vector3(hoverPoint[0], hoverPoint[1], hoverPoint[2]);
+    const dest = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + eyeHeight, hoverPoint[2]);
+    const newTarget = levelTeleportTarget(dest, camera, scene);
 
     portalCam.position.copy(dest);
-    portalCam.lookAt(dest.clone().addScaledVector(lookDir, 5));
+    portalCam.lookAt(newTarget);
     portalCam.updateProjectionMatrix();
 
-    const discPos = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + 0.03, hoverPoint[2]);
+    // Scale so the portal reads at a consistent size regardless of how
+    // close or far the hovered point is, and pull it toward the current
+    // camera (rather than a fixed world-axis offset, which only avoids
+    // z-fighting on a flat floor and re-introduces it on any wall/roof
+    // face) so it never fights the actual surface for the same pixels -
+    // that fight was the main source of the reported flicker.
+    const camDist = camera.position.distanceTo(hp);
+    const radius = THREE.MathUtils.clamp(camDist * 0.12, 0.5, 2.5);
+    const towardCamera = camera.position.clone().sub(hp).normalize();
+    const discPos = hp.clone().addScaledVector(towardCamera, Math.max(0.03, camDist * 0.01));
+
     disc.position.copy(discPos);
+    disc.scale.setScalar(radius);
     disc.lookAt(camera.position);
     ring.position.copy(discPos);
+    ring.scale.setScalar(radius);
     ring.quaternion.copy(disc.quaternion);
 
-    // Hide the portal disc while rendering its own view - otherwise it
-    // would recursively show up inside its own texture from last frame.
+    if (!shouldRenderThisFrame) return;
+
+    // Hide the portal markers while rendering their own view - otherwise
+    // they'd recursively show up inside their own texture from last frame.
     disc.visible = false;
+    ring.visible = false;
     const prevTargetBuffer = gl.getRenderTarget();
     gl.setRenderTarget(renderTarget);
     gl.render(scene, portalCam);
     gl.setRenderTarget(prevTargetBuffer);
     disc.visible = true;
+    ring.visible = true;
   });
 
   return (
     <group>
-      <mesh ref={discRef}>
-        <circleGeometry args={[0.6, 48]} />
-        <meshBasicMaterial map={renderTarget.texture} toneMapped={false} />
+      <mesh ref={discRef} renderOrder={999}>
+        <circleGeometry args={[1, 48]} />
+        <meshBasicMaterial map={renderTarget.texture} toneMapped={false} depthTest={false} />
       </mesh>
-      <mesh ref={ringRef}>
-        <ringGeometry args={[0.58, 0.65, 48]} />
-        <meshBasicMaterial color="#22d3ee" toneMapped={false} side={THREE.DoubleSide} />
+      <mesh ref={ringRef} renderOrder={999}>
+        <ringGeometry args={[0.97, 1.08, 48]} />
+        <meshBasicMaterial color="#22d3ee" toneMapped={false} side={THREE.DoubleSide} depthTest={false} />
       </mesh>
     </group>
   );
@@ -4696,18 +4732,18 @@ function Scene() {
 
       if (hitPoint) {
         // Step onto the clicked surface at a standing eye height, keeping
-        // the camera's current facing direction (yaw) rather than resetting
-        // the view - a "walk to this spot" travel tool, like SketchUp's
-        // Teleport extension, not a re-aim of the camera.
+        // the camera's current facing DIRECTION (compass heading only,
+        // not pitch) rather than resetting the view - a "walk to this
+        // spot" travel tool, like SketchUp's Teleport extension. Keeping
+        // the full 3D look vector (including whatever steep up/down pitch
+        // an orbiting camera happened to have) landed the new view staring
+        // mostly at the ground or sky, which read as "teleported to an
+        // unknown location" even though the position was correct - leveling
+        // the pitch keeps the new view oriented the way a person standing
+        // there would actually look.
         const eyeHeight = 1.7;
         const newPos = new THREE.Vector3(hitPoint.x, hitPoint.y + eyeHeight, hitPoint.z);
-
-        const controls = scene.userData.controls;
-        const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0, 0);
-        const lookDir = prevTarget.clone().sub(camera.position);
-        if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);
-        lookDir.normalize();
-        const newTarget = newPos.clone().addScaledVector(lookDir, 5);
+        const newTarget = levelTeleportTarget(newPos, camera, scene);
 
         window.dispatchEvent(new CustomEvent('set-camera', {
           detail: {
