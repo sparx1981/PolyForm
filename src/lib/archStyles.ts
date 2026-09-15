@@ -370,10 +370,10 @@ export const WINDOW_STYLES: ArchStyleDef[] = [
     type: 'window',
     name: 'Circular Porthole Window',
     category: 'Specialty',
-    description: 'Round nautical-style porthole with a heavy circular ring frame, perimeter rivets, and a single fixed glass pane.',
+    description: 'Round nautical-style porthole with a heavy circular ring frame, a square mounting plate, and a single fixed glass pane.',
     defaultDimensions: [0.8, 0.8, 0.14],
     hasGlass: true,
-    features: ['Circular Ring Frame', 'Perimeter Rivet Detailing', 'Single Fixed Round Pane']
+    features: ['Circular Ring Frame', 'Square Mounting Plate', 'Single Fixed Round Pane']
   }
 ];
 

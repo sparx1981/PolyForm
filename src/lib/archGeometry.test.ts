@@ -10,22 +10,18 @@ describe('createWindowGeometry - porthole style', () => {
     expect(posAttr.count).toBeGreaterThan(0);
   });
 
-  it('is actually round, not a rectangular frame', () => {
-    // A circular frame's XY bounding box should be roughly square
-    // (width ~= height) and noticeably smaller in area than a plain
-    // rectangular box of the same width x height, since a circle/ring
-    // doesn't fill the corners.
+  it('has a square footprint matching the wall opening, with a round ring inset within it', () => {
+    // The mounting plate spans the full rectangular wall opening (closing
+    // the corner gaps around the round ring), so the overall bounding box
+    // should match width x height almost exactly.
     const geom = createWindowGeometry(0.8, 0.8, 0.14, 'porthole');
     geom.computeBoundingBox();
     const box = geom.boundingBox!;
     const bboxW = box.max.x - box.min.x;
     const bboxH = box.max.y - box.min.y;
     expect(bboxW).toBeCloseTo(bboxH, 1);
-    // The outer radius is width/2 = 0.4, so the bounding box should be
-    // close to 0.8 x 0.8 (the ring's outer edge), not something wildly
-    // different like a full rectangular frame's own sill extension.
-    expect(bboxW).toBeGreaterThan(0.6);
-    expect(bboxW).toBeLessThan(0.9);
+    expect(bboxW).toBeGreaterThan(0.75);
+    expect(bboxW).toBeLessThan(0.85);
   });
 
   it('does not throw and falls back sanely for degenerate dimensions', () => {

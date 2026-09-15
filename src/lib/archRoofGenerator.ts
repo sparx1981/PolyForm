@@ -473,39 +473,74 @@ export function createGableRoofSlopesGeometry(
 export function createGablePedimentWallsGeometry(
   buildingWidth: number,
   buildingDepth: number,
-  ridgeHeight: number
+  ridgeHeight: number,
+  thickness: number = 0.2
 ): THREE.BufferGeometry {
-  return createGeometryFromBuilder((addTriangle) => {
+  return createGeometryFromBuilder((addTriangle, addQuad) => {
     const hw_wall = buildingWidth / 2;
     const hd_wall = buildingDepth / 2;
     const isWidthLonger = buildingWidth >= buildingDepth;
     const ridgeY = ridgeHeight;
     const eaveY = 0;
 
+    // Each gable end used to be a single zero-thickness triangle - a
+    // hosted window is cut via the same CSG pass used for roof slopes
+    // (CustomGeometry's isRoof branch in Viewport.tsx already matches
+    // this shape's 'roof-pediment' tag, since it just checks for any tag
+    // containing "roof"), but subtracting a box from a flat plane can
+    // never produce the recessed reveal a window on an ordinary wall has
+    // - there's no depth there to cut a reveal INTO. Built as a real
+    // solid prism instead (outer face flush with the building's wall
+    // perimeter, extruded inward by `thickness`), so the exact same CSG
+    // cut now behaves the same way it already does for a real wall.
+    const buildGablePrism = (
+      eave1: [number, number, number],
+      eave2: [number, number, number],
+      ridge: [number, number, number],
+      outerNormal: [number, number, number],
+      inwardOffset: [number, number, number]
+    ) => {
+      const offset = (p: [number, number, number]): [number, number, number] => [
+        p[0] + inwardOffset[0],
+        p[1] + inwardOffset[1],
+        p[2] + inwardOffset[2],
+      ];
+      const eave1In = offset(eave1);
+      const eave2In = offset(eave2);
+      const ridgeIn = offset(ridge);
+      const innerNormal: [number, number, number] = [-outerNormal[0], -outerNormal[1], -outerNormal[2]];
+
+      addTriangle(eave1, eave2, ridge, outerNormal);
+      addTriangle(ridgeIn, eave2In, eave1In, innerNormal);
+      addQuad(eave1, eave1In, eave2In, eave2, [0, -1, 0]);
+      addQuad(eave1, ridge, ridgeIn, eave1In);
+      addQuad(ridge, eave2, eave2In, ridgeIn);
+    };
+
     if (isWidthLonger) {
-      // Left gable wall (-X) - CCW: eFL -> eBL -> rL
+      // Left gable wall (-X), extruded inward toward +X
       const rL_wall: [number, number, number] = [-hw_wall, ridgeY, 0];
       const eFL_wall: [number, number, number] = [-hw_wall, eaveY, hd_wall];
       const eBL_wall: [number, number, number] = [-hw_wall, eaveY, -hd_wall];
-      addTriangle(eFL_wall, eBL_wall, rL_wall, [-1, 0, 0]);
+      buildGablePrism(eFL_wall, eBL_wall, rL_wall, [-1, 0, 0], [thickness, 0, 0]);
 
-      // Right gable wall (+X) - CCW: eBR -> eFR -> rR
+      // Right gable wall (+X), extruded inward toward -X
       const rR_wall: [number, number, number] = [hw_wall, ridgeY, 0];
       const eFR_wall: [number, number, number] = [hw_wall, eaveY, hd_wall];
       const eBR_wall: [number, number, number] = [hw_wall, eaveY, -hd_wall];
-      addTriangle(eBR_wall, eFR_wall, rR_wall, [1, 0, 0]);
+      buildGablePrism(eBR_wall, eFR_wall, rR_wall, [1, 0, 0], [-thickness, 0, 0]);
     } else {
-      // Front gable wall (+Z) - CCW: eRF -> eLF -> rF
+      // Front gable wall (+Z), extruded inward toward -Z
       const rF_wall: [number, number, number] = [0, ridgeY, hd_wall];
       const eLF_wall: [number, number, number] = [-hw_wall, eaveY, hd_wall];
       const eRF_wall: [number, number, number] = [hw_wall, eaveY, hd_wall];
-      addTriangle(eRF_wall, eLF_wall, rF_wall, [0, 0, 1]);
+      buildGablePrism(eRF_wall, eLF_wall, rF_wall, [0, 0, 1], [0, 0, -thickness]);
 
-      // Back gable wall (-Z) - CCW: eLB -> eRB -> rB
+      // Back gable wall (-Z), extruded inward toward +Z
       const rB_wall: [number, number, number] = [0, ridgeY, -hd_wall];
       const eLB_wall: [number, number, number] = [-hw_wall, eaveY, -hd_wall];
       const eRB_wall: [number, number, number] = [hw_wall, eaveY, -hd_wall];
-      addTriangle(eLB_wall, eRB_wall, rB_wall, [0, 0, -1]);
+      buildGablePrism(eLB_wall, eRB_wall, rB_wall, [0, 0, -1], [0, 0, thickness]);
     }
   });
 }
@@ -1716,7 +1751,7 @@ export function buildRoofAssemblyForRoom(
       : createGableRoofSlopesGeometry(width, depth, ridgeH, eaveOverhang);
 
     if (!isHip) {
-      pedimentGeom = createGablePedimentWallsGeometry(width, depth, ridgeH);
+      pedimentGeom = createGablePedimentWallsGeometry(width, depth, ridgeH, bounds.wallThickness || 0.20);
     }
     ridgeCapGeom = isHip
       ? createHipRidgeCapGeometry(width, depth, ridgeH, eaveOverhang)
@@ -3239,7 +3274,7 @@ export function updateRoofAssembly(
       : createGableRoofSlopesGeometry(width, depth, clampedHeight, eaveOverhang);
 
     if (!isHip) {
-      pedimentGeom = createGablePedimentWallsGeometry(width, depth, clampedHeight);
+      pedimentGeom = createGablePedimentWallsGeometry(width, depth, clampedHeight, roofData.bounds?.wallThickness || 0.20);
     }
     ridgeCapGeom = isHip
       ? createHipRidgeCapGeometry(width, depth, clampedHeight, eaveOverhang)

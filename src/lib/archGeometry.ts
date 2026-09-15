@@ -986,10 +986,8 @@ export function createWindowGeometry(
   // alongside the others (which only vary the inner glazing/mullion
   // pattern within a rectangular frame). The wall opening this window sits
   // in stays rectangular (window-opening cutting elsewhere assumes a
-  // rectangular hole), so the ring is inscribed within that bounding box -
-  // there's a small return/reveal visible at the four corners of the
-  // opening, a known simplification rather than a full round-opening
-  // feature.
+  // rectangular hole), so a square mounting plate sized to that same
+  // rectangular opening sits behind the round ring to close the corners.
   if (style === 'porthole') {
     const radius = Math.min(width, height) / 2;
     const ringThick = 0.06;
@@ -1000,7 +998,6 @@ export function createWindowGeometry(
 
     const frameParts: THREE.BufferGeometry[] = [];
     const glassParts: THREE.BufferGeometry[] = [];
-    const hardwareParts: THREE.BufferGeometry[] = [];
 
     // Ring frame: THREE.TorusGeometry's main ring already lies in the XY
     // plane with its hole along Z (the window's viewing axis), matching
@@ -1009,27 +1006,35 @@ export function createWindowGeometry(
     const ring = new THREE.TorusGeometry(outerR - tubeR, tubeR, 16, segments);
     frameParts.push(ring);
 
+    // Square mounting plate behind the ring, sized to the full rectangular
+    // wall opening with a circular hole cut for the glazing/ring - a real
+    // porthole mounting-flange detail that also closes the small corner
+    // gaps left by a round frame sitting inside a rectangular opening.
+    const plateThickness = Math.max(depth * 0.25, 0.02);
+    const hw = width / 2;
+    const hh = height / 2;
+    const plateShape = new THREE.Shape();
+    plateShape.moveTo(-hw, -hh);
+    plateShape.lineTo(hw, -hh);
+    plateShape.lineTo(hw, hh);
+    plateShape.lineTo(-hw, hh);
+    plateShape.closePath();
+    const plateHole = new THREE.Path();
+    plateHole.absarc(0, 0, outerR, 0, Math.PI * 2, false);
+    plateShape.holes.push(plateHole);
+    const plate = new THREE.ExtrudeGeometry(plateShape, { depth: plateThickness, bevelEnabled: false });
+    plate.translate(0, 0, -depth / 2);
+    frameParts.push(plate);
+
     // Fixed round glass pane, inset just behind the frame's front face.
     const glass = new THREE.CylinderGeometry(innerR, innerR, 0.008, segments);
     glass.rotateX(Math.PI / 2);
     glassParts.push(glass);
 
-    // Perimeter rivets - the signature nautical porthole detail.
-    const rivetCount = 10;
-    const rivetRadius = outerR - tubeR;
-    for (let i = 0; i < rivetCount; i++) {
-      const angle = (i / rivetCount) * Math.PI * 2;
-      const rivet = new THREE.CylinderGeometry(0.014, 0.014, tubeR * 2.2, 8);
-      rivet.rotateX(Math.PI / 2);
-      rivet.translate(Math.cos(angle) * rivetRadius, Math.sin(angle) * rivetRadius, 0);
-      hardwareParts.push(rivet);
-    }
-
     try {
       const frameMerged = BufferGeometryUtils.mergeGeometries(frameParts, false) || new THREE.BoxGeometry(width, height, depth);
       const glassMerged = BufferGeometryUtils.mergeGeometries(glassParts, false) || new THREE.BoxGeometry(0.0001, 0.0001, 0.0001);
-      const hardwareMerged = BufferGeometryUtils.mergeGeometries(hardwareParts, false) || new THREE.BoxGeometry(0.0001, 0.0001, 0.0001);
-      const merged = BufferGeometryUtils.mergeGeometries([frameMerged, glassMerged, hardwareMerged], true);
+      const merged = BufferGeometryUtils.mergeGeometries([frameMerged, glassMerged], true);
       return merged || new THREE.BoxGeometry(width, height, depth);
     } catch (e) {
       return new THREE.BoxGeometry(width, height, depth);
