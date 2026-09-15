@@ -419,4 +419,62 @@ describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () =
     // a vague ">0" check that the old buggy code already satisfied.
     expect(positions.length / 3).toBeGreaterThan(7000);
   });
+
+  it('covers the widening outer wedge of an L-shaped gable roof facet, not just its eave-width span', () => {
+    // Some L-shaped gable facets (the short-wing-cap trapezoid running
+    // from that wing's own short eave segment up to the ridge junction's
+    // much longer ridge segment) actually WIDEN toward the ridge rather
+    // than narrowing - their ridge-end half-width is bigger than their
+    // eave-end half-width. The standing-seam panel grid used to size
+    // itself from the eave-end half-width alone (correct for every OTHER
+    // facet shape, where the eave is the widest point), so no panel or
+    // rib ever reached the wider far end on these specific facets - a
+    // real, permanently bare wedge near the ridge, regardless of tile
+    // size, distinct from the earlier tapering-gap fix.
+    const lShapeRoomWalls: Shape[] = [
+      { id: 'w1', type: 'wall', position: [2, 1.4, 0], args: [4, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w2', type: 'wall', position: [4, 1.4, 3], args: [0.2, 2.8, 6], color: '#ffffff' },
+      { id: 'w3', type: 'wall', position: [0, 1.4, 6], args: [8, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w4', type: 'wall', position: [-4, 1.4, 1], args: [0.2, 2.8, 10], color: '#ffffff' },
+      { id: 'w5', type: 'wall', position: [-2, 1.4, -4], args: [4, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w6', type: 'wall', position: [0, 1.4, -2], args: [0.2, 2.8, 4], color: '#ffffff' },
+    ];
+
+    const assembly = buildRoofAssemblyForRoom(lShapeRoomWalls, {
+      roofType: 'gable',
+      pitchAngleDeg: 35,
+      eaveOverhang: 0.35,
+      fasciaHeight: 0.18,
+      tileShape: 'standing-seam',
+      tileSize: 0.5,
+    });
+
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+
+    const slopePositions = assembly.roofShape.geometryData!.positions;
+    const tilePositions = assembly.tilesShape!.geometryData!.positions;
+
+    const triArea2D = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number) =>
+      Math.abs((bx - ax) * (cz - az) - (cx - ax) * (bz - az)) / 2;
+
+    let slopeAreaXZ = 0;
+    for (let i = 0; i < slopePositions.length; i += 9) {
+      slopeAreaXZ += triArea2D(slopePositions[i], slopePositions[i + 2], slopePositions[i + 3], slopePositions[i + 5], slopePositions[i + 6], slopePositions[i + 8]);
+    }
+    // The real slope mesh is double-sided (front + back faces baked in),
+    // so its raw projected area double-counts; the tile mesh is single-
+    // sided.
+    const trueSlopeArea = slopeAreaXZ / 2;
+
+    let tileAreaXZ = 0;
+    for (let i = 0; i < tilePositions.length; i += 9) {
+      tileAreaXZ += triArea2D(tilePositions[i], tilePositions[i + 2], tilePositions[i + 3], tilePositions[i + 5], tilePositions[i + 6], tilePositions[i + 8]);
+    }
+
+    // Before the fix, this exact roof/tileSize combination covered only
+    // ~93.5% of the real roof surface (the widening wedge structurally
+    // unreachable); the fix brings it to ~102%.
+    expect(tileAreaXZ / trueSlopeArea).toBeGreaterThan(0.98);
+  });
 });

@@ -2603,8 +2603,24 @@ export function create3DRoofTilesGeometry(options: {
       const panW = Math.max(0.30, Math.min(0.60, clampedSize));
       const ribW = 0.016;
       const ribH = 0.035;
-      const numPans = Math.ceil((2 * hwEave) / panW);
-      const startU = -hwEave + (2 * hwEave - numPans * panW) / 2;
+      // The panel grid's total span has to cover the WIDEST point of the
+      // facet, not just its eave edge. For most facets (rectangular hip
+      // slopes, hip-end triangular caps, most L-shape/general-polygon
+      // trapezoids) the eave (s=0) IS the widest point, so hwEave alone
+      // was enough. But an L-shaped gable roof's short-wing-cap facets
+      // (the trapezoid running from that wing's own short eave segment
+      // up to the ridge junction's much longer ridge segment) actually
+      // WIDEN toward the ridge - hwHigh > hwLow there. Since hwEave is
+      // always the LOW/eave-side half-width (see makeTrapezoidSlopeDef's
+      // `hwEave: hwLow`), sizing the grid from hwEave alone meant no
+      // panel or rib u-value ever reached the wider far end at all - that
+      // whole outer wedge near the ridge was structurally unreachable,
+      // left permanently bare regardless of tile shape parameters. Since
+      // getHalfWidthAt is linear (monotonic) for every slope type here,
+      // its max is always at one of the two endpoints.
+      const maxHw = Math.max(hwEave, getHalfWidthAt(slopeLen));
+      const numPans = Math.ceil((2 * maxHw) / panW);
+      const startU = -maxHw + (2 * maxHw - numPans * panW) / 2;
 
       for (let i = 0; i <= numPans; i++) {
         const u = startU + i * panW;
@@ -2622,7 +2638,7 @@ export function create3DRoofTilesGeometry(options: {
         // sub-steps as the tray fill below, and only drawn where the rib
         // is still within the roof's real half-width at BOTH ends of the
         // sub-segment.
-        if (Math.abs(u) <= hwEave) {
+        if (Math.abs(u) <= maxHw) {
           const uL = u - ribW / 2;
           const uR = u + ribW / 2;
           const z0 = zBase;
@@ -2637,7 +2653,12 @@ export function create3DRoofTilesGeometry(options: {
             const sB = (st + 1) * ds;
             const hwA = getHalfWidthAt(sA);
             const hwB = getHalfWidthAt(sB);
-            if (Math.abs(uR) > Math.min(hwA, hwB)) break;
+            // `continue`, not `break`: getHalfWidthAt can WIDEN with s
+            // (see the maxHw comment above) as well as narrow, so a
+            // segment failing this check doesn't mean every later segment
+            // will too - each sub-segment needs its own independent
+            // check, exactly like the tray fill below already does.
+            if (Math.abs(uR) > Math.min(hwA, hwB)) continue;
 
             // Left vertical face
             addQuad(
