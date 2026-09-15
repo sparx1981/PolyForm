@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
-import { db, auth, handleFirestoreError, OperationType, isQuotaLocked } from './firebase';
+import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
@@ -30,17 +30,12 @@ const DEFAULT_FOG: FogSettings = {
   superMegaDensity: 0.01
 };
 
-// Helper to strip undefined values for Firestore
-const cleanData = (obj: any): any => {
-  if (Array.isArray(obj)) return obj.map(cleanData);
-  if (obj !== null && typeof obj === 'object') {
-    return Object.entries(obj).reduce((acc: any, [key, value]) => {
-      if (value !== undefined) acc[key] = cleanData(value);
-      return acc;
-    }, {});
-  }
-  return obj;
-};
+// Sanitizing for Firestore (stripping undefined values and wrapping nested
+// arrays, e.g. roofData.localWallPoly/localEavePoly on L-shaped and
+// general-polygon roofs) lives in firebase.ts as cleanFirestoreDataForSave,
+// shared with every other write site - this is the live auto-sync push, so
+// without it every edit to a model containing such a roof failed silently.
+const cleanData = cleanFirestoreDataForSave;
 
 // Re-exported for existing importers (e.g. App.tsx's `import { ... type
 // ToolbarKey, type DockZone } from './AppContext'`) — the actual
@@ -909,7 +904,7 @@ console.log("Created rectangle:", myRect.id);`);
       }
 
       if (snapshot.exists()) {
-        const data = snapshot.data();
+        const data = restoreFirestoreArraysAfterLoad(snapshot.data());
         isRemoteUpdate.current = true;
         
         // Update local hash to prevent redundant pushes

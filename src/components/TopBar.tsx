@@ -34,7 +34,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
+import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -77,17 +77,10 @@ function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.B
   return merged;
 }
 
-// Helper to sanitize objects for Firestore (removes undefined values that cause writes to fail)
-const cleanFirestoreData = (obj: any): any => {
-  if (Array.isArray(obj)) return obj.map(cleanFirestoreData);
-  if (obj !== null && typeof obj === 'object') {
-    return Object.entries(obj).reduce((acc: any, [key, value]) => {
-      if (value !== undefined) acc[key] = cleanFirestoreData(value);
-      return acc;
-    }, {});
-  }
-  return obj;
-};
+// Sanitizing for Firestore (stripping undefined values and wrapping nested
+// arrays) lives in firebase.ts as cleanFirestoreDataForSave, shared with
+// every other write site so a model saves and reloads consistently.
+const cleanFirestoreData = cleanFirestoreDataForSave;
 
 export default function TopBar() {
     const { 

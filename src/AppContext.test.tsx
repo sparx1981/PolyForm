@@ -22,6 +22,8 @@ vi.mock('./firebase', () => ({
     WRITE: 'write',
   },
   isQuotaLocked: () => false,
+  cleanFirestoreDataForSave: (obj: any) => obj,
+  restoreFirestoreArraysAfterLoad: (obj: any) => obj,
 }));
 
 vi.mock('firebase/firestore', () => ({

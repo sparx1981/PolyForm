@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { AppProvider, useApp, type ToolbarKey, type DockZone } from './AppContext';
-import { handleFirestoreError, OperationType } from './firebase';
+import { handleFirestoreError, OperationType, restoreFirestoreArraysAfterLoad } from './firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { cn } from './lib/utils';
 import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle, GripHorizontal } from 'lucide-react';
@@ -351,7 +351,7 @@ function AppContent() {
             return;
           }
           if (modelDoc.exists()) {
-            const data = modelDoc.data();
+            const data = restoreFirestoreArraysAfterLoad(modelDoc.data());
             setShapesSilent(data.shapes || []);
             setTagsSilent(data.tags || []);
             setScenesSilent(data.scenes || []);

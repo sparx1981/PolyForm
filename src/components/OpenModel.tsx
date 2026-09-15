@@ -23,7 +23,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useApp } from '../AppContext';
-import { db, handleFirestoreError, OperationType, isQuotaLocked } from '../firebase';
+import { db, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad } from '../firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy, writeBatch, limit } from 'firebase/firestore';
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
@@ -176,7 +176,11 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
       const querySnapshot = await getDocs(q);
       incrementReads(querySnapshot.size || 1);
       const fetchedModels = querySnapshot.docs.map(doc => {
-        const data = doc.data();
+        // Reverses cleanFirestoreDataForSave's nested-array wrapping (e.g.
+        // roofData.localWallPoly/localEavePoly on L-shaped and
+        // general-polygon roofs), so shapes loaded from here match what
+        // was actually saved instead of carrying raw wrapper objects.
+        const data = restoreFirestoreArraysAfterLoad(doc.data());
         return {
           id: doc.id,
           ...data as any
