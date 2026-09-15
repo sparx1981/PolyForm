@@ -1569,10 +1569,23 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
 // like the app's other ground-level tools already do for their own
 // fallbacks (see the door/window placement handlers elsewhere in this
 // file), and treat it as an upward-facing floor.
-function resolveGroundPlaneFloorHit(raycaster: THREE.Raycaster, scene: THREE.Scene): ResolvedSurfaceHit | null {
+//
+// This is only a legitimate stand-in for the app's actual, visible ground
+// plane (the `floorEnabled` mesh, a 100x100 square centered on the
+// origin) - it must not fire when that ground isn't even turned on, or
+// for a shallow/grazing ray whose mathematical y=0 crossing lands far
+// outside that square (e.g. clicking toward the horizon/sky with nothing
+// underneath), or it will "successfully" resolve a destination that has
+// nothing actually rendered there - a real, if less common, way to still
+// end up teleported into empty 3D space.
+const GROUND_PLANE_FALLBACK_HALF_EXTENT = 50; // matches the floorEnabled mesh's 100x100 footprint
+
+function resolveGroundPlaneFloorHit(raycaster: THREE.Raycaster, scene: THREE.Scene, floorEnabled: boolean): ResolvedSurfaceHit | null {
+  if (!floorEnabled) return null;
   const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const point = new THREE.Vector3();
   if (!raycaster.ray.intersectPlane(ground, point)) return null;
+  if (Math.abs(point.x) > GROUND_PLANE_FALLBACK_HALF_EXTENT || Math.abs(point.z) > GROUND_PLANE_FALLBACK_HALF_EXTENT) return null;
   return {
     worldPoint: point,
     worldNormal: new THREE.Vector3(0, 1, 0),
@@ -3303,6 +3316,11 @@ function Scene() {
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
   const [portalHoverHit, setPortalHoverHit] = useState<ResolvedSurfaceHit | null>(null);
+  // Mirrors portalHoverHit for handlePointerMove's own dedupe check below -
+  // state itself can't be read synchronously between events fired in the
+  // same tick, and the closure over the `portalHoverHit` state variable
+  // would otherwise lag by one render.
+  const portalHoverHitRef = useRef<ResolvedSurfaceHit | null>(null);
   // Kept fresh every render (not gated behind an effect's own dependency
   // list) so handleSetCamera below - defined once, early in this
   // component, and otherwise stuck with whatever effectiveCameraNear/Far
@@ -3704,6 +3722,7 @@ function Scene() {
     if (activeTool !== 'teleport') {
       setSnapIndicator(null);
       setPortalHoverHit(null);
+      portalHoverHitRef.current = null;
     }
   }, [activeTool]);
 
@@ -4903,7 +4922,7 @@ function Scene() {
       // yaw) is calibrated automatically on arrival either way.
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
-      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene);
+      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene, floorEnabled);
 
       if (!enterHit) {
         setMeasurements('Portal Navigation: Click a wall, window, door, or floor to travel there.');
@@ -5946,18 +5965,43 @@ function Scene() {
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (activeTool === 'teleport') {
+      // Several overlapping meshes (the hovered shape itself, plus the
+      // ground/background catch-all planes behind it) all forward here for
+      // the same native move event unless stopped - each doing its own
+      // full-scene raycast and pushing a brand-new hit object into state.
+      // Left unstopped, that's several redundant re-renders (and re-mounts
+      // of the live-preview render target below, since it's only mounted
+      // while portalHoverHit is non-null) per pixel of mouse movement,
+      // which is what read as the preview "flickering" while moving the
+      // cursor.
+      e.stopPropagation();
+
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
-      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene);
+      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene, floorEnabled);
       const isWall = enterHit && isNavigableSurface(enterHit.worldNormal);
       const isFloor = enterHit && isFloorSurface(enterHit.worldNormal);
 
       if (enterHit && (isWall || isFloor)) {
-        setSnapIndicator({ point: [enterHit.worldPoint.x, enterHit.worldPoint.y, enterHit.worldPoint.z], type: 'center', tooltip: isFloor ? 'Click to Walk Here' : 'Click to Walk Through' });
-        setPortalHoverHit(enterHit);
-      } else {
+        const prev = portalHoverHitRef.current;
+        // Skip the state update entirely when the hover target hasn't
+        // meaningfully moved - resolveWorldHit/resolveGroundPlaneFloorHit
+        // allocate a brand-new object every call, so without this even a
+        // stationary cursor sitting on the same surface (sub-pixel jitter
+        // between identical raycasts) would re-render on every move event.
+        const unchanged = prev
+          && prev.hitObject === enterHit.hitObject
+          && prev.worldPoint.distanceToSquared(enterHit.worldPoint) < 1e-6
+          && prev.worldNormal.dot(enterHit.worldNormal) > 0.9999;
+        if (!unchanged) {
+          setSnapIndicator({ point: [enterHit.worldPoint.x, enterHit.worldPoint.y, enterHit.worldPoint.z], type: 'center', tooltip: isFloor ? 'Click to Walk Here' : 'Click to Walk Through' });
+          setPortalHoverHit(enterHit);
+          portalHoverHitRef.current = enterHit;
+        }
+      } else if (portalHoverHitRef.current) {
         setSnapIndicator(null);
         setPortalHoverHit(null);
+        portalHoverHitRef.current = null;
       }
       return;
     }
