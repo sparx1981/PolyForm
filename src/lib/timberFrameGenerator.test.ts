@@ -66,6 +66,36 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
       return x > 0.8 && x < 3.5 && z > -3.5 && z < -0.8;
     });
     expect(voidMembers.length).toBe(0);
+
+    // Both wings of the L must get comparable common-rafter coverage.
+    // getCanonicalLPolygon rotates the room's own wall winding to start at
+    // the reflex corner without normalizing which direction each wing
+    // points - a signed-distance bug in the old loop meant whichever wing's
+    // far end happened to lie at a LOWER x/z than the reflex corner got a
+    // loop that started past its own bound and produced zero rafters,
+    // leaving that wing's roof with only the ridge/valley/hip rafters and
+    // none of the intermediate common rafters actually holding the roof
+    // surface up.
+    const wing1Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 1'));
+    const wing2Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 2'));
+    expect(wing1Rafters.length).toBeGreaterThan(5);
+    expect(wing2Rafters.length).toBeGreaterThan(5);
+
+    // Roof noggins (blocking between adjacent rafters) and collar ties
+    // (a strut across each rafter pair) previously didn't exist anywhere
+    // in the roof framing - both are now generated per wing.
+    const collarTies = members.filter(s => s.tags?.includes('timber-collar-tie'));
+    const roofNoggins = members.filter(s => s.tags?.includes('timber-roof-noggin'));
+    expect(collarTies.length).toBeGreaterThan(0);
+    expect(roofNoggins.length).toBeGreaterThan(0);
+
+    // The new collar ties and noggins must not spill into the courtyard
+    // void either.
+    const newMembersInVoid = [...collarTies, ...roofNoggins].filter(s => {
+      const [x, , z] = s.position;
+      return x > 0.8 && x < 3.5 && z > -3.5 && z < -0.8;
+    });
+    expect(newMembersInVoid.length).toBe(0);
   });
 
   it('generates accurate timber frame members for an L-shaped Hip roof', () => {
@@ -101,6 +131,21 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
 
     const hipJackRafters = members.filter(s => s.tags?.includes('timber-hip-jack-rafter'));
     expect(hipJackRafters.length).toBeGreaterThan(0);
+
+    // Both wings' common rafters and hip-setback jack rafters, checked
+    // separately - a winding-direction bug in the old code could zero out
+    // one wing's common rafters (§7) or hip-setback jacks (§8A)
+    // independently of the other, so an aggregate >0 check across both
+    // wings combined wouldn't have caught either.
+    const wing1Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 1'));
+    const wing2Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 2'));
+    expect(wing1Rafters.length).toBeGreaterThan(0);
+    expect(wing2Rafters.length).toBeGreaterThan(0);
+
+    const wing1ValleyHipJacks = members.filter(s => s.name?.includes('Jack Rafter (Wing 1 Valley Hip)'));
+    const wing2ValleyHipJacks = members.filter(s => s.name?.includes('Jack Rafter (Wing 2 Valley Hip)'));
+    expect(wing1ValleyHipJacks.length).toBeGreaterThan(0);
+    expect(wing2ValleyHipJacks.length).toBeGreaterThan(0);
   });
 
   it('generates accurate timber framing for rectangular gable and hip roofs', () => {

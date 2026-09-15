@@ -1282,12 +1282,28 @@ export function generateTimberFraming(
           }
         }
 
-        // 7. Common Rafters & Hip Jack Rafters on Wing 1 and Wing 2
+        // 7. Common Rafters, Collar Ties & Roof Noggins on Wing 1 and Wing 2
         // For Wing 1:
-        // Straight common rafters run strictly from x = e0.x towards r1.x
-        const wing1MaxX = isHip ? r1.x : e1.x;
-        let currX1 = e0.x + studSpacing;
-        while (currX1 <= wing1MaxX - 0.05) {
+        // Straight common rafters run from x = e0.x towards the wing's far
+        // end (r1.x for hip, e1.x for gable) - e0/e1/etc come from
+        // getCanonicalLPolygon, which just rotates the room's own wall
+        // winding to start at the reflex corner and does NOT normalize
+        // which direction each wing points. Assuming the far end always
+        // lies at a HIGHER x than e0 (as the old `while (currX1 <=
+        // wing1MaxX - 0.05)` loop starting at `e0.x + studSpacing` did)
+        // meant that whenever a room's winding put the far end at a LOWER
+        // x, this loop started already past its own bound and ran zero
+        // iterations - no common rafters at all on that wing, while the
+        // other wing (whose direction happened to match) got full dense
+        // coverage. Walking a signed, direction-agnostic distance from e0
+        // fixes this regardless of winding.
+        const wing1TargetX = isHip ? r1.x : e1.x;
+        const wing1SpanX = Math.abs(wing1TargetX - e0.x);
+        const wing1DirX = Math.sign(wing1TargetX - e0.x) || 1;
+        let prevRafter1: { pRidge: THREE.Vector3; pEaveVal: THREE.Vector3; pEaveOut: THREE.Vector3 } | null = null;
+        let dX1 = studSpacing;
+        while (dX1 <= wing1SpanX - 0.05) {
+          const currX1 = e0.x + wing1DirX * dX1;
           const pRidge = new THREE.Vector3(currX1, r1.y, r1.z);
           const pEaveVal = new THREE.Vector3(currX1, 0, e0.z);
           const pEaveOut = new THREE.Vector3(currX1, 0, e2.z);
@@ -1295,14 +1311,40 @@ export function generateTimberFraming(
           addBeamSegment('Common Rafter (Wing 1 Valley Side)', pEaveVal, pRidge, rafterWidth, rafterDepth, 'timber-common-rafter');
           addBeamSegment('Common Rafter (Wing 1 Outer Side)', pEaveOut, pRidge, rafterWidth, rafterDepth, 'timber-common-rafter');
 
-          currX1 += studSpacing;
+          // Collar Tie: a horizontal strut connecting the two sides of the
+          // same rafter pair at ~40% up the roof, matching the proportion
+          // used by the rectangular hip/gable branches. Without this, the
+          // L-shape branch had no lateral tie between opposing rafters at
+          // all (only the ceiling joists below tie the wing together).
+          const tieT1 = Math.min(0.9, (roofH * 0.4) / Math.max(0.01, pRidge.y));
+          addBeamSegment('Collar Tie (Wing 1)', pEaveVal.clone().lerp(pRidge, tieT1), pEaveOut.clone().lerp(pRidge, tieT1), rafterWidth, rafterDepth * 0.7, 'timber-collar-tie');
+
+          // Roof Noggin: mid-span blocking between this rafter pair and
+          // the previous one, on both sides of the wing. Roof framing
+          // previously had no cross-bracing anywhere but the collar tie
+          // above/ceiling joists below - noggins between adjacent rafters
+          // are standard practice to stop rafters twisting/buckling
+          // sideways under roof load.
+          if (prevRafter1) {
+            addBeamSegment('Roof Noggin (Wing 1 Valley Side)', prevRafter1.pEaveVal.clone().lerp(prevRafter1.pRidge, 0.5), pEaveVal.clone().lerp(pRidge, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+            addBeamSegment('Roof Noggin (Wing 1 Outer Side)', prevRafter1.pEaveOut.clone().lerp(prevRafter1.pRidge, 0.5), pEaveOut.clone().lerp(pRidge, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+          }
+          prevRafter1 = { pRidge, pEaveVal, pEaveOut };
+
+          dX1 += studSpacing;
         }
 
         // For Wing 2:
-        // Straight common rafters run strictly from z = e0.z towards r2.z
-        const wing2MaxZ = isHip ? r2.z : e5.z;
-        let currZ2 = e0.z + studSpacing;
-        while (currZ2 <= wing2MaxZ - 0.05) {
+        // Straight common rafters run from z = e0.z towards the wing's far
+        // end (r2.z for hip, e5.z for gable) - same signed-distance fix as
+        // Wing 1 above.
+        const wing2TargetZ = isHip ? r2.z : e5.z;
+        const wing2SpanZ = Math.abs(wing2TargetZ - e0.z);
+        const wing2DirZ = Math.sign(wing2TargetZ - e0.z) || 1;
+        let prevRafter2: { pRidge: THREE.Vector3; pEaveVal: THREE.Vector3; pEaveOut: THREE.Vector3 } | null = null;
+        let dZ2 = studSpacing;
+        while (dZ2 <= wing2SpanZ - 0.05) {
+          const currZ2 = e0.z + wing2DirZ * dZ2;
           const pRidge = new THREE.Vector3(r2.x, r2.y, currZ2);
           const pEaveVal = new THREE.Vector3(e0.x, 0, currZ2);
           const pEaveOut = new THREE.Vector3(e4.x, 0, currZ2);
@@ -1310,25 +1352,40 @@ export function generateTimberFraming(
           addBeamSegment('Common Rafter (Wing 2 Valley Side)', pEaveVal, pRidge, rafterWidth, rafterDepth, 'timber-common-rafter');
           addBeamSegment('Common Rafter (Wing 2 Outer Side)', pEaveOut, pRidge, rafterWidth, rafterDepth, 'timber-common-rafter');
 
-          currZ2 += studSpacing;
+          const tieT2 = Math.min(0.9, (roofH * 0.4) / Math.max(0.01, pRidge.y));
+          addBeamSegment('Collar Tie (Wing 2)', pEaveVal.clone().lerp(pRidge, tieT2), pEaveOut.clone().lerp(pRidge, tieT2), rafterWidth, rafterDepth * 0.7, 'timber-collar-tie');
+
+          if (prevRafter2) {
+            addBeamSegment('Roof Noggin (Wing 2 Valley Side)', prevRafter2.pEaveVal.clone().lerp(prevRafter2.pRidge, 0.5), pEaveVal.clone().lerp(pRidge, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+            addBeamSegment('Roof Noggin (Wing 2 Outer Side)', prevRafter2.pEaveOut.clone().lerp(prevRafter2.pRidge, 0.5), pEaveOut.clone().lerp(pRidge, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+          }
+          prevRafter2 = { pRidge, pEaveVal, pEaveOut };
+
+          dZ2 += studSpacing;
         }
 
         // 8. Hip End Jack Rafters (When Hip Roof is Selected)
         if (isHip) {
           // --- Wing 1 Hip End ---
-          // A. Side Jack Rafters in the hip setback zone (x between r1.x and e1.x)
-          const hipSpanX1 = e1.x - r1.x;
+          // A. Side Jack Rafters in the hip setback zone (x between r1.x and e1.x).
+          // Same winding-direction issue as the common-rafter loops above:
+          // `e1.x - r1.x` assumed e1 always lies at a higher x than r1, so
+          // a reversed winding made this span negative and silently
+          // skipped the whole loop (no crash, but no jack rafters either).
+          const hipSpanX1 = Math.abs(e1.x - r1.x);
           if (hipSpanX1 > 0.05) {
-            let xJack = r1.x + studSpacing;
-            while (xJack <= e1.x - 0.05) {
-              const t = (xJack - r1.x) / hipSpanX1; // 0 at ridge apex r1, 1 at eave corners
+            const hipDirX1 = Math.sign(e1.x - r1.x) || 1;
+            let dXj1 = studSpacing;
+            while (dXj1 <= hipSpanX1 - 0.05) {
+              const xJack = r1.x + hipDirX1 * dXj1;
+              const t = dXj1 / hipSpanX1; // 0 at ridge apex r1, 1 at eave corners
               const pTopLeft = r1.clone().lerp(e1, t);
               const pTopRight = r1.clone().lerp(e2, t);
 
               addBeamSegment('Jack Rafter (Wing 1 Valley Hip)', new THREE.Vector3(xJack, 0, e0.z), pTopLeft, rafterWidth, rafterDepth, 'timber-hip-jack-rafter');
               addBeamSegment('Jack Rafter (Wing 1 Outer Hip)', new THREE.Vector3(xJack, 0, e2.z), pTopRight, rafterWidth, rafterDepth, 'timber-hip-jack-rafter');
 
-              xJack += studSpacing;
+              dXj1 += studSpacing;
             }
           }
 
@@ -1352,19 +1409,22 @@ export function generateTimberFraming(
           }
 
           // --- Wing 2 Hip End ---
-          // A. Side Jack Rafters in the hip setback zone (z between r2.z and e5.z)
-          const hipSpanZ2 = e5.z - r2.z;
+          // A. Side Jack Rafters in the hip setback zone (z between r2.z and e5.z).
+          // Same winding-direction fix as Wing 1's hip setback loop above.
+          const hipSpanZ2 = Math.abs(e5.z - r2.z);
           if (hipSpanZ2 > 0.05) {
-            let zJack = r2.z + studSpacing;
-            while (zJack <= e5.z - 0.05) {
-              const t = (zJack - r2.z) / hipSpanZ2;
+            const hipDirZ2 = Math.sign(e5.z - r2.z) || 1;
+            let dZj2 = studSpacing;
+            while (dZj2 <= hipSpanZ2 - 0.05) {
+              const zJack = r2.z + hipDirZ2 * dZj2;
+              const t = dZj2 / hipSpanZ2;
               const pTopLeft = r2.clone().lerp(e5, t);
               const pTopRight = r2.clone().lerp(e4, t);
 
               addBeamSegment('Jack Rafter (Wing 2 Valley Hip)', new THREE.Vector3(e0.x, 0, zJack), pTopLeft, rafterWidth, rafterDepth, 'timber-hip-jack-rafter');
               addBeamSegment('Jack Rafter (Wing 2 Outer Hip)', new THREE.Vector3(e4.x, 0, zJack), pTopRight, rafterWidth, rafterDepth, 'timber-hip-jack-rafter');
 
-              zJack += studSpacing;
+              dZj2 += studSpacing;
             }
           }
 
@@ -1395,25 +1455,36 @@ export function generateTimberFraming(
         const v4 = new THREE.Vector3(V[4][0], 0.04, V[4][1]);
         const v5 = new THREE.Vector3(V[5][0], 0.04, V[5][1]);
 
-        // Wing 1 Ceiling Joists (between V[0]..V[1] and V[3]..V[2])
+        // Wing 1 Ceiling Joists (between V[0]..V[1] and V[3]..V[2]), with a
+        // row of mid-span noggins blocking each joist to its neighbor.
         const lenW1 = v0.distanceTo(v1);
+        let prevJoist1: { pA: THREE.Vector3; pB: THREE.Vector3 } | null = null;
         let j1 = studSpacing;
         while (j1 < lenW1 - 0.05) {
           const t = j1 / lenW1;
           const pA = v0.clone().lerp(v1, t);
           const pB = v3.clone().lerp(v2, t);
           addBeamSegment('Ceiling Joist (Wing 1)', pA, pB, rafterWidth, rafterDepth, 'timber-ceiling-joist');
+          if (prevJoist1) {
+            addBeamSegment('Ceiling Joist Noggin (Wing 1)', prevJoist1.pA.clone().lerp(prevJoist1.pB, 0.5), pA.clone().lerp(pB, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+          }
+          prevJoist1 = { pA, pB };
           j1 += studSpacing;
         }
 
         // Wing 2 Ceiling Joists (between V[5]..V[0] and V[4]..V[3])
         const lenW2 = v5.distanceTo(v0);
+        let prevJoist2: { pA: THREE.Vector3; pB: THREE.Vector3 } | null = null;
         let j2 = studSpacing;
         while (j2 < lenW2 - 0.05) {
           const t = j2 / lenW2;
           const pA = v5.clone().lerp(v0, t);
           const pB = v4.clone().lerp(v3, t);
           addBeamSegment('Ceiling Joist (Wing 2)', pA, pB, rafterWidth, rafterDepth, 'timber-ceiling-joist');
+          if (prevJoist2) {
+            addBeamSegment('Ceiling Joist Noggin (Wing 2)', prevJoist2.pA.clone().lerp(prevJoist2.pB, 0.5), pA.clone().lerp(pB, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+          }
+          prevJoist2 = { pA, pB };
           j2 += studSpacing;
         }
 
@@ -1447,6 +1518,7 @@ export function generateTimberFraming(
           addBeamSegment('Hip Rafter (North-East)', apexRight, cornerNE, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
           addBeamSegment('Hip Rafter (South-East)', apexRight, cornerSE, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
 
+          let prevHipRafterWL: { topPt: THREE.Vector3; frontEave: THREE.Vector3; backEave: THREE.Vector3 } | null = null;
           let currX = -ridgeHalfLen + 0.15;
           while (currX <= ridgeHalfLen - 0.15) {
             const topPt = new THREE.Vector3(currX, roofH, 0);
@@ -1466,6 +1538,15 @@ export function generateTimberFraming(
               rafterDepth * 0.7,
               'timber-collar-tie'
             );
+
+            // Roof Noggin: mid-span blocking between this rafter pair and
+            // the previous one, standard practice against rafters
+            // twisting/buckling sideways under roof load.
+            if (prevHipRafterWL) {
+              addBeamSegment('Roof Noggin (Front)', prevHipRafterWL.frontEave.clone().lerp(prevHipRafterWL.topPt, 0.5), frontEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+              addBeamSegment('Roof Noggin (Back)', prevHipRafterWL.backEave.clone().lerp(prevHipRafterWL.topPt, 0.5), backEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+            }
+            prevHipRafterWL = { topPt, frontEave, backEave };
 
             currX += studSpacing;
           }
@@ -1544,6 +1625,7 @@ export function generateTimberFraming(
           addBeamSegment('Hip Rafter (South-West)', apexSouth, cornerSW, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
           addBeamSegment('Hip Rafter (South-East)', apexSouth, cornerSE, hipRafterWidth, hipRafterDepth, 'timber-hip-rafter');
 
+          let prevHipRafterDL: { topPt: THREE.Vector3; leftEave: THREE.Vector3; rightEave: THREE.Vector3 } | null = null;
           let currZ = -ridgeHalfLen + 0.15;
           while (currZ <= ridgeHalfLen - 0.15) {
             const topPt = new THREE.Vector3(0, roofH, currZ);
@@ -1563,6 +1645,12 @@ export function generateTimberFraming(
               rafterDepth * 0.7,
               'timber-collar-tie'
             );
+
+            if (prevHipRafterDL) {
+              addBeamSegment('Roof Noggin (Left)', prevHipRafterDL.leftEave.clone().lerp(prevHipRafterDL.topPt, 0.5), leftEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+              addBeamSegment('Roof Noggin (Right)', prevHipRafterDL.rightEave.clone().lerp(prevHipRafterDL.topPt, 0.5), rightEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+            }
+            prevHipRafterDL = { topPt, leftEave, rightEave };
 
             currZ += studSpacing;
           }
@@ -1675,6 +1763,7 @@ export function generateTimberFraming(
           );
 
           // 2. Common Rafter Pairs along length of roof
+          let prevGableRafterWL: { topPt: THREE.Vector3; frontEave: THREE.Vector3; backEave: THREE.Vector3 } | null = null;
           let currX = -halfW;
           while (currX <= halfW + 0.02) {
             const topPt = new THREE.Vector3(currX, roofH, 0);
@@ -1706,6 +1795,12 @@ export function generateTimberFraming(
               'timber-ceiling-joist'
             );
 
+            if (prevGableRafterWL) {
+              addBeamSegment('Roof Noggin (Front)', prevGableRafterWL.frontEave.clone().lerp(prevGableRafterWL.topPt, 0.5), frontEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+              addBeamSegment('Roof Noggin (Back)', prevGableRafterWL.backEave.clone().lerp(prevGableRafterWL.topPt, 0.5), backEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+            }
+            prevGableRafterWL = { topPt, frontEave, backEave };
+
             currX += studSpacing;
           }
         } else {
@@ -1719,6 +1814,7 @@ export function generateTimberFraming(
             'timber-ridge-beam'
           );
 
+          let prevGableRafterDL: { topPt: THREE.Vector3; leftEave: THREE.Vector3; rightEave: THREE.Vector3 } | null = null;
           let currZ = -halfD;
           while (currZ <= halfD + 0.02) {
             const topPt = new THREE.Vector3(0, roofH, currZ);
@@ -1749,6 +1845,12 @@ export function generateTimberFraming(
               rafterDepth,
               'timber-ceiling-joist'
             );
+
+            if (prevGableRafterDL) {
+              addBeamSegment('Roof Noggin (Left)', prevGableRafterDL.leftEave.clone().lerp(prevGableRafterDL.topPt, 0.5), leftEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+              addBeamSegment('Roof Noggin (Right)', prevGableRafterDL.rightEave.clone().lerp(prevGableRafterDL.topPt, 0.5), rightEave.clone().lerp(topPt, 0.5), rafterWidth, rafterDepth * 0.6, 'timber-roof-noggin');
+            }
+            prevGableRafterDL = { topPt, leftEave, rightEave };
 
             currZ += studSpacing;
           }
