@@ -3281,7 +3281,7 @@ export default function RightPanelStack() {
                   <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-700/60">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Portal Navigation</span>
-                      <span className="text-[9px] text-gray-400">Click a wall, window, or door to walk through it</span>
+                      <span className="text-[9px] text-gray-400">Click a wall, window, door, or floor to walk there</span>
                     </div>
                     <button
                       id="toggle-camera-teleport"

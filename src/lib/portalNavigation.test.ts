@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import {
   resolveWorldHit,
   isNavigableSurface,
+  isFloorSurface,
   resolveExitPoint,
   sampleFloorDatum,
   resolveLandingPoint,
+  resolveFloorLanding,
   computeClearanceRadius,
   computeDynamicFov,
   computeNearClip,
@@ -13,6 +15,7 @@ import {
   buildPortalOrientation,
   smoothstep,
   resolvePortalDestination,
+  resolvePortalDestinationForFloor,
   type ResolvedSurfaceHit,
 } from './portalNavigation';
 
@@ -328,5 +331,66 @@ describe('resolvePortalDestination (integration)', () => {
     expect(dest.fov).toBeGreaterThan(0);
     expect(dest.near).toBeGreaterThanOrEqual(0.01);
     expect(dest.obstructed).toBe(false);
+  });
+});
+
+describe('isFloorSurface', () => {
+  it('accepts an upward-facing horizontal surface', () => {
+    expect(isFloorSurface(new THREE.Vector3(0, 1, 0))).toBe(true);
+  });
+
+  it('rejects a downward-facing (ceiling) surface', () => {
+    expect(isFloorSurface(new THREE.Vector3(0, -1, 0))).toBe(false);
+  });
+
+  it('rejects vertical wall normals', () => {
+    expect(isFloorSurface(new THREE.Vector3(0, 0, 1))).toBe(false);
+  });
+});
+
+describe('resolveFloorLanding', () => {
+  it('stands directly above the clicked point at eye height in open space', () => {
+    const eye = resolveFloorLanding([], new THREE.Vector3(2, 0, 3), 1.6);
+    expect(eye.x).toBeCloseTo(2, 5);
+    expect(eye.y).toBeCloseTo(1.6, 5);
+    expect(eye.z).toBeCloseTo(3, 5);
+  });
+
+  it('nudges away from a wall right next to the clicked floor point', () => {
+    // A wall 0.1m from the click - well inside the personal-space radius,
+    // exactly the "clicked near a corner" scenario that used to land the
+    // camera embedded in the wall.
+    const wall = markShape(new THREE.Mesh(new THREE.PlaneGeometry(4, 3), testMaterial()), 'near-wall');
+    wall.position.set(0, 1.6, 0.1);
+    wall.updateMatrixWorld(true);
+
+    const eye = resolveFloorLanding([wall], new THREE.Vector3(0, 0, 0), 1.6);
+    // Pushed away from the wall (to more negative Z).
+    expect(eye.z).toBeLessThan(0.1 - 0.34);
+  });
+});
+
+describe('resolvePortalDestinationForFloor (integration)', () => {
+  it('lands directly on a clicked floor point with a valid orientation', () => {
+    const floor = floorMesh(0);
+    const floorHit: ResolvedSurfaceHit = {
+      worldPoint: new THREE.Vector3(1, 0, 2),
+      worldNormal: new THREE.Vector3(0, 1, 0),
+      hitObject: floor,
+      isBackface: false,
+    };
+    const camEye = new THREE.Vector3(1, 3, -1);
+
+    const dest = resolvePortalDestinationForFloor([floor], floorHit, {
+      camEye,
+      eyeHeight: 1.6,
+      clearanceDMax: 3.5,
+    });
+
+    expect(dest.eye.x).toBeCloseTo(1, 3);
+    expect(dest.eye.y).toBeCloseTo(1.6, 3);
+    expect(dest.eye.z).toBeCloseTo(2, 3);
+    expect(dest.obstructed).toBe(false);
+    expect(dest.fov).toBeGreaterThan(0);
   });
 });

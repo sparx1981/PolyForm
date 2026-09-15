@@ -48,9 +48,14 @@ export function resolveWorldHit(
 
 const COS_45 = Math.SQRT1_2; // cos(45deg) ~= 0.7071
 
-/** Rejects floors/ceilings/steep roof pitches - only near-vertical surfaces are navigable. */
+/** Rejects floors/ceilings/steep roof pitches - only near-vertical surfaces are navigable as walls. */
 export function isNavigableSurface(worldNormal: THREE.Vector3): boolean {
   return Math.abs(worldNormal.y) <= COS_45 + 1e-6;
+}
+
+/** An upward-facing horizontal-enough surface to stand on directly (a floor, not a ceiling). */
+export function isFloorSurface(worldNormal: THREE.Vector3): boolean {
+  return worldNormal.y > COS_45 + 1e-6;
 }
 
 /**
@@ -160,6 +165,47 @@ export function resolveLandingPoint(
   const smallest = tiers[tiers.length - 1];
   const fallback = testOrigin.clone().addScaledVector(inward, smallest);
   return { eye: fallback, clearanceUsed: smallest, obstructed: true };
+}
+
+/**
+ * Floor clicks have no wall to traverse or step back from - the landing
+ * spot is simply directly above the clicked point at eye height. The one
+ * risk that still needs handling is the same one wall-adjacent standing
+ * spots have: a floor point right next to a wall or corner (very common -
+ * floors aren't usually clicked dead-center) would otherwise put the
+ * camera's body inside the wall's own solid thickness, and the near clip
+ * plane cuts straight through it with nothing to render. A short radial
+ * ring of rays nudges the landing point away from anything within a
+ * personal-space radius, same idea as resolveLandingPoint's tiers but
+ * without a single wall normal to retreat along.
+ */
+export function resolveFloorLanding(
+  raycastRoots: THREE.Object3D[],
+  floorPoint: THREE.Vector3,
+  eyeHeight: number,
+  personalSpace = 0.35
+): THREE.Vector3 {
+  const eye = new THREE.Vector3(floorPoint.x, floorPoint.y + eyeHeight, floorPoint.z);
+  const raycaster = new THREE.Raycaster();
+  const rayDirs = 8;
+
+  for (let pass = 0; pass < 2; pass++) {
+    let adjusted = false;
+    for (let i = 0; i < rayDirs; i++) {
+      const angle = (i / rayDirs) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
+      raycaster.set(eye, dir);
+      raycaster.near = 0.01;
+      raycaster.far = personalSpace;
+      const hit = raycaster.intersectObjects(raycastRoots, true).find(h => h.object.userData?.isShape);
+      if (hit && hit.distance < personalSpace) {
+        eye.addScaledVector(dir, -(personalSpace - hit.distance));
+        adjusted = true;
+      }
+    }
+    if (!adjusted) break;
+  }
+  return eye;
 }
 
 /**
@@ -290,4 +336,33 @@ export function resolvePortalDestination(
   const { target, quaternion } = buildPortalOrientation(landing.eye, yaw);
 
   return { eye: landing.eye, target, quaternion, fov, near, obstructed: landing.obstructed };
+}
+
+export interface FloorDestinationParams {
+  camEye: THREE.Vector3;
+  eyeHeight: number;
+  clearanceDMax: number;
+  fovParams?: FovParams;
+}
+
+/**
+ * Floor-click counterpart to resolvePortalDestination: no wall cavity to
+ * traverse, so this composes the simpler §5-only pipeline (clearance-driven
+ * FOV/near, level yaw orientation) around resolveFloorLanding's wall-nudge.
+ */
+export function resolvePortalDestinationForFloor(
+  raycastRoots: THREE.Object3D[],
+  floorHit: ResolvedSurfaceHit,
+  params: FloorDestinationParams
+): PortalDestination {
+  const eye = resolveFloorLanding(raycastRoots, floorHit.worldPoint, params.eyeHeight);
+  const clearanceRadius = computeClearanceRadius(raycastRoots, eye, params.clearanceDMax);
+  const fov = computeDynamicFov(clearanceRadius, params.fovParams);
+  const near = computeNearClip(clearanceRadius);
+
+  const approach = computeApproachDirection(params.camEye, floorHit.worldPoint);
+  const yaw = computeYawFromDirection(approach);
+  const { target, quaternion } = buildPortalOrientation(eye, yaw);
+
+  return { eye, target, quaternion, fov, near, obstructed: false };
 }

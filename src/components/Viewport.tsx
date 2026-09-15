@@ -103,7 +103,9 @@ import { updateTimberFramesIfPresent } from '../lib/timberFrameGenerator';
 import {
   resolveWorldHit,
   isNavigableSurface,
+  isFloorSurface,
   resolvePortalDestination,
+  resolvePortalDestinationForFloor,
   smoothstep,
   type ResolvedSurfaceHit,
   type PortalDestination,
@@ -1466,12 +1468,18 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
     // still update every frame below so the marker never visibly lags the
     // mouse, only the rendered CONTENTS and framing lag by a few ticks.
     if (!destinationRef.current || frameCountRef.current % 6 === 0) {
-      destinationRef.current = resolvePortalDestination(scene.children, enterHit, {
-        camEye: camera.position,
-        maxWallThickness: 0.6,
-        eyeHeight: 1.6,
-        clearanceDMax: 3.5,
-      });
+      destinationRef.current = isNavigableSurface(enterHit.worldNormal)
+        ? resolvePortalDestination(scene.children, enterHit, {
+            camEye: camera.position,
+            maxWallThickness: 0.6,
+            eyeHeight: 1.6,
+            clearanceDMax: 3.5,
+          })
+        : resolvePortalDestinationForFloor(scene.children, enterHit, {
+            camEye: camera.position,
+            eyeHeight: 1.6,
+            clearanceDMax: 3.5,
+          });
     }
     const dest = destinationRef.current;
 
@@ -1547,6 +1555,26 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
       </mesh>
     </group>
   );
+}
+
+// Portal Navigation's floor support needs to work even when there's no
+// authored floor/slab Shape under the cursor - many scenes (especially
+// early-stage or purely exterior ones) stand on the app's generic ground
+// plane rather than a modeled floor. When no real isShape hit exists along
+// the ray at all, fall back to the mathematical y=0 ground plane, exactly
+// like the app's other ground-level tools already do for their own
+// fallbacks (see the door/window placement handlers elsewhere in this
+// file), and treat it as an upward-facing floor.
+function resolveGroundPlaneFloorHit(raycaster: THREE.Raycaster, scene: THREE.Scene): ResolvedSurfaceHit | null {
+  const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const point = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(ground, point)) return null;
+  return {
+    worldPoint: point,
+    worldNormal: new THREE.Vector3(0, 1, 0),
+    hitObject: scene,
+    isBackface: false,
+  };
 }
 
 function Scene() {
@@ -4841,27 +4869,36 @@ function Scene() {
 
       // Portal Navigation: click a vertical architectural surface - a
       // wall, window pane, or doorway - to traverse through it into the
-      // room/setting on the other side, with framing (clearance, FOV,
-      // near-plane, eye height, yaw) calibrated automatically on arrival.
+      // room/setting on the other side, or click a floor to walk directly
+      // to that spot. Framing (clearance, FOV, near-plane, eye height,
+      // yaw) is calibrated automatically on arrival either way.
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
-      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : null;
+      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene);
 
       if (!enterHit) {
-        setMeasurements('Portal Navigation: Click a wall, window, or door to travel through it.');
-        return;
-      }
-      if (!isNavigableSurface(enterHit.worldNormal)) {
-        setMeasurements('Portal Navigation: That surface is too close to horizontal - click a vertical wall, window, or door.');
+        setMeasurements('Portal Navigation: Click a wall, window, door, or floor to travel there.');
         return;
       }
 
-      const destination = resolvePortalDestination(scene.children, enterHit, {
-        camEye: camera.position,
-        maxWallThickness: 0.6,
-        eyeHeight: 1.6,
-        clearanceDMax: 3.5,
-      });
+      let destination: PortalDestination;
+      if (isNavigableSurface(enterHit.worldNormal)) {
+        destination = resolvePortalDestination(scene.children, enterHit, {
+          camEye: camera.position,
+          maxWallThickness: 0.6,
+          eyeHeight: 1.6,
+          clearanceDMax: 3.5,
+        });
+      } else if (isFloorSurface(enterHit.worldNormal)) {
+        destination = resolvePortalDestinationForFloor(scene.children, enterHit, {
+          camEye: camera.position,
+          eyeHeight: 1.6,
+          clearanceDMax: 3.5,
+        });
+      } else {
+        setMeasurements('Portal Navigation: Click a wall, window, door, or floor - not a ceiling or steep pitch.');
+        return;
+      }
 
       if (destination.obstructed) {
         showToast('Destination space is obstructed or inaccessible.');
@@ -5874,11 +5911,12 @@ function Scene() {
     if (activeTool === 'teleport') {
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
-      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : null;
-      const valid = enterHit && isNavigableSurface(enterHit.worldNormal);
+      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene);
+      const isWall = enterHit && isNavigableSurface(enterHit.worldNormal);
+      const isFloor = enterHit && isFloorSurface(enterHit.worldNormal);
 
-      if (valid && enterHit) {
-        setSnapIndicator({ point: [enterHit.worldPoint.x, enterHit.worldPoint.y, enterHit.worldPoint.z], type: 'center', tooltip: 'Click to Walk Through' });
+      if (enterHit && (isWall || isFloor)) {
+        setSnapIndicator({ point: [enterHit.worldPoint.x, enterHit.worldPoint.y, enterHit.worldPoint.z], type: 'center', tooltip: isFloor ? 'Click to Walk Here' : 'Click to Walk Through' });
         setPortalHoverHit(enterHit);
       } else {
         setSnapIndicator(null);
@@ -8462,7 +8500,7 @@ function Scene() {
       e.stopPropagation();
       setSelectedId(shape.id);
       setSelectedIds([shape.id]);
-    } else if (activeTool === 'tape') {
+    } else if (activeTool === 'tape' || activeTool === 'teleport') {
       handlePointerDown(e);
     } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
       handlePointerDown(e);
