@@ -7,18 +7,30 @@ import type { Shape } from '../types';
 // document past that ceiling with no way to trim it after the fact (the
 // write is rejected outright, with the actual byte count and limit in the
 // error message but nothing actionable done about it). Shapes whose
-// geometryData serializes past OFFLOAD_SIZE_THRESHOLD are instead uploaded
-// as a standalone JSON blob (to Storage in production) and replaced with a
-// small marker object carrying just its URL, keeping the Firestore
-// document itself small regardless of how detailed any one shape's mesh
-// is. hydrateOffloadedGeometry reverses this when a model is loaded back
-// into the scene.
-const OFFLOAD_MARKER = '__offloadedGeometryUrl';
+// geometryData serializes past OFFLOAD_SIZE_THRESHOLD are instead written
+// to their own small Firestore document (in a dedicated
+// `geometryOverflow` collection, not Storage - a raw browser fetch() of a
+// Storage download URL requires the bucket to have CORS configured for
+// this app's exact origin, which isn't something app code can arrange,
+// and fails hard with no fallback when it isn't; going through the
+// Firestore SDK like every other read/write in this app has no such
+// requirement) and replaced with a small marker object carrying just its
+// document id, keeping the model's own Firestore document small
+// regardless of how detailed any one shape's mesh is.
+// hydrateOffloadedGeometry reverses this when a model is loaded back into
+// the scene.
+const OFFLOAD_MARKER = '__offloadedGeometryDocId';
 const OFFLOAD_SIZE_THRESHOLD = 40000;
 
 export interface GeometryOffloadIO {
-  upload: (path: string, jsonText: string) => Promise<string>;
-  fetch: (url: string) => Promise<string>;
+  upload: (docId: string, jsonText: string) => Promise<void>;
+  fetch: (docId: string) => Promise<string>;
+}
+
+// Firestore document ids can't contain '/', so shape ids (which are
+// otherwise arbitrary strings) are sanitized before being used as one.
+function toSafeDocId(raw: string): string {
+  return raw.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 export async function offloadLargeGeometryForSave(
@@ -32,9 +44,9 @@ export async function offloadLargeGeometryForSave(
       const serialized = JSON.stringify(shape.geometryData);
       if (serialized.length <= OFFLOAD_SIZE_THRESHOLD) return shape;
       try {
-        const path = `geometry-overflow/${uid}/${shape.id}-${Date.now()}.json`;
-        const url = await io.upload(path, serialized);
-        return { ...shape, geometryData: { [OFFLOAD_MARKER]: url } as any };
+        const docId = `${toSafeDocId(uid)}_${toSafeDocId(shape.id)}_${Date.now()}`;
+        await io.upload(docId, serialized);
+        return { ...shape, geometryData: { [OFFLOAD_MARKER]: docId } as any };
       } catch {
         // If the upload itself fails, fall back to saving inline - a
         // possible oversized-document error at least surfaces a clear
@@ -51,10 +63,10 @@ export async function hydrateOffloadedGeometry(
 ): Promise<Shape[]> {
   return Promise.all(
     shapes.map(async (shape) => {
-      const url = (shape.geometryData as any)?.[OFFLOAD_MARKER];
-      if (!url) return shape;
+      const docId = (shape.geometryData as any)?.[OFFLOAD_MARKER];
+      if (!docId) return shape;
       try {
-        const text = await io.fetch(url);
+        const text = await io.fetch(docId);
         return { ...shape, geometryData: JSON.parse(text) };
       } catch {
         // Leave the marker in place rather than crash the whole load - the

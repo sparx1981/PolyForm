@@ -159,6 +159,19 @@ service cloud.firestore {
       allow delete: if isDocOwner();
     }
 
+    // Overflow storage for a single shape's geometryData when it's too
+    // large to keep inline in its parent model document (see
+    // src/lib/firestoreGeometryOffload.ts) - owner-scoped the same way as
+    // materials/scripts above. Entries are content-addressed by a docId
+    // that embeds the owning uid, so ownership can be checked without a
+    // read-before-write.
+    match /geometryOverflow/{docId} {
+      allow get: if isDocOwner();
+      allow create: if isNewDocOwner();
+      allow update: if isDocOwner() && isNewDocOwner();
+      allow delete: if isDocOwner();
+    }
+
     match /scripts/{scriptId} {
       allow get, list: if isDocOwner() || resource.data.isPublic == true;
       allow create: if isNewDocOwner() && isValidScript(request.resource.data);

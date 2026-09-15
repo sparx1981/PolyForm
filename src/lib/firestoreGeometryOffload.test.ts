@@ -26,20 +26,19 @@ describe('firestoreGeometryOffload', () => {
     const shapes: Shape[] = [
       { id: 'roof-tiles-1', type: 'custom', position: [0, 0, 0], args: [], color: '#fff', geometryData: makeGeometryData(5000) },
     ];
-    const uploadedUrl = 'https://storage.example.com/geometry-overflow/uid1/roof-tiles-1.json';
-    const upload = vi.fn(async () => uploadedUrl);
+    const upload = vi.fn(async (_docId: string, _jsonText: string) => {});
     const result = await offloadLargeGeometryForSave(shapes, 'uid1', { upload, fetch: vi.fn() });
 
     expect(upload).toHaveBeenCalledTimes(1);
-    const [path, jsonText] = upload.mock.calls[0];
-    expect(path).toContain('uid1');
-    expect(path).toContain('roof-tiles-1');
+    const [docId, jsonText] = upload.mock.calls[0];
+    expect(docId).toContain('uid1');
+    expect(docId).toContain('roof-tiles-1');
     expect(JSON.parse(jsonText)).toEqual(shapes[0].geometryData);
 
     // The document-bound copy must be small regardless of how large the
     // original mesh was.
     expect(JSON.stringify(result[0].geometryData).length).toBeLessThan(500);
-    expect((result[0].geometryData as any).__offloadedGeometryUrl).toBe(uploadedUrl);
+    expect((result[0].geometryData as any).__offloadedGeometryDocId).toBe(docId);
   });
 
   it('round-trips an offloaded shape through hydrateOffloadedGeometry', async () => {
@@ -47,10 +46,14 @@ describe('firestoreGeometryOffload', () => {
     const shapes: Shape[] = [
       { id: 'roof-tiles-1', type: 'custom', position: [0, 0, 0], args: [], color: '#fff', geometryData: original },
     ];
-    let storedJson = '';
+    const store = new Map<string, string>();
     const io: GeometryOffloadIO = {
-      upload: async (_path, jsonText) => { storedJson = jsonText; return 'https://storage.example.com/blob.json'; },
-      fetch: async (url) => { expect(url).toBe('https://storage.example.com/blob.json'); return storedJson; },
+      upload: async (docId, jsonText) => { store.set(docId, jsonText); },
+      fetch: async (docId) => {
+        const text = store.get(docId);
+        if (text === undefined) throw new Error('not found');
+        return text;
+      },
     };
 
     const saved = await offloadLargeGeometryForSave(shapes, 'uid1', io);

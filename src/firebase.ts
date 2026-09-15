@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { initializeFirestore, doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
 import type { GeometryOffloadIO } from './lib/firestoreGeometryOffload';
@@ -17,17 +17,26 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1'); // Default region, change if you deployed elsewhere
 export const googleProvider = new GoogleAuthProvider();
 
-// Firebase Storage-backed IO for offloadLargeGeometryForSave/
-// hydrateOffloadedGeometry (see firestoreGeometryOffload.ts).
+// Firestore-backed IO for offloadLargeGeometryForSave/
+// hydrateOffloadedGeometry (see firestoreGeometryOffload.ts) - deliberately
+// NOT Storage, since a raw browser fetch() of a Storage download URL needs
+// the bucket's CORS config to allow this app's origin, which isn't
+// something client code can arrange and fails hard (with no fallback) in
+// any hosting context where it hasn't been set up. Going through the
+// Firestore SDK like every other read/write in this app has no such
+// requirement.
 export const firebaseGeometryIO: GeometryOffloadIO = {
-  upload: async (path, jsonText) => {
-    const storageRef = ref(storage, path);
-    await uploadString(storageRef, jsonText, 'raw');
-    return getDownloadURL(storageRef);
+  upload: async (docId, jsonText) => {
+    await setDoc(doc(db, 'geometryOverflow', docId), {
+      userId: auth.currentUser?.uid || '',
+      data: jsonText,
+      createdAt: Date.now(),
+    });
   },
-  fetch: async (url) => {
-    const res = await fetch(url);
-    return res.text();
+  fetch: async (docId) => {
+    const snap = await getDoc(doc(db, 'geometryOverflow', docId));
+    if (!snap.exists()) throw new Error(`Offloaded geometry document not found: ${docId}`);
+    return snap.data().data as string;
   },
 };
 
