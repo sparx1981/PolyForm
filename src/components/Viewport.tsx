@@ -1391,6 +1391,79 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
   );
 }
 
+// Live look-through preview for the Teleport tool: a circular "window"
+// hovering over the cursor's hit point, rendered from a second camera
+// positioned where a click would actually send the viewer - so you see
+// the destination (including behind walls/objects you're currently facing
+// away from) before committing, rather than just a flat marker.
+function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, number] }) {
+  const { gl, scene, camera } = useThree();
+  const discRef = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
+  const portalCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  if (!portalCameraRef.current) {
+    portalCameraRef.current = new THREE.PerspectiveCamera(65, 1, 0.1, 2000);
+  }
+  const renderTarget = useMemo(
+    () => new THREE.WebGLRenderTarget(512, 512, { generateMipmaps: false }),
+    []
+  );
+
+  useEffect(() => {
+    return () => { renderTarget.dispose(); };
+  }, [renderTarget]);
+
+  useFrame(() => {
+    const disc = discRef.current;
+    const ring = ringRef.current;
+    const portalCam = portalCameraRef.current;
+    if (!disc || !ring || !portalCam) return;
+
+    const eyeHeight = 1.7;
+    const dest = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + eyeHeight, hoverPoint[2]);
+
+    // Same "keep current facing direction" convention as the actual
+    // teleport click handler, so the preview matches what you'll get.
+    const controls = scene.userData.controls;
+    const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0, 0);
+    const lookDir = prevTarget.clone().sub(camera.position);
+    if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);
+    lookDir.normalize();
+
+    portalCam.position.copy(dest);
+    portalCam.lookAt(dest.clone().addScaledVector(lookDir, 5));
+    portalCam.updateProjectionMatrix();
+
+    const discPos = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + 0.03, hoverPoint[2]);
+    disc.position.copy(discPos);
+    disc.lookAt(camera.position);
+    ring.position.copy(discPos);
+    ring.quaternion.copy(disc.quaternion);
+
+    // Hide the portal disc while rendering its own view - otherwise it
+    // would recursively show up inside its own texture from last frame.
+    disc.visible = false;
+    const prevTargetBuffer = gl.getRenderTarget();
+    gl.setRenderTarget(renderTarget);
+    gl.render(scene, portalCam);
+    gl.setRenderTarget(prevTargetBuffer);
+    disc.visible = true;
+  });
+
+  return (
+    <group>
+      <mesh ref={discRef}>
+        <circleGeometry args={[0.6, 48]} />
+        <meshBasicMaterial map={renderTarget.texture} toneMapped={false} />
+      </mesh>
+      <mesh ref={ringRef}>
+        <ringGeometry args={[0.58, 0.65, 48]} />
+        <meshBasicMaterial color="#22d3ee" toneMapped={false} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
 function Scene() {
   const { 
     activeTool, 
@@ -3112,6 +3185,7 @@ function Scene() {
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
+  const [teleportHoverPoint, setTeleportHoverPoint] = useState<[number, number, number] | null>(null);
   const [trackingGuide, setTrackingGuide] = useState<{ source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null>(null);
   const awakenedRefPointsRef = useRef<Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; time: number; screenPos: { x: number; y: number } }>>([]);
   const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
@@ -3419,6 +3493,7 @@ function Scene() {
     }
     if (activeTool !== 'teleport') {
       setSnapIndicator(null);
+      setTeleportHoverPoint(null);
     }
   }, [activeTool]);
 
@@ -5654,8 +5729,10 @@ function Scene() {
       }
       if (hitPoint) {
         setSnapIndicator({ point: [hitPoint.x, hitPoint.y + 0.05, hitPoint.z], type: 'center', tooltip: 'Click to Teleport Here' });
+        setTeleportHoverPoint([hitPoint.x, hitPoint.y, hitPoint.z]);
       } else {
         setSnapIndicator(null);
+        setTeleportHoverPoint(null);
       }
       return;
     }
@@ -10374,6 +10451,10 @@ function Scene() {
         </Html>
       )}
 
+      {activeTool === 'teleport' && teleportHoverPoint && (
+        <TeleportPortalPreview hoverPoint={teleportHoverPoint} />
+      )}
+
       {/* Inference Tracking Guide line */}
       {trackingGuide && (
         <group>
@@ -11795,7 +11876,20 @@ function CustomGeometry({ shape }: { shape: Shape }) {
                 const relPos = winPos.clone().sub(roofPos).applyQuaternion(invRoofQuat);
                 const relQuat = invRoofQuat.clone().multiply(winQuat);
 
-                const cutterGeo = new THREE.BoxGeometry(winW, winH, winD);
+                // A round porthole needs a round hole - a box cutter (used
+                // for every other style) leaves a rectangular reveal around
+                // the ring, exposing the host's raw material in the corners
+                // instead of a flush fit (the same issue already fixed for
+                // portholes hosted on ordinary walls, which use a separate
+                // code path from this roof/pediment cutout).
+                let cutterGeo: THREE.BufferGeometry;
+                if (win.archStyle === 'porthole') {
+                  const radius = Math.min(winArgs[0] || 0.8, winArgs[1] || 0.8) / 2;
+                  cutterGeo = new THREE.CylinderGeometry(radius, radius, winD, 48);
+                  cutterGeo.rotateX(Math.PI / 2);
+                } else {
+                  cutterGeo = new THREE.BoxGeometry(winW, winH, winD);
+                }
                 cutterGeo.applyQuaternion(relQuat);
                 cutterGeo.translate(relPos.x, relPos.y, relPos.z);
 
