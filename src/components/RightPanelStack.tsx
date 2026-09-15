@@ -3278,38 +3278,6 @@ export default function RightPanelStack() {
 
               <SubSection title="Camera" defaultOpen={false}>
                 <div className="space-y-3 px-1 py-1">
-                  <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-700/60">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Portal Navigation</span>
-                      <span className="text-[9px] text-gray-400">Click a wall, window, door, or floor to walk there</span>
-                    </div>
-                    <button
-                      id="toggle-camera-teleport"
-                      onClick={() => setActiveTool(activeTool === 'teleport' ? 'select' : 'teleport')}
-                      className={cn(
-                        "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                        activeTool === 'teleport' ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
-                      )}
-                      title={activeTool === 'teleport' ? "Exit Portal Navigation" : "Enable Portal Navigation"}
-                    >
-                      <div className={cn(
-                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
-                        activeTool === 'teleport' ? "left-4.5" : "left-0.5"
-                      )} />
-                    </button>
-                  </div>
-
-                  {activeTool === 'teleport' && (
-                    <button
-                      onClick={() => window.dispatchEvent(new CustomEvent('reset-camera'))}
-                      className="w-full py-1.5 px-2 text-[10px] font-medium rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                      title="Return the camera to its default starting position and view"
-                    >
-                      <RotateCcw size={12} />
-                      <span>Reset to Default Position</span>
-                    </button>
-                  )}
-
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Enable Depth Clipping</span>

@@ -64,7 +64,9 @@ import {
   AlertTriangle,
   RefreshCw,
   Plus,
-  Grid3X3
+  Grid3X3,
+  Aperture,
+  RotateCcw
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType, Shape, TerrainData } from '../types';
@@ -983,6 +985,25 @@ export default function UnifiedToolRail() {
           isActive: (s) => s.isWorldViewActive,
           onClick: (s) => s.setIsWorldViewOpen(true),
           keywords: ['worldview', 'globe', 'map', 'geolocation', 'sun', 'solar', 'architecture', 'site']
+        },
+        {
+          id: 'teleport',
+          tool: 'teleport',
+          label: 'Portal Navigation',
+          subtitle: 'Click a wall, window, door, or floor to walk there',
+          icon: <Aperture size={19} />,
+          isActive: (s) => s.activeTool === 'teleport',
+          onClick: (s) => s.setActiveTool('teleport'),
+          keywords: ['portal', 'navigation', 'teleport', 'walk', 'walkthrough', 'travel', 'camera']
+        },
+        {
+          id: 'reset_camera',
+          label: 'Reset to Default Position',
+          subtitle: 'Return the camera to its default starting position and view',
+          icon: <RotateCcw size={19} />,
+          isActive: () => false,
+          onClick: () => window.dispatchEvent(new CustomEvent('reset-camera')),
+          keywords: ['reset', 'camera', 'default', 'position', 'view', 'home']
         }
       ]
     },

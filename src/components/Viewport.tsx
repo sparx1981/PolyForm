@@ -1419,8 +1419,16 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
 // catch the markers mid-toggle. Layers avoid the toggle entirely.
 const TELEPORT_PORTAL_LAYER = 31;
 
-function TeleportPortalPreview({ enterHitRef, postprocessingActive }: { enterHitRef: React.RefObject<ResolvedSurfaceHit | null>; postprocessingActive: boolean }) {
-  const { gl, scene, camera } = useThree();
+function TeleportPortalPreview({
+  postprocessingActive,
+  floorEnabled,
+  onHoverChange,
+}: {
+  postprocessingActive: boolean;
+  floorEnabled: boolean;
+  onHoverChange: (hit: ResolvedSurfaceHit | null, tooltip: string | null) => void;
+}) {
+  const { gl, scene, camera, raycaster, pointer } = useThree();
   const discRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const portalCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -1436,6 +1444,7 @@ function TeleportPortalPreview({ enterHitRef, postprocessingActive }: { enterHit
   const frameCountRef = useRef(0);
   const destinationRef = useRef<PortalDestination | null>(null);
   const lastHitObjectRef = useRef<THREE.Object3D | null>(null);
+  const hoverSyncRef = useRef<{ time: number; tooltip: string | null }>({ time: 0, tooltip: null });
 
   useEffect(() => {
     discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
@@ -1471,11 +1480,38 @@ function TeleportPortalPreview({ enterHitRef, postprocessingActive }: { enterHit
     const portalCam = portalCameraRef.current;
     if (!disc || !ring || !portalCam) return;
 
-    // Read directly off the ref every frame - see enterHitRef's own
-    // comment at its declaration for why this is a ref and not a prop
-    // value: it's updated on every native pointermove without ever going
-    // through React state/re-render.
-    const enterHit = enterHitRef.current;
+    // Raycasts against the current pointer position ONCE per rendered
+    // frame - not once per native pointermove event, which is what used
+    // to happen here. A mouse can report movement much faster than the
+    // display refreshes, and a whole-scene raycast on every single one of
+    // those events was expensive enough to starve the animation loop
+    // between frames, so the preview only visibly advanced in step with
+    // mouse movement instead of animating continuously on its own (a
+    // "flip-book" effect - one new frame per cursor move). Sampling
+    // R3F's own tracked pointer position here instead naturally caps this
+    // work to the render rate.
+    raycaster.setFromCamera(pointer, camera);
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
+    const rawHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene, floorEnabled);
+    const isWall = rawHit && isNavigableSurface(rawHit.worldNormal);
+    const isFloor = rawHit && isFloorSurface(rawHit.worldNormal);
+    const enterHit = rawHit && (isWall || isFloor) ? rawHit : null;
+
+    // The snapIndicator tooltip is a plain React-rendered <Html> overlay
+    // shared with other tools, so it still needs real state - but only
+    // needs to feel responsive, not track every frame, so it's
+    // time-throttled (immediate on appear/disappear/wall-vs-floor change,
+    // otherwise at most ~12/sec).
+    const sync = hoverSyncRef.current;
+    const tooltip = enterHit ? (isFloor ? 'Click to Walk Here' : 'Click to Walk Through') : null;
+    const now = performance.now();
+    if (tooltip !== sync.tooltip || now - sync.time > 80) {
+      sync.tooltip = tooltip;
+      sync.time = now;
+      onHoverChange(enterHit, tooltip);
+    }
+
     if (!enterHit) {
       // No valid hover target right now - hide the indicator without
       // tearing down the render target/camera, so a momentary raycast gap
@@ -3351,21 +3387,6 @@ function Scene() {
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
-  // The Portal Navigation preview's actual hover target lives ONLY in this
-  // ref, never in React state: native pointermove events fire far faster
-  // than is reasonable to run through setState + a full re-render of this
-  // (enormous) component, and every raycast produces brand-new Vector3/
-  // Quaternion instances anyway, so a value-based dedupe still let nearly
-  // every real mouse movement through. TeleportPortalPreview reads this
-  // ref directly inside its own useFrame, completely decoupled from
-  // Scene's render cycle - this is what actually stopped the preview from
-  // flickering constantly while the mouse moved, regardless of what it
-  // was over (a symptom that a scene-wide re-render churn, not a
-  // geometry-specific raycasting hiccup, explains far better).
-  const portalHoverHitRef = useRef<ResolvedSurfaceHit | null>(null);
-  // Only used to gate the (much less frequent) snapIndicator tooltip
-  // update below - see handlePointerMove's teleport branch.
-  const portalHoverStateSyncRef = useRef<{ time: number; tooltip: string | null }>({ time: 0, tooltip: null });
   // Kept fresh every render (not gated behind an effect's own dependency
   // list) so handleSetCamera below - defined once, early in this
   // component, and otherwise stuck with whatever effectiveCameraNear/Far
@@ -3766,8 +3787,6 @@ function Scene() {
     }
     if (activeTool !== 'teleport') {
       setSnapIndicator(null);
-      portalHoverHitRef.current = null;
-      portalHoverStateSyncRef.current = { time: 0, tooltip: null };
     }
   }, [activeTool]);
 
@@ -6010,49 +6029,18 @@ function Scene() {
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (activeTool === 'teleport') {
-      // Several overlapping meshes (the hovered shape itself, plus the
-      // ground/background catch-all planes behind it) all forward here for
-      // the same native move event unless stopped.
+      // Portal Navigation's own hover tracking no longer happens here at
+      // all - see TeleportPortalPreview's useFrame. Raycasting against the
+      // whole scene on every native pointermove event (which can fire much
+      // faster than the display refreshes) was itself expensive enough to
+      // saturate the main thread between animation frames, so the preview
+      // (and the rest of the viewport) only visibly updated in step with
+      // mouse movement instead of animating smoothly on its own - a
+      // "flip-book" effect one frame per cursor move, rather than a truly
+      // live preview. Doing the same raycast once per rendered frame
+      // instead (driven by R3F's own tracked pointer position) decouples
+      // it from however fast the mouse happens to report movement.
       e.stopPropagation();
-
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
-      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene, floorEnabled);
-      const isWall = enterHit && isNavigableSurface(enterHit.worldNormal);
-      const isFloor = enterHit && isFloorSurface(enterHit.worldNormal);
-      const validHit = enterHit && (isWall || isFloor) ? enterHit : null;
-
-      // The preview itself is driven ENTIRELY off this ref, read directly
-      // by TeleportPortalPreview's own useFrame - never through React
-      // state. Native pointermove fires far more often than this
-      // (enormous) component can afford to re-render, and every raycast
-      // allocates brand-new Vector3/Quaternion instances regardless of
-      // whether the cursor actually moved meaningfully, so routing the
-      // hover target through setState here reran a full Scene render on
-      // nearly every pixel of mouse movement - constant, cursor-target-
-      // independent stutter that read as the preview flickering. The ref
-      // update below is free (no re-render), so it stays perfectly smooth.
-      portalHoverHitRef.current = validHit;
-
-      // The snapIndicator tooltip is a plain React-rendered <Html> overlay
-      // shared with other tools, so it can't be driven off the ref the
-      // same way - but it only needs to feel responsive, not track every
-      // pixel, so its state update is time-throttled (immediately on any
-      // appear/disappear/wall-vs-floor change for responsiveness, and at
-      // most a few times a second otherwise) instead of firing on every
-      // single move event.
-      const sync = portalHoverStateSyncRef.current;
-      const tooltip = validHit ? (isFloor ? 'Click to Walk Here' : 'Click to Walk Through') : null;
-      const now = performance.now();
-      if (tooltip !== sync.tooltip || now - sync.time > 80) {
-        sync.tooltip = tooltip;
-        sync.time = now;
-        if (validHit) {
-          setSnapIndicator({ point: [validHit.worldPoint.x, validHit.worldPoint.y, validHit.worldPoint.z], type: 'center', tooltip: tooltip! });
-        } else {
-          setSnapIndicator(null);
-        }
-      }
       return;
     }
 
@@ -10773,7 +10761,10 @@ function Scene() {
 
       {activeTool === 'teleport' && (
         <TeleportPortalPreview
-          enterHitRef={portalHoverHitRef}
+          floorEnabled={floorEnabled}
+          onHoverChange={(hit, tooltip) => {
+            setSnapIndicator(hit ? { point: [hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z], type: 'center', tooltip: tooltip! } : null);
+          }}
           postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
         />
       )}
