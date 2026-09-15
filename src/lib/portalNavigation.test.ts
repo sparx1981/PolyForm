@@ -236,6 +236,23 @@ describe('resolveLandingPoint', () => {
     const result = resolveLandingPoint([blocker], exitPoint, wallNormal, 1.6, [1.6, 1.0, 0.6, 0.3]);
     expect(result.obstructed).toBe(true);
   });
+
+  it('escapes a room corner by fanning off-axis once every straight-ahead tier is blocked', () => {
+    // A wall segment dead ahead, covering x in [-0.05, 4.0] - the "standing
+    // right in a corner" case, where the perpendicular wall you're next to
+    // (its near edge practically at the entry point) blocks every
+    // straight-in tier, but the room is wide open just to the -X side
+    // beyond the wall's edge.
+    const blocker = markShape(new THREE.Mesh(new THREE.PlaneGeometry(4.05, 3), testMaterial()), 'corner-wall');
+    blocker.position.set(1.975, 1.6, 0.2);
+    blocker.updateMatrixWorld(true);
+
+    const exitPoint = new THREE.Vector3(0, 1.6, 0);
+    const wallNormal = new THREE.Vector3(0, 0, -1);
+    const result = resolveLandingPoint([blocker], exitPoint, wallNormal, 1.6, [1.6, 1.0, 0.6, 0.3]);
+    expect(result.obstructed).toBe(false);
+    expect(result.eye.x).toBeLessThan(0); // stepped off to the open -X side
+  });
 });
 
 describe('computeClearanceRadius', () => {
@@ -383,14 +400,38 @@ describe('resolveFloorLanding', () => {
   it('nudges away from a wall right next to the clicked floor point', () => {
     // A wall 0.1m from the click - well inside the personal-space radius,
     // exactly the "clicked near a corner" scenario that used to land the
-    // camera embedded in the wall.
+    // camera embedded in the wall. A floor spans the whole area, so the
+    // nudge has solid ground to retreat onto.
     const wall = markShape(new THREE.Mesh(new THREE.PlaneGeometry(4, 3), testMaterial()), 'near-wall');
     wall.position.set(0, 1.6, 0.1);
     wall.updateMatrixWorld(true);
+    const floor = floorMesh(0);
 
-    const eye = resolveFloorLanding([wall], new THREE.Vector3(0, 0, 0), 1.6);
+    const eye = resolveFloorLanding([wall, floor], new THREE.Vector3(0, 0, 0), 1.6);
     // Pushed away from the wall (to more negative Z).
     expect(eye.z).toBeLessThan(0.1 - 0.34);
+  });
+
+  it('does not nudge past the edge of the floor slab into open space', () => {
+    // A narrow wall sliver directly ahead (+Z only, so only that one
+    // compass direction in the sweep sees it) sitting right at the edge of
+    // a small floor patch - the ordinary wall-clearance nudge would push
+    // the camera off the patch's edge into open space if left unchecked.
+    const wall = markShape(new THREE.Mesh(new THREE.PlaneGeometry(0.05, 3), testMaterial()), 'edge-wall');
+    wall.position.set(0, 1.6, 0.1);
+    wall.updateMatrixWorld(true);
+    // Floor is a small patch centered on the click point - any nudge in
+    // any direction walks off it.
+    const floor = markShape(new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), testMaterial()), 'floor-patch');
+    floor.rotateX(-Math.PI / 2);
+    floor.position.set(0, 0, 0);
+    floor.updateMatrixWorld(true);
+
+    const eye = resolveFloorLanding([wall, floor], new THREE.Vector3(0, 0, 0), 1.6);
+    // Since retreating from the wall would walk off the floor patch, the
+    // click point itself (still on solid floor) is kept instead.
+    expect(eye.x).toBeCloseTo(0, 5);
+    expect(eye.z).toBeCloseTo(0, 5);
   });
 });
 

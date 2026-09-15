@@ -128,13 +128,49 @@ export interface LandingResolution {
 
 const CLEARANCE_TIERS = [1.6, 1.0, 0.6, 0.3];
 
+// Only tried as a fallback, once every tier has already failed straight
+// in along the wall's own normal - see the second pass below. This
+// specifically rescues the "standing right in a room corner" case: an
+// entry point right next to a perpendicular wall has that adjacent wall
+// immediately in front along every tier's straight-in ray, even though the
+// room has plenty of open floor just off to one side. Without this, a
+// second teleport click from such a spot can spuriously report every tier
+// obstructed and reject the click outright.
+const LANDING_OFF_AXIS_ANGLES_DEG = [20, -20, 40, -40];
+
+function landingCandidate(
+  raycastRoots: THREE.Object3D[],
+  testOrigin: THREE.Vector3,
+  direction: THREE.Vector3,
+  clearance: number
+): { eye: THREE.Vector3; clear: boolean } {
+  const raycaster = new THREE.Raycaster();
+  const candidate = testOrigin.clone().addScaledVector(direction, clearance);
+  const toCandidate = candidate.clone().sub(testOrigin);
+  const dist = toCandidate.length();
+  if (dist < 1e-4) return { eye: candidate, clear: true };
+
+  raycaster.set(testOrigin, toCandidate.clone().normalize());
+  raycaster.near = 0.01;
+  // Test the full distance to the candidate (not a shortened one) - an
+  // off-axis ray's forward reach shrinks as its angle from the wall normal
+  // grows, so shortening `far` risked stopping just short of a thin
+  // obstruction the candidate point actually sits behind.
+  raycaster.far = dist;
+  const hits = raycaster.intersectObjects(raycastRoots, true).filter(h => h.object.userData?.isShape);
+  return { eye: candidate, clear: hits.length === 0 };
+}
+
 /**
  * Steps the standing distance from the exit face down through
  * [1.6m -> 1.0m -> 0.6m -> 0.3m] until an unobstructed landing point is
- * found (furniture, partitions, structural columns). The y-coordinate
- * always comes from the floor-sampled target height, never from the
- * exit point's own height - otherwise a high window click would land the
- * camera up near the ceiling instead of standing on the floor.
+ * found (furniture, partitions, structural columns). If every tier is
+ * blocked straight ahead, a second pass fans out to a few off-axis angles
+ * at each tier before giving up, to escape a room corner's adjacent wall.
+ * The y-coordinate always comes from the floor-sampled target height,
+ * never from the exit point's own height - otherwise a high window click
+ * would land the camera up near the ceiling instead of standing on the
+ * floor.
  */
 export function resolveLandingPoint(
   raycastRoots: THREE.Object3D[],
@@ -143,22 +179,19 @@ export function resolveLandingPoint(
   targetY: number,
   tiers: number[] = CLEARANCE_TIERS
 ): LandingResolution {
-  const raycaster = new THREE.Raycaster();
   const testOrigin = new THREE.Vector3(exitPoint.x, targetY, exitPoint.z);
   const inward = wallNormal.clone().negate();
 
   for (const clearance of tiers) {
-    const candidate = testOrigin.clone().addScaledVector(inward, clearance);
-    const toCandidate = candidate.clone().sub(testOrigin);
-    const dist = toCandidate.length();
-    if (dist < 1e-4) return { eye: candidate, clearanceUsed: clearance, obstructed: false };
+    const result = landingCandidate(raycastRoots, testOrigin, inward, clearance);
+    if (result.clear) return { eye: result.eye, clearanceUsed: clearance, obstructed: false };
+  }
 
-    raycaster.set(testOrigin, toCandidate.clone().normalize());
-    raycaster.near = 0.01;
-    raycaster.far = Math.max(0.02, dist - 0.05);
-    const hits = raycaster.intersectObjects(raycastRoots, true).filter(h => h.object.userData?.isShape);
-    if (hits.length === 0) {
-      return { eye: candidate, clearanceUsed: clearance, obstructed: false };
+  for (const clearance of tiers) {
+    for (const angleDeg of LANDING_OFF_AXIS_ANGLES_DEG) {
+      const direction = inward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(angleDeg));
+      const result = landingCandidate(raycastRoots, testOrigin, direction, clearance);
+      if (result.clear) return { eye: result.eye, clearanceUsed: clearance, obstructed: false };
     }
   }
 
@@ -179,6 +212,20 @@ export function resolveLandingPoint(
  * personal-space radius, same idea as resolveLandingPoint's tiers but
  * without a single wall normal to retreat along.
  */
+/** Straight-down probe used to confirm solid floor still exists near `y` under `point`. */
+function hasFloorBelow(raycastRoots: THREE.Object3D[], point: THREE.Vector3, y: number): boolean {
+  const probeOrigin = new THREE.Vector3(point.x, y + 0.5, point.z);
+  const raycaster = new THREE.Raycaster(probeOrigin, new THREE.Vector3(0, -1, 0), 0, 4.0);
+  const hits = raycaster.intersectObjects(raycastRoots, true);
+  for (const hit of hits) {
+    if (!hit.face || !hit.object.userData?.isShape) continue;
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+    const n = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
+    if (n.y >= 0.9 && Math.abs(hit.point.y - y) < 0.3) return true;
+  }
+  return false;
+}
+
 export function resolveFloorLanding(
   raycastRoots: THREE.Object3D[],
   floorPoint: THREE.Vector3,
@@ -199,8 +246,16 @@ export function resolveFloorLanding(
       raycaster.far = personalSpace;
       const hit = raycaster.intersectObjects(raycastRoots, true).find(h => h.object.userData?.isShape);
       if (hit && hit.distance < personalSpace) {
-        eye.addScaledVector(dir, -(personalSpace - hit.distance));
-        adjusted = true;
+        const candidate = eye.clone().addScaledVector(dir, -(personalSpace - hit.distance));
+        // Only accept the nudge if solid floor still exists under the new
+        // spot - retreating from a wall/corner can otherwise push the
+        // camera past the edge of the floor slab (or over a stairwell
+        // hole) into open space, which is worse than standing a little
+        // close to whatever was nudged away from.
+        if (hasFloorBelow(raycastRoots, candidate, floorPoint.y)) {
+          eye.copy(candidate);
+          adjusted = true;
+        }
       }
     }
     if (!adjusted) break;
@@ -233,7 +288,7 @@ export function computeClearanceRadius(
       const direction = new THREE.Vector3(Math.sin(rad), 0, Math.cos(rad)).normalize();
       const origin = targetEye.clone().add(new THREE.Vector3(0, yOffset, 0));
       raycaster.set(origin, direction);
-      const hits = raycaster.intersectObjects(raycastRoots, true);
+      const hits = raycaster.intersectObjects(raycastRoots, true).filter(h => h.object.userData?.isShape);
       if (hits.length > 0 && hits[0].distance < minRadius) {
         minRadius = hits[0].distance;
       }
