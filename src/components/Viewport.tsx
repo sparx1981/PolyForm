@@ -1419,7 +1419,7 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
 // catch the markers mid-toggle. Layers avoid the toggle entirely.
 const TELEPORT_PORTAL_LAYER = 31;
 
-function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: ResolvedSurfaceHit; postprocessingActive: boolean }) {
+function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: ResolvedSurfaceHit | null; postprocessingActive: boolean }) {
   const { gl, scene, camera } = useThree();
   const discRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
@@ -1435,6 +1435,7 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
   );
   const frameCountRef = useRef(0);
   const destinationRef = useRef<PortalDestination | null>(null);
+  const lastHitObjectRef = useRef<THREE.Object3D | null>(null);
 
   useEffect(() => {
     discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
@@ -1450,6 +1451,18 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
       renderTarget.dispose();
       camera.layers.disable(TELEPORT_PORTAL_LAYER);
     };
+    // This component now stays mounted for the whole teleport-tool session
+    // (see its render site below) rather than being added/removed on every
+    // hover-target change, so this setup/teardown - and the GPU render
+    // target and camera-layer toggle it owns - only run once per session
+    // instead of on every raycast that happens not to land on a valid
+    // surface for a frame. Repeatedly disposing and recreating a
+    // WebGLRenderTarget (and flipping the main camera's layer mask) on
+    // every such gap is what was actually causing the preview to flicker
+    // while the mouse moved - hover detection has brief, harmless gaps
+    // (grazing a seam between two sub-meshes, a single frame between
+    // adjacent surfaces) that are completely normal for real geometry, but
+    // were previously each tearing this component down and rebuilding it.
   }, [renderTarget, camera]);
 
   useFrame(() => {
@@ -1457,6 +1470,18 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
     const ring = ringRef.current;
     const portalCam = portalCameraRef.current;
     if (!disc || !ring || !portalCam) return;
+
+    if (!enterHit) {
+      // No valid hover target right now - hide the indicator without
+      // tearing down the render target/camera, so a momentary raycast gap
+      // just blinks the marker off for a frame instead of flickering the
+      // whole preview pipeline.
+      disc.visible = false;
+      ring.visible = false;
+      return;
+    }
+    disc.visible = true;
+    ring.visible = true;
 
     frameCountRef.current++;
 
@@ -1468,7 +1493,13 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
     // Refresh it periodically; the disc/ring's own position/orientation
     // still update every frame below so the marker never visibly lags the
     // mouse, only the rendered CONTENTS and framing lag by a few ticks.
-    if (!destinationRef.current || frameCountRef.current % 6 === 0) {
+    // A genuinely new surface (not just the throttle interval) always
+    // forces an immediate recompute - this component no longer remounts
+    // between hover targets, so without this a fresh surface would show
+    // the previous one's stale destination for up to 6 frames.
+    const hitObjectChanged = lastHitObjectRef.current !== enterHit.hitObject;
+    lastHitObjectRef.current = enterHit.hitObject;
+    if (!destinationRef.current || hitObjectChanged || frameCountRef.current % 6 === 0) {
       const camYaw = extractYawFromQuaternion(camera.quaternion);
       destinationRef.current = isNavigableSurface(enterHit.worldNormal)
         ? resolvePortalDestination(scene.children, enterHit, {
@@ -1545,7 +1576,7 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
 
   return (
     <group>
-      <mesh ref={discRef} renderOrder={999}>
+      <mesh ref={discRef} renderOrder={999} visible={false}>
         <circleGeometry args={[1, 48]} />
         {postprocessingActive ? (
           <meshBasicMaterial color="#0063A3" transparent opacity={0.25} toneMapped={false} depthTest={false} />
@@ -1553,7 +1584,7 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
           <meshBasicMaterial map={renderTarget.texture} toneMapped={false} depthTest={false} />
         )}
       </mesh>
-      <mesh ref={ringRef} renderOrder={999}>
+      <mesh ref={ringRef} renderOrder={999} visible={false}>
         <ringGeometry args={[0.95, 1.02, 48]} />
         <meshBasicMaterial color="#0063A3" toneMapped={false} side={THREE.DoubleSide} depthTest={false} />
       </mesh>
@@ -10721,7 +10752,7 @@ function Scene() {
         </Html>
       )}
 
-      {activeTool === 'teleport' && portalHoverHit && (
+      {activeTool === 'teleport' && (
         <TeleportPortalPreview
           enterHit={portalHoverHit}
           postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
