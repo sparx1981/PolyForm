@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { AppProvider, useApp, type ToolbarKey, type DockZone } from './AppContext';
-import { handleFirestoreError, OperationType, restoreFirestoreArraysAfterLoad } from './firebase';
+import { handleFirestoreError, OperationType, restoreFirestoreArraysAfterLoad, hydrateOffloadedGeometry, firebaseGeometryIO } from './firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { cn } from './lib/utils';
 import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle, GripHorizontal } from 'lucide-react';
@@ -352,7 +352,8 @@ function AppContent() {
           }
           if (modelDoc.exists()) {
             const data = restoreFirestoreArraysAfterLoad(modelDoc.data());
-            setShapesSilent(data.shapes || []);
+            const hydratedShapes = await hydrateOffloadedGeometry(data.shapes || [], firebaseGeometryIO);
+            setShapesSilent(hydratedShapes);
             setTagsSilent(data.tags || []);
             setScenesSilent(data.scenes || []);
             setCustomMaterialsSilent(data.customMaterials || []);

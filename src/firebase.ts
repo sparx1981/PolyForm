@@ -1,10 +1,12 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
+import type { GeometryOffloadIO } from './lib/firestoreGeometryOffload';
 export { cleanFirestoreDataForSave, restoreFirestoreArraysAfterLoad } from './lib/firestoreArrayCodec';
+export { offloadLargeGeometryForSave, hydrateOffloadedGeometry } from './lib/firestoreGeometryOffload';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -14,6 +16,20 @@ export const db = initializeFirestore(app, {
 export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1'); // Default region, change if you deployed elsewhere
 export const googleProvider = new GoogleAuthProvider();
+
+// Firebase Storage-backed IO for offloadLargeGeometryForSave/
+// hydrateOffloadedGeometry (see firestoreGeometryOffload.ts).
+export const firebaseGeometryIO: GeometryOffloadIO = {
+  upload: async (path, jsonText) => {
+    const storageRef = ref(storage, path);
+    await uploadString(storageRef, jsonText, 'raw');
+    return getDownloadURL(storageRef);
+  },
+  fetch: async (url) => {
+    const res = await fetch(url);
+    return res.text();
+  },
+};
 
 // Validate connection to Firestore on initialization
 export async function testConnection() {

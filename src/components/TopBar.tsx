@@ -34,7 +34,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave } from '../firebase';
+import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave, offloadLargeGeometryForSave, firebaseGeometryIO } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -244,10 +244,17 @@ export default function TopBar() {
 
         const updateFirestoreModel = async (previewUrl: string) => {
           try {
+            // Offload any single shape's geometryData that's too large to
+            // comfortably fit in a Firestore document (e.g. a detailed
+            // roof-tile mesh) to Storage before writing, replacing it with
+            // a small URL marker - otherwise a sufficiently detailed
+            // design fails outright with "document ... exceeds the
+            // maximum allowed size", with nothing done about it.
+            const offloadedShapes = await offloadLargeGeometryForSave(shapes || [], user.uid, firebaseGeometryIO);
             await updateDoc(doc(db, 'models', currentModelId), {
               id: currentModelId,
               name: modelName,
-              shapes: cleanFirestoreData(shapes || []),
+              shapes: cleanFirestoreData(offloadedShapes),
               tags: cleanFirestoreData(tags || []),
               scenes: cleanFirestoreData(scenes || []),
               customMaterials: cleanFirestoreData(customMaterials || []),
@@ -379,12 +386,17 @@ export default function TopBar() {
           }
           docCreated = true;
           try {
+            // See the matching comment in handleSave's updateFirestoreModel:
+            // offload any oversized shape geometry to Storage first so a
+            // detailed design doesn't fail outright on Firestore's 1MiB
+            // document limit.
+            const offloadedShapes = await offloadLargeGeometryForSave(shapes || [], user.uid, firebaseGeometryIO);
             const docRef = await addDoc(collection(db, 'models'), {
               id: '',
               name: modelName,
               userId: user.uid,
               userName: user.displayName || 'Anonymous User',
-              shapes: cleanFirestoreData(shapes || []),
+              shapes: cleanFirestoreData(offloadedShapes),
               tags: cleanFirestoreData(tags || []),
               scenes: cleanFirestoreData(scenes || []),
               customMaterials: cleanFirestoreData(customMaterials || []),

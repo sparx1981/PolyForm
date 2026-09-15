@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
-import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave } from './firebase';
+import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadLargeGeometryForSave, hydrateOffloadedGeometry, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
@@ -895,7 +895,7 @@ console.log("Created rectangle:", myRect.id);`);
 
     // 3. Sync Model Data (Shapes, Tags, etc.)
     const modelRef = doc(db, 'models', currentModelId);
-    const unsubModel = onSnapshot(modelRef, { includeMetadataChanges: true }, (snapshot) => {
+    const unsubModel = onSnapshot(modelRef, { includeMetadataChanges: true }, async (snapshot) => {
       incrementReads(1);
       // If the change is from this client, skip re-applying to prevent flicker/jitter
       if (snapshot.metadata.hasPendingWrites) {
@@ -905,8 +905,15 @@ console.log("Created rectangle:", myRect.id);`);
 
       if (snapshot.exists()) {
         const data = restoreFirestoreArraysAfterLoad(snapshot.data());
+        // Reverses offloadLargeGeometryForSave: any shape whose
+        // geometryData was too large to store inline in the document (see
+        // the sync push above) comes back here as a small URL marker -
+        // fetch the real geometry back before it reaches the scene.
+        if (Array.isArray(data.shapes)) {
+          data.shapes = await hydrateOffloadedGeometry(data.shapes, firebaseGeometryIO);
+        }
         isRemoteUpdate.current = true;
-        
+
         // Update local hash to prevent redundant pushes
         const newState = {
           shapes: data.shapes || [],
@@ -1053,8 +1060,19 @@ console.log("Created rectangle:", myRect.id);`);
       setSyncStatus('syncing');
 
       try {
+        // Offload any single shape's geometryData that's too large to
+        // comfortably fit in a Firestore document (e.g. a detailed
+        // roof-tile mesh) to Storage before writing - otherwise a
+        // sufficiently detailed design fails outright on every auto-save
+        // attempt with "document ... exceeds the maximum allowed size",
+        // and this is the path that fires on every edit, not just an
+        // explicit Save.
+        const offloadedShapes = user?.uid
+          ? await offloadLargeGeometryForSave(shapes, user.uid, firebaseGeometryIO)
+          : shapes;
+
         const stateToPush = cleanData({
-          shapes,
+          shapes: offloadedShapes,
           tags,
           scenes,
           customMaterials,

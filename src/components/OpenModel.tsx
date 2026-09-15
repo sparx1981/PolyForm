@@ -23,7 +23,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useApp } from '../AppContext';
-import { db, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad } from '../firebase';
+import { db, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, hydrateOffloadedGeometry, firebaseGeometryIO } from '../firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy, writeBatch, limit } from 'firebase/firestore';
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
@@ -344,7 +344,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
 
     const actualPassword = await fetchModelPassword(modelToOpen.id);
     if (actualPassword !== null && passwordToTry === actualPassword) {
-      loadModel(modelToOpen);
+      await loadModel(modelToOpen);
       setIsPasswordModalOpen(false);
       setModelToOpen(null);
     } else {
@@ -352,8 +352,13 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     }
   };
 
-  const loadModel = (model: SavedModel) => {
-    setShapes(model.shapes || []);
+  const loadModel = async (model: SavedModel) => {
+    // Reverses offloadLargeGeometryForSave: a shape whose geometryData was
+    // too large to store inline in the document comes back from the list
+    // fetch as a small URL marker - fetch the real geometry before it
+    // reaches the scene.
+    const shapes = await hydrateOffloadedGeometry(model.shapes || [], firebaseGeometryIO);
+    setShapes(shapes);
     setTags(model.tags || []);
     setScenes(model.scenes || []);
     setAnimations(model.animations || []);
