@@ -24,6 +24,18 @@ describe('createWindowGeometry - porthole style', () => {
     expect(bboxW).toBeLessThan(0.85);
   });
 
+  it('actually merges the ring, plate and glass instead of falling back to a plain box', () => {
+    // ExtrudeGeometry (used for the mounting plate) produces no index
+    // buffer while TorusGeometry/CylinderGeometry (ring/glass) do -
+    // mergeGeometries silently fails on that mismatch and the style falls
+    // back to createWindowGeometry's plain THREE.BoxGeometry fallback,
+    // which has no material groups and only 24 vertices. A properly
+    // merged result has multiple groups (frame vs. glass materials).
+    const geom = createWindowGeometry(0.8, 0.8, 0.14, 'porthole');
+    expect(geom.groups.length).toBeGreaterThan(1);
+    expect(geom.getAttribute('position').count).toBeGreaterThan(24);
+  });
+
   it('does not throw and falls back sanely for degenerate dimensions', () => {
     expect(() => createWindowGeometry(0.01, 0.01, 0.01, 'porthole')).not.toThrow();
   });

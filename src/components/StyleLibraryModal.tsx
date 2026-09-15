@@ -385,6 +385,14 @@ function StyleDiagram({ style }: { style: ArchStyleDef }) {
             <rect x="10" y="100" width="120" height="6" fill="#cbd5e1" stroke="currentColor" strokeWidth="1.5" rx="1" />
           </svg>
         );
+      case 'porthole':
+        return (
+          <svg viewBox="0 0 140 120" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <rect x="30" y="10" width="80" height="90" fill="none" stroke="currentColor" strokeWidth="2" rx="4" />
+            <circle cx="70" cy="55" r="38" fill="#bae6fd" fillOpacity="0.4" stroke="currentColor" strokeWidth="4" />
+            <circle cx="70" cy="55" r="27" fill="#bae6fd" fillOpacity="0.3" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        );
       case 'cross':
       default:
         return (

@@ -1003,7 +1003,11 @@ export function createWindowGeometry(
     // plane with its hole along Z (the window's viewing axis), matching
     // every other window style's depth-along-Z convention with no extra
     // rotation needed.
-    const ring = new THREE.TorusGeometry(outerR - tubeR, tubeR, 16, segments);
+    // De-indexed to match ExtrudeGeometry below (which never produces an
+    // index buffer) - mergeGeometries requires every input to either all
+    // have an index or all lack one, otherwise it fails silently and this
+    // whole style falls back to a plain solid box.
+    const ring = new THREE.TorusGeometry(outerR - tubeR, tubeR, 16, segments).toNonIndexed();
     frameParts.push(ring);
 
     // Square mounting plate behind the ring, sized to the full rectangular
@@ -1027,7 +1031,7 @@ export function createWindowGeometry(
     frameParts.push(plate);
 
     // Fixed round glass pane, inset just behind the frame's front face.
-    const glass = new THREE.CylinderGeometry(innerR, innerR, 0.008, segments);
+    const glass = new THREE.CylinderGeometry(innerR, innerR, 0.008, segments).toNonIndexed();
     glass.rotateX(Math.PI / 2);
     glassParts.push(glass);
 

@@ -5247,7 +5247,7 @@ function Scene() {
         const shapeColor = (activeMaterial && activeMaterial !== '#ffffff' && activeMaterial !== '#8b5a2b' && activeMaterial !== '#38bdf8') ? activeMaterial : '#ffffff';
         const newDoorWindowShape: Shape = {
           id: Math.random().toString(36).substr(2, 9),
-          name: targetRoof || windowStyle === 'velux-roof' ? 'Velux Roof Window' : activeTool === 'door' ? 'Door' : 'Window',
+          name: windowStyle === 'velux-roof' ? 'Velux Roof Window' : activeTool === 'door' ? 'Door' : 'Window',
           type: activeTool,
           position: [worldPos.x, worldPos.y, worldPos.z],
           quaternion: quatArray,
