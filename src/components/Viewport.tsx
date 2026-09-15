@@ -100,6 +100,14 @@ import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
 import { applyStairwellHolesToSlabs, computeHolesForSlab } from '../lib/archStairwell';
 import { updateTimberFramesIfPresent } from '../lib/timberFrameGenerator';
+import {
+  resolveWorldHit,
+  isNavigableSurface,
+  resolvePortalDestination,
+  smoothstep,
+  type ResolvedSurfaceHit,
+  type PortalDestination,
+} from '../lib/portalNavigation';
 import { InstancedTimberFraming } from './InstancedTimberFraming';
 import { BezierTool } from '../tools/bezier/BezierTool';
 import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
@@ -1391,61 +1399,13 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
   );
 }
 
-// Shared by the Teleport tool's click handler and its live preview: keeps
-// the camera's current compass heading (yaw) but levels off any pitch, so
-// arriving at a new spot looks straight ahead at eye level rather than
-// wherever an orbiting camera happened to be angled (steeply down at the
-// ground, say) - which otherwise reads as "teleported somewhere wrong"
-// even when the landing position itself is correct.
-function levelTeleportTarget(newPos: THREE.Vector3, camera: THREE.Camera, scene: THREE.Scene): THREE.Vector3 {
-  const controls = (scene.userData as any).controls;
-  const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0, 0);
-  const lookDir = prevTarget.clone().sub(camera.position);
-  const levelDir = new THREE.Vector3(lookDir.x, 0, lookDir.z);
-  if (levelDir.lengthSq() < 1e-6) levelDir.set(0, 0, -1);
-  levelDir.normalize();
-  return newPos.clone().addScaledVector(levelDir, 5);
-}
-
-// Shared by the Teleport tool's click handler and its live preview: a
-// clicked floor point right next to a wall (a corner, say) sits at a
-// perfectly valid position, but standing THERE at eye height puts the
-// camera's body inside the wall's own solid thickness - the near clip
-// plane then cuts straight through the wall's interior, rendering pure
-// black (its back faces don't draw at all) since there's nothing else to
-// see. This reads as "teleported to a random unknown location" even
-// though X/Z landed exactly on the clicked spot. Casts a small ring of
-// short rays outward from the candidate position and nudges it away from
-// anything closer than a personal-space radius, so standing spots near
-// walls/corners land just clear of them instead of inside them.
-function resolveTeleportClearance(pos: THREE.Vector3, scene: THREE.Scene): THREE.Vector3 {
-  const clearance = 0.35;
-  const result = pos.clone();
-  const rayDirs = 8;
-  const tempRaycaster = new THREE.Raycaster();
-  for (let pass = 0; pass < 2; pass++) {
-    let adjusted = false;
-    for (let i = 0; i < rayDirs; i++) {
-      const angle = (i / rayDirs) * Math.PI * 2;
-      const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-      tempRaycaster.set(result, dir);
-      tempRaycaster.far = clearance;
-      const hit = tempRaycaster.intersectObjects(scene.children, true).find(h => h.object.userData?.isShape);
-      if (hit && hit.distance < clearance) {
-        result.addScaledVector(dir, -(clearance - hit.distance));
-        adjusted = true;
-      }
-    }
-    if (!adjusted) break;
-  }
-  return result;
-}
-
-// Live look-through preview for the Teleport tool: a circular "window"
-// hovering over the cursor's hit point, rendered from a second camera
+// Live look-through preview for Portal Navigation: a circular "window"
+// hovering over the entered surface, rendered from a second camera
 // positioned where a click would actually send the viewer - so you see
 // the destination (including behind walls/objects you're currently facing
-// away from) before committing, rather than just a flat marker.
+// away from) before committing, rather than just a flat marker. Shares
+// the exact §4-§5 resolution pipeline with the actual click handler
+// (resolvePortalDestination) so preview and outcome can never disagree.
 // A dedicated layer (not used anywhere else in the app) that only the
 // portal's own preview camera excludes - lets us keep the disc/ring
 // permanently visible to the main camera with no per-frame visibility
@@ -1456,7 +1416,7 @@ function resolveTeleportClearance(pos: THREE.Vector3, scene: THREE.Scene): THREE
 // catch the markers mid-toggle. Layers avoid the toggle entirely.
 const TELEPORT_PORTAL_LAYER = 31;
 
-function TeleportPortalPreview({ hoverPoint, postprocessingActive }: { hoverPoint: [number, number, number]; postprocessingActive: boolean }) {
+function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: ResolvedSurfaceHit; postprocessingActive: boolean }) {
   const { gl, scene, camera } = useThree();
   const discRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
@@ -1471,7 +1431,7 @@ function TeleportPortalPreview({ hoverPoint, postprocessingActive }: { hoverPoin
     []
   );
   const frameCountRef = useRef(0);
-  const clearedPosRef = useRef<THREE.Vector3 | null>(null);
+  const destinationRef = useRef<PortalDestination | null>(null);
 
   useEffect(() => {
     discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
@@ -1497,22 +1457,28 @@ function TeleportPortalPreview({ hoverPoint, postprocessingActive }: { hoverPoin
 
     frameCountRef.current++;
 
-    const eyeHeight = 1.7;
-    const hp = new THREE.Vector3(hoverPoint[0], hoverPoint[1], hoverPoint[2]);
+    const hp = enterHit.worldPoint;
 
-    // The wall-clearance check does up to 16 raycasts - too costly to redo
-    // every frame just for a cursor that hasn't moved far. Refresh it
-    // periodically; position/orientation of the disc/ring itself is still
-    // updated every frame below so the marker never visibly lags the mouse.
-    if (!clearedPosRef.current || frameCountRef.current % 6 === 0) {
-      const rawDest = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + eyeHeight, hoverPoint[2]);
-      clearedPosRef.current = resolveTeleportClearance(rawDest, scene);
+    // The full resolution pipeline does dozens of raycasts (cavity exit,
+    // floor datum, tiered occupancy checks, 16-ray clearance sweep) - too
+    // costly to redo every frame just for a cursor that hasn't moved far.
+    // Refresh it periodically; the disc/ring's own position/orientation
+    // still update every frame below so the marker never visibly lags the
+    // mouse, only the rendered CONTENTS and framing lag by a few ticks.
+    if (!destinationRef.current || frameCountRef.current % 6 === 0) {
+      destinationRef.current = resolvePortalDestination(scene.children, enterHit, {
+        camEye: camera.position,
+        maxWallThickness: 0.6,
+        eyeHeight: 1.6,
+        clearanceDMax: 3.5,
+      });
     }
-    const dest = clearedPosRef.current;
-    const newTarget = levelTeleportTarget(dest, camera, scene);
+    const dest = destinationRef.current;
 
-    portalCam.position.copy(dest);
-    portalCam.lookAt(newTarget);
+    portalCam.position.copy(dest.eye);
+    portalCam.quaternion.copy(dest.quaternion);
+    portalCam.fov = dest.fov;
+    portalCam.near = dest.near;
     portalCam.updateProjectionMatrix();
 
     // Scale so the portal reads at a consistent size regardless of how
@@ -3304,11 +3270,79 @@ function Scene() {
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
-  const [teleportHoverPoint, setTeleportHoverPoint] = useState<[number, number, number] | null>(null);
+  const [portalHoverHit, setPortalHoverHit] = useState<ResolvedSurfaceHit | null>(null);
+  const [portalTransitionActive, setPortalTransitionActive] = useState(false);
+  const portalTransitionRef = useRef<{
+    startTime: number;
+    duration: number;
+    from: { position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number; near: number };
+    to: { position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number; near: number; target: THREE.Vector3 };
+  } | null>(null);
   const [trackingGuide, setTrackingGuide] = useState<{ source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null>(null);
   const awakenedRefPointsRef = useRef<Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; time: number; screenPos: { x: number; y: number } }>>([]);
   const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
+
+  // Starts (or, mid-flight, restarts from the current interpolated pose)
+  // the Portal Navigation camera transition. See the useFrame driver below
+  // for the actual per-frame interpolation.
+  const startPortalTransition = useCallback((destination: PortalDestination) => {
+    const controls = scene.userData.controls;
+    const cam = camera as THREE.PerspectiveCamera;
+
+    // Whether or not a transition was already running, the camera's live
+    // position/quaternion/fov/near already reflect wherever it currently
+    // is (the frame driver below mutates them directly every tick) - so
+    // starting fresh from `cam.*` naturally continues smoothly from an
+    // interrupted mid-flight transition with no special-casing needed.
+    const fromPos = cam.position.clone();
+    const fromQuat = cam.quaternion.clone();
+    const fromFov = cam.fov || 50;
+    const fromNear = cam.near;
+
+    const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const duration = reducedMotion ? 0 : 200; // within the spec's 150-250ms band
+
+    portalTransitionRef.current = {
+      startTime: performance.now(),
+      duration,
+      from: { position: fromPos, quaternion: fromQuat, fov: fromFov, near: fromNear },
+      to: {
+        position: destination.eye.clone(),
+        quaternion: destination.quaternion.clone(),
+        fov: destination.fov,
+        near: destination.near,
+        target: destination.target.clone(),
+      },
+    };
+    if (controls) controls.enabled = false;
+    setPortalTransitionActive(true);
+  }, [camera, scene]);
+
+  useFrame(() => {
+    const active = portalTransitionRef.current;
+    if (!active) return;
+    const cam = camera as THREE.PerspectiveCamera;
+    const t = active.duration <= 0 ? 1 : (performance.now() - active.startTime) / active.duration;
+    const eased = smoothstep(t);
+
+    cam.position.lerpVectors(active.from.position, active.to.position, eased);
+    cam.quaternion.slerpQuaternions(active.from.quaternion, active.to.quaternion, eased);
+    cam.fov = THREE.MathUtils.lerp(active.from.fov, active.to.fov, eased);
+    cam.near = THREE.MathUtils.lerp(active.from.near, active.to.near, eased);
+    cam.updateProjectionMatrix();
+
+    if (t >= 1) {
+      const controls = scene.userData.controls;
+      if (controls) {
+        controls.target.copy(active.to.target);
+        controls.enabled = true;
+        controls.update();
+      }
+      portalTransitionRef.current = null;
+      setPortalTransitionActive(false);
+    }
+  });
   // The global keydown handler below is a single useEffect whose own
   // dependency array only lists a handful of the values it actually reads
   // (activeTool, a few vertex-array lengths, etc.) - widening it to cover
@@ -3612,7 +3646,7 @@ function Scene() {
     }
     if (activeTool !== 'teleport') {
       setSnapIndicator(null);
-      setTeleportHoverPoint(null);
+      setPortalHoverHit(null);
     }
   }, [activeTool]);
 
@@ -4805,38 +4839,37 @@ function Scene() {
     if (activeTool === 'teleport') {
       e.stopPropagation();
 
+      // Portal Navigation: click a vertical architectural surface - a
+      // wall, window pane, or doorway - to traverse through it into the
+      // room/setting on the other side, with framing (clearance, FOV,
+      // near-plane, eye height, yaw) calibrated automatically on arrival.
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const hit = intersects.find(i => i.object.userData?.isShape);
-      const hitPoint = hit ? hit.point.clone() : (() => {
-        const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const p = new THREE.Vector3();
-        return raycaster.ray.intersectPlane(ground, p) ? p : null;
-      })();
+      const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
+      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : null;
 
-      if (hitPoint) {
-        // Step onto the clicked surface at a standing eye height, keeping
-        // the camera's current facing DIRECTION (compass heading only,
-        // not pitch) rather than resetting the view - a "walk to this
-        // spot" travel tool, like SketchUp's Teleport extension. Keeping
-        // the full 3D look vector (including whatever steep up/down pitch
-        // an orbiting camera happened to have) landed the new view staring
-        // mostly at the ground or sky, which read as "teleported to an
-        // unknown location" even though the position was correct - leveling
-        // the pitch keeps the new view oriented the way a person standing
-        // there would actually look.
-        const eyeHeight = 1.7;
-        const rawPos = new THREE.Vector3(hitPoint.x, hitPoint.y + eyeHeight, hitPoint.z);
-        const newPos = resolveTeleportClearance(rawPos, scene);
-        const newTarget = levelTeleportTarget(newPos, camera, scene);
-
-        window.dispatchEvent(new CustomEvent('set-camera', {
-          detail: {
-            position: [newPos.x, newPos.y, newPos.z],
-            target: [newTarget.x, newTarget.y, newTarget.z]
-          }
-        }));
-        setMeasurements('Teleport: Click another spot to keep moving, or switch tool to stop.');
+      if (!enterHit) {
+        setMeasurements('Portal Navigation: Click a wall, window, or door to travel through it.');
+        return;
       }
+      if (!isNavigableSurface(enterHit.worldNormal)) {
+        setMeasurements('Portal Navigation: That surface is too close to horizontal - click a vertical wall, window, or door.');
+        return;
+      }
+
+      const destination = resolvePortalDestination(scene.children, enterHit, {
+        camEye: camera.position,
+        maxWallThickness: 0.6,
+        eyeHeight: 1.6,
+        clearanceDMax: 3.5,
+      });
+
+      if (destination.obstructed) {
+        showToast('Destination space is obstructed or inaccessible.');
+        return;
+      }
+
+      startPortalTransition(destination);
+      setMeasurements('Portal Navigation: Click another surface to keep moving, or switch tool to stop.');
       return;
     }
 
@@ -5840,19 +5873,16 @@ function Scene() {
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (activeTool === 'teleport') {
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const hit = intersects.find(i => i.object.userData?.isShape);
-      let hitPoint: THREE.Vector3 | null = hit ? hit.point.clone() : null;
-      if (!hitPoint) {
-        const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const p = new THREE.Vector3();
-        hitPoint = raycaster.ray.intersectPlane(ground, p) ? p : null;
-      }
-      if (hitPoint) {
-        setSnapIndicator({ point: [hitPoint.x, hitPoint.y + 0.05, hitPoint.z], type: 'center', tooltip: 'Click to Teleport Here' });
-        setTeleportHoverPoint([hitPoint.x, hitPoint.y, hitPoint.z]);
+      const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
+      const enterHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : null;
+      const valid = enterHit && isNavigableSurface(enterHit.worldNormal);
+
+      if (valid && enterHit) {
+        setSnapIndicator({ point: [enterHit.worldPoint.x, enterHit.worldPoint.y, enterHit.worldPoint.z], type: 'center', tooltip: 'Click to Walk Through' });
+        setPortalHoverHit(enterHit);
       } else {
         setSnapIndicator(null);
-        setTeleportHoverPoint(null);
+        setPortalHoverHit(null);
       }
       return;
     }
@@ -9094,7 +9124,7 @@ function Scene() {
           MIDDLE: THREE.MOUSE.ROTATE,
           RIGHT: THREE.MOUSE.PAN
         }}
-        enabled={!drawingStart && !pushPullState && !isSculptingDragRef.current && activeTool !== 'landscape_sculpt' && activeTool !== 'landscape_mask'}
+        enabled={!drawingStart && !pushPullState && !isSculptingDragRef.current && activeTool !== 'landscape_sculpt' && activeTool !== 'landscape_mask' && !portalTransitionActive}
         minPolarAngle={floorEnabled ? 0 : -Math.PI}
         maxPolarAngle={floorEnabled ? Math.PI / 2 : Math.PI}
       />
@@ -10571,9 +10601,9 @@ function Scene() {
         </Html>
       )}
 
-      {activeTool === 'teleport' && teleportHoverPoint && (
+      {activeTool === 'teleport' && portalHoverHit && (
         <TeleportPortalPreview
-          hoverPoint={teleportHoverPoint}
+          enterHit={portalHoverHit}
           postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
         />
       )}

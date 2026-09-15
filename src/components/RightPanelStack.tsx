@@ -3280,8 +3280,8 @@ export default function RightPanelStack() {
                 <div className="space-y-3 px-1 py-1">
                   <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-700/60">
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Teleport</span>
-                      <span className="text-[9px] text-gray-400">Click a spot in the model to walk there</span>
+                      <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Portal Navigation</span>
+                      <span className="text-[9px] text-gray-400">Click a wall, window, or door to walk through it</span>
                     </div>
                     <button
                       id="toggle-camera-teleport"
@@ -3290,7 +3290,7 @@ export default function RightPanelStack() {
                         "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
                         activeTool === 'teleport' ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
                       )}
-                      title={activeTool === 'teleport' ? "Exit Teleport Mode" : "Enable Teleport Mode"}
+                      title={activeTool === 'teleport' ? "Exit Portal Navigation" : "Enable Portal Navigation"}
                     >
                       <div className={cn(
                         "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
