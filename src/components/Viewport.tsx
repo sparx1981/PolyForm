@@ -1412,13 +1412,25 @@ function levelTeleportTarget(newPos: THREE.Vector3, camera: THREE.Camera, scene:
 // positioned where a click would actually send the viewer - so you see
 // the destination (including behind walls/objects you're currently facing
 // away from) before committing, rather than just a flat marker.
+// A dedicated layer (not used anywhere else in the app) that only the
+// portal's own preview camera excludes - lets us keep the disc/ring
+// permanently visible to the main camera with no per-frame visibility
+// toggling. Toggling .visible around the off-screen render was a source
+// of flicker in its own right: if anything else in the render pipeline
+// (the app's optional EffectComposer/SSAO pass in particular) reads scene
+// state at a slightly different point in the frame than assumed, it could
+// catch the markers mid-toggle. Layers avoid the toggle entirely.
+const TELEPORT_PORTAL_LAYER = 31;
+
 function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, number] }) {
   const { gl, scene, camera } = useThree();
   const discRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const portalCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   if (!portalCameraRef.current) {
-    portalCameraRef.current = new THREE.PerspectiveCamera(65, 1, 0.1, 2000);
+    const cam = new THREE.PerspectiveCamera(65, 1, 0.1, 2000);
+    cam.layers.disable(TELEPORT_PORTAL_LAYER);
+    portalCameraRef.current = cam;
   }
   const renderTarget = useMemo(
     () => new THREE.WebGLRenderTarget(384, 384, { generateMipmaps: false }),
@@ -1427,8 +1439,20 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
   const frameCountRef = useRef(0);
 
   useEffect(() => {
-    return () => { renderTarget.dispose(); };
-  }, [renderTarget]);
+    discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
+    ringRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
+    camera.layers.enable(TELEPORT_PORTAL_LAYER);
+    // Never a valid raycast target - purely a visual indicator, so it must
+    // not be able to intercept the hover/click hit-testing that decides
+    // where the tool actually sends the viewer.
+    const noRaycast = () => {};
+    if (discRef.current) discRef.current.raycast = noRaycast;
+    if (ringRef.current) ringRef.current.raycast = noRaycast;
+    return () => {
+      renderTarget.dispose();
+      camera.layers.disable(TELEPORT_PORTAL_LAYER);
+    };
+  }, [renderTarget, camera]);
 
   useFrame(() => {
     const disc = discRef.current;
@@ -1454,14 +1478,15 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
     portalCam.lookAt(newTarget);
     portalCam.updateProjectionMatrix();
 
-    // Scale so the portal reads at a consistent size regardless of how
-    // close or far the hovered point is, and pull it toward the current
-    // camera (rather than a fixed world-axis offset, which only avoids
-    // z-fighting on a flat floor and re-introduces it on any wall/roof
-    // face) so it never fights the actual surface for the same pixels -
-    // that fight was the main source of the reported flicker.
+    // Deliberately a small, roughly fixed world-space radius rather than
+    // one that grows with distance: a big circle covers a wide range of
+    // real-world depth (easily spanning a near wall AND the floor behind
+    // it in perspective), so clicking anywhere inside it could raycast to
+    // a surface far from where the disc visually appeared to be - the
+    // most likely explanation for landing somewhere unexpected. Keeping it
+    // small and reasonably constant keeps "click the marker" precise.
     const camDist = camera.position.distanceTo(hp);
-    const radius = THREE.MathUtils.clamp(camDist * 0.12, 0.5, 2.5);
+    const radius = THREE.MathUtils.clamp(camDist * 0.035, 0.35, 0.6);
     const towardCamera = camera.position.clone().sub(hp).normalize();
     const discPos = hp.clone().addScaledVector(towardCamera, Math.max(0.03, camDist * 0.01));
 
@@ -1474,16 +1499,19 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
 
     if (!shouldRenderThisFrame) return;
 
-    // Hide the portal markers while rendering their own view - otherwise
-    // they'd recursively show up inside their own texture from last frame.
-    disc.visible = false;
-    ring.visible = false;
-    const prevTargetBuffer = gl.getRenderTarget();
+    const prevRenderTarget = gl.getRenderTarget();
+    const prevAutoClear = gl.autoClear;
+    // Explicitly clear (rather than relying on autoClear, which some
+    // postprocessing setups in this app turn off globally) - otherwise
+    // each frame's render accumulates on top of the last into the same
+    // target, ghosting/smearing as the portal moves, which read as
+    // flicker.
+    gl.autoClear = true;
     gl.setRenderTarget(renderTarget);
+    gl.clear();
     gl.render(scene, portalCam);
-    gl.setRenderTarget(prevTargetBuffer);
-    disc.visible = true;
-    ring.visible = true;
+    gl.setRenderTarget(prevRenderTarget);
+    gl.autoClear = prevAutoClear;
   });
 
   return (
@@ -1493,8 +1521,8 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
         <meshBasicMaterial map={renderTarget.texture} toneMapped={false} depthTest={false} />
       </mesh>
       <mesh ref={ringRef} renderOrder={999}>
-        <ringGeometry args={[0.97, 1.08, 48]} />
-        <meshBasicMaterial color="#22d3ee" toneMapped={false} side={THREE.DoubleSide} depthTest={false} />
+        <ringGeometry args={[0.95, 1.02, 48]} />
+        <meshBasicMaterial color="#0063A3" toneMapped={false} side={THREE.DoubleSide} depthTest={false} />
       </mesh>
     </group>
   );
