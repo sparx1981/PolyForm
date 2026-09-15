@@ -181,6 +181,25 @@ describe('resolveExitPoint', () => {
     const exit = resolveExitPoint([front], enterHit, 0.6);
     expect(exit.equals(enterHit.worldPoint)).toBe(true);
   });
+
+  it('ignores a decorative (non-isShape) overlay sitting where the far face would be', () => {
+    // A selection-highlight/wireframe-style overlay mesh - real geometry
+    // with a correctly anti-parallel normal, but not part of the actual
+    // architecture - must not be mistaken for the wall's far face.
+    const { front } = wallPair(0.2);
+    const decoy = new THREE.Mesh(new THREE.PlaneGeometry(4, 3), testMaterial());
+    decoy.position.copy(front.position).setZ(front.position.z + 0.2);
+    decoy.updateMatrixWorld(true); // no markShape() - deliberately not tagged isShape
+
+    const enterHit: ResolvedSurfaceHit = {
+      worldPoint: front.position.clone(),
+      worldNormal: new THREE.Vector3(0, 0, -1),
+      hitObject: front,
+      isBackface: false,
+    };
+    const exit = resolveExitPoint([front, decoy], enterHit, 0.6);
+    expect(exit.equals(enterHit.worldPoint)).toBe(true);
+  });
 });
 
 describe('sampleFloorDatum', () => {

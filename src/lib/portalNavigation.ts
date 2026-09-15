@@ -80,7 +80,7 @@ export function resolveExitPoint(
   const hits = raycaster.intersectObjects(raycastRoots, true);
   for (const hit of hits) {
     if (hit.object === enterHit.hitObject && hit.distance < 0.002) continue;
-    if (!hit.face) continue;
+    if (!hit.face || !hit.object.userData?.isShape) continue;
 
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
     const candidateNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
@@ -99,6 +99,12 @@ export function resolveExitPoint(
  * equal (split levels, raised foundations). Falls back to the camera's
  * current eye elevation when no qualifying horizontal face is found
  * (unfinished massing, open-air context).
+ *
+ * Deliberately does NOT restrict hits to `userData.isShape` the way the
+ * other probes in this module do: stepping through an exterior wall into
+ * an unmodeled yard/terrain should still land on the app's generic
+ * ground plane, which - unlike an authored floor/roof Shape - was never
+ * tagged as one.
  */
 export function sampleFloorDatum(
   raycastRoots: THREE.Object3D[],
