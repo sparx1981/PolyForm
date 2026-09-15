@@ -4571,6 +4571,43 @@ function Scene() {
     pointerUpHandledRef.current = false;
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
 
+    if (activeTool === 'teleport') {
+      e.stopPropagation();
+
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const hit = intersects.find(i => i.object.userData?.isShape);
+      const hitPoint = hit ? hit.point.clone() : (() => {
+        const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const p = new THREE.Vector3();
+        return raycaster.ray.intersectPlane(ground, p) ? p : null;
+      })();
+
+      if (hitPoint) {
+        // Step onto the clicked surface at a standing eye height, keeping
+        // the camera's current facing direction (yaw) rather than resetting
+        // the view - a "walk to this spot" travel tool, like SketchUp's
+        // Teleport extension, not a re-aim of the camera.
+        const eyeHeight = 1.7;
+        const newPos = new THREE.Vector3(hitPoint.x, hitPoint.y + eyeHeight, hitPoint.z);
+
+        const controls = scene.userData.controls;
+        const prevTarget = controls ? controls.target.clone() : new THREE.Vector3(0, 0, 0);
+        const lookDir = prevTarget.clone().sub(camera.position);
+        if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1);
+        lookDir.normalize();
+        const newTarget = newPos.clone().addScaledVector(lookDir, 5);
+
+        window.dispatchEvent(new CustomEvent('set-camera', {
+          detail: {
+            position: [newPos.x, newPos.y, newPos.z],
+            target: [newTarget.x, newTarget.y, newTarget.z]
+          }
+        }));
+        setMeasurements('Teleport: Click another spot to keep moving, or switch tool to stop.');
+      }
+      return;
+    }
+
     if (activeTool === 'bezier') {
       e.stopPropagation();
 

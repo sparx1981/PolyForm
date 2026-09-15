@@ -1014,7 +1014,11 @@ export function createWindowGeometry(
     // wall opening with a circular hole cut for the glazing/ring - a real
     // porthole mounting-flange detail that also closes the small corner
     // gaps left by a round frame sitting inside a rectangular opening.
-    const plateThickness = Math.max(depth * 0.25, 0.02);
+    // Spans the window's full depth (like the ring and every other frame
+    // part) rather than just a thin slice - the wall opening this window
+    // sits in is cut through its full thickness, so a plate covering only
+    // part of that depth left the corners open, exposing whatever sits
+    // behind the window through the gap.
     const hw = width / 2;
     const hh = height / 2;
     const plateShape = new THREE.Shape();
@@ -1026,7 +1030,7 @@ export function createWindowGeometry(
     const plateHole = new THREE.Path();
     plateHole.absarc(0, 0, outerR, 0, Math.PI * 2, false);
     plateShape.holes.push(plateHole);
-    const plate = new THREE.ExtrudeGeometry(plateShape, { depth: plateThickness, bevelEnabled: false });
+    const plate = new THREE.ExtrudeGeometry(plateShape, { depth, bevelEnabled: false });
     plate.translate(0, 0, -depth / 2);
     frameParts.push(plate);
 

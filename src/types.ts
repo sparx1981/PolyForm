@@ -20,7 +20,7 @@ export type ToolType =
   | 'line' | 'poly' | 'bezier' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
   | 'move' | 'rotate' | 'scale' | 'pushpull' | 'followme' | 'offset' | 'flip'
   | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section'
-  | 'orbit' | 'pan' | 'zoom' | 'zoomextents'
+  | 'orbit' | 'pan' | 'zoom' | 'zoomextents' | 'teleport'
   | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome'
   | 'bevel' | 'subtract' | 'note' | 'deform'
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
