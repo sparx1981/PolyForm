@@ -1,4 +1,4 @@
-import React, { useRef, useState, createContext, useContext } from 'react';
+import React, { useRef, useState, useEffect, createContext, useContext } from 'react';
 import { 
   Building2, 
   DoorOpen, 
@@ -118,6 +118,18 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
 
   const [showWallOptions, setShowWallOptions] = useState(false);
   const [showRoofOptions, setShowRoofOptions] = useState(false);
+  const roofMenuBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Close the roof generator's dropdown whenever a DIFFERENT tool becomes
+  // active - previously it only ever closed via its own toggle/menu-item
+  // clicks, so switching tools by clicking anywhere else in the toolbar
+  // (or via a hotkey) left it open and floating over whatever was selected
+  // next. Selecting 'roof' itself (this button's own click handler calls
+  // handleOpenModifierPanel('roof') before toggling) doesn't trip this,
+  // since activeTool is already 'roof' in that case.
+  useEffect(() => {
+    if (activeTool !== 'roof') setShowRoofOptions(false);
+  }, [activeTool]);
 
   // Unified modifier panel opening handler
   const handleOpenModifierPanel = (toolId: ToolType) => {
@@ -246,6 +258,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
       {/* Parametric Roof Generator */}
       <div className="relative">
         <button
+          ref={roofMenuBtnRef}
           id="arch-roof-menu-btn"
           onClick={() => {
             handleOpenModifierPanel('roof');
@@ -261,52 +274,61 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
           <Home size={18} />
         </button>
 
-        {showRoofOptions && (
-          <div 
-            className={cn(
-              "absolute left-14 top-0 z-50 p-2 rounded-xl shadow-2xl border text-xs min-w-[190px] space-y-1 backdrop-blur-md",
-              theme === 'dark' ? "bg-gray-900/95 border-gray-700 text-white" : "bg-white/95 border-gray-200 text-gray-800"
-            )}
-          >
-            <div className="font-bold text-[10px] uppercase text-gray-400 px-1 py-0.5">Generate Roof</div>
-            <button
-              onClick={() => { handleGenerateRoof('gable'); setShowRoofOptions(false); }}
-              className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+        {/* Portaled to document.body, like every other toolbar flyout here
+            (see FlyoutPortal's own docstring) - rendered as a plain
+            absolutely-positioned child of this toolbar, this menu was
+            trapped inside the toolbar's own stacking context, and lost to
+            whichever sibling toolbar/panel happened to sit later in the
+            DOM at the same effective z-index, regardless of its own
+            z-50. */}
+        <FlyoutPortal anchorRef={roofMenuBtnRef} open={showRoofOptions} side={flyoutSide}>
+          {showRoofOptions && (
+            <div
+              className={cn(
+                "p-2 rounded-xl shadow-2xl border text-xs min-w-[190px] space-y-1 backdrop-blur-md",
+                theme === 'dark' ? "bg-gray-900/95 border-gray-700 text-white" : "bg-white/95 border-gray-200 text-gray-800"
+              )}
             >
-              <span>Gable Roof (35°)</span>
-              <span className="text-[10px] text-gray-400 font-mono">35°</span>
-            </button>
-            <button
-              onClick={() => { handleGenerateRoof('hip'); setShowRoofOptions(false); }}
-              className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
-            >
-              <span>Hip Roof (4 slopes)</span>
-              <span className="text-[10px] text-gray-400 font-mono">35°</span>
-            </button>
-            <button
-              onClick={() => { handleGenerateRoof('parapet'); setShowRoofOptions(false); }}
-              className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
-            >
-              <span>Parapet Roof (Flat / Coping)</span>
-              <span className="text-[10px] text-gray-400 font-mono">0°</span>
-            </button>
-            <div className="pt-1 border-t border-gray-200 dark:border-gray-700">
+              <div className="font-bold text-[10px] uppercase text-gray-400 px-1 py-0.5">Generate Roof</div>
               <button
-                onClick={() => {
-                  handleOpenModifierPanel('timber-frame');
-                  setShowRoofOptions(false);
-                }}
-                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 transition-colors flex items-center justify-between"
+                onClick={() => { handleGenerateRoof('gable'); setShowRoofOptions(false); }}
+                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
               >
-                <span className="flex items-center gap-1.5">
-                  <Hammer size={12} />
-                  <span>Timber Frame</span>
-                </span>
-                <span className="text-[10px] text-gray-400 font-mono">Engine</span>
+                <span>Gable Roof (35°)</span>
+                <span className="text-[10px] text-gray-400 font-mono">35°</span>
               </button>
+              <button
+                onClick={() => { handleGenerateRoof('hip'); setShowRoofOptions(false); }}
+                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+              >
+                <span>Hip Roof (4 slopes)</span>
+                <span className="text-[10px] text-gray-400 font-mono">35°</span>
+              </button>
+              <button
+                onClick={() => { handleGenerateRoof('parapet'); setShowRoofOptions(false); }}
+                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+              >
+                <span>Parapet Roof (Flat / Coping)</span>
+                <span className="text-[10px] text-gray-400 font-mono">0°</span>
+              </button>
+              <div className="pt-1 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => {
+                    handleOpenModifierPanel('timber-frame');
+                    setShowRoofOptions(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 transition-colors flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Hammer size={12} />
+                    <span>Timber Frame</span>
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-mono">Engine</span>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </FlyoutPortal>
       </div>
 
       {/* Reactive Timber Frame Engine */}
