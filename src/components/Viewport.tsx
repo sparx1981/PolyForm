@@ -928,6 +928,7 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
         const invWallQuat = wallQuat.clone().invert();
 
         const openings: WallOpening[] = [];
+        const portholeWindows: { localX: number; localY: number; radius: number }[] = [];
         for (const s of shapes) {
           if (s.type !== 'door' && s.type !== 'window') continue;
           if (s.hidden) continue;
@@ -947,6 +948,15 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
           const inZ = Math.abs(localPos.z) <= wallThick / 2 + 0.35;
 
           if (isHosted || (inX && inY && inZ)) {
+            // A porthole's round frame doesn't match the rectangular hole
+            // every other style uses - cut a round hole via CSG below
+            // instead, so the reveal around the ring is the wall's own
+            // material (and recolors with the wall) rather than a separate
+            // rectangular cutout with mismatched corners.
+            if (s.type === 'window' && s.archStyle === 'porthole') {
+              portholeWindows.push({ localX: localPos.x, localY: localPos.y, radius: Math.min(sWidth, sHeight) / 2 });
+              continue;
+            }
             openings.push({
               id: s.id,
               type: s.type,
@@ -959,7 +969,31 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
           }
         }
 
-        return createWallWithOpeningsGeometry(wallLength, wallHeight, wallThick, openings, shape.wallStyle || shape.archStyle);
+        let wallGeom = createWallWithOpeningsGeometry(wallLength, wallHeight, wallThick, openings, shape.wallStyle || shape.archStyle);
+
+        if (portholeWindows.length > 0) {
+          try {
+            let currentBrush = new Brush(mergeVertices(wallGeom.clone()));
+            currentBrush.updateMatrixWorld();
+            const evaluator = new Evaluator();
+            for (const win of portholeWindows) {
+              const cutterGeo = new THREE.CylinderGeometry(win.radius, win.radius, wallThick + 0.4, 48);
+              cutterGeo.rotateX(Math.PI / 2);
+              cutterGeo.translate(win.localX, win.localY, 0);
+              const cutterBrush = new Brush(cutterGeo);
+              cutterBrush.updateMatrixWorld();
+              const result = evaluator.evaluate(currentBrush, cutterBrush, SUBTRACTION);
+              if (result && result.geometry) currentBrush = result;
+            }
+            const cutGeom = mergeVertices(currentBrush.geometry);
+            cutGeom.computeVertexNormals();
+            wallGeom = cutGeom;
+          } catch (csgErr) {
+            console.warn('Porthole wall cutout error:', csgErr);
+          }
+        }
+
+        return wallGeom;
       }
       case 'door': {
         const dWidth = args[0] || 0.9;
@@ -3383,6 +3417,9 @@ function Scene() {
       setFenceCandidatePos(null);
       setFenceHoveredVertex(null);
     }
+    if (activeTool !== 'teleport') {
+      setSnapIndicator(null);
+    }
   }, [activeTool]);
 
   // Listen for external polygon side count changes
@@ -5606,6 +5643,23 @@ function Scene() {
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (activeTool === 'teleport') {
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const hit = intersects.find(i => i.object.userData?.isShape);
+      let hitPoint: THREE.Vector3 | null = hit ? hit.point.clone() : null;
+      if (!hitPoint) {
+        const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const p = new THREE.Vector3();
+        hitPoint = raycaster.ray.intersectPlane(ground, p) ? p : null;
+      }
+      if (hitPoint) {
+        setSnapIndicator({ point: [hitPoint.x, hitPoint.y + 0.05, hitPoint.z], type: 'center', tooltip: 'Click to Teleport Here' });
+      } else {
+        setSnapIndicator(null);
+      }
+      return;
+    }
+
     if (activeTool === 'block_picker' && activeBlockPart) {
       const part = getBlockPart(activeBlockPart.partId);
       if (part) {
@@ -8913,7 +8967,7 @@ function Scene() {
               pickSunCenter(e.point);
               return;
             }
-            if (placingLightId || activeTool === 'scale_figure') handlePointerDown(e);
+            if (placingLightId || activeTool === 'scale_figure' || activeTool === 'teleport') handlePointerDown(e);
             else if (activeTool === 'select' || true) {
               if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
                 return;
@@ -8950,7 +9004,7 @@ function Scene() {
             pickSunCenter(e.point);
             return;
           }
-          if (activeTool === 'scale_figure') {
+          if (activeTool === 'scale_figure' || activeTool === 'teleport') {
             handlePointerDown(e);
             return;
           }
@@ -8971,7 +9025,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -11577,7 +11631,7 @@ function CustomGeometry({ shape }: { shape: Shape }) {
     if (!shapes || shapes.length === 0) return '';
     const hosted = shapes.filter(s =>
       s.type === 'window' && !s.hidden &&
-      (s.hostWallId === shape.id || s.archStyle === 'velux-roof' || s.name?.toLowerCase().includes('velux'))
+      (s.hostWallId ? s.hostWallId === shape.id : (s.archStyle === 'velux-roof' || s.name?.toLowerCase().includes('velux')))
     );
     if (hosted.length === 0) return '';
     return JSON.stringify(hosted.map(w => [w.id, w.position, w.quaternion, w.rotation, w.args]));
@@ -11710,9 +11764,9 @@ function CustomGeometry({ shape }: { shape: Shape }) {
         // Cut rectangular apertures for any hosted Velux roof windows/skylights
         const isRoof = shape.tags?.some((t: string) => t.includes('roof')) || shape.name?.toLowerCase().includes('roof');
         if (isRoof && shapes && shapes.length > 0) {
-          const hostedWindows = shapes.filter(s => 
+          const hostedWindows = shapes.filter(s =>
             s.type === 'window' && !s.hidden &&
-            (s.hostWallId === shape.id || s.archStyle === 'velux-roof' || s.name?.toLowerCase().includes('velux'))
+            (s.hostWallId ? s.hostWallId === shape.id : (s.archStyle === 'velux-roof' || s.name?.toLowerCase().includes('velux')))
           );
 
           if (hostedWindows.length > 0) {

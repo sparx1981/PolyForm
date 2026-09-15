@@ -10,10 +10,10 @@ describe('createWindowGeometry - porthole style', () => {
     expect(posAttr.count).toBeGreaterThan(0);
   });
 
-  it('has a square footprint matching the wall opening, with a round ring inset within it', () => {
-    // The mounting plate spans the full rectangular wall opening (closing
-    // the corner gaps around the round ring), so the overall bounding box
-    // should match width x height almost exactly.
+  it('is round, with its outer edge matching the window width/height', () => {
+    // The ring's outer radius is derived directly from width/height, so the
+    // overall bounding box (a circle inscribed in the square wall opening)
+    // should be close to width x height, not something wildly different.
     const geom = createWindowGeometry(0.8, 0.8, 0.14, 'porthole');
     geom.computeBoundingBox();
     const box = geom.boundingBox!;
@@ -24,13 +24,12 @@ describe('createWindowGeometry - porthole style', () => {
     expect(bboxW).toBeLessThan(0.85);
   });
 
-  it('actually merges the ring, plate and glass instead of falling back to a plain box', () => {
-    // ExtrudeGeometry (used for the mounting plate) produces no index
-    // buffer while TorusGeometry/CylinderGeometry (ring/glass) do -
-    // mergeGeometries silently fails on that mismatch and the style falls
-    // back to createWindowGeometry's plain THREE.BoxGeometry fallback,
-    // which has no material groups and only 24 vertices. A properly
-    // merged result has multiple groups (frame vs. glass materials).
+  it('actually merges the ring and glass instead of falling back to a plain box', () => {
+    // TorusGeometry and CylinderGeometry must stay index-compatible when
+    // merged (mergeGeometries fails silently on a mismatch and this style
+    // falls back to createWindowGeometry's plain THREE.BoxGeometry, which
+    // has no material groups and only 24 vertices). A properly merged
+    // result has multiple groups (frame vs. glass materials).
     const geom = createWindowGeometry(0.8, 0.8, 0.14, 'porthole');
     expect(geom.groups.length).toBeGreaterThan(1);
     expect(geom.getAttribute('position').count).toBeGreaterThan(24);

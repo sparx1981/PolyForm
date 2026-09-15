@@ -1005,8 +1005,14 @@ export function generateTimberFraming(
   // 3. ROOF TIMBER FRAMING (Hip Rafters, Ridge Beam, Common & Jack Rafters, Collar Ties)
   // -------------------------------------------------------------
   if (includeRoof) {
-    // Collect roof assemblies (even if cladding/tiles are hidden, timber frame is structural)
-    const roofShapes = allShapes.filter(s => 
+    // Collect roof assemblies (even if cladding/tiles are hidden, timber frame is structural).
+    // Windows/doors are excluded outright: a hosted window named e.g. "Velux
+    // Roof Window" matches the "roof" name substring below (a naming bug
+    // once made this happen for windows on ANY roof-tagged host, not just
+    // actual velux-style roof windows), which would otherwise get the
+    // window itself treated as a roof and framed accordingly.
+    const roofShapes = allShapes.filter(s =>
+      s.type !== 'window' && s.type !== 'door' &&
       (s.tags?.includes('roof') || s.name?.toLowerCase().includes('roof')) &&
       !s.tags?.includes('roof-fascia') &&
       !s.tags?.includes('roof-pediment') &&

@@ -1010,29 +1010,11 @@ export function createWindowGeometry(
     const ring = new THREE.TorusGeometry(outerR - tubeR, tubeR, 16, segments).toNonIndexed();
     frameParts.push(ring);
 
-    // Square mounting plate behind the ring, sized to the full rectangular
-    // wall opening with a circular hole cut for the glazing/ring - a real
-    // porthole mounting-flange detail that also closes the small corner
-    // gaps left by a round frame sitting inside a rectangular opening.
-    // Spans the window's full depth (like the ring and every other frame
-    // part) rather than just a thin slice - the wall opening this window
-    // sits in is cut through its full thickness, so a plate covering only
-    // part of that depth left the corners open, exposing whatever sits
-    // behind the window through the gap.
-    const hw = width / 2;
-    const hh = height / 2;
-    const plateShape = new THREE.Shape();
-    plateShape.moveTo(-hw, -hh);
-    plateShape.lineTo(hw, -hh);
-    plateShape.lineTo(hw, hh);
-    plateShape.lineTo(-hw, hh);
-    plateShape.closePath();
-    const plateHole = new THREE.Path();
-    plateHole.absarc(0, 0, outerR, 0, Math.PI * 2, false);
-    plateShape.holes.push(plateHole);
-    const plate = new THREE.ExtrudeGeometry(plateShape, { depth, bevelEnabled: false });
-    plate.translate(0, 0, -depth / 2);
-    frameParts.push(plate);
+    // No separate mounting plate: the wall this window sits in cuts a
+    // round hole matching the ring exactly (see the porthole-specific CSG
+    // cut in Viewport.tsx's wall geometry), so the reveal around the ring
+    // is the wall's own material/color, not a fixed frame-colored part -
+    // and it recolors correctly when the wall is repainted.
 
     // Fixed round glass pane, inset just behind the frame's front face.
     const glass = new THREE.CylinderGeometry(innerR, innerR, 0.008, segments).toNonIndexed();

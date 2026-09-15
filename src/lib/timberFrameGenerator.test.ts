@@ -469,6 +469,29 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
       ...overrides,
     });
 
+    it('never treats a window as a roof, even one mis-named with a roof-referencing name', () => {
+      // A window hosted on any roof-tagged shape (e.g. a Gable Pediment)
+      // used to be named "Velux Roof Window" regardless of its actual
+      // style, and the roof-shape filter matched on a "roof" substring in
+      // the name - so the window itself got treated as an extra roof and
+      // framed accordingly. Excluding window/door types outright is the
+      // fix that holds regardless of what the shape happens to be named,
+      // including already-saved models still carrying the old bad name.
+      const roof = rectRoof();
+      const strayWindow: Shape = {
+        id: 'w-bad-name',
+        name: 'Velux Roof Window',
+        type: 'window',
+        position: [0, 1, 0],
+        args: [0.8, 0.8, 0.14],
+        color: '#ffffff',
+        archStyle: 'porthole',
+      };
+      const withoutWindow = generateTimberFraming([roof], { includeRoof: true, includeWalls: false, includeFloors: false });
+      const withWindow = generateTimberFraming([roof, strayWindow], { includeRoof: true, includeWalls: false, includeFloors: false });
+      expect(withWindow.roofRafterCount).toBe(withoutWindow.roofRafterCount);
+    });
+
     it('reads roof height from roofData.ridgeHeight, not a stale args[1]', () => {
       // args[1] intentionally disagrees with roofData.ridgeHeight - only
       // one of them can be the "real" roof height, and it must be
