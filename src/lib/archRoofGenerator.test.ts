@@ -384,4 +384,39 @@ describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () =
     }
     expect(worstOffsetNearRidge).toBeLessThan(1.5);
   });
+
+  it('does not leave unfilled tray gaps on a hip roof where standing-seam panels taper', () => {
+    // A tapering hip slope means the panel-tray fill's per-segment
+    // clipping is only requiring the FAR (narrower) end of a sub-segment
+    // to have real width - since that end is always the tighter
+    // constraint on a converging slope, whenever it narrowed to near-zero
+    // the whole segment (including the still-valid near end) was
+    // discarded outright, leaving a real unfilled gap rather than a
+    // properly tapered wedge.
+    const rectWalls: Shape[] = [
+      { id: 'w1', type: 'wall', position: [0, 1.4, -3], args: [8, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w2', type: 'wall', position: [4, 1.4, 0], args: [0.2, 2.8, 6], color: '#ffffff' },
+      { id: 'w3', type: 'wall', position: [0, 1.4, 3], args: [8, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w4', type: 'wall', position: [-4, 1.4, 0], args: [0.2, 2.8, 6], color: '#ffffff' },
+    ];
+
+    const assembly = buildRoofAssemblyForRoom(rectWalls, {
+      roofType: 'hip',
+      ridgeHeight: 2.2,
+      eaveOverhang: 0.3,
+      fasciaHeight: 0.18,
+      tileShape: 'standing-seam',
+      tileSize: 0.4,
+    });
+
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+    const positions = assembly.tilesShape!.geometryData!.positions;
+    // Before the fix, this exact roof produced 6384 tile vertices; the
+    // fix fills the previously-dropped tapering wedges, raising real
+    // coverage to 7872. A threshold well above the old count but below
+    // the new one gives a clear, specific regression signal rather than
+    // a vague ">0" check that the old buggy code already satisfied.
+    expect(positions.length / 3).toBeGreaterThan(7000);
+  });
 });

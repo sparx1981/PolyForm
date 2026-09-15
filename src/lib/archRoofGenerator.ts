@@ -2627,7 +2627,9 @@ export function create3DRoofTilesGeometry(options: {
           const uR = u + ribW / 2;
           const z0 = zBase;
           const z1 = zBase + ribH;
-          const stepsS = 4;
+          // Matches the tray fill's resolution below so a rib and its
+          // neighboring trays taper off at the same points along the slope.
+          const stepsS = 8;
           const ds = slopeLen / stepsS;
 
           for (let st = 0; st < stepsS; st++) {
@@ -2673,7 +2675,23 @@ export function create3DRoofTilesGeometry(options: {
           const u2 = u + panW - ribW / 2;
           const maxHw = Math.max(getHalfWidthAt(0), getHalfWidthAt(slopeLen));
           if (u1 >= -maxHw && u2 <= maxHw) {
-            const stepsS = 4;
+            // A hip roof or non-rectangular (L-shaped/general-polygon) slope
+            // narrows toward the ridge/apex, so a column of tray fill that
+            // starts full-width at the eave can taper to nothing by the
+            // ridge. This used to require BOTH ends of every sub-segment to
+            // still have >0.02m of clipped width (`cu2A > cu1A + 0.02 &&
+            // cu2B > cu1B + 0.02`) - since the far end (sB) is always the
+            // narrower one on a converging slope, whenever a segment's far
+            // end had narrowed to near-zero, the ENTIRE segment was dropped,
+            // discarding the portion near its wide end (sA) that was
+            // perfectly valid. That threw away up to a quarter of a
+            // panel's length (with the 4-step resolution below) right where
+            // the roof narrows - exactly the "unfilled" triangular gaps
+            // seen near hips/ridges/valleys. Now only requires ONE end to
+            // have real width; the quad still degenerates gracefully to a
+            // tapered wedge when the other end has collapsed to a point,
+            // which is the correct shape there, not a bug.
+            const stepsS = 8;
             const ds = slopeLen / stepsS;
             for (let st = 0; st < stepsS; st++) {
               const sA = st * ds;
@@ -2685,7 +2703,7 @@ export function create3DRoofTilesGeometry(options: {
               const cu1B = Math.max(-hwB, Math.min(hwB, u1));
               const cu2B = Math.max(-hwB, Math.min(hwB, u2));
 
-              if (cu2A > cu1A + 0.02 && cu2B > cu1B + 0.02) {
+              if (cu2A - cu1A > 0.02 || cu2B - cu1B > 0.02) {
                 addQuad(
                   to3D(cu1A, sA, zBase),
                   to3D(cu2A, sA, zBase),
