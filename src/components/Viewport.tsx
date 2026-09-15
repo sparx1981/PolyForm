@@ -1407,6 +1407,40 @@ function levelTeleportTarget(newPos: THREE.Vector3, camera: THREE.Camera, scene:
   return newPos.clone().addScaledVector(levelDir, 5);
 }
 
+// Shared by the Teleport tool's click handler and its live preview: a
+// clicked floor point right next to a wall (a corner, say) sits at a
+// perfectly valid position, but standing THERE at eye height puts the
+// camera's body inside the wall's own solid thickness - the near clip
+// plane then cuts straight through the wall's interior, rendering pure
+// black (its back faces don't draw at all) since there's nothing else to
+// see. This reads as "teleported to a random unknown location" even
+// though X/Z landed exactly on the clicked spot. Casts a small ring of
+// short rays outward from the candidate position and nudges it away from
+// anything closer than a personal-space radius, so standing spots near
+// walls/corners land just clear of them instead of inside them.
+function resolveTeleportClearance(pos: THREE.Vector3, scene: THREE.Scene): THREE.Vector3 {
+  const clearance = 0.35;
+  const result = pos.clone();
+  const rayDirs = 8;
+  const tempRaycaster = new THREE.Raycaster();
+  for (let pass = 0; pass < 2; pass++) {
+    let adjusted = false;
+    for (let i = 0; i < rayDirs; i++) {
+      const angle = (i / rayDirs) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+      tempRaycaster.set(result, dir);
+      tempRaycaster.far = clearance;
+      const hit = tempRaycaster.intersectObjects(scene.children, true).find(h => h.object.userData?.isShape);
+      if (hit && hit.distance < clearance) {
+        result.addScaledVector(dir, -(clearance - hit.distance));
+        adjusted = true;
+      }
+    }
+    if (!adjusted) break;
+  }
+  return result;
+}
+
 // Live look-through preview for the Teleport tool: a circular "window"
 // hovering over the cursor's hit point, rendered from a second camera
 // positioned where a click would actually send the viewer - so you see
@@ -1422,7 +1456,7 @@ function levelTeleportTarget(newPos: THREE.Vector3, camera: THREE.Camera, scene:
 // catch the markers mid-toggle. Layers avoid the toggle entirely.
 const TELEPORT_PORTAL_LAYER = 31;
 
-function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, number] }) {
+function TeleportPortalPreview({ hoverPoint, postprocessingActive }: { hoverPoint: [number, number, number]; postprocessingActive: boolean }) {
   const { gl, scene, camera } = useThree();
   const discRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
@@ -1437,6 +1471,7 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
     []
   );
   const frameCountRef = useRef(0);
+  const clearedPosRef = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
     discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
@@ -1460,33 +1495,33 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
     const portalCam = portalCameraRef.current;
     if (!disc || !ring || !portalCam) return;
 
-    // Re-rendering the whole scene from a second camera every animation
-    // frame is expensive - only refresh the portal's own view every other
-    // frame (it still tracks the cursor and updates size/position every
-    // frame; only the rendered contents lag by one tick, imperceptible for
-    // a preview) to keep this from dragging down overall framerate on
-    // large models.
     frameCountRef.current++;
-    const shouldRenderThisFrame = frameCountRef.current % 2 === 0;
 
     const eyeHeight = 1.7;
     const hp = new THREE.Vector3(hoverPoint[0], hoverPoint[1], hoverPoint[2]);
-    const dest = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + eyeHeight, hoverPoint[2]);
+
+    // The wall-clearance check does up to 16 raycasts - too costly to redo
+    // every frame just for a cursor that hasn't moved far. Refresh it
+    // periodically; position/orientation of the disc/ring itself is still
+    // updated every frame below so the marker never visibly lags the mouse.
+    if (!clearedPosRef.current || frameCountRef.current % 6 === 0) {
+      const rawDest = new THREE.Vector3(hoverPoint[0], hoverPoint[1] + eyeHeight, hoverPoint[2]);
+      clearedPosRef.current = resolveTeleportClearance(rawDest, scene);
+    }
+    const dest = clearedPosRef.current;
     const newTarget = levelTeleportTarget(dest, camera, scene);
 
     portalCam.position.copy(dest);
     portalCam.lookAt(newTarget);
     portalCam.updateProjectionMatrix();
 
-    // Deliberately a small, roughly fixed world-space radius rather than
-    // one that grows with distance: a big circle covers a wide range of
-    // real-world depth (easily spanning a near wall AND the floor behind
-    // it in perspective), so clicking anywhere inside it could raycast to
-    // a surface far from where the disc visually appeared to be - the
-    // most likely explanation for landing somewhere unexpected. Keeping it
-    // small and reasonably constant keeps "click the marker" precise.
+    // Scale so the portal reads at a consistent size regardless of how
+    // close or far the hovered point is, and pull it toward the current
+    // camera (rather than a fixed world-axis offset, which only avoids
+    // z-fighting on a flat floor and re-introduces it on any wall/roof
+    // face) so it never fights the actual surface for the same pixels.
     const camDist = camera.position.distanceTo(hp);
-    const radius = THREE.MathUtils.clamp(camDist * 0.035, 0.35, 0.6);
+    const radius = THREE.MathUtils.clamp(camDist * 0.12, 0.5, 2.5);
     const towardCamera = camera.position.clone().sub(hp).normalize();
     const discPos = hp.clone().addScaledVector(towardCamera, Math.max(0.03, camDist * 0.01));
 
@@ -1497,20 +1532,36 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
     ring.scale.setScalar(radius);
     ring.quaternion.copy(disc.quaternion);
 
-    if (!shouldRenderThisFrame) return;
+    // Rendering a whole second pass of the scene while this app's own
+    // ambient-occlusion/fog EffectComposer is active has proven unreliable
+    // (the composer manages its own render targets/clear state, and a raw
+    // manual gl.render() competing with that is a known-fragile
+    // combination) - skip the live look-through content in that case and
+    // just show the plain indicator ring/disc instead, rather than risk
+    // more flicker.
+    if (postprocessingActive) return;
+
+    // Re-rendering the whole scene from a second camera every animation
+    // frame is expensive - only refresh every other frame (only the
+    // rendered CONTENTS lag by one tick; position/size above still update
+    // every frame) to keep this from dragging down overall framerate.
+    if (frameCountRef.current % 2 !== 0) return;
 
     const prevRenderTarget = gl.getRenderTarget();
     const prevAutoClear = gl.autoClear;
+    const prevViewport = gl.getViewport(new THREE.Vector4());
     // Explicitly clear (rather than relying on autoClear, which some
-    // postprocessing setups in this app turn off globally) - otherwise
-    // each frame's render accumulates on top of the last into the same
-    // target, ghosting/smearing as the portal moves, which read as
-    // flicker.
+    // postprocessing setups in this app turn off globally) and restore the
+    // viewport afterward (setRenderTarget doesn't restore it on its own) -
+    // otherwise either can leak into the next render and show up as
+    // smearing or a wrongly-sized main view, both of which read as flicker.
     gl.autoClear = true;
     gl.setRenderTarget(renderTarget);
+    gl.setViewport(0, 0, renderTarget.width, renderTarget.height);
     gl.clear();
     gl.render(scene, portalCam);
     gl.setRenderTarget(prevRenderTarget);
+    gl.setViewport(prevViewport);
     gl.autoClear = prevAutoClear;
   });
 
@@ -1518,7 +1569,11 @@ function TeleportPortalPreview({ hoverPoint }: { hoverPoint: [number, number, nu
     <group>
       <mesh ref={discRef} renderOrder={999}>
         <circleGeometry args={[1, 48]} />
-        <meshBasicMaterial map={renderTarget.texture} toneMapped={false} depthTest={false} />
+        {postprocessingActive ? (
+          <meshBasicMaterial color="#0063A3" transparent opacity={0.25} toneMapped={false} depthTest={false} />
+        ) : (
+          <meshBasicMaterial map={renderTarget.texture} toneMapped={false} depthTest={false} />
+        )}
       </mesh>
       <mesh ref={ringRef} renderOrder={999}>
         <ringGeometry args={[0.95, 1.02, 48]} />
@@ -4770,7 +4825,8 @@ function Scene() {
         // the pitch keeps the new view oriented the way a person standing
         // there would actually look.
         const eyeHeight = 1.7;
-        const newPos = new THREE.Vector3(hitPoint.x, hitPoint.y + eyeHeight, hitPoint.z);
+        const rawPos = new THREE.Vector3(hitPoint.x, hitPoint.y + eyeHeight, hitPoint.z);
+        const newPos = resolveTeleportClearance(rawPos, scene);
         const newTarget = levelTeleportTarget(newPos, camera, scene);
 
         window.dispatchEvent(new CustomEvent('set-camera', {
@@ -10516,7 +10572,10 @@ function Scene() {
       )}
 
       {activeTool === 'teleport' && teleportHoverPoint && (
-        <TeleportPortalPreview hoverPoint={teleportHoverPoint} />
+        <TeleportPortalPreview
+          hoverPoint={teleportHoverPoint}
+          postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
+        />
       )}
 
       {/* Inference Tracking Guide line */}
