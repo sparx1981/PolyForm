@@ -980,6 +980,62 @@ export function createWindowGeometry(
   depth = 0.12,
   style = 'cross'
 ): THREE.BufferGeometry {
+  // Circular Porthole: every other style below shares a rectangular outer
+  // frame + sill built unconditionally further down, so a genuinely round
+  // frame has to branch out before any of that runs, not as a switch case
+  // alongside the others (which only vary the inner glazing/mullion
+  // pattern within a rectangular frame). The wall opening this window sits
+  // in stays rectangular (window-opening cutting elsewhere assumes a
+  // rectangular hole), so the ring is inscribed within that bounding box -
+  // there's a small return/reveal visible at the four corners of the
+  // opening, a known simplification rather than a full round-opening
+  // feature.
+  if (style === 'porthole') {
+    const radius = Math.min(width, height) / 2;
+    const ringThick = 0.06;
+    const outerR = radius;
+    const innerR = radius - ringThick;
+    const tubeR = depth / 2;
+    const segments = 48;
+
+    const frameParts: THREE.BufferGeometry[] = [];
+    const glassParts: THREE.BufferGeometry[] = [];
+    const hardwareParts: THREE.BufferGeometry[] = [];
+
+    // Ring frame: THREE.TorusGeometry's main ring already lies in the XY
+    // plane with its hole along Z (the window's viewing axis), matching
+    // every other window style's depth-along-Z convention with no extra
+    // rotation needed.
+    const ring = new THREE.TorusGeometry(outerR - tubeR, tubeR, 16, segments);
+    frameParts.push(ring);
+
+    // Fixed round glass pane, inset just behind the frame's front face.
+    const glass = new THREE.CylinderGeometry(innerR, innerR, 0.008, segments);
+    glass.rotateX(Math.PI / 2);
+    glassParts.push(glass);
+
+    // Perimeter rivets - the signature nautical porthole detail.
+    const rivetCount = 10;
+    const rivetRadius = outerR - tubeR;
+    for (let i = 0; i < rivetCount; i++) {
+      const angle = (i / rivetCount) * Math.PI * 2;
+      const rivet = new THREE.CylinderGeometry(0.014, 0.014, tubeR * 2.2, 8);
+      rivet.rotateX(Math.PI / 2);
+      rivet.translate(Math.cos(angle) * rivetRadius, Math.sin(angle) * rivetRadius, 0);
+      hardwareParts.push(rivet);
+    }
+
+    try {
+      const frameMerged = BufferGeometryUtils.mergeGeometries(frameParts, false) || new THREE.BoxGeometry(width, height, depth);
+      const glassMerged = BufferGeometryUtils.mergeGeometries(glassParts, false) || new THREE.BoxGeometry(0.0001, 0.0001, 0.0001);
+      const hardwareMerged = BufferGeometryUtils.mergeGeometries(hardwareParts, false) || new THREE.BoxGeometry(0.0001, 0.0001, 0.0001);
+      const merged = BufferGeometryUtils.mergeGeometries([frameMerged, glassMerged, hardwareMerged], true);
+      return merged || new THREE.BoxGeometry(width, height, depth);
+    } catch (e) {
+      return new THREE.BoxGeometry(width, height, depth);
+    }
+  }
+
   const frameParts: THREE.BufferGeometry[] = [];
   const glassParts: THREE.BufferGeometry[] = [];
   const hardwareParts: THREE.BufferGeometry[] = [];

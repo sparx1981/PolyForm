@@ -364,6 +364,16 @@ export const WINDOW_STYLES: ArchStyleDef[] = [
     defaultDimensions: [0.9, 1.2, 0.15],
     hasGlass: true,
     features: ['Pitched Roof Flashing Collar', 'Center-Pivot Opening Sash', 'Low-E Insulated Glazing', 'Top Control Ventilation Bar']
+  },
+  {
+    id: 'porthole',
+    type: 'window',
+    name: 'Circular Porthole Window',
+    category: 'Specialty',
+    description: 'Round nautical-style porthole with a heavy circular ring frame, perimeter rivets, and a single fixed glass pane.',
+    defaultDimensions: [0.8, 0.8, 0.14],
+    hasGlass: true,
+    features: ['Circular Ring Frame', 'Perimeter Rivet Detailing', 'Single Fixed Round Pane']
   }
 ];
 
