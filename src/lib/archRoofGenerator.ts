@@ -1051,6 +1051,85 @@ function distToPolygonBoundary2D(px: number, pz: number, polygon: [number, numbe
   return minD;
 }
 
+function pointInPolygon2D(px: number, pz: number, polygon: [number, number][]): boolean {
+  let inside = false;
+  const n = polygon.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [xi, zi] = polygon[i];
+    const [xj, zj] = polygon[j];
+    if (zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Approximate "pole of inaccessibility" - the point inside a polygon
+ * farthest from any edge, found via a coarse-to-fine grid search. Used as
+ * the fan-triangulation apex for a general/arbitrary roof polygon: the
+ * naive vertex-mean centroid used previously can land outside a concave
+ * (reflex-cornered) polygon entirely, producing a self-intersecting or
+ * grossly wrong roof fan over the concave notch. This always returns a
+ * point strictly inside the polygon (falling back to its nearest vertex
+ * only for a degenerate/self-intersecting input).
+ */
+function findInteriorApexPoint2D(poly: [number, number][]): [number, number] {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, z] of poly) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+  }
+
+  let cx = (minX + maxX) / 2;
+  let cz = (minZ + maxZ) / 2;
+  let rangeX = (maxX - minX) || 1;
+  let rangeZ = (maxZ - minZ) || 1;
+
+  let bestX = cx, bestZ = cz;
+  let bestD = pointInPolygon2D(cx, cz, poly) ? distToPolygonBoundary2D(cx, cz, poly) : -1;
+
+  const GRID = 12;
+  for (let pass = 0; pass < 5; pass++) {
+    let found = false;
+    for (let i = 0; i <= GRID; i++) {
+      const x = cx - rangeX / 2 + (i / GRID) * rangeX;
+      for (let j = 0; j <= GRID; j++) {
+        const z = cz - rangeZ / 2 + (j / GRID) * rangeZ;
+        if (!pointInPolygon2D(x, z, poly)) continue;
+        const d = distToPolygonBoundary2D(x, z, poly);
+        if (d > bestD) {
+          bestD = d;
+          bestX = x;
+          bestZ = z;
+          found = true;
+        }
+      }
+    }
+    if (found) {
+      cx = bestX;
+      cz = bestZ;
+    }
+    rangeX /= GRID / 2;
+    rangeZ /= GRID / 2;
+  }
+
+  if (bestD < 0) {
+    let nearest = poly[0];
+    let nd = Infinity;
+    const bboxCx = (minX + maxX) / 2, bboxCz = (minZ + maxZ) / 2;
+    for (const p of poly) {
+      const d = Math.hypot(p[0] - bboxCx, p[1] - bboxCz);
+      if (d < nd) {
+        nd = d;
+        nearest = p;
+      }
+    }
+    return nearest;
+  }
+  return [bestX, bestZ];
+}
+
 /**
  * Extracts the 6 canonical ordered vertices of an L-shape starting at the reflex corner.
  */
@@ -1361,14 +1440,10 @@ export function createGeneralPolygonalRoofSlopesGeometry(
     const slope = Math.tan(rad);
     const n = eavePoly.length;
 
-    // Find center/mean of polygon
-    let cx = 0, cz = 0;
-    for (const p of eavePoly) {
-      cx += p[0];
-      cz += p[1];
-    }
-    cx /= n;
-    cz /= n;
+    // The vertex-mean centroid can land outside a concave (reflex-cornered)
+    // polygon; use the pole-of-inaccessibility approximation instead so the
+    // apex always stays inside the actual footprint.
+    const [cx, cz] = findInteriorApexPoint2D(eavePoly);
 
     const centerDist = distToPolygonBoundary2D(cx, cz, eavePoly);
     const centerH = Math.min(ridgeHeight, Math.max(0.6, centerDist * slope));
@@ -1671,7 +1746,7 @@ export function buildRoofAssemblyForRoom(
 
   } else {
     // General N-sided polygonal roof
-    slopesGeom = createGeneralPolygonalRoofSlopesGeometry(localWallPoly, localEavePoly, ridgeH, params.pitchAngleDeg || 35);
+    slopesGeom = createGeneralPolygonalRoofSlopesGeometry(localWallPoly, localEavePoly, ridgeH, params.pitchAngleDeg ?? 35);
     ridgeCapGeom = createHipRidgeCapGeometry(width, depth, ridgeH, eaveOverhang);
     fasciaGeom = createPolygonalFasciaGeometry(localWallPoly, localEavePoly, fasciaHeight, false);
     soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
@@ -1814,7 +1889,7 @@ export function buildRoofAssemblyForRoom(
       localEavePoly,
       reflexIndex,
       isGeneralPolygon: !isRectangular && !(isLShape && reflexIndex !== undefined),
-      pitchAngleDeg: params.pitchAngleDeg,
+      pitchAngleDeg: params.pitchAngleDeg ?? 35,
     });
 
     if (tilesGeom.attributes.position && tilesGeom.attributes.position.count > 0) {
@@ -2359,15 +2434,10 @@ export function create3DRoofTilesGeometry(options: {
   } else if (isGeneralPolygon && localWallPoly && localEavePoly) {
     // Matches createGeneralPolygonalRoofSlopesGeometry's fan triangulation:
     // one facet per eave-polygon edge, all rising to the same skeleton
-    // apex point above the polygon's centroid.
+    // apex point (the same pole-of-inaccessibility approximation, so it
+    // stays inside a concave footprint and matches the real slope mesh).
     const n = localEavePoly.length;
-    let cx = 0, cz = 0;
-    for (const p of localEavePoly) {
-      cx += p[0];
-      cz += p[1];
-    }
-    cx /= n;
-    cz /= n;
+    const [cx, cz] = findInteriorApexPoint2D(localEavePoly);
     const rad = THREE.MathUtils.degToRad(pitchAngleDeg);
     const slope = Math.tan(rad);
     const centerDist = distToPolygonBoundary2D(cx, cz, localEavePoly);

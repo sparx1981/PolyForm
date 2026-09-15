@@ -249,14 +249,29 @@ export const RoofModifierSection: React.FC = () => {
   // actually triggers the rebuild keeps the slider's displayed number
   // (updated synchronously via setRoofHeight/etc., outside this debounce)
   // responsive while the expensive 3D work only runs once the user pauses.
+  // The setTimeout callback below only closes over whatever
+  // applyRoofAssemblyModifications reference existed at the moment the
+  // timer was scheduled. If an immediate action (tile shape/color/
+  // randomize/etc, or the roof being deleted/switched) happens in the
+  // 120ms window before that timer fires, the stale closure would still
+  // read the pre-edit `shapes`/`activeRoof` it captured back then and
+  // silently overwrite the intervening change - or resurrect a
+  // just-deleted roof - when it finally runs. Routing the fire through a
+  // ref that's kept current every render means the timer always calls
+  // the LATEST closure (latest shapes/activeRoof) instead of a frozen one.
+  const applyRoofAssemblyModificationsRef = useRef(applyRoofAssemblyModifications);
+  useEffect(() => {
+    applyRoofAssemblyModificationsRef.current = applyRoofAssemblyModifications;
+  }, [applyRoofAssemblyModifications]);
+
   const roofAssemblyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedApplyRoofAssemblyModifications = useCallback((params: Parameters<typeof applyRoofAssemblyModifications>[0]) => {
     if (roofAssemblyDebounceRef.current) clearTimeout(roofAssemblyDebounceRef.current);
     roofAssemblyDebounceRef.current = setTimeout(() => {
       roofAssemblyDebounceRef.current = null;
-      applyRoofAssemblyModifications(params);
+      applyRoofAssemblyModificationsRef.current(params);
     }, 120);
-  }, [applyRoofAssemblyModifications]);
+  }, []);
 
   useEffect(() => {
     return () => {

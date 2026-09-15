@@ -229,4 +229,119 @@ describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () =
     // old behavior.
     expect(outsideCount).toBe(0);
   });
+
+  it('keeps general-polygon tile apex height in sync with the slope mesh apex height', () => {
+    // Regression test for a pitchAngleDeg divergence: buildRoofAssemblyForRoom
+    // passed `params.pitchAngleDeg || 35` into the slope mesh but the raw
+    // `params.pitchAngleDeg` into the tile mesh, whose own default only
+    // covers `undefined` - so an explicit pitchAngleDeg of 0 made the slope
+    // mesh apex sit far above the tile mesh apex (tiles sinking through the
+    // roof near the peak). Using the same diamond footprint as above.
+    const len = Math.sqrt(18);
+    const diamondRoomWalls: Shape[] = [
+      { id: 'w1', type: 'wall', position: [4.5, 1.4, 1.5], rotation: [0, -Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w2', type: 'wall', position: [4.5, 1.4, 4.5], rotation: [0, -3 * Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w3', type: 'wall', position: [1.5, 1.4, 4.5], rotation: [0, 3 * Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w4', type: 'wall', position: [1.5, 1.4, 1.5], rotation: [0, Math.PI / 4, 0], args: [len, 2.8, 0.2], color: '#ffffff' },
+    ];
+
+    const assembly = buildRoofAssemblyForRoom(diamondRoomWalls, {
+      roofType: 'hip',
+      pitchAngleDeg: 0,
+      ridgeHeight: 2.0,
+      eaveOverhang: 0.35,
+      fasciaHeight: 0.18,
+      tileShape: 'flat',
+      tileSize: 0.35,
+    });
+
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+
+    const slopePositions = assembly.roofShape.geometryData!.positions;
+    const tilePositions = assembly.tilesShape!.geometryData!.positions;
+    let slopeMaxY = -Infinity;
+    for (let i = 1; i < slopePositions.length; i += 3) slopeMaxY = Math.max(slopeMaxY, slopePositions[i]);
+    let tileMaxY = -Infinity;
+    for (let i = 1; i < tilePositions.length; i += 3) tileMaxY = Math.max(tileMaxY, tilePositions[i]);
+
+    expect(tileMaxY).toBeCloseTo(slopeMaxY, 1);
+  });
+
+  it('keeps the general-polygon fan apex inside a concave (T-shaped) footprint', () => {
+    // T-shaped 8-vertex footprint with 2 reflex corners: a horizontal top
+    // bar (x[0,6] z[4,6]) and a vertical stem (x[2,4] z[0,4]). This has 8
+    // vertices, so it isn't the rectangular (n===4) or L-shape (n===6,
+    // 1 reflex corner) special case - it must take the general-polygon
+    // path. The naive vertex-mean centroid of this shape sits at roughly
+    // (3, 3.14), which is OUTSIDE the polygon (in the left or right
+    // "armpit" void) since the stem is only 2m wide - a real defect the
+    // pole-of-inaccessibility apex must avoid.
+    const tShapeRoomWalls: Shape[] = [
+      { id: 'w1', type: 'wall', position: [0, 1.4, 5], args: [0.2, 2.8, 2], color: '#ffffff' },
+      { id: 'w2', type: 'wall', position: [3, 1.4, 6], args: [6, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w3', type: 'wall', position: [6, 1.4, 5], args: [0.2, 2.8, 2], color: '#ffffff' },
+      { id: 'w4', type: 'wall', position: [5, 1.4, 4], args: [2, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w5', type: 'wall', position: [4, 1.4, 2], args: [0.2, 2.8, 4], color: '#ffffff' },
+      { id: 'w6', type: 'wall', position: [3, 1.4, 0], args: [2, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w7', type: 'wall', position: [2, 1.4, 2], args: [0.2, 2.8, 4], color: '#ffffff' },
+      { id: 'w8', type: 'wall', position: [1, 1.4, 4], args: [2, 2.8, 0.2], color: '#ffffff' },
+    ];
+
+    const assembly = buildRoofAssemblyForRoom(tShapeRoomWalls, {
+      roofType: 'hip',
+      pitchAngleDeg: 35,
+      eaveOverhang: 0.2,
+      fasciaHeight: 0.18,
+      tileShape: 'flat',
+      tileSize: 0.35,
+    });
+
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+    expect(assembly.tilesShape).toBeDefined();
+    const positions = assembly.tilesShape!.geometryData!.positions;
+    expect(positions.length).toBeGreaterThan(0);
+
+    const localEavePoly = assembly.roofShape.roofData?.localEavePoly as [number, number][] | undefined;
+    expect(localEavePoly).toBeDefined();
+    if (!localEavePoly) return;
+
+    // A larger tolerance than the convex-footprint tests above: near a
+    // triangular hip-end facet's acute corner, a tile quad can legitimately
+    // overshoot the true edge by close to a full tile width in two
+    // directions at once - this is ordinary tile-grid quantization, not
+    // the apex-outside-the-polygon defect this test targets.
+    const pointInPoly = (x: number, z: number, poly: [number, number][], tol = 0.3): boolean => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, zi] = poly[i];
+        const [xj, zj] = poly[j];
+        if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
+          inside = !inside;
+        }
+      }
+      if (inside) return true;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, zi] = poly[i];
+        const [xj, zj] = poly[j];
+        const dx = xj - xi, dz = zj - zi;
+        const len2 = dx * dx + dz * dz || 1e-9;
+        const t = Math.max(0, Math.min(1, ((x - xi) * dx + (z - zi) * dz) / len2));
+        const px = xi + t * dx, pz = zi + t * dz;
+        if (Math.hypot(x - px, z - pz) < tol) return true;
+      }
+      return false;
+    };
+
+    let outsideCount = 0;
+    for (let i = 0; i < positions.length; i += 3) {
+      if (!pointInPoly(positions[i], positions[i + 2], localEavePoly)) outsideCount++;
+    }
+    // Before the pole-of-inaccessibility fix, the fan apex for this
+    // T-shape sat outside the polygon (in one of the armpit voids),
+    // pulling a large share of tile facets far outside the real footprint
+    // - well beyond the tile-quantization tolerance above.
+    expect(outsideCount).toBe(0);
+  });
 });

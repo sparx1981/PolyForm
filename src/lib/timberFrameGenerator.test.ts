@@ -462,14 +462,48 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
       expect(insetDistance).toBeGreaterThan(0.08);
     });
 
+    it('keeps rafter geometry finite and sane for a very small room at the minimum roof height', () => {
+      // Boundary case: a tiny 1.5m x 1.5m room at the 0.60m ridge-height
+      // floor archRoofGenerator.ts clamps to. The rafter inset (reveal +
+      // half depth) is a large fraction of this roof's total rise, so
+      // without a clamp relative to the member's own span it could pull
+      // the rafter's center to an implausible/degenerate position.
+      const smallRoof = rectRoof({ args: [1.5, 0.6, 1.5], roofData: { ridgeHeight: 0.6, eaveOverhang: 0.3 } });
+      const members = generateTimberFrameForRoof(smallRoof, []);
+      const rafter = members.find(s => s.name?.includes('Common Rafter (Front)'));
+      expect(rafter).toBeDefined();
+      if (!rafter) return;
+
+      for (const v of rafter.position) expect(Number.isFinite(v)).toBe(true);
+      for (const v of rafter.args as number[]) expect(Number.isFinite(v)).toBe(true);
+      // The rafter must stay within the roof's own vertical envelope -
+      // above the wall top (y=0 in this local roof space) and at or below
+      // the ridge height, never inset past either boundary.
+      expect(rafter.position[1]).toBeGreaterThanOrEqual(0);
+      expect(rafter.position[1]).toBeLessThanOrEqual(0.6);
+      expect((rafter.args as number[])[2]).toBeGreaterThan(0);
+    });
+
     it('recomputes roof timber framing when only roofData changes (eaveOverhang), not just args', () => {
+      // A host wall alongside the roof, matching how a real scene is
+      // assembled - without it, getArchFingerprint's roof-detection filter
+      // is the only thing under test here, and a roof-less fixture can
+      // pass for the wrong reason (fingerprint always "" regardless of
+      // roofData, since nothing else is in the shape list).
+      const wall: Shape = { id: 'w1', type: 'wall', position: [3, 1.2, 0], args: [6, 2.4, 0.2], color: '#fff' };
       const roof = rectRoof({ roofData: { ridgeHeight: 2.4, eaveOverhang: 0.3 } });
       const initialFrame = generateTimberFrameForRoof(roof, []);
-      const shapesWithTimber = [roof, ...initialFrame.map(s => ({ ...s, tags: [...(s.tags || []), 'timber-frame'] }))];
+      const shapesWithTimber = [wall, roof, ...initialFrame.map(s => ({ ...s, tags: [...(s.tags || []), 'timber-frame'] }))];
+
+      // Prime lastArchFingerprint deterministically with the pre-edit
+      // scene, since it's shared module state across every test in this
+      // file - without priming, a leftover fingerprint from an unrelated
+      // test could make this pass (or fail) for the wrong reason.
+      updateTimberFramesIfPresent(shapesWithTimber);
 
       // Same args, only roofData.eaveOverhang changes.
       const editedRoof = { ...roof, roofData: { ridgeHeight: 2.4, eaveOverhang: 1.2 } };
-      const updatedShapes = updateTimberFramesIfPresent([editedRoof, ...shapesWithTimber.slice(1)]);
+      const updatedShapes = updateTimberFramesIfPresent([wall, editedRoof, ...shapesWithTimber.slice(2)]);
 
       const updatedRafter = updatedShapes.find(s => s.name?.includes('Common Rafter (Front)') && s.tags?.includes('timber-frame'));
       const originalRafter = initialFrame.find(s => s.name?.includes('Common Rafter (Front)'));

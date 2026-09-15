@@ -1122,7 +1122,12 @@ export function generateTimberFraming(
         // offset into the pStartLocal/pEndLocal points passed in above them,
         // so they keep the original, smaller reveal-only behavior.
         const isRafterMember = subTag.includes('rafter');
-        const inset = revealDistance + (isRafterMember ? depth / 2 : 0);
+        // Clamp to a fraction of the member's own span: for a very small
+        // room (or the roof height floor) this inset could otherwise
+        // exceed a large share of the member's total rise, pulling its
+        // center to an implausible position instead of just tucking it
+        // under the roof surface.
+        const inset = Math.min(revealDistance + (isRafterMember ? depth / 2 : 0), span * 0.4);
         if (inset > 0) {
           midLocal.addScaledVector(yAxis, -inset);
         }
@@ -1847,7 +1852,14 @@ function getArchFingerprint(shapes: Shape[]): string {
   const archShapes = shapes.filter(s =>
     !s.tags?.includes('timber-frame') &&
     !s.name?.toLowerCase().startsWith('timber ') &&
-    (s.type === 'wall' || s.type === 'door' || s.type === 'window' || s.tags?.includes('wall') || s.tags?.includes('roof') || s.tags?.includes('floor') || s.tags?.includes('slab'))
+    (s.type === 'wall' || s.type === 'door' || s.type === 'window' ||
+      s.tags?.includes('wall') || s.tags?.includes('floor') || s.tags?.includes('slab') ||
+      // Roof shapes built by archRoofGenerator.ts are type 'custom' tagged
+      // e.g. 'roof-structure'/'roof-assembly'/'roof-slopes', never the bare
+      // 'roof' string - match the same broad roof-detection pattern used
+      // elsewhere in the app (RoofModifierSection.tsx, AppContext.tsx) so
+      // roof edits are actually included in the fingerprint below.
+      s.type === 'roof' || s.tags?.some(t => t.includes('roof')) || s.name?.toLowerCase().includes('roof'))
   );
   // Includes roofData/customData (ridgeHeight, eaveOverhang, pitchAngleDeg,
   // roofType, ...) alongside position/args/quaternion - a roof edit that
