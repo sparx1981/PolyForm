@@ -2610,41 +2610,61 @@ export function create3DRoofTilesGeometry(options: {
         const u = startU + i * panW;
         const rgb = getTileColor(slopeIdx, 0, i);
 
-        // Standing Seam Rib along seam line
+        // Standing Seam Rib along seam line. Unlike the panel tray below
+        // (which re-samples getHalfWidthAt(s) per sub-step), this used to
+        // gate on the EAVE half-width only and then draw one quad from
+        // s=0 straight to s=slopeLen - fine for a rectangular gable roof
+        // (constant half-width), but on a hip roof or a non-rectangular
+        // (L-shaped/general-polygon) roof the slope narrows toward the
+        // ridge/apex, so a rib near the eave edge stuck out past the real
+        // roof surface (the diagonal hip edge) instead of tapering off
+        // where the roof actually narrows. Now walked in the same
+        // sub-steps as the tray fill below, and only drawn where the rib
+        // is still within the roof's real half-width at BOTH ends of the
+        // sub-segment.
         if (Math.abs(u) <= hwEave) {
-          const sEnd = slopeLen;
           const uL = u - ribW / 2;
           const uR = u + ribW / 2;
           const z0 = zBase;
           const z1 = zBase + ribH;
+          const stepsS = 4;
+          const ds = slopeLen / stepsS;
 
-          // Left vertical face
-          addQuad(
-            to3D(uL, 0, z0),
-            to3D(uL, sEnd, z0),
-            to3D(uL, sEnd, z1),
-            to3D(uL, 0, z1),
-            norm3D(-1, 0, 0),
-            rgb
-          );
-          // Right vertical face
-          addQuad(
-            to3D(uR, 0, z1),
-            to3D(uR, sEnd, z1),
-            to3D(uR, sEnd, z0),
-            to3D(uR, 0, z0),
-            norm3D(1, 0, 0),
-            rgb
-          );
-          // Top folded cap
-          addQuad(
-            to3D(uL, 0, z1),
-            to3D(uR, 0, z1),
-            to3D(uR, sEnd, z1),
-            to3D(uL, sEnd, z1),
-            norm3D(0, 0, 1),
-            rgb
-          );
+          for (let st = 0; st < stepsS; st++) {
+            const sA = st * ds;
+            const sB = (st + 1) * ds;
+            const hwA = getHalfWidthAt(sA);
+            const hwB = getHalfWidthAt(sB);
+            if (Math.abs(uR) > Math.min(hwA, hwB)) break;
+
+            // Left vertical face
+            addQuad(
+              to3D(uL, sA, z0),
+              to3D(uL, sB, z0),
+              to3D(uL, sB, z1),
+              to3D(uL, sA, z1),
+              norm3D(-1, 0, 0),
+              rgb
+            );
+            // Right vertical face
+            addQuad(
+              to3D(uR, sA, z1),
+              to3D(uR, sB, z1),
+              to3D(uR, sB, z0),
+              to3D(uR, sA, z0),
+              norm3D(1, 0, 0),
+              rgb
+            );
+            // Top folded cap
+            addQuad(
+              to3D(uL, sA, z1),
+              to3D(uR, sA, z1),
+              to3D(uR, sB, z1),
+              to3D(uL, sB, z1),
+              norm3D(0, 0, 1),
+              rgb
+            );
+          }
         }
 
         // Panel Flat Tray between seams

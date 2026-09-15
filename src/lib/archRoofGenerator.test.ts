@@ -344,4 +344,44 @@ describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () =
     // - well beyond the tile-quantization tolerance above.
     expect(outsideCount).toBe(0);
   });
+
+  it('tapers standing-seam ribs with a hip roof\'s narrowing profile instead of protruding past the ridge', () => {
+    const rectWalls: Shape[] = [
+      { id: 'w1', type: 'wall', position: [0, 1.4, -3], args: [8, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w2', type: 'wall', position: [4, 1.4, 0], args: [0.2, 2.8, 6], color: '#ffffff' },
+      { id: 'w3', type: 'wall', position: [0, 1.4, 3], args: [8, 2.8, 0.2], color: '#ffffff' },
+      { id: 'w4', type: 'wall', position: [-4, 1.4, 0], args: [0.2, 2.8, 6], color: '#ffffff' },
+    ];
+    const ridgeHeight = 2.2;
+
+    const assembly = buildRoofAssemblyForRoom(rectWalls, {
+      roofType: 'hip',
+      ridgeHeight,
+      eaveOverhang: 0.3,
+      fasciaHeight: 0.18,
+      tileShape: 'standing-seam',
+      tileSize: 0.4,
+    });
+
+    expect(assembly).toBeDefined();
+    if (!assembly) return;
+    const positions = assembly.tilesShape!.geometryData!.positions;
+    expect(positions.length).toBeGreaterThan(0);
+
+    // Near the ridge, a hip roof this shape (8m x 6m, 0.3m eave overhang)
+    // has narrowed to just the ridge line itself (half-width 4.35 - 3.35 =
+    // 1.0m) - before the per-segment clipping fix, a standing-seam rib
+    // kept its full eave-edge horizontal offset (up to ~4.35m) all the way
+    // to the ridge instead of tapering with the roof, so a vertex near
+    // ridge height could sit ~4x farther from the center axis than the
+    // real roof surface allows there.
+    let worstOffsetNearRidge = 0;
+    for (let i = 0; i < positions.length; i += 3) {
+      const y = positions[i + 1];
+      if (y > ridgeHeight * 0.85) {
+        worstOffsetNearRidge = Math.max(worstOffsetNearRidge, Math.abs(positions[i]), Math.abs(positions[i + 2]));
+      }
+    }
+    expect(worstOffsetNearRidge).toBeLessThan(1.5);
+  });
 });
