@@ -106,6 +106,7 @@ import {
   isFloorSurface,
   resolvePortalDestination,
   resolvePortalDestinationForFloor,
+  extractYawFromQuaternion,
   smoothstep,
   type ResolvedSurfaceHit,
   type PortalDestination,
@@ -1468,17 +1469,20 @@ function TeleportPortalPreview({ enterHit, postprocessingActive }: { enterHit: R
     // still update every frame below so the marker never visibly lags the
     // mouse, only the rendered CONTENTS and framing lag by a few ticks.
     if (!destinationRef.current || frameCountRef.current % 6 === 0) {
+      const camYaw = extractYawFromQuaternion(camera.quaternion);
       destinationRef.current = isNavigableSurface(enterHit.worldNormal)
         ? resolvePortalDestination(scene.children, enterHit, {
             camEye: camera.position,
             maxWallThickness: 0.6,
             eyeHeight: 1.6,
             clearanceDMax: 3.5,
+            camYaw,
           })
         : resolvePortalDestinationForFloor(scene.children, enterHit, {
             camEye: camera.position,
             eyeHeight: 1.6,
             clearanceDMax: 3.5,
+            camYaw,
           });
     }
     const dest = destinationRef.current;
@@ -3299,6 +3303,13 @@ function Scene() {
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
   const [portalHoverHit, setPortalHoverHit] = useState<ResolvedSurfaceHit | null>(null);
+  // Kept fresh every render (not gated behind an effect's own dependency
+  // list) so handleSetCamera below - defined once, early in this
+  // component, and otherwise stuck with whatever effectiveCameraNear/Far
+  // were at mount - can always restore the app's CURRENT baseline near/far
+  // when a view change or Reset follows a Portal Navigation transition
+  // (which sets camera.near dynamically, per-destination).
+  const effectiveCameraDefaultsRef = useRef({ near: 0.1, far: 5000 });
   const [portalTransitionActive, setPortalTransitionActive] = useState(false);
   const portalTransitionRef = useRef<{
     startTime: number;
@@ -3594,17 +3605,35 @@ function Scene() {
     window.addEventListener('request-scene-raw', handleRequestSceneRaw);
     
     const handleSetCamera = (e: any) => {
+      // Any explicit camera placement (a named view, or Reset) should land
+      // on the app's normal baseline framing, not whatever a Portal
+      // Navigation transition happened to leave cam.fov/near/far at -
+      // otherwise the destination looks broken (wrong FOV, near-clipped
+      // geometry) and can read as "the click did nothing" even though the
+      // position/target did move. A transition still mid-flight is also
+      // cancelled outright rather than left to fight this jump next frame.
+      portalTransitionRef.current = null;
+      setPortalTransitionActive(false);
+
       const { position, target, zoom } = e.detail;
       camera.position.set(...(position as [number, number, number]));
-      
+
+      if ((camera as any).isPerspectiveCamera) {
+        const cam = camera as THREE.PerspectiveCamera;
+        cam.fov = 50; // three.js default - the app never overrides this outside a portal transition
+        cam.near = effectiveCameraDefaultsRef.current.near;
+        cam.far = effectiveCameraDefaultsRef.current.far;
+      }
+
       if (zoom !== undefined) {
         camera.zoom = zoom;
-        camera.updateProjectionMatrix();
       }
+      camera.updateProjectionMatrix();
 
       const controls = scene.userData.controls;
       if (controls) {
         controls.target.set(...(target as [number, number, number]));
+        controls.enabled = true;
         controls.update();
       }
     };
@@ -4881,6 +4910,12 @@ function Scene() {
         return;
       }
 
+      // Falls back to the camera's own current heading when the click
+      // direction is too near-vertical to derive a stable yaw from (see
+      // computeYawFromDirection) - the common case for a floor click,
+      // since users typically look nearly straight down to click one.
+      const camYaw = extractYawFromQuaternion(camera.quaternion);
+
       let destination: PortalDestination;
       if (isNavigableSurface(enterHit.worldNormal)) {
         destination = resolvePortalDestination(scene.children, enterHit, {
@@ -4888,12 +4923,14 @@ function Scene() {
           maxWallThickness: 0.6,
           eyeHeight: 1.6,
           clearanceDMax: 3.5,
+          camYaw,
         });
       } else if (isFloorSurface(enterHit.worldNormal)) {
         destination = resolvePortalDestinationForFloor(scene.children, enterHit, {
           camEye: camera.position,
           eyeHeight: 1.6,
           clearanceDMax: 3.5,
+          camYaw,
         });
       } else {
         setMeasurements('Portal Navigation: Click a wall, window, door, or floor - not a ceiling or steep pitch.');
@@ -9120,6 +9157,7 @@ function Scene() {
 
   const effectiveCameraNear = cameraDepthClippingEnabled ? Math.max(0.01, cameraNear) : 0.1;
   const effectiveCameraFar = cameraDepthClippingEnabled ? Math.max(effectiveCameraNear + 0.1, cameraFar) : 5000;
+  effectiveCameraDefaultsRef.current = { near: effectiveCameraNear, far: effectiveCameraFar };
 
   useEffect(() => {
     if (camera && (camera as any).isPerspectiveCamera) {

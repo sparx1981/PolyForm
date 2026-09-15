@@ -267,9 +267,38 @@ export function computeApproachDirection(camEye: THREE.Vector3, enterPoint: THRE
   return enterPoint.clone().sub(camEye).normalize();
 }
 
-/** Yaw only - pitch/roll are forced to zero so vertical building lines stay parallel to screen edges. */
-export function computeYawFromDirection(direction: THREE.Vector3): number {
+// Below this horizontal-magnitude threshold, atan2(x, z) is numerically
+// unstable/essentially arbitrary - both components are close enough to
+// zero that floating-point noise decides the result. This is the common
+// case for a floor click: users typically look nearly straight down to
+// click a floor, making the camera-to-hit-point direction near-vertical.
+const MIN_HORIZONTAL_MAGNITUDE = 1e-3;
+
+/**
+ * Yaw only - pitch/roll are forced to zero so vertical building lines stay
+ * parallel to screen edges. Falls back to `fallbackYaw` (normally the
+ * camera's own current facing) when `direction`'s horizontal component is
+ * too small to derive a stable heading from, rather than committing to an
+ * arbitrary atan2 result that can face the leveled camera into unrendered
+ * space.
+ */
+export function computeYawFromDirection(direction: THREE.Vector3, fallbackYaw = 0): number {
+  const horizontalMagnitude = Math.hypot(direction.x, direction.z);
+  if (horizontalMagnitude < MIN_HORIZONTAL_MAGNITUDE) return fallbackYaw;
   return Math.atan2(direction.x, direction.z);
+}
+
+/**
+ * Extracts a yaw matching computeYawFromDirection/buildPortalOrientation's
+ * own convention (atan2(x, z) of the forward direction) directly from a
+ * camera's world quaternion, by rotating the camera-local forward axis
+ * (0, 0, -1) into world space. Deliberately not an Euler 'YXZ' decomposition
+ * - that convention's yaw is offset from this one by pi and would feed a
+ * bogus fallback back into buildPortalOrientation.
+ */
+export function extractYawFromQuaternion(quaternion: THREE.Quaternion): number {
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion);
+  return Math.atan2(forward.x, forward.z);
 }
 
 export interface PortalOrientation {
@@ -307,6 +336,8 @@ export interface PortalDestinationParams {
   eyeHeight: number;
   clearanceDMax: number;
   fovParams?: FovParams;
+  /** Camera's current yaw, used when the approach direction is too near-vertical to derive a stable heading. */
+  camYaw?: number;
 }
 
 /**
@@ -332,7 +363,7 @@ export function resolvePortalDestination(
   const near = computeNearClip(clearanceRadius);
 
   const approach = computeApproachDirection(params.camEye, enterHit.worldPoint);
-  const yaw = computeYawFromDirection(approach);
+  const yaw = computeYawFromDirection(approach, params.camYaw ?? 0);
   const { target, quaternion } = buildPortalOrientation(landing.eye, yaw);
 
   return { eye: landing.eye, target, quaternion, fov, near, obstructed: landing.obstructed };
@@ -343,6 +374,8 @@ export interface FloorDestinationParams {
   eyeHeight: number;
   clearanceDMax: number;
   fovParams?: FovParams;
+  /** Camera's current yaw, used when the approach direction is too near-vertical to derive a stable heading. */
+  camYaw?: number;
 }
 
 /**
@@ -361,7 +394,7 @@ export function resolvePortalDestinationForFloor(
   const near = computeNearClip(clearanceRadius);
 
   const approach = computeApproachDirection(params.camEye, floorHit.worldPoint);
-  const yaw = computeYawFromDirection(approach);
+  const yaw = computeYawFromDirection(approach, params.camYaw ?? 0);
   const { target, quaternion } = buildPortalOrientation(eye, yaw);
 
   return { eye, target, quaternion, fov, near, obstructed: false };

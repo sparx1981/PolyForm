@@ -12,6 +12,7 @@ import {
   computeDynamicFov,
   computeNearClip,
   computeYawFromDirection,
+  extractYawFromQuaternion,
   buildPortalOrientation,
   smoothstep,
   resolvePortalDestination,
@@ -283,6 +284,29 @@ describe('computeYawFromDirection / buildPortalOrientation', () => {
     const euler = new THREE.Euler().setFromQuaternion(quaternion, 'YXZ');
     expect(euler.x).toBeCloseTo(0, 5);
     expect(euler.z).toBeCloseTo(0, 5);
+  });
+
+  it('derives yaw from a direction with a clear horizontal component, ignoring the fallback', () => {
+    const yaw = computeYawFromDirection(new THREE.Vector3(1, 0, 0), Math.PI);
+    expect(yaw).toBeCloseTo(Math.PI / 2, 5);
+  });
+
+  it('falls back to the supplied yaw for a near-vertical direction (e.g. looking straight down at a floor)', () => {
+    const nearlyVertical = new THREE.Vector3(1e-6, -1, 1e-6).normalize();
+    const fallback = 1.234;
+    expect(computeYawFromDirection(nearlyVertical, fallback)).toBe(fallback);
+  });
+
+  it('falls back to 0 when no fallback is supplied and the direction is exactly vertical', () => {
+    expect(computeYawFromDirection(new THREE.Vector3(0, -1, 0))).toBe(0);
+  });
+});
+
+describe('extractYawFromQuaternion', () => {
+  it('recovers the yaw used to build a level orientation', () => {
+    const yaw = 0.7;
+    const { quaternion } = buildPortalOrientation(new THREE.Vector3(0, 1.6, 0), yaw);
+    expect(extractYawFromQuaternion(quaternion)).toBeCloseTo(yaw, 5);
   });
 });
 
