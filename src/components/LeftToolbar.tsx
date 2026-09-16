@@ -34,8 +34,7 @@ import {
   Wand2,
   Ruler,
   ToggleLeft,
-  ToggleRight,
-  Footprints
+  ToggleRight
 } from 'lucide-react';
 import { useRef, useState, createContext, useContext } from 'react';
 import { FlyoutPortal } from './ui/FlyoutPortal';
@@ -823,7 +822,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <ToolButton tool="orbit" icon={<Orbit size={20} />} label="Orbit (O)" />
       <ToolButton tool="pan" icon={<Hand size={20} />} label="Pan (H)" />
       <ToolButton tool="zoom" icon={<ZoomIn size={20} />} label="Zoom (Z)" />
-      <ToolButton tool="walk" icon={<Footprints size={20} />} label="Walk Mode" />
 
       {pinnedScripts.length > 0 && (
         <>

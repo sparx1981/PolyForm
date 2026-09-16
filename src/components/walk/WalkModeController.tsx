@@ -110,11 +110,21 @@ export default function WalkModeController({
     let cancelled = false;
     const raf = requestAnimationFrame(() => {
       if (cancelled) return;
-      const world = buildCollisionWorld(scene, shapes, floorEnabled);
+      let world: CollisionWorld | null = null;
+      let buildFailed = false;
+      try {
+        world = buildCollisionWorld(scene, shapes, floorEnabled);
+      } catch (err) {
+        // A malformed/unsupported shape's geometry shouldn't hard-lock the
+        // UI on "Preparing Walk Mode..." forever - bail out to the
+        // previous tool the same way "nothing to walk on" does.
+        console.error('[WalkMode] Failed to build collision world:', err);
+        buildFailed = true;
+      }
       collisionWorldRef.current = world;
       bridge.buildInfo = world ? { triangleCount: world.triangleCount, buildTimeMs: world.buildTimeMs } : null;
       if (!world) {
-        onToast?.('Walk Mode needs a floor or some architecture to walk on.');
+        onToast?.(buildFailed ? 'Walk Mode could not be started for this model.' : 'Walk Mode needs a floor or some architecture to walk on.');
         setPhase('inactive');
         onExit();
         return;
@@ -134,7 +144,15 @@ export default function WalkModeController({
     if (phaseRef.current === 'inactive' || phaseRef.current === 'preparing') return;
     if (rebuildTimeoutRef.current) window.clearTimeout(rebuildTimeoutRef.current);
     rebuildTimeoutRef.current = window.setTimeout(() => {
-      const world = buildCollisionWorld(scene, shapes, floorEnabled);
+      let world: CollisionWorld | null = null;
+      try {
+        world = buildCollisionWorld(scene, shapes, floorEnabled);
+      } catch (err) {
+        console.error('[WalkMode] Failed to rebuild collision world:', err);
+        // Keep the previous (still-disposed-free) world rather than
+        // leaving the player with no collision at all.
+        return;
+      }
       disposeCollisionWorld(collisionWorldRef.current);
       collisionWorldRef.current = world;
       bridge.buildInfo = world ? { triangleCount: world.triangleCount, buildTimeMs: world.buildTimeMs } : null;

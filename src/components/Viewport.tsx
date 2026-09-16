@@ -1427,6 +1427,12 @@ const TELEPORT_PORTAL_LAYER = 31;
 // disc trusts them.
 const HOVER_CONFIRM_FRAMES = 2;
 const HOVER_HOLD_MS = 120;
+// Below this many screen pixels of movement between frames, the cursor
+// counts as "not really moving" for hover-hysteresis purposes (see
+// lastPointerPxRef's comment) - small enough that no deliberate mouse
+// movement is ever mistaken for standing still, large enough to absorb
+// mouse-hardware jitter.
+const HOVER_STILL_PX = 2;
 
 function TeleportPortalPreview({
   postprocessingActive,
@@ -1437,7 +1443,7 @@ function TeleportPortalPreview({
   floorEnabled: boolean;
   onHoverChange: (hit: ResolvedSurfaceHit | null, tooltip: string | null) => void;
 }) {
-  const { gl, scene, camera, raycaster, pointer } = useThree();
+  const { gl, scene, camera, raycaster, pointer, size } = useThree();
   const discRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const portalCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -1468,6 +1474,16 @@ function TeleportPortalPreview({
   // anchored deep inside the model, or blinking off entirely for a frame.
   const stableHitRef = useRef<{ hit: ResolvedSurfaceHit; time: number } | null>(null);
   const pendingHitRef = useRef<{ object: THREE.Object3D | null; count: number }>({ object: null, count: 0 });
+  // The cursor's own screen position last frame - see its use below for why
+  // this, not object identity, is what actually distinguishes "the cursor
+  // is grazing an edge and the ray flukily hit something else" (screen
+  // position barely moved) from "the user swept the mouse to a genuinely
+  // new, distant target" (screen position moved a lot), which the object-
+  // identity-only version of this fix couldn't tell apart - it delayed
+  // EVERY hit-object change by a frame or two, including real, continuous
+  // mouse movement sliding across a wall built from many small panels
+  // (each one a different object), which is what read as "less fluid".
+  const lastPointerPxRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
@@ -1522,17 +1538,32 @@ function TeleportPortalPreview({
     const isFloor = rawHit && isFloorSurface(rawHit.worldNormal);
     const rawEnterHit = rawHit && (isWall || isFloor) ? rawHit : null;
 
-    // Stabilize: accept the raw hit immediately when it's the SAME object
-    // already being shown (normal continuous tracking across one surface),
-    // but require a DIFFERENT object to win two frames in a row before
-    // switching to it, and hold the last good hit for a short grace period
-    // through a momentary miss (both filter out the single-frame grazes
-    // described above without adding any perceptible lag to genuine hover
-    // movement, which almost always keeps landing on the same object frame
-    // after frame anyway).
+    // Did the cursor itself actually move this frame? This, not object
+    // identity, is what actually distinguishes a raycast glitch (cursor
+    // still, ray flukily lands on something else) from real tracking
+    // (cursor sliding across a wall built from many small panels, a
+    // different object every frame, which is completely normal and must
+    // never be delayed - see lastPointerPxRef's comment).
+    const pointerPx = { x: pointer.x * size.width * 0.5, y: pointer.y * size.height * 0.5 };
+    const lastPx = lastPointerPxRef.current;
+    const pointerStill =
+      !!lastPx && Math.hypot(pointerPx.x - lastPx.x, pointerPx.y - lastPx.y) < HOVER_STILL_PX;
+    lastPointerPxRef.current = pointerPx;
+
+    // Stabilize: accept the raw hit immediately whenever the cursor itself
+    // is genuinely moving (deliberate mouse movement should never lag,
+    // whatever object it lands on), or when it's the SAME object already
+    // being shown. Only a raw hit that both changes object AND arrives
+    // while the cursor is essentially still is suspect - that combination
+    // is the actual signature of the grazing-angle glitch described above
+    // (same screen pixel, wildly different depth/object) - and needs to
+    // repeat for two consecutive frames before it's trusted. A miss is
+    // held over for a short grace period on the same condition: a real
+    // "cursor moved off the model" miss should hide the disc immediately,
+    // not linger.
     const stable = stableHitRef.current;
     const rawObject = rawEnterHit?.hitObject ?? null;
-    if (rawEnterHit && stable && rawObject === stable.hit.hitObject) {
+    if (rawEnterHit && (!pointerStill || !stable || rawObject === stable.hit.hitObject)) {
       stableHitRef.current = { hit: rawEnterHit, time: now };
       pendingHitRef.current = { object: null, count: 0 };
     } else if (rawEnterHit) {
@@ -1545,16 +1576,12 @@ function TeleportPortalPreview({
       if (pendingHitRef.current.count >= HOVER_CONFIRM_FRAMES) {
         stableHitRef.current = { hit: rawEnterHit, time: now };
         pendingHitRef.current = { object: null, count: 0 };
-      } else if (!stable || now - stable.time > HOVER_HOLD_MS) {
-        // No confirmed hit to fall back on - show the raw result as-is
-        // rather than nothing, so a genuinely new hover target (first
-        // surface of the session, or after a real gap) still appears
-        // without waiting for a second confirming frame.
-        stableHitRef.current = { hit: rawEnterHit, time: now };
       }
+      // Otherwise keep showing the current stable hit (if any) - it's
+      // still fresh since we only got here because the cursor is still.
     } else {
       pendingHitRef.current = { object: null, count: 0 };
-      if (stable && now - stable.time > HOVER_HOLD_MS) {
+      if (!pointerStill || (stable && now - stable.time > HOVER_HOLD_MS)) {
         stableHitRef.current = null;
       }
     }

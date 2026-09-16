@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MeshBVH, StaticGeometryGenerator } from 'three-mesh-bvh';
+import { MeshBVH } from 'three-mesh-bvh';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Shape } from '../../types';
 import { collectCollidableMeshes } from './collidables';
@@ -16,6 +16,28 @@ export interface CollisionWorld {
 /** Margin added around the shape bounds before clipping the floor quad to them (spec §6.1). */
 const FLOOR_BOUNDS_MARGIN = 1;
 
+/**
+ * Bakes one mesh's geometry into a standalone, world-space, position-only,
+ * NON-INDEXED BufferGeometry. Every geometry this module produces (regular
+ * meshes, per-instance InstancedMesh copies, the floor quad) goes through
+ * this same normalization so they can always be merged together
+ * regardless of what any individual shape's geometry looked like -
+ * `BufferGeometryUtils.mergeGeometries` requires every input to agree on
+ * both attributes AND indexed-vs-not, and the collidable allow-list (walls,
+ * stairs, roofs, terrain, procedurally generated timber framing, ...) mixes
+ * indexed and non-indexed geometry freely. This used to go through
+ * three-mesh-bvh's own StaticGeometryGenerator for non-instanced meshes,
+ * which hits that exact same mismatch internally and throws.
+ */
+function bakeMeshGeometry(geometry: THREE.BufferGeometry, worldMatrix: THREE.Matrix4): THREE.BufferGeometry {
+  let geom = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  for (const key of Object.keys(geom.attributes)) {
+    if (key !== 'position') geom.deleteAttribute(key);
+  }
+  geom.applyMatrix4(worldMatrix);
+  return geom;
+}
+
 function bakeInstancedMesh(mesh: THREE.InstancedMesh): THREE.BufferGeometry[] {
   const baked: THREE.BufferGeometry[] = [];
   const instanceMatrix = new THREE.Matrix4();
@@ -23,13 +45,7 @@ function bakeInstancedMesh(mesh: THREE.InstancedMesh): THREE.BufferGeometry[] {
   for (let i = 0; i < mesh.count; i++) {
     mesh.getMatrixAt(i, instanceMatrix);
     worldMatrix.multiplyMatrices(mesh.matrixWorld, instanceMatrix);
-    const geom = mesh.geometry.clone();
-    // Position only - collision doesn't need normals/UVs (spec §9 memory note).
-    for (const key of Object.keys(geom.attributes)) {
-      if (key !== 'position') geom.deleteAttribute(key);
-    }
-    geom.applyMatrix4(worldMatrix);
-    baked.push(geom);
+    baked.push(bakeMeshGeometry(mesh.geometry, worldMatrix));
   }
   return baked;
 }
@@ -37,10 +53,7 @@ function bakeInstancedMesh(mesh: THREE.InstancedMesh): THREE.BufferGeometry[] {
 /**
  * Builds a single merged, world-space, position-only geometry from every
  * collidable mesh plus (optionally) a floor quad, and a MeshBVH over it
- * (spec §7.2). Regular meshes go through three-mesh-bvh's own
- * StaticGeometryGenerator; InstancedMesh objects (e.g. timber framing) are
- * baked by hand first since StaticGeometryGenerator does not expand
- * per-instance transforms on its own.
+ * (spec §7.2).
  */
 export function buildCollisionWorld(
   scene: THREE.Object3D,
@@ -51,27 +64,17 @@ export function buildCollisionWorld(
   const shapesById = new Map(shapes.map((s) => [s.id, s]));
   const meshes = collectCollidableMeshes(scene, shapesById);
 
-  const regularMeshes: THREE.Mesh[] = [];
-  const bakedInstancedGeoms: THREE.BufferGeometry[] = [];
+  const geometries: THREE.BufferGeometry[] = [];
   for (const obj of meshes) {
     if ((obj as THREE.InstancedMesh).isInstancedMesh) {
-      bakedInstancedGeoms.push(...bakeInstancedMesh(obj as THREE.InstancedMesh));
+      geometries.push(...bakeInstancedMesh(obj as THREE.InstancedMesh));
     } else {
-      regularMeshes.push(obj as THREE.Mesh);
+      const mesh = obj as THREE.Mesh;
+      mesh.updateWorldMatrix(true, false);
+      const geom = bakeMeshGeometry(mesh.geometry, mesh.matrixWorld);
+      if (geom.attributes.position && geom.attributes.position.count > 0) geometries.push(geom);
     }
   }
-
-  const geometries: THREE.BufferGeometry[] = [];
-
-  if (regularMeshes.length > 0) {
-    const generator = new StaticGeometryGenerator(regularMeshes);
-    generator.attributes = ['position'];
-    const generated = generator.generate();
-    if (generated.attributes.position && generated.attributes.position.count > 0) {
-      geometries.push(generated);
-    }
-  }
-  geometries.push(...bakedInstancedGeoms);
 
   if (geometries.length === 0 && !floorEnabled) {
     return null;
@@ -125,10 +128,9 @@ function buildFloorQuad(shapeBounds: THREE.Box3): THREE.BufferGeometry {
   const geom = new THREE.PlaneGeometry(width, depth);
   geom.rotateX(-Math.PI / 2);
   geom.translate(cx, 0, cz);
-  for (const key of Object.keys(geom.attributes)) {
-    if (key !== 'position') geom.deleteAttribute(key);
-  }
-  return geom;
+  // PlaneGeometry is indexed by default - normalize the same way every
+  // other geometry here is (see bakeMeshGeometry) so it merges cleanly.
+  return bakeMeshGeometry(geom, new THREE.Matrix4());
 }
 
 export function disposeCollisionWorld(world: CollisionWorld | null): void {

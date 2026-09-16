@@ -892,16 +892,6 @@ export default function UnifiedToolRail() {
           keywords: ['zoom', 'magnify', 'view', 'in', 'out']
         },
         {
-          id: 'walk',
-          tool: 'walk',
-          label: 'Walk Mode',
-          subtitle: 'Walk through the model in first person',
-          icon: <Footprints size={19} />,
-          isActive: (s) => s.activeTool === 'walk',
-          onClick: (s) => s.setActiveTool('walk'),
-          keywords: ['walk', 'walkthrough', 'first person', 'fps', 'collision', 'gravity', 'jump']
-        },
-        {
           id: 'ai_query',
           label: 'AI Query',
           subtitle: 'Ask AI assistant about your model & scene',
@@ -1073,6 +1063,16 @@ export default function UnifiedToolRail() {
           isActive: (s) => s.activeTool === 'teleport',
           onClick: (s) => s.setActiveTool('teleport'),
           keywords: ['portal', 'navigation', 'teleport', 'walk', 'walkthrough', 'travel', 'camera']
+        },
+        {
+          id: 'walk',
+          tool: 'walk',
+          label: 'Walk Mode',
+          subtitle: 'Walk through the model in first person',
+          icon: <Footprints size={19} className="text-indigo-500 dark:text-indigo-400" />,
+          isActive: (s) => s.activeTool === 'walk',
+          onClick: (s) => s.setActiveTool('walk'),
+          keywords: ['walk', 'walkthrough', 'first person', 'fps', 'collision', 'gravity', 'jump']
         },
         {
           id: 'reset_camera',

@@ -1,5 +1,5 @@
 import React, { useRef, useState, createContext, useContext } from 'react';
-import { Aperture, RotateCcw, Crop } from 'lucide-react';
+import { Aperture, RotateCcw, Crop, Footprints } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
 import { cn } from '../lib/utils';
@@ -107,6 +107,14 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
           icon={<Aperture size={19} className="text-indigo-500 dark:text-indigo-400" />}
           label="Portal Navigation"
           subtitle="Click a wall, window, door, or floor to walk there"
+        />
+
+        {/* Walk Mode */}
+        <CameraToolButton
+          tool="walk"
+          icon={<Footprints size={19} className="text-indigo-500 dark:text-indigo-400" />}
+          label="Walk Mode"
+          subtitle="Walk through the model in first person"
         />
 
         {/* Reset Camera Position */}
