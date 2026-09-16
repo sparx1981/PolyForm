@@ -1444,7 +1444,9 @@ function TeleportPortalPreview({
   const frameCountRef = useRef(0);
   const destinationRef = useRef<PortalDestination | null>(null);
   const lastHitObjectRef = useRef<THREE.Object3D | null>(null);
-  const hoverSyncRef = useRef<{ time: number; tooltip: string | null }>({ time: 0, tooltip: null });
+  const hoverSyncRef = useRef<{ time: number; tooltip: string | null; point: THREE.Vector3 | null }>({ time: 0, tooltip: null, point: null });
+  const lastPortalPoseRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number } | null>(null);
+  const lastPortalRenderRef = useRef(0);
 
   useEffect(() => {
     discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
@@ -1499,16 +1501,22 @@ function TeleportPortalPreview({
     const enterHit = rawHit && (isWall || isFloor) ? rawHit : null;
 
     // The snapIndicator tooltip is a plain React-rendered <Html> overlay
-    // shared with other tools, so it still needs real state - but only
-    // needs to feel responsive, not track every frame, so it's
-    // time-throttled (immediate on appear/disappear/wall-vs-floor change,
-    // otherwise at most ~12/sec).
+    // shared with other tools, so it still needs real state - and a state
+    // update here re-renders this whole (very large) component, so it must
+    // only happen when the result would actually look different: the
+    // tooltip text changed, it appeared/disappeared, or the point moved far
+    // enough to be worth repositioning (rate-limited on top of that). A
+    // cursor sitting still now costs zero re-renders, where the previous
+    // unconditional ~12/sec heartbeat kept reconciling the entire scene
+    // tree for an identical result.
     const sync = hoverSyncRef.current;
     const tooltip = enterHit ? (isFloor ? 'Click to Walk Here' : 'Click to Walk Through') : null;
     const now = performance.now();
-    if (tooltip !== sync.tooltip || now - sync.time > 80) {
+    const pointMoved = !!enterHit && (!sync.point || sync.point.distanceToSquared(enterHit.worldPoint) > 1e-4);
+    if (tooltip !== sync.tooltip || (pointMoved && now - sync.time > 80)) {
       sync.tooltip = tooltip;
       sync.time = now;
+      sync.point = enterHit ? enterHit.worldPoint.clone() : null;
       onHoverChange(enterHit, tooltip);
     }
 
@@ -1591,43 +1599,102 @@ function TeleportPortalPreview({
     // more flicker.
     if (postprocessingActive) return;
 
-    // Re-rendering the whole scene from a second camera every animation
-    // frame is expensive - only refresh every other frame (only the
-    // rendered CONTENTS lag by one tick; position/size above still update
-    // every frame) to keep this from dragging down overall framerate.
-    if (frameCountRef.current % 2 !== 0) return;
+    // Re-rendering the whole scene from a second camera is by far the most
+    // expensive thing this component does, so it only happens when the
+    // rendered result would actually differ: when the destination pose or
+    // framing changed (i.e. the cursor moved somewhere new), or on a slow
+    // heartbeat to pick up scene edits. A stationary cursor produces an
+    // identical image every time, so re-rendering it on a blind
+    // every-other-frame cadence - as this used to - was pure waste, and
+    // that wasted whole-scene pass (plus the shadow maps below) is what
+    // left the renderer struggling to keep up while the cursor moved.
+    const lastPose = lastPortalPoseRef.current;
+    const poseChanged =
+      !lastPose ||
+      lastPose.position.distanceToSquared(portalCam.position) > 1e-8 ||
+      lastPose.quaternion.angleTo(portalCam.quaternion) > 1e-4 ||
+      Math.abs(lastPose.fov - portalCam.fov) > 1e-3;
+    if (!poseChanged && now - lastPortalRenderRef.current < 500) return;
+    if (!lastPortalPoseRef.current) {
+      lastPortalPoseRef.current = { position: portalCam.position.clone(), quaternion: portalCam.quaternion.clone(), fov: portalCam.fov };
+    } else {
+      lastPortalPoseRef.current.position.copy(portalCam.position);
+      lastPortalPoseRef.current.quaternion.copy(portalCam.quaternion);
+      lastPortalPoseRef.current.fov = portalCam.fov;
+    }
+    lastPortalRenderRef.current = now;
 
     const prevRenderTarget = gl.getRenderTarget();
     const prevAutoClear = gl.autoClear;
     const prevViewport = gl.getViewport(new THREE.Vector4());
-    // Explicitly clear (rather than relying on autoClear, which some
-    // postprocessing setups in this app turn off globally) and restore the
-    // viewport afterward (setRenderTarget doesn't restore it on its own) -
-    // otherwise either can leak into the next render and show up as
-    // smearing or a wrongly-sized main view, both of which read as flicker.
+    const prevShadowAutoUpdate = gl.shadowMap.autoUpdate;
+    const prevClearAlpha = gl.getClearAlpha();
+    // The disc's material is blended (see its own comment), so anything the
+    // portal camera doesn't cover - open sky past the geometry - would show
+    // the scene behind the disc through it unless the target is cleared
+    // opaque.
+    gl.setClearAlpha(1);
+    // Shadow maps are rendered from each LIGHT's own camera, so the ones
+    // the main pass already produced are equally valid for this off-screen
+    // pass - letting gl.render() rebuild them all over again just doubled
+    // the shadow cost of every frame this runs on, for an identical result.
+    gl.shadowMap.autoUpdate = false;
+    // Explicitly clear rather than relying on autoClear, which some
+    // postprocessing setups in this app turn off globally - otherwise the
+    // previous contents smear through.
     gl.autoClear = true;
+    // NOTE: no setViewport() here on purpose. setRenderTarget() already
+    // sets the viewport to the target's own size, whereas setViewport()
+    // takes CSS pixels and re-applies the renderer's pixel ratio on top -
+    // so explicitly setting it to the target's pixel dimensions rendered a
+    // cropped, zoomed view on any HiDPI display. It also left
+    // getViewport() reporting the target's size, which drei's <Edges>
+    // (fat lines) read in LineSegments2.onBeforeRender to set their
+    // `resolution` uniform - so every edge material the portal camera
+    // could see had its resolution clobbered by this pass.
     gl.setRenderTarget(renderTarget);
-    gl.setViewport(0, 0, renderTarget.width, renderTarget.height);
     gl.clear();
     gl.render(scene, portalCam);
     gl.setRenderTarget(prevRenderTarget);
     gl.setViewport(prevViewport);
     gl.autoClear = prevAutoClear;
+    gl.shadowMap.autoUpdate = prevShadowAutoUpdate;
+    gl.setClearAlpha(prevClearAlpha);
   });
 
   return (
     <group>
+      {/* `transparent` and `depthWrite={false}` are both load-bearing here,
+          and together they are what actually stops the preview flickering.
+          These two meshes are pure overlays meant to sit on top of
+          everything, but as plain OPAQUE materials they landed in the
+          opaque pass, which three.js draws in full before ANY transparent
+          object - so this app's translucent walls (and the black edge lines
+          drawn with them) were always drawn afterwards, on top of the
+          portal. What kept that from being merely wrong-looking is that a
+          material which skips the depth TEST still WRITES depth by default:
+          the disc stamped its own camera-facing depth across the whole
+          circle, so those later wall fragments were depth-rejected wherever
+          the stamp happened to land nearer than the wall. The disc is a flat
+          plane pushed just off a surface it is rarely parallel to, so which
+          side wins varies across the circle AND changes as the cursor moves
+          - the wall and its edges winking in and out per pixel, per frame,
+          only while the cursor moved. Marking them transparent puts them at
+          the end of the transparent pass instead (renderOrder 999 sorts them
+          last), so they draw over everything exactly once, and not writing
+          depth means they never affect anything drawn after them. Opacity
+          stays 1, so the disc still reads as solid. */}
       <mesh ref={discRef} renderOrder={999} visible={false}>
         <circleGeometry args={[1, 48]} />
         {postprocessingActive ? (
-          <meshBasicMaterial color="#0063A3" transparent opacity={0.25} toneMapped={false} depthTest={false} />
+          <meshBasicMaterial color="#0063A3" transparent opacity={0.25} toneMapped={false} depthTest={false} depthWrite={false} />
         ) : (
-          <meshBasicMaterial map={renderTarget.texture} toneMapped={false} depthTest={false} />
+          <meshBasicMaterial map={renderTarget.texture} transparent toneMapped={false} depthTest={false} depthWrite={false} />
         )}
       </mesh>
       <mesh ref={ringRef} renderOrder={999} visible={false}>
         <ringGeometry args={[0.95, 1.02, 48]} />
-        <meshBasicMaterial color="#0063A3" toneMapped={false} side={THREE.DoubleSide} depthTest={false} />
+        <meshBasicMaterial color="#0063A3" transparent toneMapped={false} side={THREE.DoubleSide} depthTest={false} depthWrite={false} />
       </mesh>
     </group>
   );
