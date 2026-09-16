@@ -46,6 +46,21 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'walk-mode',
+    title: 'Walk Mode',
+    category: 'tools',
+    content: 'Walk Mode lets you explore your model in first person, with gravity, collision, and stairs - as if you were physically walking through it.',
+    steps: [
+      'Select the Walk Mode tool (the footprints icon) from the Camera group.',
+      'Click a spot on the floor or another walkable surface to start walking there.',
+      'Move with WASD or the arrow keys, look around with the mouse, and press Space to jump.',
+      'Walls, roofs, terrain and similar architecture/landscape geometry block movement; you cannot walk through them, but you can climb stairs and small steps automatically.',
+      'Press Esc to exit Walk Mode and return to your previous tool. Losing mouse focus (e.g. alt-tab) pauses instead of exiting.',
+      'On touch devices, use the on-screen joystick to move, drag to look around, and the Jump/Exit buttons.',
+      'Adjust Movement Speed and Mouse Sensitivity in the Tool Modifier panel while Walk Mode is active.'
+    ]
+  },
+  {
     id: 'rectangle-tool',
     title: 'Rectangle Tool',
     category: 'tools',

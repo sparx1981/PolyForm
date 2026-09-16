@@ -271,19 +271,25 @@ describe('AppContext / useApp', () => {
     it('toolbarOrder falls back to the default when stored data is malformed', () => {
       localStorage.setItem('polyform_toolbar_order', JSON.stringify(['left', 'left', 'landscapes']));
       const { result } = renderApp();
-      expect(result.current.toolbarOrder).toEqual(['left', 'architecture', 'landscapes']);
+      expect(result.current.toolbarOrder).toEqual(['left', 'architecture', 'landscapes', 'camera']);
     });
 
     it('toolbarOrder accepts a valid stored permutation', () => {
+      localStorage.setItem('polyform_toolbar_order', JSON.stringify(['landscapes', 'left', 'architecture', 'camera']));
+      const { result } = renderApp();
+      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera']);
+    });
+
+    it('toolbarOrder appends camera to a pre-camera-toolbar stored permutation', () => {
       localStorage.setItem('polyform_toolbar_order', JSON.stringify(['landscapes', 'left', 'architecture']));
       const { result } = renderApp();
-      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture']);
+      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera']);
     });
 
     it('toolbarDocks falls back to the default when stored data has an invalid zone', () => {
       localStorage.setItem('polyform_toolbar_docks', JSON.stringify({ left: 'left', architecture: 'nowhere', landscapes: 'left' }));
       const { result } = renderApp();
-      expect(result.current.toolbarDocks).toEqual({ left: 'left', architecture: 'left', landscapes: 'left' });
+      expect(result.current.toolbarDocks).toEqual({ left: 'left', architecture: 'left', landscapes: 'left', camera: 'left' });
     });
 
     it('setToolbarDocks persists a valid update', () => {

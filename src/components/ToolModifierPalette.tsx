@@ -13,6 +13,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { RoofModifierSection } from './RoofModifierSection';
 import { ScaleFigureModifierSection } from './ScaleFigureModifierSection';
 import { CameraClippingSection } from './CameraClippingSection';
+import { WalkModeModifiers } from './walk/WalkModeModifiers';
 
 export const ToolModifierPalette: React.FC = () => {
   const { 
@@ -243,7 +244,7 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-trimble-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -474,6 +475,12 @@ export const ToolModifierPalette: React.FC = () => {
         {activeTool === 'clipping' && (
           <ErrorBoundary name="Camera Clipping Modifiers" compact>
             <CameraClippingSection idPrefix="palette-camera" />
+          </ErrorBoundary>
+        )}
+
+        {activeTool === 'walk' && (
+          <ErrorBoundary name="Walk Mode Modifiers" compact>
+            <WalkModeModifiers />
           </ErrorBoundary>
         )}
 

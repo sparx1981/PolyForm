@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  MousePointer2, 
+import {
+  MousePointer2,
   Lasso,
-  Eraser, 
+  Footprints,
+  Eraser,
   PaintBucket, 
   Box, 
   PenLine, 
@@ -889,6 +890,16 @@ export default function UnifiedToolRail() {
           isActive: (s) => s.activeTool === 'zoom',
           onClick: (s) => s.setActiveTool('zoom'),
           keywords: ['zoom', 'magnify', 'view', 'in', 'out']
+        },
+        {
+          id: 'walk',
+          tool: 'walk',
+          label: 'Walk Mode',
+          subtitle: 'Walk through the model in first person',
+          icon: <Footprints size={19} />,
+          isActive: (s) => s.activeTool === 'walk',
+          onClick: (s) => s.setActiveTool('walk'),
+          keywords: ['walk', 'walkthrough', 'first person', 'fps', 'collision', 'gravity', 'jump']
         },
         {
           id: 'ai_query',

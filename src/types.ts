@@ -20,7 +20,7 @@ export type ToolType =
   | 'line' | 'poly' | 'bezier' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
   | 'move' | 'rotate' | 'scale' | 'pushpull' | 'followme' | 'offset' | 'flip'
   | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section'
-  | 'orbit' | 'pan' | 'zoom' | 'zoomextents' | 'teleport'
+  | 'orbit' | 'pan' | 'zoom' | 'zoomextents' | 'teleport' | 'walk'
   | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome'
   | 'bevel' | 'subtract' | 'note' | 'deform'
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
@@ -341,6 +341,14 @@ export interface AppState {
   setGridEnabled: (enabled: boolean) => void;
   floorEnabled: boolean;
   setFloorEnabled: (enabled: boolean) => void;
+  walkModePhase: WalkModePhase;
+  setWalkModePhase: (phase: WalkModePhase) => void;
+  walkMovementSpeed: number;
+  setWalkMovementSpeed: (speed: number) => void;
+  walkMouseSensitivity: number;
+  setWalkMouseSensitivity: (sensitivity: number) => void;
+  /** Shared, non-reactive channel between WalkModeController (inside the R3F Canvas) and WalkModeOverlay (a plain DOM sibling) - see WalkBridge's own doc comment. */
+  walkBridgeRef: { current: import('./lib/walkMode/inputState').WalkBridge };
   skyboxBlur: number;
   setSkyboxBlur: (blur: number) => void;
   environmentIntensity: number;
@@ -1193,6 +1201,16 @@ export interface RoadModifier {
 }
 
 export type TerrainModifier = PadModifier | RoadModifier | SurfaceModifier;
+
+/**
+ * Walk Mode's session state machine (see the Walk Mode spec §5.1):
+ * 'inactive' - the tool isn't active at all.
+ * 'preparing' - the collision BVH is being built (only shown if it takes > 150ms).
+ * 'placing' - waiting for a click/tap on a valid floor/stair/ground spot to start walking.
+ * 'walking' - first-person, pointer locked (desktop) or touch-controlled.
+ * 'paused' - pointer lock was lost by accident (alt-tab, etc.) - "click to resume".
+ */
+export type WalkModePhase = 'inactive' | 'preparing' | 'placing' | 'walking' | 'paused';
 
 
 

@@ -11,7 +11,9 @@ import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
 import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimberFrameForRoof, generateTimberFrameForBuilding } from './lib/timberFrameGenerator';
 import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
-import { TimberFrameParams, TimberFrameRecomputeState } from './types';
+import { TimberFrameParams, TimberFrameRecomputeState, WalkModePhase } from './types';
+import { createWalkBridge } from './lib/walkMode/inputState';
+import { MOVEMENT_SPEED_RANGE, MOUSE_SENSITIVITY_RANGE } from './lib/walkMode/constants';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -231,6 +233,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [gridEnabled, setGridEnabled] = useState(true);
   const [floorEnabled, setFloorEnabled] = useState(false);
   const [floorColor, setFloorColor] = useState('#f9fafb');
+
+  // Walk Mode (see src/lib/walkMode/ and the Walk Mode spec). Not
+  // persisted as the active tool on reload/autosave - it's a transient
+  // navigation mode, never part of the saved model.
+  const [walkModePhase, setWalkModePhase] = useState<WalkModePhase>('inactive');
+  const [walkMovementSpeed, setWalkMovementSpeedState] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(MOVEMENT_SPEED_RANGE.storageKey);
+      if (stored !== null) {
+        const parsed = parseFloat(stored);
+        if (Number.isFinite(parsed)) return THREE.MathUtils.clamp(parsed, MOVEMENT_SPEED_RANGE.min, MOVEMENT_SPEED_RANGE.max);
+      }
+    } catch (e) {}
+    return MOVEMENT_SPEED_RANGE.default;
+  });
+  const setWalkMovementSpeed = (speed: number) => {
+    const clamped = THREE.MathUtils.clamp(speed, MOVEMENT_SPEED_RANGE.min, MOVEMENT_SPEED_RANGE.max);
+    setWalkMovementSpeedState(clamped);
+    try { localStorage.setItem(MOVEMENT_SPEED_RANGE.storageKey, String(clamped)); } catch (e) {}
+  };
+  const [walkMouseSensitivity, setWalkMouseSensitivityState] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(MOUSE_SENSITIVITY_RANGE.storageKey);
+      if (stored !== null) {
+        const parsed = parseFloat(stored);
+        if (Number.isFinite(parsed)) return THREE.MathUtils.clamp(parsed, MOUSE_SENSITIVITY_RANGE.min, MOUSE_SENSITIVITY_RANGE.max);
+      }
+    } catch (e) {}
+    return MOUSE_SENSITIVITY_RANGE.default;
+  });
+  const setWalkMouseSensitivity = (sensitivity: number) => {
+    const clamped = THREE.MathUtils.clamp(sensitivity, MOUSE_SENSITIVITY_RANGE.min, MOUSE_SENSITIVITY_RANGE.max);
+    setWalkMouseSensitivityState(clamped);
+    try { localStorage.setItem(MOUSE_SENSITIVITY_RANGE.storageKey, String(clamped)); } catch (e) {}
+  };
+  // Stable for the lifetime of the app - see WalkBridge's own doc comment
+  // for why WalkModeController and WalkModeOverlay need this instead of props.
+  const walkBridgeRef = useRef(createWalkBridge());
   const [skyboxBlur, setSkyboxBlur] = useState(0);
   const [environmentIntensity, setEnvironmentIntensity] = useState(1.0);
   const [skyboxRotation, setSkyboxRotation] = useState(0);
@@ -627,18 +667,28 @@ console.log("Created rectangle:", myRect.id);`);
    * toolbar to reposition it. Persisted the same way layoutMode is.
    */
   const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera'];
+  const ALL_TOOLBAR_KEYS: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera'];
   const [toolbarOrder, setToolbarOrderState] = useState<ToolbarKey[]>(() => {
     try {
       const stored = localStorage.getItem('polyform_toolbar_order');
       if (stored) {
         const parsed = JSON.parse(stored);
+        // A valid permutation: every element a real toolbar key, no
+        // duplicates, and one entry per key this stored value predates
+        // 'camera' by (3, from before that toolbar existed) or covers all
+        // 4. Anything else (missing/duplicate keys, unknown values) falls
+        // back to the default rather than being used half-broken.
         if (
           Array.isArray(parsed) &&
-          parsed.every((k) => (['left', 'architecture', 'landscapes', 'camera'] as ToolbarKey[]).includes(k))
+          new Set(parsed).size === parsed.length &&
+          parsed.every((k) => ALL_TOOLBAR_KEYS.includes(k))
         ) {
-          const res = [...parsed] as ToolbarKey[];
-          if (!res.includes('camera')) res.push('camera');
-          return res;
+          if (parsed.length === ALL_TOOLBAR_KEYS.length) {
+            return parsed as ToolbarKey[];
+          }
+          if (parsed.length === ALL_TOOLBAR_KEYS.length - 1 && !parsed.includes('camera')) {
+            return [...parsed, 'camera'] as ToolbarKey[];
+          }
         }
       }
     } catch (e) {}
@@ -677,12 +727,16 @@ console.log("Created rectangle:", myRect.id);`);
       const stored = localStorage.getItem('polyform_toolbar_docks');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === 'object') {
+        const isValidZone = (z: unknown): z is DockZone => z === 'left' || z === 'top' || z === 'bottom';
+        if (
+          parsed && typeof parsed === 'object' &&
+          (['left', 'architecture', 'landscapes'] as ToolbarKey[]).every((k) => isValidZone(parsed[k]))
+        ) {
           return {
-            left: parsed.left || 'left',
-            architecture: parsed.architecture || 'left',
-            landscapes: parsed.landscapes || 'left',
-            camera: parsed.camera || 'left',
+            left: parsed.left,
+            architecture: parsed.architecture,
+            landscapes: parsed.landscapes,
+            camera: isValidZone(parsed.camera) ? parsed.camera : 'left',
           };
         }
       }
@@ -2025,6 +2079,13 @@ console.log("Created rectangle:", myRect.id);`);
       setGridEnabled: handleSetGridEnabled,
       floorEnabled,
       setFloorEnabled: handleSetFloorEnabled,
+      walkModePhase,
+      setWalkModePhase,
+      walkMovementSpeed,
+      setWalkMovementSpeed,
+      walkMouseSensitivity,
+      setWalkMouseSensitivity,
+      walkBridgeRef,
       floorColor,
       setFloorColor,
       skyboxBlur,

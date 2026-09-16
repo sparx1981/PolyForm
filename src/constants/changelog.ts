@@ -5,6 +5,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'September 16, 2026',
+    items: [
+      'Walk Mode: Added a new first-person navigation tool alongside Orbit/Pan/Zoom. Click a spot on the floor to start walking with WASD movement, mouse look, jumping, gravity, and automatic step/stair climbing against a capsule collider built from the model\'s architecture and landscape geometry.',
+      'Walk Mode collides with walls, windows, steps, staircases, roofs, terrain, fences, railings and other solid architecture/landscape shapes (doors remain walk-through), and stops you at an invisible wall around the edge of the model.',
+      'Walk Mode pauses (rather than exits) if you lose window focus or switch tabs mid-walk, and resumes with a click; pressing Esc deliberately exits back to your previous tool at the position you walked to.',
+      'Added Movement Speed and Mouse Sensitivity settings for Walk Mode to the Tool Modifier panel, persisted across sessions.',
+      'Added on-screen joystick, drag-to-look, Jump and Exit controls for Walk Mode on touch devices.',
+      'Portal Navigation preview: fixed a remaining flicker where the preview disc/ring could briefly jump to an unrelated point (or disappear for a frame) while hovering near an edge, thin member, or opening - the raycast now requires a changed hover target to be confirmed for two frames, and briefly holds the last good result through a momentary miss, before updating the indicator.',
+    ]
+  },
+  {
     date: 'April 27, 2026',
     items: [
       'Model Visibility Fix: Resolved an issue where existing models were not showing up in the Open Model list by optimizing the default query to remove Firestore-side orderBy index dependencies and fixing missing icon imports.',

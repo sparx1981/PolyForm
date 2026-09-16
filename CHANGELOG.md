@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.0] - 2026-09-16
+### Added
+- **Walk Mode**: A new first-person navigation tool (Camera group, next to Orbit/Pan/Zoom). Click a spot on the floor to start walking with WASD movement, mouse look, jumping, gravity, and automatic step/stair climbing, using a capsule collider against the model's architecture and landscape geometry (walls, windows, steps, staircases, roofs, terrain, fences, railings; doors remain walk-through).
+- **Walk Mode Settings**: Movement Speed and Mouse Sensitivity controls in the Tool Modifier panel, persisted across sessions.
+- **Walk Mode Touch Controls**: On-screen joystick, drag-to-look, Jump and Exit buttons for touch devices.
+### Fixed
+- **Portal Navigation Preview Flicker (continued)**: The preview disc/ring could still briefly jump to an unrelated point or blink off for a frame when hovering near an edge, thin member, or opening. The hover raycast now requires a changed target to be confirmed for two consecutive frames, and briefly holds the last good result through a momentary miss, before updating the indicator.
+- **Toolbar Layout Validation**: Restored strict validation of stored toolbar order/dock preferences (rejecting duplicate or invalid entries) that had been loosened when the Camera toolbar group was added, while still upgrading older 3-toolbar saved layouts to include it.
+
 ## [1.9.0] - 2026-04-28
 ### Optimized
 - **Real-time Performance**: Restored Collaborative Transformations and Cursors to a fluid 1-second sync interval.

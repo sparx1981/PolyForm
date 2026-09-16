@@ -39,6 +39,7 @@
     "tailwind-merge": "^3.5.0",
     "three": "^0.183.2",
     "three-bvh-csg": "^0.0.18",
+    "three-mesh-bvh": "^0.9.15",
     "vite": "^6.2.0"
   },
   "devDependencies": {

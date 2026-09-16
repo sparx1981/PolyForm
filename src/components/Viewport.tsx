@@ -56,7 +56,7 @@ import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { getBlockPart, buildBlockGeometry, primaryStudDirection, STUD_UNIT, BRICK_HEIGHT, PLATE_HEIGHT, BlockPart } from '../lib/blockKitGeometry';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
-import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier } from '../types';
+import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier, ToolType } from '../types';
 import CutFillVolumeOverlay from './terrain/CutFillVolumeOverlay';
 import RoadSplineOverlay from './terrain/RoadSplineOverlay';
 import ParametricPadOverlay from './terrain/ParametricPadOverlay';
@@ -108,9 +108,12 @@ import {
   resolvePortalDestinationForFloor,
   extractYawFromQuaternion,
   smoothstep,
+  PORTAL_EYE_HEIGHT,
   type ResolvedSurfaceHit,
   type PortalDestination,
 } from '../lib/portalNavigation';
+import WalkModeController from './walk/WalkModeController';
+import WalkModeOverlay from './walk/WalkModeOverlay';
 import { InstancedTimberFraming } from './InstancedTimberFraming';
 import { BezierTool } from '../tools/bezier/BezierTool';
 import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
@@ -1419,6 +1422,12 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
 // catch the markers mid-toggle. Layers avoid the toggle entirely.
 const TELEPORT_PORTAL_LAYER = 31;
 
+// See stableHitRef's own comment inside TeleportPortalPreview for why these
+// exist: raw per-frame raycasts need a little hysteresis before the preview
+// disc trusts them.
+const HOVER_CONFIRM_FRAMES = 2;
+const HOVER_HOLD_MS = 120;
+
 function TeleportPortalPreview({
   postprocessingActive,
   floorEnabled,
@@ -1447,6 +1456,18 @@ function TeleportPortalPreview({
   const hoverSyncRef = useRef<{ time: number; tooltip: string | null; point: THREE.Vector3 | null }>({ time: 0, tooltip: null, point: null });
   const lastPortalPoseRef = useRef<{ position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number } | null>(null);
   const lastPortalRenderRef = useRef(0);
+  // Hysteresis for the raw per-frame raycast (see the big comment where this
+  // is used, below): a camera-and-mouse-static scene can still legitimately
+  // return a DIFFERENT nearest hit on consecutive frames right at a grazing
+  // angle - a window/door reveal edge, a stair baluster gap, a wall corner -
+  // where sub-pixel jitter in `pointer` flips which of two nearly-coincident
+  // faces (one right in front of the cursor, one much further behind it) the
+  // ray lands on first. Passing every such raw result straight through to
+  // the disc's position/scale is what read as the reported flicker: the
+  // indicator popping between a near, correctly-sized disc and a huge one
+  // anchored deep inside the model, or blinking off entirely for a frame.
+  const stableHitRef = useRef<{ hit: ResolvedSurfaceHit; time: number } | null>(null);
+  const pendingHitRef = useRef<{ object: THREE.Object3D | null; count: number }>({ object: null, count: 0 });
 
   useEffect(() => {
     discRef.current?.layers.set(TELEPORT_PORTAL_LAYER);
@@ -1492,13 +1513,52 @@ function TeleportPortalPreview({
     // "flip-book" effect - one new frame per cursor move). Sampling
     // R3F's own tracked pointer position here instead naturally caps this
     // work to the render rate.
+    const now = performance.now();
     raycaster.setFromCamera(pointer, camera);
     const intersects = raycaster.intersectObjects(scene.children, true);
     const shapeHit = intersects.find(i => i.object.userData?.isShape && i.face);
     const rawHit = shapeHit ? resolveWorldHit(shapeHit, raycaster.ray.direction) : resolveGroundPlaneFloorHit(raycaster, scene, floorEnabled);
     const isWall = rawHit && isNavigableSurface(rawHit.worldNormal);
     const isFloor = rawHit && isFloorSurface(rawHit.worldNormal);
-    const enterHit = rawHit && (isWall || isFloor) ? rawHit : null;
+    const rawEnterHit = rawHit && (isWall || isFloor) ? rawHit : null;
+
+    // Stabilize: accept the raw hit immediately when it's the SAME object
+    // already being shown (normal continuous tracking across one surface),
+    // but require a DIFFERENT object to win two frames in a row before
+    // switching to it, and hold the last good hit for a short grace period
+    // through a momentary miss (both filter out the single-frame grazes
+    // described above without adding any perceptible lag to genuine hover
+    // movement, which almost always keeps landing on the same object frame
+    // after frame anyway).
+    const stable = stableHitRef.current;
+    const rawObject = rawEnterHit?.hitObject ?? null;
+    if (rawEnterHit && stable && rawObject === stable.hit.hitObject) {
+      stableHitRef.current = { hit: rawEnterHit, time: now };
+      pendingHitRef.current = { object: null, count: 0 };
+    } else if (rawEnterHit) {
+      const pending = pendingHitRef.current;
+      if (pending.object === rawObject) {
+        pending.count++;
+      } else {
+        pendingHitRef.current = { object: rawObject, count: 1 };
+      }
+      if (pendingHitRef.current.count >= HOVER_CONFIRM_FRAMES) {
+        stableHitRef.current = { hit: rawEnterHit, time: now };
+        pendingHitRef.current = { object: null, count: 0 };
+      } else if (!stable || now - stable.time > HOVER_HOLD_MS) {
+        // No confirmed hit to fall back on - show the raw result as-is
+        // rather than nothing, so a genuinely new hover target (first
+        // surface of the session, or after a real gap) still appears
+        // without waiting for a second confirming frame.
+        stableHitRef.current = { hit: rawEnterHit, time: now };
+      }
+    } else {
+      pendingHitRef.current = { object: null, count: 0 };
+      if (stable && now - stable.time > HOVER_HOLD_MS) {
+        stableHitRef.current = null;
+      }
+    }
+    const enterHit = stableHitRef.current?.hit ?? null;
 
     // The snapIndicator tooltip is a plain React-rendered <Html> overlay
     // shared with other tools, so it still needs real state - and a state
@@ -1510,8 +1570,11 @@ function TeleportPortalPreview({
     // unconditional ~12/sec heartbeat kept reconciling the entire scene
     // tree for an identical result.
     const sync = hoverSyncRef.current;
-    const tooltip = enterHit ? (isFloor ? 'Click to Walk Here' : 'Click to Walk Through') : null;
-    const now = performance.now();
+    // Classify off the STABILIZED hit's own normal, not the raw `isFloor`
+    // computed above - `enterHit` can be a held-over hit from a previous
+    // frame (grace period or unconfirmed switch), and pairing it with this
+    // frame's raw classification could label it wrong for one frame.
+    const tooltip = enterHit ? (isFloorSurface(enterHit.worldNormal) ? 'Click to Walk Here' : 'Click to Walk Through') : null;
     const pointMoved = !!enterHit && (!sync.point || sync.point.distanceToSquared(enterHit.worldPoint) > 1e-4);
     if (tooltip !== sync.tooltip || (pointMoved && now - sync.time > 80)) {
       sync.tooltip = tooltip;
@@ -1554,13 +1617,13 @@ function TeleportPortalPreview({
         ? resolvePortalDestination(scene.children, enterHit, {
             camEye: camera.position,
             maxWallThickness: 0.6,
-            eyeHeight: 1.6,
+            eyeHeight: PORTAL_EYE_HEIGHT,
             clearanceDMax: 3.5,
             camYaw,
           })
         : resolvePortalDestinationForFloor(scene.children, enterHit, {
             camEye: camera.position,
-            eyeHeight: 1.6,
+            eyeHeight: PORTAL_EYE_HEIGHT,
             clearanceDMax: 3.5,
             camYaw,
           });
@@ -1914,7 +1977,12 @@ function Scene() {
     civilPadSettings,
     civilStripingSettings,
     addTerrainModifier,
-    updateTerrainModifier
+    updateTerrainModifier,
+    walkModePhase,
+    setWalkModePhase,
+    walkMovementSpeed,
+    walkMouseSensitivity,
+    walkBridgeRef
   } = useApp();
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
@@ -3462,6 +3530,14 @@ function Scene() {
   // (which sets camera.near dynamically, per-destination).
   const effectiveCameraDefaultsRef = useRef({ near: 0.1, far: 5000 });
   const [portalTransitionActive, setPortalTransitionActive] = useState(false);
+  // The tool active just before Walk Mode was entered, so exiting (ESC)
+  // can restore it (spec §5.5) - tracked here rather than inside
+  // WalkModeController since that component only exists while
+  // activeTool === 'walk', by which point the previous tool is already gone.
+  const preWalkToolRef = useRef<ToolType>('orbit');
+  useEffect(() => {
+    if (activeTool !== 'walk') preWalkToolRef.current = activeTool;
+  }, [activeTool]);
   const portalTransitionRef = useRef<{
     startTime: number;
     duration: number;
@@ -4448,6 +4524,11 @@ function Scene() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Walk Mode owns all keyboard input while active (WASD, Space, Escape,
+      // arrows) - every other tool's single-key shortcuts below (w, d, s for
+      // Scale, undo/redo, delete, etc.) must be suppressed so they don't fire
+      // while the player is just trying to walk. See WalkModeController.
+      if (activeTool === 'walk') return;
       if (isDeveloperConsoleOpen) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { if (e.key === 'Enter' && rectangleInputState.active) { e.preventDefault(); finalizeRectangleInput(); } else if (e.key === 'Escape' && rectangleInputState.active) { e.preventDefault(); setRectangleInputState({ active: false, startPoint: null, width: '', depth: '' }); } return; }
       
@@ -5040,6 +5121,12 @@ function Scene() {
   const [pointerDownInfo, setPointerDownInfo] = useState<{ time: number, pos: THREE.Vector3 } | null>(null);
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    // Walk Mode handles its own placement click and pointer-lock entirely
+    // through native listeners on the canvas element (see
+    // WalkModeController) - every other tool's click behavior below
+    // (selection, drawing, deselect-on-background, etc.) must not run
+    // while it's active.
+    if (activeTool === 'walk') return;
     pointerUpHandledRef.current = false;
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
 
@@ -5071,14 +5158,14 @@ function Scene() {
         destination = resolvePortalDestination(scene.children, enterHit, {
           camEye: camera.position,
           maxWallThickness: 0.6,
-          eyeHeight: 1.6,
+          eyeHeight: PORTAL_EYE_HEIGHT,
           clearanceDMax: 3.5,
           camYaw,
         });
       } else if (isFloorSurface(enterHit.worldNormal)) {
         destination = resolvePortalDestinationForFloor(scene.children, enterHit, {
           camEye: camera.position,
-          eyeHeight: 1.6,
+          eyeHeight: PORTAL_EYE_HEIGHT,
           clearanceDMax: 3.5,
           camYaw,
         });
@@ -6095,6 +6182,9 @@ function Scene() {
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    // See handlePointerDown's identical guard - Walk Mode's own placement
+    // hover lives entirely in WalkModeController.
+    if (activeTool === 'walk') return;
     if (activeTool === 'teleport') {
       // Portal Navigation's own hover tracking no longer happens here at
       // all - see TeleportPortalPreview's useFrame. Raycasting against the
@@ -9328,7 +9418,7 @@ function Scene() {
       <OrbitControls 
         makeDefault 
         zoomToCursor
-        autoRotate={autoOrbitEnabled}
+        autoRotate={autoOrbitEnabled && activeTool !== 'walk'}
         autoRotateSpeed={orbitRotationSpeed * 2}
         ref={(ref) => { 
           if (ref) {
@@ -9349,7 +9439,7 @@ function Scene() {
           MIDDLE: THREE.MOUSE.ROTATE,
           RIGHT: THREE.MOUSE.PAN
         }}
-        enabled={!drawingStart && !pushPullState && !isSculptingDragRef.current && activeTool !== 'landscape_sculpt' && activeTool !== 'landscape_mask' && !portalTransitionActive}
+        enabled={!drawingStart && !pushPullState && !isSculptingDragRef.current && activeTool !== 'landscape_sculpt' && activeTool !== 'landscape_mask' && activeTool !== 'walk' && !portalTransitionActive}
         minPolarAngle={floorEnabled ? 0 : -Math.PI}
         maxPolarAngle={floorEnabled ? Math.PI / 2 : Math.PI}
       />
@@ -10833,6 +10923,28 @@ function Scene() {
             setSnapIndicator(hit ? { point: [hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z], type: 'center', tooltip: tooltip! } : null);
           }}
           postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
+        />
+      )}
+
+      {/* Walk Mode (spec polyform-walk-mode-spec.md): entirely self-contained
+          - owns its own placement click/hover, pointer lock, physics loop and
+          camera while active, rather than threading into the handlers above
+          (which all early-return for activeTool==='walk' - see their own
+          comments). */}
+      {activeTool === 'walk' && (
+        <WalkModeController
+          scene={scene}
+          camera={camera as THREE.PerspectiveCamera}
+          gl={gl}
+          shapes={shapes}
+          floorEnabled={floorEnabled}
+          phase={walkModePhase}
+          setPhase={setWalkModePhase}
+          movementSpeed={walkMovementSpeed}
+          mouseSensitivity={walkMouseSensitivity}
+          bridge={walkBridgeRef.current}
+          onExit={() => setActiveTool(preWalkToolRef.current)}
+          onToast={setViewportToast}
         />
       )}
 
@@ -12617,6 +12729,8 @@ export default function Viewport() {
           </div>
         </div>
       )}
+
+      {activeTool === 'walk' && <WalkModeOverlay />}
 
       {placingNotePos && (
         // Rendered directly here — no portal needed, since this whole

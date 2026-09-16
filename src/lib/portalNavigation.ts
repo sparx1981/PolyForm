@@ -9,6 +9,9 @@ import * as THREE from 'three';
  * scene raycasting and the camera transition.
  */
 
+/** Shared standing eye height, also used by Walk Mode (src/lib/walkMode/constants.ts) so the two features agree on where "standing" puts your eyes. */
+export const PORTAL_EYE_HEIGHT = 1.6;
+
 export interface ResolvedSurfaceHit {
   worldPoint: THREE.Vector3;
   worldNormal: THREE.Vector3;
