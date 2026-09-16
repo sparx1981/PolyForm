@@ -15,7 +15,9 @@ import {
   Check,
   Globe,
   Hammer,
-  PersonStanding
+  PersonStanding,
+  Aperture,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
@@ -233,12 +235,21 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
         subtitle="12-step architectural staircase flight (Rise 2.16m, Run 3.6m)"
       />
 
-      <ArchToolButton 
-        tool="scale_figure" 
-        icon={<PersonStanding size={19} />} 
-        label="Scale Figure (Person)" 
+      <ArchToolButton
+        tool="scale_figure"
+        icon={<PersonStanding size={19} />}
+        label="Scale Figure (Person)"
         subtitle={`${currentScaleChar.name} (${currentScaleHeight.toFixed(2)}m eye-level datum)`}
       />
+
+      <ArchToolButton
+        tool="teleport"
+        icon={<Aperture size={19} />}
+        label="Portal Navigation"
+        subtitle="Click a wall, window, door, or floor to walk there"
+      />
+
+      <ResetCameraToolButton />
 
       <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />
 
@@ -352,6 +363,42 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
       <WorldViewToolButton />
     </aside>
     </FlyoutSideContext.Provider>
+  );
+}
+
+function ResetCameraToolButton() {
+  const { theme } = useApp();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const flyoutSide = useContext(FlyoutSideContext);
+
+  return (
+    <div className="relative group">
+      <button
+        ref={buttonRef}
+        id="arch-reset-camera-btn"
+        onClick={() => window.dispatchEvent(new CustomEvent('reset-camera'))}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className={cn(
+          "toolbar-btn relative flex items-center justify-center transition-all",
+          theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
+        )}
+      >
+        <RotateCcw size={18} />
+
+        <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
+          {hovered && (
+            <div className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none z-50">
+              <div className="font-semibold flex items-center gap-1.5">
+                <span>Reset to Default Position</span>
+              </div>
+              <div className="text-[10px] text-gray-400 font-normal">Return the camera to its default starting position and view</div>
+            </div>
+          )}
+        </FlyoutPortal>
+      </button>
+    </div>
   );
 }
 
