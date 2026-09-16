@@ -339,6 +339,10 @@ export interface AppState {
   setFogSettings: (settings: FogSettings | ((prev: FogSettings) => FogSettings)) => void;
   gridEnabled: boolean;
   setGridEnabled: (enabled: boolean) => void;
+  axisIndicatorEnabled: boolean;
+  setAxisIndicatorEnabled: (enabled: boolean) => void;
+  miniAxisIndicatorEnabled: boolean;
+  setMiniAxisIndicatorEnabled: (enabled: boolean) => void;
   floorEnabled: boolean;
   setFloorEnabled: (enabled: boolean) => void;
   walkModePhase: WalkModePhase;

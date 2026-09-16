@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.4] - 2026-09-16
+### Added
+- **Scene Helpers Axis Toggles**: Split axis visibility into two independent controls in the "Scene Helpers" section of the Visualisation right panel:
+  - **Axis Indicator**: Toggles the main 3D coordinate axes located at (0, 0, 0) in the 3D space on or off.
+  - **Mini Axis Indicator**: Toggles the interactive viewport orientation Gizmo in the bottom-left corner of the screen on or off.
+  - Both states persist to user settings in Firestore and are controllable via the Developer API (`sdk.setAxisIndicator(enabled)` and `sdk.setMiniAxisIndicator(enabled)`).
+
 ## [1.10.3] - 2026-09-16
 ### Fixed
 - **Walk Mode Stuck Mid-Staircase**: Straight/L-shaped/U-shaped staircases could stop the player partway up (curved staircases were unaffected). The step-up assist probed forward along the player's raw input/look direction, which is normal for an FPS-style "WASD relative to camera" scheme but drifts off-axis from the riser actually ahead the moment the player turns their head while still holding "forward" - easy to do on a long straight/L/U flight, much less tempting on a curved one where looking along the curve is the walking direction anyway. It now probes straight into whichever contact is actually blocking, independent of camera yaw. Added a regression test that reproduces the stuck behavior purely from an oscillating camera yaw, with no narrow geometry involved.

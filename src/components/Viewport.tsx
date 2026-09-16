@@ -13,7 +13,9 @@ import {
   Grid, 
   TransformControls, 
   ContactShadows, 
-  Environment 
+  Environment,
+  GizmoHelper,
+  GizmoViewport
 } from '@react-three/drei';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
@@ -1920,6 +1922,8 @@ function Scene() {
     sunSpeed,
     gridEnabled,
     setGridEnabled,
+    axisIndicatorEnabled,
+    miniAxisIndicatorEnabled,
     floorEnabled,
     setFloorEnabled,
     floorColor,
@@ -9539,6 +9543,19 @@ function Scene() {
         />
       )}
 
+      {miniAxisIndicatorEnabled && (
+        <GizmoHelper
+          alignment="bottom-left"
+          margin={[60, 60]}
+        >
+          <GizmoViewport
+            axisColors={['#ef4444', '#22c55e', '#3b82f6']}
+            labelColor="#ffffff"
+            disabled={walkModePhase !== 'inactive'}
+          />
+        </GizmoHelper>
+      )}
+
       {floorEnabled && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
@@ -9812,20 +9829,22 @@ function Scene() {
 
       <Effects />
 
-      <group>
-        <mesh position={[50, 0, 0]}>
-          <boxGeometry args={[100, 0.1, 0.1]} />
-          <meshBasicMaterial color="#ef4444" />
-        </mesh>
-        <mesh position={[0, 0, 50]}>
-          <boxGeometry args={[0.1, 0.1, 100]} />
-          <meshBasicMaterial color="#22c55e" />
-        </mesh>
-        <mesh position={[0, 50, 0]}>
-          <boxGeometry args={[0.1, 100, 0.1]} />
-          <meshBasicMaterial color="#3b82f6" />
-        </mesh>
-      </group>
+      {axisIndicatorEnabled && (
+        <group>
+          <mesh position={[50, 0, 0]}>
+            <boxGeometry args={[100, 0.1, 0.1]} />
+            <meshBasicMaterial color="#ef4444" />
+          </mesh>
+          <mesh position={[0, 0, 50]}>
+            <boxGeometry args={[0.1, 0.1, 100]} />
+            <meshBasicMaterial color="#22c55e" />
+          </mesh>
+          <mesh position={[0, 50, 0]}>
+            <boxGeometry args={[0.1, 100, 0.1]} />
+            <meshBasicMaterial color="#3b82f6" />
+          </mesh>
+        </group>
+      )}
 
       {/* WorldView Map Overlay */}
       {isWorldViewActive && (

@@ -2548,6 +2548,20 @@ export class DeveloperSDK implements SDK {
     this.log(`Grid ${enabled ? 'enabled' : 'disabled'}.`);
   }
 
+  setAxisIndicator(enabled: boolean): void {
+    if (this.extraSetters.setAxisIndicatorEnabled) {
+      this.extraSetters.setAxisIndicatorEnabled(enabled);
+    }
+    this.log(`Axis indicator ${enabled ? 'enabled' : 'disabled'}.`);
+  }
+
+  setMiniAxisIndicator(enabled: boolean): void {
+    if (this.extraSetters.setMiniAxisIndicatorEnabled) {
+      this.extraSetters.setMiniAxisIndicatorEnabled(enabled);
+    }
+    this.log(`Mini axis indicator ${enabled ? 'enabled' : 'disabled'}.`);
+  }
+
   setFloor(enabled: boolean, color?: string): void {
     if (this.extraSetters.setFloorEnabled) {
       this.extraSetters.setFloorEnabled(enabled);

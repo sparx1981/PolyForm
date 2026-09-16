@@ -231,6 +231,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [customLights, setCustomLights] = useState<CustomLight[]>([]);
   const [fogSettings, setFogSettings] = useState<FogSettings>(DEFAULT_FOG);
   const [gridEnabled, setGridEnabled] = useState(true);
+  const [axisIndicatorEnabled, setAxisIndicatorEnabled] = useState(true);
+  const [miniAxisIndicatorEnabled, setMiniAxisIndicatorEnabled] = useState(true);
   const [floorEnabled, setFloorEnabled] = useState(false);
   const [floorColor, setFloorColor] = useState('#f9fafb');
 
@@ -864,6 +866,8 @@ console.log("Created rectangle:", myRect.id);`);
             theme,
             unit,
             gridEnabled,
+            axisIndicatorEnabled,
+            miniAxisIndicatorEnabled,
             floorEnabled,
             allNotesVisible,
             defaultCameraPosition,
@@ -883,7 +887,7 @@ console.log("Created rectangle:", myRect.id);`);
       const timeout = setTimeout(saveSettings, 30000); // 30s debounce for settings
       return () => clearTimeout(timeout);
     }
-  }, [theme, unit, gridEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, layoutMode, user?.uid]);
+  }, [theme, unit, gridEnabled, axisIndicatorEnabled, miniAxisIndicatorEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, layoutMode, user?.uid]);
 
   // Load user settings
   const lastSettingsLoad = useRef<number>(0);
@@ -901,6 +905,8 @@ console.log("Created rectangle:", myRect.id);`);
           if (data.theme) setTheme(data.theme);
           if (data.unit) setUnit(data.unit);
           if (data.gridEnabled !== undefined) setGridEnabled(data.gridEnabled);
+          if (data.axisIndicatorEnabled !== undefined) setAxisIndicatorEnabled(data.axisIndicatorEnabled);
+          if (data.miniAxisIndicatorEnabled !== undefined) setMiniAxisIndicatorEnabled(data.miniAxisIndicatorEnabled);
           if (data.floorEnabled !== undefined) setFloorEnabled(data.floorEnabled);
           if (data.allNotesVisible !== undefined) setAllNotesVisible(data.allNotesVisible);
           // Deliberately NOT loading data.defaultCameraPosition/
@@ -1891,6 +1897,8 @@ console.log("Created rectangle:", myRect.id);`);
     setMeasurements('');
     setIsWorldViewActive(false);
     setGridEnabled(true);
+    setAxisIndicatorEnabled(true);
+    setMiniAxisIndicatorEnabled(true);
     setSunIntensity(1.0);
     setLightPosition([5, 5, 5]);
     setActiveTool('select');
@@ -1919,6 +1927,16 @@ console.log("Created rectangle:", myRect.id);`);
   const handleSetGridEnabled = (enabled: boolean) => {
     setGridEnabled(enabled);
     recordAction(`sdk.setGrid(${enabled});`);
+  };
+
+  const handleSetAxisIndicatorEnabled = (enabled: boolean) => {
+    setAxisIndicatorEnabled(enabled);
+    recordAction(`sdk.setAxisIndicator(${enabled});`);
+  };
+
+  const handleSetMiniAxisIndicatorEnabled = (enabled: boolean) => {
+    setMiniAxisIndicatorEnabled(enabled);
+    recordAction(`sdk.setMiniAxisIndicator(${enabled});`);
   };
 
   const handleSetFloorEnabled = (enabled: boolean) => {
@@ -2077,6 +2095,10 @@ console.log("Created rectangle:", myRect.id);`);
       setFogSettings: handleSetFogSettings,
       gridEnabled,
       setGridEnabled: handleSetGridEnabled,
+      axisIndicatorEnabled,
+      setAxisIndicatorEnabled: handleSetAxisIndicatorEnabled,
+      miniAxisIndicatorEnabled,
+      setMiniAxisIndicatorEnabled: handleSetMiniAxisIndicatorEnabled,
       floorEnabled,
       setFloorEnabled: handleSetFloorEnabled,
       walkModePhase,

@@ -271,6 +271,10 @@ export default function RightPanelStack() {
     setActiveTool,
     gridEnabled,
     setGridEnabled,
+    axisIndicatorEnabled,
+    setAxisIndicatorEnabled,
+    miniAxisIndicatorEnabled,
+    setMiniAxisIndicatorEnabled,
     floorEnabled,
     setFloorEnabled,
     floorColor,
@@ -4071,6 +4075,38 @@ export default function RightPanelStack() {
                     <div className={cn(
                       "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
                       gridEnabled ? "left-4.5" : "left-0.5"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>Axis Indicator</span>
+                  <button 
+                    onClick={() => setAxisIndicatorEnabled(!axisIndicatorEnabled)}
+                    className={cn(
+                      "w-8 h-4 rounded-full relative transition-colors",
+                      axisIndicatorEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                      axisIndicatorEnabled ? "left-4.5" : "left-0.5"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>Mini Axis Indicator</span>
+                  <button 
+                    onClick={() => setMiniAxisIndicatorEnabled(!miniAxisIndicatorEnabled)}
+                    className={cn(
+                      "w-8 h-4 rounded-full relative transition-colors",
+                      miniAxisIndicatorEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                      miniAxisIndicatorEnabled ? "left-4.5" : "left-0.5"
                     )} />
                   </button>
                 </div>
