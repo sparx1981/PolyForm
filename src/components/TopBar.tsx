@@ -135,6 +135,8 @@ export default function TopBar() {
       setIsArchitectureToolbarEnabled,
       isLandscapesToolbarEnabled,
       setIsLandscapesToolbarEnabled,
+      isCameraToolbarEnabled,
+      setIsCameraToolbarEnabled,
       layoutMode,
       setLayoutMode,
       terrainModifiers,
@@ -1206,6 +1208,11 @@ export default function TopBar() {
                       isVisible={isLandscapesToolbarEnabled}
                       onToggle={() => setIsLandscapesToolbarEnabled(!isLandscapesToolbarEnabled)}
                     />
+                    <VisibilityToggle 
+                      label="Camera Toolbar"
+                      isVisible={isCameraToolbarEnabled}
+                      onToggle={() => setIsCameraToolbarEnabled(!isCameraToolbarEnabled)}
+                    />
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
@@ -1226,6 +1233,26 @@ export default function TopBar() {
                       { tool: 'window', label: 'Window Frame' },
                       { tool: 'step', label: 'Single Step / Riser' },
                       { tool: 'staircase', label: 'Staircase Flight' },
+                      { tool: 'scale_figure', label: 'Scale Figure (Person)' },
+                      { tool: 'stack_story', label: 'Stack Story Level' },
+                      { tool: 'roof', label: 'Parametric Roof Generator' },
+                      { tool: 'timber-frame', label: 'Timber Frame Engine' },
+                      { tool: 'worldview', label: 'WorldView Geolocation' },
+                    ].map(({ tool, label }) => (
+                      <VisibilityToggle 
+                        key={tool}
+                        label={label}
+                        isVisible={toolbarVisibility[tool] !== false}
+                        onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
+                      />
+                    ))}
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Camera Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg px-2">
+                    {[
+                      { tool: 'teleport', label: 'Portal Navigation' },
+                      { tool: 'reset_camera', label: 'Reset Camera Position' },
+                      { tool: 'clipping', label: 'Camera Depth Clipping' },
                     ].map(({ tool, label }) => (
                       <VisibilityToggle 
                         key={tool}

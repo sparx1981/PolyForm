@@ -10,7 +10,7 @@ import type { FaceId } from './lib/geometry/types';
 // application, well outside the kernel — into that strict-mode kernel
 // compilation, which is where most of tsconfig.kernel.json's several
 // hundred errors were actually coming from.
-export type ToolbarKey = 'left' | 'architecture' | 'landscapes';
+export type ToolbarKey = 'left' | 'architecture' | 'landscapes' | 'camera';
 export type DockZone = 'left' | 'top' | 'bottom';
 
 export type CivilToolMode = 'terrain' | 'road' | 'pad-rect' | 'pad-circle' | 'striping';
@@ -26,7 +26,7 @@ export type ToolType =
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
   | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock'
-  | 'roof' | 'timber-frame' | 'scale_figure'
+  | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping'
   | 'block_picker'
   | CivilToolMode;
 
@@ -513,6 +513,8 @@ export interface AppState {
   setIsArchitectureToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   isLandscapesToolbarEnabled: boolean;
   setIsLandscapesToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  isCameraToolbarEnabled: boolean;
+  setIsCameraToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   layoutMode: 'classic' | 'unified';
   setLayoutMode: (mode: 'classic' | 'unified' | ((prev: 'classic' | 'unified') => 'classic' | 'unified')) => void;
   landscapeSculptSettings: {

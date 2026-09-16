@@ -16,6 +16,7 @@ import TopBar from './components/TopBar';
 import LeftToolbar from './components/LeftToolbar';
 import ArchitectureToolbar from './components/ArchitectureToolbar';
 import LandscapesToolbar from './components/LandscapesToolbar';
+import CameraToolbar from './components/CameraToolbar';
 import UnifiedToolRail from './components/UnifiedToolRail';
 import RightPanelStack from './components/RightPanelStack';
 import StatusBar from './components/StatusBar';
@@ -242,7 +243,11 @@ function AppContent() {
       toolbarOrder,
       setToolbarOrder,
       toolbarDocks,
-      setToolbarDocks
+      setToolbarDocks,
+      isBasicToolbarEnabled,
+      isArchitectureToolbarEnabled,
+      isLandscapesToolbarEnabled,
+      isCameraToolbarEnabled
     } = useApp();
   
     const quotaLocked = isQuotaLocked();
@@ -274,12 +279,22 @@ function AppContent() {
         case 'left': return <LeftToolbar layoutMode={layoutMode} dock={dock} />;
         case 'architecture': return <ArchitectureToolbar dock={dock} />;
         case 'landscapes': return <LandscapesToolbar dock={dock} />;
+        case 'camera': return <CameraToolbar dock={dock} />;
       }
     };
     // toolbarOrder governs relative order everywhere; filtering it per
     // zone keeps that one order meaningful within each dock rather than
-    // needing a separate order per zone.
-    const toolbarsInZone = (zone: DockZone) => toolbarOrder.filter((k) => toolbarDocks[k] === zone);
+    // needing a separate order per zone. Also filter by enabled state so
+    // disabled toolbars don't leave empty drag handles.
+    const isToolbarEnabled = (k: ToolbarKey) => {
+      switch (k) {
+        case 'left': return isBasicToolbarEnabled;
+        case 'architecture': return isArchitectureToolbarEnabled;
+        case 'landscapes': return isLandscapesToolbarEnabled;
+        case 'camera': return isCameraToolbarEnabled;
+      }
+    };
+    const toolbarsInZone = (zone: DockZone) => toolbarOrder.filter((k) => toolbarDocks[k] === zone && isToolbarEnabled(k));
     const remainingSeconds = Math.max(0, Math.ceil((quotaLockdownTime - Date.now()) / 1000));
     const remainingMinutes = Math.floor(remainingSeconds / 60);
     const remainingSecs = remainingSeconds % 60;

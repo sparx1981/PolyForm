@@ -15,9 +15,7 @@ import {
   Check,
   Globe,
   Hammer,
-  PersonStanding,
-  Aperture,
-  RotateCcw
+  PersonStanding
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
@@ -97,6 +95,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
     isArchitectureToolbarEnabled, 
     theme, 
     bannerColor,
+    toolbarVisibility,
     activeTool,
     setActiveTool,
     wallToolSettings,
@@ -242,123 +241,124 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
         subtitle={`${currentScaleChar.name} (${currentScaleHeight.toFixed(2)}m eye-level datum)`}
       />
 
-      <ArchToolButton
-        tool="teleport"
-        icon={<Aperture size={19} />}
-        label="Portal Navigation"
-        subtitle="Click a wall, window, door, or floor to walk there"
-      />
-
-      <ResetCameraToolButton />
-
-      <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />
+      {((toolbarVisibility?.stack_story !== false) || (toolbarVisibility?.roof !== false) || (toolbarVisibility?.['timber-frame'] !== false && toolbarVisibility?.timber_frame !== false)) && (
+        <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />
+      )}
 
       {/* Story Level Stacking */}
-      <button
-        id="arch-stack-story-btn"
-        onClick={handleStackStory}
-        title="Stack Next Story Level (Duplicates ground floor walls + ceiling slab)"
-        className={cn(
-          "toolbar-btn relative flex items-center justify-center transition-all",
-          theme === 'dark' ? "hover:bg-gray-700 text-cyan-400" : "hover:bg-gray-100 text-cyan-600"
-        )}
-      >
-        <Building2 size={18} />
-      </button>
+      {toolbarVisibility?.stack_story !== false && (
+        <button
+          id="arch-stack-story-btn"
+          onClick={handleStackStory}
+          title="Stack Next Story Level (Duplicates ground floor walls + ceiling slab)"
+          className={cn(
+            "toolbar-btn relative flex items-center justify-center transition-all",
+            theme === 'dark' ? "hover:bg-gray-700 text-cyan-400" : "hover:bg-gray-100 text-cyan-600"
+          )}
+        >
+          <Building2 size={18} />
+        </button>
+      )}
 
       {/* Parametric Roof Generator */}
-      <div className="relative">
-        <button
-          ref={roofMenuBtnRef}
-          id="arch-roof-menu-btn"
-          onClick={() => {
-            handleOpenModifierPanel('roof');
-            setShowRoofOptions(!showRoofOptions);
-          }}
-          title="Parametric Roof Generator (Gable / Hip / Parapet)"
-          className={cn(
-            "toolbar-btn relative flex items-center justify-center transition-all",
-            (showRoofOptions || activeTool === 'roof') && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
-            theme === 'dark' ? "hover:bg-gray-700 text-sky-400 hover:text-sky-300" : "hover:bg-gray-100 text-trimble-blue hover:text-trimble-blue"
-          )}
-        >
-          <Home size={18} />
-        </button>
+      {toolbarVisibility?.roof !== false && (
+        <div className="relative">
+          <button
+            ref={roofMenuBtnRef}
+            id="arch-roof-menu-btn"
+            onClick={() => {
+              handleOpenModifierPanel('roof');
+              setShowRoofOptions(!showRoofOptions);
+            }}
+            title="Parametric Roof Generator (Gable / Hip / Parapet)"
+            className={cn(
+              "toolbar-btn relative flex items-center justify-center transition-all",
+              (showRoofOptions || activeTool === 'roof') && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+              theme === 'dark' ? "hover:bg-gray-700 text-sky-400 hover:text-sky-300" : "hover:bg-gray-100 text-trimble-blue hover:text-trimble-blue"
+            )}
+          >
+            <Home size={18} />
+          </button>
 
-        {/* Portaled to document.body, like every other toolbar flyout here
-            (see FlyoutPortal's own docstring) - rendered as a plain
-            absolutely-positioned child of this toolbar, this menu was
-            trapped inside the toolbar's own stacking context, and lost to
-            whichever sibling toolbar/panel happened to sit later in the
-            DOM at the same effective z-index, regardless of its own
-            z-50. */}
-        <FlyoutPortal anchorRef={roofMenuBtnRef} open={showRoofOptions} side={flyoutSide}>
-          {showRoofOptions && (
-            <div
-              className={cn(
-                "p-2 rounded-xl shadow-2xl border text-xs min-w-[190px] space-y-1 backdrop-blur-md",
-                theme === 'dark' ? "bg-gray-900/95 border-gray-700 text-white" : "bg-white/95 border-gray-200 text-gray-800"
-              )}
-            >
-              <div className="font-bold text-[10px] uppercase text-gray-400 px-1 py-0.5">Generate Roof</div>
-              <button
-                onClick={() => { handleGenerateRoof('gable'); setShowRoofOptions(false); }}
-                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+          {/* Portaled to document.body, like every other toolbar flyout here
+              (see FlyoutPortal's own docstring) - rendered as a plain
+              absolutely-positioned child of this toolbar, this menu was
+              trapped inside the toolbar's own stacking context, and lost to
+              whichever sibling toolbar/panel happened to sit later in the
+              DOM at the same effective z-index, regardless of its own
+              z-50. */}
+          <FlyoutPortal anchorRef={roofMenuBtnRef} open={showRoofOptions} side={flyoutSide}>
+            {showRoofOptions && (
+              <div
+                className={cn(
+                  "p-2 rounded-xl shadow-2xl border text-xs min-w-[190px] space-y-1 backdrop-blur-md",
+                  theme === 'dark' ? "bg-gray-900/95 border-gray-700 text-white" : "bg-white/95 border-gray-200 text-gray-800"
+                )}
               >
-                <span>Gable Roof (35°)</span>
-                <span className="text-[10px] text-gray-400 font-mono">35°</span>
-              </button>
-              <button
-                onClick={() => { handleGenerateRoof('hip'); setShowRoofOptions(false); }}
-                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
-              >
-                <span>Hip Roof (4 slopes)</span>
-                <span className="text-[10px] text-gray-400 font-mono">35°</span>
-              </button>
-              <button
-                onClick={() => { handleGenerateRoof('parapet'); setShowRoofOptions(false); }}
-                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
-              >
-                <span>Parapet Roof (Flat / Coping)</span>
-                <span className="text-[10px] text-gray-400 font-mono">0°</span>
-              </button>
-              <div className="pt-1 border-t border-gray-200 dark:border-gray-700">
+                <div className="font-bold text-[10px] uppercase text-gray-400 px-1 py-0.5">Generate Roof</div>
                 <button
-                  onClick={() => {
-                    handleOpenModifierPanel('timber-frame');
-                    setShowRoofOptions(false);
-                  }}
-                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 transition-colors flex items-center justify-between"
+                  onClick={() => { handleGenerateRoof('gable'); setShowRoofOptions(false); }}
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Hammer size={12} />
-                    <span>Timber Frame</span>
-                  </span>
-                  <span className="text-[10px] text-gray-400 font-mono">Engine</span>
+                  <span>Gable Roof (35°)</span>
+                  <span className="text-[10px] text-gray-400 font-mono">35°</span>
                 </button>
+                <button
+                  onClick={() => { handleGenerateRoof('hip'); setShowRoofOptions(false); }}
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+                >
+                  <span>Hip Roof (4 slopes)</span>
+                  <span className="text-[10px] text-gray-400 font-mono">35°</span>
+                </button>
+                <button
+                  onClick={() => { handleGenerateRoof('parapet'); setShowRoofOptions(false); }}
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+                >
+                  <span>Parapet Roof (Flat / Coping)</span>
+                  <span className="text-[10px] text-gray-400 font-mono">0°</span>
+                </button>
+                <div className="pt-1 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => {
+                      handleOpenModifierPanel('timber-frame');
+                      setShowRoofOptions(false);
+                    }}
+                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 transition-colors flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Hammer size={12} />
+                      <span>Timber Frame</span>
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">Engine</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </FlyoutPortal>
-      </div>
+            )}
+          </FlyoutPortal>
+        </div>
+      )}
 
       {/* Reactive Timber Frame Engine */}
-      <div className="relative">
-        <button
-          id="arch-timber-frame-btn"
-          onClick={() => handleOpenModifierPanel('timber-frame')}
-          title="Reactive Timber Frame Engine (Studs, Plates, Headers, Joists & Rafters)"
-          className={cn(
-            "toolbar-btn relative flex items-center justify-center transition-all",
-            activeTool === 'timber-frame' && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
-            theme === 'dark' ? "hover:bg-gray-700 text-amber-400 hover:text-amber-300" : "hover:bg-gray-100 text-amber-600 hover:text-amber-700"
-          )}
-        >
-          <Hammer size={18} />
-        </button>
-      </div>
+      {toolbarVisibility?.['timber-frame'] !== false && toolbarVisibility?.timber_frame !== false && (
+        <div className="relative">
+          <button
+            id="arch-timber-frame-btn"
+            onClick={() => handleOpenModifierPanel('timber-frame')}
+            title="Reactive Timber Frame Engine (Studs, Plates, Headers, Joists & Rafters)"
+            className={cn(
+              "toolbar-btn relative flex items-center justify-center transition-all",
+              activeTool === 'timber-frame' && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+              theme === 'dark' ? "hover:bg-gray-700 text-amber-400 hover:text-amber-300" : "hover:bg-gray-100 text-amber-600 hover:text-amber-700"
+            )}
+          >
+            <Hammer size={18} />
+          </button>
+        </div>
+      )}
 
-      <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />
+      {toolbarVisibility?.worldview !== false && (
+        <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />
+      )}
 
       <WorldViewToolButton />
     </aside>
@@ -366,47 +366,13 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
   );
 }
 
-function ResetCameraToolButton() {
-  const { theme } = useApp();
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [hovered, setHovered] = useState(false);
-  const flyoutSide = useContext(FlyoutSideContext);
-
-  return (
-    <div className="relative group">
-      <button
-        ref={buttonRef}
-        id="arch-reset-camera-btn"
-        onClick={() => window.dispatchEvent(new CustomEvent('reset-camera'))}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className={cn(
-          "toolbar-btn relative flex items-center justify-center transition-all",
-          theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
-        )}
-      >
-        <RotateCcw size={18} />
-
-        <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
-          {hovered && (
-            <div className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md whitespace-nowrap shadow-xl border border-gray-700 pointer-events-none z-50">
-              <div className="font-semibold flex items-center gap-1.5">
-                <span>Reset to Default Position</span>
-              </div>
-              <div className="text-[10px] text-gray-400 font-normal">Return the camera to its default starting position and view</div>
-            </div>
-          )}
-        </FlyoutPortal>
-      </button>
-    </div>
-  );
-}
-
 function WorldViewToolButton() {
-  const { setIsWorldViewOpen, isWorldViewActive, theme } = useApp();
+  const { setIsWorldViewOpen, isWorldViewActive, theme, toolbarVisibility } = useApp();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
   const flyoutSide = useContext(FlyoutSideContext);
+
+  if (toolbarVisibility?.worldview === false) return null;
 
   return (
     <div className="relative group">

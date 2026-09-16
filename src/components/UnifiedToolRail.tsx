@@ -66,7 +66,10 @@ import {
   Plus,
   Grid3X3,
   Aperture,
-  RotateCcw
+  RotateCcw,
+  Crop,
+  Home,
+  Hammer
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType, Shape, TerrainData } from '../types';
@@ -74,6 +77,7 @@ import { cn, runToolboxScript } from '../lib/utils';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { DeveloperSDK } from '../services/developerService';
+import { buildNextFloorLevel } from '../lib/archRoofGenerator';
 
 interface ToolItem {
   id: string;
@@ -101,6 +105,10 @@ export default function UnifiedToolRail() {
     activeTool,
     setActiveTool,
     toolbarVisibility,
+    isBasicToolbarEnabled,
+    isArchitectureToolbarEnabled,
+    isLandscapesToolbarEnabled,
+    isCameraToolbarEnabled,
     showAllDimensions,
     setShowAllDimensions,
     activeBevelType,
@@ -215,7 +223,8 @@ export default function UnifiedToolRail() {
     return {
       basic: true,
       architecture: true,
-      landscape: true
+      landscape: true,
+      camera: true
     };
   });
 
@@ -229,18 +238,28 @@ export default function UnifiedToolRail() {
     });
   };
 
+  // List of enabled toolbar category IDs
+  const enabledCategoryIds = useMemo(() => {
+    const ids: string[] = [];
+    if (isBasicToolbarEnabled) ids.push('basic');
+    if (isArchitectureToolbarEnabled) ids.push('architecture');
+    if (isLandscapesToolbarEnabled) ids.push('landscape');
+    if (isCameraToolbarEnabled) ids.push('camera');
+    return ids;
+  }, [isBasicToolbarEnabled, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled]);
+
   // Check if all sections are collapsed
   const allCollapsed = useMemo(() => {
-    return Object.values(expandedSections).every(val => !val);
-  }, [expandedSections]);
+    if (enabledCategoryIds.length === 0) return false;
+    return enabledCategoryIds.every(id => !expandedSections[id]);
+  }, [expandedSections, enabledCategoryIds]);
 
   const toggleAllSections = () => {
     const nextState = allCollapsed; // if all collapsed, expand all (true); else collapse all (false)
-    const updated: Record<string, boolean> = {
-      basic: nextState,
-      architecture: nextState,
-      landscape: nextState
-    };
+    const updated: Record<string, boolean> = { ...expandedSections };
+    enabledCategoryIds.forEach(id => {
+      updated[id] = nextState;
+    });
     setExpandedSections(updated);
     try {
       localStorage.setItem('polyform_unified_rail_sections', JSON.stringify(updated));
@@ -987,23 +1006,86 @@ export default function UnifiedToolRail() {
           keywords: ['worldview', 'globe', 'map', 'geolocation', 'sun', 'solar', 'architecture', 'site']
         },
         {
+          id: 'stack_story',
+          label: 'Stack Story Level',
+          subtitle: 'Duplicates ground floor walls + ceiling slab to next story',
+          icon: <Building2 size={19} className="text-cyan-600 dark:text-cyan-400" />,
+          isActive: () => false,
+          onClick: (s) => {
+            const wallShapes = s.shapes.filter((sh: any) => sh.type === 'wall');
+            if (wallShapes.length === 0) {
+              s.setMeasurements('No walls found to stack. Draw a room first.');
+              return;
+            }
+            const { newWalls, newOpenings, newSlabs } = buildNextFloorLevel(wallShapes, s.shapes, true);
+            newWalls.forEach((w: any) => s.addShape(w));
+            newOpenings.forEach((op: any) => s.addShape(op));
+            newSlabs.forEach((slab: any) => s.addShape(slab));
+            s.commitHistory();
+            s.setActiveStory((prev: number) => prev + 1);
+            s.setMeasurements(`Stacked new Story Level ${s.activeStory + 1} with floor slab and walls.`);
+          },
+          keywords: ['stack', 'story', 'floor', 'level', 'duplicate', 'building', 'multistory']
+        },
+        {
+          id: 'roof',
+          tool: 'roof',
+          label: 'Parametric Roof Generator',
+          subtitle: 'Generate gable, hip, or parapet roof on walls',
+          icon: <Home size={19} className="text-sky-600 dark:text-sky-400" />,
+          isActive: (s) => s.activeTool === 'roof',
+          onClick: (s) => s.setActiveTool('roof'),
+          keywords: ['roof', 'gable', 'hip', 'parapet', 'eaves', 'ridge', 'rafter']
+        },
+        {
+          id: 'timber-frame',
+          tool: 'timber-frame',
+          label: 'Timber Frame Engine',
+          subtitle: 'Studs, plates, headers, joists & rafters',
+          icon: <Hammer size={19} className="text-amber-600 dark:text-amber-400" />,
+          isActive: (s) => s.activeTool === 'timber-frame',
+          onClick: (s) => s.setActiveTool('timber-frame'),
+          keywords: ['timber', 'frame', 'framing', 'wood', 'studs', 'rafters', 'joists', 'structural']
+        }
+      ]
+    },
+    {
+      id: 'camera',
+      name: 'Camera',
+      tools: [
+        {
           id: 'teleport',
           tool: 'teleport',
           label: 'Portal Navigation',
           subtitle: 'Click a wall, window, door, or floor to walk there',
-          icon: <Aperture size={19} />,
+          icon: <Aperture size={19} className="text-indigo-500 dark:text-indigo-400" />,
           isActive: (s) => s.activeTool === 'teleport',
           onClick: (s) => s.setActiveTool('teleport'),
           keywords: ['portal', 'navigation', 'teleport', 'walk', 'walkthrough', 'travel', 'camera']
         },
         {
           id: 'reset_camera',
-          label: 'Reset to Default Position',
-          subtitle: 'Return the camera to its default starting position and view',
-          icon: <RotateCcw size={19} />,
+          label: 'Reset Camera Position',
+          subtitle: 'Return to default isometric framing',
+          icon: <RotateCcw size={19} className="text-indigo-500 dark:text-indigo-400" />,
           isActive: () => false,
           onClick: () => window.dispatchEvent(new CustomEvent('reset-camera')),
           keywords: ['reset', 'camera', 'default', 'position', 'view', 'home']
+        },
+        {
+          id: 'clipping',
+          tool: 'clipping',
+          label: 'Camera Depth Clipping',
+          subtitle: 'Near & Far frustum clipping planes',
+          icon: <Crop size={19} className="text-sky-500 dark:text-sky-400" />,
+          isActive: (s) => s.activeTool === 'clipping',
+          onClick: (s) => {
+            s.setActiveTool('clipping');
+            if (s.isToolModifierDocked && !s.rightPanelVisible) {
+              s.setRightPanelVisible(true);
+            }
+          },
+          keywords: ['camera', 'depth', 'clipping', 'frustum', 'near', 'far', 'plane', 'section']
         }
       ]
     },
@@ -1234,12 +1316,37 @@ export default function UnifiedToolRail() {
     landscapeSculptSettings.masked
   ]);
 
+  // Filter categories and individual tools based on toolbar visibility settings
+  const visibleCategories = useMemo(() => {
+    return toolCategories
+      .filter(category => {
+        if (category.id === 'basic' && !isBasicToolbarEnabled) return false;
+        if (category.id === 'architecture' && !isArchitectureToolbarEnabled) return false;
+        if (category.id === 'landscape' && !isLandscapesToolbarEnabled) return false;
+        if (category.id === 'camera' && !isCameraToolbarEnabled) return false;
+        return true;
+      })
+      .map(category => {
+        const visibleTools = category.tools.filter(tool => {
+          if (tool.tool && toolbarVisibility && toolbarVisibility[tool.tool] === false) return false;
+          if (tool.id && toolbarVisibility && toolbarVisibility[tool.id] === false) return false;
+          if (tool.id === 'timber-frame' && (toolbarVisibility?.['timber-frame'] === false || toolbarVisibility?.timber_frame === false)) return false;
+          return true;
+        });
+        return {
+          ...category,
+          tools: visibleTools
+        };
+      })
+      .filter(category => category.tools.length > 0);
+  }, [toolCategories, isBasicToolbarEnabled, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, toolbarVisibility]);
+
   // Filter tools based on search query
   const filteredCategories = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return toolCategories;
+    if (!query) return visibleCategories;
 
-    return toolCategories.map(category => {
+    return visibleCategories.map(category => {
       const matchingTools = category.tools.filter(tool => {
         if (tool.label.toLowerCase().includes(query)) return true;
         if (tool.id.toLowerCase().includes(query)) return true;
@@ -1254,7 +1361,11 @@ export default function UnifiedToolRail() {
         tools: matchingTools
       };
     }).filter(category => category.tools.length > 0);
-  }, [toolCategories, searchQuery]);
+  }, [visibleCategories, searchQuery]);
+
+  if (!isBasicToolbarEnabled && !isArchitectureToolbarEnabled && !isLandscapesToolbarEnabled && !isCameraToolbarEnabled) {
+    return null;
+  }
 
   return (
     <aside 
@@ -1383,6 +1494,9 @@ export default function UnifiedToolRail() {
                       {category.tools.map((tool) => {
                         // Check if toolbar item visibility is hidden in settings
                         if (tool.tool && toolbarVisibility && toolbarVisibility[tool.tool] === false) {
+                          return null;
+                        }
+                        if (tool.id && toolbarVisibility && toolbarVisibility[tool.id] === false) {
                           return null;
                         }
 

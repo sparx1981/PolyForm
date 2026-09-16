@@ -582,6 +582,25 @@ console.log("Created rectangle:", myRect.id);`);
     });
   };
 
+  // Camera Toolbar (Enabled by default, persisted across sessions)
+  const [isCameraToolbarEnabled, setIsCameraToolbarEnabledState] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_camera_toolbar');
+      if (stored !== null) return stored === 'true';
+    } catch (e) {}
+    return true;
+  });
+
+  const setIsCameraToolbarEnabled = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsCameraToolbarEnabledState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_camera_toolbar', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   // Toolbar Layout Mode ('classic' | 'unified', default 'classic')
   const [layoutMode, setLayoutModeState] = useState<'classic' | 'unified'>(() => {
     try {
@@ -602,12 +621,12 @@ console.log("Created rectangle:", myRect.id);`);
   };
 
   /**
-   * Which order the three classic-layout toolbars (Basic, Architecture,
-   * Landscapes) render in, left to right — user-reorderable by dragging,
+   * Which order the classic-layout toolbars (Basic, Architecture,
+   * Landscapes, Camera) render in, left to right — user-reorderable by dragging,
    * the same way a desktop app like Word or Excel lets you drag a
    * toolbar to reposition it. Persisted the same way layoutMode is.
    */
-  const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes'];
+  const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera'];
   const [toolbarOrder, setToolbarOrderState] = useState<ToolbarKey[]>(() => {
     try {
       const stored = localStorage.getItem('polyform_toolbar_order');
@@ -615,11 +634,11 @@ console.log("Created rectangle:", myRect.id);`);
         const parsed = JSON.parse(stored);
         if (
           Array.isArray(parsed) &&
-          parsed.length === 3 &&
-          new Set(parsed).size === 3 &&
-          parsed.every((k) => DEFAULT_TOOLBAR_ORDER.includes(k))
+          parsed.every((k) => (['left', 'architecture', 'landscapes', 'camera'] as ToolbarKey[]).includes(k))
         ) {
-          return parsed as ToolbarKey[];
+          const res = [...parsed] as ToolbarKey[];
+          if (!res.includes('camera')) res.push('camera');
+          return res;
         }
       }
     } catch (e) {}
@@ -642,7 +661,7 @@ console.log("Created rectangle:", myRect.id);`);
    * it there as a horizontal strip, the same way dragging a toolbar to a
    * different edge in Word or Excel re-docks it, rather than just
    * reordering it among its current neighbours. Defaults to 'left' for
-   * all three, matching how they've always looked. `toolbarOrder` above
+   * all four, matching how they've always looked. `toolbarOrder` above
    * still governs relative order WITHIN whichever dock a toolbar ends up
    * in — the two pieces of state are independent by design, so moving a
    * toolbar to a new edge doesn't need to also decide a new order for it.
@@ -651,19 +670,20 @@ console.log("Created rectangle:", myRect.id);`);
     left: 'left',
     architecture: 'left',
     landscapes: 'left',
+    camera: 'left',
   };
   const [toolbarDocks, setToolbarDocksState] = useState<Record<ToolbarKey, DockZone>>(() => {
     try {
       const stored = localStorage.getItem('polyform_toolbar_docks');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (
-          parsed && typeof parsed === 'object' &&
-          (['left', 'architecture', 'landscapes'] as ToolbarKey[]).every(
-            (k) => parsed[k] === 'left' || parsed[k] === 'top' || parsed[k] === 'bottom',
-          )
-        ) {
-          return parsed as Record<ToolbarKey, DockZone>;
+        if (parsed && typeof parsed === 'object') {
+          return {
+            left: parsed.left || 'left',
+            architecture: parsed.architecture || 'left',
+            landscapes: parsed.landscapes || 'left',
+            camera: parsed.camera || 'left',
+          };
         }
       }
     } catch (e) {}
@@ -796,6 +816,7 @@ console.log("Created rectangle:", myRect.id);`);
             defaultCameraTarget,
             isArchitectureToolbarEnabled,
             isLandscapesToolbarEnabled,
+            isCameraToolbarEnabled,
             layoutMode,
             updatedAt: Date.now()
           }, { merge: true });
@@ -808,7 +829,7 @@ console.log("Created rectangle:", myRect.id);`);
       const timeout = setTimeout(saveSettings, 30000); // 30s debounce for settings
       return () => clearTimeout(timeout);
     }
-  }, [theme, unit, gridEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, layoutMode, user?.uid]);
+  }, [theme, unit, gridEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, layoutMode, user?.uid]);
 
   // Load user settings
   const lastSettingsLoad = useRef<number>(0);
@@ -848,6 +869,9 @@ console.log("Created rectangle:", myRect.id);`);
           }
           if (data.isLandscapesToolbarEnabled !== undefined) {
             setIsLandscapesToolbarEnabled(Boolean(data.isLandscapesToolbarEnabled));
+          }
+          if (data.isCameraToolbarEnabled !== undefined) {
+            setIsCameraToolbarEnabled(Boolean(data.isCameraToolbarEnabled));
           }
           if (data.layoutMode === 'classic' || data.layoutMode === 'unified') {
             setLayoutMode(data.layoutMode);
@@ -2132,13 +2156,15 @@ console.log("Created rectangle:", myRect.id);`);
       retrySync,
       isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
-      // Architecture & Landscapes Toolbars
+      // Architecture, Landscapes & Camera Toolbars
       isBasicToolbarEnabled,
       setIsBasicToolbarEnabled,
       isArchitectureToolbarEnabled,
       setIsArchitectureToolbarEnabled,
       isLandscapesToolbarEnabled,
       setIsLandscapesToolbarEnabled,
+      isCameraToolbarEnabled,
+      setIsCameraToolbarEnabled,
       layoutMode,
       setLayoutMode,
       toolbarOrder,

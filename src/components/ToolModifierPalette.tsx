@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding } from 'lucide-react';
+import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop } from 'lucide-react';
 import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { WallJustification } from '../tools/inference/types';
@@ -12,6 +12,7 @@ import { TimberFrameParams, Shape } from '../types';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RoofModifierSection } from './RoofModifierSection';
 import { ScaleFigureModifierSection } from './ScaleFigureModifierSection';
+import { CameraClippingSection } from './CameraClippingSection';
 
 export const ToolModifierPalette: React.FC = () => {
   const { 
@@ -64,6 +65,12 @@ export const ToolModifierPalette: React.FC = () => {
   const [bezierSegments, setBezierSegments] = useState<number>(24);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  useEffect(() => {
+    if (activeTool === 'clipping') {
+      setIsCollapsed(false);
+    }
+  }, [activeTool]);
+
   const hasSettings = [
     'move', 
     'bevel', 
@@ -76,7 +83,8 @@ export const ToolModifierPalette: React.FC = () => {
     'lasso',
     'timber-frame',
     'roof',
-    'scale_figure'
+    'scale_figure',
+    'clipping'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -225,6 +233,8 @@ export const ToolModifierPalette: React.FC = () => {
             <Home size={14} className="text-sky-500" />
           ) : activeTool === 'scale_figure' ? (
             <PersonStanding size={14} className="text-trimble-blue" />
+          ) : activeTool === 'clipping' ? (
+            <Crop size={14} className="text-sky-500" />
           ) : activeTool === 'bezier' ? (
             <Spline size={14} className="text-trimble-blue" />
           ) : (activeTool === 'select' || activeTool === 'lasso') ? (
@@ -233,7 +243,7 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-trimble-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -458,6 +468,12 @@ export const ToolModifierPalette: React.FC = () => {
         {activeTool === 'scale_figure' && (
           <ErrorBoundary name="Scale Figure Modifiers Panel" compact>
             <ScaleFigureModifierSection />
+          </ErrorBoundary>
+        )}
+
+        {activeTool === 'clipping' && (
+          <ErrorBoundary name="Camera Clipping Modifiers" compact>
+            <CameraClippingSection idPrefix="palette-camera" />
           </ErrorBoundary>
         )}
 
