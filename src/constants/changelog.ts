@@ -19,6 +19,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Walk Mode: holding Shift now sprints (1.6x Movement Speed).',
       'Fixed Camera toolbar icons (Portal Navigation, Walk Mode, Reset Camera, Camera Depth Clipping) using a permanently tinted color scheme unlike every other toolbar; they now match.',
       'Added Walk Mode to the "Camera Toolbar Icons" visibility settings list.',
+      'Walk Mode now collides with basic shapes, drawn/poly geometry, floor slabs and everything else you model by default, not just a curated list of architecture/landscape types - so anything you draw can be walked into, stood on, or jumped onto. Doors, small plants (bushes), scale-reference figures and dimension annotations remain walk-through. This also fixes being unable to reach an upper floor via a staircase, since the floor slab (generic "poly" geometry) previously wasn\'t collidable at all.',
     ]
   },
   {

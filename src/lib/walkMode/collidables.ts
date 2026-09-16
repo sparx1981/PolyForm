@@ -3,26 +3,27 @@ import type { Shape } from '../../types';
 
 /**
  * Walk Mode's single source of truth for "is this shape something the
- * player can't walk through" - kept as one exported allow-list (rather
- * than scattered checks) so the product decision in the spec (§6.1) stays
- * easy to find and change later.
+ * player can't walk through". Deny-list, not allow-list: any drawn or
+ * generated object - basic shapes, drawn/poly geometry, floor slabs,
+ * architecture, landscape, timber framing - collides by default, so
+ * whatever the user draws is something they can walk into, stand on, or
+ * jump onto without it needing its own entry here first. Only things
+ * that would make walking through the model actively worse are excluded:
+ * doors (you'd otherwise have to open every one), small plants/shrubs
+ * (walking around every bush would be tedious - full trees still block),
+ * scale-reference figures (decorative, not real geometry), and dimension
+ * annotations (not geometry at all).
  */
-const SOLID_SHAPE_TYPES = new Set<string>([
-  // Architecture
-  'wall', 'window', 'step', 'staircase', 'roof',
-  // Landscape
-  'terrain', 'fence', 'railing', 'lamp', 'bench', 'rock',
+const WALK_THROUGH_SHAPE_TYPES = new Set<string>([
+  'door',
+  'bush',
+  'scale_figure',
+  'measurement',
 ]);
 
-/** Doors are deliberately excluded - see collidables.test.ts and the spec's §6.1 table. */
 export function isWalkCollidable(shape: Shape): boolean {
   if (shape.hidden) return false;
-  if (SOLID_SHAPE_TYPES.has(shape.type)) return true;
-  // Timber frame members (studs, plates, headers, joists, rafters) are
-  // generated as their own shapes that don't necessarily carry one of the
-  // types above, but are still real structural geometry.
-  if (shape.timberFrame || shape.timberMemberData) return true;
-  return false;
+  return !WALK_THROUGH_SHAPE_TYPES.has(shape.type);
 }
 
 export interface CollectedMesh {

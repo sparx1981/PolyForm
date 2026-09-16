@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.2] - 2026-09-16
+### Changed
+- **Walk Mode Collision Policy**: Switched from an allow-list (only a curated set of architecture/landscape types collided) to a deny-list - basic shapes, drawn/poly geometry, floor slabs and everything else now collides by default, so anything you draw can be walked into, stood on, or jumped onto. Only doors, small plants (bushes; trees still block), scale-reference figures, and dimension annotations remain walk-through. This also likely explains being unable to reach an upper floor via a staircase: floor slabs are generated as generic "poly" geometry, which the old allow-list didn't cover, so the floor above the stairs wasn't solid at all.
+
 ## [1.10.1] - 2026-09-16
 ### Fixed
 - **Portal Navigation Preview Stutter**: Every hover tick during Portal Navigation was updating a shared tooltip state on Viewport's own (very large) top-level component, re-rendering it in full on nearly every mouse move - expensive enough to read as flicker/stutter across the whole viewport, not just the preview disc. The tooltip is now local, self-contained state inside the small preview component itself, so a hover update only re-renders that.
