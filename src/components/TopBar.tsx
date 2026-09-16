@@ -1251,6 +1251,7 @@ export default function TopBar() {
                   <CollapsibleSection title="Camera Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg px-2">
                     {[
                       { tool: 'teleport', label: 'Portal Navigation' },
+                      { tool: 'walk', label: 'Walk Mode' },
                       { tool: 'reset_camera', label: 'Reset Camera Position' },
                       { tool: 'clipping', label: 'Camera Depth Clipping' },
                     ].map(({ tool, label }) => (

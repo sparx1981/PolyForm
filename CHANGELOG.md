@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.1] - 2026-09-16
+### Fixed
+- **Portal Navigation Preview Stutter**: Every hover tick during Portal Navigation was updating a shared tooltip state on Viewport's own (very large) top-level component, re-rendering it in full on nearly every mouse move - expensive enough to read as flicker/stutter across the whole viewport, not just the preview disc. The tooltip is now local, self-contained state inside the small preview component itself, so a hover update only re-renders that.
+- **Walk Mode Strafe Controls Reversed**: D moved left and A moved right. The wish-direction "right" vector used the wrong sign relative to the camera's actual local +X (screen-right) axis; fixed the formula and added a regression test that derives the camera's true right vector and checks the player actually moves toward it.
+- **Camera Toolbar Icon Colors**: Portal Navigation, Walk Mode, Reset Camera and Camera Depth Clipping had permanently tinted icons (indigo/sky) unlike every other toolbar, whose icons use a neutral color that only changes on hover/active. Removed the forced tint so the Camera toolbar matches.
+- **Camera Toolbar Icons Settings List**: The "Camera Toolbar Icons" section of the visibility settings panel was missing Walk Mode, so it couldn't be hidden/shown from there like its siblings.
+### Added
+- **Walk Mode Sprint**: Holding Shift while walking now sprints (1.6x Movement Speed).
+
 ## [1.10.0] - 2026-09-16
 ### Added
 - **Walk Mode**: A new first-person navigation tool (Camera toolbar/group, next to Portal Navigation, Reset Camera and Camera Depth Clipping, in both the classic and unified layouts). Click a spot on the floor to start walking with WASD movement, mouse look, jumping, gravity, and automatic step/stair climbing, using a capsule collider against the model's architecture and landscape geometry (walls, windows, steps, staircases, roofs, terrain, fences, railings; doors remain walk-through).

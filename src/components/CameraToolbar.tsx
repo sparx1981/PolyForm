@@ -102,9 +102,9 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
         )}
       >
         {/* Portal Navigation Tool */}
-        <CameraToolButton 
+        <CameraToolButton
           tool="teleport"
-          icon={<Aperture size={19} className="text-indigo-500 dark:text-indigo-400" />}
+          icon={<Aperture size={19} />}
           label="Portal Navigation"
           subtitle="Click a wall, window, door, or floor to walk there"
         />
@@ -112,15 +112,15 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
         {/* Walk Mode */}
         <CameraToolButton
           tool="walk"
-          icon={<Footprints size={19} className="text-indigo-500 dark:text-indigo-400" />}
+          icon={<Footprints size={19} />}
           label="Walk Mode"
           subtitle="Walk through the model in first person"
         />
 
         {/* Reset Camera Position */}
-        <CameraToolButton 
+        <CameraToolButton
           tool="reset_camera"
-          icon={<RotateCcw size={18} className="text-indigo-500 dark:text-indigo-400" />}
+          icon={<RotateCcw size={18} />}
           label="Reset Camera Position"
           subtitle="Return to default isometric framing"
           isActive={false}
@@ -130,9 +130,9 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
         />
 
         {/* Camera Depth Clipping */}
-        <CameraToolButton 
+        <CameraToolButton
           tool="clipping"
-          icon={<Crop size={19} className="text-sky-500 dark:text-sky-400" />}
+          icon={<Crop size={19} />}
           label="Camera Depth Clipping"
           subtitle="Near & Far frustum clipping planes"
           isActive={activeTool === 'clipping'}

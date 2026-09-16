@@ -134,10 +134,19 @@ export function checkCapsuleFits(bvh: MeshBVH, feetPoint: THREE.Vector3): boolea
   return totalPush <= MAX_STEP_HEIGHT;
 }
 
-/** Forward/right basis from a yaw matching buildPortalOrientation's convention (dir = sin(yaw), 0, cos(yaw)). */
+/**
+ * Forward/right basis from a yaw matching buildPortalOrientation's
+ * convention (dir = sin(yaw), 0, cos(yaw)). `right` is forward rotated -90
+ * degrees about Y - i.e. the camera's actual local +X (screen-right) axis
+ * rotated into world space, which is (-forward.z, 0, forward.x), not
+ * (forward.z, 0, -forward.x) (that pairing is left, not right - it was
+ * reported as strafe controls being backwards: D moved left, A moved
+ * right, which is exactly what a flipped right vector produces since the
+ * key mapping in inputState.ts already assigns D/ArrowRight to +1).
+ */
 function computeWishDirection(move: MoveIntent, yaw: number, out: THREE.Vector3): THREE.Vector3 {
   _forward.set(Math.sin(yaw), 0, Math.cos(yaw));
-  _right.set(_forward.z, 0, -_forward.x);
+  _right.set(-_forward.z, 0, _forward.x);
   return out.copy(_forward).multiplyScalar(move.z).addScaledVector(_right, move.x);
 }
 

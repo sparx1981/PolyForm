@@ -1437,13 +1437,23 @@ const HOVER_STILL_PX = 2;
 function TeleportPortalPreview({
   postprocessingActive,
   floorEnabled,
-  onHoverChange,
 }: {
   postprocessingActive: boolean;
   floorEnabled: boolean;
-  onHoverChange: (hit: ResolvedSurfaceHit | null, tooltip: string | null) => void;
 }) {
   const { gl, scene, camera, raycaster, pointer, size } = useThree();
+  // Owned locally rather than lifted into Viewport's own giant Scene()
+  // component (as a previous version did, via a shared `snapIndicator`
+  // state + an onHoverChange callback prop): a state update anywhere
+  // re-renders the ENTIRE component it lives on, and Scene() is thousands
+  // of lines with hundreds of hooks. Routing every hover tick through it
+  // was expensive enough on its own to read as stutter/flicker in the
+  // whole viewport, not just this preview - keeping the state (and the
+  // re-render it causes) confined to this small component fixes that
+  // regardless of how the mesh-level flicker/hysteresis work above turns
+  // out, and was diagnosed from the user's own suggestion that removing
+  // the tooltip text seemed to help.
+  const [hoverTooltip, setHoverTooltip] = useState<{ point: [number, number, number]; text: string } | null>(null);
   const discRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const portalCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -1607,7 +1617,7 @@ function TeleportPortalPreview({
       sync.tooltip = tooltip;
       sync.time = now;
       sync.point = enterHit ? enterHit.worldPoint.clone() : null;
-      onHoverChange(enterHit, tooltip);
+      setHoverTooltip(enterHit && tooltip ? { point: [enterHit.worldPoint.x, enterHit.worldPoint.y, enterHit.worldPoint.z], text: tooltip } : null);
     }
 
     if (!enterHit) {
@@ -1786,6 +1796,16 @@ function TeleportPortalPreview({
         <ringGeometry args={[0.95, 1.02, 48]} />
         <meshBasicMaterial color="#0063A3" transparent toneMapped={false} side={THREE.DoubleSide} depthTest={false} depthWrite={false} />
       </mesh>
+      {hoverTooltip && (
+        <Html position={hoverTooltip.point} center occlude={false} zIndexRange={[50, 60]}>
+          <div className="flex flex-col items-center gap-1 pointer-events-none -translate-y-4">
+            <div className="w-2.5 h-2.5 rounded-full bg-fuchsia-400 border border-fuchsia-600 ring-2 ring-fuchsia-200 shadow-lg" />
+            <div className="bg-black/80 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap shadow border border-white/20">
+              {hoverTooltip.text}
+            </div>
+          </div>
+        </Html>
+      )}
     </group>
   );
 }
@@ -10946,9 +10966,6 @@ function Scene() {
       {activeTool === 'teleport' && (
         <TeleportPortalPreview
           floorEnabled={floorEnabled}
-          onHoverChange={(hit, tooltip) => {
-            setSnapIndicator(hit ? { point: [hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z], type: 'center', tooltip: tooltip! } : null);
-          }}
           postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
         />
       )}

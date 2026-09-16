@@ -14,6 +14,7 @@ import {
   RECENT_BLUR_WINDOW_MS,
   STEP_UP_SMOOTH_MS,
   TOUCH_LOOK_DEG_PER_PX,
+  SPRINT_MULTIPLIER,
 } from '../../lib/walkMode/constants';
 import { lockLossClassifier } from '../../lib/walkMode/lockLossClassifier';
 import type { WalkBridge } from '../../lib/walkMode/inputState';
@@ -332,10 +333,11 @@ export default function WalkModeController({
     const move = bridge.inputState.getMove();
     const jumpRequested = bridge.inputState.consumeJumpPressed();
     const cameraYaw = extractYawFromQuaternion(camera.quaternion);
+    const speed = bridge.inputState.isSprinting() ? movementSpeed * SPRINT_MULTIPLIER : movementSpeed;
 
     stepPlayer(
       playerState,
-      { move, jumpRequested, cameraYaw, speed: movementSpeed },
+      { move, jumpRequested, cameraYaw, speed },
       rawDt,
       world.bvh,
       { min: world.bounds.min, max: world.bounds.max }

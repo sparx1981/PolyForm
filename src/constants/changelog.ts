@@ -14,6 +14,11 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Added on-screen joystick, drag-to-look, Jump and Exit controls for Walk Mode on touch devices.',
       'Fixed Walk Mode getting stuck on "Preparing Walk Mode..." on models that mix indexed and non-indexed geometry.',
       'Portal Navigation preview: fixed the preview disc/ring jumping to an unrelated point (or disappearing for a frame) while hovering near an edge, thin member, or opening, without adding the lag a first attempt at this introduced - the fix now only kicks in when the cursor itself is essentially still, so real mouse movement is never delayed.',
+      'Portal Navigation preview: fixed a further source of viewport stutter while hovering - the tooltip was updating shared state on Viewport\'s large top-level component, re-rendering it on nearly every mouse move; it is now local to the small preview component instead.',
+      'Fixed Walk Mode strafe controls being reversed (D moved left, A moved right).',
+      'Walk Mode: holding Shift now sprints (1.6x Movement Speed).',
+      'Fixed Camera toolbar icons (Portal Navigation, Walk Mode, Reset Camera, Camera Depth Clipping) using a permanently tinted color scheme unlike every other toolbar; they now match.',
+      'Added Walk Mode to the "Camera Toolbar Icons" visibility settings list.',
     ]
   },
   {

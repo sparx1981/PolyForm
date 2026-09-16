@@ -5,7 +5,7 @@ export interface MoveIntent {
   magnitude: number;
 }
 
-const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
+const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight']);
 
 /**
  * Combines keyboard state and touch joystick/look state into one
@@ -113,6 +113,11 @@ export class WalkInputState {
   /** Called by the touch Jump button. */
   queueJump() {
     this.jumpQueued = true;
+  }
+
+  /** True while either Shift key is held - sprint (spec follow-up: hold Shift to sprint). */
+  isSprinting(): boolean {
+    return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
   }
 
   reset() {

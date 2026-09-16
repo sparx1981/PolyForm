@@ -4,6 +4,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createPlayerState, stepPlayer, type PhysicsBounds, type StepInput } from './playerPhysics';
 import { CAPSULE_RADIUS, MAX_STEP_HEIGHT } from './constants';
+import { extractYawFromQuaternion } from '../portalNavigation';
 
 function buildBVH(geometries: THREE.BufferGeometry[]): MeshBVH {
   const merged = geometries.length === 1 ? geometries[0] : BufferGeometryUtils.mergeGeometries(geometries, false)!;
@@ -66,13 +67,37 @@ describe('stepPlayer', () => {
     expect(state.feet.y).toBeLessThan(0.05);
   });
 
+  it('positive move.x (D / strafe-right) moves toward the camera\'s actual right, not its left', () => {
+    // Regression test for a reported bug: D strafed left and A strafed
+    // right. Rather than hardcoding "which world axis is right at yaw
+    // zero" (easy to get backwards again the same way), this derives the
+    // camera's real right vector (its local +X axis in world space) and
+    // checks the player actually moved toward it.
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 1.6, 0);
+    camera.lookAt(0, 1.6, 10);
+    camera.updateMatrixWorld();
+    const yaw = extractYawFromQuaternion(camera.quaternion);
+    const worldRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+
+    const bvh = buildBVH([flatFloorGeom()]);
+    const state = createPlayerState(new THREE.Vector3(0, 0, 0));
+    for (let i = 0; i < 10; i++) stepPlayer(state, idleInput({ cameraYaw: yaw }), 1 / 60, bvh, OPEN_BOUNDS);
+    for (let i = 0; i < 120; i++) {
+      stepPlayer(state, idleInput({ move: { x: 1, z: 0, magnitude: 1 }, cameraYaw: yaw }), 1 / 60, bvh, OPEN_BOUNDS);
+    }
+    expect(state.feet.dot(worldRight)).toBeGreaterThan(0.5);
+  });
+
   it('stops at capsule-radius distance from a wall it walks straight into', () => {
     const bvh = buildBVH([flatFloorGeom(), wallGeom(3)]);
     const state = createPlayerState(new THREE.Vector3(0, 0, 0));
     // Ground first.
     for (let i = 0; i < 10; i++) stepPlayer(state, idleInput(), 1 / 60, bvh, OPEN_BOUNDS);
     for (let i = 0; i < 600; i++) {
-      stepPlayer(state, idleInput({ move: { x: 1, z: 0, magnitude: 1 } }), 1 / 60, bvh, OPEN_BOUNDS);
+      // Negative move.x is world +X at cameraYaw 0 (see computeWishDirection's
+      // own doc comment on the right-vector convention).
+      stepPlayer(state, idleInput({ move: { x: -1, z: 0, magnitude: 1 } }), 1 / 60, bvh, OPEN_BOUNDS);
     }
     // Wall's near face is at x = 3 - 0.1 (thickness/2) = 2.9.
     expect(state.feet.x).toBeLessThanOrEqual(2.9 - CAPSULE_RADIUS + 0.02);
@@ -84,8 +109,9 @@ describe('stepPlayer', () => {
     const state = createPlayerState(new THREE.Vector3(0, 0, -2));
     for (let i = 0; i < 10; i++) stepPlayer(state, idleInput(), 1 / 60, bvh, OPEN_BOUNDS);
     for (let i = 0; i < 300; i++) {
-      // Moving toward +x (into the wall) and +z (along it) at once.
-      stepPlayer(state, idleInput({ move: { x: 0.7071, z: 0.7071, magnitude: 1 } }), 1 / 60, bvh, OPEN_BOUNDS);
+      // Moving toward +x (into the wall) and +z (along it) at once - see
+      // the wall-stop test's comment on the move.x sign convention.
+      stepPlayer(state, idleInput({ move: { x: -0.7071, z: 0.7071, magnitude: 1 } }), 1 / 60, bvh, OPEN_BOUNDS);
     }
     // Blocked in x by the wall, but still slid forward in z.
     expect(state.feet.x).toBeLessThan(3);
@@ -189,7 +215,8 @@ describe('stepPlayer', () => {
     const bounds: PhysicsBounds = { min: new THREE.Vector3(-5, 0, -5), max: new THREE.Vector3(5, 0, 5) };
     const state = createPlayerState(new THREE.Vector3(4.9, 0, 0));
     for (let i = 0; i < 120; i++) {
-      stepPlayer(state, idleInput({ move: { x: 1, z: 0, magnitude: 1 } }), 1 / 60, bvh, bounds);
+      // Negative move.x is world +X at cameraYaw 0 - see the wall-stop test's comment.
+      stepPlayer(state, idleInput({ move: { x: -1, z: 0, magnitude: 1 } }), 1 / 60, bvh, bounds);
     }
     expect(state.feet.x).toBeLessThanOrEqual(5 - CAPSULE_RADIUS + 1e-6);
     expect(state.velocity.x).toBeLessThanOrEqual(0);
@@ -219,7 +246,8 @@ describe('stepPlayer', () => {
     const state = createPlayerState(new THREE.Vector3(2, 0, 0));
     for (let i = 0; i < 10; i++) stepPlayer(state, idleInput(), 1 / 60, bvh, OPEN_BOUNDS);
     // A full second in one call - internally clamped to MAX_FRAME_DT.
-    stepPlayer(state, idleInput({ move: { x: 1, z: 0, magnitude: 1 }, speed: 50 }), 1.0, bvh, OPEN_BOUNDS);
+    // Negative move.x is world +X at cameraYaw 0 - see the wall-stop test's comment.
+    stepPlayer(state, idleInput({ move: { x: -1, z: 0, magnitude: 1 }, speed: 50 }), 1.0, bvh, OPEN_BOUNDS);
     expect(state.feet.x).toBeLessThan(2.9);
   });
 });

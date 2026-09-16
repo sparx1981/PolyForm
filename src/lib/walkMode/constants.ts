@@ -12,6 +12,7 @@ export const JUMP_SPEED = 5.5; // m/s, apex ~= 0.75m
 export const GROUND_ACCEL = 12; // /s, exponential approach to target velocity
 export const GROUND_DAMPING = 10; // /s, exponential decay of x/z when no input
 export const AIR_CONTROL = 0.3; // multiplier on accel while airborne
+export const SPRINT_MULTIPLIER = 1.6; // multiplies Movement Speed while Shift is held
 
 export const PHYSICS_SUBSTEPS = 5;
 export const MAX_FRAME_DT = 0.05; // seconds, clamp to avoid tunnelling after a hitch/tab-switch
