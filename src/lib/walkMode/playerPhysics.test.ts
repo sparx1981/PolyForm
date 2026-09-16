@@ -170,6 +170,33 @@ describe('stepPlayer', () => {
     expect(maxY).toBeGreaterThan(12 * 0.18 - 0.1);
   });
 
+  it('keeps climbing a staircase even while the camera yaw swings side to side (looking around while walking)', () => {
+    // Regression test for a reported bug: straight/L/U-shaped staircases
+    // got the player stuck part-way up, while curved ones worked fine.
+    // Root cause had nothing to do with width or curvature as such: the
+    // step-up assist used to probe forward along the player's raw
+    // input/look direction (`wishDir`), which is entirely normal for an
+    // FPS-style "WASD relative to camera" scheme but drifts off-axis from
+    // the riser actually in front of the player the moment they turn
+    // their head while still holding "forward" - trivial to do on a long
+    // straight/L/U flight, much less tempting on a curved one where
+    // looking along the curve IS the walking direction. A skewed probe
+    // can miss the tread ahead. It now probes straight into whichever
+    // contact is actually blocking, independent of camera yaw.
+    const landing = new THREE.BoxGeometry(4, 0.2, 4);
+    landing.translate(0, 12 * 0.18 - 0.1, 12 * 0.28 + 2);
+    const bvh = buildBVH([flatFloorGeom(), ...staircaseGeom(12, 0.18, 0.28), landing]);
+    const state = createPlayerState(new THREE.Vector3(0, 0, -0.5));
+    for (let i = 0; i < 10; i++) stepPlayer(state, idleInput(), 1 / 60, bvh, OPEN_BOUNDS);
+    let maxY = state.feet.y;
+    for (let i = 0; i < 600; i++) {
+      const yaw = THREE.MathUtils.degToRad(30) * Math.sin(i * 0.05);
+      stepPlayer(state, idleInput({ move: { x: 0, z: 1, magnitude: 1 }, cameraYaw: yaw }), 1 / 60, bvh, OPEN_BOUNDS);
+      maxY = Math.max(maxY, state.feet.y);
+    }
+    expect(maxY).toBeGreaterThan(12 * 0.18 - 0.05);
+  });
+
   it('does not climb a 0.5m block (taller than MAX_STEP_HEIGHT)', () => {
     const blockGeom = new THREE.BoxGeometry(4, 0.5, 1);
     blockGeom.translate(0, 0.25, 1);

@@ -38,6 +38,15 @@ export interface CollectedMesh {
  * qualifies if walking up its parent chain finds that tag pointing at a
  * collidable shape - this covers both a single mesh per shape and the
  * multi-mesh sub-face/instanced-timber-frame cases below.
+ *
+ * Kernel-drawn geometry (lines/arcs/rectangles/polygons drawn with the
+ * kernel tools - see KernelGeometry.tsx's own doc comment on the
+ * kernel/Shape[] split) lives in a completely separate system: it's never
+ * a `Shape` at all, so the `userData.isShape` lookup above can never see
+ * it. Its face meshes are tagged `userData.isKernelGeometry` instead and
+ * are collected unconditionally - there's no door/plant/etc equivalent
+ * exclusion in that system, just solid drawn faces - so the deny-list
+ * above doesn't apply to them.
  */
 export function collectCollidableMeshes(
   scene: THREE.Object3D,
@@ -51,6 +60,11 @@ export function collectCollidableMeshes(
 
     const geom = (obj as THREE.Mesh).geometry;
     if (!geom || !geom.attributes?.position || geom.attributes.position.count === 0) return;
+
+    if (obj.userData?.isKernelGeometry) {
+      collected.push(obj);
+      return;
+    }
 
     const shape = findOwningShape(obj, shapesById);
     if (!shape) return;

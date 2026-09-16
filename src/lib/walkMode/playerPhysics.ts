@@ -65,6 +65,7 @@ const _direction = new THREE.Vector3();
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _wishDir = new THREE.Vector3();
+const _stepUpProbeDir = new THREE.Vector3();
 const _preMoveFeet = new THREE.Vector3();
 const _liftedFeet = new THREE.Vector3();
 const _downRay = new THREE.Ray();
@@ -206,9 +207,24 @@ export function stepPlayer(state: PlayerState, input: StepInput, rawDt: number, 
     // Step-up assist: only when the horizontal move was actually blocked
     // by a non-floor (wall-type) contact while grounded (spec §7.5's
     // "Step-up assist").
-    const blockedByWall = state.grounded && contacts.some((c) => !isFloorSurface(c.direction));
+    const wallContact = state.grounded ? contacts.find((c) => !isFloorSurface(c.direction)) : undefined;
+    const blockedByWall = wallContact !== undefined;
     if (blockedByWall) {
-      const stepUp = tryStepUp(bvh, _preMoveFeet, _wishDir);
+      // Probe straight into whatever is actually blocking (the wall
+      // contact's own direction, negated and flattened to XZ), not the
+      // player's raw input/look direction (`_wishDir`). Those two agree
+      // when walking straight at a riser, but a player who turns their
+      // head while continuing to hold "forward" (completely normal FPS
+      // behavior, especially on a long straight/L/U flight - much less
+      // tempting on a curved one, where looking along the curve IS the
+      // walking direction) skews wishDir off-axis from the actual riser
+      // it's aimed at. A skewed probe can miss the tread ahead entirely -
+      // reproduced as a regression test that gets stuck part-way up a
+      // wide-open staircase purely from oscillating camera yaw, with no
+      // narrow geometry involved at all.
+      _stepUpProbeDir.set(-wallContact!.direction.x, 0, -wallContact!.direction.z);
+      if (_stepUpProbeDir.lengthSq() < 1e-8) _stepUpProbeDir.copy(_wishDir);
+      const stepUp = tryStepUp(bvh, _preMoveFeet, _stepUpProbeDir);
       if (stepUp) {
         const cameraRise = stepUp.feet.y - state.feet.y;
         state.feet.copy(stepUp.feet);

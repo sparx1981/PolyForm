@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.3] - 2026-09-16
+### Fixed
+- **Walk Mode Stuck Mid-Staircase**: Straight/L-shaped/U-shaped staircases could stop the player partway up (curved staircases were unaffected). The step-up assist probed forward along the player's raw input/look direction, which is normal for an FPS-style "WASD relative to camera" scheme but drifts off-axis from the riser actually ahead the moment the player turns their head while still holding "forward" - easy to do on a long straight/L/U flight, much less tempting on a curved one where looking along the curve is the walking direction anyway. It now probes straight into whichever contact is actually blocking, independent of camera yaw. Added a regression test that reproduces the stuck behavior purely from an oscillating camera yaw, with no narrow geometry involved.
+- **Walk Mode Ignored Kernel-Drawn Geometry**: Shapes drawn with the kernel-based drawing tools (lines, arcs, rectangles, polygons) never collided in Walk Mode, since they live in a completely separate system from the rest of the model's shapes and were invisible to the collision builder. They're now collected the same way as everything else and collide by default.
+
 ## [1.10.2] - 2026-09-16
 ### Changed
 - **Walk Mode Collision Policy**: Switched from an allow-list (only a curated set of architecture/landscape types collided) to a deny-list - basic shapes, drawn/poly geometry, floor slabs and everything else now collides by default, so anything you draw can be walked into, stood on, or jumped onto. Only doors, small plants (bushes; trees still block), scale-reference figures, and dimension annotations remain walk-through. This also likely explains being unable to reach an upper floor via a staircase: floor slabs are generated as generic "poly" geometry, which the old allow-list didn't cover, so the floor above the stairs wasn't solid at all.

@@ -20,6 +20,8 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Fixed Camera toolbar icons (Portal Navigation, Walk Mode, Reset Camera, Camera Depth Clipping) using a permanently tinted color scheme unlike every other toolbar; they now match.',
       'Added Walk Mode to the "Camera Toolbar Icons" visibility settings list.',
       'Walk Mode now collides with basic shapes, drawn/poly geometry, floor slabs and everything else you model by default, not just a curated list of architecture/landscape types - so anything you draw can be walked into, stood on, or jumped onto. Doors, small plants (bushes), scale-reference figures and dimension annotations remain walk-through. This also fixes being unable to reach an upper floor via a staircase, since the floor slab (generic "poly" geometry) previously wasn\'t collidable at all.',
+      'Fixed Walk Mode getting stuck partway up straight/L-shaped/U-shaped staircases (curved ones were unaffected) - the step-up assist now probes straight into whatever is actually blocking it instead of the player\'s raw look direction, so turning your head mid-climb no longer throws it off.',
+      'Fixed Walk Mode not colliding with geometry drawn using the kernel-based drawing tools (lines, arcs, rectangles, polygons) - it now collides the same as everything else.',
     ]
   },
   {
