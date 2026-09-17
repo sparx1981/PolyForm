@@ -21,8 +21,6 @@ import {
   ArrowUpFromLine, 
   Search,
   MoreHorizontal,
-  Orbit,
-  Hand,
   ZoomIn,
   Sparkles,
   CircleDot,
@@ -819,8 +817,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       
       <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
       
-      <ToolButton tool="orbit" icon={<Orbit size={20} />} label="Orbit (O)" />
-      <ToolButton tool="pan" icon={<Hand size={20} />} label="Pan (H)" />
       <ToolButton tool="zoom" icon={<ZoomIn size={20} />} label="Zoom (Z)" />
 
       {pinnedScripts.length > 0 && (

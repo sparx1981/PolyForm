@@ -1,5 +1,5 @@
 import React, { useRef, useState, createContext, useContext } from 'react';
-import { Aperture, RotateCcw, Crop, Footprints } from 'lucide-react';
+import { Aperture, RotateCcw, Crop, Footprints, Orbit, Hand, Eye, ZoomIn } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
 import { cn } from '../lib/utils';
@@ -101,6 +101,38 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
           theme === 'dark' ? "bg-gray-850 border-gray-700" : "bg-slate-50/90 border-gray-200"
         )}
       >
+        {/* Orbit Tool */}
+        <CameraToolButton
+          tool="orbit"
+          icon={<Orbit size={19} />}
+          label="Orbit (O)"
+          subtitle="Orbit camera view around target"
+        />
+
+        {/* Pan Tool */}
+        <CameraToolButton
+          tool="pan"
+          icon={<Hand size={19} />}
+          label="Pan (H)"
+          subtitle="Pan camera view horizontally and vertically"
+        />
+
+        {/* Zoom Tool */}
+        <CameraToolButton
+          tool="zoom"
+          icon={<ZoomIn size={19} />}
+          label="Zoom (Z)"
+          subtitle="Zoom camera view in/out"
+        />
+
+        {/* Look Tool */}
+        <CameraToolButton
+          tool="look"
+          icon={<Eye size={19} />}
+          label="Look Around"
+          subtitle="Rotate camera direction without walking"
+        />
+
         {/* Portal Navigation Tool */}
         <CameraToolButton
           tool="teleport"

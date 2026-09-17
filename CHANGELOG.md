@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.5] - 2026-09-16
+### Added
+- **Procedural Grass Feature in Terrain Floating Panel**:
+  - **UI Controls**: Added Procedural Grass controls within the terrain palette with an on/off toggle, Two-Tone gradient color pickers (Root and Tip) with 5 quick presets (Lawn, Meadow, Autumn, Alpine, Savanna), and parametric sliders for Density (instances/m²), Base Height (m), Height Variance (%), and Max Slope Angle (°).
+  - **GPU Instancing**: Implemented `THREE.InstancedMesh` with merged low-poly 2D card silhouettes (3-4 blade variations per clump, 3-5 triangles each) with zero alpha cutouts or transparent PNG textures, preventing overdraw penalties.
+  - **Shader Pipeline**: Vertex-shader cylindrical billboarding around the local Y-axis facing camera direction, wind animation using trigonometric wave vertex displacement, and root-to-tip two-tone gradient coloring with subtle per-instance hue/lightness jitter and near-plane camera fading.
+  - **Terrain Sampling & Exclusion Rules**: Stratified jittered distribution across terrain boundaries up to 150m × 150m, slope culling based on surface normal $\vec{N} \cdot (0, 1, 0) < \cos(\theta_{\text{max}})$, and floor slab/pad footprint exclusion to discard points inside buildings or on slabs before GPU buffer upload.
+  - **Walk Mode Compatibility**: Grass instanced meshes are explicitly excluded from character navigation collision raycasts and BVH generation (`userData.isGrass = true`, `isObstacle = false`, `raycast = () => {}`).
+
 ## [1.10.4] - 2026-09-16
 ### Added
 - **Scene Helpers Axis Toggles**: Split axis visibility into two independent controls in the "Scene Helpers" section of the Visualisation right panel:

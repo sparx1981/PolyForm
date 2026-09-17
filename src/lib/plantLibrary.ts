@@ -29,7 +29,7 @@ export const PLANT_SPECIES_CATALOG: PlantSpecies[] = [
     modelType: 'fbx',
     modelPath: '/models/plants/ribbon_grass/Ribbon_Grass_tbdpec3r_Mid_tbdpec3r_',
     texturePath: '/models/plants/ribbon_grass/Ribbon_Grass_tbdpec3r_Mid_2K_',
-    variations: ['VarA', 'VarB', 'VarC', 'VarD', 'VarE', 'VarF'],
+    variations: ['VarC', 'VarD', 'VarE', 'VarF'],
     thumbnailColor: '#65a30d'
   },
   {
@@ -61,12 +61,48 @@ export const PLANT_SPECIES_CATALOG: PlantSpecies[] = [
     name: 'English Lavender (Lavandula angustifolia)',
     category: 'bush',
     scientificName: 'Lavandula angustifolia',
-    description: 'Aromatic perennial shrub with silver-green foliage and violet flowering mounds.',
+    description: 'Aromatic perennial shrub with silver-green foliage and violet flowering spikes.',
     defaultHeight: 0.65,
     defaultSpread: 0.75,
     foliageColor: '#818cf8',
     modelType: 'procedural',
     thumbnailColor: '#818cf8'
+  },
+  {
+    id: 'wild_rose_bush',
+    name: 'Wild Rose Bush (Rosa canina)',
+    category: 'bush',
+    scientificName: 'Rosa canina',
+    description: 'Natural thorny flowering shrub with arching woody canes, layered rose foliage, and delicate pastel pink blossoms.',
+    defaultHeight: 1.10,
+    defaultSpread: 1.25,
+    foliageColor: '#2d6a4f',
+    modelType: 'procedural',
+    thumbnailColor: '#f43f5e'
+  },
+  {
+    id: 'fern_cluster',
+    name: 'Woodland Sword Fern (Polystichum munitum)',
+    category: 'bush',
+    scientificName: 'Polystichum munitum',
+    description: 'Evergreen woodland fern with graceful arching pinnate fronds cascading from a fibrous crown.',
+    defaultHeight: 0.60,
+    defaultSpread: 0.85,
+    foliageColor: '#15803d',
+    modelType: 'procedural',
+    thumbnailColor: '#16a34a'
+  },
+  {
+    id: 'ornamental_grass',
+    name: 'Feather Reed Grass (Calamagrostis)',
+    category: 'bush',
+    scientificName: 'Calamagrostis x acutiflora',
+    description: 'Architectural ornamental grass forming a dense upright fountain of variegated blades crowned by golden wheat plumes.',
+    defaultHeight: 0.95,
+    defaultSpread: 0.75,
+    foliageColor: '#84cc16',
+    modelType: 'procedural',
+    thumbnailColor: '#eab308'
   },
 
   // --- TREES ---

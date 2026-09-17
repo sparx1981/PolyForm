@@ -56,6 +56,7 @@ export function collectCollidableMeshes(
 
   scene.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh) && !(obj as THREE.InstancedMesh).isInstancedMesh) return;
+    if (obj.userData?.isGrass || obj.userData?.isObstacle === false || obj.name === 'procedural-grass-mesh') return;
     if (!isVisibleThroughParents(obj)) return;
 
     const geom = (obj as THREE.Mesh).geometry;

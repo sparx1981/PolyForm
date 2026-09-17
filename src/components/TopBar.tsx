@@ -1216,10 +1216,30 @@ export default function TopBar() {
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
-                    {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'orbit', 'pan', 'zoom', 'component'].map(tool => (
+                    {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'component'].map(tool => (
                       <VisibilityToggle 
                         key={tool}
                         label={tool === 'component' ? 'Make Component' : tool.charAt(0).toUpperCase() + tool.slice(1)}
+                        isVisible={toolbarVisibility[tool] !== false}
+                        onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
+                      />
+                    ))}
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Camera Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                    {[
+                      { tool: 'orbit', label: 'Orbit (O)' },
+                      { tool: 'pan', label: 'Pan (H)' },
+                      { tool: 'zoom', label: 'Zoom (Z)' },
+                      { tool: 'look', label: 'Look Around' },
+                      { tool: 'teleport', label: 'Portal Navigation' },
+                      { tool: 'walk', label: 'Walk Mode' },
+                      { tool: 'reset_camera', label: 'Reset Camera Position' },
+                      { tool: 'clipping', label: 'Camera Depth Clipping' },
+                    ].map(({ tool, label }) => (
+                      <VisibilityToggle 
+                        key={tool}
+                        label={label}
                         isVisible={toolbarVisibility[tool] !== false}
                         onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
                       />

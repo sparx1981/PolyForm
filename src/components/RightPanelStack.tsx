@@ -2874,10 +2874,24 @@ export default function RightPanelStack() {
                         <div className="space-y-2">
                           <label className="text-[8px] text-gray-400 uppercase font-bold">Effect Type</label>
                           <div className="grid grid-cols-2 gap-1 px-1">
-                            {['confetti', 'fire', 'smoke', 'sparks', 'magic_aura'].map((type) => (
+                            {['confetti', 'fire', 'smoke', 'sparks', 'magic_aura', 'bird', 'bee'].map((type) => (
                               <button
                                 key={type}
-                                onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, type: type as any } : a))}
+                                onClick={() => setAnimations(prev => prev.map(a => {
+                                  if (a.id !== anim.id) return a;
+                                  let newDensity = a.density;
+                                  let newScale = a.scale || 1;
+                                  if (type === 'bird' && (a.density > 20 || a.density < 1)) {
+                                    newDensity = 1;
+                                    newScale = 1;
+                                  } else if (type === 'bee' && (a.density > 50 || a.density < 3)) {
+                                    newDensity = 8;
+                                    newScale = 1;
+                                  } else if (type !== 'bird' && type !== 'bee' && a.density < 100) {
+                                    newDensity = 1000;
+                                  }
+                                  return { ...a, type: type as any, density: newDensity, scale: newScale };
+                                }))}
                                 className={cn(
                                   "py-1 text-[8px] font-bold rounded border transition-all truncate px-1",
                                   anim.type === type 
@@ -2893,11 +2907,16 @@ export default function RightPanelStack() {
 
                         <div className="space-y-1">
                           <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
-                            <span>Density</span>
+                            <span>
+                              {anim.type === 'bird' ? 'Bird Count' : anim.type === 'bee' ? 'Bee Swarm Size' : 'Density'}
+                            </span>
                             <span>{anim.density}</span>
                           </div>
                           <input 
-                            type="range" min="100" max="5000" step="100"
+                            type="range" 
+                            min={anim.type === 'bird' ? 1 : anim.type === 'bee' ? 3 : 100} 
+                            max={anim.type === 'bird' ? 5 : anim.type === 'bee' ? 30 : 5000} 
+                            step={anim.type === 'bird' || anim.type === 'bee' ? 1 : 100}
                             value={anim.density}
                             onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, density: parseInt(e.target.value) } : a))}
                             className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
@@ -2906,11 +2925,14 @@ export default function RightPanelStack() {
 
                         <div className="space-y-1">
                           <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
-                            <span>Scale (Size)</span>
+                            <span>{anim.type === 'bird' || anim.type === 'bee' ? 'Scale' : 'Scale (Size)'}</span>
                             <span>{(anim.scale || 1).toFixed(1)}</span>
                           </div>
                           <input 
-                            type="range" min="0.1" max="100" step="0.1"
+                            type="range" 
+                            min={anim.type === 'bird' ? 0.4 : anim.type === 'bee' ? 0.5 : 0.1} 
+                            max={anim.type === 'bird' ? 3.0 : anim.type === 'bee' ? 3.0 : 100} 
+                            step={0.1}
                             value={anim.scale || 1}
                             onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, scale: parseFloat(e.target.value) } : a))}
                             className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
@@ -3296,6 +3318,7 @@ export default function RightPanelStack() {
                     <option value="sunrise">Sunrise</option>
                     <option value="twilight">Twilight</option>
                     <option value="woodland">Woodland</option>
+                    <option value="snowy">Snowy Alpine</option>
                     <option value="cyberspace-neon">Cyberspace Neon</option>
                     <option value="studio">Studio</option>
                   </select>

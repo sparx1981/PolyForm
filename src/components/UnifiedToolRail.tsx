@@ -25,6 +25,7 @@ import {
   Search,
   Orbit,
   Hand,
+  Eye,
   ZoomIn,
   Sparkles,
   CircleDot,
@@ -859,39 +860,6 @@ export default function UnifiedToolRail() {
           keywords: ['scale', 'resize', 'transform', 'stretch']
         },
         {
-          id: 'orbit',
-          tool: 'orbit',
-          label: 'Orbit',
-          hotkey: 'O',
-          subtitle: 'Orbit camera view',
-          icon: <Orbit size={19} />,
-          isActive: (s) => s.activeTool === 'orbit',
-          onClick: (s) => s.setActiveTool('orbit'),
-          keywords: ['orbit', 'camera', 'view', 'rotate view']
-        },
-        {
-          id: 'pan',
-          tool: 'pan',
-          label: 'Pan',
-          hotkey: 'H',
-          subtitle: 'Pan camera view',
-          icon: <Hand size={19} />,
-          isActive: (s) => s.activeTool === 'pan',
-          onClick: (s) => s.setActiveTool('pan'),
-          keywords: ['pan', 'hand', 'drag camera', 'view']
-        },
-        {
-          id: 'zoom',
-          tool: 'zoom',
-          label: 'Zoom',
-          hotkey: 'Z',
-          subtitle: 'Zoom camera view in/out',
-          icon: <ZoomIn size={19} />,
-          isActive: (s) => s.activeTool === 'zoom',
-          onClick: (s) => s.setActiveTool('zoom'),
-          keywords: ['zoom', 'magnify', 'view', 'in', 'out']
-        },
-        {
           id: 'ai_query',
           label: 'AI Query',
           subtitle: 'Ask AI assistant about your model & scene',
@@ -1054,6 +1022,49 @@ export default function UnifiedToolRail() {
       id: 'camera',
       name: 'Camera',
       tools: [
+        {
+          id: 'orbit',
+          tool: 'orbit',
+          label: 'Orbit',
+          hotkey: 'O',
+          subtitle: 'Orbit camera view around target',
+          icon: <Orbit size={19} className="text-indigo-500 dark:text-indigo-400" />,
+          isActive: (s) => s.activeTool === 'orbit',
+          onClick: (s) => s.setActiveTool('orbit'),
+          keywords: ['orbit', 'camera', 'view', 'rotate view']
+        },
+        {
+          id: 'pan',
+          tool: 'pan',
+          label: 'Pan',
+          hotkey: 'H',
+          subtitle: 'Pan camera view horizontally and vertically',
+          icon: <Hand size={19} className="text-indigo-500 dark:text-indigo-400" />,
+          isActive: (s) => s.activeTool === 'pan',
+          onClick: (s) => s.setActiveTool('pan'),
+          keywords: ['pan', 'hand', 'drag camera', 'view']
+        },
+        {
+          id: 'zoom',
+          tool: 'zoom',
+          label: 'Zoom',
+          hotkey: 'Z',
+          subtitle: 'Zoom camera view in/out',
+          icon: <ZoomIn size={19} className="text-indigo-500 dark:text-indigo-400" />,
+          isActive: (s) => s.activeTool === 'zoom',
+          onClick: (s) => s.setActiveTool('zoom'),
+          keywords: ['zoom', 'magnify', 'view', 'in', 'out', 'camera']
+        },
+        {
+          id: 'look',
+          tool: 'look',
+          label: 'Look Around',
+          subtitle: 'Rotate camera direction without walking',
+          icon: <Eye size={19} className="text-indigo-500 dark:text-indigo-400" />,
+          isActive: (s) => s.activeTool === 'look',
+          onClick: (s) => s.setActiveTool('look'),
+          keywords: ['look', 'mouse look', 'camera direction', 'pivot', 'view']
+        },
         {
           id: 'teleport',
           tool: 'teleport',

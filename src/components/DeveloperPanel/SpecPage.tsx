@@ -706,7 +706,7 @@ const DATA_MODELS: DataModel[] = [
     path: 'Model.animations[]',
     fields: [
       { name: 'id', type: 'string', description: 'Unique identifier.' },
-      { name: 'type', type: 'AnimationEffectType', description: 'confetti | fire | smoke | sparks | magic_aura' },
+      { name: 'type', type: 'AnimationEffectType', description: 'confetti | fire | smoke | sparks | magic_aura | bird | bee' },
       { name: 'position', type: '[number,number,number]', description: 'World XYZ position of the particle emitter.' },
       { name: 'density', type: 'number', description: 'Emission rate multiplier (0.1 – 5.0).' },
       { name: 'loop', type: 'boolean', description: 'Whether the effect loops indefinitely or is a one-shot burst.' },

@@ -62,6 +62,9 @@ import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl
 import CutFillVolumeOverlay from './terrain/CutFillVolumeOverlay';
 import RoadSplineOverlay from './terrain/RoadSplineOverlay';
 import ParametricPadOverlay from './terrain/ParametricPadOverlay';
+import { ProceduralGrass } from './terrain/ProceduralGrass';
+import { ProceduralWildflowers } from './terrain/ProceduralWildflowers';
+import { getSnowyEnvironmentTexture } from '../lib/snowyEnvironment';
 import BlockPickerOverlay from './BlockPickerOverlay';
 import { deduplicateKnots, clampSplineGradeWithTransitions, sanitizeElevation } from '../lib/terrain/math';
 import { applyPadGradingToTerrain } from '../lib/terrain/padGeometry';
@@ -116,6 +119,8 @@ import {
 } from '../lib/portalNavigation';
 import WalkModeController from './walk/WalkModeController';
 import WalkModeOverlay from './walk/WalkModeOverlay';
+import LookModeController from './camera/LookModeController';
+import LookModeOverlay from './camera/LookModeOverlay';
 import { InstancedTimberFraming } from './InstancedTimberFraming';
 import { BezierTool } from '../tools/bezier/BezierTool';
 import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
@@ -3587,7 +3592,7 @@ function Scene() {
   // activeTool === 'walk', by which point the previous tool is already gone.
   const preWalkToolRef = useRef<ToolType>('orbit');
   useEffect(() => {
-    if (activeTool !== 'walk') preWalkToolRef.current = activeTool;
+    if (activeTool !== 'walk' && activeTool !== 'look') preWalkToolRef.current = activeTool;
   }, [activeTool]);
   const portalTransitionRef = useRef<{
     startTime: number;
@@ -5177,7 +5182,7 @@ function Scene() {
     // WalkModeController) - every other tool's click behavior below
     // (selection, drawing, deselect-on-background, etc.) must not run
     // while it's active.
-    if (activeTool === 'walk') return;
+    if (activeTool === 'walk' || activeTool === 'look') return;
     pointerUpHandledRef.current = false;
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
 
@@ -6235,7 +6240,7 @@ function Scene() {
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     // See handlePointerDown's identical guard - Walk Mode's own placement
     // hover lives entirely in WalkModeController.
-    if (activeTool === 'walk') return;
+    if (activeTool === 'walk' || activeTool === 'look') return;
     if (activeTool === 'teleport') {
       // Portal Navigation's own hover tracking no longer happens here at
       // all - see TeleportPortalPreview's useFrame. Raycasting against the
@@ -7945,6 +7950,7 @@ function Scene() {
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    if (activeTool === 'walk' || activeTool === 'look') return;
 
     if (e?.stopPropagation) e.stopPropagation();
     if (pointerUpHandledRef.current) return;
@@ -9469,7 +9475,7 @@ function Scene() {
       <OrbitControls 
         makeDefault 
         zoomToCursor
-        autoRotate={autoOrbitEnabled && activeTool !== 'walk'}
+        autoRotate={autoOrbitEnabled && activeTool !== 'walk' && activeTool !== 'look'}
         autoRotateSpeed={orbitRotationSpeed * 2}
         ref={(ref) => { 
           if (ref) {
@@ -9490,7 +9496,7 @@ function Scene() {
           MIDDLE: THREE.MOUSE.ROTATE,
           RIGHT: THREE.MOUSE.PAN
         }}
-        enabled={!drawingStart && !pushPullState && !isSculptingDragRef.current && activeTool !== 'landscape_sculpt' && activeTool !== 'landscape_mask' && activeTool !== 'walk' && !portalTransitionActive}
+        enabled={!drawingStart && !pushPullState && !isSculptingDragRef.current && activeTool !== 'landscape_sculpt' && activeTool !== 'landscape_mask' && activeTool !== 'walk' && activeTool !== 'look' && !portalTransitionActive}
         minPolarAngle={floorEnabled ? 0 : -Math.PI}
         maxPolarAngle={floorEnabled ? Math.PI / 2 : Math.PI}
       />
@@ -10429,7 +10435,7 @@ function Scene() {
 
         if ((shape.type === 'tree' || shape.type === 'bush') && shape.plantSpeciesId) {
           const plantSpecies = PLANT_SPECIES_CATALOG.find(s => s.id === shape.plantSpeciesId);
-          if (plantSpecies?.modelType === 'fbx' || plantSpecies?.modelType === 'usd') {
+          if (plantSpecies?.modelType === 'fbx' || plantSpecies?.modelType === 'usd' || plantSpecies?.modelType === 'gltf') {
             return (
               <PlantModelMesh
                 key={shape.id}
@@ -10616,19 +10622,19 @@ function Scene() {
                 );
               }
 
-              const hasVertexColors = isTerrainHeatmap || shape.type === 'scale_figure' || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0);
+              const hasVertexColors = isTerrainHeatmap || shape.type === 'scale_figure' || shape.type === 'bush' || shape.type === 'tree' || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0);
 
               return (
                 <meshStandardMaterial
                   color={hasVertexColors ? '#ffffff' : (shape.color || '#ffffff')}
                   vertexColors={hasVertexColors}
-                  roughness={shape.roughness ?? 0.8}
-                  metalness={shape.metalness ?? 0.05}
+                  roughness={shape.type === 'bush' || shape.type === 'tree' ? 0.75 : (shape.roughness ?? 0.8)}
+                  metalness={shape.type === 'bush' || shape.type === 'tree' ? 0.04 : (shape.metalness ?? 0.05)}
                   {...(hasVertexColors ? {} : pbrMapProps)}
                   transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
                   opacity={effectiveOpacity}
                   depthWrite={effectiveOpacity >= 0.85}
-                  side={(effectiveOpacity < 1 || shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
+                  side={(effectiveOpacity < 1 || shape.type === 'poly' || shape.type === 'terrain' || shape.type === 'bush' || shape.type === 'tree' || shape.type === 'custom' || shape.tags?.some(t => t.includes('roof'))) ? THREE.DoubleSide : THREE.FrontSide}
                   emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                   emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
                 />
@@ -10656,6 +10662,30 @@ function Scene() {
         </mesh>
       );
     })}
+
+      {/* Procedural Grass Instances for active terrain shapes */}
+      {shapes
+        .filter(s => s.type === 'terrain' && !s.hidden && s.terrainData?.grass?.enabled)
+        .map(terrainShape => (
+          <ProceduralGrass
+            key={`procedural-grass-${terrainShape.id}`}
+            terrainShape={terrainShape}
+            shapes={shapes}
+            terrainModifiers={terrainModifiers}
+          />
+        ))}
+
+      {/* Procedural Wildflower Instances for active terrain shapes */}
+      {shapes
+        .filter(s => s.type === 'terrain' && !s.hidden && s.terrainData?.flowers?.enabled)
+        .map(terrainShape => (
+          <ProceduralWildflowers
+            key={`procedural-flowers-${terrainShape.id}`}
+            terrainShape={terrainShape}
+            shapes={shapes}
+            terrainModifiers={terrainModifiers}
+          />
+        ))}
 
       {/*
         Invisible dummy the group-transform gizmo below is attached to.
@@ -11006,6 +11036,18 @@ function Scene() {
           movementSpeed={walkMovementSpeed}
           mouseSensitivity={walkMouseSensitivity}
           bridge={walkBridgeRef.current}
+          onExit={() => setActiveTool(preWalkToolRef.current)}
+          onToast={setViewportToast}
+        />
+      )}
+
+      {/* Look Mode: camera direction / orientation control without walking or physics */}
+      {activeTool === 'look' && (
+        <LookModeController
+          scene={scene}
+          camera={camera as THREE.PerspectiveCamera}
+          gl={gl}
+          mouseSensitivity={walkMouseSensitivity}
           onExit={() => setActiveTool(preWalkToolRef.current)}
           onToast={setViewportToast}
         />
@@ -11581,12 +11623,29 @@ function EnvironmentLighting() {
   // Hardware fallback detection
   const isHDRSupported = gl.capabilities.isWebGL2;
   
+  const snowyMap = useMemo(() => {
+    if (skybox === 'snowy') {
+      return getSnowyEnvironmentTexture();
+    }
+    return null;
+  }, [skybox]);
+
   if (skybox === 'none' || !isHDRSupported) {
     return (
       <>
         {skybox === 'none' ? <color attach="background" args={[theme === 'light' ? '#e5e5e5' : '#2B2B2B']} /> : null}
         <hemisphereLight intensity={0.5} groundColor="#444444" />
       </>
+    );
+  }
+
+  if (skybox === 'snowy' && snowyMap) {
+    return (
+      <Environment 
+        map={snowyMap}
+        background 
+        blur={skyboxBlur}
+      />
     );
   }
 
@@ -12794,6 +12853,7 @@ export default function Viewport() {
       )}
 
       {activeTool === 'walk' && <WalkModeOverlay />}
+      {activeTool === 'look' && <LookModeOverlay />}
 
       {placingNotePos && (
         // Rendered directly here — no portal needed, since this whole

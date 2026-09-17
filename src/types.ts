@@ -20,7 +20,7 @@ export type ToolType =
   | 'line' | 'poly' | 'bezier' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
   | 'move' | 'rotate' | 'scale' | 'pushpull' | 'followme' | 'offset' | 'flip'
   | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section'
-  | 'orbit' | 'pan' | 'zoom' | 'zoomextents' | 'teleport' | 'walk'
+  | 'orbit' | 'pan' | 'zoom' | 'zoomextents' | 'teleport' | 'walk' | 'look'
   | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome'
   | 'bevel' | 'subtract' | 'note' | 'deform'
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
@@ -32,7 +32,65 @@ export type ToolType =
 
 export type ToolMode = ToolType | CivilToolMode;
 
-export type SkyboxType = 'none' | 'golden-hour' | 'woodland' | 'sunrise' | 'twilight' | 'cyberspace-neon' | 'studio';
+export type SkyboxType = 'none' | 'golden-hour' | 'woodland' | 'sunrise' | 'twilight' | 'cyberspace-neon' | 'studio' | 'snowy';
+
+export interface GrassSettings {
+  enabled: boolean;
+  rootColor: string;
+  tipColor: string;
+  density: number; // instances per m²
+  baseHeight: number; // meters
+  heightVariance: number; // 0.0 to 1.0
+  maxSlopeAngle: number; // degrees
+  animate?: boolean; // toggle for procedural grass wind animation
+  animationStrength?: number; // 0.0 to 1.0 slider controlling animation strength
+  windStrength?: number;
+  windSpeed?: number;
+}
+
+export const DEFAULT_GRASS_SETTINGS: GrassSettings = {
+  enabled: false,
+  rootColor: '#1e3f20',
+  tipColor: '#88bb44',
+  density: 8,
+  baseHeight: 0.10,
+  heightVariance: 0.35,
+  maxSlopeAngle: 35,
+  animate: true,
+  animationStrength: 0.08,
+  windStrength: 0.08,
+  windSpeed: 2.0
+};
+
+export interface WildflowerSettings {
+  enabled: boolean;
+  density: number; // instances per m² (0.1 to 15)
+  baseHeight: number; // meters, low-lying (0.05 to 0.45m)
+  heightVariance: number; // 0.0 to 1.0
+  maxSlopeAngle: number; // degrees
+  primaryColor: string; // main petal color
+  secondaryColor: string; // accent petal color
+  stemColor: string; // stem & leaf green
+  flowerType?: 'mixed' | 'poppy' | 'alpine' | 'buttercup' | 'lavender' | 'daisy';
+  animate?: boolean; // toggle wind animation
+  animationStrength?: number; // 0.0 to 1.0 (default 0.08 for 8%)
+  windSpeed?: number;
+}
+
+export const DEFAULT_WILDFLOWER_SETTINGS: WildflowerSettings = {
+  enabled: false,
+  density: 0.3, // 0.3 / m²
+  baseHeight: 0.05, // 5cm (0.05m)
+  heightVariance: 0.30,
+  maxSlopeAngle: 35,
+  primaryColor: '#ffffff', // Daisies pure white petals
+  secondaryColor: '#f59e0b', // Daisies warm golden core
+  stemColor: '#2e6128', // Rich meadow stem green
+  flowerType: 'daisy',
+  animate: true,
+  animationStrength: 0.02, // 2%
+  windSpeed: 2.0
+};
 
 export interface TerrainData {
   gridX: number;
@@ -49,6 +107,8 @@ export interface TerrainData {
   textureScale?: number;
   roughness?: number;
   topography?: string;
+  grass?: GrassSettings;
+  flowers?: WildflowerSettings;
 }
 
 const KNOWN_TEXTURE_IDS = new Set([
@@ -198,10 +258,11 @@ export interface FogSettings {
 
 export interface SceneAnimation {
   id: string;
-  type: 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura';
+  type: 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura' | 'bird' | 'bee';
   position: [number, number, number];
   density: number;
   scale?: number;
+  speed?: number;
   looping: boolean;
   playing: boolean;
 }

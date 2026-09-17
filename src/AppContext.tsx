@@ -206,7 +206,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Task #155: SketchUp-style edge line rendering settings -- user-configurable on/off, colour, opacity.
   const [edgeLinesEnabled, setEdgeLinesEnabled] = useState<boolean>(true);
   const [edgeLinesColor, setEdgeLinesColor] = useState<string>('#1a1a1a');
-  const [edgeLinesOpacity, setEdgeLinesOpacity] = useState<number>(1);
+  const [edgeLinesOpacity, setEdgeLinesOpacity] = useState<number>(0.3);
   const [edgeLinesThickness, setEdgeLinesThickness] = useState<number>(2);
   const [lightPosition, setLightPosition] = useState<[number, number, number]>([5, 5, 5]);
   // The point the sun orbits around when animateSun is on — defaults to

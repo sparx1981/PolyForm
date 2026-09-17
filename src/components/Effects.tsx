@@ -2,6 +2,7 @@ import React, { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useApp } from '../AppContext';
+import { BirdSystem, BeeSystem } from './animations/NatureAnimations';
 
 interface ParticleSystemProps {
   type: 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura';
@@ -162,9 +163,34 @@ export const Effects: React.FC = () => {
 
   return (
     <group>
-      {animations.map(anim => (
-        <ParticleSystem key={anim.id} {...anim} />
-      ))}
+      {animations.map(anim => {
+        if (anim.type === 'bird') {
+          return (
+            <BirdSystem
+              key={anim.id}
+              position={anim.position}
+              density={anim.density}
+              scale={anim.scale}
+              speed={anim.speed}
+              looping={anim.looping}
+              playing={anim.playing}
+            />
+          );
+        }
+        if (anim.type === 'bee') {
+          return (
+            <BeeSystem
+              key={anim.id}
+              position={anim.position}
+              density={anim.density}
+              scale={anim.scale}
+              speed={anim.speed}
+              playing={anim.playing}
+            />
+          );
+        }
+        return <ParticleSystem key={anim.id} {...anim} />;
+      })}
     </group>
   );
 };

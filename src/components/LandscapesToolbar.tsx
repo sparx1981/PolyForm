@@ -29,15 +29,18 @@ import {
   PanelRightClose,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Trees,
   Sprout,
+  Flower2,
   Fence,
   SlidersHorizontal,
   Lamp,
   Armchair,
-  Disc
+  Disc,
+  Wind
 } from 'lucide-react';
-import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape } from '../types';
+import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../types';
 import { createTerrainShape, generateTerrainHeights, TopographyPreset } from '../lib/terrain/terrainFactory';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
@@ -45,6 +48,15 @@ import { applyPadGradingToTerrain } from '../lib/terrain/padGeometry';
 import { flattenTerrainForFloorSlabs } from '../lib/archRoomAssembly';
 import { ROAD_MATERIALS } from '../lib/terrain/roadMaterials';
 import { regradeTerrainWithModifiers } from '../lib/terrain/roadGeometry';
+
+const WILDFLOWER_PRESETS = [
+  { name: 'Daisies', primary: '#ffffff', secondary: '#f59e0b', stem: '#2e6128', type: 'daisy', density: 0.3, baseHeight: 0.05, animationStrength: 0.02 },
+  { name: 'Meadow Mix', primary: '#f43f5e', secondary: '#facc15', stem: '#2d5a27', type: 'mixed' },
+  { name: 'Alpine Bloom', primary: '#f8fafc', secondary: '#3b82f6', stem: '#1e3f20', type: 'alpine' },
+  { name: 'Poppy Field', primary: '#ef4444', secondary: '#f97316', stem: '#2e5b27', type: 'poppy' },
+  { name: 'Buttercups', primary: '#eab308', secondary: '#fef08a', stem: '#325828', type: 'buttercup' },
+  { name: 'Lavender', primary: '#a855f7', secondary: '#c084fc', stem: '#264e23', type: 'lavender' },
+];
 
 const FlyoutSideContext = createContext<'right' | 'bottom'>('right');
 
@@ -198,6 +210,19 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
 
   const [padSubTab, setPadSubTab] = useState<'geometry' | 'surface'>('geometry');
 
+  const [isGrassCollapsed, setIsGrassCollapsed] = useState(false);
+  const [isFlowersCollapsed, setIsFlowersCollapsed] = useState(false);
+
+  const [grassOptions, setGrassOptions] = useState<GrassSettings>(() => ({
+    ...DEFAULT_GRASS_SETTINGS,
+    ...(activeTerrain?.terrainData?.grass || {})
+  }));
+
+  const [wildflowerOptions, setWildflowerOptions] = useState<WildflowerSettings>(() => ({
+    ...DEFAULT_WILDFLOWER_SETTINGS,
+    ...(activeTerrain?.terrainData?.flowers || {})
+  }));
+
   // Sync terrain options from the active or selected terrain
   useEffect(() => {
     if (activeTerrain?.terrainData) {
@@ -210,8 +235,52 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
         topography: (td.topography as TopographyPreset) || prev.topography,
         roughness: td.roughness !== undefined ? td.roughness : prev.roughness,
       }));
+      if (td.grass) {
+        setGrassOptions(prev => ({
+          ...prev,
+          ...td.grass
+        }));
+      }
+      if (td.flowers) {
+        setWildflowerOptions(prev => ({
+          ...prev,
+          ...td.flowers
+        }));
+      }
     }
-  }, [activeTerrain?.id, activeTerrain?.terrainData?.roughness, activeTerrain?.terrainData?.topography, activeTerrain?.terrainData?.width, activeTerrain?.terrainData?.depth]);
+  }, [activeTerrain?.id, activeTerrain?.terrainData?.roughness, activeTerrain?.terrainData?.topography, activeTerrain?.terrainData?.width, activeTerrain?.terrainData?.depth, activeTerrain?.terrainData?.grass, activeTerrain?.terrainData?.flowers]);
+
+  const handleUpdateGrass = (patch: Partial<GrassSettings>) => {
+    const nextGrass = { ...grassOptions, ...patch };
+    setGrassOptions(nextGrass);
+
+    if (activeTerrain && activeTerrain.terrainData) {
+      const updatedShape: Shape = {
+        ...activeTerrain,
+        terrainData: {
+          ...activeTerrain.terrainData,
+          grass: nextGrass
+        }
+      };
+      setShapes(prev => prev.map(s => s.id === activeTerrain.id ? updatedShape : s));
+    }
+  };
+
+  const handleUpdateFlowers = (patch: Partial<WildflowerSettings>) => {
+    const nextFlowers = { ...wildflowerOptions, ...patch };
+    setWildflowerOptions(nextFlowers);
+
+    if (activeTerrain && activeTerrain.terrainData) {
+      const updatedShape: Shape = {
+        ...activeTerrain,
+        terrainData: {
+          ...activeTerrain.terrainData,
+          flowers: nextFlowers
+        }
+      };
+      setShapes(prev => prev.map(s => s.id === activeTerrain.id ? updatedShape : s));
+    }
+  };
 
   // Sync road settings when a road is selected
   useEffect(() => {
@@ -318,6 +387,11 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
       roughness: opts.roughness,
       textureId: opts.textureId
     }, targetId);
+
+    if (newTerrain.terrainData) {
+      newTerrain.terrainData.grass = { ...grassOptions };
+      newTerrain.terrainData.flowers = { ...wildflowerOptions };
+    }
 
     if (terrainModifiers.length > 0) {
       const regraded = regradeTerrainWithModifiers(newTerrain, terrainModifiers);
@@ -1047,6 +1121,563 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Procedural Grass Collapsible Section */}
+                <div className="pt-2.5 border-t border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setIsGrassCollapsed(!isGrassCollapsed)}
+                      className="flex items-center gap-1.5 text-left group cursor-pointer"
+                    >
+                      <div className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors">
+                        {isGrassCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                      </div>
+                      <Sprout size={14} className={grassOptions.enabled ? "text-emerald-500" : "text-gray-400"} />
+                      <span className="text-[10px] uppercase font-bold text-gray-700 dark:text-gray-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                        Procedural Grass
+                      </span>
+                      {grassOptions.enabled && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-medium">
+                          Active
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      title={grassOptions.enabled ? "Disable procedural grass" : "Enable procedural grass"}
+                      onClick={() => {
+                        const nextEnabled = !grassOptions.enabled;
+                        handleUpdateGrass({ enabled: nextEnabled });
+                        if (nextEnabled && !activeTerrain) {
+                          handleAddOrUpdateTerrain();
+                        }
+                        if (nextEnabled && isGrassCollapsed) {
+                          setIsGrassCollapsed(false);
+                        }
+                      }}
+                      className={cn(
+                        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                        grassOptions.enabled ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-700"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out",
+                          grassOptions.enabled ? "translate-x-4" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  {!isGrassCollapsed && grassOptions.enabled && (
+                    <div className="space-y-3 bg-gray-50/75 dark:bg-gray-800/60 p-2.5 rounded-xl border border-gray-200/80 dark:border-gray-700/80">
+                      {/* Two-Tone Gradient Pickers */}
+                      <div>
+                        <div className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1.5 flex items-center justify-between">
+                          <span>Two-Tone Gradient</span>
+                          <span className="text-[9px] text-gray-600 dark:text-gray-400">Root → Tip</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[9px] text-gray-600 dark:text-gray-400 block mb-0.5">Root Color</span>
+                            <div className="flex items-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-1">
+                              <input
+                                type="color"
+                                value={grassOptions.rootColor}
+                                onChange={(e) => handleUpdateGrass({ rootColor: e.target.value })}
+                                className="w-5 h-5 rounded border-0 p-0 cursor-pointer bg-transparent"
+                              />
+                              <input
+                                type="text"
+                                value={grassOptions.rootColor}
+                                onChange={(e) => handleUpdateGrass({ rootColor: e.target.value })}
+                                className="w-full text-[10px] font-mono uppercase bg-transparent outline-none text-gray-800 dark:text-gray-200"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-gray-600 dark:text-gray-400 block mb-0.5">Tip Color</span>
+                            <div className="flex items-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-1">
+                              <input
+                                type="color"
+                                value={grassOptions.tipColor}
+                                onChange={(e) => handleUpdateGrass({ tipColor: e.target.value })}
+                                className="w-5 h-5 rounded border-0 p-0 cursor-pointer bg-transparent"
+                              />
+                              <input
+                                type="text"
+                                value={grassOptions.tipColor}
+                                onChange={(e) => handleUpdateGrass({ tipColor: e.target.value })}
+                                className="w-full text-[10px] font-mono uppercase bg-transparent outline-none text-gray-800 dark:text-gray-200"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex gap-1 mt-2">
+                          {[
+                            { name: 'Lawn', root: '#1e3f20', tip: '#88bb44' },
+                            { name: 'Meadow', root: '#284e1b', tip: '#a3e635' },
+                            { name: 'Autumn', root: '#362b18', tip: '#d97706' },
+                            { name: 'Alpine', root: '#8f9992', tip: '#aec1b5' },
+                            { name: 'Savanna', root: '#42381c', tip: '#eab308' },
+                          ].map(preset => (
+                            <button
+                              key={preset.name}
+                              type="button"
+                              onClick={() => handleUpdateGrass({ rootColor: preset.root, tipColor: preset.tip })}
+                              className="px-1.5 py-0.5 rounded text-[9px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-emerald-500 text-gray-700 dark:text-gray-300 transition-colors cursor-pointer"
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Density Slider */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Density</label>
+                          <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {grassOptions.density} / m²
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="25"
+                          step="1"
+                          value={grassOptions.density}
+                          onChange={(e) => handleUpdateGrass({ density: parseInt(e.target.value, 10) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
+                        <div className="flex justify-between text-[8px] text-gray-600 dark:text-gray-400 font-mono mt-0.5">
+                          <span>Sparse (1)</span>
+                          <span>Balanced (8)</span>
+                          <span>Dense (25)</span>
+                        </div>
+                      </div>
+
+                      {/* Base Height Slider */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Base Height</label>
+                          <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {grassOptions.baseHeight.toFixed(2)} m
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.05"
+                          max="1.20"
+                          step="0.01"
+                          value={grassOptions.baseHeight}
+                          onChange={(e) => handleUpdateGrass({ baseHeight: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
+                      </div>
+
+                      {/* Height Variance Slider */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Height Variance</label>
+                          <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {(grassOptions.heightVariance * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.0"
+                          max="1.0"
+                          step="0.05"
+                          value={grassOptions.heightVariance}
+                          onChange={(e) => handleUpdateGrass({ heightVariance: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
+                      </div>
+
+                      {/* Max Slope Angle Slider */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Max Slope Angle</label>
+                          <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {grassOptions.maxSlopeAngle}°
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="10"
+                          max="70"
+                          step="1"
+                          value={grassOptions.maxSlopeAngle}
+                          onChange={(e) => handleUpdateGrass({ maxSlopeAngle: parseInt(e.target.value, 10) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
+                        <div className="flex justify-between text-[8px] text-gray-600 dark:text-gray-400 font-mono mt-0.5">
+                          <span>Gentle (15°)</span>
+                          <span>Standard (35°)</span>
+                          <span>Steep (60°)</span>
+                        </div>
+                      </div>
+
+                      {/* Wind Animation Section */}
+                      <div className="pt-2 border-t border-gray-200/80 dark:border-gray-700/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Wind size={13} className={grassOptions.animate !== false ? "text-emerald-500" : "text-gray-400"} />
+                            <label className="text-[10px] font-medium text-gray-700 dark:text-gray-300">
+                              Wind Animation
+                            </label>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextAnimate = !(grassOptions.animate !== false);
+                              const patch: Partial<GrassSettings> = { animate: nextAnimate };
+                              if (nextAnimate) {
+                                patch.animationStrength = 0.08;
+                                patch.windStrength = 0.08;
+                              }
+                              handleUpdateGrass(patch);
+                            }}
+                            className={cn(
+                              "relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                              grassOptions.animate !== false ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-700"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out",
+                                grassOptions.animate !== false ? "translate-x-3" : "translate-x-0"
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        {grassOptions.animate !== false && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center">
+                              <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Animation Strength</label>
+                              <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                {Math.round(((grassOptions.animationStrength ?? grassOptions.windStrength ?? 0.08) * 100))}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.01"
+                              max="1.00"
+                              step="0.01"
+                              value={grassOptions.animationStrength ?? grassOptions.windStrength ?? 0.08}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                handleUpdateGrass({ animationStrength: val, windStrength: val });
+                              }}
+                              className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                            />
+                            <div className="flex justify-between text-[8px] text-gray-500 dark:text-gray-400 font-mono">
+                              <span>Gentle (5%)</span>
+                              <span>Breeze (25%)</span>
+                              <span>Strong (100%)</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Procedural Wild Flowers Collapsible Section */}
+                <div className="pt-2.5 border-t border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setIsFlowersCollapsed(!isFlowersCollapsed)}
+                      className="flex items-center gap-1.5 text-left group cursor-pointer"
+                    >
+                      <div className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors">
+                        {isFlowersCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                      </div>
+                      <Flower2 size={14} className={wildflowerOptions.enabled ? "text-rose-500" : "text-gray-400"} />
+                      <span className="text-[10px] uppercase font-bold text-gray-700 dark:text-gray-300 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
+                        Procedural Wild Flowers
+                      </span>
+                      {wildflowerOptions.enabled && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-medium">
+                          Active
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      title={wildflowerOptions.enabled ? "Disable procedural wild flowers" : "Enable procedural wild flowers"}
+                      onClick={() => {
+                        const nextEnabled = !wildflowerOptions.enabled;
+                        handleUpdateFlowers({ enabled: nextEnabled });
+                        if (nextEnabled && !activeTerrain) {
+                          handleAddOrUpdateTerrain();
+                        }
+                        if (nextEnabled && isFlowersCollapsed) {
+                          setIsFlowersCollapsed(false);
+                        }
+                      }}
+                      className={cn(
+                        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                        wildflowerOptions.enabled ? "bg-rose-600" : "bg-gray-300 dark:bg-gray-700"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out",
+                          wildflowerOptions.enabled ? "translate-x-4" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  {!isFlowersCollapsed && wildflowerOptions.enabled && (
+                    <div className="space-y-3 bg-gray-50/75 dark:bg-gray-800/60 p-2.5 rounded-xl border border-gray-200/80 dark:border-gray-700/80">
+                      {/* Meadow Presets */}
+                      <div>
+                        <span className="text-[9px] text-gray-500 dark:text-gray-400 font-medium block mb-1">Meadow Presets</span>
+                        <div className="grid grid-cols-3 gap-1">
+                          {WILDFLOWER_PRESETS.map(preset => {
+                            const isPresetActive = wildflowerOptions.flowerType === preset.type;
+                            return (
+                              <button
+                                key={preset.name}
+                                type="button"
+                                onClick={() => handleUpdateFlowers({
+                                  primaryColor: preset.primary,
+                                  secondaryColor: preset.secondary,
+                                  stemColor: preset.stem,
+                                  flowerType: preset.type as any,
+                                  ...(preset.density !== undefined ? { density: preset.density } : {}),
+                                  ...(preset.baseHeight !== undefined ? { baseHeight: preset.baseHeight } : {}),
+                                  ...(preset.animationStrength !== undefined ? { animationStrength: preset.animationStrength } : {})
+                                })}
+                                className={cn(
+                                  "px-1.5 py-1 rounded text-[9px] border transition-colors cursor-pointer flex items-center justify-between",
+                                  isPresetActive 
+                                    ? "bg-rose-50 dark:bg-rose-950/40 border-rose-500 text-rose-700 dark:text-rose-300 font-semibold ring-1 ring-rose-500/30"
+                                    : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-rose-400 text-gray-700 dark:text-gray-300"
+                                )}
+                              >
+                                <span className="truncate">{preset.name}</span>
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0 ml-1 border border-black/10" style={{ backgroundColor: preset.primary }} />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Petal & Stem Colors */}
+                      <div>
+                        <div className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1.5 flex items-center justify-between">
+                          <span>Colors & Foliage</span>
+                          <span className="text-[9px] text-gray-500 dark:text-gray-400">Petals & Stems</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <div>
+                            <span className="text-[9px] text-gray-500 dark:text-gray-400 block mb-0.5 truncate">Primary</span>
+                            <div className="flex items-center gap-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-1">
+                              <input
+                                type="color"
+                                value={wildflowerOptions.primaryColor}
+                                onChange={(e) => handleUpdateFlowers({ primaryColor: e.target.value })}
+                                className="w-4 h-4 rounded border-0 p-0 cursor-pointer bg-transparent shrink-0"
+                              />
+                              <input
+                                type="text"
+                                value={wildflowerOptions.primaryColor}
+                                onChange={(e) => handleUpdateFlowers({ primaryColor: e.target.value })}
+                                className="w-full text-[9px] font-mono uppercase bg-transparent outline-none text-gray-800 dark:text-gray-200"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-gray-500 dark:text-gray-400 block mb-0.5 truncate">Accent</span>
+                            <div className="flex items-center gap-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-1">
+                              <input
+                                type="color"
+                                value={wildflowerOptions.secondaryColor}
+                                onChange={(e) => handleUpdateFlowers({ secondaryColor: e.target.value })}
+                                className="w-4 h-4 rounded border-0 p-0 cursor-pointer bg-transparent shrink-0"
+                              />
+                              <input
+                                type="text"
+                                value={wildflowerOptions.secondaryColor}
+                                onChange={(e) => handleUpdateFlowers({ secondaryColor: e.target.value })}
+                                className="w-full text-[9px] font-mono uppercase bg-transparent outline-none text-gray-800 dark:text-gray-200"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-gray-500 dark:text-gray-400 block mb-0.5 truncate">Stem</span>
+                            <div className="flex items-center gap-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-1">
+                              <input
+                                type="color"
+                                value={wildflowerOptions.stemColor}
+                                onChange={(e) => handleUpdateFlowers({ stemColor: e.target.value })}
+                                className="w-4 h-4 rounded border-0 p-0 cursor-pointer bg-transparent shrink-0"
+                              />
+                              <input
+                                type="text"
+                                value={wildflowerOptions.stemColor}
+                                onChange={(e) => handleUpdateFlowers({ stemColor: e.target.value })}
+                                className="w-full text-[9px] font-mono uppercase bg-transparent outline-none text-gray-800 dark:text-gray-200"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Density Slider (allows density < 1 / m²) */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Flower Density</label>
+                          <span className="font-mono text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
+                            {wildflowerOptions.density < 1 ? wildflowerOptions.density.toFixed(1) : (Number.isInteger(wildflowerOptions.density) ? wildflowerOptions.density : wildflowerOptions.density.toFixed(1))} / m²
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="15"
+                          step="0.1"
+                          value={wildflowerOptions.density}
+                          onChange={(e) => handleUpdateFlowers({ density: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                        <div className="flex justify-between text-[8px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                          <span>Sparse (0.1)</span>
+                          <span>Meadow (4)</span>
+                          <span>Abundant (15)</span>
+                        </div>
+                      </div>
+
+                      {/* Base Height Slider (Low-lying flowers: 0.05m to 0.45m, default 0.10m) */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Low-Lying Height</label>
+                          <span className="font-mono text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
+                            {(wildflowerOptions.baseHeight * 100).toFixed(0)} cm ({wildflowerOptions.baseHeight.toFixed(2)}m)
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.05"
+                          max="0.45"
+                          step="0.01"
+                          value={wildflowerOptions.baseHeight}
+                          onChange={(e) => handleUpdateFlowers({ baseHeight: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                      </div>
+
+                      {/* Height Variance Slider */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Height Variance</label>
+                          <span className="font-mono text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
+                            {(wildflowerOptions.heightVariance * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.0"
+                          max="1.0"
+                          step="0.05"
+                          value={wildflowerOptions.heightVariance}
+                          onChange={(e) => handleUpdateFlowers({ heightVariance: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                      </div>
+
+                      {/* Max Slope Angle Slider */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Max Slope Angle</label>
+                          <span className="font-mono text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
+                            {wildflowerOptions.maxSlopeAngle}°
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="10"
+                          max="70"
+                          step="1"
+                          value={wildflowerOptions.maxSlopeAngle}
+                          onChange={(e) => handleUpdateFlowers({ maxSlopeAngle: parseInt(e.target.value, 10) })}
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                        />
+                      </div>
+
+                      {/* Wind Animation Section */}
+                      <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <Wind size={13} className={wildflowerOptions.animate !== false ? "text-rose-500" : "text-gray-400"} />
+                            <label className="text-[10px] font-medium text-gray-700 dark:text-gray-300">
+                              Wind Animation
+                            </label>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextAnimate = !(wildflowerOptions.animate !== false);
+                              const patch: Partial<WildflowerSettings> = { animate: nextAnimate };
+                              if (nextAnimate) {
+                                patch.animationStrength = 0.02;
+                              }
+                              handleUpdateFlowers(patch);
+                            }}
+                            className={cn(
+                              "relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                              wildflowerOptions.animate !== false ? "bg-rose-600" : "bg-gray-300 dark:bg-gray-700"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out",
+                                wildflowerOptions.animate !== false ? "translate-x-3" : "translate-x-0"
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        {wildflowerOptions.animate !== false && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[9px] text-gray-500 dark:text-gray-400">Animation Strength</span>
+                              <span className="font-mono text-[10px] text-rose-600 dark:text-rose-400 font-medium">
+                                {Math.round(((wildflowerOptions.animationStrength ?? 0.02) * 100))}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.01"
+                              max="1.00"
+                              step="0.01"
+                              value={wildflowerOptions.animationStrength ?? 0.02}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                handleUpdateFlowers({ animationStrength: val });
+                              }}
+                              className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                            />
+                            <div className="flex justify-between text-[8px] text-gray-500 dark:text-gray-400 font-mono">
+                              <span>Gentle (5%)</span>
+                              <span>Breeze (25%)</span>
+                              <span>Strong (100%)</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
