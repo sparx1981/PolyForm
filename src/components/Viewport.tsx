@@ -1,4 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
+import { SceneWeather } from './graphics/SceneWeather';
+import { InstancedVegetation } from './graphics/InstancedVegetation';
+import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
+import { batchablePlant } from '../lib/graphics/vegetationEligibility';
 import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
 import { 
@@ -1851,6 +1855,7 @@ function resolveGroundPlaneFloorHit(raycaster: THREE.Raycaster, scene: THREE.Sce
 }
 
 function Scene() {
+  const { graphicsSettings } = useApp();
   const { 
     activeTool, 
     setActiveTool,
@@ -2042,6 +2047,11 @@ function Scene() {
   } = useApp();
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
+  const batchedPlants = useMemo(() => {
+    const selected = new Set([...selectedIds, ...(selectedId ? [selectedId] : [])]);
+    return shapes.filter(shape => batchablePlant(shape, selected, tags, graphicsSettings.vegetation.instancing, activeTool));
+  }, [shapes, selectedIds, selectedId, tags, graphicsSettings.vegetation.instancing, activeTool]);
+  const batchedPlantIds = useMemo(() => new Set(batchedPlants.map(shape => shape.id)), [batchedPlants]);
 
   // Shared by every click path that can complete a "Pick Sun Centre"
   // pick (Shape mesh, kernel face, the floor plane, and the always-
@@ -9834,6 +9844,8 @@ function Scene() {
       ))}
 
       <Effects />
+      <SceneWeather />
+      <InstancedVegetation plants={batchedPlants} onSelect={handleMeshClick} onContextMenu={handleContextMenu} />
 
       {axisIndicatorEnabled && (
         <group>
@@ -9943,6 +9955,7 @@ function Scene() {
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;
+        if (batchedPlantIds.has(shape.id)) return null;
         if (shape.tags?.includes('timber-frame') || shape.id.startsWith('tf-')) {
           // Rendered via InstancedTimberFraming for batch instancing performance
           return null;
@@ -10345,7 +10358,7 @@ function Scene() {
           metalnessMap: getCachedPBRMapTexture(shape.metalnessMapUrl),
           aoMap: getCachedPBRMapTexture(shape.aoMapUrl),
           aoMapIntensity: shape.aoMapUrl ? (shape.aoMapIntensity ?? 1) : undefined,
-          displacementMap: getCachedPBRMapTexture(shape.displacementMapUrl),
+          displacementMap: shape.surfaceDepthEnabled === undefined ? getCachedPBRMapTexture(shape.displacementMapUrl) : null,
           displacementScale: shape.displacementMapUrl ? (shape.displacementScale ?? 0.1) : undefined,
         };
 
@@ -10434,8 +10447,7 @@ function Scene() {
         );
 
         if ((shape.type === 'tree' || shape.type === 'bush') && shape.plantSpeciesId) {
-          const plantSpecies = PLANT_SPECIES_CATALOG.find(s => s.id === shape.plantSpeciesId);
-          if (plantSpecies?.modelType === 'fbx' || plantSpecies?.modelType === 'usd' || plantSpecies?.modelType === 'gltf') {
+          {
             return (
               <PlantModelMesh
                 key={shape.id}
@@ -10482,6 +10494,7 @@ function Scene() {
 
         return (
           <mesh key={shape.id} {...meshProps}>
+          {shape.surfaceDepthEnabled && shape.displacementMapUrl && <SurfaceDepthBinding shape={shape} />}
           {(shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism') && shape.bevelAmount ? (
             <PolyGeometry
               vertices={regularPolygonVertices(

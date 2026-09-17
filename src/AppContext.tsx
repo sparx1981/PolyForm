@@ -14,6 +14,7 @@ import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
 import { TimberFrameParams, TimberFrameRecomputeState, WalkModePhase } from './types';
 import { createWalkBridge } from './lib/walkMode/inputState';
 import { MOVEMENT_SPEED_RANGE, MOUSE_SENSITIVITY_RANGE } from './lib/walkMode/constants';
+import { defaultGraphicsSettings, normalizeGraphicsSettings } from './lib/graphics/graphicsSettings';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -194,6 +195,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [openMaterialsSignal, setOpenMaterialsSignal] = useState(0);
   const [bannerColor, setBannerColor] = useState('#0063A3');
   const [customMaterials, setCustomMaterials] = useState<any[]>([]);
+  const [graphicsSettings, setGraphicsSettings] = useState(defaultGraphicsSettings);
   const [currentModelId, setCurrentModelId] = useState<string | null>(null);
   const [currentModelName, setCurrentModelName] = useState<string | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -1004,6 +1006,7 @@ console.log("Created rectangle:", myRect.id);`);
           tags: data.tags || [],
           scenes: data.scenes || [],
           customMaterials: data.customMaterials || [],
+          graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings),
           animations: data.animations || [],
           timberFrameParams: data.timberFrameParams || null,
           terrainModifiers: data.terrainModifiers || []
@@ -1020,6 +1023,7 @@ console.log("Created rectangle:", myRect.id);`);
         if (data.tags) setTags(data.tags);
         if (data.scenes) setScenes(data.scenes);
         if (data.customMaterials) setCustomMaterials(data.customMaterials);
+        setGraphicsSettings(normalizeGraphicsSettings(data.graphicsSettings));
         if (data.animations) setAnimations(data.animations);
         if (data.notes) setNotes(data.notes);
         if (data.customLights) setCustomLights(data.customLights);
@@ -1118,7 +1122,7 @@ console.log("Created rectangle:", myRect.id);`);
     // kernelRevision stands in for the graph itself: the graph is mutated in
     // place, so hashing it by reference would never change and a
     // geometry-only edit would never be saved.
-    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision, timberFrameParams, terrainModifiers };
+    const currentState = { shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, kernelRevision, timberFrameParams, terrainModifiers };
     const currentStateHash = JSON.stringify(currentState);
 
     if (currentStateHash === syncState.lastStateHash) {
@@ -1160,6 +1164,7 @@ console.log("Created rectangle:", myRect.id);`);
           tags,
           scenes,
           customMaterials,
+          graphicsSettings,
           animations,
           notes,
           customLights,
@@ -1237,7 +1242,7 @@ console.log("Created rectangle:", myRect.id);`);
         syncState.retryTimeoutId = null;
       }
     };
-  }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers]);
+  }, [shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers]);
 
   const retrySync = useCallback(() => {
     retrySyncRef.current?.();
@@ -1888,6 +1893,7 @@ console.log("Created rectangle:", myRect.id);`);
     setActiveTagId(null);
     setScenes([]);
     setCustomMaterials([]);
+    setGraphicsSettings(defaultGraphicsSettings());
     setNotes([]);
     setCustomLights([]);
     setAnimations([]);
@@ -2043,6 +2049,8 @@ console.log("Created rectangle:", myRect.id);`);
       bannerColor,
       setBannerColor,
       customMaterials,
+      graphicsSettings,
+      setGraphicsSettings,
       setCustomMaterials,
       clearShapes,
       currentModelId,

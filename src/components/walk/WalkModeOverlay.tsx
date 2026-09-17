@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../AppContext';
 import { TOUCH_JOYSTICK_RADIUS_PX, TOUCH_JOYSTICK_DEADZONE, HUD_FADE_MS } from '../../lib/walkMode/constants';
-
-const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+import { useIsTouchOnlyDevice } from '../../lib/walkMode/deviceDetection';
 
 /**
  * The DOM half of Walk Mode (spec §5.1/§5.4): a plain sibling of the R3F
@@ -15,6 +14,7 @@ export default function WalkModeOverlay() {
   const bridge = walkBridgeRef.current;
   const [hudVisible, setHudVisible] = useState(true);
   const hudTimerRef = useRef<number | null>(null);
+  const isTouchDevice = useIsTouchOnlyDevice();
 
   useEffect(() => {
     if (walkModePhase !== 'walking') {
@@ -46,6 +46,12 @@ export default function WalkModeOverlay() {
           <div className="bg-gray-900/90 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-xl border border-gray-700 text-center">
             Click a spot on the floor to start walking
           </div>
+        </div>
+      )}
+
+      {walkModePhase === 'walking' && !isTouchDevice && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-1.5 h-1.5 rounded-full bg-white/70 shadow-[0_0_2px_rgba(0,0,0,0.8)]" />
         </div>
       )}
 

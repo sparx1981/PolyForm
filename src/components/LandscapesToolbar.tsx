@@ -1,4 +1,5 @@
 import React, { useState, useRef, createContext, useContext, useEffect } from 'react';
+import { VegetationControls } from './graphics/VegetationControls';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -2505,6 +2506,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             {/* 5. Vegetation & Flora Species Picker (Trees / Bushes & Shrubs) */}
             {activeTier === 'vegetation' && (
               <div className="space-y-3.5">
+                <VegetationControls />
                 <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg gap-1">
                   <button
                     type="button"

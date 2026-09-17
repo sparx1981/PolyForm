@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { VegetationControls } from './graphics/VegetationControls';
 import {
   MousePointer2,
   Lasso,
@@ -2008,6 +2009,7 @@ export default function UnifiedToolRail() {
 
           {activeLandscapeCategory === 'plant' && (
             <div className="space-y-3">
+              <VegetationControls />
               <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium">
                 <span>{activeTool === 'tree' ? 'Available Tree Species' : 'Bushes, Grasses & Flora'}</span>
                 <span className="text-[10px] bg-trimble-blue/15 text-trimble-blue px-2 py-0.5 rounded-full font-bold">

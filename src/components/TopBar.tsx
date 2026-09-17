@@ -1,3 +1,4 @@
+import { normalizeGraphicsSettings } from '../lib/graphics/graphicsSettings';
 import { 
   Menu, 
   User, 
@@ -105,6 +106,8 @@ export default function TopBar() {
       scenes,
       setScenes,
       customMaterials,
+      graphicsSettings,
+      setGraphicsSettings,
       setCustomMaterials,
       animations,
       setAnimations,
@@ -200,6 +203,7 @@ export default function TopBar() {
       tags: tags || [],
       scenes: scenes || [],
       customMaterials: customMaterials || [],
+      graphicsSettings,
       animations: animations || [],
       notes: notes || [],
       customLights: customLights || [],
@@ -260,6 +264,7 @@ export default function TopBar() {
               tags: cleanFirestoreData(tags || []),
               scenes: cleanFirestoreData(scenes || []),
               customMaterials: cleanFirestoreData(customMaterials || []),
+              graphicsSettings: cleanFirestoreData(graphicsSettings),
               animations: cleanFirestoreData(animations || []),
               notes: cleanFirestoreData(notes || []),
               customLights: cleanFirestoreData(customLights || []),
@@ -274,6 +279,7 @@ export default function TopBar() {
               tags,
               scenes,
               customMaterials,
+              graphicsSettings,
               notes,
               customLights,
               ...(previewUrl ? { previewUrl } : {}),
@@ -403,6 +409,7 @@ export default function TopBar() {
               scenes: cleanFirestoreData(scenes || []),
               customMaterials: cleanFirestoreData(customMaterials || []),
               animations: cleanFirestoreData(animations || []),
+              graphicsSettings: cleanFirestoreData(graphicsSettings),
               notes: cleanFirestoreData(notes || []),
               customLights: cleanFirestoreData(customLights || []),
               updatedAt: serverTimestamp(),
@@ -601,6 +608,7 @@ export default function TopBar() {
     setTags(model.tags || []);
     setScenes(model.scenes || []);
     if (model.customMaterials) setCustomMaterials(model.customMaterials);
+    setGraphicsSettings(normalizeGraphicsSettings(model.graphicsSettings));
     if (model.animations) setAnimations(model.animations);
     if (model.notes) setNotes(model.notes);
     if (model.customLights) setCustomLights(model.customLights);

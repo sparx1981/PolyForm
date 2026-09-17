@@ -1,6 +1,7 @@
 import type { KernelArcHost } from './tools/kernelArcHost';
 import type * as THREE from 'three';
 import type { FaceId } from './lib/geometry/types';
+import type { GraphicsSettings } from './lib/graphics/graphicsSettings';
 
 // Defined here (not in AppContext.tsx, which re-exports them for existing
 // importers) because types.ts is imported by the entire geometry
@@ -180,6 +181,9 @@ export interface Shape {
   aoMapIntensity?: number;
   displacementMapUrl?: string;
   displacementScale?: number;
+  displacementBias?: number;
+  surfaceDepthEnabled?: boolean;
+  surfaceDepthSegments?: number;
   materialPreset?: string;
   isParametric?: boolean;
   parametricData?: any;
@@ -307,6 +311,8 @@ export interface ChatMessage {
 }
 
 export interface AppState {
+  graphicsSettings: GraphicsSettings;
+  setGraphicsSettings: (settings: GraphicsSettings | ((previous: GraphicsSettings) => GraphicsSettings)) => void;
   activeTool: ToolType;
   setActiveTool: (tool: ToolType) => void;
   measurements: string;
@@ -802,6 +808,7 @@ export interface DeveloperScript {
 }
 
 export interface SavedModel {
+  graphicsSettings?: GraphicsSettings;
   id: string;
   userId: string;
   userName?: string;

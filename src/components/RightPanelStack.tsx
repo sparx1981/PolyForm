@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { WeatherControls } from './graphics/WeatherControls';
+import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
 import * as THREE from 'three';
 import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
@@ -2508,6 +2510,7 @@ export default function RightPanelStack() {
             onToggle={() => togglePanel('materials')}
           >
             <div className="space-y-4">
+              <SurfaceDepthControls />
               <div className="grid grid-cols-5 gap-2">
                 {COLORS.map((color, idx) => (
                   <div 
@@ -3302,6 +3305,7 @@ export default function RightPanelStack() {
                 </div>
               </SubSection>
 
+              <SubSection title="Weather"><WeatherControls /></SubSection>
               <SubSection title="Environment">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Environment Map</label>

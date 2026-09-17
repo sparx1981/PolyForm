@@ -69,6 +69,14 @@ beforeEach(() => {
 });
 
 describe('AppContext / useApp', () => {
+  it('resets graphics state with a new design', () => {
+    const { result } = renderApp();
+    act(() => result.current.setGraphicsSettings(previous => ({ ...previous, weather: { ...previous.weather, enabled: true } })));
+    expect(result.current.graphicsSettings.weather.enabled).toBe(true);
+    act(() => result.current.clearShapes());
+    expect(result.current.graphicsSettings.weather.enabled).toBe(false);
+    expect(result.current.graphicsSettings.vegetation.instancing).toBe(true);
+  });
   it('throws when used outside of AppProvider', () => {
     // useApp() throws synchronously during render (not at call time), so
     // the throw surfaces from renderHook() itself.

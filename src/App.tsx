@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { normalizeGraphicsSettings } from './lib/graphics/graphicsSettings';
 import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
@@ -228,6 +229,7 @@ function AppContent() {
       setTagsSilent,
       setScenesSilent,
       setCustomMaterialsSilent,
+      setGraphicsSettings,
       setAnimationsSilent,
       setCustomLightsSilent,
       setNotesSilent,
@@ -372,6 +374,7 @@ function AppContent() {
             setTagsSilent(data.tags || []);
             setScenesSilent(data.scenes || []);
             setCustomMaterialsSilent(data.customMaterials || []);
+            setGraphicsSettings(normalizeGraphicsSettings(data.graphicsSettings));
             setAnimationsSilent(data.animations || []);
             if (setCustomLightsSilent) setCustomLightsSilent(data.customLights || []);
             if (setNotesSilent) setNotesSilent(data.notes || []);
@@ -396,7 +399,7 @@ function AppContent() {
       if (user) {
         handleJoin();
       }
-    }, [user, updateModelId, setShapesSilent, setTagsSilent, setScenesSilent, setCustomMaterialsSilent, setAnimationsSilent, setCustomLightsSilent, setNotesSilent, setCurrentModelName]);
+    }, [user, updateModelId, setShapesSilent, setTagsSilent, setScenesSilent, setCustomMaterialsSilent, setGraphicsSettings, setAnimationsSilent, setCustomLightsSilent, setNotesSilent, setCurrentModelName]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {

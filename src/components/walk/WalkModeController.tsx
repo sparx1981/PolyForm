@@ -27,6 +27,8 @@ interface SavedCameraState {
   quaternion: THREE.Quaternion;
 }
 
+import { isTouchOnlyDevice } from '../../lib/walkMode/deviceDetection';
+
 interface WalkModeControllerProps {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -42,7 +44,6 @@ interface WalkModeControllerProps {
   onToast?: (msg: string) => void;
 }
 
-const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 const _touchLookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
 
@@ -207,7 +208,17 @@ export default function WalkModeController({
     controls.addEventListener('unlock', onUnlock);
     window.addEventListener('blur', onBlur);
 
-    bridge.requestResume = () => controls.lock();
+    bridge.requestResume = () => {
+      if (!isTouchOnlyDevice()) {
+        try {
+          controls.lock();
+        } catch {
+          setPhase('walking');
+        }
+      } else {
+        setPhase('walking');
+      }
+    };
     bridge.requestExit = () => exitWalkMode();
 
     return () => {
@@ -284,7 +295,13 @@ export default function WalkModeController({
       camera.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
 
       setPhase('walking');
-      if (!isTouchDevice) controlsRef.current?.lock();
+      if (!isTouchOnlyDevice()) {
+        try {
+          controlsRef.current?.lock();
+        } catch (err) {
+          console.warn('[WalkMode] Initial pointer lock failed:', err);
+        }
+      }
     };
 
     dom.addEventListener('pointermove', onMove);
@@ -296,6 +313,64 @@ export default function WalkModeController({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
+
+  // --- Walking phase desktop interaction:
+  // 1. If canvas is clicked while walking and pointer is unlocked, re-lock.
+  // 2. Fallback pointer drag-to-look if pointer lock is not currently held.
+  useEffect(() => {
+    if (phase !== 'walking') return;
+    const dom = gl.domElement;
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    const onWalkingClick = () => {
+      if (!isTouchOnlyDevice() && controlsRef.current && !controlsRef.current.isLocked) {
+        try {
+          controlsRef.current.lock();
+        } catch (err) {
+          console.warn('[WalkMode] Pointer lock on click failed:', err);
+        }
+      }
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      // If pointer is locked, PointerLockControls handles mouse look natively on document mousemove
+      if (controlsRef.current?.isLocked) return;
+      if (isDragging) {
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        bridge.inputState.addLookDelta(dx, dy);
+      }
+    };
+
+    const onPointerUp = () => {
+      isDragging = false;
+    };
+
+    dom.addEventListener('click', onWalkingClick);
+    dom.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+
+    return () => {
+      dom.removeEventListener('click', onWalkingClick);
+      dom.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, [phase, gl.domElement, bridge]);
 
   // --- Per-frame: placement marker while placing, physics + camera while walking.
   useFrame((_, rawDt) => {
@@ -326,6 +401,13 @@ export default function WalkModeController({
       _touchLookEuler.setFromQuaternion(camera.quaternion);
       _touchLookEuler.y -= dx * TOUCH_LOOK_DEG_PER_PX * (Math.PI / 180) * mouseSensitivity;
       _touchLookEuler.x -= dy * TOUCH_LOOK_DEG_PER_PX * (Math.PI / 180) * mouseSensitivity;
+      _touchLookEuler.x = THREE.MathUtils.clamp(_touchLookEuler.x, -PITCH_LIMIT, PITCH_LIMIT);
+      camera.quaternion.setFromEuler(_touchLookEuler);
+    }
+
+    // Enforce pitch limits across both native PointerLockControls and manual look
+    _touchLookEuler.setFromQuaternion(camera.quaternion);
+    if (_touchLookEuler.x < -PITCH_LIMIT || _touchLookEuler.x > PITCH_LIMIT) {
       _touchLookEuler.x = THREE.MathUtils.clamp(_touchLookEuler.x, -PITCH_LIMIT, PITCH_LIMIT);
       camera.quaternion.setFromEuler(_touchLookEuler);
     }

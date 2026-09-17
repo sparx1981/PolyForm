@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { normalizeGraphicsSettings, defaultGraphicsSettings } from '../lib/graphics/graphicsSettings';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -54,7 +55,8 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     setShapes, 
     setTags, 
     setScenes, 
-    setCustomMaterials, 
+    setCustomMaterials,
+    setGraphicsSettings,
     setCurrentModelId, 
     setCurrentModelName,
     currentModelId,
@@ -294,6 +296,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         setScenes([]);
         setAnimations([]);
         setCustomMaterials([]);
+        setGraphicsSettings(defaultGraphicsSettings());
       }
       
       setDeleteConfirmId(null);
@@ -363,6 +366,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     setScenes(model.scenes || []);
     setAnimations(model.animations || []);
     if (model.customMaterials) setCustomMaterials(model.customMaterials);
+    setGraphicsSettings(normalizeGraphicsSettings(model.graphicsSettings));
     setCurrentModelId(model.id);
     setCurrentModelName(model.name);
     onClose();

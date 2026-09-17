@@ -189,7 +189,7 @@ export const Effects: React.FC = () => {
             />
           );
         }
-        return <ParticleSystem key={anim.id} {...anim} />;
+        return <ParticleSystem key={anim.id} {...anim} type={anim.type as ParticleSystemProps['type']} />;
       })}
     </group>
   );
