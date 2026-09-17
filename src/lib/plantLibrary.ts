@@ -15,6 +15,29 @@ export interface PlantSpecies {
   thumbnailColor?: string;
 }
 
+const ADDITIONAL_PROCEDURAL_SPECIES: PlantSpecies[] = [
+  {
+    id: 'norway_spruce', name: 'Norway Spruce', category: 'tree', scientificName: 'Picea abies',
+    description: 'Tiered evergreen with a narrow spire and broad lower needle boughs.',
+    defaultHeight: 10, defaultSpread: 4, foliageColor: '#244c38', trunkColor: '#654533', modelType: 'procedural'
+  },
+  {
+    id: 'flowering_cherry', name: 'Flowering Cherry', category: 'tree', scientificName: 'Prunus serrulata',
+    description: 'Spreading branching crown with pale pink spring blossom clusters.',
+    defaultHeight: 5, defaultSpread: 5.5, foliageColor: '#e9b8ca', trunkColor: '#594039', modelType: 'procedural'
+  },
+  {
+    id: 'creeping_juniper', name: 'Creeping Juniper', category: 'bush', scientificName: 'Juniperus horizontalis',
+    description: 'Low spreading blue-green evergreen with radial woody stems.',
+    defaultHeight: 0.45, defaultSpread: 1.8, foliageColor: '#567c79', modelType: 'procedural'
+  },
+  {
+    id: 'rosemary_shrub', name: 'Rosemary', category: 'bush', scientificName: 'Salvia rosmarinus',
+    description: 'Upright aromatic shrub with narrow silvery green needle sprays.',
+    defaultHeight: 1.1, defaultSpread: 0.9, foliageColor: '#678570', modelType: 'procedural'
+  },
+];
+
 export const PLANT_SPECIES_CATALOG: PlantSpecies[] = [
   // --- BUSHES & GROUND COVER ---
   {
@@ -198,5 +221,6 @@ export const PLANT_SPECIES_CATALOG: PlantSpecies[] = [
     trunkColor: '#4a3728',
     modelType: 'procedural',
     thumbnailColor: '#4ade80'
-  }
+  },
+  ...ADDITIONAL_PROCEDURAL_SPECIES
 ];

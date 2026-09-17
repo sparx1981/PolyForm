@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Shape } from '../types';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { loadPlantGLTF, loadPlantFBX, loadPlantUSD, getCachedPlantTexture } from '../lib/plantModelLoader';
 import { createTreeGeometry, createBushGeometry } from '../lib/landscapeGeometry';
+import { VegetationWind } from '../lib/graphics/VegetationWind';
 
 interface PlantModelMeshProps {
   shape: Shape;
@@ -13,57 +14,44 @@ interface PlantModelMeshProps {
   selectionHighlight?: React.ReactNode;
 }
 
-/**
- * Attaches gentle wind foliage shader animation to a standard material
- * similar to the wind wave calculation on Procedural Grass.
- */
-function applyFoliageWindAnimation(mat: THREE.MeshStandardMaterial, windStrength: number = 0.07, heightThreshold: number = 0.8) {
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = { value: 0 };
-    shader.uniforms.uWindStrength = { value: windStrength };
-    shader.vertexShader = `
-      uniform float uTime;
-      uniform float uWindStrength;
-    ` + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace(
-      '#include <begin_vertex>',
-      `
-      #include <begin_vertex>
-      if (position.y > ${heightThreshold.toFixed(2)}) {
-        float swayFactor = (position.y - ${heightThreshold.toFixed(2)}) * 0.05 * uWindStrength;
-        float wave1 = sin(uTime * 2.2 + position.x * 0.8 + position.z * 0.8) * swayFactor;
-        float wave2 = cos(uTime * 3.4 + position.z * 1.3) * (swayFactor * 0.45);
-        transformed.x += wave1;
-        transformed.z += wave2;
-      }
-      `
-    );
-    mat.userData.shader = shader;
-  };
-}
-
 export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighlight }: PlantModelMeshProps) {
   const [modelGroup, setModelGroup] = useState<THREE.Group | null>(null);
   const groupRef = useRef<THREE.Group>(null);
+  const wind = useMemo(() => new VegetationWind(), []);
+  const fallbackRef = useRef<THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>>(null);
+  const fallbackGeom = useMemo(() => shape.type === 'tree'
+    ? createTreeGeometry(shape.plantSpeciesId || 'english_oak')
+    : createBushGeometry(shape.plantSpeciesId || 'ribbon_grass'), [shape.type, shape.plantSpeciesId]);
+  useEffect(() => () => fallbackGeom.dispose(), [fallbackGeom]);
+  useEffect(() => {
+    if (!fallbackRef.current) return;
+    fallbackGeom.computeBoundingBox();
+    const box = fallbackGeom.boundingBox!;
+    return wind.attachMesh(fallbackRef.current, box.min.y, Math.max(0.001, box.max.y - box.min.y));
+  }, [wind, fallbackGeom, modelGroup]);
 
   const plantSpecies = PLANT_SPECIES_CATALOG.find(s => s.id === shape.plantSpeciesId);
   const variation = shape.plantVariation || (plantSpecies?.variations ? plantSpecies.variations[0] : 'VarC');
 
-  // Real-time foliage wind animation loop matching Procedural Grass wind dynamics
-  useFrame((state) => {
-    if (!modelGroup) return;
-    const time = state.clock.getElapsedTime();
-    modelGroup.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
-        if (mat?.userData?.shader?.uniforms?.uTime) {
-          mat.userData.shader.uniforms.uTime.value = time;
-        }
-      }
-    });
-  });
+  useFrame((state) => wind.setTime(state.clock.elapsedTime));
 
   useEffect(() => {
+    let cancelled = false;
+    const cleanups: (() => void)[] = [];
+    const ownedMaterials: THREE.Material[] = [];
+    const ownedGeometry: THREE.BufferGeometry[] = [];
+    setModelGroup(null);
+    const finish = (group: THREE.Group) => {
+      group.traverse(child => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]>;
+        ownedMaterials.push(...(Array.isArray(mesh.material) ? mesh.material : [mesh.material]));
+        mesh.geometry.computeBoundingBox();
+        const box = mesh.geometry.boundingBox!;
+        cleanups.push(wind.attachMesh(mesh, box.min.y, Math.max(0.001, box.max.y - box.min.y)));
+      });
+      setModelGroup(group);
+    };
     if (!plantSpecies) return;
 
     if (plantSpecies.modelType === 'gltf') {
@@ -72,6 +60,7 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
       const gltfUrl = `${plantSpecies.modelPath}${gltfVariation}.glb`;
 
       loadPlantGLTF(gltfUrl, (gltfGroup) => {
+        if (cancelled) return;
         const cloned = gltfGroup.clone(true);
 
         // Compute bounding box and normalize tree scale
@@ -95,34 +84,27 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
             mesh.castShadow = true;
             mesh.receiveShadow = true;
 
-            const isTrunk = mesh.name.toLowerCase().includes('trunk') || mesh.name.toLowerCase().includes('bark');
-
-            if (isTrunk) {
-              mesh.material = new THREE.MeshStandardMaterial({
-                color: shape.color ? new THREE.Color(shape.color) : new THREE.Color('#4e3629'),
-                roughness: 0.9,
-                metalness: 0.05,
-                emissive: selectedId === shape.id ? new THREE.Color('#0063A3') : new THREE.Color('#000000'),
-                emissiveIntensity: selectedId === shape.id ? 0.35 : 0
-              });
-            } else {
-              // High fidelity foliage with wind sway
-              const foliageMat = new THREE.MeshStandardMaterial({
-                color: shape.color ? new THREE.Color(shape.color) : new THREE.Color('#2d6a4f'),
-                roughness: 0.65,
-                metalness: 0.05,
-                side: THREE.DoubleSide,
-                shadowSide: THREE.DoubleSide,
-                emissive: selectedId === shape.id ? new THREE.Color('#0063A3') : new THREE.Color('#000000'),
-                emissiveIntensity: selectedId === shape.id ? 0.35 : 0
-              });
-              applyFoliageWindAnimation(foliageMat, 0.12, 1.5);
-              mesh.material = foliageMat;
-            }
+            // Preserve imported PBR maps and alpha cutouts instead of replacing the
+            // scan's materials with untextured colors. Never mutate cached materials.
+            const originals = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            const materials = originals.map(original => {
+              const isTrunk = /trunk|bark/i.test(`${mesh.name} ${original.name}`);
+              const mat = original instanceof THREE.MeshStandardMaterial
+                ? original.clone() : new THREE.MeshStandardMaterial({ roughness: isTrunk ? 0.9 : 0.65 });
+              if (!mat.map) mat.color.set(isTrunk ? (plantSpecies.trunkColor || '#4e3629') : (shape.color || '#2d6a4f'));
+              if (!isTrunk) {
+                mat.side = mat.shadowSide = THREE.DoubleSide;
+                if (mat.alphaMap || mat.alphaTest > 0) { mat.alphaTest = Math.max(mat.alphaTest, 0.25); mat.transparent = false; }
+              }
+              mat.emissive.set(selectedId === shape.id ? '#0063A3' : '#000000');
+              mat.emissiveIntensity = selectedId === shape.id ? 0.35 : 0;
+              return mat;
+            });
+            mesh.material = Array.isArray(mesh.material) ? materials : materials[0];
           }
         });
 
-        setModelGroup(cloned);
+        finish(cloned);
       });
 
     } else if (plantSpecies.modelType === 'usd') {
@@ -131,6 +113,7 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
       const usdUrl = `${plantSpecies.modelPath}${usdVariation}.usd`;
 
       loadPlantUSD(usdUrl, (usdGroup) => {
+        if (cancelled) return;
         const cloned = usdGroup.clone(true);
         const box = new THREE.Box3().setFromObject(cloned);
         const size = new THREE.Vector3();
@@ -154,12 +137,11 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
               metalness: 0.05,
               side: THREE.DoubleSide
             });
-            applyFoliageWindAnimation(mat, 0.08, 0.8);
             mesh.material = mat;
           }
         });
 
-        setModelGroup(cloned);
+        finish(cloned);
       });
 
     } else if (plantSpecies.modelType === 'fbx') {
@@ -170,6 +152,7 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
       const textureBase = plantSpecies.texturePath || '/models/plants/ribbon_grass/Ribbon_Grass_tbdpec3r_Mid_2K_';
 
       loadPlantFBX(fbxUrl, (fbx) => {
+        if (cancelled) return;
         const cloned = fbx.clone(true);
 
         // Load 2K Botanical PBR Texture maps
@@ -197,6 +180,8 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
         cloned.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
+            mesh.geometry = mesh.geometry.clone();
+            ownedGeometry.push(mesh.geometry);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
 
@@ -214,7 +199,7 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
             const bladeMat = new THREE.MeshStandardMaterial({
               map: albedoTex,
               alphaMap: opacityTex,
-              transparent: true,
+              transparent: false,
               alphaTest: 0.25,
               normalMap: normalTex,
               roughnessMap: roughnessTex,
@@ -226,26 +211,27 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
               emissive: selectedId === shape.id ? new THREE.Color('#0063A3') : new THREE.Color('#000000'),
               emissiveIntensity: selectedId === shape.id ? 0.35 : 0
             });
-            applyFoliageWindAnimation(bladeMat, 0.09, 0.05);
             mesh.material = bladeMat;
           }
         });
 
-        setModelGroup(cloned);
+        finish(cloned);
       }, (err) => {
         console.warn('[PlantModelMesh] Falling back to procedural geometry for:', plantSpecies.id, err);
       });
     }
-  }, [shape.plantSpeciesId, variation, shape.scale, selectedId === shape.id, shape.color]);
+    return () => {
+      cancelled = true;
+      cleanups.forEach(cleanup => cleanup());
+      ownedMaterials.forEach(material => material.dispose());
+      ownedGeometry.forEach(geometry => geometry.dispose());
+    };
+  }, [shape.plantSpeciesId, variation, shape.scale, selectedId === shape.id, shape.color, wind]);
 
   // Immediate high-realism procedural fallback while loading (never a placeholder sphere)
   if (!modelGroup) {
-    const fallbackGeom = shape.type === 'tree'
-      ? createTreeGeometry(shape.plantSpeciesId || 'english_oak')
-      : createBushGeometry(shape.plantSpeciesId || 'ribbon_grass');
-
     return (
-      <mesh {...meshProps}>
+      <mesh {...meshProps} ref={fallbackRef}>
         <primitive object={fallbackGeom} attach="geometry" />
         <meshStandardMaterial
           vertexColors

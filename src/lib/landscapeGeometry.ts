@@ -165,6 +165,31 @@ export function createTreeGeometry(speciesId: string = 'english_oak'): THREE.Buf
   const geometries: THREE.BufferGeometry[] = [];
 
   switch (speciesId) {
+    case 'norway_spruce': {
+      geometries.push(createStemSegment(0.05, 0.24, 10, [0, 5, 0], [0, 0, 0], '#654533'));
+      for (let tier = 0; tier < 7; tier++) {
+        const radius = 2 * (1 - tier / 8);
+        const needles = new THREE.ConeGeometry(radius, 2.7 - tier * 0.19, 9, 2);
+        needles.rotateY(tier * 0.7);
+        needles.translate(0, 2 + tier * 1.2, 0);
+        applyGeometryVertexColors(needles, '#193c2e', '#507358', 0.07);
+        geometries.push(needles);
+      }
+      break;
+    }
+    case 'flowering_cherry': {
+      geometries.push(createStemSegment(0.12, 0.28, 2.6, [0, 1.3, 0], [0, 0, 0], '#594039'));
+      for (let i = 0; i < 7; i++) {
+        const angle = i * Math.PI * 2 / 7;
+        const x = Math.cos(angle), z = Math.sin(angle);
+        const branch = new THREE.CylinderGeometry(0.025, 0.10, 2.4, 5);
+        branch.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x, 0.8, z).normalize()));
+        branch.translate(x * 0.8, 2.8, z * 0.8);
+        applyGeometryVertexColors(branch, '#594039'); geometries.push(branch);
+        geometries.push(createOrganicFoliageLobe([1.1, 0.8, 1.1], [x * 1.65, 3.6 + (i % 3) * 0.23, z * 1.65], '#c887a8', '#ffe1e9', 0.18, i));
+      }
+      break;
+    }
     case 'mediterranean_cypress': {
       // Columnar pencil cypress: slender tapered vertical trunk with dense ascending flame foliage
       geometries.push(createStemSegment(0.12, 0.22, 1.8, [0, 0.9, 0], [0, 0, 0], '#3a2717'));
@@ -361,6 +386,26 @@ export function createBushGeometry(speciesId: string = 'boxwood_hedge_bush'): TH
   const geometries: THREE.BufferGeometry[] = [];
 
   switch (speciesId) {
+    case 'creeping_juniper': {
+      for (let i = 0; i < 9; i++) {
+        const a = i * Math.PI * 2 / 9;
+        const x = Math.cos(a), z = Math.sin(a);
+        geometries.push(createStemSegment(0.009, 0.025, 0.65, [x * 0.3, 0.10, z * 0.3], [z * 1.2, 0, -x * 1.2], '#68503e'));
+        geometries.push(createOrganicFoliageLobe([0.40, 0.18, 0.32], [x * 0.49, 0.22 + (i % 2) * 0.05, z * 0.49], '#355855', '#83a7a0', 0.2, i));
+      }
+      break;
+    }
+    case 'rosemary_shrub': {
+      for (let i = 0; i < 13; i++) {
+        const a = i * 2.399963;
+        const r = 0.28 * Math.sqrt(i / 13);
+        const x = Math.cos(a) * r, z = Math.sin(a) * r;
+        const height = 0.7 + 0.3 * (1 - i / 13);
+        geometries.push(createStemSegment(0.004, 0.014, height, [x, height / 2, z], [0, 0, 0], '#695947'));
+        geometries.push(createOrganicFoliageLobe([0.14, height * 0.39, 0.14], [x, height * 0.63, z], '#3f614b', '#9aaf99', 0.22, i));
+      }
+      break;
+    }
     case 'ribbon_grass': {
       // Ribbon Grass (Phalaris arundinacea 'Picta'): Arching fountain of variegated cream-and-green ribbon blades
       geometries.push(createStemSegment(0.04, 0.07, 0.12, [0, 0.06, 0], [0, 0, 0], '#27361a'));
