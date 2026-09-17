@@ -9,6 +9,9 @@ interface BirdSystemProps {
   speed?: number;
   looping?: boolean;
   playing?: boolean;
+  bodyColor?: string;
+  breastColor?: string;
+  beakColor?: string;
 }
 
 /**
@@ -22,8 +25,15 @@ export const BirdSystem: React.FC<BirdSystemProps> = ({
   speed = 1,
   looping = true,
   playing = true,
+  bodyColor = '#1e3a8a',
+  breastColor = '#ea580c',
+  beakColor = '#f59e0b',
 }) => {
   const groupRef = useRef<THREE.Group>(null);
+  // Head and tail shade off the body color instead of their own pickers, so the whole
+  // bird stays coherent when only "body colour" is changed.
+  const headColor = useMemo(() => new THREE.Color(bodyColor).offsetHSL(0, 0, 0.08).getStyle(), [bodyColor]);
+  const tailColor = useMemo(() => new THREE.Color(bodyColor).offsetHSL(0, 0, -0.18).getStyle(), [bodyColor]);
   const birdCount = Math.max(1, Math.min(6, Math.round(density <= 10 ? density : Math.max(1, density / 250))));
 
   // Pre-generate bird instances with slightly staggered offsets and unique trajectories
@@ -135,38 +145,38 @@ export const BirdSystem: React.FC<BirdSystemProps> = ({
           {/* Bird Body: Aerodynamic fuselage */}
           <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
             <coneGeometry args={[0.18, 0.65, 8]} />
-            <meshStandardMaterial color="#1e3a8a" roughness={0.6} />
+            <meshStandardMaterial color={bodyColor} roughness={0.6} />
           </mesh>
 
-          {/* Bird Breast / Belly (Warm Chestnut) */}
+          {/* Bird Breast / Belly */}
           <mesh position={[0, -0.06, 0.08]} scale={[0.85, 0.75, 1.1]}>
             <sphereGeometry args={[0.16, 8, 8]} />
-            <meshStandardMaterial color="#ea580c" roughness={0.8} />
+            <meshStandardMaterial color={breastColor} roughness={0.8} />
           </mesh>
 
           {/* Bird Head */}
           <mesh position={[0, 0.14, 0.28]} castShadow>
             <sphereGeometry args={[0.13, 8, 8]} />
-            <meshStandardMaterial color="#1e40af" roughness={0.6} />
+            <meshStandardMaterial color={headColor} roughness={0.6} />
           </mesh>
 
           {/* Bird Beak */}
           <mesh position={[0, 0.12, 0.44]} rotation={[Math.PI / 2, 0, 0]}>
             <coneGeometry args={[0.04, 0.14, 4]} />
-            <meshStandardMaterial color="#f59e0b" roughness={0.4} />
+            <meshStandardMaterial color={beakColor} roughness={0.4} />
           </mesh>
 
           {/* Tail Feathers */}
           <mesh position={[0, 0.04, -0.42]} rotation={[-0.2, 0, 0]}>
             <boxGeometry args={[0.16, 0.02, 0.35]} />
-            <meshStandardMaterial color="#0f172a" roughness={0.7} />
+            <meshStandardMaterial color={tailColor} roughness={0.7} />
           </mesh>
 
           {/* Left Wing with Pivot */}
           <group position={[-0.12, 0.05, 0.06]} ref={(el) => (leftWingRefs.current[i] = el)}>
             <mesh position={[-0.32, 0, 0]} rotation={[0, -0.15, 0]}>
               <boxGeometry args={[0.55, 0.02, 0.26]} />
-              <meshStandardMaterial color="#1e3a8a" roughness={0.7} />
+              <meshStandardMaterial color={bodyColor} roughness={0.7} />
             </mesh>
           </group>
 
@@ -174,7 +184,7 @@ export const BirdSystem: React.FC<BirdSystemProps> = ({
           <group position={[0.12, 0.05, 0.06]} ref={(el) => (rightWingRefs.current[i] = el)}>
             <mesh position={[0.32, 0, 0]} rotation={[0, 0.15, 0]}>
               <boxGeometry args={[0.55, 0.02, 0.26]} />
-              <meshStandardMaterial color="#1e3a8a" roughness={0.7} />
+              <meshStandardMaterial color={bodyColor} roughness={0.7} />
             </mesh>
           </group>
         </group>

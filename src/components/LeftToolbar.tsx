@@ -21,7 +21,6 @@ import {
   ArrowUpFromLine, 
   Search,
   MoreHorizontal,
-  ZoomIn,
   Sparkles,
   CircleDot,
   CornerUpRight,
@@ -814,10 +813,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <ToolButton tool="move" icon={<Move size={20} />} label="Move (M / G)" />
       <ToolButton tool="rotate" icon={<RotateCw size={20} />} label="Rotate (Q)" />
       <ToolButton tool="scale" icon={<Maximize size={20} />} label="Scale (S)" />
-      
-      <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
-      
-      <ToolButton tool="zoom" icon={<ZoomIn size={20} />} label="Zoom (Z)" />
 
       {pinnedScripts.length > 0 && (
         <>

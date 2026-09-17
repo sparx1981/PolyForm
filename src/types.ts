@@ -272,13 +272,18 @@ export interface FogSettings {
 
 export interface SceneAnimation {
   id: string;
-  type: 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura' | 'bird' | 'bee';
+  type: 'none' | 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura' | 'bird' | 'bee';
   position: [number, number, number];
   density: number;
   scale?: number;
   speed?: number;
   looping: boolean;
   playing: boolean;
+  // Bird-only: customises the flock's plumage. Falls back to BirdSystem's built-in
+  // defaults (dark blue body/wings, chestnut breast) when left unset.
+  birdBodyColor?: string;
+  birdBreastColor?: string;
+  birdBeakColor?: string;
 }
 
 export interface SceneNote {

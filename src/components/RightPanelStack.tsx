@@ -2838,7 +2838,7 @@ export default function RightPanelStack() {
                       const id = Math.random().toString(36).substr(2, 9);
                       const newAnim: SceneAnimation = {
                         id,
-                        type: 'confetti',
+                        type: 'none',
                         position: [0, 0, 0],
                         density: 1000,
                         scale: 1,
@@ -2877,7 +2877,7 @@ export default function RightPanelStack() {
                         <div className="space-y-2">
                           <label className="text-[8px] text-gray-400 uppercase font-bold">Effect Type</label>
                           <div className="grid grid-cols-2 gap-1 px-1">
-                            {['confetti', 'fire', 'smoke', 'sparks', 'magic_aura', 'bird', 'bee'].map((type) => (
+                            {['none', 'confetti', 'fire', 'smoke', 'sparks', 'magic_aura', 'bird', 'bee'].map((type) => (
                               <button
                                 key={type}
                                 onClick={() => setAnimations(prev => prev.map(a => {
@@ -2907,6 +2907,29 @@ export default function RightPanelStack() {
                             ))}
                           </div>
                         </div>
+
+                        {anim.type === 'bird' && (
+                          <div className="space-y-2">
+                            <label className="text-[8px] text-gray-400 uppercase font-bold">Plumage colours</label>
+                            <div className="grid grid-cols-3 gap-2 px-1">
+                              {([
+                                ['birdBodyColor', 'Body', '#1e3a8a'],
+                                ['birdBreastColor', 'Breast', '#ea580c'],
+                                ['birdBeakColor', 'Beak', '#f59e0b'],
+                              ] as const).map(([field, label, fallback]) => (
+                                <label key={field} className="flex flex-col items-center gap-1 text-[8px] text-gray-500">
+                                  {label}
+                                  <input
+                                    type="color"
+                                    value={anim[field] ?? fallback}
+                                    onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, [field]: e.target.value } : a))}
+                                    className="w-full h-6 rounded cursor-pointer border-none p-0"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="space-y-1">
                           <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">

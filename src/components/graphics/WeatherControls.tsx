@@ -25,10 +25,14 @@ export function WeatherControls() {
       <GraphicsSlider label="Wind north / south" value={weather.windZ} min={-20} max={20} step={0.1} unit=" m/s" onChange={windZ => update({ windZ })} />
       {(Object.keys(weather.layers) as WeatherKind[]).map(kind => {
         const settings = weather.layers[kind], airborne = kind === 'clouds' || kind === 'mist';
-        return <fieldset key={kind} className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-3">
-          <legend className="sr-only">{kind}</legend>
-          <label className="flex items-center gap-2 text-xs font-semibold capitalize"><input type="checkbox" checked={settings.enabled} onChange={e => layer(kind, { enabled: e.target.checked })} />{kind}</label>
-          {settings.enabled && <>
+        // `open` tracks settings.enabled each render (auto-expands on enable, auto-collapses
+        // on disable) but React only touches the DOM attribute when that value actually
+        // changes, so a manual expand/collapse by the user in between isn't fought.
+        return <details key={kind} open={settings.enabled} className="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+          <summary className="flex items-center gap-2 text-xs font-semibold capitalize cursor-pointer list-none">
+            <input type="checkbox" checked={settings.enabled} onClick={e => e.stopPropagation()} onChange={e => layer(kind, { enabled: e.target.checked })} />{kind}
+          </summary>
+          {settings.enabled && <div className="space-y-2 pt-2">
             <GraphicsSlider label={`${kind} density`} value={settings.density} min={0} max={1} onChange={density => layer(kind, { density })} />
             <GraphicsSlider label={`${kind} opacity`} value={settings.opacity} min={0} max={1} onChange={opacity => layer(kind, { opacity })} />
             <GraphicsSlider label={`${kind} size`} value={settings.size} min={airborne ? 1 : 0.02} max={airborne ? 60 : 1} step={airborne ? 1 : 0.01} unit=" m" onChange={size => layer(kind, { size })} />
@@ -51,8 +55,8 @@ export function WeatherControls() {
               <GraphicsSlider label={`${kind} gravity`} value={settings.gravity} min={0} max={20} step={0.1} onChange={gravity => layer(kind, { gravity })} />
             </>}
             <GraphicsSlider label={`${kind} turbulence`} value={settings.turbulence} min={0} max={5} step={0.05} onChange={turbulence => layer(kind, { turbulence })} />
-          </>}
-        </fieldset>;
+          </div>}
+        </details>;
       })}
     </>}
   </div>;
