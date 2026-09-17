@@ -14,7 +14,9 @@ export function SurfaceDepthBinding({ shape }: { shape: Shape }) {
   useLayoutEffect(() => {
     if (!shape.surfaceDepthEnabled || !shape.displacementMapUrl || !canApplySurfaceDepth(shape)) return;
     const mesh = marker.current?.parent;
-    if (!(mesh instanceof THREE.Mesh) || !(mesh.material instanceof THREE.MeshStandardMaterial)) return;
+    if (!(mesh instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (materials.length === 0 || !materials.every(mat => mat instanceof THREE.MeshStandardMaterial)) return;
     const original = mesh.geometry;
     if (!original.hasAttribute('uv') || !original.hasAttribute('normal')) return;
     let disposed = false, relief: SurfaceDepth | undefined, subdivided: THREE.BufferGeometry | undefined, displayedGeometry: THREE.BufferGeometry | undefined;

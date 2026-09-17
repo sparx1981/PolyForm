@@ -2,8 +2,13 @@ import * as THREE from 'three';
 import type { Shape } from '../../types';
 
 export function canApplySurfaceDepth(shape: Shape): boolean {
+  // Bevelled edges and per-face (surfaceMaterials) objects are supported best-effort:
+  // SurfaceDepth.init() patches every material in a multi-material mesh with the same
+  // height field, so a box with six different face materials still gets one coherent
+  // relief. surfaceDivisions (a separate per-face UV subdivision grid, unrelated to
+  // face-group materials) isn't handled by the subdivision pass below, so stays excluded.
   return ['box', 'rect', 'sphere', 'cone', 'cylinder', 'custom', 'terrain', 'poly', 'rock'].includes(shape.type)
-    && !shape.bevelAmount && !shape.surfaceMaterials && !shape.surfaceDivisions;
+    && !shape.surfaceDivisions;
 }
 
 /** One-time bounded subdivision; never modifies the modelling/collision geometry. */

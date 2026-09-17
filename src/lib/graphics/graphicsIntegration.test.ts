@@ -55,7 +55,11 @@ it('subdivides only the render geometry under a fixed vertex budget', () => {
   expect(geometry.attributes.position.array).toEqual(before);
   expect(refined.attributes.uv.count).toBe(refined.attributes.position.count);
   expect(refined.groups).toHaveLength(6);
-  expect(canApplySurfaceDepth({ type: 'box', surfaceMaterials: { 0: '#fff' } } as any)).toBe(false);
+  // Multi-material (per-face) boxes are supported best-effort: SurfaceDepth patches
+  // every material in the array with the same height field.
+  expect(canApplySurfaceDepth({ type: 'box', surfaceMaterials: { 0: '#fff' } } as any)).toBe(true);
+  expect(canApplySurfaceDepth({ type: 'box', bevelAmount: 0.1 } as any)).toBe(true);
+  expect(canApplySurfaceDepth({ type: 'box', surfaceDivisions: { 0: 2 } } as any)).toBe(false);
   geometry.dispose(); refined.dispose();
 });
 

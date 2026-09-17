@@ -21,7 +21,7 @@ import {
   GizmoHelper,
   GizmoViewport
 } from '@react-three/drei';
-import { EffectComposer, SSAO } from '@react-three/postprocessing';
+import { EffectComposer, N8AO } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as THREE from 'three';
 import { SUBTRACTION, Evaluator, Brush } from 'three-bvh-csg';
@@ -1428,7 +1428,7 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
 // permanently visible to the main camera with no per-frame visibility
 // toggling. Toggling .visible around the off-screen render was a source
 // of flicker in its own right: if anything else in the render pipeline
-// (the app's optional EffectComposer/SSAO pass in particular) reads scene
+// (the app's optional EffectComposer/N8AO pass in particular) reads scene
 // state at a slightly different point in the frame than assumed, it could
 // catch the markers mid-toggle. Layers avoid the toggle entirely.
 const TELEPORT_PORTAL_LAYER = 31;
@@ -11585,12 +11585,20 @@ function Scene() {
       <BlockPickerOverlay />
 
       {(ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))) && (
-        <EffectComposer enableNormalPass={ambientOcclusionEnabled}>
+        <EffectComposer>
           {ambientOcclusionEnabled && (
-            <SSAO 
-              intensity={15} 
-              radius={0.3} 
-              luminanceInfluence={0.6} 
+            // N8AO (GTAO-style) instead of the older SSAO effect: SSAO's fixed
+            // world-space sample radius caused halo/self-occlusion artifacts that
+            // changed with camera distance and object scale. screenSpaceRadius
+            // scales the radius in screen space instead, so contact shadows stay
+            // consistent whether the user is zoomed into a doorknob or looking at
+            // a whole building - this is what actually fixes the reported artifacts.
+            <N8AO
+              aoRadius={1}
+              distanceFalloff={1}
+              intensity={3}
+              screenSpaceRadius
+              quality="medium"
             />
           )}
           {fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)) && (

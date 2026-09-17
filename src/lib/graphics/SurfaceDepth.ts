@@ -22,22 +22,25 @@ export class SurfaceDepth {
     this.uniforms.pfDepthScale.value = scale; this.uniforms.pfDepthBias.value = bias;
   }
 
-  /** Material must be private to this mesh. Works with Physical (a Standard subclass).
-   * Attach after wind if combining effects. Dispose before disposing the mesh. */
-  init(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>) {
+  /** Material(s) must be private to this mesh. Works with Physical (a Standard subclass).
+   * A material array (per-face-group meshes, e.g. a box with a different material per
+   * side) gets the same height field patched into every entry, so the whole object
+   * shares one coherent relief even though face colors differ. Attach after wind if
+   * combining effects. Dispose before disposing the mesh. */
+  init(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]>) {
     if (this.cleanup) throw new Error('SurfaceDepth is already attached');
     if (!mesh.geometry.hasAttribute('uv') || !mesh.geometry.hasAttribute('normal'))
       throw new Error('SurfaceDepth requires UVs and normals');
-    const source = mesh.material;
-    const old = { displacementMap: source.displacementMap, displacementScale: source.displacementScale,
-      displacementBias: source.displacementBias };
+    const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (sourceMaterials.length === 0) throw new Error('SurfaceDepth requires at least one material');
+    const primary = sourceMaterials[0];
     const previousDepth = mesh.customDepthMaterial;
     const previousDistance = mesh.customDistanceMaterial;
     const depth = previousDepth ?? new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     const distance = previousDistance ?? new THREE.MeshDistanceMaterial();
     if (!(depth instanceof THREE.MeshDepthMaterial) || !(distance instanceof THREE.MeshDistanceMaterial))
       throw new Error('SurfaceDepth requires standard depth/distance shadow materials');
-    const materials = [source, depth, distance];
+    const materials = [...sourceMaterials, depth, distance];
     const saved = materials.map(mat => ({ displacementMap: mat.displacementMap,
       displacementScale: mat.displacementScale, displacementBias: mat.displacementBias,
       map: mat.map, alphaMap: mat.alphaMap, alphaTest: mat.alphaTest, side: mat.side }));
@@ -55,9 +58,12 @@ export class SurfaceDepth {
         `);
       } });
     });
+    // The depth/distance shadow proxies are single materials for the whole mesh, so they
+    // can only mirror one face's map/alphaTest/side; the primary (first) material stands
+    // in for the group. This only affects alpha-cutout shadows on a multi-material mesh.
     for (const shadow of [depth, distance]) {
-      shadow.map = source.map; shadow.alphaMap = source.alphaMap;
-      shadow.alphaTest = source.alphaTest; shadow.side = source.side;
+      shadow.map = primary.map; shadow.alphaMap = primary.alphaMap;
+      shadow.alphaTest = primary.alphaTest; shadow.side = primary.side;
     }
     mesh.customDepthMaterial = depth; mesh.customDistanceMaterial = distance;
     // Preserve geometry ownership; update CPU culling bounds once, never vertex positions.
@@ -85,7 +91,6 @@ export class SurfaceDepth {
     this.cleanup = () => {
       undo.forEach(fn => fn());
       materials.forEach((mat, i) => Object.assign(mat, saved[i]));
-      Object.assign(source, old);
       mesh.customDepthMaterial = previousDepth; mesh.customDistanceMaterial = previousDistance;
       if (!previousDepth) depth.dispose(); if (!previousDistance) distance.dispose();
       mesh.geometry = originalGeometry; geometry.dispose();
