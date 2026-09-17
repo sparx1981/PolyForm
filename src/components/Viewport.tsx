@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } fr
 import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
+import { shouldHideAutoNormalMap } from '../lib/graphics/depthGeometry';
 import { batchablePlant } from '../lib/graphics/vegetationEligibility';
 import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
@@ -10351,9 +10352,10 @@ function Scene() {
 
         // Optional PBR map slots beyond the diffuse/albedo map. Spread onto
         // every meshStandardMaterial below - undefined props are no-ops.
+        const hideAutoNormalOnDisabledDepth = shouldHideAutoNormalMap(shape);
         const pbrMapProps = {
-          normalMap: getCachedPBRMapTexture(shape.normalMapUrl),
-          normalScale: shape.normalMapUrl ? new THREE.Vector2(shape.normalScale ?? 1, shape.normalScale ?? 1) : undefined,
+          normalMap: hideAutoNormalOnDisabledDepth ? null : getCachedPBRMapTexture(shape.normalMapUrl),
+          normalScale: (!hideAutoNormalOnDisabledDepth && shape.normalMapUrl) ? new THREE.Vector2(shape.normalScale ?? 1, shape.normalScale ?? 1) : undefined,
           roughnessMap: getCachedPBRMapTexture(shape.roughnessMapUrl),
           metalnessMap: getCachedPBRMapTexture(shape.metalnessMapUrl),
           aoMap: getCachedPBRMapTexture(shape.aoMapUrl),

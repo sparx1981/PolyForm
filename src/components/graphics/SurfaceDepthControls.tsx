@@ -4,7 +4,7 @@ import { canApplySurfaceDepth } from '../../lib/graphics/depthGeometry';
 import { GraphicsSlider } from './WeatherControls';
 import { SurfaceDepthPresetThumbnail } from './SurfaceDepthPresetThumbnail';
 import {
-  SURFACE_DEPTH_PRESETS, DEFAULT_SURFACE_DEPTH_PARAMS, findSurfaceDepthPreset,
+  SURFACE_DEPTH_PRESETS, DEFAULT_SURFACE_DEPTH_PARAMS, AUTO_NORMAL_STRENGTH, findSurfaceDepthPreset,
   heightCanvasToNormalCanvas, heightCanvasFromImageUrl, canvasToDataUrl,
   type SurfaceDepthPresetParams,
 } from '../../lib/graphics/proceduralSurface';
@@ -57,7 +57,7 @@ export function SurfaceDepthControls() {
       surfaceDepthSegments: shape?.surfaceDepthSegments ?? 16, ...extra,
     };
     if (shape?.surfaceDepthAutoNormal !== false) {
-      const normalUrl = canvasToDataUrl(heightCanvasToNormalCanvas(heightCanvas, 2.2));
+      const normalUrl = canvasToDataUrl(heightCanvasToNormalCanvas(heightCanvas, AUTO_NORMAL_STRENGTH));
       if (normalUrl.length <= MAX_DATA_URL_LENGTH) { changes.normalMapUrl = normalUrl; changes.surfaceDepthAutoNormal = true; }
     }
     update(changes);
@@ -127,7 +127,7 @@ export function SurfaceDepthControls() {
       const canvas = document.createElement('canvas');
       canvas.width = img.width; canvas.height = img.height;
       canvas.getContext('2d')!.drawImage(img, 0, 0);
-      const normalUrl = canvasToDataUrl(heightCanvasToNormalCanvas(canvas, 2.2));
+      const normalUrl = canvasToDataUrl(heightCanvasToNormalCanvas(canvas, AUTO_NORMAL_STRENGTH));
       if (normalUrl.length <= MAX_DATA_URL_LENGTH) update({ normalMapUrl: normalUrl, surfaceDepthAutoNormal: true });
     };
     img.src = shape.displacementMapUrl;

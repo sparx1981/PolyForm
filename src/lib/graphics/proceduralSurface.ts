@@ -199,6 +199,13 @@ export function findSurfaceDepthPreset(id: string | undefined): SurfaceDepthPres
   return SURFACE_DEPTH_PRESETS.find(p => p.id === id);
 }
 
+// Default Sobel strength for auto-derived normal maps. The smooth, low-frequency presets
+// (bumpy, wood grain) have a much shallower per-pixel gradient than sharp-edged ones
+// (brick, stone), so a low strength leaves them looking almost flat while brick still
+// reads fine - this is high enough to make every preset visibly perturb shading without
+// blowing out brick/stone's already-strong edges into harsh aliasing.
+export const AUTO_NORMAL_STRENGTH = 6;
+
 /** Sobel-derived tangent-space normal map from a grayscale height canvas. Wraps at the
  * edges so the result tiles seamlessly under RepeatWrapping, matching the height map. */
 export function heightCanvasToNormalCanvas(height: HTMLCanvasElement, strength = 1): HTMLCanvasElement {

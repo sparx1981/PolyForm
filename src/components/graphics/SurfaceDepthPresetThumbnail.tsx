@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { heightCanvasToNormalCanvas, type SurfaceDepthPreset, type SurfaceDepthPresetParams } from '../../lib/graphics/proceduralSurface';
+import { AUTO_NORMAL_STRENGTH, heightCanvasToNormalCanvas, type SurfaceDepthPreset, type SurfaceDepthPresetParams } from '../../lib/graphics/proceduralSurface';
 
 function RotatingRelief({ height, normal }: { height: THREE.Texture; normal: THREE.Texture }) {
   const ref = useRef<THREE.Mesh>(null);
@@ -25,7 +25,7 @@ export function SurfaceDepthPresetThumbnail({ preset, params, size = 56 }: {
 }) {
   const { height, normal } = useMemo(() => {
     const heightCanvas = preset.generateHeight(params, 128);
-    const normalCanvas = heightCanvasToNormalCanvas(heightCanvas, 2.2);
+    const normalCanvas = heightCanvasToNormalCanvas(heightCanvas, AUTO_NORMAL_STRENGTH);
     const heightTexture = new THREE.CanvasTexture(heightCanvas);
     heightTexture.colorSpace = THREE.NoColorSpace; heightTexture.wrapS = heightTexture.wrapT = THREE.RepeatWrapping;
     const normalTexture = new THREE.CanvasTexture(normalCanvas);

@@ -11,6 +11,16 @@ export function canApplySurfaceDepth(shape: Shape): boolean {
     && !shape.surfaceDivisions;
 }
 
+/** normalMapUrl is shared by two unrelated features: a general PBR material preset can
+ * set it directly, or Surface depth can auto-derive it from the height map
+ * (surfaceDepthAutoNormal !== false). Only the auto-derived one has any meaning tied to
+ * the Surface depth toggle, so only it should disappear when Surface depth is disabled -
+ * an independently-applied normal map (material preset, or a manually uploaded one with
+ * surfaceDepthAutoNormal === false) must stay regardless of that toggle. */
+export function shouldHideAutoNormalMap(shape: Shape): boolean {
+  return Boolean(shape.displacementMapUrl) && shape.surfaceDepthAutoNormal !== false && shape.surfaceDepthEnabled === false;
+}
+
 /** One-time bounded subdivision; never modifies the modelling/collision geometry. */
 export function subdivideDepthGeometry(source: THREE.BufferGeometry, detail = 16): THREE.BufferGeometry {
   if (!source.hasAttribute('uv') || !source.hasAttribute('normal')) throw new Error('Depth needs UVs and normals');

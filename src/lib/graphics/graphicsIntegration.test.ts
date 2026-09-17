@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { defaultGraphicsSettings, normalizeGraphicsSettings } from './graphicsSettings';
 import { batchablePlant } from './vegetationEligibility';
-import { subdivideDepthGeometry, canApplySurfaceDepth } from './depthGeometry';
+import { subdivideDepthGeometry, canApplySurfaceDepth, shouldHideAutoNormalMap } from './depthGeometry';
 import { WeatherSystem } from './WeatherSystem';
 import { isolateMaterialGroup } from './plantAssets';
 import type { Shape } from '../../types';
@@ -60,6 +60,15 @@ it('subdivides only the render geometry under a fixed vertex budget', () => {
   expect(canApplySurfaceDepth({ type: 'box', surfaceMaterials: { 0: '#fff' } } as any)).toBe(true);
   expect(canApplySurfaceDepth({ type: 'box', bevelAmount: 0.1 } as any)).toBe(true);
   expect(canApplySurfaceDepth({ type: 'box', surfaceDivisions: { 0: 2 } } as any)).toBe(false);
+
+  // Auto-derived normal maps hide when Surface depth is disabled...
+  expect(shouldHideAutoNormalMap({ displacementMapUrl: 'x', surfaceDepthEnabled: false } as any)).toBe(true);
+  // ...but stay while enabled...
+  expect(shouldHideAutoNormalMap({ displacementMapUrl: 'x', surfaceDepthEnabled: true } as any)).toBe(false);
+  // ...and an independently-applied normal map (no height map, or a manually uploaded
+  // one with auto-normal turned off) is never hidden by this toggle.
+  expect(shouldHideAutoNormalMap({ surfaceDepthEnabled: false } as any)).toBe(false);
+  expect(shouldHideAutoNormalMap({ displacementMapUrl: 'x', surfaceDepthEnabled: false, surfaceDepthAutoNormal: false } as any)).toBe(false);
   geometry.dispose(); refined.dispose();
 });
 
