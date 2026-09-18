@@ -1,43 +1,38 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import * as THREE from 'three';
-import { Canvas, useFrame } from '@react-three/fiber';
+import React, { useEffect, useState } from 'react';
 import { createLampGeometry } from '../../lib/landscapeGeometry';
+import { renderGeometryThumbnail } from '../../lib/graphics/thumbnailRenderer';
 
-function RotatingLamp({ geometry, center }: { geometry: THREE.BufferGeometry; center: THREE.Vector3 }) {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame((_, delta) => { if (ref.current) ref.current.rotation.y += delta * 0.5; });
-  return (
-    <mesh ref={ref} geometry={geometry} position={[-center.x, -center.y, -center.z]}>
-      <meshStandardMaterial vertexColors roughness={0.6} metalness={0.15} />
-    </mesh>
-  );
-}
+// Keyed by style+height, so reopening the picker (or the AI Generate tab's preview,
+// wherever else this gets used) is instant instead of re-rendering every thumbnail
+// again. Small strings - never worth bothering to evict.
+const snapshotCache = new Map<string, string>();
 
-/** Small live-rendered preview of one lamp style, so a user sees the actual model shape
- * before applying it - the same pattern used for Surface depth's pattern thumbnails.
- * Frames off the geometry's own bounding sphere (as CustomToolbarOverlay's
- * TilePreviewThumbnail does) rather than guessed dimensions, so it works for any style's
- * actual built size - including a bollard's much shorter post or the cobra arm's sideways
- * reach - without per-style camera tuning. */
+/** Small static preview of one lamp style, so a user sees the actual model shape
+ * before applying it. Renders through the app's single shared offscreen WebGL
+ * context (see thumbnailRenderer.ts) rather than mounting its own live <Canvas> -
+ * a picker grid can have a couple dozen of these open at once, and that many
+ * simultaneous WebGL contexts is what was crashing the app when the interior style
+ * library shipped. Framed off the geometry's own bounding sphere (as
+ * CustomToolbarOverlay's TilePreviewThumbnail does) rather than guessed dimensions,
+ * so it works for any style's actual built size - including a bollard's much
+ * shorter post or the cobra arm's sideways reach - without per-style camera tuning. */
 export function LampStyleThumbnail({ styleId, height = 3.2, size = 96 }: { styleId: string; height?: number; size?: number }) {
-  const geometry = useMemo(() => createLampGeometry(height, styleId), [styleId, height]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
+  const key = `${styleId}:${height}`;
+  const [dataUrl, setDataUrl] = useState<string | undefined>(() => snapshotCache.get(key));
 
-  geometry.computeBoundingSphere();
-  const radius = geometry.boundingSphere?.radius || 1;
-  const center = geometry.boundingSphere?.center || new THREE.Vector3();
-  const dist = Math.max(radius, 0.01) * 2.6;
+  useEffect(() => {
+    const cached = snapshotCache.get(key);
+    if (cached) { setDataUrl(cached); return; }
+    const geometry = createLampGeometry(height, styleId);
+    const url = renderGeometryThumbnail(geometry, Math.max(96, size * 2));
+    geometry.dispose();
+    snapshotCache.set(key, url);
+    setDataUrl(url);
+  }, [key, height, styleId, size]);
 
   return (
-    <Canvas
-      className="rounded pointer-events-none"
-      style={{ width: size, height: size }}
-      gl={{ antialias: true, alpha: true }}
-      camera={{ position: [dist * 0.7, dist * 0.7, dist * 0.7], fov: 35 }}
-    >
-      <ambientLight intensity={0.9} />
-      <directionalLight position={[2, 3, 2]} intensity={1} />
-      <RotatingLamp geometry={geometry} center={center} />
-    </Canvas>
+    <div className="rounded pointer-events-none overflow-hidden bg-transparent" style={{ width: size, height: size }}>
+      {dataUrl && <img src={dataUrl} width={size} height={size} alt="" className="w-full h-full object-contain" />}
+    </div>
   );
 }
