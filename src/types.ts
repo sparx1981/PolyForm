@@ -434,6 +434,10 @@ export interface AppState {
   setShadowOpacity: (opacity: number) => void;
   ambientOcclusionEnabled: boolean;
   setAmbientOcclusionEnabled: (enabled: boolean) => void;
+  godRaysEnabled: boolean;
+  setGodRaysEnabled: (enabled: boolean) => void;
+  godRaysIntensity: number;
+  setGodRaysIntensity: (intensity: number) => void;
   activeBevelType: 'radius' | 'chamfer';
   setActiveBevelType: (type: 'radius' | 'chamfer') => void;
   skybox: SkyboxType;

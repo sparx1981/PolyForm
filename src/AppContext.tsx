@@ -232,6 +232,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [sunIntensity, setSunIntensity] = useState(1.0);
   const [shadowOpacity, setShadowOpacity] = useState(0.25);
   const [ambientOcclusionEnabled, setAmbientOcclusionEnabled] = useState(false);
+  // Screen-space "sun shafts" through whatever occludes the sun (buildings, terrain,
+  // trees) - a moderate-cost toggle, off by default like ambient occlusion above.
+  const [godRaysEnabled, setGodRaysEnabled] = useState(false);
+  const [godRaysIntensity, setGodRaysIntensity] = useState(0.5);
   const [activeBevelType, setActiveBevelType] = useState<'radius' | 'chamfer'>('radius');
   const [skybox, setSkybox] = useState<SkyboxType>('none');
   const [customLights, setCustomLights] = useState<CustomLight[]>([]);
@@ -2106,6 +2110,10 @@ console.log("Created rectangle:", myRect.id);`);
       setShadowOpacity,
       ambientOcclusionEnabled,
       setAmbientOcclusionEnabled: handleSetAmbientOcclusionEnabled,
+      godRaysEnabled,
+      setGodRaysEnabled,
+      godRaysIntensity,
+      setGodRaysIntensity,
       activeBevelType,
       setActiveBevelType: handleSetActiveBevelType,
       skybox,

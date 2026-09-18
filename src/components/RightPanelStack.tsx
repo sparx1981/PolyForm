@@ -247,6 +247,10 @@ export default function RightPanelStack() {
     setShadowOpacity,
     ambientOcclusionEnabled,
     setAmbientOcclusionEnabled,
+    godRaysEnabled,
+    setGodRaysEnabled,
+    godRaysIntensity,
+    setGodRaysIntensity,
     customLights,
     setCustomLights,
     fogSettings,
@@ -3712,12 +3716,45 @@ export default function RightPanelStack() {
                       <span>Shadow Opacity</span>
                       <span>{Math.round(shadowOpacity * 100)}%</span>
                     </div>
-                    <input 
+                    <input
                       type="range" min="0" max="1" step="0.05"
                       value={shadowOpacity}
                       onChange={(e) => setShadowOpacity(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
                     />
+                  </div>
+
+                  <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">God Rays</span>
+                      <button
+                        onClick={() => setGodRaysEnabled(!godRaysEnabled)}
+                        className={cn(
+                          "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                          godRaysEnabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                          godRaysEnabled ? "left-4.5" : "left-0.5"
+                        )} />
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-gray-400 -mt-1">Screen-space sun shafts through whatever occludes the sun (buildings, terrain, trees). Moderate render cost.</p>
+                    {godRaysEnabled && (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                          <span>God Rays Intensity</span>
+                          <span>{godRaysIntensity.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range" min="0.05" max="2" step="0.05"
+                          value={godRaysIntensity}
+                          onChange={(e) => setGodRaysIntensity(parseFloat(e.target.value))}
+                          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t border-gray-100 dark:border-gray-800">

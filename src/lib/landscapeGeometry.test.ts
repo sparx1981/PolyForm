@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { createLampGeometry, getLampLightAnchor, getLampLightAimOffset } from './landscapeGeometry';
-import { LAMP_STYLES } from './lampStyles';
+import { LAMP_STYLES, findLampStyle } from './lampStyles';
 
 describe('lamp styles', () => {
   it('builds a valid, non-empty geometry for every style', () => {
@@ -100,5 +100,28 @@ describe('lamp styles', () => {
       const [, y] = getLampLightAnchor(1, id);
       expect(y).toBeLessThanOrEqual(0.01);
     }
+  });
+
+  it('tags every style with where it actually mounts', () => {
+    for (const style of LAMP_STYLES) {
+      expect(['floor', 'ceiling', 'wall']).toContain(style.mount);
+    }
+    // Every ceiling-mount style is interior - there's no such thing as an exterior
+    // fixture that mounts to a ceiling in this library.
+    for (const style of LAMP_STYLES.filter(s => s.mount === 'ceiling')) {
+      expect(style.category).toBe('interior');
+    }
+  });
+
+  it('gives cobra and cobra-double their requested 46 intensity / 4.5 scale', () => {
+    for (const id of ['cobra', 'cobra-double']) {
+      const style = findLampStyle(id);
+      expect(style.light.intensity).toBe(46);
+      expect(style.light.scale).toBe(4.5);
+    }
+  });
+
+  it('gives modern-led a rect light, not a spot', () => {
+    expect(findLampStyle('modern-led').light.type).toBe('rect');
   });
 });

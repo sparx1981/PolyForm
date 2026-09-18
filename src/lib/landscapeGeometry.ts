@@ -1436,7 +1436,6 @@ export function getLampLightAimOffset(style: string): [number, number, number] {
   switch (style) {
     case 'cobra': return [0.15, -1, 0];
     case 'cobra-double': return [0, -1, 0];
-    case 'modern-led': return [0.1, -1, 0];
     case 'high-mast': return [0, -1, 0];
     case 'recessed': return [0, -1, 0];
     case 'track': return [0, -1, 0];

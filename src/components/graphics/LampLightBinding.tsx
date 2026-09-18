@@ -65,6 +65,7 @@ export function LampLightBinding({ shape }: { shape: Shape }) {
           distance: def.light.distance, decay: def.light.decay,
           angle: def.light.angle, penumbra: def.light.penumbra,
           width: def.light.width, height: def.light.height,
+          scale: def.light.scale,
           target,
           // rectAreaLight has no target; it's aimed via a fixed rotation instead -
           // straight down suits every 'rect' style here (a flush ceiling panel).

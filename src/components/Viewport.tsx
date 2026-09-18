@@ -23,7 +23,7 @@ import {
   GizmoHelper,
   GizmoViewport
 } from '@react-three/drei';
-import { EffectComposer, N8AO } from '@react-three/postprocessing';
+import { EffectComposer, N8AO, GodRays } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as THREE from 'three';
 import { SUBTRACTION, Evaluator, Brush } from 'three-bvh-csg';
@@ -83,6 +83,7 @@ import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers, Lasso, SquareDashed } from 'lucide-react';
 import StyleLibraryModal from './StyleLibraryModal';
 import { LampStylePicker } from './graphics/LampStylePicker';
+import { findLampStyle } from '../lib/lampStyles';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
@@ -476,6 +477,13 @@ const fogFragmentShader = `
   uniform int fogType; // 0: standard, 1: super-mega
   uniform mat4 projectionMatrixInverse;
   uniform mat4 viewMatrixInverse;
+  // Sun-tinted fog: brightens and warms the fog color when the view ray points
+  // toward the sun, the everyday effect of atmospheric scattering (the sky and any
+  // haze glow brighter in the sun's direction, most obviously near sunrise/sunset).
+  // Reuses this same shader/fog pass rather than a separate effect.
+  uniform vec3 sunDirection;
+  uniform vec3 sunColor;
+  uniform float sunStrength;
 
   // Noise functions for volumetric effect
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -513,6 +521,12 @@ const fogFragmentShader = `
     vec3 rayDir = normalize(worldPos - cameraPos);
     float dist = length(worldPos - cameraPos);
 
+    // How directly this ray looks toward the sun - a tight, high-power falloff so
+    // the tint stays a glow around the sun's direction rather than washing out the
+    // whole sky. sunStrength (from Sun Intensity) keeps a dim/off sun from tinting
+    // fog it isn't actually lighting.
+    float sunAmount = pow(max(dot(rayDir, sunDirection), 0.0), 10.0) * clamp(sunStrength, 0.0, 1.0);
+
     if (fogType == 1) { // Super Mega Volumetric Fog
       float totalDensity = 0.0;
       int steps = 16;
@@ -532,7 +546,8 @@ const fogFragmentShader = `
       }
       
       float fogFactor = exp(-totalDensity);
-      outputColor = vec4(mix(color1, inputColor.rgb, fogFactor), inputColor.a);
+      vec3 tintedFog = mix(color1, sunColor, sunAmount);
+      outputColor = vec4(mix(tintedFog, inputColor.rgb, fogFactor), inputColor.a);
       return;
     }
 
@@ -569,6 +584,8 @@ const fogFragmentShader = `
       }
     }
 
+    fogColor = mix(fogColor, sunColor, sunAmount);
+
     outputColor = vec4(mix(fogColor, inputColor.rgb, fogFactor), inputColor.a);
   }
 `;
@@ -578,7 +595,7 @@ RectAreaLightUniformsLib.init();
 class FogEffectImpl extends Effect {
   camera: THREE.Camera;
 
-  constructor({ color1, color2, color3, density, height, heightEnd, speed, colorCount, fogType, camera }: any) {
+  constructor({ color1, color2, color3, density, height, heightEnd, speed, colorCount, fogType, camera, sunPosition, sunColor, sunStrength }: any) {
     super('FogEffect', fogFragmentShader, {
       attributes: EffectAttribute.DEPTH,
       uniforms: new Map([
@@ -593,7 +610,10 @@ class FogEffectImpl extends Effect {
         ['colorCount', new THREE.Uniform(colorCount)],
         ['fogType', new THREE.Uniform(fogType)],
         ['projectionMatrixInverse', new THREE.Uniform(new THREE.Matrix4().copy(camera.projectionMatrixInverse))],
-        ['viewMatrixInverse', new THREE.Uniform(new THREE.Matrix4().copy(camera.matrixWorld))]
+        ['viewMatrixInverse', new THREE.Uniform(new THREE.Matrix4().copy(camera.matrixWorld))],
+        ['sunDirection', new THREE.Uniform(new THREE.Vector3(...sunPosition).normalize())],
+        ['sunColor', new THREE.Uniform(new THREE.Color(sunColor))],
+        ['sunStrength', new THREE.Uniform(sunStrength)]
       ])
     });
     this.camera = camera;
@@ -608,7 +628,7 @@ class FogEffectImpl extends Effect {
   }
 }
 
-const FogEffect = React.forwardRef(({ settings, camera }: any, ref) => {
+const FogEffect = React.forwardRef(({ settings, camera, sunPosition, sunIntensity }: any, ref) => {
   const effect = useMemo(() => new FogEffectImpl({
     color1: settings?.colors?.[0] || '#ffffff',
     color2: settings?.colors?.[1] || '#ffffff',
@@ -619,9 +639,19 @@ const FogEffect = React.forwardRef(({ settings, camera }: any, ref) => {
     speed: settings.animate ? settings.speed : 0,
     colorCount: settings.colorCount,
     fogType: settings.type === 'super-mega' ? 1 : 0,
-    camera
-  }), [settings, camera]);
-  
+    camera,
+    sunPosition: sunPosition || [5, 5, 5],
+    // A fixed warm daylight tint rather than a per-scene setting: sun-tinted fog is
+    // meant as a subtle, always-sensible enhancement to the existing fog pass, not
+    // another color to configure.
+    sunColor: '#fff4dd',
+    // Ties the tint's strength to the sun's own configured brightness (Sun Intensity,
+    // 0-50 in the Lighting panel) so a dim/disabled sun doesn't tint fog it isn't
+    // actually lighting; halved and clamped since the shader's own falloff already
+    // does the heavy lifting of keeping this subtle.
+    sunStrength: Math.min(1, (sunIntensity ?? 1) / 2)
+  }), [settings, camera, sunPosition, sunIntensity]);
+
   return <primitive ref={ref} object={effect} dispose={null} />;
 });
 
@@ -1912,6 +1942,8 @@ function Scene() {
     setShadowOpacity,
     ambientOcclusionEnabled,
     setAmbientOcclusionEnabled,
+    godRaysEnabled,
+    godRaysIntensity,
     activeBevelType,
     setActiveBevelType,
     activeBevelAmount,
@@ -3412,6 +3444,11 @@ function Scene() {
     subtractTargetId, setSubtractTargetId, performMixedCSGSubtraction,
   ]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
+  // The sun's own screen-space marker for GodRays (see the <GodRays> mount below) -
+  // separate from the showLightsource debug sphere, since this one needs to always
+  // exist (not just when that debug toggle is on) for the effect to have something
+  // to reference.
+  const sunMeshRef = useRef<THREE.Mesh>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);
   const selectedLightIdRef = useRef(selectedLightId);
@@ -9489,6 +9526,9 @@ function Scene() {
   const effectiveCameraFar = cameraDepthClippingEnabled ? Math.max(effectiveCameraNear + 0.1, cameraFar) : 5000;
   effectiveCameraDefaultsRef.current = { near: effectiveCameraNear, far: effectiveCameraFar };
 
+  const fogPostprocessingActive = fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1));
+  const postprocessingActive = ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive;
+
   useEffect(() => {
     if (camera && (camera as any).isPerspectiveCamera) {
       camera.near = effectiveCameraNear;
@@ -9538,14 +9578,21 @@ function Scene() {
       <Fog />
       
       <ambientLight intensity={(skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity)} />
-      <directionalLight 
+      <directionalLight
         ref={directionalLightRef}
-        position={lightPosition} 
-        intensity={sunIntensity} 
-        castShadow={shadowsEnabled} 
+        position={lightPosition}
+        intensity={sunIntensity}
+        castShadow={shadowsEnabled}
         shadow-mapSize={[1024, 1024]}
       />
-      
+
+      {godRaysEnabled && (
+        <mesh ref={sunMeshRef} position={lightPosition}>
+          <sphereGeometry args={[0.4, 16, 16]} />
+          <meshBasicMaterial color="#fff6d8" toneMapped={false} />
+        </mesh>
+      )}
+
       {showLightsource && (
         <group position={lightPosition}>
           <mesh>
@@ -11060,7 +11107,7 @@ function Scene() {
       {activeTool === 'teleport' && (
         <TeleportPortalPreview
           floorEnabled={floorEnabled}
-          postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
+          postprocessingActive={postprocessingActive}
         />
       )}
 
@@ -11616,8 +11663,12 @@ function Scene() {
       <ParametricPadOverlay />
       <BlockPickerOverlay />
 
-      {(ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))) && (
-        <EffectComposer>
+      {postprocessingActive && (
+        // autoClear is normally left at its default (true); GodRays specifically
+        // needs it off - it renders an extra internal occlusion pass, and without
+        // this, occlusion by scene geometry looks wrong (see the console warning
+        // @react-three/postprocessing's own GodRays logs if this is missing).
+        <EffectComposer autoClear={!godRaysEnabled}>
           {ambientOcclusionEnabled && (
             // N8AO (GTAO-style) instead of the older SSAO effect: SSAO's fixed
             // world-space sample radius caused halo/self-occlusion artifacts that
@@ -11633,10 +11684,24 @@ function Scene() {
               quality="medium"
             />
           )}
-          {fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)) && (
-            <FogEffect 
-              settings={fogSettings} 
+          {fogPostprocessingActive && (
+            <FogEffect
+              settings={fogSettings}
               camera={camera}
+              sunPosition={lightPosition}
+              sunIntensity={sunIntensity}
+            />
+          )}
+          {godRaysEnabled && (
+            <GodRays
+              sun={sunMeshRef}
+              density={0.85}
+              decay={0.9}
+              weight={0.4 * godRaysIntensity}
+              exposure={0.5 * godRaysIntensity}
+              clampMax={1}
+              blur
+              samples={60}
             />
           )}
         </EffectComposer>
@@ -14237,7 +14302,22 @@ export default function Viewport() {
         onClose={() => setLampStyleTargetId(null)}
         onApplyStyle={(styleId) => {
           if (!lampStyleTargetId) return;
-          setShapes(shapes.map(s => s.id === lampStyleTargetId ? { ...s, archStyle: styleId } : s));
+          const styleDef = findLampStyle(styleId);
+          setShapes(shapes.map(s => {
+            if (s.id !== lampStyleTargetId) return s;
+            // The placement tool drops a lamp wherever the user clicked, which is
+            // floor/ground height the overwhelming majority of the time - there's no
+            // ceiling-surface-aware placement mode. A style that mounts to the
+            // ceiling (a pendant, a downlight, a troffer) needs to actually sit up
+            // near a ceiling, not hang its fixture down from a floor-level pivot -
+            // that was rendering ceiling fixtures below the floor. Only lift it when
+            // the shape still looks floor-level; a lamp someone has already
+            // deliberately raised (e.g. onto an upper story) is left alone.
+            const position = (styleDef.mount === 'ceiling' && s.position[1] < 2.0)
+              ? [s.position[0], 2.4, s.position[2]] as [number, number, number]
+              : s.position;
+            return { ...s, archStyle: styleId, position };
+          }));
           commitHistory();
           setMeasurements(`Updated light style to ${styleId.toUpperCase()}`);
           setLampStyleTargetId(null);
