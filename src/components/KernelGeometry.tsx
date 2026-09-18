@@ -72,6 +72,30 @@ const DEFAULT_BACK = '#8f9ba8';
 const DEFAULT_EDGE = '#2b2b2b';
 const DEFAULT_SELECTED = '#3b82f6';
 
+/**
+ * SurfaceDepth (see KernelSurfaceDepthBinding) only ever touches the
+ * displacementMap: it's a GPU vertex displacement with no per-vertex normal
+ * recompute, so viewed face-on it is all but invisible without a normal map
+ * layered in separately for per-pixel shading - the same reason a Shape's own
+ * pbrMapProps in Viewport.tsx binds shape.normalMapUrl alongside its
+ * displacement. Kernel faces need the identical pairing, or a face painted
+ * with a height map looks like it "did nothing" the instant the camera is
+ * looking straight at it rather than across it at a raking angle.
+ */
+const _kernelNormalMapCache = new Map<string, THREE.Texture>();
+function getKernelNormalMapTexture(url: string | undefined): THREE.Texture | undefined {
+  if (!url) return undefined;
+  let tex = _kernelNormalMapCache.get(url);
+  if (tex) return tex;
+  tex = new THREE.TextureLoader().load(url, (loaded) => {
+    loaded.wrapS = THREE.RepeatWrapping; loaded.wrapT = THREE.RepeatWrapping;
+    loaded.colorSpace = THREE.NoColorSpace; loaded.needsUpdate = true;
+  });
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.NoColorSpace;
+  _kernelNormalMapCache.set(url, tex);
+  return tex;
+}
+
 export function KernelGeometry({
   graph,
   revision = 0,
@@ -197,6 +221,8 @@ export function KernelGeometry({
             opacity={opacity}
             roughness={0.85}
             metalness={0}
+            normalMap={getKernelNormalMapTexture(g.surfaceDepth?.normalMapUrl)}
+            normalScale={g.surfaceDepth?.normalMapUrl ? new THREE.Vector2(1, 1) : undefined}
             // Pushes this face's DEPTH VALUES back slightly (not its actual
             // position) so any line geometry sitting exactly on the same
             // plane — the boundary between two coplanar faces, most
