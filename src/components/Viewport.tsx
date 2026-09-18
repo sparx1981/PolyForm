@@ -10516,6 +10516,7 @@ function Scene() {
               height={Array.isArray(shape.args) ? shape.args[2] : 1}
               bevelAmount={shape.bevelAmount}
               bevelSegments={shape.bevelSegments || 4}
+              bevelType={shape.bevelType || 'radius'}
               uprightY
             />
           ) : shape.type === 'circle' || shape.type === 'line' || shape.type === 'triangle' || shape.type === 'prism' ? (
@@ -10536,7 +10537,7 @@ function Scene() {
           ) : shape.type === 'cylinder' ? (
             <cylinderGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 1, 1, 32]) as any} />
           ) : shape.type === 'poly' ? (
-            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={computeHolesForSlab(shape, shapes)} />
+            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} bevelType={shape.bevelType || 'radius'} holes={computeHolesForSlab(shape, shapes)} />
           ) : ['wall', 'door', 'window', 'step', 'staircase', 'scale_figure'].includes(shape.type) ? (
             <ArchGeometry shape={shape} shapes={shapes} />
           ) : ['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(shape.type) ? (
@@ -12278,7 +12279,7 @@ function normalizePolyWinding(pts: [number, number][], ccw: boolean): [number, n
   return isCCW === ccw ? pts : [...pts].reverse();
 }
 
-function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, uprightY = false, holes = undefined }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, uprightY?: boolean, holes?: [number, number][][] }) {
+function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, bevelType = 'radius', uprightY = false, holes = undefined }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, bevelType?: 'radius' | 'chamfer', uprightY?: boolean, holes?: [number, number][][] }) {
   const geometry = useMemo(() => {
     if (!vertices || vertices.length < 3) return new THREE.BufferGeometry();
     
@@ -12318,12 +12319,18 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
         return new THREE.ShapeGeometry(shape);
       } else {
         const safeBevel = Math.max(0, Math.min(bevelAmount, height / 2 - 0.001));
+        // three.js's own multi-segment bevel already interpolates each ring via
+        // cos/sin (a genuine quarter-circle profile), so a high segment count IS a
+        // rounded "radius" bevel for free. A true "chamfer" is a single flat angled
+        // cut - one segment, no curve - which is why forcing segments=1 here is the
+        // whole fix, not a new bevel algorithm.
+        const effectiveBevelSegments = bevelType === 'chamfer' ? 1 : Math.max(4, bevelSegments);
         const geo = new THREE.ExtrudeGeometry(shape, {
           depth: height,
           bevelEnabled: safeBevel > 0,
           bevelThickness: safeBevel,
           bevelSize: safeBevel,
-          bevelSegments: Math.max(1, bevelSegments),
+          bevelSegments: effectiveBevelSegments,
           bevelOffset: 0
         });
         geo.translate(0, 0, -height / 2); // Center in Z to match other primitives
@@ -12334,7 +12341,7 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
       console.error('[PolyGeometry] Failed to create geometry:', err);
       return new THREE.BufferGeometry();
     }
-  }, [vertices, height, bevelAmount, bevelSegments, uprightY, holes]);
+  }, [vertices, height, bevelAmount, bevelSegments, bevelType, uprightY, holes]);
 
   useEffect(() => {
     return () => {

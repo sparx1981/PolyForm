@@ -963,6 +963,33 @@ export function createDoorGeometry(
         archSegment.translate(x, y, 0);
         frameParts.push(archSegment);
       }
+
+      // The wall cuts a plain rectangular hole sized to this shape's own width/height
+      // (same as every other door style), but a round arch doesn't reach that
+      // rectangle's top corners - without infill there, the two corners above the
+      // arch's springline are just an open gap through to whatever's behind the wall.
+      // Fill them with a solid panel shaped as "rectangle above the springline, minus
+      // the arch's own half-disc", i.e. exactly those two corners and nothing else.
+      const spandrelShape = new THREE.Shape();
+      spandrelShape.moveTo(-width / 2, springlineY);
+      spandrelShape.lineTo(-width / 2, height / 2);
+      spandrelShape.lineTo(width / 2, height / 2);
+      spandrelShape.lineTo(width / 2, springlineY);
+      spandrelShape.closePath();
+
+      const archHole = new THREE.Path();
+      archHole.absarc(0, springlineY, archRadius, 0, Math.PI, false);
+      archHole.closePath();
+      spandrelShape.holes.push(archHole);
+
+      // A Shape with a hole makes ExtrudeGeometry emit non-indexed output, while every
+      // other frame part (plain BoxGeometry) is indexed - mergeGeometries below requires
+      // one or the other consistently, so re-index this one to match.
+      const spandrelGeo = BufferGeometryUtils.mergeVertices(
+        new THREE.ExtrudeGeometry(spandrelShape, { depth: frameDepth, bevelEnabled: false })
+      );
+      spandrelGeo.translate(0, 0, -frameDepth / 2);
+      frameParts.push(spandrelGeo);
       break;
     }
 

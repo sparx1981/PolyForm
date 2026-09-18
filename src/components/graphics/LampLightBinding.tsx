@@ -28,6 +28,16 @@ export function LampLightBinding({ shape }: { shape: Shape }) {
   const style = shape.archStyle || 'classic';
   const lightId = `lamp-light-${shape.id}`;
 
+  // setCustomLights (from useApp()) is a plain function recreated every AppContext
+  // render, not a stable useState setter or a useCallback - including it in a
+  // dependency array below would re-run these effects on every single app render
+  // (not just when this lamp's own position/style actually changes), which is exactly
+  // what caused the crash this was fixing: the cleanup effect would keep tearing the
+  // light down and the setup effect would keep rebuilding it, forever. It's still safe
+  // to call from inside the effects without being a dependency, since every call always
+  // goes through the current-state functional-updater form (`prev => ...`), never a
+  // captured/stale value.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const worldPos = computeWorldAnchor(shape, getLampLightAnchor(height, style));
     setCustomLights(prev => {
@@ -42,11 +52,12 @@ export function LampLightBinding({ shape }: { shape: Shape }) {
       if (x === worldPos[0] && y === worldPos[1] && z === worldPos[2]) return prev;
       return prev.map(l => l.id === lightId ? { ...l, position: worldPos } : l);
     });
-  }, [lightId, shape.id, shape.position, shape.rotation, shape.quaternion, shape.scale, height, style, setCustomLights]);
+  }, [lightId, shape.id, shape.position, shape.rotation, shape.quaternion, shape.scale, height, style]);
 
   // Separate effect so this only fires on true unmount (the lamp shape being deleted),
   // not on every position/style update above.
-  useEffect(() => () => { setCustomLights(prev => prev.filter(l => l.id !== lightId)); }, [lightId, setCustomLights]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => { setCustomLights(prev => prev.filter(l => l.id !== lightId)); }, [lightId]);
 
   return null;
 }

@@ -86,6 +86,23 @@ describe('createDoorGeometry - open archway styles (no physical door leaf)', () 
     expect(() => createDoorGeometry(0.01, 0.01, 0.01, 'archway-round')).not.toThrow();
   });
 
+  it('fills the spandrel corners above the arch, so a rectangular wall cutout has no gap', () => {
+    // The wall cuts a plain rectangular hole sized to this door's own width/height (same
+    // as every style). A round arch alone never reaches that rectangle's top corners -
+    // only the spandrel infill does, so a vertex deep in a top corner (high x, high y at
+    // once) proves the infill is actually there and not just the arch and jambs.
+    const width = 1.0, height = 2.2;
+    const geom = createDoorGeometry(width, height, 0.15, 'archway-round');
+    const pos = geom.getAttribute('position');
+    let foundCorner = false;
+    for (let i = 0; i < pos.count; i++) {
+      const x = Math.abs(pos.getX(i));
+      const y = pos.getY(i);
+      if (x > width / 2 - 0.05 && y > height / 2 - 0.05) { foundCorner = true; break; }
+    }
+    expect(foundCorner).toBe(true);
+  });
+
   it('still produces the normal flush-panel geometry for unrelated styles', () => {
     const geom = createDoorGeometry(0.9, 2.1, 0.15, 'flush');
     expect(geom.groups.length).toBeGreaterThan(1);
