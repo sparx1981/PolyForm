@@ -890,11 +890,186 @@ function createBollardLampGeometry(height: number): THREE.BufferGeometry {
   return safeMergeGeometries(geometries, '#44403c');
 }
 
+function createCobraDoubleLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const armReach = 0.85;
+
+  const base = new THREE.CylinderGeometry(0.2, 0.26, 0.28, 14);
+  base.translate(0, 0.14, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.07, 0.09, height - 0.4, 14);
+  pole.translate(0, 0.28 + (height - 0.4) / 2, 0);
+  geometries.push(pole);
+
+  // A median/dual-carriageway light reaches both ways from one pole, so an arm and
+  // head pair is built once, then mirrored across X for the opposite side.
+  for (const side of [1, -1]) {
+    const armOut = new THREE.CylinderGeometry(0.04, 0.045, armReach, 10);
+    armOut.rotateZ(Math.PI / 2);
+    armOut.translate(side * (armReach / 2 + 0.09), height, 0);
+    geometries.push(armOut);
+
+    const head = new THREE.BoxGeometry(0.38, 0.13, 0.2);
+    head.translate(side * (armReach + 0.14), height - 0.05, 0);
+    applyGeometryVertexColors(head, '#1e293b');
+    geometries.push(head);
+
+    const lens = new THREE.BoxGeometry(0.3, 0.02, 0.14);
+    lens.translate(side * (armReach + 0.14), height - 0.12, 0);
+    applyGeometryVertexColors(lens, '#fef9c3');
+    geometries.push(lens);
+  }
+
+  return safeMergeGeometries(geometries, '#1e293b');
+}
+
+function createPostTopLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const base = new THREE.CylinderGeometry(0.18, 0.24, 0.22, 16);
+  base.translate(0, 0.11, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.055, 0.065, height - 0.5, 16);
+  pole.translate(0, 0.22 + (height - 0.5) / 2, 0);
+  geometries.push(pole);
+
+  // The "acorn" - a squat sphere sitting directly on the pole, the plainer,
+  // far more common cousin of the Victorian style's boxy ornate lantern.
+  const acorn = new THREE.SphereGeometry(0.22, 14, 10);
+  acorn.scale(1, 1.15, 1);
+  acorn.translate(0, height + 0.1, 0);
+  applyGeometryVertexColors(acorn, '#f5f5f4');
+  geometries.push(acorn);
+
+  const finialCap = new THREE.ConeGeometry(0.06, 0.1, 8);
+  finialCap.translate(0, height + 0.36, 0);
+  geometries.push(finialCap);
+
+  return safeMergeGeometries(geometries, '#3f3f46');
+}
+
+function createModernLedLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const armReach = 0.75;
+
+  const base = new THREE.CylinderGeometry(0.16, 0.2, 0.2, 8);
+  base.translate(0, 0.1, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.05, 0.05, height - 0.3, 8);
+  pole.translate(0, 0.2 + (height - 0.3) / 2, 0);
+  geometries.push(pole);
+
+  // A straight, perfectly horizontal arm - contemporary fixtures skip the cobra's
+  // curve, since the slim cutoff head itself does the visual work.
+  const arm = new THREE.CylinderGeometry(0.03, 0.03, armReach, 8);
+  arm.rotateZ(Math.PI / 2);
+  arm.translate(armReach / 2 + 0.05, height, 0);
+  geometries.push(arm);
+
+  // Slim rectangular "shoebox" cutoff housing, flat-bottomed so no light spills upward.
+  const housing = new THREE.BoxGeometry(0.5, 0.06, 0.24);
+  housing.translate(armReach + 0.05, height - 0.02, 0);
+  geometries.push(housing);
+
+  const ledPanel = new THREE.BoxGeometry(0.44, 0.015, 0.2);
+  ledPanel.translate(armReach + 0.05, height - 0.055, 0);
+  applyGeometryVertexColors(ledPanel, '#e0f2fe');
+  geometries.push(ledPanel);
+
+  return safeMergeGeometries(geometries, '#334155');
+}
+
+function createHighMastLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  // A high mast is a highway/interchange fixture: a plain pole several times taller
+  // than a street-scale light, topped with a cluster of floodlights rather than one
+  // downward head. `height` still drives the scale so the style stays resizable, just
+  // from a taller starting point than the others.
+  const mastHeight = highMastHeight(height);
+
+  const base = new THREE.CylinderGeometry(0.28, 0.36, 0.4, 16);
+  base.translate(0, 0.2, 0);
+  geometries.push(base);
+
+  const mast = new THREE.CylinderGeometry(0.09, 0.16, mastHeight - 0.6, 16);
+  mast.translate(0, 0.4 + (mastHeight - 0.6) / 2, 0);
+  geometries.push(mast);
+
+  const ring = new THREE.TorusGeometry(0.22, 0.025, 8, 20);
+  ring.rotateX(Math.PI / 2);
+  ring.translate(0, mastHeight - 0.15, 0);
+  geometries.push(ring);
+
+  // Four floodlight heads angled outward and down around the mast head, the
+  // characteristic silhouette of a highway high-mast light.
+  const floodCount = 4;
+  for (let i = 0; i < floodCount; i++) {
+    const angle = (i / floodCount) * Math.PI * 2;
+    const flood = new THREE.BoxGeometry(0.34, 0.16, 0.22);
+    flood.rotateX(Math.PI / 5.5);
+    flood.rotateY(angle);
+    flood.translate(Math.sin(angle) * 0.3, mastHeight, Math.cos(angle) * 0.3);
+    applyGeometryVertexColors(flood, '#1c1917');
+    geometries.push(flood);
+
+    const lens = new THREE.BoxGeometry(0.26, 0.02, 0.16);
+    lens.rotateX(Math.PI / 5.5 + Math.PI / 2);
+    lens.rotateY(angle);
+    lens.translate(Math.sin(angle) * 0.42, mastHeight - 0.06, Math.cos(angle) * 0.42);
+    applyGeometryVertexColors(lens, '#fef9c3');
+    geometries.push(lens);
+  }
+
+  return safeMergeGeometries(geometries, '#57534e');
+}
+
+// Same short-post scale rule as bollardPostHeight, and shared with getLampLightAnchor
+// for the same reason: "height" widens reach, not the post.
+function solarPathPostHeight(height: number): number {
+  return Math.max(0.7, Math.min(1.3, height * 0.32));
+}
+
+// Shared with getLampLightAnchor so the light attaches at the actual built mast top.
+function highMastHeight(height: number): number {
+  return Math.max(height * 2.6, 9);
+}
+
+function createSolarPathLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const postHeight = solarPathPostHeight(height);
+
+  const post = new THREE.CylinderGeometry(0.045, 0.055, postHeight, 12);
+  post.translate(0, postHeight / 2, 0);
+  geometries.push(post);
+
+  // The solar panel, tilted skyward on a short stalk above a diffuser band.
+  const panel = new THREE.BoxGeometry(0.26, 0.02, 0.18);
+  panel.rotateZ(-0.3);
+  panel.translate(0.02, postHeight + 0.1, 0);
+  applyGeometryVertexColors(panel, '#1e3a5f');
+  geometries.push(panel);
+
+  const diffuser = new THREE.CylinderGeometry(0.09, 0.09, 0.05, 16);
+  diffuser.translate(0, postHeight + 0.02, 0);
+  applyGeometryVertexColors(diffuser, '#f5f5f4');
+  geometries.push(diffuser);
+
+  return safeMergeGeometries(geometries, '#44403c');
+}
+
 export function createLampGeometry(height: number = 3.2, style: string = 'classic'): THREE.BufferGeometry {
   switch (style) {
     case 'cobra': return createCobraLampGeometry(height);
+    case 'cobra-double': return createCobraDoubleLampGeometry(height);
     case 'victorian': return createVictorianLampGeometry(height);
+    case 'post-top': return createPostTopLampGeometry(height);
+    case 'modern-led': return createModernLedLampGeometry(height);
+    case 'high-mast': return createHighMastLampGeometry(height);
     case 'bollard': return createBollardLampGeometry(height);
+    case 'solar-path': return createSolarPathLampGeometry(height);
     case 'classic':
     default: return createClassicLampGeometry(height);
   }
@@ -906,8 +1081,13 @@ export function createLampGeometry(height: number = 3.2, style: string = 'classi
 export function getLampLightAnchor(height: number = 3.2, style: string = 'classic'): [number, number, number] {
   switch (style) {
     case 'cobra': return [0.9 + 0.15, height - 0.06, 0];
+    case 'cobra-double': return [0, height - 0.05, 0];
     case 'victorian': return [0, height - 0.2, 0];
+    case 'post-top': return [0, height + 0.1, 0];
+    case 'modern-led': return [0.75 + 0.05, height - 0.05, 0];
+    case 'high-mast': return [0, highMastHeight(height), 0];
     case 'bollard': return [0, bollardPostHeight(height) * 0.68, 0];
+    case 'solar-path': return [0, solarPathPostHeight(height) + 0.02, 0];
     case 'classic':
     default: return [0, height - 0.25, 0];
   }

@@ -13,7 +13,7 @@ export function LampStylePicker({ isOpen, targetShape, onClose, onApplyStyle, th
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className={`w-full max-w-lg rounded-lg shadow-xl p-4 space-y-4 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}
+        className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-lg shadow-xl p-4 space-y-4 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -22,7 +22,7 @@ export function LampStylePicker({ isOpen, targetShape, onClose, onApplyStyle, th
             <X size={16} />
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {LAMP_STYLES.map(style => {
             const active = currentStyleId === style.id;
             return (
