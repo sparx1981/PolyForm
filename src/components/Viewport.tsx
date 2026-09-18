@@ -14229,7 +14229,7 @@ export default function Viewport() {
         }}
       />
 
-      {/* Style picker for street lights - a variety of light models to choose from */}
+      {/* Style picker for light fixtures - exterior and interior models to choose from */}
       <LampStylePicker
         isOpen={!!lampStyleTargetId}
         targetShape={shapes.find(s => s.id === lampStyleTargetId) || null}

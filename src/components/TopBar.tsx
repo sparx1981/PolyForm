@@ -1306,7 +1306,7 @@ export default function TopBar() {
                       { tool: 'bush', label: 'Plant Bush / Shrub' },
                       { tool: 'fence', label: 'Post & Rail Fence' },
                       { tool: 'railing', label: 'Safety Railing' },
-                      { tool: 'lamp', label: 'Street / Path Lamp' },
+                      { tool: 'lamp', label: 'Light Fixture' },
                       { tool: 'bench', label: 'Park / Garden Bench' },
                       { tool: 'rock', label: 'Landscape Boulder' },
                     ].map(({ tool, label }) => (
