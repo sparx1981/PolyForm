@@ -303,6 +303,26 @@ function StyleDiagram({ style }: { style: ArchStyleDef }) {
             <rect x="78" y="25" width="3" height="105" fill="#64748b" rx="1" />
           </svg>
         );
+      case 'archway-square':
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            {/* Casing only, open interior - no leaf, no handle */}
+            <rect x="10" y="5" width="80" height="150" fill="none" stroke="currentColor" strokeWidth="3" rx="1" />
+            <rect x="18" y="13" width="64" height="134" fill="#e2e8f0" fillOpacity="0.35" />
+            <line x1="30" y1="147" x2="30" y2="13" stroke="currentColor" strokeWidth="1" strokeDasharray="2 4" opacity="0.5" />
+            <line x1="70" y1="147" x2="70" y2="13" stroke="currentColor" strokeWidth="1" strokeDasharray="2 4" opacity="0.5" />
+          </svg>
+        );
+      case 'archway-round':
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            {/* Casing with a semicircular head, open interior - no leaf, no handle */}
+            <path d="M 10,155 L 10,55 A 40,40 0 0,1 90,55 L 90,155" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+            <path d="M 18,150 L 18,55 A 32,32 0 0,1 82,55 L 82,150" fill="#e2e8f0" fillOpacity="0.35" stroke="none" />
+            <line x1="30" y1="150" x2="30" y2="58" stroke="currentColor" strokeWidth="1" strokeDasharray="2 4" opacity="0.5" />
+            <line x1="70" y1="150" x2="70" y2="58" stroke="currentColor" strokeWidth="1" strokeDasharray="2 4" opacity="0.5" />
+          </svg>
+        );
       case 'flush':
       default:
         return (
