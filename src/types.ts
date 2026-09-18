@@ -236,6 +236,10 @@ export interface CustomLight {
   contrast?: number; // 0 to 1
   position: [number, number, number];
   target?: [number, number, number];
+  // Set when this light is attached to a prop (e.g. a street lamp) rather than placed
+  // freestanding: its position is kept in sync with that shape and it's removed along
+  // with it, but it's still a full, independently editable CustomLight otherwise.
+  parentShapeId?: string;
   // Projector/Spot specific
   distance?: number;
   angle?: number;

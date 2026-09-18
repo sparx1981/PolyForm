@@ -60,6 +60,13 @@ it('subdivides only the render geometry under a fixed vertex budget', () => {
   expect(canApplySurfaceDepth({ type: 'box', surfaceMaterials: { 0: '#fff' } } as any)).toBe(true);
   expect(canApplySurfaceDepth({ type: 'box', bevelAmount: 0.1 } as any)).toBe(true);
   expect(canApplySurfaceDepth({ type: 'box', surfaceDivisions: { 0: 2 } } as any)).toBe(false);
+  // Surface depth is a material property, not a shape-type allowlist: any object type
+  // qualifies (objects whose actual mesh can't take it are excluded at runtime instead,
+  // by SurfaceDepthBinding), and surfaceDivisions is the only thing that excludes it here.
+  for (const type of ['wall', 'door', 'window', 'staircase', 'roof', 'lamp', 'tree', 'bench']) {
+    expect(canApplySurfaceDepth({ type } as any)).toBe(true);
+  }
+  expect(canApplySurfaceDepth({ type: 'wall', surfaceDivisions: { 0: 2 } } as any)).toBe(false);
 
   // Auto-derived normal maps hide when Surface depth is disabled...
   expect(shouldHideAutoNormalMap({ displacementMapUrl: 'x', surfaceDepthEnabled: false } as any)).toBe(true);

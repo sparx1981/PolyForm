@@ -16,9 +16,17 @@ export function SurfaceDepthBinding({ shape }: { shape: Shape }) {
     const mesh = marker.current?.parent;
     if (!(mesh instanceof THREE.Mesh)) return;
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    if (materials.length === 0 || !materials.every(mat => mat instanceof THREE.MeshStandardMaterial)) return;
+    // Surface depth is available on any shape type, but a handful of objects (mainly
+    // vertex-colored landscape props) render with a plain/non-standard material or
+    // geometry with no UVs, which this can't drive. Warn rather than fail silently, since
+    // the toggle now offers no advance way to tell which objects those are.
+    if (materials.length === 0 || !materials.every(mat => mat instanceof THREE.MeshStandardMaterial)) {
+      console.warn('[Surface depth] This object’s material doesn’t support height maps.'); return;
+    }
     const original = mesh.geometry;
-    if (!original.hasAttribute('uv') || !original.hasAttribute('normal')) return;
+    if (!original.hasAttribute('uv') || !original.hasAttribute('normal')) {
+      console.warn('[Surface depth] This object’s geometry has no UVs to map a height map onto.'); return;
+    }
     let disposed = false, relief: SurfaceDepth | undefined, subdivided: THREE.BufferGeometry | undefined, displayedGeometry: THREE.BufferGeometry | undefined;
     const originalRaycast = mesh.raycast;
     const texture = new THREE.TextureLoader().load(shape.displacementMapUrl, () => {

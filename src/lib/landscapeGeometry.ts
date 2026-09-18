@@ -779,7 +779,7 @@ export function createRailingGeometry(length: number = 2.4, height: number = 1.0
   return safeMergeGeometries(geometries, '#475569');
 }
 
-export function createLampGeometry(height: number = 3.2): THREE.BufferGeometry {
+function createClassicLampGeometry(height: number): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = [];
 
   const base = new THREE.CylinderGeometry(0.2, 0.25, 0.3, 14);
@@ -799,6 +799,118 @@ export function createLampGeometry(height: number = 3.2): THREE.BufferGeometry {
   geometries.push(cap);
 
   return safeMergeGeometries(geometries, '#334155');
+}
+
+function createCobraLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const armReach = 0.9;
+
+  const base = new THREE.CylinderGeometry(0.18, 0.22, 0.25, 14);
+  base.translate(0, 0.125, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.06, 0.08, height - 0.4, 14);
+  pole.translate(0, 0.25 + (height - 0.4) / 2, 0);
+  geometries.push(pole);
+
+  // Curved arm reaching out over the roadway, approximated with two angled segments.
+  const armRise = new THREE.CylinderGeometry(0.045, 0.05, 0.35, 10);
+  armRise.rotateZ(-Math.PI / 3.2);
+  armRise.translate(armReach * 0.18, height - 0.15, 0);
+  geometries.push(armRise);
+
+  const armOut = new THREE.CylinderGeometry(0.04, 0.045, armReach, 10);
+  armOut.rotateZ(Math.PI / 2);
+  armOut.translate(armReach / 2 + 0.1, height + 0.02, 0);
+  geometries.push(armOut);
+
+  // Angled cobra-head housing at the end of the arm.
+  const head = new THREE.BoxGeometry(0.4, 0.14, 0.22);
+  head.rotateZ(-0.12);
+  head.translate(armReach + 0.15, height - 0.06, 0);
+  geometries.push(head);
+
+  return safeMergeGeometries(geometries, '#1e293b');
+}
+
+function createVictorianLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const base = new THREE.CylinderGeometry(0.24, 0.3, 0.28, 8);
+  base.translate(0, 0.14, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.07, 0.09, height - 0.9, 12);
+  pole.translate(0, 0.28 + (height - 0.9) / 2, 0);
+  geometries.push(pole);
+
+  // Decorative scrollwork bands, suggested by a couple of wider rings along the pole.
+  for (const bandY of [height * 0.35, height * 0.65]) {
+    const band = new THREE.TorusGeometry(0.1, 0.025, 8, 16);
+    band.rotateX(Math.PI / 2);
+    band.translate(0, bandY, 0);
+    geometries.push(band);
+  }
+
+  // Boxy four-sided lantern with a pointed finial cap.
+  const lantern = new THREE.BoxGeometry(0.32, 0.4, 0.32);
+  lantern.translate(0, height - 0.2, 0);
+  geometries.push(lantern);
+
+  const finial = new THREE.ConeGeometry(0.2, 0.28, 4);
+  finial.translate(0, height + 0.14, 0);
+  geometries.push(finial);
+
+  return safeMergeGeometries(geometries, '#292524');
+}
+
+// Bollards are short by nature; a tall "height" arg just widens the glowing band's reach,
+// not the whole post. Shared with getLampLightAnchor so both stay in sync on the actual
+// built height instead of duplicating this clamp separately.
+function bollardPostHeight(height: number): number {
+  return Math.max(0.6, Math.min(1.1, height * 0.28));
+}
+
+function createBollardLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const postHeight = bollardPostHeight(height);
+
+  const post = new THREE.CylinderGeometry(0.09, 0.1, postHeight, 16);
+  post.translate(0, postHeight / 2, 0);
+  geometries.push(post);
+
+  const glowBand = new THREE.CylinderGeometry(0.095, 0.095, postHeight * 0.3, 16);
+  glowBand.translate(0, postHeight * 0.68, 0);
+  geometries.push(glowBand);
+
+  const cap = new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  cap.translate(0, postHeight, 0);
+  geometries.push(cap);
+
+  return safeMergeGeometries(geometries, '#44403c');
+}
+
+export function createLampGeometry(height: number = 3.2, style: string = 'classic'): THREE.BufferGeometry {
+  switch (style) {
+    case 'cobra': return createCobraLampGeometry(height);
+    case 'victorian': return createVictorianLampGeometry(height);
+    case 'bollard': return createBollardLampGeometry(height);
+    case 'classic':
+    default: return createClassicLampGeometry(height);
+  }
+}
+
+/** Local-space point (before the shape's own position/rotation/scale) where each lamp
+ * style's light actually comes from, so an attached CustomLight can sit at the right
+ * spot on the model instead of the shape's own pivot (its base). */
+export function getLampLightAnchor(height: number = 3.2, style: string = 'classic'): [number, number, number] {
+  switch (style) {
+    case 'cobra': return [0.9 + 0.15, height - 0.06, 0];
+    case 'victorian': return [0, height - 0.2, 0];
+    case 'bollard': return [0, bollardPostHeight(height) * 0.68, 0];
+    case 'classic':
+    default: return [0, height - 0.25, 0];
+  }
 }
 
 export function createBenchGeometry(length: number = 1.8): THREE.BufferGeometry {

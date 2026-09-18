@@ -248,8 +248,17 @@ export function flattenTerrainForFloorSlabs(
 
   // STRICT REQUIREMENT: Base perimeter strictly on 'Floor Slab', NOT 'Foundation Skirt'.
   // Foundations of a building typically extend down into the ground.
-  const slabs = allShapes.filter(s => 
-    s.id !== terrain.id && !s.hidden && (
+  // Only the ground floor (story-1, or untagged for older saved projects) should ever
+  // shape the terrain - an upper story's slab is several meters above grade, and
+  // excavating/flattening the ground at that elevation would deform the terrain to match
+  // a level that was never meant to touch it. Any required terrain deformation happens
+  // once, when the ground-floor wall loop is closed.
+  const isUpperStory = (s: Shape) => s.tags?.some(t => {
+    const match = /^story-(\d+)$/.exec(t);
+    return match && Number(match[1]) > 1;
+  });
+  const slabs = allShapes.filter(s =>
+    s.id !== terrain.id && !s.hidden && !isUpperStory(s) && (
       s.tags?.includes('floor-slab') ||
       (s.name?.toLowerCase().includes('floor slab') && !s.tags?.includes('foundation-skirt') && !s.name?.toLowerCase().includes('foundation'))
     ) && !s.tags?.includes('foundation-skirt') && !s.name?.toLowerCase().includes('foundation')

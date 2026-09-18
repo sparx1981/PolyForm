@@ -2,13 +2,18 @@ import * as THREE from 'three';
 import type { Shape } from '../../types';
 
 export function canApplySurfaceDepth(shape: Shape): boolean {
-  // Bevelled edges and per-face (surfaceMaterials) objects are supported best-effort:
-  // SurfaceDepth.init() patches every material in a multi-material mesh with the same
-  // height field, so a box with six different face materials still gets one coherent
-  // relief. surfaceDivisions (a separate per-face UV subdivision grid, unrelated to
-  // face-group materials) isn't handled by the subdivision pass below, so stays excluded.
-  return ['box', 'rect', 'sphere', 'cone', 'cylinder', 'custom', 'terrain', 'poly', 'rock'].includes(shape.type)
-    && !shape.surfaceDivisions;
+  // Surface depth is a material property, not a shape-type allowlist: it can go on any
+  // object's surface, the same way a color or texture can. Bevelled edges and per-face
+  // (surfaceMaterials) objects are supported best-effort - SurfaceDepth.init() patches
+  // every material in a multi-material mesh with the same height field, so an object with
+  // several face materials still gets one coherent relief across all of them.
+  // surfaceDivisions (a separate per-face UV subdivision grid, unrelated to face-group
+  // materials) isn't handled by the subdivision pass below, so stays excluded. Objects
+  // whose actual mesh can't take it (no UVs, vertex-colored/non-standard material,
+  // instanced/batched rendering) are excluded at runtime instead, by
+  // SurfaceDepthBinding's own checks - this stays a single, simple gate rather than
+  // tracking every geometry's capabilities here too.
+  return !shape.surfaceDivisions;
 }
 
 /** normalMapUrl is shared by two unrelated features: a general PBR material preset can

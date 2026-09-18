@@ -139,9 +139,10 @@ export function SurfaceDepthControls() {
   return <details className="border rounded p-2 space-y-2 text-xs" data-testid="surface-depth-controls">
     <summary className="font-semibold cursor-pointer">Surface depth</summary>
     {!shape ? <p>Select an object to configure surface depth.</p> : !canApplySurfaceDepth(shape) ?
-      <p>Surface depth isn't available on this object's mesh type. Try a primitive, terrain, polygon, rock or custom mesh.</p> : <>
+      <p>Surface depth isn't available on objects with per-face texture tiling (surface divisions).</p> : <>
       <p className="truncate">{shape.name || shape.type}</p>
       <label className="flex gap-2"><input type="checkbox" disabled={!shape.displacementMapUrl} checked={Boolean(shape.surfaceDepthEnabled)} onChange={e => update({ surfaceDepthEnabled: e.target.checked })} />Enable surface depth</label>
+      <p className="text-[10px] text-gray-500">Works on most objects. A few (mostly vertex-colored landscape props) can't take a height map - if nothing changes after enabling, check the browser console.</p>
 
       <div className="flex gap-1 border-b pb-1" role="tablist">
         {([['presets', 'Patterns'], ['texture', 'From texture'], ['upload', 'Upload image']] as [Mode, string][]).map(([key, label]) => (

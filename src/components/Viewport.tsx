@@ -3,6 +3,7 @@ import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { shouldHideAutoNormalMap } from '../lib/graphics/depthGeometry';
+import { LampLightBinding } from './graphics/LampLightBinding';
 import { batchablePlant } from '../lib/graphics/vegetationEligibility';
 import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
@@ -81,6 +82,7 @@ import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers, Lasso, SquareDashed } from 'lucide-react';
 import StyleLibraryModal from './StyleLibraryModal';
+import { LampStylePicker } from './graphics/LampStylePicker';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
@@ -1116,7 +1118,7 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
       case 'railing':
         return createRailingGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.0, Array.isArray(shape.args) ? shape.args[1] : 1.0);
       case 'lamp':
-        return createLampGeometry(Array.isArray(shape.args) ? shape.args[1] : 3.2);
+        return createLampGeometry(Array.isArray(shape.args) ? shape.args[1] : 3.2, shape.archStyle || 'classic');
       case 'bench':
         return createBenchGeometry(Array.isArray(shape.args) ? shape.args[0] : 1.8);
       case 'rock':
@@ -1124,7 +1126,7 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
       default:
         return new THREE.BoxGeometry(1, 1, 1);
     }
-  }, [shape.type, shape.args, shape.plantSpeciesId]);
+  }, [shape.type, shape.args, shape.plantSpeciesId, shape.archStyle]);
 
   useEffect(() => {
     return () => {
@@ -8833,9 +8835,11 @@ function Scene() {
           ? Math.min(...shape.args) / 2
           : (shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism')
             ? Math.max(0.01, Math.min(shape.args[0], shape.args[2] / 2))
-            : shape.type === 'poly'
-              ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
-              : 1
+            : shape.type === 'cylinder'
+              ? Math.max(0.01, Math.min(shape.args[0], shape.args[1], shape.args[2] / 2))
+              : shape.type === 'poly'
+                ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
+                : 1
       });
     } else if (activeTool === 'paint' || activeTool === 'eraser') {
       e.stopPropagation();
@@ -10497,7 +10501,13 @@ function Scene() {
         return (
           <mesh key={shape.id} {...meshProps}>
           {shape.surfaceDepthEnabled && shape.displacementMapUrl && <SurfaceDepthBinding shape={shape} />}
-          {(shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism') && shape.bevelAmount ? (
+          {shape.type === 'lamp' && <LampLightBinding shape={shape} />}
+          {((shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism')
+              // A tapered cylinder (radiusTop !== radiusBottom) can't be represented by
+              // PolyGeometry's constant-cross-section extrude bevel, so it falls back to
+              // the plain, unbevelled cylinderGeometry branch below instead.
+              || (shape.type === 'cylinder' && Array.isArray(shape.args) && shape.args[0] === shape.args[1])
+            ) && shape.bevelAmount ? (
             <PolyGeometry
               vertices={regularPolygonVertices(
                 Array.isArray(shape.args) ? shape.args[0] : 1,
@@ -12727,6 +12737,7 @@ export default function Viewport() {
   // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [styleLibraryTargetId, setStyleLibraryTargetId] = useState<string | null>(null);
+  const [lampStyleTargetId, setLampStyleTargetId] = useState<string | null>(null);
   // objectInfoTarget lives HERE, in the outer Viewport() component, not in
   // Scene(): the button that sets it (the kernel context menu's "View
   // Object Information") and the modal that displays it are BOTH rendered
@@ -13496,7 +13507,28 @@ export default function Viewport() {
                 }
                 return null;
               })()}
-              <button 
+              {(() => {
+                const shape = shapes.find(sh => sh.id === contextMenu.data.shapeId);
+                if (shape && shape.type === 'lamp') {
+                  return (
+                    <button
+                      onClick={() => {
+                        setLampStyleTargetId(shape.id);
+                        setContextMenu(null);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-trimble-blue",
+                        theme === 'dark' ? "hover:bg-gray-700 bg-trimble-blue/10" : "hover:bg-gray-100 bg-trimble-blue/5"
+                      )}
+                    >
+                      <Palette size={14} className="text-trimble-blue shrink-0" />
+                      <span>Change Style...</span>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+              <button
                 onClick={() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; if (st === 'box' || st === 'rect') setIsDividePopupOpen(true); }} disabled={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return st !== 'box' && st !== 'rect'; })()} title={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return (st === 'box' || st === 'rect') ? undefined : 'Only available on box/rectangle faces'; })()}
                 className={cn(
                   "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
@@ -14164,6 +14196,21 @@ export default function Viewport() {
 
           setMeasurements(`Updated style to ${styleId.toUpperCase()}${extraOptions?.isParametric ? ' (Parametric Mode Active)' : ''}${isDoorOrWindow && hasTimberFraming ? ' · Framing Committed' : ''}`);
           setStyleLibraryTargetId(null);
+        }}
+      />
+
+      {/* Style picker for street lights - a variety of light models to choose from */}
+      <LampStylePicker
+        isOpen={!!lampStyleTargetId}
+        targetShape={shapes.find(s => s.id === lampStyleTargetId) || null}
+        theme={theme}
+        onClose={() => setLampStyleTargetId(null)}
+        onApplyStyle={(styleId) => {
+          if (!lampStyleTargetId) return;
+          setShapes(shapes.map(s => s.id === lampStyleTargetId ? { ...s, archStyle: styleId } : s));
+          commitHistory();
+          setMeasurements(`Updated light style to ${styleId.toUpperCase()}`);
+          setLampStyleTargetId(null);
         }}
       />
     </div>
