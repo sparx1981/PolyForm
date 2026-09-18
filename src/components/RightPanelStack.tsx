@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WeatherControls } from './graphics/WeatherControls';
 import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
+import { HeightMapPicker } from './graphics/HeightMapPicker';
 import * as THREE from 'three';
 import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
@@ -12,7 +13,7 @@ import type { FaceId } from '../lib/geometry/types';
 import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
-import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier } from '../types';
+import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier, HeightMapValue } from '../types';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
@@ -179,10 +180,11 @@ function SubSection({ title, children, defaultOpen = false }: { title: string, c
 
 export default function RightPanelStack() {
   const { 
-    activeMaterial, 
-    setActiveMaterial, 
+    activeMaterial,
+    setActiveMaterial,
     activePBR,
     setActivePBR,
+    setActiveSurfaceDepth,
     shapes,
     kernelHost,
     kernelRevision,
@@ -415,6 +417,14 @@ export default function RightPanelStack() {
     metalness: 0,
     opacity: 1
   });
+  // The height map (if any) being defined alongside this new material's color/texture -
+  // saved onto the material itself so painting it later also applies the height map.
+  const [newMaterialSurfaceDepth, setNewMaterialSurfaceDepth] = useState<HeightMapValue | null>(null);
+  // Lifted out of handleTextureUpload's async closure so the "From texture" mode of
+  // HeightMapPicker has something to derive a height map from as soon as it's ready,
+  // without waiting on that handler's Firebase persistence step.
+  const [newTextureDataUrl, setNewTextureDataUrl] = useState<string | undefined>(undefined);
+  useEffect(() => { if (!isAddMaterialOpen) { setNewMaterialSurfaceDepth(null); setNewTextureDataUrl(undefined); } }, [isAddMaterialOpen]);
   const [premadeMaterials, setPremadeMaterials] = useState<any[]>([]);
   const [tagSearch, setTagSearch] = useState('');
   const [newTagName, setNewTagName] = useState('');
@@ -578,11 +588,13 @@ export default function RightPanelStack() {
       type: 'color',
       value: newColor,
       pbr: pbrSettings,
+      surfaceDepth: newMaterialSurfaceDepth || undefined,
       createdAt: new Date()
     };
     setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
     setActiveMaterial(newColor);
     setActivePBR(pbrSettings);
+    setActiveSurfaceDepth(newMaterialSurfaceDepth);
     setActiveTool('paint');
     setIsAddMaterialOpen(false);
 
@@ -621,11 +633,13 @@ export default function RightPanelStack() {
       type: 'texture',
       value: aiPreviewUrl,
       pbr: pbrSettings,
+      surfaceDepth: newMaterialSurfaceDepth || undefined,
       createdAt: new Date()
     };
     setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
     setActiveMaterial(aiPreviewUrl);
     setActivePBR(pbrSettings);
+    setActiveSurfaceDepth(newMaterialSurfaceDepth);
     setActiveTool('paint');
     setIsAddMaterialOpen(false);
     setAiPreviewUrl(null);
@@ -668,6 +682,7 @@ export default function RightPanelStack() {
         reader.onerror = reject;
         reader.readAsDataURL(uploadBlob);
       });
+      setNewTextureDataUrl(dataUrl);
 
       const materialId = Math.random().toString(36).substr(2, 9);
       const cleanName = file.name.replace(/\.[^/.]+$/, "");
@@ -678,6 +693,7 @@ export default function RightPanelStack() {
         type: 'texture',
         value: dataUrl,
         pbr: pbrSettings,
+        surfaceDepth: newMaterialSurfaceDepth || undefined,
         createdAt: new Date()
       };
 
@@ -685,6 +701,7 @@ export default function RightPanelStack() {
       setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), newMaterial]);
       setActiveMaterial(dataUrl);
       setActivePBR(pbrSettings);
+      setActiveSurfaceDepth(newMaterialSurfaceDepth);
       setActiveTool('paint');
       setIsAddMaterialOpen(false);
 
@@ -732,6 +749,7 @@ export default function RightPanelStack() {
     // If activeMaterial is the deleted one, fallback to standard neutral
     if (activeMaterial === matToDelete.value) {
       setActiveMaterial('#e2e8f0');
+      setActiveSurfaceDepth(null);
     }
 
     // Persist deletion to Firestore if logged in
@@ -2518,6 +2536,7 @@ export default function RightPanelStack() {
                     onClick={() => {
                       setActiveMaterial(color);
                       setActivePBR({ roughness: 0.5, metalness: 0, opacity: 1 });
+                      setActiveSurfaceDepth(null);
                       setActiveTool('paint');
                     }}
                     className={cn(
@@ -2533,6 +2552,7 @@ export default function RightPanelStack() {
                     onClick={() => {
                       setActiveMaterial(m.value);
                       if (m.pbr) setActivePBR(m.pbr);
+                      setActiveSurfaceDepth(m.surfaceDepth || null);
                       setActiveTool('paint');
                     }}
                     className={cn(
@@ -2576,6 +2596,7 @@ export default function RightPanelStack() {
                         onClick={() => {
                           setActiveMaterial(m.value);
                           if (m.pbr) setActivePBR(m.pbr);
+                          setActiveSurfaceDepth(m.surfaceDepth || null);
                           setActiveTool('paint');
                         }}
                         className={cn(
@@ -4589,7 +4610,18 @@ export default function RightPanelStack() {
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
                     </div>
 
-                    <button 
+                    <div className="space-y-2 pt-4 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Settings2 size={16} className="text-gray-400" />
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
+                      </div>
+                      <HeightMapPicker
+                        value={newMaterialSurfaceDepth || {}}
+                        onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
+                      />
+                    </div>
+
+                    <button
                       onClick={handleAddColor}
                       className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all"
                     >
@@ -4634,6 +4666,18 @@ export default function RightPanelStack() {
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
                     </div>
 
+                    <div className="space-y-2 pt-4 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Settings2 size={16} className="text-gray-400" />
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
+                      </div>
+                      <HeightMapPicker
+                        value={newMaterialSurfaceDepth || {}}
+                        onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
+                        sourceTextureUrl={newTextureDataUrl}
+                      />
+                    </div>
+
                     {uploading && (
                       <div className="flex items-center justify-center gap-2 text-trimble-blue">
                         <Loader2 className="animate-spin" size={18} />
@@ -4657,6 +4701,7 @@ export default function RightPanelStack() {
                           };
                           setActivePBR(newPbr);
                           setPbrSettings(newPbr);
+                          setActiveSurfaceDepth(null);
                           setIsAddMaterialOpen(false);
                         }}
                         className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-trimble-blue transition-all"
@@ -4747,6 +4792,17 @@ export default function RightPanelStack() {
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
                           </div>
                           <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
+                        </div>
+                        <div className="space-y-2 pt-2 border-t border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <Settings2 size={16} className="text-gray-400" />
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
+                          </div>
+                          <HeightMapPicker
+                            value={newMaterialSurfaceDepth || {}}
+                            onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
+                            sourceTextureUrl={aiPreviewUrl}
+                          />
                         </div>
                         <button
                           onClick={handleAddAIMaterial}

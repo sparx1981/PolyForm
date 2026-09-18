@@ -204,6 +204,23 @@ export interface Shape {
   layerStack?: LayerStackItem[];
 }
 
+/** The height-map-related fields, independent of whatever they're attached to - a Shape
+ * directly (see the surfaceDepth-prefixed/displacementMapUrl/normalMapUrl fields above,
+ * which this mirrors), or a reusable material definition (customMaterials) that carries a
+ * height map to be painted onto any object later, the same way a color or texture is. */
+export interface HeightMapValue {
+  displacementMapUrl?: string;
+  normalMapUrl?: string;
+  surfaceDepthAutoNormal?: boolean;
+  surfaceDepthPresetId?: string;
+  surfaceDepthPatternScale?: number;
+  surfaceDepthPatternStrength?: number;
+  surfaceDepthSeed?: number;
+  displacementScale?: number;
+  displacementBias?: number;
+  surfaceDepthSegments?: number;
+}
+
 export interface TimberFrameShapeData {
   params: TimberFrameParams;
   openingAssemblies?: OpeningFrameAssembly[];
@@ -340,6 +357,8 @@ export interface AppState {
   setActiveMaterial: (color: string) => void;
   activePBR: { roughness: number, metalness: number, opacity: number };
   setActivePBR: (pbr: { roughness: number, metalness: number, opacity: number }) => void;
+  activeSurfaceDepth: HeightMapValue | null;
+  setActiveSurfaceDepth: (value: HeightMapValue | null) => void;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
   selectedIds: string[];
@@ -364,7 +383,7 @@ export interface AppState {
   commitHistory: () => void;
   addShape: (shape: Shape) => void;
   removeShape: (id: string) => void;
-  updateShapeColor: (id: string, color: string, pbr?: { roughness: number, metalness: number, opacity: number }) => void;
+  updateShapeColor: (id: string, color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => void;
   updateShapeDimensions: (id: string, position: [number, number, number], args: any) => void;
   isAIRendererOpen: boolean;
   setIsAIRendererOpen: (open: boolean) => void;

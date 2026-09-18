@@ -1873,8 +1873,9 @@ function Scene() {
     removeShape,
     selectedId, 
     setSelectedId, 
-    activeMaterial, 
+    activeMaterial,
     activePBR,
+    activeSurfaceDepth,
     updateShapeColor,
     updateShapeDimensions,
     setMeasurements,
@@ -8344,7 +8345,7 @@ function Scene() {
       }));
     } else {
       // Apply to whole object (default for shapes without per-face support, or forced via Shift+click)
-      updateShapeColor(id, activeMaterial, activePBR);
+      updateShapeColor(id, activeMaterial, activePBR, activeSurfaceDepth);
     }
   } else if (activeTool === 'offset') {
       if (offsetPreviewPoints && offsetPreviewPoints.length > 2 && selectedId) {
