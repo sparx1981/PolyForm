@@ -20,8 +20,10 @@ import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { EdgeId, FaceId, Graph } from '../lib/geometry/types';
 import { tessellateFace, tessellateGraph, mergeBuffers, edgeBuffer } from '../lib/geometry/tessellate';
-import { facesByMaterial } from '../tools/kernelSelection';
+import { facesByRenderGroup } from '../tools/kernelSelection';
 import { ThickLineSegments } from './ThickLineSegments';
+import { KernelSurfaceDepthBinding } from './graphics/KernelSurfaceDepthBinding';
+import type { HeightMapValue } from '../types';
 
 export interface KernelGeometryProps {
   graph: Graph;
@@ -95,8 +97,9 @@ export function KernelGeometry({
    * tool work on kernel geometry at all. Hidden faces are excluded here.
    */
   const groups = useMemo(() => {
-    const out: { color: string; geometry: THREE.BufferGeometry; faceOfTriangle: FaceId[] }[] = [];
-    for (const [color, faceIds] of facesByMaterial(graph)) {
+    const out: { key: string; color: string; geometry: THREE.BufferGeometry; faceOfTriangle: FaceId[]; surfaceDepth: HeightMapValue | undefined }[] = [];
+    let index = 0;
+    for (const { color, faceIds, surfaceDepth } of facesByRenderGroup(graph)) {
       const meshes = faceIds
         .map((id) => tessellateFace(graph, id))
         .filter((m): m is NonNullable<typeof m> => m !== null);
@@ -110,7 +113,9 @@ export function KernelGeometry({
       geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
       geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
       geo.computeBoundingSphere();
-      out.push({ color, geometry: geo, faceOfTriangle: merged.faceOfTriangle });
+      // Two groups can share a colour but differ by height map, so the
+      // colour alone is no longer a unique React key.
+      out.push({ key: `${color}#${index++}`, color, geometry: geo, faceOfTriangle: merged.faceOfTriangle, surfaceDepth });
     }
     return out;
   }, [graph, revision]);
@@ -148,7 +153,7 @@ export function KernelGeometry({
     <group name="kernel-geometry">
       {groups.map((g) => (
         <mesh
-          key={g.color}
+          key={g.key}
           geometry={g.geometry}
           castShadow
           receiveShadow
@@ -206,6 +211,7 @@ export function KernelGeometry({
             polygonOffsetFactor={1}
             polygonOffsetUnits={1}
           />
+          {g.surfaceDepth && <KernelSurfaceDepthBinding surfaceDepth={g.surfaceDepth} revision={revision} />}
         </mesh>
       ))}
 

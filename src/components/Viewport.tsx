@@ -88,7 +88,7 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
+import { paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
@@ -2179,11 +2179,29 @@ function Scene() {
       // relationship as "click selects the group, double-click drills into
       // one face," just using shift as the modifier since paint has no
       // natural "double-click" gesture of its own.
+      //
+      // A pre-existing multi-face selection (built by shift-clicking faces
+      // with a non-paint tool active, the same mechanism used to move/scale
+      // a custom set of faces) takes priority over "paint the clicked face's
+      // whole object": painting then applies to every selected face, however
+      // many separate primitives they came from — the height map carried by
+      // the active material included, same as its color.
       if (event.shiftKey) {
-        if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
+        if (paintFace(kernelHost.graph, faceId, activeMaterial)) {
+          setFaceSurfaceDepth(kernelHost.graph, faceId, activeSurfaceDepth ?? null);
+          bumpKernel();
+        }
+      } else if (kernelSelectedSet.size > 1) {
+        if (paintFaces(kernelHost.graph, kernelSelectedSet, activeMaterial) > 0) {
+          setFacesSurfaceDepth(kernelHost.graph, kernelSelectedSet, activeSurfaceDepth ?? null);
+          bumpKernel();
+        }
       } else {
         const group = groupContaining(kernelHost.graph, faceId);
-        if (paintFaces(kernelHost.graph, group, activeMaterial) > 0) bumpKernel();
+        if (paintFaces(kernelHost.graph, group, activeMaterial) > 0) {
+          setFacesSurfaceDepth(kernelHost.graph, group, activeSurfaceDepth ?? null);
+          bumpKernel();
+        }
       }
       return;
     }
@@ -2234,7 +2252,7 @@ function Scene() {
       setSelectedFaceIds(groupContaining(kernelHost.graph, faceId));
       lastKernelClickRef.current = { faceId, time: now };
     }
-  }, [activeTool, activeMaterial, kernelHost, bumpKernel, setSelectedFaceIds, setSelectedId, setSelectedIds]);
+  }, [activeTool, activeMaterial, activeSurfaceDepth, kernelSelectedSet, kernelHost, bumpKernel, setSelectedFaceIds, setSelectedId, setSelectedIds]);
 
   // ---- Move/scale/rotate for a kernel face-group selection ----
   //
@@ -12686,9 +12704,10 @@ export default function Viewport() {
     selectedIds, 
     removeShape, 
     selectedSurface, 
-    activeMaterial, 
-    activePBR, 
-    setShapes, 
+    activeMaterial,
+    activePBR,
+    activeSurfaceDepth,
+    setShapes,
     addShape,
     duplicateObject,
     commitHistory,
@@ -13579,7 +13598,10 @@ export default function Viewport() {
               */}
               <button
                 onClick={() => {
-                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial) > 0) bumpKernel();
+                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial) > 0) {
+                    setFacesSurfaceDepth(kernelHost.graph, contextMenu.data, activeSurfaceDepth ?? null);
+                    bumpKernel();
+                  }
                   setContextMenu(null);
                 }}
                 className={cn(

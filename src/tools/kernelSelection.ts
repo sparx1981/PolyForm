@@ -17,6 +17,7 @@ import { add, planeBasis, projectToBasis } from '../lib/geometry/math';
 import { signedArea } from '../lib/geometry/polygon';
 import { insertIsolatedEdge, type InsertContext } from '../lib/geometry/insert';
 import { derive, type DeriveOptions } from '../lib/geometry/derive';
+import type { HeightMapValue } from '../types';
 
 /** One row in the Outliner. */
 export interface FaceSummary {
@@ -196,6 +197,80 @@ export function facesByMaterial(g: Graph): Map<string, FaceId[]> {
     else groups.set(key, [id]);
   }
   return groups;
+}
+
+/**
+ * A face's height map, same shape as a Shape's own surfaceDepth* fields (see
+ * types.ts) but stored per kernel face rather than per object, since a kernel
+ * mesh can carry many independently-paintable faces across its whole graph.
+ * Kept in `attributes.custom` rather than a new Face field: it is paint-tool
+ * state, not core topology, and `custom` is exactly what that field is for.
+ */
+const SURFACE_DEPTH_KEY = 'surfaceDepth';
+
+/** Sets (or, given null, clears) a face's height map. Returns false when the face is gone. */
+export function setFaceSurfaceDepth(g: Graph, id: FaceId, depth: HeightMapValue | null): boolean {
+  const f = g.faces.get(id);
+  if (!f) return false;
+  if (depth?.displacementMapUrl) f.attributes.custom[SURFACE_DEPTH_KEY] = depth;
+  else delete f.attributes.custom[SURFACE_DEPTH_KEY];
+  return true;
+}
+
+/** Batch form of setFaceSurfaceDepth, mirroring paintFaces. Returns the count actually set. */
+export function setFacesSurfaceDepth(g: Graph, ids: Iterable<FaceId>, depth: HeightMapValue | null): number {
+  let count = 0;
+  for (const id of ids) if (setFaceSurfaceDepth(g, id, depth)) count++;
+  return count;
+}
+
+export function getFaceSurfaceDepth(g: Graph, id: FaceId): HeightMapValue | undefined {
+  const value = g.faces.get(id)?.attributes.custom[SURFACE_DEPTH_KEY];
+  return value as HeightMapValue | undefined;
+}
+
+/** Fields that change what actually gets rendered/GPU-uploaded for a height map -
+ * anything else (e.g. a future non-visual field) wouldn't need its own render group. */
+function surfaceDepthSignature(depth: HeightMapValue | undefined): string {
+  if (!depth?.displacementMapUrl) return '';
+  return JSON.stringify([
+    depth.displacementMapUrl, depth.normalMapUrl, depth.displacementScale, depth.displacementBias, depth.surfaceDepthSegments,
+  ]);
+}
+
+export interface KernelRenderGroup {
+  readonly color: string;
+  readonly faceIds: FaceId[];
+  readonly surfaceDepth: HeightMapValue | undefined;
+}
+
+/**
+ * Faces grouped by colour AND height map, for rendering.
+ *
+ * A single mesh can only carry one material, so displacement (like colour)
+ * needs its own group per distinct value - two faces painted the same colour
+ * but with different height maps (or one with none) cannot share a mesh, or
+ * the whole group would displace identically. Faces with the SAME colour and
+ * SAME height map still share one mesh, same as plain colour grouping did.
+ */
+export function facesByRenderGroup(g: Graph): KernelRenderGroup[] {
+  const order: string[] = [];
+  const groups = new Map<string, KernelRenderGroup & { faceIds: FaceId[] }>();
+  for (const id of [...g.faces.keys()].sort((a, b) => a - b)) {
+    const f = g.faces.get(id)!;
+    if (f.attributes.hidden) continue;
+    const color = f.attributes.materialFront ?? DEFAULT_LABEL_COLOR;
+    const depth = getFaceSurfaceDepth(g, id);
+    const key = `${color} ${surfaceDepthSignature(depth)}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { color, faceIds: [], surfaceDepth: depth };
+      groups.set(key, group);
+      order.push(key);
+    }
+    group.faceIds.push(id);
+  }
+  return order.map(key => groups.get(key)!);
 }
 
 export { DEFAULT_LABEL_COLOR };
