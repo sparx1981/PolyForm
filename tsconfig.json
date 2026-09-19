@@ -23,5 +23,6 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": ["PolyForm-gpu-integration", "dist", "node_modules"]
 }

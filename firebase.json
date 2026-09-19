@@ -2,5 +2,21 @@
   "firestore": {
     "database": "ai-studio-remixdraftup-aef4769a-09cf-4cce-89b2-898369165644",
     "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "dist",
+    "headers": [
+      {
+        "source": "/polyhaven/releases/**",
+        "headers": [{ "key": "Cache-Control", "value": "public,max-age=31536000,immutable" }]
+      },
+      {
+        "source": "/polyhaven/*.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      }
+    ]
   }
 }

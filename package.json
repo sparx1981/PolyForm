@@ -13,7 +13,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "lint:kernel": "tsc -p tsconfig.kernel.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "polyhaven": "tsx scripts/polyhaven/cli.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

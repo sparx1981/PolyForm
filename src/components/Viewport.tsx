@@ -1,4 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
+import { SceneWeather } from './graphics/SceneWeather';
+import { InstancedVegetation } from './graphics/InstancedVegetation';
+import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
+import { batchablePlant } from '../lib/graphics/vegetationEligibility';
 import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
 import { 
@@ -80,6 +84,12 @@ import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
+import { runtimeImageUrl, useMaterialBindings } from '../lib/assets/useMaterialBindings';
+import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
+import { loadAssetManifest } from '../lib/assets/catalog';
+import { chooseTier } from '../lib/assets/materialResolver';
+import { EnvironmentManager } from '../lib/assets/environmentManager';
+import { useManagedBindingTextures } from '../lib/assets/useManagedBindingTextures';
 import { rankSnap } from '../tools/tuning';
 import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
@@ -1851,6 +1861,7 @@ function resolveGroundPlaneFloorHit(raycaster: THREE.Raycaster, scene: THREE.Sce
 }
 
 function Scene() {
+  const { graphicsSettings } = useApp();
   const { 
     activeTool, 
     setActiveTool,
@@ -1866,6 +1877,8 @@ function Scene() {
     selectedId, 
     setSelectedId, 
     activeMaterial, 
+    activeMaterialBindingId,
+    materialBindings,
     activePBR,
     updateShapeColor,
     updateShapeDimensions,
@@ -2041,7 +2054,23 @@ function Scene() {
     walkBridgeRef
   } = useApp();
 
+  const usedMaterialBindings = useMemo(() => {
+    const ids = new Set<string>();
+    for (const shape of shapes) {
+      if (shape.materialBindingId) ids.add(shape.materialBindingId);
+      for (const id of Object.values(shape.surfaceMaterialBindings ?? {})) if (id) ids.add(id);
+    }
+    return Object.fromEntries([...ids].filter(id => materialBindings[id]).map(id => [id, materialBindings[id]]));
+  }, [shapes, materialBindings]);
+  const { resolved: resolvedMaterialBindings } = useMaterialBindings(usedMaterialBindings, '2k');
+
   const { raycaster, mouse, camera, scene, gl } = useThree();
+  const managedBindingTextures = useManagedBindingTextures(gl, resolvedMaterialBindings);
+  const batchedPlants = useMemo(() => {
+    const selected = new Set([...selectedIds, ...(selectedId ? [selectedId] : [])]);
+    return shapes.filter(shape => batchablePlant(shape, selected, tags, graphicsSettings.vegetation.instancing, activeTool));
+  }, [shapes, selectedIds, selectedId, tags, graphicsSettings.vegetation.instancing, activeTool]);
+  const batchedPlantIds = useMemo(() => new Set(batchedPlants.map(shape => shape.id)), [batchedPlants]);
 
   // Shared by every click path that can complete a "Pick Sun Centre"
   // pick (Shape mesh, kernel face, the floor plane, and the always-
@@ -8309,7 +8338,11 @@ function Scene() {
             surfaceMaterials: {
               ...(s.surfaceMaterials || {}),
               [key]: activeMaterial
-            }
+            },
+            surfaceMaterialBindings: {
+              ...(s.surfaceMaterialBindings || {}),
+              [key]: activeMaterialBindingId ?? '',
+            },
           };
         }
         return s;
@@ -8324,7 +8357,11 @@ function Scene() {
             surfaceMaterials: {
               ...(s.surfaceMaterials || {}),
               [faceKey]: activeMaterial
-            }
+            },
+            surfaceMaterialBindings: {
+              ...(s.surfaceMaterialBindings || {}),
+              [faceKey]: activeMaterialBindingId ?? '',
+            },
           };
         }
         return s;
@@ -9834,6 +9871,8 @@ function Scene() {
       ))}
 
       <Effects />
+      <SceneWeather />
+      <InstancedVegetation plants={batchedPlants} onSelect={handleMeshClick} onContextMenu={handleContextMenu} />
 
       {axisIndicatorEnabled && (
         <group>
@@ -9943,6 +9982,7 @@ function Scene() {
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;
+        if (batchedPlantIds.has(shape.id)) return null;
         if (shape.tags?.includes('timber-frame') || shape.id.startsWith('tf-')) {
           // Rendered via InstancedTimberFraming for batch instancing performance
           return null;
@@ -10336,49 +10376,82 @@ function Scene() {
           }
         }
 
+        const bindingMaterial = (bindingId?: string) => {
+          const binding = bindingId ? resolvedMaterialBindings[bindingId] : undefined;
+          if (!binding) return undefined;
+          const textures = bindingId ? managedBindingTextures[bindingId] : undefined;
+          const ormUrl = runtimeImageUrl(binding.maps.orm);
+          return {
+            baseColorUrl: runtimeImageUrl(binding.maps.basecolor),
+            baseColorTexture: textures?.basecolor,
+            color: binding.color,
+            roughness: binding.roughness,
+            metalness: binding.metalness,
+            opacity: binding.opacity,
+            depth: binding.depth,
+            pbr: {
+              normalMap: textures?.['normal-gl'] ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps['normal-gl'])),
+              normalScale: binding.maps['normal-gl'] ? new THREE.Vector2(binding.normalStrength, binding.normalStrength) : undefined,
+              roughnessMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              metalnessMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              aoMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              aoMapIntensity: ormUrl ? 1 : undefined,
+              specularIntensityMap: textures?.specular ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps.specular)),
+              transmissionMap: textures?.transmission ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps.transmission)),
+              transmission: binding.maps.transmission ? 1 : undefined,
+            },
+          };
+        };
+        const objectBinding = bindingMaterial(shape.materialBindingId);
+
         // Optional PBR map slots beyond the diffuse/albedo map. Spread onto
-        // every meshStandardMaterial below - undefined props are no-ops.
+        // every physical material below - undefined props are no-ops.
         const pbrMapProps = {
-          normalMap: getCachedPBRMapTexture(shape.normalMapUrl),
-          normalScale: shape.normalMapUrl ? new THREE.Vector2(shape.normalScale ?? 1, shape.normalScale ?? 1) : undefined,
-          roughnessMap: getCachedPBRMapTexture(shape.roughnessMapUrl),
-          metalnessMap: getCachedPBRMapTexture(shape.metalnessMapUrl),
-          aoMap: getCachedPBRMapTexture(shape.aoMapUrl),
-          aoMapIntensity: shape.aoMapUrl ? (shape.aoMapIntensity ?? 1) : undefined,
-          displacementMap: getCachedPBRMapTexture(shape.displacementMapUrl),
+          normalMap: objectBinding?.pbr.normalMap ?? getCachedPBRMapTexture(shape.normalMapUrl),
+          normalScale: objectBinding?.pbr.normalScale ?? (shape.normalMapUrl ? new THREE.Vector2(shape.normalScale ?? 1, shape.normalScale ?? 1) : undefined),
+          roughnessMap: objectBinding?.pbr.roughnessMap ?? getCachedPBRMapTexture(shape.roughnessMapUrl),
+          metalnessMap: objectBinding?.pbr.metalnessMap ?? getCachedPBRMapTexture(shape.metalnessMapUrl),
+          aoMap: objectBinding?.pbr.aoMap ?? getCachedPBRMapTexture(shape.aoMapUrl),
+          aoMapIntensity: objectBinding?.pbr.aoMapIntensity ?? (shape.aoMapUrl ? (shape.aoMapIntensity ?? 1) : undefined),
+          specularIntensityMap: objectBinding?.pbr.specularIntensityMap,
+          transmissionMap: objectBinding?.pbr.transmissionMap,
+          transmission: objectBinding?.pbr.transmission,
+          displacementMap: shape.surfaceDepthEnabled === undefined ? getCachedPBRMapTexture(shape.displacementMapUrl) : null,
           displacementScale: shape.displacementMapUrl ? (shape.displacementScale ?? 0.1) : undefined,
         };
 
         const materialElements = shape.type === 'box' && shape.surfaceMaterials && !shape.bevelAmount ? (
           [0, 2, 4, 6, 8, 10].map((idx) => {
             const mat = shape.surfaceMaterials?.[idx] || shape.color;
-            return isTextureUrl(mat) ? (
-              <meshStandardMaterial
+            const faceBinding = bindingMaterial(shape.surfaceMaterialBindings?.[idx] ?? shape.materialBindingId);
+            const textureUrl = faceBinding?.baseColorUrl ?? (isTextureUrl(mat) ? mat : undefined);
+            return textureUrl ? (
+              <meshPhysicalMaterial
                 key={idx}
                 attach={`material-${idx/2}`}
-                map={getCachedTexture(mat)}
-                color="#ffffff"
-                roughness={shape.roughness ?? 0.5}
-                metalness={shape.metalness ?? 0}
-                {...pbrMapProps}
-                transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
-                opacity={effectiveOpacity}
-                depthWrite={effectiveOpacity >= 0.85}
+                map={faceBinding?.baseColorTexture ?? getCachedTexture(textureUrl)}
+                color={faceBinding?.color ?? '#ffffff'}
+                roughness={faceBinding?.roughness ?? shape.roughness ?? 0.5}
+                metalness={faceBinding?.metalness ?? shape.metalness ?? 0}
+                {...(faceBinding?.pbr ?? pbrMapProps)}
+                transparent={effectiveOpacity < 1 || (faceBinding?.opacity ?? 1) < 1}
+                opacity={Math.min(effectiveOpacity, faceBinding?.opacity ?? 1)}
+                depthWrite={Math.min(effectiveOpacity, faceBinding?.opacity ?? 1) >= 0.85}
                 side={effectiveOpacity < 1 ? THREE.DoubleSide : (shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide)}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
               />
             ) : (
-              <meshStandardMaterial
+              <meshPhysicalMaterial
                 key={idx}
                 attach={`material-${idx/2}`}
-                color={mat}
-                roughness={shape.roughness ?? 0.5}
-                metalness={shape.metalness ?? 0}
-                {...pbrMapProps}
-                transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
-                opacity={effectiveOpacity}
-                depthWrite={effectiveOpacity >= 0.85}
+                color={faceBinding?.color ?? mat}
+                roughness={faceBinding?.roughness ?? shape.roughness ?? 0.5}
+                metalness={faceBinding?.metalness ?? shape.metalness ?? 0}
+                {...(faceBinding?.pbr ?? pbrMapProps)}
+                transparent={effectiveOpacity < 1 || (faceBinding?.opacity ?? 1) < 1}
+                opacity={Math.min(effectiveOpacity, faceBinding?.opacity ?? 1)}
+                depthWrite={Math.min(effectiveOpacity, faceBinding?.opacity ?? 1) >= 0.85}
                 side={effectiveOpacity < 1 ? THREE.DoubleSide : (shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide)}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
@@ -10386,28 +10459,28 @@ function Scene() {
             );
           })
         ) : (
-          isTextureUrl(shape.color) ? (
-            <meshStandardMaterial
-              map={getCachedTexture(shape.color)}
-              color="#ffffff"
-              roughness={shape.roughness ?? 0.5}
-              metalness={shape.metalness ?? 0}
+          (objectBinding?.baseColorUrl || isTextureUrl(shape.color)) ? (
+            <meshPhysicalMaterial
+              map={objectBinding?.baseColorTexture ?? getCachedTexture(objectBinding?.baseColorUrl ?? shape.color)}
+              color={objectBinding?.color ?? '#ffffff'}
+              roughness={objectBinding?.roughness ?? shape.roughness ?? 0.5}
+              metalness={objectBinding?.metalness ?? shape.metalness ?? 0}
               {...pbrMapProps}
               transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
-              opacity={effectiveOpacity}
+              opacity={Math.min(effectiveOpacity, objectBinding?.opacity ?? 1)}
               depthWrite={effectiveOpacity >= 0.85}
               side={effectiveOpacity < 1 ? THREE.DoubleSide : THREE.FrontSide}
               emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
               emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
             />
           ) : (
-            <meshStandardMaterial
-              color={shape.color}
-              roughness={shape.roughness || 0.5}
-              metalness={shape.metalness || 0}
+            <meshPhysicalMaterial
+              color={objectBinding?.color ?? shape.color}
+              roughness={objectBinding?.roughness ?? (shape.roughness || 0.5)}
+              metalness={objectBinding?.metalness ?? (shape.metalness || 0)}
               {...pbrMapProps}
               transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
-              opacity={effectiveOpacity}
+              opacity={Math.min(effectiveOpacity, objectBinding?.opacity ?? 1)}
               depthWrite={effectiveOpacity >= 0.85}
               side={effectiveOpacity < 1 ? THREE.DoubleSide : THREE.FrontSide}
               emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
@@ -10434,8 +10507,7 @@ function Scene() {
         );
 
         if ((shape.type === 'tree' || shape.type === 'bush') && shape.plantSpeciesId) {
-          const plantSpecies = PLANT_SPECIES_CATALOG.find(s => s.id === shape.plantSpeciesId);
-          if (plantSpecies?.modelType === 'fbx' || plantSpecies?.modelType === 'usd' || plantSpecies?.modelType === 'gltf') {
+          {
             return (
               <PlantModelMesh
                 key={shape.id}
@@ -10482,6 +10554,9 @@ function Scene() {
 
         return (
           <mesh key={shape.id} {...meshProps}>
+          {((shape.surfaceDepthEnabled && shape.displacementMapUrl) || (objectBinding?.depth?.enabled && shape.materialBindingId && managedBindingTextures[shape.materialBindingId]?.height)) &&
+            <SurfaceDepthBinding shape={shape} materialDepth={objectBinding?.depth}
+              heightTexture={shape.materialBindingId ? managedBindingTextures[shape.materialBindingId]?.height : undefined} />}
           {(shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism') && shape.bevelAmount ? (
             <PolyGeometry
               vertices={regularPolygonVertices(
@@ -10564,38 +10639,23 @@ function Scene() {
               />
             </>
           ) : shape.type === 'box' && shape.surfaceMaterials ? (
-            [0, 2, 4, 6, 8, 10].map((idx) => {
-              const mat = shape.surfaceMaterials?.[idx] || shape.color;
-              return isTextureUrl(mat) ? (
-                <meshStandardMaterial 
-                  key={idx}
-                  attach={`material-${idx/2}`}
-                  map={getCachedTexture(mat)} 
-                  color="#ffffff"
-                  roughness={shape.roughness ?? 0.5}
-                  metalness={shape.metalness ?? 0}
-                  transparent={shape.opacity !== undefined && shape.opacity < 1}
-                  opacity={shape.opacity ?? 1}
-                  side={shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide}
-                  emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
-                  emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
-                />
-              ) : (
-                <meshStandardMaterial 
-                  key={idx}
-                  attach={`material-${idx/2}`}
-                  color={mat} 
-                  roughness={shape.roughness ?? 0.5}
-                  metalness={shape.metalness ?? 0}
-                  transparent={shape.opacity !== undefined && shape.opacity < 1}
-                  opacity={shape.opacity ?? 1}
-                  side={shape.type === 'poly' ? THREE.DoubleSide : THREE.FrontSide}
-                  emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
-                  emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
-                />
-              );
-            })
+            materialElements
           ) : (
+            objectBinding ? (
+              <meshPhysicalMaterial
+                map={objectBinding.baseColorTexture ?? (objectBinding.baseColorUrl ? getCachedTexture(objectBinding.baseColorUrl) : null)}
+                color={objectBinding.color}
+                roughness={objectBinding.roughness}
+                metalness={objectBinding.metalness}
+                {...objectBinding.pbr}
+                transparent={effectiveOpacity < 1 || objectBinding.opacity < 1}
+                opacity={Math.min(effectiveOpacity, objectBinding.opacity)}
+                depthWrite={effectiveOpacity >= 0.85}
+                side={(effectiveOpacity < 1 || ['poly', 'terrain', 'custom'].includes(shape.type)) ? THREE.DoubleSide : THREE.FrontSide}
+                emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
+                emissiveIntensity={selectedId === shape.id ? 0.5 : 0}
+              />
+            ) :
             (() => {
               const isTerrainHeatmap = shape.type === 'terrain' && !!shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default';
               const resolvedTexUrl = !isTerrainHeatmap ? (
@@ -11606,9 +11666,40 @@ function EnvironmentLighting() {
     skyboxBlur, 
     environmentIntensity, 
     skyboxRotation,
-    theme
+    theme,
+    environment,
   } = useApp();
   const { gl, scene } = useThree();
+  const { assets: environmentAssets } = useAssetCatalog('hdri');
+  const managerRef = useRef<EnvironmentManager | null>(null);
+
+  useEffect(() => {
+    const manager = new EnvironmentManager(gl);
+    managerRef.current = manager;
+    return () => {
+      manager.dispose();
+      managerRef.current = null;
+    };
+  }, [gl]);
+
+  useEffect(() => {
+    const manager = managerRef.current;
+    if (!manager) return;
+    if (!environment.ref) {
+      void manager.apply(scene, environment, null);
+      return;
+    }
+    const controller = new AbortController();
+    const summary = environmentAssets.find(asset => asset.id === environment.ref?.assetId);
+    if (summary && summary.revision === environment.ref.revision) {
+      void loadAssetManifest(summary, controller.signal).then(manifest => {
+        const tier = chooseTier(manifest, environment.quality);
+        const variant = manifest.tiers[tier]?.environment ?? null;
+        return manager.apply(scene, environment, variant);
+      }).catch(() => false);
+    }
+    return () => controller.abort();
+  }, [environment, environmentAssets, scene]);
 
   useEffect(() => {
     const rotation = (skyboxRotation * Math.PI) / 180;
@@ -11629,6 +11720,8 @@ function EnvironmentLighting() {
     }
     return null;
   }, [skybox]);
+
+  if (environment.ref) return <hemisphereLight intensity={0.25} groundColor="#444444" />;
 
   if (skybox === 'none' || !isHDRSupported) {
     return (

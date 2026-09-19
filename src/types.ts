@@ -1,6 +1,8 @@
 import type { KernelArcHost } from './tools/kernelArcHost';
 import type * as THREE from 'three';
 import type { FaceId } from './lib/geometry/types';
+import type { GraphicsSettings } from './lib/graphics/graphicsSettings';
+import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
 
 // Defined here (not in AppContext.tsx, which re-exports them for existing
 // importers) because types.ts is imported by the entire geometry
@@ -104,6 +106,7 @@ export interface TerrainData {
   contourInterval?: number;
   zones?: Array<{ id: string; name: string; color: string; polygon: [number, number][] }>;
   textureUrl?: string;
+  materialBindingId?: string;
   textureScale?: number;
   roughness?: number;
   topography?: string;
@@ -146,6 +149,9 @@ export interface Shape {
   tags?: string[];
   groupId?: string; hidden?: boolean;
   surfaceMaterials?: Record<number, string>; // face index -> material/color
+  materialBindingId?: string;
+  surfaceMaterialBindings?: Record<number, string>;
+  modelMaterialBindings?: Record<string, string>;
   surfaceDivisions?: Record<number, number | [number, number]>; // face index -> gridSize or [gridX, gridY]
   bevelAmount?: number;
   bevelType?: 'radius' | 'chamfer';
@@ -180,6 +186,9 @@ export interface Shape {
   aoMapIntensity?: number;
   displacementMapUrl?: string;
   displacementScale?: number;
+  displacementBias?: number;
+  surfaceDepthEnabled?: boolean;
+  surfaceDepthSegments?: number;
   materialPreset?: string;
   isParametric?: boolean;
   parametricData?: any;
@@ -212,6 +221,7 @@ export interface SceneState {
   cameraTarget: [number, number, number];
   previewUrl?: string;
   timestamp?: string; // For display/sorting
+  environment?: EnvironmentState;
 }
 
 export interface CustomLight {
@@ -307,12 +317,20 @@ export interface ChatMessage {
 }
 
 export interface AppState {
+  graphicsSettings: GraphicsSettings;
+  setGraphicsSettings: (settings: GraphicsSettings | ((previous: GraphicsSettings) => GraphicsSettings)) => void;
   activeTool: ToolType;
   setActiveTool: (tool: ToolType) => void;
   measurements: string;
   setMeasurements: (val: string) => void;
   activeMaterial: string;
   setActiveMaterial: (color: string) => void;
+  activeMaterialBindingId: string | null;
+  setActiveMaterialBindingId: (bindingId: string | null) => void;
+  materialBindings: Record<string, MaterialInstance>;
+  setMaterialBindings: (bindings: Record<string, MaterialInstance> | ((previous: Record<string, MaterialInstance>) => Record<string, MaterialInstance>)) => void;
+  environment: EnvironmentState;
+  setEnvironment: (environment: EnvironmentState | ((previous: EnvironmentState) => EnvironmentState)) => void;
   activePBR: { roughness: number, metalness: number, opacity: number };
   setActivePBR: (pbr: { roughness: number, metalness: number, opacity: number }) => void;
   selectedId: string | null;
@@ -802,6 +820,11 @@ export interface DeveloperScript {
 }
 
 export interface SavedModel {
+  graphicsSettings?: GraphicsSettings;
+  assetSchemaVersion?: 1;
+  assetCatalogRelease?: string;
+  environment?: EnvironmentState;
+  materialBindings?: Record<string, MaterialInstance>;
   id: string;
   userId: string;
   userName?: string;

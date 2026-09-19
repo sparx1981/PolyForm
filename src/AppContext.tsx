@@ -14,6 +14,10 @@ import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
 import { TimberFrameParams, TimberFrameRecomputeState, WalkModePhase } from './types';
 import { createWalkBridge } from './lib/walkMode/inputState';
 import { MOVEMENT_SPEED_RANGE, MOUSE_SENSITIVITY_RANGE } from './lib/walkMode/constants';
+import { defaultGraphicsSettings, normalizeGraphicsSettings } from './lib/graphics/graphicsSettings';
+import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
+import { legacyEnvironmentState } from './lib/assets/legacyAdapter';
+import { readAssetProjectState } from './lib/assets/projectCodec';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -163,7 +167,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * react-dom-rendered Viewport() function renders the actual dialog.
    */
   const [placingNotePos, setPlacingNotePos] = useState<THREE.Vector3 | null>(null);
-  const [activeMaterial, setActiveMaterial] = useState('#ffffff');
+  const [activeMaterial, setActiveMaterialState] = useState('#ffffff');
+  const [activeMaterialBindingId, setActiveMaterialBindingId] = useState<string | null>(null);
+  const [materialBindings, setMaterialBindings] = useState<Record<string, MaterialInstance>>({});
   const [activePBR, setActivePBR] = useState({ roughness: 0.5, metalness: 0, opacity: 1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -194,6 +200,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [openMaterialsSignal, setOpenMaterialsSignal] = useState(0);
   const [bannerColor, setBannerColor] = useState('#0063A3');
   const [customMaterials, setCustomMaterials] = useState<any[]>([]);
+  const [graphicsSettings, setGraphicsSettings] = useState(defaultGraphicsSettings);
   const [currentModelId, setCurrentModelId] = useState<string | null>(null);
   const [currentModelName, setCurrentModelName] = useState<string | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -228,6 +235,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [ambientOcclusionEnabled, setAmbientOcclusionEnabled] = useState(false);
   const [activeBevelType, setActiveBevelType] = useState<'radius' | 'chamfer'>('radius');
   const [skybox, setSkybox] = useState<SkyboxType>('none');
+  const [environment, setEnvironment] = useState<EnvironmentState>(() => legacyEnvironmentState('none', 1, 0, 0));
   const [customLights, setCustomLights] = useState<CustomLight[]>([]);
   const [fogSettings, setFogSettings] = useState<FogSettings>(DEFAULT_FOG);
   const [gridEnabled, setGridEnabled] = useState(true);
@@ -989,6 +997,7 @@ console.log("Created rectangle:", myRect.id);`);
 
       if (snapshot.exists()) {
         const data = restoreFirestoreArraysAfterLoad(snapshot.data());
+        const assetState = readAssetProjectState(data);
         // Reverses offloadLargeGeometryForSave: any shape whose
         // geometryData was too large to store inline in the document (see
         // the sync push above) comes back here as a small URL marker -
@@ -1004,9 +1013,12 @@ console.log("Created rectangle:", myRect.id);`);
           tags: data.tags || [],
           scenes: data.scenes || [],
           customMaterials: data.customMaterials || [],
+          graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings),
           animations: data.animations || [],
           timberFrameParams: data.timberFrameParams || null,
-          terrainModifiers: data.terrainModifiers || []
+          terrainModifiers: data.terrainModifiers || [],
+          environment: assetState.environment,
+          materialBindings: assetState.materialBindings,
         };
         getSyncState(currentModelId).lastStateHash = JSON.stringify(newState);
 
@@ -1020,11 +1032,14 @@ console.log("Created rectangle:", myRect.id);`);
         if (data.tags) setTags(data.tags);
         if (data.scenes) setScenes(data.scenes);
         if (data.customMaterials) setCustomMaterials(data.customMaterials);
+        setGraphicsSettings(normalizeGraphicsSettings(data.graphicsSettings));
         if (data.animations) setAnimations(data.animations);
         if (data.notes) setNotes(data.notes);
         if (data.customLights) setCustomLights(data.customLights);
         if (data.timberFrameParams) setTimberFrameParams(data.timberFrameParams);
         if (data.terrainModifiers && Array.isArray(data.terrainModifiers)) setTerrainModifiers(data.terrainModifiers.filter((m: any) => m.type !== 'pad'));
+        setEnvironment(assetState.environment);
+        setMaterialBindings(assetState.materialBindings);
         if (data.name) setCurrentModelName(data.name);
 
         setSyncStatus('synced');
@@ -1118,7 +1133,7 @@ console.log("Created rectangle:", myRect.id);`);
     // kernelRevision stands in for the graph itself: the graph is mutated in
     // place, so hashing it by reference would never change and a
     // geometry-only edit would never be saved.
-    const currentState = { shapes, tags, scenes, customMaterials, animations, notes, customLights, kernelRevision, timberFrameParams, terrainModifiers };
+    const currentState = { shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, kernelRevision, timberFrameParams, terrainModifiers, environment, materialBindings };
     const currentStateHash = JSON.stringify(currentState);
 
     if (currentStateHash === syncState.lastStateHash) {
@@ -1160,11 +1175,16 @@ console.log("Created rectangle:", myRect.id);`);
           tags,
           scenes,
           customMaterials,
+          graphicsSettings,
           animations,
           notes,
           customLights,
           timberFrameParams,
           terrainModifiers,
+          assetSchemaVersion: 1,
+          assetCatalogRelease: '2026-09-18-pilot-r1',
+          environment,
+          materialBindings,
           // Drawn geometry lives in the kernel graph, not in shapes. Without
           // this it is never persisted, and because the provider does not
           // unmount when you switch documents it also leaks between them:
@@ -1237,7 +1257,7 @@ console.log("Created rectangle:", myRect.id);`);
         syncState.retryTimeoutId = null;
       }
     };
-  }, [shapes, tags, scenes, customMaterials, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers]);
+  }, [shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers, environment, materialBindings]);
 
   const retrySync = useCallback(() => {
     retrySyncRef.current?.();
@@ -1795,6 +1815,11 @@ console.log("Created rectangle:", myRect.id);`);
 
   const handleSetSkybox = (type: SkyboxType) => {
     setSkybox(type);
+    setEnvironment(previous => previous.ref ? previous : {
+      ...previous,
+      legacySkybox: type,
+      background: type !== 'none',
+    });
     recordAction(`sdk.setSkybox("${type}", ${skyboxBlur}, ${skyboxRotation}, ${environmentIntensity});`);
   };
 
@@ -1846,7 +1871,9 @@ console.log("Created rectangle:", myRect.id);`);
         const updated: Shape = {
           ...s,
           color,
-          surfaceMaterials: {},
+          materialBindingId: activeMaterialBindingId ?? undefined,
+          surfaceMaterials: undefined,
+          surfaceMaterialBindings: undefined,
           roughness: pbr?.roughness ?? s.roughness,
           metalness: pbr?.metalness ?? s.metalness,
           opacity: pbr?.opacity ?? s.opacity
@@ -1863,6 +1890,11 @@ console.log("Created rectangle:", myRect.id);`);
       return s;
     }));
     recordAction(`const obj = sdk.getObjectByName("${id}");\nif (obj) sdk.applyColor(obj, "${color}");`);
+  };
+
+  const handleSetActiveMaterial = (value: string) => {
+    setActiveMaterialState(value);
+    setActiveMaterialBindingId(null);
   };
 
   const updateShapeDimensions = (id: string, position: [number, number, number], args: any) => {
@@ -1888,6 +1920,10 @@ console.log("Created rectangle:", myRect.id);`);
     setActiveTagId(null);
     setScenes([]);
     setCustomMaterials([]);
+    setMaterialBindings({});
+    setActiveMaterialBindingId(null);
+    setEnvironment(legacyEnvironmentState('none', 1, 0, 0));
+    setGraphicsSettings(defaultGraphicsSettings());
     setNotes([]);
     setCustomLights([]);
     setAnimations([]);
@@ -1956,16 +1992,19 @@ console.log("Created rectangle:", myRect.id);`);
 
   const handleSetSkyboxBlur = (blur: number) => {
     setSkyboxBlur(blur);
+    setEnvironment(previous => ({ ...previous, blur }));
     recordAction(`sdk.setSkybox("${skybox}", { blur: ${blur} });`);
   };
 
   const handleSetEnvironmentIntensity = (intensity: number) => {
     setEnvironmentIntensity(intensity);
+    setEnvironment(previous => ({ ...previous, intensity, backgroundIntensity: intensity }));
     recordAction(`sdk.setSkybox("${skybox}", { intensity: ${intensity} });`);
   };
 
   const handleSetSkyboxRotation = (rotation: number) => {
     setSkyboxRotation(rotation);
+    setEnvironment(previous => ({ ...previous, rotationRadians: rotation * Math.PI / 180 }));
     recordAction(`sdk.setSkybox("${skybox}", { rotation: ${rotation} });`);
   };
 
@@ -1995,7 +2034,13 @@ console.log("Created rectangle:", myRect.id);`);
       placingNotePos,
       setPlacingNotePos,
       activeMaterial,
-      setActiveMaterial,
+      setActiveMaterial: handleSetActiveMaterial,
+      activeMaterialBindingId,
+      setActiveMaterialBindingId,
+      materialBindings,
+      setMaterialBindings,
+      environment,
+      setEnvironment,
       activePBR,
       setActivePBR,
       selectedId,
@@ -2043,6 +2088,8 @@ console.log("Created rectangle:", myRect.id);`);
       bannerColor,
       setBannerColor,
       customMaterials,
+      graphicsSettings,
+      setGraphicsSettings,
       setCustomMaterials,
       clearShapes,
       currentModelId,

@@ -58,18 +58,37 @@ service cloud.firestore {
     function isValidModel(data) {
       return data.keys().hasAll(['name', 'userId', 'shapes']) &&
              !('password' in data) &&
-             data.name is string && data.name.size() > 0 &&
-             data.userId is string &&
-             data.shapes is list &&
-             (!('terrainModifiers' in data) || data.terrainModifiers is list);
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.shapes is list && data.shapes.size() <= 5000 &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 1000)) &&
+             (!('scenes' in data) || (data.scenes is list && data.scenes.size() <= 500)) &&
+             (!('customMaterials' in data) || (data.customMaterials is list && data.customMaterials.size() <= 1000)) &&
+             (!('terrainModifiers' in data) || (data.terrainModifiers is list && data.terrainModifiers.size() <= 2000));
+    }
+
+    function isValidCollaboratorModelUpdate() {
+      return request.resource.data.userId == resource.data.userId &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'shapes', 'tags', 'scenes', 'customMaterials', 'graphicsSettings',
+               'animations', 'notes', 'customLights', 'timberFrameParams',
+               'terrainModifiers', 'kernel', 'updatedAt', 'assetSchemaVersion',
+               'assetCatalogRelease', 'environment', 'materialBindings'
+             ]) &&
+             isValidModel(request.resource.data);
     }
 
     function isValidMaterial(data) {
-      return data.keys().hasAll(['userId', 'name', 'type', 'value']) &&
+      return data.keys().hasAll(['userId', 'name', 'type']) &&
              data.userId is string &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.type in ['color', 'texture'] &&
-             data.value is string;
+             data.type in ['color', 'texture', 'asset'] &&
+             ((data.type in ['color', 'texture'] && data.value is string) ||
+              (data.type == 'asset' && data.schemaVersion == 2 &&
+               data.assetRef is map &&
+               data.assetRef.assetId is string &&
+               data.assetRef.assetId.matches('^ph:material:[a-z0-9][a-z0-9_-]*$') &&
+               data.assetRef.revision is string && data.assetRef.revision.size() > 0 && data.assetRef.revision.size() < 200));
     }
 
     function isValidScript(data) {
@@ -81,10 +100,12 @@ service cloud.firestore {
 
     function isValidCollaboration(data) {
       return data.keys().hasAll(['modelId', 'email', 'role', 'status']) &&
-             data.modelId is string &&
-             data.email is string &&
+             data.modelId is string && data.modelId.size() > 0 && data.modelId.size() <= 256 &&
+             data.email is string && data.email.size() > 3 && data.email.size() <= 320 &&
              data.role in ['owner', 'collaborator'] &&
-             data.status in ['invited', 'active', 'offline'];
+             data.status in ['invited', 'active', 'offline'] &&
+             (!('uid' in data) || data.uid == null || (data.uid is string && data.uid.size() <= 128)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 200));
     }
 
     function isValidChatMessage(data) {
@@ -93,6 +114,14 @@ service cloud.firestore {
              data.displayName is string &&
              data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
              data.timestamp is number;
+    }
+
+    function isValidRecipientCollaborationUpdate() {
+      return request.resource.data.modelId == resource.data.modelId &&
+             request.resource.data.email == resource.data.email &&
+             request.resource.data.role == resource.data.role &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'displayName', 'status', 'lastSeen']) &&
+             isValidCollaboration(request.resource.data);
     }
 
     // Rules Definitions
@@ -113,7 +142,8 @@ service cloud.firestore {
     match /models/{modelId} {
       allow list, get: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || resource.data.isPublic == true || isInvited(modelId));
       allow create: if isNewDocOwner() && isValidModel(request.resource.data);
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isInvited(modelId));
+      allow update: if (isDocOwner() && request.resource.data.userId == resource.data.userId && isValidModel(request.resource.data)) ||
+                    (isInvited(modelId) && isValidCollaboratorModelUpdate());
       allow delete: if isDocOwner();
 
       // Password-protected sharing: the plaintext password lives only here,
@@ -142,7 +172,7 @@ service cloud.firestore {
           get(/databases/$(database)/documents/models/$(modelId)).data.isPublic == true ||
           isInvited(modelId)
         );
-        allow create: if isAuthenticated() && isValidChatMessage(request.resource.data);
+        allow create: if isAuthenticated() && (isModelOwner(modelId) || isInvited(modelId)) && isValidChatMessage(request.resource.data);
         // Lets the model owner purge chat history when deleting the model
         // itself (see handleDelete in OpenModel.tsx) — otherwise these
         // would be orphaned, world-readable-to-collaborators documents
@@ -155,8 +185,19 @@ service cloud.firestore {
     match /materials/{materialId} {
       allow get, list: if isDocOwner();
       allow create: if isNewDocOwner() && isValidMaterial(request.resource.data);
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isInvited(resource.data.modelId)) && isValidMaterial(request.resource.data);
+      allow update: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || (('modelId' in resource.data) && isInvited(resource.data.modelId))) &&
+        request.resource.data.userId == resource.data.userId &&
+        (!('modelId' in resource.data) || request.resource.data.modelId == resource.data.modelId) &&
+        isValidMaterial(request.resource.data);
       allow delete: if isDocOwner();
+    }
+
+    // Static manifests hold the full catalog. This small document is only
+    // the public, revalidated active-release pointer; clients never write it.
+    match /assetCatalogs/polyhaven {
+      allow get: if true;
+      allow list, create, update, delete: if false;
     }
 
     // Overflow storage for a single shape's geometryData when it's too
@@ -186,7 +227,8 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidCollaboration(request.resource.data) &&
         isModelOwner(request.resource.data.modelId);
       allow update: if isAuthenticated() && (
-        isOwnCollaborationEmail(resource.data) || isModelOwner(resource.data.modelId)
+        (isOwnCollaborationEmail(resource.data) && isValidRecipientCollaborationUpdate()) ||
+        (isModelOwner(resource.data.modelId) && isValidCollaboration(request.resource.data))
       );
       allow delete: if isAuthenticated() && (
         isOwnCollaborationEmail(resource.data) || isModelOwner(resource.data.modelId)

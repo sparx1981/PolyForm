@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polyform.invalid/schemas/polyhaven-catalog-v1.json",
+  "type": "object",
+  "required": ["schemaVersion", "release", "generatedAt", "assets"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "release": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "minLength": 1 },
+    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "required": ["id", "sourceId", "kind", "name", "source", "license", "revision", "manifestUrl", "thumbnailUrl", "categoryId", "categoryPath", "categorySlugPath", "ancestorCategoryIds", "legacyCategories", "tags", "attributes", "availableTiers"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^ph:(material|hdri):[a-z0-9][a-z0-9_-]*$" },
+        "kind": { "enum": ["material", "hdri"] },
+        "availableTiers": { "type": "array", "items": { "enum": ["1k", "2k", "4k"] }, "uniqueItems": true }
+      },
+      "additionalProperties": true
+    }
+  }
+}

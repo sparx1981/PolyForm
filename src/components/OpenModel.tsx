@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { normalizeGraphicsSettings, defaultGraphicsSettings } from '../lib/graphics/graphicsSettings';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
@@ -28,6 +29,7 @@ import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, upda
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
 import { useModalA11y } from './ui/useModalA11y';
+import { readAssetProjectState } from '../lib/assets/projectCodec';
 
 // Local, dependency-free placeholder - no network round-trip, so it can never
 // itself fail to load the way an external image URL (or an expired/blocked
@@ -54,14 +56,21 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     setShapes, 
     setTags, 
     setScenes, 
-    setCustomMaterials, 
+    setCustomMaterials,
+    setGraphicsSettings,
     setCurrentModelId, 
     setCurrentModelName,
     currentModelId,
     animations,
     setAnimations,
     theme,
-    incrementReads
+    incrementReads,
+    setSkybox,
+    setSkyboxBlur,
+    setSkyboxRotation,
+    setEnvironmentIntensity,
+    setEnvironment,
+    setMaterialBindings
   } = useApp();
 
   type ModelFilter = 'recent' | 'all' | 'me' | 'shared';
@@ -294,6 +303,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
         setScenes([]);
         setAnimations([]);
         setCustomMaterials([]);
+        setGraphicsSettings(defaultGraphicsSettings());
       }
       
       setDeleteConfirmId(null);
@@ -363,6 +373,14 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     setScenes(model.scenes || []);
     setAnimations(model.animations || []);
     if (model.customMaterials) setCustomMaterials(model.customMaterials);
+    setGraphicsSettings(normalizeGraphicsSettings(model.graphicsSettings));
+    const assetState = readAssetProjectState(model as unknown as Record<string, unknown>);
+    setEnvironment(assetState.environment);
+    setMaterialBindings(assetState.materialBindings);
+    if (assetState.environment.legacySkybox) setSkybox(assetState.environment.legacySkybox as Parameters<typeof setSkybox>[0]);
+    setSkyboxBlur(assetState.environment.blur);
+    setSkyboxRotation(assetState.environment.rotationRadians * 180 / Math.PI);
+    setEnvironmentIntensity(assetState.environment.intensity);
     setCurrentModelId(model.id);
     setCurrentModelName(model.name);
     onClose();

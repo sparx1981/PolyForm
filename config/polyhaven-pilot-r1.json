@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "release": "2026-09-18-pilot-r1",
+  "materials": ["brick_wall_001", "stone_brick_wall_001", "concrete_floor_worn_001", "white_stucco", "brown_planks_03", "box_profile_metal_sheet", "worn_corrugated_iron", "marble_01", "clay_roof_tiles", "granite_tile", "grass_ground", "aerial_rocks_02", "wood_chips", "dry_ground_01", "cobblestone_01", "brick_gravel", "snow_01", "asphalt_02", "terrain_red_01"],
+  "hdris": ["kloofendal_48d_partly_cloudy_puresky", "alps_field", "birchwood"],
+  "environmentGroups": { "kloofendal_48d_partly_cloudy_puresky": "pure-skies", "alps_field": "mountains-hills", "birchwood": "forest-woodland" },
+  "deterministicFixtures": ["alpha-cutout"]
+}

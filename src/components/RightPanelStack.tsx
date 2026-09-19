@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { WeatherControls } from './graphics/WeatherControls';
+import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
+import { MaterialEditorDialog } from './MaterialEditorDialog';
 import * as THREE from 'three';
 import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
@@ -11,7 +14,8 @@ import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierP
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
 import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier } from '../types';
-import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
+import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
+import { isEnvironmentAssetId, isMaterialAssetId, type AssetSummary } from '../lib/assets/types';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -24,94 +28,6 @@ const COLORS = [
   '#6366f1', '#8b5cf6', '#a855f7', '#d946ef',
   '#ec4899', '#f43f5e', '#71717a', '#18181b'
 ];
-
-// Generates a small, fully client-side procedural preview texture for a
-// Pre-Made PBR material, based on its base colour, roughness and metalness,
-// plus simple keyword-based category detection (metal / wood / fabric /
-// stone / glossy). Replaces the old approach of trying to load a photo from
-// an external site (which usually 404'd) and falling back to a random,
-// unrelated stock photo from picsum.photos - which is why materials looked
-// like flat colour swatches (or, worse, an unrelated photo) instead of an
-// actual texture. Runs once per material and is cached on the object, so it
-// never touches the network.
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace('#', '');
-  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-  const n = parseInt(full || '888888', 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function shadeRgb(rgb: [number, number, number], amt: number): [number, number, number] {
-  return rgb.map(c => Math.max(0, Math.min(255, Math.round(c + amt)))) as [number, number, number];
-}
-function rgbCss(rgb: [number, number, number], a: number = 1): string {
-  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
-}
-function generateMaterialTexture(mat: { name?: string; color?: string; roughness?: number; metalness?: number }): string {
-  const size = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return '';
-  const base = hexToRgb(mat.color || '#888888');
-  ctx.fillStyle = rgbCss(base);
-  ctx.fillRect(0, 0, size, size);
-
-  const name = (mat.name || '').toLowerCase();
-  const metalness = mat.metalness ?? 0;
-  const roughness = mat.roughness ?? 0.5;
-
-  if (metalness > 0.5) {
-    // Brushed metal: horizontal streaks of varying tone.
-    for (let y = 0; y < size; y++) {
-      const n = (Math.sin(y * 0.7) + Math.sin(y * 3.1 + 2)) * 0.5;
-      ctx.fillStyle = rgbCss(shadeRgb(base, n * 22), 0.5);
-      ctx.fillRect(0, y, size, 1);
-    }
-  } else if (/wood|oak|pine|walnut|mahogany|ebony|cork/.test(name)) {
-    // Wood grain: wavy vertical lines.
-    for (let x = 0; x < size; x += 3) {
-      ctx.strokeStyle = rgbCss(shadeRgb(base, -20 - (x % 9)));
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      for (let y = 0; y <= size; y += 8) {
-        const wob = Math.sin((y + x) * 0.15) * 4;
-        ctx.lineTo(x + wob, y);
-      }
-      ctx.stroke();
-    }
-  } else if (/denim|velvet|felt|canvas|leather|fabric/.test(name)) {
-    // Woven fabric: crosshatch.
-    ctx.strokeStyle = rgbCss(shadeRgb(base, -25), 0.5);
-    for (let i = -size; i < size; i += 6) {
-      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + size, size); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(i + size, 0); ctx.lineTo(i, size); ctx.stroke();
-    }
-  } else if (/concrete|stone|granite|marble|slate|sandstone|limestone|asphalt|brick|chalk|sand|ceramic|porcelain|snow|moss/.test(name)) {
-    // Speckled / mottled surface.
-    for (let i = 0; i < 900; i++) {
-      const x = Math.random() * size, y = Math.random() * size;
-      ctx.fillStyle = rgbCss(shadeRgb(base, (Math.random() - 0.5) * 50), 0.5);
-      ctx.fillRect(x, y, 1.5, 1.5);
-    }
-  } else if (roughness < 0.15) {
-    // Glossy / glass: soft diagonal sheen.
-    const grad = ctx.createLinearGradient(0, 0, size, size);
-    grad.addColorStop(0, rgbCss(shadeRgb(base, 40)));
-    grad.addColorStop(0.5, rgbCss(base));
-    grad.addColorStop(1, rgbCss(shadeRgb(base, -30)));
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-  } else {
-    // Default: subtle grain noise so it never reads as a flat swatch.
-    for (let i = 0; i < 500; i++) {
-      const x = Math.random() * size, y = Math.random() * size;
-      ctx.fillStyle = rgbCss(shadeRgb(base, (Math.random() - 0.5) * 18), 0.4);
-      ctx.fillRect(x, y, 1, 1);
-    }
-  }
-  return canvas.toDataURL('image/png');
-}
 
 interface PanelProps {
   id: string;
@@ -178,7 +94,11 @@ function SubSection({ title, children, defaultOpen = false }: { title: string, c
 export default function RightPanelStack() {
   const { 
     activeMaterial, 
-    setActiveMaterial, 
+    setActiveMaterial,
+    activeMaterialBindingId,
+    setActiveMaterialBindingId,
+    materialBindings,
+    setMaterialBindings,
     activePBR,
     setActivePBR,
     shapes,
@@ -237,6 +157,8 @@ export default function RightPanelStack() {
     setAllTagsVisible,
     skybox,
     setSkybox,
+    environment,
+    setEnvironment,
     sunIntensity,
     setSunIntensity,
     shadowOpacity,
@@ -396,6 +318,7 @@ export default function RightPanelStack() {
     }
   }, [openMaterialsSignal]);
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
+  const [editorAsset, setEditorAsset] = useState<AssetSummary | null>(null);
   const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'premade' | 'ai'>('color');
   const [hfToken, setHfTokenState] = useState<string>(() => HuggingFaceService.getToken());
   const setHfToken = (t: string) => { setHfTokenState(t); HuggingFaceService.setToken(t); };
@@ -413,86 +336,32 @@ export default function RightPanelStack() {
     metalness: 0,
     opacity: 1
   });
-  const [premadeMaterials, setPremadeMaterials] = useState<any[]>([]);
+  const { assets: catalogMaterials, loading: catalogLoading, fallback: catalogFallback } = useAssetCatalog('material');
+  const { assets: environmentAssets } = useAssetCatalog('hdri');
+  const premadeMaterials = useMemo(() => catalogMaterials.map(asset => ({
+    id: asset.id,
+    name: asset.name,
+    revision: asset.revision,
+    texture: asset.thumbnailUrl,
+    category: asset.categoryPath,
+    hasHeight: asset.hasHeight,
+  })), [catalogMaterials]);
+  const selectCatalogMaterial = (asset: AssetSummary) => {
+    if (!isMaterialAssetId(asset.id)) return;
+    const assetId = asset.id;
+    setActiveMaterial(asset.thumbnailUrl);
+    setMaterialBindings(previous => ({
+      ...previous,
+      [assetId]: previous[assetId]?.ref.revision === asset.revision
+        ? previous[assetId]
+        : { ref: { assetId, revision: asset.revision } },
+    }));
+    setActiveMaterialBindingId(asset.id);
+    setActiveTool('paint');
+  };
   const [tagSearch, setTagSearch] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
-
-  useEffect(() => {
-    if (isAddMaterialOpen && premadeMaterials.length === 0) {
-      // Curated standard PBR materials
-      const standardList = [
-        { name: 'Aluminum', roughness: 0.1, metalness: 1.0, color: '#EBEDEE' }, 
-        { name: 'Aluminum (Anodized Red)', roughness: 0.2, metalness: 1.0, color: '#990000' }, 
-        { name: 'Amber', roughness: 0.05, metalness: 0.0, color: '#D44A09' }, 
-        { name: 'Asphalt (Fresh)', roughness: 0.8, metalness: 0.0, color: '#0B0A0A' }, 
-        { name: 'Banana', roughness: 0.6, metalness: 0.0, color: '#F2C94C' }, 
-        { name: 'Beryllium', roughness: 0.1, metalness: 1.0, color: '#898788' }, 
-        { name: 'Blackboard', roughness: 0.9, metalness: 0.0, color: '#0A0A0A' }, 
-        { name: 'Blood', roughness: 0.3, metalness: 0.0, color: '#A40101' }, 
-        { name: 'Polished Steel', roughness: 0.05, metalness: 1.0, color: '#c0c0c0' }, 
-        { name: 'Gold', roughness: 0.1, metalness: 1.0, color: '#ffd700' }, 
-        { name: 'Copper', roughness: 0.2, metalness: 1.0, color: '#b87333' }, 
-        { name: 'Rubber', roughness: 0.9, metalness: 0.0, color: '#222222' }, 
-        { name: 'Plastic', roughness: 0.3, metalness: 0.0, color: '#ffffff' }, 
-        { name: 'Glass', roughness: 0.01, metalness: 0.0, color: '#ffffff', opacity: 0.3 }, 
-        { name: 'Wood (Oak)', roughness: 0.7, metalness: 0.0, color: '#7b5c3d' }, 
-        { name: 'Concrete', roughness: 0.85, metalness: 0.0, color: '#9ca3af' }, 
-        { name: 'Brass', roughness: 0.25, metalness: 1.0, color: '#B5A642' }, 
-        { name: 'Bronze', roughness: 0.3, metalness: 1.0, color: '#CD7F32' }, 
-        { name: 'Chrome', roughness: 0.05, metalness: 1.0, color: '#C4C4C4' }, 
-        { name: 'Titanium', roughness: 0.35, metalness: 1.0, color: '#878681' }, 
-        { name: 'Silver', roughness: 0.1, metalness: 1.0, color: '#C0C0C0' }, 
-        { name: 'Tin', roughness: 0.4, metalness: 1.0, color: '#D9D9D9' }, 
-        { name: 'Rusted Iron', roughness: 0.85, metalness: 0.6, color: '#8B4513' }, 
-        { name: 'Stainless Steel', roughness: 0.2, metalness: 1.0, color: '#B7C3C9' }, 
-        { name: 'Walnut', roughness: 0.65, metalness: 0.0, color: '#5C4033' }, 
-        { name: 'Pine', roughness: 0.7, metalness: 0.0, color: '#DEB887' }, 
-        { name: 'Mahogany', roughness: 0.6, metalness: 0.0, color: '#4E2A1E' }, 
-        { name: 'Oak (Light)', roughness: 0.7, metalness: 0.0, color: '#C19A6B' }, 
-        { name: 'Ebony', roughness: 0.5, metalness: 0.0, color: '#3D2B1F' }, 
-        { name: 'Marble (White)', roughness: 0.15, metalness: 0.0, color: '#F5F5F0' }, 
-        { name: 'Granite', roughness: 0.5, metalness: 0.0, color: '#736F6E' }, 
-        { name: 'Sandstone', roughness: 0.8, metalness: 0.0, color: '#C2A878' }, 
-        { name: 'Slate', roughness: 0.6, metalness: 0.0, color: '#2F4F4F' }, 
-        { name: 'Limestone', roughness: 0.75, metalness: 0.0, color: '#E8DCC5' }, 
-        { name: 'Denim', roughness: 0.9, metalness: 0.0, color: '#3B5998' }, 
-        { name: 'Velvet', roughness: 0.95, metalness: 0.0, color: '#4B0082' }, 
-        { name: 'Leather (Brown)', roughness: 0.55, metalness: 0.0, color: '#5C3317' }, 
-        { name: 'Canvas', roughness: 0.85, metalness: 0.0, color: '#E8E4C9' }, 
-        { name: 'Felt', roughness: 0.95, metalness: 0.0, color: '#7A7A7A' }, 
-        { name: 'Plastic (Glossy Red)', roughness: 0.1, metalness: 0.0, color: '#FF3B30' }, 
-        { name: 'Plastic (Matte Green)', roughness: 0.7, metalness: 0.0, color: '#34C759' }, 
-        { name: 'ABS (Black)', roughness: 0.4, metalness: 0.0, color: '#1C1C1E' }, 
-        { name: 'PVC (White)', roughness: 0.35, metalness: 0.0, color: '#F2F2F7' }, 
-        { name: 'Frosted Glass', roughness: 0.4, metalness: 0.0, color: '#FFFFFF', opacity: 0.5 }, 
-        { name: 'Tinted Glass (Blue)', roughness: 0.05, metalness: 0.0, color: '#4A90D9', opacity: 0.35 }, 
-        { name: 'Ice', roughness: 0.1, metalness: 0.0, color: '#D6ECF0', opacity: 0.6 }, 
-        { name: 'Porcelain', roughness: 0.2, metalness: 0.0, color: '#FFFFF0' }, 
-        { name: 'Ceramic Tile (White)', roughness: 0.25, metalness: 0.0, color: '#FAFAFA' }, 
-        { name: 'Brick (Red)', roughness: 0.85, metalness: 0.0, color: '#B22222' }, 
-        { name: 'Cardboard', roughness: 0.9, metalness: 0.0, color: '#C19A6B' }, 
-        { name: 'Chalk', roughness: 0.95, metalness: 0.0, color: '#FFFFFF' }, 
-        { name: 'Cork', roughness: 0.8, metalness: 0.0, color: '#9B6B43' }, 
-        { name: 'Charcoal', roughness: 0.9, metalness: 0.0, color: '#1C1C1C' }, 
-        { name: 'Snow', roughness: 0.85, metalness: 0.0, color: '#FFFAFA' }, 
-        { name: 'Sand', roughness: 0.85, metalness: 0.0, color: '#EDC9AF' }, 
-        { name: 'Moss', roughness: 0.9, metalness: 0.0, color: '#4A6741' },
-      ].map(m => ({ ...m, texture: generateMaterialTexture(m) }));
-
-      // Photorealistic landscape textures
-      const landscapeList = LANDSCAPE_TEXTURES.map(t => ({
-        id: t.id,
-        name: `${t.name} (Landscape)`,
-        roughness: t.roughness,
-        metalness: t.metalness,
-        color: t.previewColor,
-        texture: t.generate()
-      }));
-
-      setPremadeMaterials([...landscapeList, ...standardList]);
-    }
-  }, [isAddMaterialOpen, premadeMaterials.length]);
 
   const [currentModelOwnerDraft, setCurrentModelOwnerDraft] = useState<string | null>(null);
 
@@ -580,6 +449,7 @@ export default function RightPanelStack() {
     };
     setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
     setActiveMaterial(newColor);
+    setActiveMaterialBindingId(null);
     setActivePBR(pbrSettings);
     setActiveTool('paint');
     setIsAddMaterialOpen(false);
@@ -623,6 +493,7 @@ export default function RightPanelStack() {
     };
     setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
     setActiveMaterial(aiPreviewUrl);
+    setActiveMaterialBindingId(null);
     setActivePBR(pbrSettings);
     setActiveTool('paint');
     setIsAddMaterialOpen(false);
@@ -682,6 +553,7 @@ export default function RightPanelStack() {
       // Instantly add to custom materials in state & activate paint tool with this material
       setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), newMaterial]);
       setActiveMaterial(dataUrl);
+      setActiveMaterialBindingId(null);
       setActivePBR(pbrSettings);
       setActiveTool('paint');
       setIsAddMaterialOpen(false);
@@ -730,6 +602,7 @@ export default function RightPanelStack() {
     // If activeMaterial is the deleted one, fallback to standard neutral
     if (activeMaterial === matToDelete.value) {
       setActiveMaterial('#e2e8f0');
+      setActiveMaterialBindingId(null);
     }
 
     // Persist deletion to Firestore if logged in
@@ -2508,12 +2381,14 @@ export default function RightPanelStack() {
             onToggle={() => togglePanel('materials')}
           >
             <div className="space-y-4">
+              <SurfaceDepthControls />
               <div className="grid grid-cols-5 gap-2">
                 {COLORS.map((color, idx) => (
                   <div 
                     key={`palette-preset-${color}-${idx}`} 
                     onClick={() => {
                       setActiveMaterial(color);
+                      setActiveMaterialBindingId(null);
                       setActivePBR({ roughness: 0.5, metalness: 0, opacity: 1 });
                       setActiveTool('paint');
                     }}
@@ -2529,6 +2404,7 @@ export default function RightPanelStack() {
                     key={m.id || `custom-col-${m.value}-${i}`} 
                     onClick={() => {
                       setActiveMaterial(m.value);
+                      setActiveMaterialBindingId(null);
                       if (m.pbr) setActivePBR(m.pbr);
                       setActiveTool('paint');
                     }}
@@ -2572,6 +2448,7 @@ export default function RightPanelStack() {
                         key={m.id || `custom-tex-${i}`}
                         onClick={() => {
                           setActiveMaterial(m.value);
+                          setActiveMaterialBindingId(null);
                           if (m.pbr) setActivePBR(m.pbr);
                           setActiveTool('paint');
                         }}
@@ -2612,6 +2489,25 @@ export default function RightPanelStack() {
                   </div>
                 </div>
               )}
+
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Poly Haven PBR materials</span>
+                  <span className="text-[9px] text-gray-400">Double-click to edit</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {catalogMaterials.map(asset => <button type="button" key={asset.id}
+                    onClick={() => selectCatalogMaterial(asset)}
+                    onDoubleClick={() => setEditorAsset(asset)}
+                    className={cn('overflow-hidden rounded border text-left hover:border-trimble-blue', activeMaterialBindingId === asset.id ? 'border-trimble-blue ring-1 ring-trimble-blue' : 'border-gray-300')}
+                    title={`${asset.name} — click to paint, double-click to edit`}>
+                    <img src={asset.thumbnailUrl} alt="" loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
+                    <span className="block truncate px-1 py-0.5 text-[9px]">{asset.name}</span>
+                  </button>)}
+                </div>
+                {catalogLoading && <p className="text-[10px] text-gray-500">Loading materials…</p>}
+                {!catalogLoading && catalogFallback && <p className="text-[10px] text-gray-500">Catalog unavailable; existing colours and uploads remain usable.</p>}
+              </div>
 
               <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
                 <span className="text-gray-500">Active:</span>
@@ -3302,26 +3198,52 @@ export default function RightPanelStack() {
                 </div>
               </SubSection>
 
+              <SubSection title="Weather"><WeatherControls /></SubSection>
               <SubSection title="Environment">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Environment Map</label>
                   <select 
-                    value={skybox}
-                    onChange={(e) => setSkybox(e.target.value as any)}
+                    value={environment.ref?.assetId ?? skybox}
+                    onChange={(e) => {
+                      const selected = environmentAssets.find(asset => asset.id === e.target.value);
+                      if (selected && selected.kind === 'hdri' && isEnvironmentAssetId(selected.id)) {
+                        const assetId = selected.id;
+                        setEnvironment(previous => ({
+                          ...previous,
+                          ref: { assetId, revision: selected.revision },
+                          legacySkybox: undefined,
+                          background: true,
+                        }));
+                        setSkybox('none');
+                      } else {
+                        setEnvironment(previous => ({ ...previous, ref: null, legacySkybox: e.target.value }));
+                        setSkybox(e.target.value as any);
+                      }
+                    }}
                     className={cn(
                       "w-full px-2 py-1.5 border rounded text-xs outline-none focus:border-trimble-blue",
                       theme === 'dark' ? "bg-gray-700 border-gray-600 text-gray-200" : "bg-white border-gray-200 text-gray-700"
                     )}
                   >
                     <option value="none">None (Default)</option>
-                    <option value="golden-hour">Golden Hour</option>
-                    <option value="sunrise">Sunrise</option>
-                    <option value="twilight">Twilight</option>
-                    <option value="woodland">Woodland</option>
-                    <option value="snowy">Snowy Alpine</option>
-                    <option value="cyberspace-neon">Cyberspace Neon</option>
-                    <option value="studio">Studio</option>
+                    {(['pure-skies', 'mountains-hills', 'forest-woodland'] as const).map(group => (
+                      <optgroup key={group} label={group.replaceAll('-', ' ')}>
+                        {environmentAssets.filter(asset => asset.environmentGroup === group).map(asset => (
+                          <option key={asset.id} value={asset.id}>{asset.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                    <optgroup label="Legacy compatibility">
+                      <option value="golden-hour">Golden Hour</option>
+                      <option value="sunrise">Sunrise</option>
+                      <option value="twilight">Twilight</option>
+                      <option value="woodland">Woodland</option>
+                      <option value="snowy">Snowy Alpine</option>
+                      <option value="cyberspace-neon">Cyberspace Neon</option>
+                      <option value="studio">Studio</option>
+                    </optgroup>
                   </select>
+                  <div className="text-[9px] text-gray-400">Poly Haven · CC0 · restricted pilot categories</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
@@ -4486,6 +4408,18 @@ export default function RightPanelStack() {
 
       {/* Add Material Modal */}
       <AnimatePresence>
+        {editorAsset && <MaterialEditorDialog
+          asset={editorAsset}
+          instance={materialBindings[editorAsset.id]}
+          onClose={() => setEditorAsset(null)}
+          onSave={instance => {
+            setMaterialBindings(previous => ({ ...previous, [editorAsset.id]: instance }));
+            setActiveMaterialBindingId(editorAsset.id);
+            setActiveMaterial(editorAsset.thumbnailUrl);
+            setActivePBR({ roughness: instance.roughness ?? 0.5, metalness: instance.metalness ?? 0, opacity: instance.opacity ?? 1 });
+            setEditorAsset(null);
+          }}
+        />}
         {isAddMaterialOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <motion.div
@@ -4617,27 +4551,22 @@ export default function RightPanelStack() {
                 ) : activeTab === 'premade' ? (
                   <div className="grid grid-cols-2 gap-4">
                     {premadeMaterials.map((mat: any, i: number) => (
-                      <div 
+                      <button
+                        type="button"
                         key={mat.id || `premade-${mat.name || i}-${i}`}
                         onClick={() => {
-                          setActiveMaterial(mat.texture || mat.color);
-                          if (mat.color) setNewColor(mat.color);
-                          setActiveTool('paint');
-                          const newPbr = {
-                            roughness: mat.roughness !== undefined ? mat.roughness : 0.5,
-                            metalness: mat.metalness !== undefined ? mat.metalness : 0,
-                            opacity: mat.opacity !== undefined ? mat.opacity : 1
-                          };
-                          setActivePBR(newPbr);
-                          setPbrSettings(newPbr);
+                          const asset = catalogMaterials.find(item => item.id === mat.id);
+                          if (asset) selectCatalogMaterial(asset);
                           setIsAddMaterialOpen(false);
                         }}
-                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-trimble-blue transition-all"
+                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-trimble-blue transition-all text-left"
                       >
                         <div className="aspect-square bg-gray-100 relative">
                           <img
                             src={mat.texture}
                             alt={mat.name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -4646,14 +4575,20 @@ export default function RightPanelStack() {
                         </div>
                         <div className="p-2">
                           <div className="text-[10px] font-bold truncate">{mat.name}</div>
-                          <div className="text-[8px] text-gray-400">PBR Ready</div>
+                          <div className="text-[8px] text-gray-400 truncate">{mat.category}</div>
+                          <div className="text-[8px] text-gray-400">Poly Haven · CC0{mat.hasHeight ? ' · Height' : ''}</div>
                         </div>
-                      </div>
+                      </button>
                     ))}
-                    {premadeMaterials.length === 0 && (
+                    {catalogLoading && premadeMaterials.length === 0 && (
                       <div className="col-span-2 py-12 text-center text-gray-400">
                         <Loader2 size={24} className="animate-spin mx-auto mb-2" />
-                        <span>Loading PBR library...</span>
+                        <span>Loading Poly Haven library...</span>
+                      </div>
+                    )}
+                    {!catalogLoading && catalogFallback && premadeMaterials.length === 0 && (
+                      <div className="col-span-2 py-8 text-center text-xs text-gray-400">
+                        The material catalog is temporarily unavailable. Custom uploads and colours remain available.
                       </div>
                     )}
                   </div>

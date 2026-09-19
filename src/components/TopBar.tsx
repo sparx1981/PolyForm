@@ -1,3 +1,4 @@
+import { normalizeGraphicsSettings } from '../lib/graphics/graphicsSettings';
 import { 
   Menu, 
   User, 
@@ -48,6 +49,7 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { SketchupService, HuggingFaceService } from '../services/sketchupService';
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
+import { readAssetProjectState } from '../lib/assets/projectCodec';
 
 function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const positions: number[] = [];
@@ -105,6 +107,8 @@ export default function TopBar() {
       scenes,
       setScenes,
       customMaterials,
+      graphicsSettings,
+      setGraphicsSettings,
       setCustomMaterials,
       animations,
       setAnimations,
@@ -140,7 +144,19 @@ export default function TopBar() {
       layoutMode,
       setLayoutMode,
       terrainModifiers,
-      kernelHost
+      kernelHost,
+      skybox,
+      setSkybox,
+      skyboxBlur,
+      setSkyboxBlur,
+      skyboxRotation,
+      setSkyboxRotation,
+      environmentIntensity,
+      setEnvironmentIntensity,
+      environment,
+      setEnvironment,
+      materialBindings,
+      setMaterialBindings
     } = useApp();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -193,13 +209,18 @@ export default function TopBar() {
     const safeFilename = modelName.replace(/[^a-zA-Z0-9_\- ]/g, '_').trim() || 'PolyForm-Design';
     const projectData = {
       format: 'polyform',
-      version: 2,
+      version: 3,
       appName: 'PolyForm 3D',
+      assetSchemaVersion: 1,
+      assetCatalogRelease: '2026-09-18-pilot-r1',
+      environment,
+      materialBindings,
       name: modelName,
       shapes: shapes || [],
       tags: tags || [],
       scenes: scenes || [],
       customMaterials: customMaterials || [],
+      graphicsSettings,
       animations: animations || [],
       notes: notes || [],
       customLights: customLights || [],
@@ -260,9 +281,14 @@ export default function TopBar() {
               tags: cleanFirestoreData(tags || []),
               scenes: cleanFirestoreData(scenes || []),
               customMaterials: cleanFirestoreData(customMaterials || []),
+              graphicsSettings: cleanFirestoreData(graphicsSettings),
               animations: cleanFirestoreData(animations || []),
               notes: cleanFirestoreData(notes || []),
               customLights: cleanFirestoreData(customLights || []),
+              assetSchemaVersion: 1,
+              assetCatalogRelease: '2026-09-18-pilot-r1',
+              environment: cleanFirestoreData(environment),
+              materialBindings: cleanFirestoreData(materialBindings),
               ...(previewUrl ? { previewUrl } : {}),
               updatedAt: serverTimestamp()
             });
@@ -274,6 +300,7 @@ export default function TopBar() {
               tags,
               scenes,
               customMaterials,
+              graphicsSettings,
               notes,
               customLights,
               ...(previewUrl ? { previewUrl } : {}),
@@ -403,8 +430,13 @@ export default function TopBar() {
               scenes: cleanFirestoreData(scenes || []),
               customMaterials: cleanFirestoreData(customMaterials || []),
               animations: cleanFirestoreData(animations || []),
+              graphicsSettings: cleanFirestoreData(graphicsSettings),
               notes: cleanFirestoreData(notes || []),
               customLights: cleanFirestoreData(customLights || []),
+              assetSchemaVersion: 1,
+              assetCatalogRelease: '2026-09-18-pilot-r1',
+              environment: cleanFirestoreData(environment),
+              materialBindings: cleanFirestoreData(materialBindings),
               updatedAt: serverTimestamp(),
               createdAt: serverTimestamp(),
               previewUrl: previewUrl || '',
@@ -597,13 +629,22 @@ export default function TopBar() {
   };
 
   const loadModel = (model: any) => {
+    const assetState = readAssetProjectState(model);
     setShapes(model.shapes || []);
     setTags(model.tags || []);
     setScenes(model.scenes || []);
     if (model.customMaterials) setCustomMaterials(model.customMaterials);
+    setGraphicsSettings(normalizeGraphicsSettings(model.graphicsSettings));
     if (model.animations) setAnimations(model.animations);
     if (model.notes) setNotes(model.notes);
     if (model.customLights) setCustomLights(model.customLights);
+    const legacySkybox = assetState.environment.legacySkybox;
+    setEnvironment(assetState.environment);
+    setMaterialBindings(assetState.materialBindings);
+    if (legacySkybox) setSkybox(legacySkybox as Parameters<typeof setSkybox>[0]);
+    setSkyboxBlur(assetState.environment.blur);
+    setSkyboxRotation(assetState.environment.rotationRadians * 180 / Math.PI);
+    setEnvironmentIntensity(assetState.environment.intensity);
     setCurrentModelId(model.id || null);
     setCurrentModelName(model.name || null);
     setIsSavedModelsOpen(false);

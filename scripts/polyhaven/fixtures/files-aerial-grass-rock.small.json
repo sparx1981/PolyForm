@@ -1,0 +1,17 @@
+{
+  "Diffuse": {
+    "2k": { "png": { "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/aerial_grass_rock/aerial_grass_rock_diff_2k.png", "size": 100, "md5": "00000000000000000000000000000000" } }
+  },
+  "nor_gl": {
+    "2k": { "png": { "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/aerial_grass_rock/aerial_grass_rock_nor_gl_2k.png", "size": 100, "md5": "00000000000000000000000000000000" } }
+  },
+  "AO": {
+    "2k": { "png": { "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/aerial_grass_rock/aerial_grass_rock_ao_2k.png", "size": 100, "md5": "00000000000000000000000000000000" } }
+  },
+  "Displacement": {
+    "2k": { "exr": { "url": "https://dl.polyhaven.org/file/ph-assets/Textures/exr/2k/aerial_grass_rock/aerial_grass_rock_disp_2k.exr", "size": 100, "md5": "00000000000000000000000000000000" } }
+  },
+  "arm": {
+    "2k": { "png": { "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/aerial_grass_rock/aerial_grass_rock_arm_2k.png", "size": 100, "md5": "00000000000000000000000000000000" } }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "score": 2,
+  "summary": "Major authorization and validation gaps exist in the pre-deployment rules. The new Poly Haven catalog and derivative paths correctly deny client writes, but collaborator updates can bypass model and collaboration invariants, message writes are not scoped to model participants, and several user-write paths lack resource bounds.",
+  "findings": [
+    {
+      "check": "The Update Bypass",
+      "severity": "major",
+      "issue": "An invited collaborator can update a model without isValidModel, immutable-owner, or field-diff checks, allowing userId, sharing state, and unrelated protected fields to be changed.",
+      "recommendation": "Require immutable userId and restrict collaborator changes to the explicit collaborative design-state field set; run full validation for owner updates."
+    },
+    {
+      "check": "Authority Source",
+      "severity": "major",
+      "issue": "A collaboration recipient can update their document without preserving modelId, email, or role. isInvited only checks document existence, so mutable collaboration data can become an authority source.",
+      "recommendation": "Make modelId, email, and role immutable for recipient updates; permit only uid, displayName, status, and lastSeen changes while retaining owner-controlled validation."
+    },
+    {
+      "check": "Business Logic vs. Rules",
+      "severity": "major",
+      "issue": "Any authenticated user can create a chat message below any known model id because message creation validates payload shape but not model ownership or invitation.",
+      "recommendation": "Require model owner or invited collaborator status for message creation."
+    },
+    {
+      "check": "The Update Bypass",
+      "severity": "moderate",
+      "issue": "Material updates can change userId and modelId, and the collaborator branch derives authority from the pre-update modelId without preserving ownership fields.",
+      "recommendation": "Require userId and modelId to remain unchanged and validate the full post-update document."
+    },
+    {
+      "check": "Storage Abuse",
+      "severity": "minor",
+      "issue": "Owner-scoped texture, preview, and geometry writes have no content-type or request-size ceilings; Firestore models, arrays, messages, settings, and overflow records also have incomplete bounds.",
+      "recommendation": "Add conservative Storage size/content-type checks and bounded Firestore strings/lists/maps compatible with current application payloads."
+    },
+    {
+      "check": "Field-Level vs. Identity-Level Security",
+      "severity": "minor",
+      "issue": "The new /assetCatalogs/polyhaven document and /polyhaven/** Storage prefix are public-read and deny every client write, which is appropriate for the static CC0 library. Trusted publication must use server credentials because rules cannot grant the browser publisher access.",
+      "recommendation": "Keep the client-write denial and publish only with ADC/CI credentials."
+    }
+  ]
+}
