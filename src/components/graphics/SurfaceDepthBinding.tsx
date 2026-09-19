@@ -4,15 +4,39 @@ import type { Shape } from '../../types';
 import { SurfaceDepth } from '../../lib/graphics';
 import { canApplySurfaceDepth, subdivideDepthGeometry } from '../../lib/graphics/depthGeometry';
 
-/** Child of the existing model mesh; geometry stays unmodified in the saved model. */
-export function SurfaceDepthBinding({ shape }: { shape: Shape }) {
+export interface MaterialDepth {
+  enabled: boolean;
+  scaleMeters: number;
+  biasMeters: number;
+  calibrated: boolean;
+}
+
+const clamp = (value: number | undefined, min: number, max: number, fallback: number) =>
+  Number.isFinite(value) ? Math.max(min, Math.min(max, value!)) : fallback;
+
+/** Child of the existing model mesh; geometry stays unmodified in the saved model.
+ *
+ * Two mutually exclusive height sources feed the same relief: a shape's own legacy
+ * `displacementMapUrl` (loaded here via TextureLoader), or a catalog-bound material's
+ * `materialDepth`/`heightTexture` pair - already resolved and loaded (through
+ * ManagedTextureManager, which can decode the half-float EXR height maps Poly Haven
+ * ships; TextureLoader cannot) by useManagedBindingTextures/useMaterialBindings. That
+ * managed texture is owned and disposed by its own hook via refcounting, so it must
+ * never be disposed here. */
+export function SurfaceDepthBinding({ shape, materialDepth, heightTexture }: {
+  shape: Shape; materialDepth?: MaterialDepth | null; heightTexture?: THREE.Texture;
+}) {
   const marker = useRef<THREE.Object3D>(null);
   const active = useRef<SurfaceDepth | null>(null);
   const latest = useRef(shape); latest.current = shape;
-  const values = () => ({ scale: Number.isFinite(latest.current.displacementScale) ? Math.max(0, Math.min(0.2, latest.current.displacementScale!)) : 0.04,
-    bias: Number.isFinite(latest.current.displacementBias) ? Math.max(-0.2, Math.min(0.2, latest.current.displacementBias!)) : 0 });
+  const latestDepth = useRef(materialDepth); latestDepth.current = materialDepth;
+  const usingManagedHeight = Boolean(materialDepth?.enabled && heightTexture);
+  const values = () => usingManagedHeight
+    ? { scale: clamp(latestDepth.current!.scaleMeters, 0, 0.2, 0.04), bias: clamp(latestDepth.current!.biasMeters, -0.2, 0.2, 0) }
+    : { scale: clamp(latest.current.displacementScale, 0, 0.2, 0.04), bias: clamp(latest.current.displacementBias, -0.2, 0.2, 0) };
   useLayoutEffect(() => {
-    if (!shape.surfaceDepthEnabled || !shape.displacementMapUrl || !canApplySurfaceDepth(shape)) return;
+    if (!usingManagedHeight && (!shape.surfaceDepthEnabled || !shape.displacementMapUrl)) return;
+    if (!canApplySurfaceDepth(shape)) return;
     const mesh = marker.current?.parent;
     if (!(mesh instanceof THREE.Mesh)) return;
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -29,9 +53,8 @@ export function SurfaceDepthBinding({ shape }: { shape: Shape }) {
     }
     let disposed = false, relief: SurfaceDepth | undefined, subdivided: THREE.BufferGeometry | undefined, displayedGeometry: THREE.BufferGeometry | undefined;
     const originalRaycast = mesh.raycast;
-    const texture = new THREE.TextureLoader().load(shape.displacementMapUrl, () => {
+    const attach = (texture: THREE.Texture) => {
       if (disposed) return;
-      texture.colorSpace = THREE.NoColorSpace; texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
       subdivided = subdivideDepthGeometry(original, shape.surfaceDepthSegments ?? 16);
       mesh.geometry = subdivided;
       const { scale, bias } = values();
@@ -42,17 +65,28 @@ export function SurfaceDepthBinding({ shape }: { shape: Shape }) {
         const displayed = this.geometry; this.geometry = original;
         try { originalRaycast.call(this, raycaster, intersections); } finally { this.geometry = displayed; }
       };
-    }, undefined, () => console.warn('[Surface depth] Height texture could not be loaded'));
+    };
+    let ownedTexture: THREE.Texture | undefined;
+    if (usingManagedHeight) {
+      attach(heightTexture!);
+    } else {
+      const texture = new THREE.TextureLoader().load(shape.displacementMapUrl!, () => {
+        texture.colorSpace = THREE.NoColorSpace; texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        attach(texture);
+      }, undefined, () => console.warn('[Surface depth] Height texture could not be loaded'));
+      ownedTexture = texture;
+    }
     return () => {
       disposed = true; active.current = null;
       const current = mesh.geometry;
       const ownsGeometry = current === displayedGeometry || current === subdivided;
       relief?.dispose();
       mesh.geometry = ownsGeometry ? original : current; mesh.raycast = originalRaycast;
-      subdivided?.dispose(); texture.dispose();
+      subdivided?.dispose(); ownedTexture?.dispose();
     };
-  }, [shape.surfaceDepthEnabled, shape.displacementMapUrl,
+  }, [shape.surfaceDepthEnabled, shape.displacementMapUrl, usingManagedHeight, heightTexture,
     shape.surfaceDepthSegments, shape.type, shape.args, shape.geometryData, shape.terrainData, shape.surfaceMaterials, shape.bevelAmount]);
-  useLayoutEffect(() => { const { scale, bias } = values(); active.current?.configure(scale, bias); }, [shape.displacementScale, shape.displacementBias]);
+  useLayoutEffect(() => { const { scale, bias } = values(); active.current?.configure(scale, bias); },
+    [shape.displacementScale, shape.displacementBias, materialDepth?.scaleMeters, materialDepth?.biasMeters]);
   return <object3D ref={marker} />;
 }
