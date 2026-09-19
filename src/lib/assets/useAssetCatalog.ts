@@ -11,6 +11,9 @@ export function useAssetCatalog(kind?: AssetSummary['kind']) {
     void loadCatalogIndex('/polyhaven/catalog.v1.json', controller.signal).then(next => {
       setCatalog(next);
       setFallback(next === FALLBACK_CATALOG || next.release === FALLBACK_CATALOG.release);
+    }).catch(() => {
+      // Aborting a catalog request during test teardown or route changes is expected.
+      // Keep the bundled fallback and, importantly, consume the rejected promise.
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, []);

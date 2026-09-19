@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PolyForm GPU environment preview</title>
+<style>body{margin:0;background:#17242c;color:#edf5fa;font:14px system-ui}canvas{display:block}aside{position:absolute;top:16px;left:16px;background:#152129e8;padding:18px;border-radius:12px;width:280px}h1{font-size:18px;margin:0 0 10px}label{display:block;margin:10px 0}input[type=range]{width:160px;float:right}p{line-height:1.45;color:#bfced6}button{padding:7px;margin-top:8px}#status{font-size:12px;color:#a8dfc0}</style></head>
+<body><aside><h1>PolyForm GPU environment</h1><p>1,024 instanced spruce trees. Drag to orbit; scroll to zoom. Surface tile uses GPU displacement.</p>
+<label>Wind <input id="wind" type="range" min="0" max="0.4" step="0.01" value="0.12"></label>
+<label>Relief <input id="depth" type="range" min="0" max="0.1" step="0.005" value="0.06"></label>
+<label><input id="rain" type="checkbox" checked> Rain</label><label><input id="snow" type="checkbox" checked> Snow</label>
+<label><input id="clouds" type="checkbox" checked> Clouds</label><label><input id="mist" type="checkbox" checked> Mist</label>
+<button id="camera">Switch perspective / orthographic</button><p id="status">Compiling GPU programs…</p></aside>
+<script type="module" src="./gpu-environment.ts"></script></body></html>

@@ -344,18 +344,30 @@ export function createDoorGeometry(
   const panelWidth = width - frameThick * 2 - 0.01;
   const panelHeight = height - frameThick - 0.01;
 
+  // Open archway styles have no leaf/glass/hardware - just casing around the opening.
+  // The round one also has no straight header: its top is a true semicircular arch, so
+  // the jambs are shortened to meet the arch's springline instead of running full height.
+  const isRoundArchway = style === 'archway-round';
+  const archRadius = width / 2;
+  const springlineY = height / 2 - archRadius;
+  const jambTopY = isRoundArchway ? springlineY : height / 2;
+  const jambHeight = jambTopY + height / 2;
+  const jambCenterY = (jambTopY - height / 2) / 2;
+
   // 1. Left & Right Jambs + Top Header
-  const leftJamb = new THREE.BoxGeometry(frameThick, height, frameDepth);
-  leftJamb.translate(-width / 2 + frameThick / 2, 0, 0);
+  const leftJamb = new THREE.BoxGeometry(frameThick, jambHeight, frameDepth);
+  leftJamb.translate(-width / 2 + frameThick / 2, jambCenterY, 0);
   frameParts.push(leftJamb);
 
-  const rightJamb = new THREE.BoxGeometry(frameThick, height, frameDepth);
-  rightJamb.translate(width / 2 - frameThick / 2, 0, 0);
+  const rightJamb = new THREE.BoxGeometry(frameThick, jambHeight, frameDepth);
+  rightJamb.translate(width / 2 - frameThick / 2, jambCenterY, 0);
   frameParts.push(rightJamb);
 
-  const topHeader = new THREE.BoxGeometry(width, frameThick, frameDepth);
-  topHeader.translate(0, height / 2 - frameThick / 2, 0);
-  frameParts.push(topHeader);
+  if (!isRoundArchway) {
+    const topHeader = new THREE.BoxGeometry(width, frameThick, frameDepth);
+    topHeader.translate(0, height / 2 - frameThick / 2, 0);
+    frameParts.push(topHeader);
+  }
 
   // 2. Door Style Specific Leaf Geometry
   switch (style) {
@@ -923,6 +935,61 @@ export function createDoorGeometry(
       knob2.rotateX(Math.PI / 2);
       knob2.translate(0.03, -0.05, panelThick / 2 + 0.03);
       hardwareParts.push(knob2);
+      break;
+    }
+
+    case 'archway-square': {
+      // Open doorway: the straight jambs and header built above are the whole thing -
+      // no leaf, glass or hardware, just a plain casing around the opening.
+      break;
+    }
+
+    case 'archway-round': {
+      // Open doorway with a true semicircular arched head - the straight header is
+      // skipped above and the jambs stop at the springline; a segmented curved casing
+      // (same technique as the window 'arch' style) fills in the rest of the opening.
+      const numArchSegments = 12;
+      for (let s = 0; s < numArchSegments; s++) {
+        const theta1 = (Math.PI / numArchSegments) * s;
+        const theta2 = (Math.PI / numArchSegments) * (s + 1);
+        const midTheta = (theta1 + theta2) / 2;
+        const segLen = (Math.PI * archRadius) / numArchSegments;
+
+        const x = Math.cos(midTheta) * (archRadius - frameThick / 2);
+        const y = springlineY + Math.sin(midTheta) * (archRadius - frameThick / 2);
+
+        const archSegment = new THREE.BoxGeometry(segLen * 1.05, frameThick, frameDepth);
+        archSegment.rotateZ(midTheta - Math.PI / 2);
+        archSegment.translate(x, y, 0);
+        frameParts.push(archSegment);
+      }
+
+      // The wall cuts a plain rectangular hole sized to this shape's own width/height
+      // (same as every other door style), but a round arch doesn't reach that
+      // rectangle's top corners - without infill there, the two corners above the
+      // arch's springline are just an open gap through to whatever's behind the wall.
+      // Fill them with a solid panel shaped as "rectangle above the springline, minus
+      // the arch's own half-disc", i.e. exactly those two corners and nothing else.
+      const spandrelShape = new THREE.Shape();
+      spandrelShape.moveTo(-width / 2, springlineY);
+      spandrelShape.lineTo(-width / 2, height / 2);
+      spandrelShape.lineTo(width / 2, height / 2);
+      spandrelShape.lineTo(width / 2, springlineY);
+      spandrelShape.closePath();
+
+      const archHole = new THREE.Path();
+      archHole.absarc(0, springlineY, archRadius, 0, Math.PI, false);
+      archHole.closePath();
+      spandrelShape.holes.push(archHole);
+
+      // A Shape with a hole makes ExtrudeGeometry emit non-indexed output, while every
+      // other frame part (plain BoxGeometry) is indexed - mergeGeometries below requires
+      // one or the other consistently, so re-index this one to match.
+      const spandrelGeo = BufferGeometryUtils.mergeVertices(
+        new THREE.ExtrudeGeometry(spandrelShape, { depth: frameDepth, bevelEnabled: false })
+      );
+      spandrelGeo.translate(0, 0, -frameDepth / 2);
+      frameParts.push(spandrelGeo);
       break;
     }
 

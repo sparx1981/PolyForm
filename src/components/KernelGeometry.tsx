@@ -20,8 +20,10 @@ import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { EdgeId, FaceId, Graph } from '../lib/geometry/types';
 import { tessellateFace, tessellateGraph, mergeBuffers, edgeBuffer } from '../lib/geometry/tessellate';
-import { facesByMaterial } from '../tools/kernelSelection';
+import { facesByRenderGroup } from '../tools/kernelSelection';
 import { ThickLineSegments } from './ThickLineSegments';
+import { KernelSurfaceDepthBinding } from './graphics/KernelSurfaceDepthBinding';
+import type { HeightMapValue } from '../types';
 
 export interface KernelGeometryProps {
   graph: Graph;
@@ -70,6 +72,30 @@ const DEFAULT_BACK = '#8f9ba8';
 const DEFAULT_EDGE = '#2b2b2b';
 const DEFAULT_SELECTED = '#3b82f6';
 
+/**
+ * SurfaceDepth (see KernelSurfaceDepthBinding) only ever touches the
+ * displacementMap: it's a GPU vertex displacement with no per-vertex normal
+ * recompute, so viewed face-on it is all but invisible without a normal map
+ * layered in separately for per-pixel shading - the same reason a Shape's own
+ * pbrMapProps in Viewport.tsx binds shape.normalMapUrl alongside its
+ * displacement. Kernel faces need the identical pairing, or a face painted
+ * with a height map looks like it "did nothing" the instant the camera is
+ * looking straight at it rather than across it at a raking angle.
+ */
+const _kernelNormalMapCache = new Map<string, THREE.Texture>();
+function getKernelNormalMapTexture(url: string | undefined): THREE.Texture | undefined {
+  if (!url) return undefined;
+  let tex = _kernelNormalMapCache.get(url);
+  if (tex) return tex;
+  tex = new THREE.TextureLoader().load(url, (loaded) => {
+    loaded.wrapS = THREE.RepeatWrapping; loaded.wrapT = THREE.RepeatWrapping;
+    loaded.colorSpace = THREE.NoColorSpace; loaded.needsUpdate = true;
+  });
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.NoColorSpace;
+  _kernelNormalMapCache.set(url, tex);
+  return tex;
+}
+
 export function KernelGeometry({
   graph,
   revision = 0,
@@ -95,8 +121,9 @@ export function KernelGeometry({
    * tool work on kernel geometry at all. Hidden faces are excluded here.
    */
   const groups = useMemo(() => {
-    const out: { color: string; geometry: THREE.BufferGeometry; faceOfTriangle: FaceId[] }[] = [];
-    for (const [color, faceIds] of facesByMaterial(graph)) {
+    const out: { key: string; color: string; geometry: THREE.BufferGeometry; faceOfTriangle: FaceId[]; surfaceDepth: HeightMapValue | undefined }[] = [];
+    let index = 0;
+    for (const { color, faceIds, surfaceDepth } of facesByRenderGroup(graph)) {
       const meshes = faceIds
         .map((id) => tessellateFace(graph, id))
         .filter((m): m is NonNullable<typeof m> => m !== null);
@@ -110,7 +137,9 @@ export function KernelGeometry({
       geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
       geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
       geo.computeBoundingSphere();
-      out.push({ color, geometry: geo, faceOfTriangle: merged.faceOfTriangle });
+      // Two groups can share a colour but differ by height map, so the
+      // colour alone is no longer a unique React key.
+      out.push({ key: `${color}#${index++}`, color, geometry: geo, faceOfTriangle: merged.faceOfTriangle, surfaceDepth });
     }
     return out;
   }, [graph, revision]);
@@ -148,7 +177,7 @@ export function KernelGeometry({
     <group name="kernel-geometry">
       {groups.map((g) => (
         <mesh
-          key={g.color}
+          key={g.key}
           geometry={g.geometry}
           castShadow
           receiveShadow
@@ -192,6 +221,8 @@ export function KernelGeometry({
             opacity={opacity}
             roughness={0.85}
             metalness={0}
+            normalMap={getKernelNormalMapTexture(g.surfaceDepth?.normalMapUrl)}
+            normalScale={g.surfaceDepth?.normalMapUrl ? new THREE.Vector2(1, 1) : undefined}
             // Pushes this face's DEPTH VALUES back slightly (not its actual
             // position) so any line geometry sitting exactly on the same
             // plane — the boundary between two coplanar faces, most
@@ -206,6 +237,7 @@ export function KernelGeometry({
             polygonOffsetFactor={1}
             polygonOffsetUnits={1}
           />
+          {g.surfaceDepth && <KernelSurfaceDepthBinding surfaceDepth={g.surfaceDepth} revision={revision} />}
         </mesh>
       ))}
 

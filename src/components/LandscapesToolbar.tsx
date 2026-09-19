@@ -789,13 +789,13 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
         <div className="relative group">
           <CivilToolButton
             tool="lamp"
-            label="Street / Path Lamp"
-            subtitle="Place outdoor lantern & architectural light post (3.2m)"
+            label="Light Fixture"
+            subtitle="Place a light - street lamp, ceiling fixture or any other style (right-click to change style)"
             icon={<Lamp size={20} />}
             active={activeTool === 'lamp'}
             onClick={() => {
               setActiveTool('lamp');
-              setConsoleOutput(c => [...c, '[Landscapes] Lamp Post Tool active: click to place path light.']);
+              setConsoleOutput(c => [...c, '[Landscapes] Light Fixture Tool active: click to place, right-click to change style.']);
             }}
           />
         </div>

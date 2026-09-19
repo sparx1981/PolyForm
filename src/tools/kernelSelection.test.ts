@@ -5,6 +5,7 @@ import {
   setFaceHidden, toggleFaceHidden, deleteFace, deleteFaceAndEdges,
   clearFaceMaterial, facesByMaterial, faceGroups, groupContaining,
   setGroupHidden, deleteGroupFacesAndEdges, duplicateGroup, objectInfoSummary,
+  setFaceSurfaceDepth, setFacesSurfaceDepth, getFaceSurfaceDepth, facesByRenderGroup,
 } from './kernelSelection';
 import { insertFaceOffset } from '../lib/geometry/faceOffset';
 import { planeBasis } from '../lib/geometry/math';
@@ -200,6 +201,103 @@ describe('render grouping', () => {
     const a = [...facesByMaterial(h.graph).keys()];
     const b = [...facesByMaterial(h.graph).keys()];
     expect(a).toEqual(b);
+  });
+});
+
+describe('surface depth', () => {
+  const depthA = { displacementMapUrl: 'data:image/png;base64,AAA', displacementScale: 0.04 };
+  const depthB = { displacementMapUrl: 'data:image/png;base64,BBB', displacementScale: 0.08 };
+
+  it('sets and reads a face height map', () => {
+    const h = host(); square(h);
+    const id = only(h);
+    expect(setFaceSurfaceDepth(h.graph, id, depthA)).toBe(true);
+    expect(getFaceSurfaceDepth(h.graph, id)).toEqual(depthA);
+  });
+
+  it('clears a height map when given null, or an object with no map URL', () => {
+    const h = host(); square(h);
+    const id = only(h);
+    setFaceSurfaceDepth(h.graph, id, depthA);
+    setFaceSurfaceDepth(h.graph, id, null);
+    expect(getFaceSurfaceDepth(h.graph, id)).toBeUndefined();
+
+    setFaceSurfaceDepth(h.graph, id, depthA);
+    setFaceSurfaceDepth(h.graph, id, {});
+    expect(getFaceSurfaceDepth(h.graph, id)).toBeUndefined();
+  });
+
+  it('returns false for a face that no longer exists', () => {
+    const h = host(); square(h);
+    const id = only(h);
+    deleteFace(h.graph, id);
+    expect(setFaceSurfaceDepth(h.graph, id, depthA)).toBe(false);
+  });
+
+  it('sets a height map across a whole selection, spanning several faces', () => {
+    const h = host();
+    square(h, 4);
+    h.commitSegment(vec3(0,0,0), vec3(4,0,4));
+    const ids = [...h.graph.faces.keys()];
+    expect(setFacesSurfaceDepth(h.graph, ids, depthA)).toBe(2);
+    for (const id of ids) expect(getFaceSurfaceDepth(h.graph, id)).toEqual(depthA);
+  });
+
+  it('groups faces by colour AND height map, so two faces sharing a colour but not a height map render separately', () => {
+    const h = host();
+    square(h, 4);
+    h.commitSegment(vec3(0,0,0), vec3(4,0,4));
+    const ids = [...h.graph.faces.keys()];
+    // Same colour on both, but only one gets a height map.
+    paintFace(h.graph, ids[0]!, '#ffffff');
+    paintFace(h.graph, ids[1]!, '#ffffff');
+    setFaceSurfaceDepth(h.graph, ids[0]!, depthA);
+
+    const groups = facesByRenderGroup(h.graph);
+    expect(groups).toHaveLength(2);
+    const withDepth = groups.find(g => g.surfaceDepth);
+    const withoutDepth = groups.find(g => !g.surfaceDepth);
+    expect(withDepth?.faceIds).toEqual([ids[0]]);
+    expect(withoutDepth?.faceIds).toEqual([ids[1]]);
+  });
+
+  it('keeps faces with the same colour and the same height map in one render group', () => {
+    const h = host();
+    square(h, 4);
+    h.commitSegment(vec3(0,0,0), vec3(4,0,4));
+    const ids = [...h.graph.faces.keys()];
+    paintFaces(h.graph, ids, '#ffffff');
+    setFacesSurfaceDepth(h.graph, ids, depthA);
+
+    const groups = facesByRenderGroup(h.graph);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.faceIds).toHaveLength(2);
+    expect(groups[0]!.surfaceDepth).toEqual(depthA);
+  });
+
+  it('splits faces with the same colour but different height map values into separate groups', () => {
+    const h = host();
+    square(h, 4);
+    h.commitSegment(vec3(0,0,0), vec3(4,0,4));
+    const ids = [...h.graph.faces.keys()];
+    paintFaces(h.graph, ids, '#ffffff');
+    setFaceSurfaceDepth(h.graph, ids[0]!, depthA);
+    setFaceSurfaceDepth(h.graph, ids[1]!, depthB);
+
+    const groups = facesByRenderGroup(h.graph);
+    expect(groups).toHaveLength(2);
+  });
+
+  it('excludes hidden faces from render groups, same as facesByMaterial', () => {
+    const h = host();
+    square(h, 4);
+    h.commitSegment(vec3(0,0,0), vec3(4,0,4));
+    const ids = [...h.graph.faces.keys()];
+    setFaceHidden(h.graph, ids[0]!, true);
+    const groups = facesByRenderGroup(h.graph);
+    const allIds = groups.flatMap(g => g.faceIds);
+    expect(allIds).not.toContain(ids[0]);
+    expect(allIds).toContain(ids[1]);
   });
 });
 

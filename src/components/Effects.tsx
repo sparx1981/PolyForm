@@ -164,6 +164,7 @@ export const Effects: React.FC = () => {
   return (
     <group>
       {animations.map(anim => {
+        if (anim.type === 'none') return null;
         if (anim.type === 'bird') {
           return (
             <BirdSystem
@@ -174,6 +175,9 @@ export const Effects: React.FC = () => {
               speed={anim.speed}
               looping={anim.looping}
               playing={anim.playing}
+              bodyColor={anim.birdBodyColor}
+              breastColor={anim.birdBreastColor}
+              beakColor={anim.birdBeakColor}
             />
           );
         }
@@ -189,7 +193,7 @@ export const Effects: React.FC = () => {
             />
           );
         }
-        return <ParticleSystem key={anim.id} {...anim} />;
+        return <ParticleSystem key={anim.id} {...anim} type={anim.type as ParticleSystemProps['type']} />;
       })}
     </group>
   );

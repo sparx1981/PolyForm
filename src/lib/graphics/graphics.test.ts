@@ -4,6 +4,7 @@ import { VegetationBatch, VegetationWind, SurfaceDepth, WeatherSystem } from './
 import { patchMaterial, type Shader } from './shaderHooks';
 import { createTreeGeometry, createBushGeometry } from '../landscapeGeometry';
 import { PLANT_SPECIES_CATALOG } from '../plantLibrary';
+import { SURFACE_DEPTH_PRESETS, DEFAULT_SURFACE_DEPTH_PARAMS, findSurfaceDepthPreset } from './proceduralSurface';
 
 function compile(material: THREE.Material, name: 'standard' | 'physical' | 'depth' | 'distance' = 'standard') {
   const shader = { uniforms: {}, vertexShader: THREE.ShaderLib[name].vertexShader,
@@ -90,6 +91,41 @@ describe('surface depth', () => {
     depth.dispose(); expect(mesh.geometry).toBe(geometry); expect(material.displacementMap).toBe(null);
     expect(mesh.customDistanceMaterial).toBeUndefined();
     geometry.dispose(); material.dispose(); texture.dispose();
+  });
+
+  it('patches every material in a per-face material array and restores each on dispose', () => {
+    const texture = new THREE.Texture();
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const materials = [new THREE.MeshStandardMaterial({ color: 'red' }), new THREE.MeshStandardMaterial({ color: 'blue' })];
+    const mesh = new THREE.Mesh(geometry, materials);
+    const depth = new SurfaceDepth(texture).init(mesh);
+    for (const mat of materials) {
+      const shader = compile(mat);
+      expect(shader.uniforms.pfDepthScale).toBeDefined();
+      expect(mat.displacementMap).toBe(texture);
+    }
+    // Depth/distance shadow proxies mirror only the first material's map/side.
+    expect(mesh.customDepthMaterial).toBeInstanceOf(THREE.MeshDepthMaterial);
+    depth.dispose();
+    for (const mat of materials) expect(mat.displacementMap).toBe(null);
+    expect(mesh.customDepthMaterial).toBeUndefined(); expect(mesh.customDistanceMaterial).toBeUndefined();
+    geometry.dispose(); materials.forEach(m => m.dispose()); texture.dispose();
+  });
+});
+
+describe('procedural surface depth presets', () => {
+  it('registers a unique, well-formed preset for each pattern', () => {
+    const ids = SURFACE_DEPTH_PRESETS.map(p => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const preset of SURFACE_DEPTH_PRESETS) {
+      expect(preset.name.length).toBeGreaterThan(0);
+      expect(preset.description.length).toBeGreaterThan(0);
+      expect(typeof preset.generateHeight).toBe('function');
+    }
+    expect(findSurfaceDepthPreset(SURFACE_DEPTH_PRESETS[0].id)).toBe(SURFACE_DEPTH_PRESETS[0]);
+    expect(findSurfaceDepthPreset('does-not-exist')).toBeUndefined();
+    expect(DEFAULT_SURFACE_DEPTH_PARAMS.scale).toBeGreaterThan(0);
+    expect(DEFAULT_SURFACE_DEPTH_PARAMS.strength).toBeGreaterThan(0);
   });
 });
 

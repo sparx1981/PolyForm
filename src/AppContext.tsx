@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone } from './types';
+import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadLargeGeometryForSave, hydrateOffloadedGeometry, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
@@ -171,6 +171,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeMaterialBindingId, setActiveMaterialBindingId] = useState<string | null>(null);
   const [materialBindings, setMaterialBindings] = useState<Record<string, MaterialInstance>>({});
   const [activePBR, setActivePBR] = useState({ roughness: 0.5, metalness: 0, opacity: 1 });
+  // The height map (if any) carried by whichever material is currently loaded into the
+  // paint tool - set alongside activeMaterial/activePBR by every swatch click, applied to
+  // the target object by updateShapeColor when painting the whole object.
+  const [activeSurfaceDepth, setActiveSurfaceDepth] = useState<HeightMapValue | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedSurface, setSelectedSurface] = useState<{ shapeId: string, faceIndex: number, subFaceIndex?: number } | null>(null);
@@ -233,6 +237,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [sunIntensity, setSunIntensity] = useState(1.0);
   const [shadowOpacity, setShadowOpacity] = useState(0.25);
   const [ambientOcclusionEnabled, setAmbientOcclusionEnabled] = useState(false);
+  // Screen-space "sun shafts" through whatever occludes the sun (buildings, terrain,
+  // trees) - a moderate-cost toggle, off by default like ambient occlusion above.
+  const [godRaysEnabled, setGodRaysEnabled] = useState(false);
+  const [godRaysIntensity, setGodRaysIntensity] = useState(0.5);
   const [activeBevelType, setActiveBevelType] = useState<'radius' | 'chamfer'>('radius');
   const [skybox, setSkybox] = useState<SkyboxType>('none');
   const [environment, setEnvironment] = useState<EnvironmentState>(() => legacyEnvironmentState('none', 1, 0, 0));
@@ -1865,7 +1873,7 @@ console.log("Created rectangle:", myRect.id);`);
     });
   };
 
-  const updateShapeColor = (id: string, color: string, pbr?: { roughness: number, metalness: number, opacity: number }) => {
+  const updateShapeColor = (id: string, color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => {
     handleSetShapes(prev => prev.map(s => {
       if (s.id === id) {
         const updated: Shape = {
@@ -1876,7 +1884,14 @@ console.log("Created rectangle:", myRect.id);`);
           surfaceMaterialBindings: undefined,
           roughness: pbr?.roughness ?? s.roughness,
           metalness: pbr?.metalness ?? s.metalness,
-          opacity: pbr?.opacity ?? s.opacity
+          opacity: pbr?.opacity ?? s.opacity,
+          // A material carrying a height map (surfaceDepth truthy) applies it as this
+          // object's surface depth, same as picking one directly in its own panel. A
+          // material with none (undefined, or explicitly null to mean "plain") clears
+          // whatever height map this object had before - painting a new material
+          // replaces the old one's special properties, it doesn't layer on top of them.
+          ...(surfaceDepth ? { ...surfaceDepth, surfaceDepthEnabled: Boolean(surfaceDepth.displacementMapUrl) }
+            : { surfaceDepthEnabled: false, displacementMapUrl: undefined, normalMapUrl: undefined, surfaceDepthPresetId: undefined }),
         };
         if (s.type === 'terrain' && s.terrainData) {
           updated.terrainData = {
@@ -2043,6 +2058,8 @@ console.log("Created rectangle:", myRect.id);`);
       setEnvironment,
       activePBR,
       setActivePBR,
+      activeSurfaceDepth,
+      setActiveSurfaceDepth,
       selectedId,
       setSelectedId,
       selectedIds,
@@ -2132,6 +2149,10 @@ console.log("Created rectangle:", myRect.id);`);
       setShadowOpacity,
       ambientOcclusionEnabled,
       setAmbientOcclusionEnabled: handleSetAmbientOcclusionEnabled,
+      godRaysEnabled,
+      setGodRaysEnabled,
+      godRaysIntensity,
+      setGodRaysIntensity,
       activeBevelType,
       setActiveBevelType: handleSetActiveBevelType,
       skybox,

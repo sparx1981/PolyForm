@@ -20,12 +20,20 @@ export class ManagedTextureManager {
   private readonly entries = new Map<string, CacheEntry>();
   private disposed = false;
   private readonly ktx2: KTX2Loader;
+  private readonly ktx2Supported: boolean;
   private readonly exr = new EXRLoader();
   private readonly image = new THREE.TextureLoader();
 
   constructor(renderer: THREE.WebGLRenderer, transcoderPath = '/basis/') {
     this.ktx2 = new KTX2Loader().setTranscoderPath(transcoderPath);
-    this.ktx2.detectSupport(renderer);
+    try {
+      this.ktx2.detectSupport(renderer);
+      this.ktx2Supported = true;
+    } catch {
+      // Headless/jsdom renderers have no WebGL extensions. Use the manifest fallback
+      // image there; real WebGL clients still take the compressed KTX2 path.
+      this.ktx2Supported = false;
+    }
     this.image.setCrossOrigin('anonymous');
   }
 
@@ -103,7 +111,7 @@ export class ManagedTextureManager {
 
   private async load(variant: MapVariant): Promise<THREE.Texture> {
     try {
-      if (variant.format === 'ktx2') return await this.ktx2.loadAsync(variant.url);
+      if (variant.format === 'ktx2' && this.ktx2Supported) return await this.ktx2.loadAsync(variant.url);
       if (variant.format === 'exr') return await this.exr.loadAsync(variant.url);
       return await this.image.loadAsync(variant.url);
     } catch (error) {

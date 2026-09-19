@@ -1290,16 +1290,16 @@ export default function UnifiedToolRail() {
         {
           id: 'lamp',
           tool: 'lamp',
-          label: 'Street / Path Lamp',
-          subtitle: 'Place outdoor lantern & architectural light post (3.2m)',
+          label: 'Light Fixture',
+          subtitle: 'Place a light - street lamp, ceiling fixture or any other style (right-click to change style)',
           icon: <Lamp size={19} />,
           isActive: (s) => s.activeTool === 'lamp',
           onClick: (s) => {
             s.setActiveTool('lamp');
             setActiveLandscapeCategory(null);
-            setConsoleOutput(prev => [...prev, '[Landscapes] Lamp Post Tool active: click to place path light.']);
+            setConsoleOutput(prev => [...prev, '[Landscapes] Light Fixture Tool active: click to place, right-click to change style.']);
           },
-          keywords: ['lamp', 'light', 'lantern', 'street light', 'post']
+          keywords: ['lamp', 'light', 'lantern', 'street light', 'post', 'pendant', 'chandelier', 'downlight', 'sconce', 'troffer', 'ceiling light', 'interior light']
         },
         {
           id: 'bench',

@@ -779,7 +779,7 @@ export function createRailingGeometry(length: number = 2.4, height: number = 1.0
   return safeMergeGeometries(geometries, '#475569');
 }
 
-export function createLampGeometry(height: number = 3.2): THREE.BufferGeometry {
+function createClassicLampGeometry(height: number): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = [];
 
   const base = new THREE.CylinderGeometry(0.2, 0.25, 0.3, 14);
@@ -799,6 +799,648 @@ export function createLampGeometry(height: number = 3.2): THREE.BufferGeometry {
   geometries.push(cap);
 
   return safeMergeGeometries(geometries, '#334155');
+}
+
+// Cobra-head and other arterial-road fixtures read as toy-scale at a pedestrian post
+// lamp's ~3m default: real single-carriageway cobra heads are almost always mounted
+// 6-10m up. Shared with getLampLightAnchor so the light attaches at the built arm,
+// not the shorter unclamped height. Pedestrian-scale styles (classic, victorian,
+// post-top) keep the user's own height untouched - only roadway fixtures get a floor.
+function roadwayLampHeight(height: number): number {
+  return Math.max(height, 6.5);
+}
+
+function createCobraLampGeometry(rawHeight: number): THREE.BufferGeometry {
+  const height = roadwayLampHeight(rawHeight);
+  const geometries: THREE.BufferGeometry[] = [];
+  const armReach = 0.9;
+
+  const base = new THREE.CylinderGeometry(0.18, 0.22, 0.25, 14);
+  base.translate(0, 0.125, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.06, 0.08, height - 0.4, 14);
+  pole.translate(0, 0.25 + (height - 0.4) / 2, 0);
+  geometries.push(pole);
+
+  // Curved arm reaching out over the roadway, approximated with two angled segments.
+  const armRise = new THREE.CylinderGeometry(0.045, 0.05, 0.35, 10);
+  armRise.rotateZ(-Math.PI / 3.2);
+  armRise.translate(armReach * 0.18, height - 0.15, 0);
+  geometries.push(armRise);
+
+  const armOut = new THREE.CylinderGeometry(0.04, 0.045, armReach, 10);
+  armOut.rotateZ(Math.PI / 2);
+  armOut.translate(armReach / 2 + 0.1, height + 0.02, 0);
+  geometries.push(armOut);
+
+  // Angled cobra-head housing at the end of the arm.
+  const head = new THREE.BoxGeometry(0.4, 0.14, 0.22);
+  head.rotateZ(-0.12);
+  head.translate(armReach + 0.15, height - 0.06, 0);
+  geometries.push(head);
+
+  // Amber lens on the housing's underside, matching the light it actually casts -
+  // without this the fixture read as a plain dark box with no clue it's lit at all.
+  const lens = new THREE.BoxGeometry(0.32, 0.02, 0.16);
+  lens.rotateZ(-0.12);
+  lens.translate(armReach + 0.15, height - 0.13, 0);
+  applyGeometryVertexColors(lens, '#fed7aa');
+  geometries.push(lens);
+
+  return safeMergeGeometries(geometries, '#1e293b');
+}
+
+function createVictorianLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const base = new THREE.CylinderGeometry(0.24, 0.3, 0.28, 8);
+  base.translate(0, 0.14, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.07, 0.09, height - 0.9, 12);
+  pole.translate(0, 0.28 + (height - 0.9) / 2, 0);
+  geometries.push(pole);
+
+  // Decorative scrollwork bands, suggested by a couple of wider rings along the pole.
+  for (const bandY of [height * 0.35, height * 0.65]) {
+    const band = new THREE.TorusGeometry(0.1, 0.025, 8, 16);
+    band.rotateX(Math.PI / 2);
+    band.translate(0, bandY, 0);
+    geometries.push(band);
+  }
+
+  // Boxy four-sided lantern with a pointed finial cap.
+  const lantern = new THREE.BoxGeometry(0.32, 0.4, 0.32);
+  lantern.translate(0, height - 0.2, 0);
+  geometries.push(lantern);
+
+  const finial = new THREE.ConeGeometry(0.2, 0.28, 4);
+  finial.translate(0, height + 0.14, 0);
+  geometries.push(finial);
+
+  return safeMergeGeometries(geometries, '#292524');
+}
+
+// Bollards are short by nature; a tall "height" arg just widens the glowing band's reach,
+// not the whole post. Shared with getLampLightAnchor so both stay in sync on the actual
+// built height instead of duplicating this clamp separately.
+function bollardPostHeight(height: number): number {
+  return Math.max(0.6, Math.min(1.1, height * 0.28));
+}
+
+function createBollardLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const postHeight = bollardPostHeight(height);
+
+  const post = new THREE.CylinderGeometry(0.09, 0.1, postHeight, 16);
+  post.translate(0, postHeight / 2, 0);
+  geometries.push(post);
+
+  const glowBand = new THREE.CylinderGeometry(0.095, 0.095, postHeight * 0.3, 16);
+  glowBand.translate(0, postHeight * 0.68, 0);
+  geometries.push(glowBand);
+
+  const cap = new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  cap.translate(0, postHeight, 0);
+  geometries.push(cap);
+
+  return safeMergeGeometries(geometries, '#44403c');
+}
+
+function createCobraDoubleLampGeometry(rawHeight: number): THREE.BufferGeometry {
+  const height = roadwayLampHeight(rawHeight);
+  const geometries: THREE.BufferGeometry[] = [];
+  const armReach = 0.85;
+
+  const base = new THREE.CylinderGeometry(0.2, 0.26, 0.28, 14);
+  base.translate(0, 0.14, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.07, 0.09, height - 0.4, 14);
+  pole.translate(0, 0.28 + (height - 0.4) / 2, 0);
+  geometries.push(pole);
+
+  // A median/dual-carriageway light reaches both ways from one pole, so an arm and
+  // head pair is built once, then mirrored across X for the opposite side.
+  for (const side of [1, -1]) {
+    const armOut = new THREE.CylinderGeometry(0.04, 0.045, armReach, 10);
+    armOut.rotateZ(Math.PI / 2);
+    armOut.translate(side * (armReach / 2 + 0.09), height, 0);
+    geometries.push(armOut);
+
+    const head = new THREE.BoxGeometry(0.38, 0.13, 0.2);
+    head.translate(side * (armReach + 0.14), height - 0.05, 0);
+    applyGeometryVertexColors(head, '#1e293b');
+    geometries.push(head);
+
+    const lens = new THREE.BoxGeometry(0.3, 0.02, 0.14);
+    lens.translate(side * (armReach + 0.14), height - 0.12, 0);
+    applyGeometryVertexColors(lens, '#fef9c3');
+    geometries.push(lens);
+  }
+
+  return safeMergeGeometries(geometries, '#1e293b');
+}
+
+function createPostTopLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const base = new THREE.CylinderGeometry(0.18, 0.24, 0.22, 16);
+  base.translate(0, 0.11, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.055, 0.065, height - 0.5, 16);
+  pole.translate(0, 0.22 + (height - 0.5) / 2, 0);
+  geometries.push(pole);
+
+  // The "acorn" - a squat sphere sitting directly on the pole, the plainer,
+  // far more common cousin of the Victorian style's boxy ornate lantern.
+  const acorn = new THREE.SphereGeometry(0.22, 14, 10);
+  acorn.scale(1, 1.15, 1);
+  acorn.translate(0, height + 0.1, 0);
+  applyGeometryVertexColors(acorn, '#f5f5f4');
+  geometries.push(acorn);
+
+  const finialCap = new THREE.ConeGeometry(0.06, 0.1, 8);
+  finialCap.translate(0, height + 0.36, 0);
+  geometries.push(finialCap);
+
+  return safeMergeGeometries(geometries, '#3f3f46');
+}
+
+function createModernLedLampGeometry(rawHeight: number): THREE.BufferGeometry {
+  const height = roadwayLampHeight(rawHeight);
+  const geometries: THREE.BufferGeometry[] = [];
+  const armReach = 0.75;
+
+  const base = new THREE.CylinderGeometry(0.16, 0.2, 0.2, 8);
+  base.translate(0, 0.1, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.05, 0.05, height - 0.3, 8);
+  pole.translate(0, 0.2 + (height - 0.3) / 2, 0);
+  geometries.push(pole);
+
+  // A straight, perfectly horizontal arm - contemporary fixtures skip the cobra's
+  // curve, since the slim cutoff head itself does the visual work.
+  const arm = new THREE.CylinderGeometry(0.03, 0.03, armReach, 8);
+  arm.rotateZ(Math.PI / 2);
+  arm.translate(armReach / 2 + 0.05, height, 0);
+  geometries.push(arm);
+
+  // Slim rectangular "shoebox" cutoff housing, flat-bottomed so no light spills upward.
+  const housing = new THREE.BoxGeometry(0.5, 0.06, 0.24);
+  housing.translate(armReach + 0.05, height - 0.02, 0);
+  geometries.push(housing);
+
+  const ledPanel = new THREE.BoxGeometry(0.44, 0.015, 0.2);
+  ledPanel.translate(armReach + 0.05, height - 0.055, 0);
+  applyGeometryVertexColors(ledPanel, '#e0f2fe');
+  geometries.push(ledPanel);
+
+  return safeMergeGeometries(geometries, '#334155');
+}
+
+function createHighMastLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  // A high mast is a highway/interchange fixture: a plain pole several times taller
+  // than a street-scale light, topped with a cluster of floodlights rather than one
+  // downward head. `height` still drives the scale so the style stays resizable, just
+  // from a taller starting point than the others.
+  const mastHeight = highMastHeight(height);
+
+  const base = new THREE.CylinderGeometry(0.28, 0.36, 0.4, 16);
+  base.translate(0, 0.2, 0);
+  geometries.push(base);
+
+  const mast = new THREE.CylinderGeometry(0.09, 0.16, mastHeight - 0.6, 16);
+  mast.translate(0, 0.4 + (mastHeight - 0.6) / 2, 0);
+  geometries.push(mast);
+
+  const ring = new THREE.TorusGeometry(0.22, 0.025, 8, 20);
+  ring.rotateX(Math.PI / 2);
+  ring.translate(0, mastHeight - 0.15, 0);
+  geometries.push(ring);
+
+  // Four floodlight heads angled outward and down around the mast head, the
+  // characteristic silhouette of a highway high-mast light.
+  const floodCount = 4;
+  for (let i = 0; i < floodCount; i++) {
+    const angle = (i / floodCount) * Math.PI * 2;
+    const flood = new THREE.BoxGeometry(0.34, 0.16, 0.22);
+    flood.rotateX(Math.PI / 5.5);
+    flood.rotateY(angle);
+    flood.translate(Math.sin(angle) * 0.3, mastHeight, Math.cos(angle) * 0.3);
+    applyGeometryVertexColors(flood, '#1c1917');
+    geometries.push(flood);
+
+    const lens = new THREE.BoxGeometry(0.26, 0.02, 0.16);
+    lens.rotateX(Math.PI / 5.5 + Math.PI / 2);
+    lens.rotateY(angle);
+    lens.translate(Math.sin(angle) * 0.42, mastHeight - 0.06, Math.cos(angle) * 0.42);
+    applyGeometryVertexColors(lens, '#fef9c3');
+    geometries.push(lens);
+  }
+
+  return safeMergeGeometries(geometries, '#57534e');
+}
+
+// Same short-post scale rule as bollardPostHeight, and shared with getLampLightAnchor
+// for the same reason: "height" widens reach, not the post.
+function solarPathPostHeight(height: number): number {
+  return Math.max(0.7, Math.min(1.3, height * 0.32));
+}
+
+// Shared with getLampLightAnchor so the light attaches at the actual built mast top.
+function highMastHeight(height: number): number {
+  return Math.max(height * 2.6, 9);
+}
+
+function createSolarPathLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const postHeight = solarPathPostHeight(height);
+
+  const post = new THREE.CylinderGeometry(0.045, 0.055, postHeight, 12);
+  post.translate(0, postHeight / 2, 0);
+  geometries.push(post);
+
+  // The solar panel, tilted skyward on a short stalk above a diffuser band.
+  const panel = new THREE.BoxGeometry(0.26, 0.02, 0.18);
+  panel.rotateZ(-0.3);
+  panel.translate(0.02, postHeight + 0.1, 0);
+  applyGeometryVertexColors(panel, '#1e3a5f');
+  geometries.push(panel);
+
+  const diffuser = new THREE.CylinderGeometry(0.09, 0.09, 0.05, 16);
+  diffuser.translate(0, postHeight + 0.02, 0);
+  applyGeometryVertexColors(diffuser, '#f5f5f4');
+  geometries.push(diffuser);
+
+  return safeMergeGeometries(geometries, '#44403c');
+}
+
+// ---------------------------------------------------------------------------
+// Interior fixtures.
+//
+// Every exterior style above builds UPWARD from its shape's local origin - that
+// origin is the fixture's floor-level base, since the placement tool always drops a
+// new shape wherever the user clicked. Ceiling fixtures (pendant, chandelier,
+// recessed, track, high-bay, troffer) instead build DOWNWARD from that same local
+// origin, treating it as the ceiling attachment point - the natural result of
+// clicking the underside of a ceiling/roof shape to place one there. Floor-standing
+// interior styles (floor-lamp, desk-lamp, nightstand) keep the upward convention.
+// Wall-sconce is the one compromise: the placement tool has no wall-snapping, so it
+// includes its own integrated backplate on a slim mounting rod, rather than
+// assuming a real wall is there to flush-mount against.
+// ---------------------------------------------------------------------------
+
+function pendantDrop(height: number): number {
+  return Math.max(0.35, Math.min(1.1, height * 0.5));
+}
+
+function chandelierDrop(height: number): number {
+  return Math.max(0.45, Math.min(1.3, height * 0.55));
+}
+
+function floorLampHeight(height: number): number {
+  return Math.max(1.3, Math.min(1.9, height));
+}
+
+function deskLampHeight(height: number): number {
+  return Math.max(0.32, Math.min(0.5, height * 0.4));
+}
+
+function sconceMountHeight(height: number): number {
+  return Math.max(1.5, Math.min(2.0, height));
+}
+
+function nightstandHeight(height: number): number {
+  return Math.max(0.3, Math.min(0.45, height * 0.35));
+}
+
+function createPendantLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const drop = pendantDrop(height);
+
+  const canopy = new THREE.CylinderGeometry(0.06, 0.05, 0.03, 12);
+  geometries.push(canopy);
+
+  const cord = new THREE.CylinderGeometry(0.008, 0.008, drop, 8);
+  cord.translate(0, -drop / 2, 0);
+  geometries.push(cord);
+
+  const shade = new THREE.CylinderGeometry(0.09, 0.22, 0.2, 20, 1, true);
+  shade.translate(0, -drop - 0.08, 0);
+  applyGeometryVertexColors(shade, '#1c1917');
+  geometries.push(shade);
+
+  const bulb = new THREE.SphereGeometry(0.06, 12, 10);
+  bulb.translate(0, -drop - 0.14, 0);
+  applyGeometryVertexColors(bulb, '#fff7e6');
+  geometries.push(bulb);
+
+  return safeMergeGeometries(geometries, '#292524');
+}
+
+function createChandelierGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const drop = chandelierDrop(height);
+
+  const canopy = new THREE.CylinderGeometry(0.09, 0.07, 0.03, 14);
+  geometries.push(canopy);
+
+  const chain = new THREE.CylinderGeometry(0.01, 0.01, drop * 0.6, 8);
+  chain.translate(0, -drop * 0.3, 0);
+  geometries.push(chain);
+
+  const hub = new THREE.SphereGeometry(0.07, 12, 10);
+  hub.translate(0, -drop * 0.6, 0);
+  geometries.push(hub);
+
+  // A ring of candle-style arms radiating out from the hub, each carrying its own bulb.
+  const armCount = 6;
+  const armReach = 0.28;
+  for (let i = 0; i < armCount; i++) {
+    const angle = (i / armCount) * Math.PI * 2;
+    const arm = new THREE.CylinderGeometry(0.012, 0.016, armReach, 8);
+    arm.rotateZ(Math.PI / 2 - 0.25);
+    arm.rotateY(angle);
+    arm.translate(Math.sin(angle) * armReach * 0.45, -drop * 0.6 + armReach * 0.2, Math.cos(angle) * armReach * 0.45);
+    geometries.push(arm);
+
+    const bulb = new THREE.SphereGeometry(0.035, 10, 8);
+    bulb.translate(Math.sin(angle) * armReach * 0.85, -drop * 0.6 + armReach * 0.38, Math.cos(angle) * armReach * 0.85);
+    applyGeometryVertexColors(bulb, '#fff7e6');
+    geometries.push(bulb);
+  }
+
+  return safeMergeGeometries(geometries, '#b45309');
+}
+
+function createRecessedDownlightGeometry(): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const trim = new THREE.CylinderGeometry(0.09, 0.1, 0.015, 20);
+  geometries.push(trim);
+
+  const can = new THREE.CylinderGeometry(0.075, 0.08, 0.12, 20);
+  can.translate(0, 0.06, 0);
+  geometries.push(can);
+
+  const lens = new THREE.CylinderGeometry(0.065, 0.065, 0.01, 20);
+  lens.translate(0, -0.01, 0);
+  applyGeometryVertexColors(lens, '#fffaf0');
+  geometries.push(lens);
+
+  return safeMergeGeometries(geometries, '#e7e5e4');
+}
+
+function createTrackLightGeometry(): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const railLength = 0.9;
+
+  const canopy = new THREE.CylinderGeometry(0.05, 0.045, 0.025, 12);
+  geometries.push(canopy);
+
+  const rail = new THREE.BoxGeometry(railLength, 0.03, 0.05);
+  rail.translate(0, -0.02, 0);
+  geometries.push(rail);
+
+  // Three angled heads clipped onto the rail, each free to aim independently in real
+  // life - approximated here as a shared, gently splayed angle across the row.
+  const headCount = 3;
+  for (let i = 0; i < headCount; i++) {
+    const x = -railLength / 2 + 0.15 + i * ((railLength - 0.3) / (headCount - 1));
+    const tilt = (i - (headCount - 1) / 2) * 0.25;
+
+    const mount = new THREE.CylinderGeometry(0.02, 0.02, 0.05, 8);
+    mount.translate(x, -0.05, 0);
+    geometries.push(mount);
+
+    const head = new THREE.CylinderGeometry(0.035, 0.045, 0.12, 12);
+    head.rotateZ(tilt);
+    head.translate(x + Math.sin(tilt) * 0.06, -0.11 - Math.cos(tilt) * 0.06 + 0.06, 0);
+    applyGeometryVertexColors(head, '#18181b');
+    geometries.push(head);
+  }
+
+  return safeMergeGeometries(geometries, '#3f3f46');
+}
+
+function createFloorLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const totalHeight = floorLampHeight(height);
+
+  const base = new THREE.CylinderGeometry(0.16, 0.19, 0.03, 20);
+  base.translate(0, 0.015, 0);
+  geometries.push(base);
+
+  const pole = new THREE.CylinderGeometry(0.018, 0.022, totalHeight - 0.28, 12);
+  pole.translate(0, 0.03 + (totalHeight - 0.28) / 2, 0);
+  geometries.push(pole);
+
+  const shade = new THREE.CylinderGeometry(0.13, 0.19, 0.26, 20, 1, true);
+  shade.translate(0, totalHeight - 0.13, 0);
+  applyGeometryVertexColors(shade, '#e7e0d3');
+  geometries.push(shade);
+
+  return safeMergeGeometries(geometries, '#3f3f46');
+}
+
+function createDeskLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const totalHeight = deskLampHeight(height);
+
+  const base = new THREE.CylinderGeometry(0.08, 0.09, 0.02, 16);
+  base.translate(0, 0.01, 0);
+  geometries.push(base);
+
+  const lowerArm = new THREE.CylinderGeometry(0.012, 0.014, totalHeight * 0.55, 8);
+  lowerArm.rotateZ(-0.35);
+  lowerArm.translate(totalHeight * 0.14, totalHeight * 0.3, 0);
+  geometries.push(lowerArm);
+
+  const upperArm = new THREE.CylinderGeometry(0.01, 0.012, totalHeight * 0.5, 8);
+  upperArm.rotateZ(0.5);
+  upperArm.translate(totalHeight * 0.42, totalHeight * 0.65, 0);
+  geometries.push(upperArm);
+
+  const head = new THREE.CylinderGeometry(0.03, 0.06, 0.11, 16);
+  head.rotateZ(Math.PI / 2 + 0.4);
+  head.translate(totalHeight * 0.62, totalHeight * 0.88, 0);
+  applyGeometryVertexColors(head, '#18181b');
+  geometries.push(head);
+
+  return safeMergeGeometries(geometries, '#3f3f46');
+}
+
+function createWallSconceGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const mountHeight = sconceMountHeight(height);
+
+  // A slim mounting rod stands in for the wall's own vertical run of conduit, since
+  // this fixture is placed freestanding (no wall-snapping in the placement tool) -
+  // the backplate above is what actually reads as "mounted", not this rod.
+  const rod = new THREE.CylinderGeometry(0.012, 0.012, mountHeight, 8);
+  rod.translate(0, mountHeight / 2, 0);
+  geometries.push(rod);
+
+  const backplate = new THREE.BoxGeometry(0.02, 0.22, 0.16);
+  backplate.translate(0.01, mountHeight, 0);
+  geometries.push(backplate);
+
+  // Half-shade - a cylinder cut to its front half (open side facing away from the
+  // implied wall, along +X), kept upright like any other lamp shade rather than
+  // rotated onto its side, flush against the backplate.
+  const shade = new THREE.CylinderGeometry(0.1, 0.12, 0.18, 16, 1, true, -Math.PI / 2, Math.PI);
+  shade.translate(0.09, mountHeight, 0);
+  applyGeometryVertexColors(shade, '#e7e0d3');
+  geometries.push(shade);
+
+  return safeMergeGeometries(geometries, '#78716c');
+}
+
+function createHighBayGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  // Warehouse/workshop ceilings run much higher than a domestic room - "height" is
+  // still honoured (a taller click point drops it lower), but never below a
+  // realistic high-bay mounting height.
+  const drop = Math.max(0.3, Math.min(0.6, height * 0.08));
+
+  const canopy = new THREE.CylinderGeometry(0.06, 0.05, 0.04, 12);
+  geometries.push(canopy);
+
+  const hangar = new THREE.CylinderGeometry(0.015, 0.015, drop, 8);
+  hangar.translate(0, -drop / 2, 0);
+  geometries.push(hangar);
+
+  // The UFO-style reflector dome, with cooling fins around its rim - the
+  // characteristic industrial high-bay silhouette.
+  const dome = new THREE.SphereGeometry(0.26, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+  dome.translate(0, -drop, 0);
+  applyGeometryVertexColors(dome, '#3f3f46');
+  geometries.push(dome);
+
+  const finCount = 12;
+  for (let i = 0; i < finCount; i++) {
+    const angle = (i / finCount) * Math.PI * 2;
+    const fin = new THREE.BoxGeometry(0.02, 0.05, 0.24);
+    fin.rotateY(angle);
+    fin.translate(Math.sin(angle) * 0.24, -drop - 0.05, Math.cos(angle) * 0.24);
+    geometries.push(fin);
+  }
+
+  const lens = new THREE.CylinderGeometry(0.2, 0.2, 0.015, 20);
+  lens.translate(0, -drop - 0.09, 0);
+  applyGeometryVertexColors(lens, '#eef6ff');
+  geometries.push(lens);
+
+  return safeMergeGeometries(geometries, '#52525b');
+}
+
+function createTrofferGeometry(): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const frame = new THREE.BoxGeometry(1.24, 0.04, 0.64);
+  geometries.push(frame);
+
+  const lens = new THREE.BoxGeometry(1.16, 0.012, 0.56);
+  lens.translate(0, -0.025, 0);
+  applyGeometryVertexColors(lens, '#fbfdff');
+  geometries.push(lens);
+
+  return safeMergeGeometries(geometries, '#e4e4e7');
+}
+
+function createNightstandLampGeometry(height: number): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const totalHeight = nightstandHeight(height);
+
+  const base = new THREE.CylinderGeometry(0.07, 0.08, 0.02, 16);
+  base.translate(0, 0.01, 0);
+  geometries.push(base);
+
+  const stem = new THREE.CylinderGeometry(0.012, 0.015, totalHeight - 0.14, 10);
+  stem.translate(0, 0.02 + (totalHeight - 0.14) / 2, 0);
+  geometries.push(stem);
+
+  const shade = new THREE.CylinderGeometry(0.08, 0.11, 0.12, 16, 1, true);
+  shade.translate(0, totalHeight - 0.06, 0);
+  applyGeometryVertexColors(shade, '#f3e8d8');
+  geometries.push(shade);
+
+  return safeMergeGeometries(geometries, '#57534e');
+}
+
+export function createLampGeometry(height: number = 3.2, style: string = 'classic'): THREE.BufferGeometry {
+  switch (style) {
+    case 'cobra': return createCobraLampGeometry(height);
+    case 'cobra-double': return createCobraDoubleLampGeometry(height);
+    case 'victorian': return createVictorianLampGeometry(height);
+    case 'post-top': return createPostTopLampGeometry(height);
+    case 'modern-led': return createModernLedLampGeometry(height);
+    case 'high-mast': return createHighMastLampGeometry(height);
+    case 'bollard': return createBollardLampGeometry(height);
+    case 'solar-path': return createSolarPathLampGeometry(height);
+    case 'pendant': return createPendantLampGeometry(height);
+    case 'chandelier': return createChandelierGeometry(height);
+    case 'recessed': return createRecessedDownlightGeometry();
+    case 'track': return createTrackLightGeometry();
+    case 'floor-lamp': return createFloorLampGeometry(height);
+    case 'desk-lamp': return createDeskLampGeometry(height);
+    case 'wall-sconce': return createWallSconceGeometry(height);
+    case 'high-bay': return createHighBayGeometry(height);
+    case 'troffer': return createTrofferGeometry();
+    case 'nightstand': return createNightstandLampGeometry(height);
+    case 'classic':
+    default: return createClassicLampGeometry(height);
+  }
+}
+
+/** Local-space point (before the shape's own position/rotation/scale) where each lamp
+ * style's light actually comes from, so an attached CustomLight can sit at the right
+ * spot on the model instead of the shape's own pivot (its base). */
+export function getLampLightAnchor(height: number = 3.2, style: string = 'classic'): [number, number, number] {
+  switch (style) {
+    case 'cobra': { const h = roadwayLampHeight(height); return [0.9 + 0.15, h - 0.06, 0]; }
+    case 'cobra-double': { const h = roadwayLampHeight(height); return [0, h - 0.05, 0]; }
+    case 'victorian': return [0, height - 0.2, 0];
+    case 'post-top': return [0, height + 0.1, 0];
+    case 'modern-led': { const h = roadwayLampHeight(height); return [0.75 + 0.05, h - 0.05, 0]; }
+    case 'high-mast': return [0, highMastHeight(height), 0];
+    case 'bollard': return [0, bollardPostHeight(height) * 0.68, 0];
+    case 'solar-path': return [0, solarPathPostHeight(height) + 0.02, 0];
+    case 'pendant': { const d = pendantDrop(height); return [0, -d - 0.14, 0]; }
+    case 'chandelier': { const d = chandelierDrop(height); return [0, -d * 0.6, 0]; }
+    case 'recessed': return [0, -0.01, 0];
+    case 'track': return [0, -0.09, 0];
+    case 'floor-lamp': { const h = floorLampHeight(height); return [0, h - 0.13, 0]; }
+    case 'desk-lamp': { const h = deskLampHeight(height); return [h * 0.62, h * 0.88, 0]; }
+    case 'wall-sconce': return [0.09, sconceMountHeight(height), 0];
+    case 'high-bay': { const d = Math.max(0.3, Math.min(0.6, height * 0.08)); return [0, -d - 0.09, 0]; }
+    case 'troffer': return [0, -0.025, 0];
+    case 'nightstand': { const h = nightstandHeight(height); return [0, h - 0.06, 0]; }
+    case 'classic':
+    default: return [0, height - 0.25, 0];
+  }
+}
+
+/** Local-space offset FROM getLampLightAnchor, defining the direction a spot-type
+ * light aims (see LampStyleDef.light in lampStyles.ts) - transformed through the same
+ * shape matrix as the anchor itself, so the beam follows the shape's own rotation. A
+ * plain downward aim is the right default for every directional fixture here: roadway
+ * cutoffs and floodlights point down at the surface they're lighting, and ceiling
+ * downlights/spots point down into the room. */
+export function getLampLightAimOffset(style: string): [number, number, number] {
+  switch (style) {
+    case 'cobra': return [0.15, -1, 0];
+    case 'cobra-double': return [0, -1, 0];
+    case 'high-mast': return [0, -1, 0];
+    case 'recessed': return [0, -1, 0];
+    case 'track': return [0, -1, 0];
+    default: return [0, -1, 0];
+  }
 }
 
 export function createBenchGeometry(length: number = 1.8): THREE.BufferGeometry {

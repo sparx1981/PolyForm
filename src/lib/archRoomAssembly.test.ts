@@ -5,7 +5,9 @@ import {
   distanceToPolygonBoundary2D,
   calculateBalancedDatumElevation,
   buildRoomAssembly,
+  flattenTerrainForFloorSlabs,
 } from './archRoomAssembly';
+import { createTerrainShape } from './terrain/terrainFactory';
 import { Shape } from '../types';
 
 describe('ArchRoomAssembly & Site Terracing', () => {
@@ -73,5 +75,34 @@ describe('ArchRoomAssembly & Site Terracing', () => {
     expect(verts[0]).toEqual([-5, -4]);
     // Point (10,0) is (5, -4)
     expect(verts[1]).toEqual([5, -4]);
+  });
+
+  it('only lets the ground-floor slab shape terrain; upper stories never touch it', () => {
+    const terrainShape = createTerrainShape({ width: 30, depth: 30, resolution: 16, topography: 'flat' });
+    const vertices = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(6, 0, 0),
+      new THREE.Vector3(6, 0, 4),
+      new THREE.Vector3(0, 0, 4),
+    ];
+    const groundFloor = buildRoomAssembly(vertices, terrainShape, undefined, { story: 1 });
+    expect(groundFloor.slabShape.tags).toContain('story-1');
+
+    // A story-2 slab (as buildNextFloorLevel produces) sitting several meters above grade.
+    const upperFloorSlab: Shape = {
+      ...groundFloor.slabShape,
+      id: 'upper-slab',
+      position: [groundFloor.slabShape.position[0], groundFloor.slabShape.position[1] + 2.8, groundFloor.slabShape.position[2]],
+      tags: ['architecture', 'story-2', 'floor-slab'],
+    };
+
+    // Only the upper-story slab present: nothing should qualify, so the terrain is untouched.
+    expect(flattenTerrainForFloorSlabs(terrainShape, [upperFloorSlab], 1.0)).toBeNull();
+
+    // With both present, the result must match flattening for the ground floor alone -
+    // the upper slab must not additionally reshape the terrain at its own elevation.
+    const withGroundOnly = flattenTerrainForFloorSlabs(terrainShape, [groundFloor.slabShape], 1.0);
+    const withBoth = flattenTerrainForFloorSlabs(terrainShape, [groundFloor.slabShape, upperFloorSlab], 1.0);
+    expect(Array.from(withBoth!.heights)).toEqual(Array.from(withGroundOnly!.heights));
   });
 });

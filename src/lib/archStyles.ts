@@ -261,6 +261,26 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     defaultDimensions: [1.8, 2.1, 0.18],
     hasGlass: true,
     features: ['Dual French Glass Leafs', 'Operable Louvered Shutters', 'Wrought Iron Strap Hinges', 'Traditional Architectural Charm']
+  },
+  {
+    id: 'archway-square',
+    type: 'door',
+    name: 'Open Archway (Square)',
+    category: 'Specialty',
+    description: 'An open doorway with a plain rectangular casing and no physical door leaf - just a walk-through opening.',
+    defaultDimensions: [1.0, 2.1, 0.15],
+    hasGlass: false,
+    features: ['No Door Leaf', 'Plain Rectangular Casing', 'Open Walk-Through']
+  },
+  {
+    id: 'archway-round',
+    type: 'door',
+    name: 'Open Archway (Rounded)',
+    category: 'Specialty',
+    description: 'An open doorway with a true semicircular arched head and no physical door leaf, for a classic archway look.',
+    defaultDimensions: [1.0, 2.2, 0.15],
+    hasGlass: false,
+    features: ['No Door Leaf', 'Semicircular Arched Head', 'Open Walk-Through']
   }
 ];
 

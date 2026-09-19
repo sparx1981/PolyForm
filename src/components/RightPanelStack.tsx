@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WeatherControls } from './graphics/WeatherControls';
 import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
+import { HeightMapPicker } from './graphics/HeightMapPicker';
 import * as THREE from 'three';
 import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
@@ -13,9 +14,10 @@ import type { FaceId } from '../lib/geometry/types';
 import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
-import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier } from '../types';
+import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier, HeightMapValue } from '../types';
 import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
 import { isEnvironmentAssetId, isMaterialAssetId, type AssetSummary } from '../lib/assets/types';
+import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -101,6 +103,7 @@ export default function RightPanelStack() {
     setMaterialBindings,
     activePBR,
     setActivePBR,
+    setActiveSurfaceDepth,
     shapes,
     kernelHost,
     kernelRevision,
@@ -165,6 +168,10 @@ export default function RightPanelStack() {
     setShadowOpacity,
     ambientOcclusionEnabled,
     setAmbientOcclusionEnabled,
+    godRaysEnabled,
+    setGodRaysEnabled,
+    godRaysIntensity,
+    setGodRaysIntensity,
     customLights,
     setCustomLights,
     fogSettings,
@@ -357,8 +364,17 @@ export default function RightPanelStack() {
         : { ref: { assetId, revision: asset.revision } },
     }));
     setActiveMaterialBindingId(asset.id);
+    setActiveSurfaceDepth(null);
     setActiveTool('paint');
   };
+  // The height map (if any) being defined alongside this new material's color/texture -
+  // saved onto the material itself so painting it later also applies the height map.
+  const [newMaterialSurfaceDepth, setNewMaterialSurfaceDepth] = useState<HeightMapValue | null>(null);
+  // Lifted out of handleTextureUpload's async closure so the "From texture" mode of
+  // HeightMapPicker has something to derive a height map from as soon as it's ready,
+  // without waiting on that handler's Firebase persistence step.
+  const [newTextureDataUrl, setNewTextureDataUrl] = useState<string | undefined>(undefined);
+  useEffect(() => { if (!isAddMaterialOpen) { setNewMaterialSurfaceDepth(null); setNewTextureDataUrl(undefined); } }, [isAddMaterialOpen]);
   const [tagSearch, setTagSearch] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
@@ -445,12 +461,14 @@ export default function RightPanelStack() {
       type: 'color',
       value: newColor,
       pbr: pbrSettings,
+      surfaceDepth: newMaterialSurfaceDepth || undefined,
       createdAt: new Date()
     };
     setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
     setActiveMaterial(newColor);
     setActiveMaterialBindingId(null);
     setActivePBR(pbrSettings);
+    setActiveSurfaceDepth(newMaterialSurfaceDepth);
     setActiveTool('paint');
     setIsAddMaterialOpen(false);
 
@@ -489,12 +507,14 @@ export default function RightPanelStack() {
       type: 'texture',
       value: aiPreviewUrl,
       pbr: pbrSettings,
+      surfaceDepth: newMaterialSurfaceDepth || undefined,
       createdAt: new Date()
     };
     setCustomMaterials(prev => [...prev.filter(m => m.id !== materialId), material]);
     setActiveMaterial(aiPreviewUrl);
     setActiveMaterialBindingId(null);
     setActivePBR(pbrSettings);
+    setActiveSurfaceDepth(newMaterialSurfaceDepth);
     setActiveTool('paint');
     setIsAddMaterialOpen(false);
     setAiPreviewUrl(null);
@@ -537,6 +557,7 @@ export default function RightPanelStack() {
         reader.onerror = reject;
         reader.readAsDataURL(uploadBlob);
       });
+      setNewTextureDataUrl(dataUrl);
 
       const materialId = Math.random().toString(36).substr(2, 9);
       const cleanName = file.name.replace(/\.[^/.]+$/, "");
@@ -547,6 +568,7 @@ export default function RightPanelStack() {
         type: 'texture',
         value: dataUrl,
         pbr: pbrSettings,
+        surfaceDepth: newMaterialSurfaceDepth || undefined,
         createdAt: new Date()
       };
 
@@ -555,6 +577,7 @@ export default function RightPanelStack() {
       setActiveMaterial(dataUrl);
       setActiveMaterialBindingId(null);
       setActivePBR(pbrSettings);
+      setActiveSurfaceDepth(newMaterialSurfaceDepth);
       setActiveTool('paint');
       setIsAddMaterialOpen(false);
 
@@ -603,6 +626,7 @@ export default function RightPanelStack() {
     if (activeMaterial === matToDelete.value) {
       setActiveMaterial('#e2e8f0');
       setActiveMaterialBindingId(null);
+      setActiveSurfaceDepth(null);
     }
 
     // Persist deletion to Firestore if logged in
@@ -2390,6 +2414,7 @@ export default function RightPanelStack() {
                       setActiveMaterial(color);
                       setActiveMaterialBindingId(null);
                       setActivePBR({ roughness: 0.5, metalness: 0, opacity: 1 });
+                      setActiveSurfaceDepth(null);
                       setActiveTool('paint');
                     }}
                     className={cn(
@@ -2406,6 +2431,7 @@ export default function RightPanelStack() {
                       setActiveMaterial(m.value);
                       setActiveMaterialBindingId(null);
                       if (m.pbr) setActivePBR(m.pbr);
+                      setActiveSurfaceDepth(m.surfaceDepth || null);
                       setActiveTool('paint');
                     }}
                     className={cn(
@@ -2450,6 +2476,7 @@ export default function RightPanelStack() {
                           setActiveMaterial(m.value);
                           setActiveMaterialBindingId(null);
                           if (m.pbr) setActivePBR(m.pbr);
+                          setActiveSurfaceDepth(m.surfaceDepth || null);
                           setActiveTool('paint');
                         }}
                         className={cn(
@@ -2731,7 +2758,7 @@ export default function RightPanelStack() {
                       const id = Math.random().toString(36).substr(2, 9);
                       const newAnim: SceneAnimation = {
                         id,
-                        type: 'confetti',
+                        type: 'none',
                         position: [0, 0, 0],
                         density: 1000,
                         scale: 1,
@@ -2770,7 +2797,7 @@ export default function RightPanelStack() {
                         <div className="space-y-2">
                           <label className="text-[8px] text-gray-400 uppercase font-bold">Effect Type</label>
                           <div className="grid grid-cols-2 gap-1 px-1">
-                            {['confetti', 'fire', 'smoke', 'sparks', 'magic_aura', 'bird', 'bee'].map((type) => (
+                            {['none', 'confetti', 'fire', 'smoke', 'sparks', 'magic_aura', 'bird', 'bee'].map((type) => (
                               <button
                                 key={type}
                                 onClick={() => setAnimations(prev => prev.map(a => {
@@ -2800,6 +2827,29 @@ export default function RightPanelStack() {
                             ))}
                           </div>
                         </div>
+
+                        {anim.type === 'bird' && (
+                          <div className="space-y-2">
+                            <label className="text-[8px] text-gray-400 uppercase font-bold">Plumage colours</label>
+                            <div className="grid grid-cols-3 gap-2 px-1">
+                              {([
+                                ['birdBodyColor', 'Body', '#1e3a8a'],
+                                ['birdBreastColor', 'Breast', '#ea580c'],
+                                ['birdBeakColor', 'Beak', '#f59e0b'],
+                              ] as const).map(([field, label, fallback]) => (
+                                <label key={field} className="flex flex-col items-center gap-1 text-[8px] text-gray-500">
+                                  {label}
+                                  <input
+                                    type="color"
+                                    value={anim[field] ?? fallback}
+                                    onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, [field]: e.target.value } : a))}
+                                    className="w-full h-6 rounded cursor-pointer border-none p-0"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="space-y-1">
                           <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
@@ -3592,6 +3642,39 @@ export default function RightPanelStack() {
                       onChange={(e) => setShadowOpacity(parseFloat(e.target.value))}
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
                     />
+                  </div>
+
+                  <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">God Rays</span>
+                      <button
+                        onClick={() => setGodRaysEnabled(!godRaysEnabled)}
+                        className={cn(
+                          "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                          godRaysEnabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                          godRaysEnabled ? "left-4.5" : "left-0.5"
+                        )} />
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-gray-400 -mt-1">Screen-space sun shafts through whatever occludes the sun (buildings, terrain, trees). Moderate render cost.</p>
+                    {godRaysEnabled && (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                          <span>God Rays Intensity</span>
+                          <span>{godRaysIntensity.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range" min="0.05" max="2" step="0.05"
+                          value={godRaysIntensity}
+                          onChange={(e) => setGodRaysIntensity(parseFloat(e.target.value))}
+                          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
@@ -4496,6 +4579,17 @@ export default function RightPanelStack() {
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
                     </div>
 
+                    <div className="space-y-2 pt-4 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Settings2 size={16} className="text-gray-400" />
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
+                      </div>
+                      <HeightMapPicker
+                        value={newMaterialSurfaceDepth || {}}
+                        onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
+                      />
+                    </div>
+
                     <button 
                       onClick={handleAddColor}
                       className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all"
@@ -4539,6 +4633,18 @@ export default function RightPanelStack() {
                         <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
                       </div>
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
+                    </div>
+
+                    <div className="space-y-2 pt-4 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Settings2 size={16} className="text-gray-400" />
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
+                      </div>
+                      <HeightMapPicker
+                        value={newMaterialSurfaceDepth || {}}
+                        onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
+                        sourceTextureUrl={newTextureDataUrl}
+                      />
                     </div>
 
                     {uploading && (
@@ -4655,6 +4761,17 @@ export default function RightPanelStack() {
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
                           </div>
                           <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
+                        </div>
+                        <div className="space-y-2 pt-2 border-t border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <Settings2 size={16} className="text-gray-400" />
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
+                          </div>
+                          <HeightMapPicker
+                            value={newMaterialSurfaceDepth || {}}
+                            onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
+                            sourceTextureUrl={aiPreviewUrl}
+                          />
                         </div>
                         <button
                           onClick={handleAddAIMaterial}

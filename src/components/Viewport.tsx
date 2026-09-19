@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } fr
 import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
+import { shouldHideAutoNormalMap } from '../lib/graphics/depthGeometry';
+import { LampLightBinding } from './graphics/LampLightBinding';
 import { batchablePlant } from '../lib/graphics/vegetationEligibility';
 import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
@@ -21,7 +23,7 @@ import {
   GizmoHelper,
   GizmoViewport
 } from '@react-three/drei';
-import { EffectComposer, SSAO } from '@react-three/postprocessing';
+import { EffectComposer, N8AO, GodRays } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as THREE from 'three';
 import { SUBTRACTION, Evaluator, Brush } from 'three-bvh-csg';
@@ -80,6 +82,8 @@ import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
 import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers, Lasso, SquareDashed } from 'lucide-react';
 import StyleLibraryModal from './StyleLibraryModal';
+import { LampStylePicker } from './graphics/LampStylePicker';
+import { findLampStyle } from '../lib/lampStyles';
 import { KernelGeometry } from './KernelGeometry';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
@@ -91,7 +95,7 @@ import { chooseTier } from '../lib/assets/materialResolver';
 import { EnvironmentManager } from '../lib/assets/environmentManager';
 import { useManagedBindingTextures } from '../lib/assets/useManagedBindingTextures';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, paintFaces, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
+import { paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
@@ -479,6 +483,13 @@ const fogFragmentShader = `
   uniform int fogType; // 0: standard, 1: super-mega
   uniform mat4 projectionMatrixInverse;
   uniform mat4 viewMatrixInverse;
+  // Sun-tinted fog: brightens and warms the fog color when the view ray points
+  // toward the sun, the everyday effect of atmospheric scattering (the sky and any
+  // haze glow brighter in the sun's direction, most obviously near sunrise/sunset).
+  // Reuses this same shader/fog pass rather than a separate effect.
+  uniform vec3 sunDirection;
+  uniform vec3 sunColor;
+  uniform float sunStrength;
 
   // Noise functions for volumetric effect
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -516,6 +527,12 @@ const fogFragmentShader = `
     vec3 rayDir = normalize(worldPos - cameraPos);
     float dist = length(worldPos - cameraPos);
 
+    // How directly this ray looks toward the sun - a tight, high-power falloff so
+    // the tint stays a glow around the sun's direction rather than washing out the
+    // whole sky. sunStrength (from Sun Intensity) keeps a dim/off sun from tinting
+    // fog it isn't actually lighting.
+    float sunAmount = pow(max(dot(rayDir, sunDirection), 0.0), 10.0) * clamp(sunStrength, 0.0, 1.0);
+
     if (fogType == 1) { // Super Mega Volumetric Fog
       float totalDensity = 0.0;
       int steps = 16;
@@ -535,7 +552,8 @@ const fogFragmentShader = `
       }
       
       float fogFactor = exp(-totalDensity);
-      outputColor = vec4(mix(color1, inputColor.rgb, fogFactor), inputColor.a);
+      vec3 tintedFog = mix(color1, sunColor, sunAmount);
+      outputColor = vec4(mix(tintedFog, inputColor.rgb, fogFactor), inputColor.a);
       return;
     }
 
@@ -572,6 +590,8 @@ const fogFragmentShader = `
       }
     }
 
+    fogColor = mix(fogColor, sunColor, sunAmount);
+
     outputColor = vec4(mix(fogColor, inputColor.rgb, fogFactor), inputColor.a);
   }
 `;
@@ -581,7 +601,7 @@ RectAreaLightUniformsLib.init();
 class FogEffectImpl extends Effect {
   camera: THREE.Camera;
 
-  constructor({ color1, color2, color3, density, height, heightEnd, speed, colorCount, fogType, camera }: any) {
+  constructor({ color1, color2, color3, density, height, heightEnd, speed, colorCount, fogType, camera, sunPosition, sunColor, sunStrength }: any) {
     super('FogEffect', fogFragmentShader, {
       attributes: EffectAttribute.DEPTH,
       uniforms: new Map([
@@ -596,7 +616,10 @@ class FogEffectImpl extends Effect {
         ['colorCount', new THREE.Uniform(colorCount)],
         ['fogType', new THREE.Uniform(fogType)],
         ['projectionMatrixInverse', new THREE.Uniform(new THREE.Matrix4().copy(camera.projectionMatrixInverse))],
-        ['viewMatrixInverse', new THREE.Uniform(new THREE.Matrix4().copy(camera.matrixWorld))]
+        ['viewMatrixInverse', new THREE.Uniform(new THREE.Matrix4().copy(camera.matrixWorld))],
+        ['sunDirection', new THREE.Uniform(new THREE.Vector3(...sunPosition).normalize())],
+        ['sunColor', new THREE.Uniform(new THREE.Color(sunColor))],
+        ['sunStrength', new THREE.Uniform(sunStrength)]
       ])
     });
     this.camera = camera;
@@ -611,7 +634,7 @@ class FogEffectImpl extends Effect {
   }
 }
 
-const FogEffect = React.forwardRef(({ settings, camera }: any, ref) => {
+const FogEffect = React.forwardRef(({ settings, camera, sunPosition, sunIntensity }: any, ref) => {
   const effect = useMemo(() => new FogEffectImpl({
     color1: settings?.colors?.[0] || '#ffffff',
     color2: settings?.colors?.[1] || '#ffffff',
@@ -622,8 +645,18 @@ const FogEffect = React.forwardRef(({ settings, camera }: any, ref) => {
     speed: settings.animate ? settings.speed : 0,
     colorCount: settings.colorCount,
     fogType: settings.type === 'super-mega' ? 1 : 0,
-    camera
-  }), [settings, camera]);
+    camera,
+    sunPosition: sunPosition || [5, 5, 5],
+    // A fixed warm daylight tint rather than a per-scene setting: sun-tinted fog is
+    // meant as a subtle, always-sensible enhancement to the existing fog pass, not
+    // another color to configure.
+    sunColor: '#fff4dd',
+    // Ties the tint's strength to the sun's own configured brightness (Sun Intensity,
+    // 0-50 in the Lighting panel) so a dim/disabled sun doesn't tint fog it isn't
+    // actually lighting; halved and clamped since the shader's own falloff already
+    // does the heavy lifting of keeping this subtle.
+    sunStrength: Math.min(1, (sunIntensity ?? 1) / 2)
+  }), [settings, camera, sunPosition, sunIntensity]);
   
   return <primitive ref={ref} object={effect} dispose={null} />;
 });
@@ -1121,7 +1154,7 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
       case 'railing':
         return createRailingGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.0, Array.isArray(shape.args) ? shape.args[1] : 1.0);
       case 'lamp':
-        return createLampGeometry(Array.isArray(shape.args) ? shape.args[1] : 3.2);
+        return createLampGeometry(Array.isArray(shape.args) ? shape.args[1] : 3.2, shape.archStyle || 'classic');
       case 'bench':
         return createBenchGeometry(Array.isArray(shape.args) ? shape.args[0] : 1.8);
       case 'rock':
@@ -1129,7 +1162,7 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
       default:
         return new THREE.BoxGeometry(1, 1, 1);
     }
-  }, [shape.type, shape.args, shape.plantSpeciesId]);
+  }, [shape.type, shape.args, shape.plantSpeciesId, shape.archStyle]);
 
   useEffect(() => {
     return () => {
@@ -1434,7 +1467,7 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
 // permanently visible to the main camera with no per-frame visibility
 // toggling. Toggling .visible around the off-screen render was a source
 // of flicker in its own right: if anything else in the render pipeline
-// (the app's optional EffectComposer/SSAO pass in particular) reads scene
+// (the app's optional EffectComposer/N8AO pass in particular) reads scene
 // state at a slightly different point in the frame than assumed, it could
 // catch the markers mid-toggle. Layers avoid the toggle entirely.
 const TELEPORT_PORTAL_LAYER = 31;
@@ -1880,6 +1913,7 @@ function Scene() {
     activeMaterialBindingId,
     materialBindings,
     activePBR,
+    activeSurfaceDepth,
     updateShapeColor,
     updateShapeDimensions,
     setMeasurements,
@@ -1916,6 +1950,8 @@ function Scene() {
     setShadowOpacity,
     ambientOcclusionEnabled,
     setAmbientOcclusionEnabled,
+    godRaysEnabled,
+    godRaysIntensity,
     activeBevelType,
     setActiveBevelType,
     activeBevelAmount,
@@ -2194,11 +2230,29 @@ function Scene() {
       // relationship as "click selects the group, double-click drills into
       // one face," just using shift as the modifier since paint has no
       // natural "double-click" gesture of its own.
+      //
+      // A pre-existing multi-face selection (built by shift-clicking faces
+      // with a non-paint tool active, the same mechanism used to move/scale
+      // a custom set of faces) takes priority over "paint the clicked face's
+      // whole object": painting then applies to every selected face, however
+      // many separate primitives they came from — the height map carried by
+      // the active material included, same as its color.
       if (event.shiftKey) {
-        if (paintFace(kernelHost.graph, faceId, activeMaterial)) bumpKernel();
+        if (paintFace(kernelHost.graph, faceId, activeMaterial)) {
+          setFaceSurfaceDepth(kernelHost.graph, faceId, activeSurfaceDepth ?? null);
+          bumpKernel();
+        }
+      } else if (kernelSelectedSet.size > 1) {
+        if (paintFaces(kernelHost.graph, kernelSelectedSet, activeMaterial) > 0) {
+          setFacesSurfaceDepth(kernelHost.graph, kernelSelectedSet, activeSurfaceDepth ?? null);
+          bumpKernel();
+        }
       } else {
         const group = groupContaining(kernelHost.graph, faceId);
-        if (paintFaces(kernelHost.graph, group, activeMaterial) > 0) bumpKernel();
+        if (paintFaces(kernelHost.graph, group, activeMaterial) > 0) {
+          setFacesSurfaceDepth(kernelHost.graph, group, activeSurfaceDepth ?? null);
+          bumpKernel();
+        }
       }
       return;
     }
@@ -2249,7 +2303,7 @@ function Scene() {
       setSelectedFaceIds(groupContaining(kernelHost.graph, faceId));
       lastKernelClickRef.current = { faceId, time: now };
     }
-  }, [activeTool, activeMaterial, kernelHost, bumpKernel, setSelectedFaceIds, setSelectedId, setSelectedIds]);
+  }, [activeTool, activeMaterial, activeSurfaceDepth, kernelSelectedSet, kernelHost, bumpKernel, setSelectedFaceIds, setSelectedId, setSelectedIds]);
 
   // ---- Move/scale/rotate for a kernel face-group selection ----
   //
@@ -3409,6 +3463,11 @@ function Scene() {
     subtractTargetId, setSubtractTargetId, performMixedCSGSubtraction,
   ]);
   const directionalLightRef = useRef<THREE.DirectionalLight>(null!);
+  // The sun's own screen-space marker for GodRays (see the <GodRays> mount below) -
+  // separate from the showLightsource debug sphere, since this one needs to always
+  // exist (not just when that debug toggle is on) for the effect to have something
+  // to reference.
+  const sunMeshRef = useRef<THREE.Mesh>(null!);
   const transformRef = useRef<any>(null);
   const selectedIdRef = useRef(selectedId);
   const selectedLightIdRef = useRef(selectedLightId);
@@ -8368,7 +8427,7 @@ function Scene() {
       }));
     } else {
       // Apply to whole object (default for shapes without per-face support, or forced via Shift+click)
-      updateShapeColor(id, activeMaterial, activePBR);
+      updateShapeColor(id, activeMaterial, activePBR, activeSurfaceDepth);
     }
   } else if (activeTool === 'offset') {
       if (offsetPreviewPoints && offsetPreviewPoints.length > 2 && selectedId) {
@@ -8859,9 +8918,11 @@ function Scene() {
           ? Math.min(...shape.args) / 2
           : (shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism')
             ? Math.max(0.01, Math.min(shape.args[0], shape.args[2] / 2))
-            : shape.type === 'poly'
-              ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
-              : 1
+            : shape.type === 'cylinder'
+              ? Math.max(0.01, Math.min(shape.args[0], shape.args[1], shape.args[2] / 2))
+              : shape.type === 'poly'
+                ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
+                : 1
       });
     } else if (activeTool === 'paint' || activeTool === 'eraser') {
       e.stopPropagation();
@@ -9492,6 +9553,9 @@ function Scene() {
   const effectiveCameraFar = cameraDepthClippingEnabled ? Math.max(effectiveCameraNear + 0.1, cameraFar) : 5000;
   effectiveCameraDefaultsRef.current = { near: effectiveCameraNear, far: effectiveCameraFar };
 
+  const fogPostprocessingActive = fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1));
+  const postprocessingActive = ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive;
+
   useEffect(() => {
     if (camera && (camera as any).isPerspectiveCamera) {
       camera.near = effectiveCameraNear;
@@ -9549,6 +9613,13 @@ function Scene() {
         shadow-mapSize={[1024, 1024]}
       />
       
+      {godRaysEnabled && (
+        <mesh ref={sunMeshRef} position={lightPosition}>
+          <sphereGeometry args={[0.4, 16, 16]} />
+          <meshBasicMaterial color="#fff6d8" toneMapped={false} />
+        </mesh>
+      )}
+
       {showLightsource && (
         <group position={lightPosition}>
           <mesh>
@@ -10406,9 +10477,10 @@ function Scene() {
 
         // Optional PBR map slots beyond the diffuse/albedo map. Spread onto
         // every physical material below - undefined props are no-ops.
+        const hideAutoNormalOnDisabledDepth = shouldHideAutoNormalMap(shape);
         const pbrMapProps = {
-          normalMap: objectBinding?.pbr.normalMap ?? getCachedPBRMapTexture(shape.normalMapUrl),
-          normalScale: objectBinding?.pbr.normalScale ?? (shape.normalMapUrl ? new THREE.Vector2(shape.normalScale ?? 1, shape.normalScale ?? 1) : undefined),
+          normalMap: objectBinding?.pbr.normalMap ?? (hideAutoNormalOnDisabledDepth ? null : getCachedPBRMapTexture(shape.normalMapUrl)),
+          normalScale: objectBinding?.pbr.normalScale ?? ((!hideAutoNormalOnDisabledDepth && shape.normalMapUrl) ? new THREE.Vector2(shape.normalScale ?? 1, shape.normalScale ?? 1) : undefined),
           roughnessMap: objectBinding?.pbr.roughnessMap ?? getCachedPBRMapTexture(shape.roughnessMapUrl),
           metalnessMap: objectBinding?.pbr.metalnessMap ?? getCachedPBRMapTexture(shape.metalnessMapUrl),
           aoMap: objectBinding?.pbr.aoMap ?? getCachedPBRMapTexture(shape.aoMapUrl),
@@ -10557,7 +10629,13 @@ function Scene() {
           {((shape.surfaceDepthEnabled && shape.displacementMapUrl) || (objectBinding?.depth?.enabled && shape.materialBindingId && managedBindingTextures[shape.materialBindingId]?.height)) &&
             <SurfaceDepthBinding shape={shape} materialDepth={objectBinding?.depth}
               heightTexture={shape.materialBindingId ? managedBindingTextures[shape.materialBindingId]?.height : undefined} />}
-          {(shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism') && shape.bevelAmount ? (
+          {shape.type === 'lamp' && <LampLightBinding shape={shape} />}
+          {((shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism')
+              // A tapered cylinder (radiusTop !== radiusBottom) can't be represented by
+              // PolyGeometry's constant-cross-section extrude bevel, so it falls back to
+              // the plain, unbevelled cylinderGeometry branch below instead.
+              || (shape.type === 'cylinder' && Array.isArray(shape.args) && shape.args[0] === shape.args[1])
+            ) && shape.bevelAmount ? (
             <PolyGeometry
               vertices={regularPolygonVertices(
                 Array.isArray(shape.args) ? shape.args[0] : 1,
@@ -10566,6 +10644,7 @@ function Scene() {
               height={Array.isArray(shape.args) ? shape.args[2] : 1}
               bevelAmount={shape.bevelAmount}
               bevelSegments={shape.bevelSegments || 4}
+              bevelType={shape.bevelType || 'radius'}
               uprightY
             />
           ) : shape.type === 'circle' || shape.type === 'line' || shape.type === 'triangle' || shape.type === 'prism' ? (
@@ -10586,7 +10665,7 @@ function Scene() {
           ) : shape.type === 'cylinder' ? (
             <cylinderGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 1, 1, 32]) as any} />
           ) : shape.type === 'poly' ? (
-            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} holes={computeHolesForSlab(shape, shapes)} />
+            <PolyGeometry vertices={shape.args?.vertices || []} height={shape.args?.height ?? 0} bevelAmount={shape.bevelAmount || 0} bevelSegments={shape.bevelSegments || 4} bevelType={shape.bevelType || 'radius'} holes={computeHolesForSlab(shape, shapes)} />
           ) : ['wall', 'door', 'window', 'step', 'staircase', 'scale_figure'].includes(shape.type) ? (
             <ArchGeometry shape={shape} shapes={shapes} />
           ) : ['tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'].includes(shape.type) ? (
@@ -11075,7 +11154,7 @@ function Scene() {
       {activeTool === 'teleport' && (
         <TeleportPortalPreview
           floorEnabled={floorEnabled}
-          postprocessingActive={ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))}
+          postprocessingActive={postprocessingActive}
         />
       )}
 
@@ -11631,19 +11710,45 @@ function Scene() {
       <ParametricPadOverlay />
       <BlockPickerOverlay />
 
-      {(ambientOcclusionEnabled || (fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)))) && (
-        <EffectComposer enableNormalPass={ambientOcclusionEnabled}>
+      {postprocessingActive && (
+        // autoClear is normally left at its default (true); GodRays specifically
+        // needs it off - it renders an extra internal occlusion pass, and without
+        // this, occlusion by scene geometry looks wrong (see the console warning
+        // @react-three/postprocessing's own GodRays logs if this is missing).
+        <EffectComposer autoClear={!godRaysEnabled}>
           {ambientOcclusionEnabled && (
-            <SSAO 
-              intensity={15} 
-              radius={0.3} 
-              luminanceInfluence={0.6} 
+            // N8AO (GTAO-style) instead of the older SSAO effect: SSAO's fixed
+            // world-space sample radius caused halo/self-occlusion artifacts that
+            // changed with camera distance and object scale. screenSpaceRadius
+            // scales the radius in screen space instead, so contact shadows stay
+            // consistent whether the user is zoomed into a doorknob or looking at
+            // a whole building - this is what actually fixes the reported artifacts.
+            <N8AO
+              aoRadius={1}
+              distanceFalloff={1}
+              intensity={3}
+              screenSpaceRadius
+              quality="medium"
             />
           )}
-          {fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1)) && (
+          {fogPostprocessingActive && (
             <FogEffect 
               settings={fogSettings} 
               camera={camera}
+              sunPosition={lightPosition}
+              sunIntensity={sunIntensity}
+            />
+          )}
+          {godRaysEnabled && (
+            <GodRays
+              sun={sunMeshRef}
+              density={0.85}
+              decay={0.9}
+              weight={0.4 * godRaysIntensity}
+              exposure={0.5 * godRaysIntensity}
+              clampMax={1}
+              blur
+              samples={60}
             />
           )}
         </EffectComposer>
@@ -12338,7 +12443,7 @@ function normalizePolyWinding(pts: [number, number][], ccw: boolean): [number, n
   return isCCW === ccw ? pts : [...pts].reverse();
 }
 
-function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, uprightY = false, holes = undefined }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, uprightY?: boolean, holes?: [number, number][][] }) {
+function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4, bevelType = 'radius', uprightY = false, holes = undefined }: { vertices: [number, number][], height?: number, bevelAmount?: number, bevelSegments?: number, bevelType?: 'radius' | 'chamfer', uprightY?: boolean, holes?: [number, number][][] }) {
   const geometry = useMemo(() => {
     if (!vertices || vertices.length < 3) return new THREE.BufferGeometry();
     
@@ -12378,12 +12483,18 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
         return new THREE.ShapeGeometry(shape);
       } else {
         const safeBevel = Math.max(0, Math.min(bevelAmount, height / 2 - 0.001));
+        // three.js's own multi-segment bevel already interpolates each ring via
+        // cos/sin (a genuine quarter-circle profile), so a high segment count IS a
+        // rounded "radius" bevel for free. A true "chamfer" is a single flat angled
+        // cut - one segment, no curve - which is why forcing segments=1 here is the
+        // whole fix, not a new bevel algorithm.
+        const effectiveBevelSegments = bevelType === 'chamfer' ? 1 : Math.max(4, bevelSegments);
         const geo = new THREE.ExtrudeGeometry(shape, {
           depth: height,
           bevelEnabled: safeBevel > 0,
           bevelThickness: safeBevel,
           bevelSize: safeBevel,
-          bevelSegments: Math.max(1, bevelSegments),
+          bevelSegments: effectiveBevelSegments,
           bevelOffset: 0
         });
         geo.translate(0, 0, -height / 2); // Center in Z to match other primitives
@@ -12394,7 +12505,7 @@ function PolyGeometry({ vertices, height = 0, bevelAmount = 0, bevelSegments = 4
       console.error('[PolyGeometry] Failed to create geometry:', err);
       return new THREE.BufferGeometry();
     }
-  }, [vertices, height, bevelAmount, bevelSegments, uprightY, holes]);
+  }, [vertices, height, bevelAmount, bevelSegments, bevelType, uprightY, holes]);
 
   useEffect(() => {
     return () => {
@@ -12740,6 +12851,7 @@ export default function Viewport() {
     selectedSurface, 
     activeMaterial, 
     activePBR, 
+    activeSurfaceDepth,
     setShapes, 
     addShape,
     duplicateObject,
@@ -12797,6 +12909,7 @@ export default function Viewport() {
   // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [styleLibraryTargetId, setStyleLibraryTargetId] = useState<string | null>(null);
+  const [lampStyleTargetId, setLampStyleTargetId] = useState<string | null>(null);
   // objectInfoTarget lives HERE, in the outer Viewport() component, not in
   // Scene(): the button that sets it (the kernel context menu's "View
   // Object Information") and the modal that displays it are BOTH rendered
@@ -13566,6 +13679,27 @@ export default function Viewport() {
                 }
                 return null;
               })()}
+              {(() => {
+                const shape = shapes.find(sh => sh.id === contextMenu.data.shapeId);
+                if (shape && shape.type === 'lamp') {
+                  return (
+                    <button
+                      onClick={() => {
+                        setLampStyleTargetId(shape.id);
+                        setContextMenu(null);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-trimble-blue",
+                        theme === 'dark' ? "hover:bg-gray-700 bg-trimble-blue/10" : "hover:bg-gray-100 bg-trimble-blue/5"
+                      )}
+                    >
+                      <Palette size={14} className="text-trimble-blue shrink-0" />
+                      <span>Change Style...</span>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <button 
                 onClick={() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; if (st === 'box' || st === 'rect') setIsDividePopupOpen(true); }} disabled={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return st !== 'box' && st !== 'rect'; })()} title={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return (st === 'box' || st === 'rect') ? undefined : 'Only available on box/rectangle faces'; })()}
                 className={cn(
@@ -13609,7 +13743,10 @@ export default function Viewport() {
               */}
               <button
                 onClick={() => {
-                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial) > 0) bumpKernel();
+                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial) > 0) {
+                    setFacesSurfaceDepth(kernelHost.graph, contextMenu.data, activeSurfaceDepth ?? null);
+                    bumpKernel();
+                  }
                   setContextMenu(null);
                 }}
                 className={cn(
@@ -14234,6 +14371,36 @@ export default function Viewport() {
 
           setMeasurements(`Updated style to ${styleId.toUpperCase()}${extraOptions?.isParametric ? ' (Parametric Mode Active)' : ''}${isDoorOrWindow && hasTimberFraming ? ' · Framing Committed' : ''}`);
           setStyleLibraryTargetId(null);
+        }}
+      />
+
+      {/* Style picker for light fixtures - exterior and interior models to choose from */}
+      <LampStylePicker
+        isOpen={!!lampStyleTargetId}
+        targetShape={shapes.find(s => s.id === lampStyleTargetId) || null}
+        theme={theme}
+        onClose={() => setLampStyleTargetId(null)}
+        onApplyStyle={(styleId) => {
+          if (!lampStyleTargetId) return;
+          const styleDef = findLampStyle(styleId);
+          setShapes(shapes.map(s => {
+            if (s.id !== lampStyleTargetId) return s;
+            // The placement tool drops a lamp wherever the user clicked, which is
+            // floor/ground height the overwhelming majority of the time - there's no
+            // ceiling-surface-aware placement mode. A style that mounts to the
+            // ceiling (a pendant, a downlight, a troffer) needs to actually sit up
+            // near a ceiling, not hang its fixture down from a floor-level pivot -
+            // that was rendering ceiling fixtures below the floor. Only lift it when
+            // the shape still looks floor-level; a lamp someone has already
+            // deliberately raised (e.g. onto an upper story) is left alone.
+            const position = (styleDef.mount === 'ceiling' && s.position[1] < 2.0)
+              ? [s.position[0], 2.4, s.position[2]] as [number, number, number]
+              : s.position;
+            return { ...s, archStyle: styleId, position };
+          }));
+          commitHistory();
+          setMeasurements(`Updated light style to ${styleId.toUpperCase()}`);
+          setLampStyleTargetId(null);
         }}
       />
     </div>
