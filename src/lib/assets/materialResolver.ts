@@ -9,7 +9,10 @@ export interface ResolvedMaterial {
   metalness: number;
   opacity: number;
   depth: { enabled: boolean; scaleMeters: number; biasMeters: number; calibrated: boolean } | null;
+  uv: { repeat: [number, number]; offset: [number, number]; rotation: number };
 }
+
+const DEFAULT_UV = { repeat: [1, 1] as [number, number], offset: [0, 0] as [number, number], rotation: 0 };
 
 const ORDER: AssetQuality[] = ['4k', '2k', '1k'];
 
@@ -43,5 +46,6 @@ export function resolveMaterial(instance: MaterialInstance, manifest: AssetManif
       biasMeters: requestedDepth?.biasMeters ?? authoredDepth.biasMeters,
       calibrated: authoredDepth.calibrated,
     } : null,
+    uv: instance.uv ?? DEFAULT_UV,
   };
 }

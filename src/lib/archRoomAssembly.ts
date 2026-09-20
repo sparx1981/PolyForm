@@ -94,6 +94,30 @@ export function sampleTerrainElevation(x: number, z: number, terrain: Shape): nu
 }
 
 /**
+ * True outward-pointing 2D normal for a room-perimeter edge, regardless of whether the
+ * room was drawn clockwise or counter-clockwise. A fixed "rotate the travel direction
+ * 90 degrees" rule flips between pointing outward and inward depending on which way the
+ * loop was walked - this instead nudges a test point off the edge midpoint and asks the
+ * polygon itself which side that landed on, so justification (exterior/interior) offsets
+ * always land on the correct physical side of the drawn line, closing corners cleanly
+ * instead of leaving a gap on one winding and an overlap on the other.
+ */
+export function computeOutwardWallNormal2D(
+  pA: THREE.Vector3,
+  pB: THREE.Vector3,
+  roomPolygon2D: Array<[number, number]>
+): THREE.Vector3 {
+  const dir = new THREE.Vector3().subVectors(pB, pA);
+  const normal = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+  const midX = (pA.x + pB.x) / 2;
+  const midZ = (pA.z + pB.z) / 2;
+  const testDist = 0.2;
+  const testX = midX + normal.x * testDist;
+  const testZ = midZ + normal.z * testDist;
+  return isPointInPolygon2D(testX, testZ, roomPolygon2D) ? normal.negate() : normal;
+}
+
+/**
  * Automatically orients room perimeter walls so their local +Z face (the exterior/cladding face)
  * is guaranteed to point outward towards the exterior, regardless of whether the user drew
  * the room in a clockwise or counter-clockwise fashion.

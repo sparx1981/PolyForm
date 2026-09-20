@@ -113,7 +113,7 @@ import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
-import { buildRoomAssembly, orientRoomWallsToExterior } from '../lib/archRoomAssembly';
+import { buildRoomAssembly, orientRoomWallsToExterior, computeOutwardWallNormal2D } from '../lib/archRoomAssembly';
 import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
@@ -4392,19 +4392,45 @@ function Scene() {
         next.push(assembly.foundationShape);
       }
 
-      // Re-align all room perimeter walls so their base sits precisely on the top of the floor slab (datumZ)
+      // Re-align all room perimeter walls: base on top of the floor slab (datumZ), and
+      // recompute each wall's justification offset against the TRUE outward normal of its
+      // matched loop edge (rather than trusting the offset direction guessed per-click while
+      // drawing, which flips between correct and backwards depending on whether the room was
+      // drawn clockwise or counter-clockwise - the actual cause of corners either overlapping
+      // or gapping depending on draw direction).
+      const loopLen = loopVectors.length;
       next = next.map(s => {
         if (s.type === 'wall') {
           const wPos = new THREE.Vector3(...s.position);
-          const isPartOfRoom = roomPoly2D.some(([rx, rz]) => {
-            const wLen = Array.isArray(s.args) ? (s.args[0] || 3.0) : 3.0;
-            return Math.hypot(wPos.x - rx, wPos.z - rz) < Math.max(2.5, wLen);
-          });
+          let bestEdge = -1, bestDist = Infinity;
+          for (let i = 0; i < loopLen; i++) {
+            const pA = loopVectors[i];
+            const pB = loopVectors[(i + 1) % loopLen];
+            const midX = (pA.x + pB.x) / 2;
+            const midZ = (pA.z + pB.z) / 2;
+            const d = Math.hypot(wPos.x - midX, wPos.z - midZ);
+            if (d < bestDist) { bestDist = d; bestEdge = i; }
+          }
+          const wLen = Array.isArray(s.args) ? (s.args[0] || 3.0) : 3.0;
+          const isPartOfRoom = bestEdge >= 0 && bestDist < Math.max(2.5, wLen);
           if (isPartOfRoom) {
             const wallH = Array.isArray(s.args) ? (s.args[1] || 2.8) : 2.8;
+            const thickness = Array.isArray(s.args) ? (s.args[2] || 0.2) : 0.2;
+            const pA = loopVectors[bestEdge];
+            const pB = loopVectors[(bestEdge + 1) % loopLen];
+            const dir = new THREE.Vector3().subVectors(pB, pA);
+            const angle = Math.atan2(dir.z, dir.x);
+            const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+            const trueNormal = computeOutwardWallNormal2D(pA, pB, roomPoly2D);
+            const offsetScalar = s.tags?.includes('wall-exterior') ? thickness / 2
+              : s.tags?.includes('wall-interior') ? -thickness / 2 : 0;
+            const midX = (pA.x + pB.x) / 2 + trueNormal.x * offsetScalar;
+            const midZ = (pA.z + pB.z) / 2 + trueNormal.z * offsetScalar;
             return {
               ...s,
-              position: [s.position[0], assembly.datumZ + wallH / 2, s.position[2]],
+              position: [midX, assembly.datumZ + wallH / 2, midZ],
+              quaternion: [quat.x, quat.y, quat.z, quat.w] as [number, number, number, number],
+              args: [dir.length(), wallH, thickness],
             };
           }
         }

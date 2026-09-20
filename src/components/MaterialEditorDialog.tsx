@@ -42,6 +42,7 @@ export function MaterialEditorDialog({ asset, instance, onSave, onClose }: Props
           scaleMeters: resolved.depth.scaleMeters,
           biasMeters: resolved.depth.biasMeters,
         } : undefined,
+        uv: starting.uv ?? { repeat: resolved.uv.repeat, offset: resolved.uv.offset, rotation: resolved.uv.rotation },
       });
     }).catch(cause => {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load the material manifest.');
@@ -50,9 +51,15 @@ export function MaterialEditorDialog({ asset, instance, onSave, onClose }: Props
   }, [asset, instance]);
 
   const maps = manifest?.tiers['2k'] ?? manifest?.tiers['1k'] ?? manifest?.tiers['4k'];
-  const slider = (label: string, value: number, min: number, max: number, step: number, update: (value: number) => void) => (
+  const infoIcon = (tooltip: string) => (
+    <span tabIndex={0} title={tooltip} aria-label={tooltip}
+      className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-gray-400 text-[9px] leading-none text-gray-500">
+      i
+    </span>
+  );
+  const slider = (label: string, value: number, min: number, max: number, step: number, update: (value: number) => void, tooltip?: string) => (
     <label className="block text-xs text-gray-700">
-      <span className="flex justify-between"><span>{label}</span><span>{value.toFixed(step < 0.01 ? 3 : 2)}</span></span>
+      <span className="flex justify-between"><span className="inline-flex items-center gap-1">{label}{tooltip && infoIcon(tooltip)}</span><span>{value.toFixed(step < 0.01 ? 3 : 2)}</span></span>
       <input className="w-full accent-blue-600" type="range" min={min} max={max} step={step} value={value}
         onChange={event => update(clamp(Number(event.target.value), min, max))} />
     </label>
@@ -78,14 +85,22 @@ export function MaterialEditorDialog({ asset, instance, onSave, onClose }: Props
           <input aria-label="Material tint" type="color" value={draft.tint ?? '#ffffff'} onChange={event => setDraft(previous => previous ? { ...previous, tint: event.target.value } : previous)} />
           <button type="button" className="text-blue-600" onClick={() => setDraft(previous => previous ? { ...previous, tint: undefined } : previous)}>Use source colour</button>
         </label>
-        {slider('Roughness', draft.roughness ?? 0.5, 0, 1, 0.01, roughness => setDraft(previous => previous ? { ...previous, roughness } : previous))}
-        {slider('Metalness', draft.metalness ?? 0, 0, 1, 0.01, metalness => setDraft(previous => previous ? { ...previous, metalness } : previous))}
-        {slider('Opacity', draft.opacity ?? 1, 0, 1, 0.01, opacity => setDraft(previous => previous ? { ...previous, opacity } : previous))}
-        {maps?.['normal-gl'] && slider('Normal strength', draft.normalStrength ?? 1, 0, 2, 0.01, normalStrength => setDraft(previous => previous ? { ...previous, normalStrength } : previous))}
+        {slider('Roughness', draft.roughness ?? 0.5, 0, 1, 0.01, roughness => setDraft(previous => previous ? { ...previous, roughness } : previous),
+          'How sharp or soft light reflections look. Low = smooth, glossy, almost mirror-like. High = rough, matte, with no visible shine.')}
+        {slider('Metalness', draft.metalness ?? 0, 0, 1, 0.01, metalness => setDraft(previous => previous ? { ...previous, metalness } : previous),
+          'Whether the surface behaves like a metal or not. Low = looks like plastic, stone, wood or fabric. High = looks like bare metal, with tinted reflections instead of a plain white highlight.')}
+        {slider('Opacity', draft.opacity ?? 1, 0, 1, 0.01, opacity => setDraft(previous => previous ? { ...previous, opacity } : previous),
+          'How see-through the material is. 1 is fully solid; lower values make it increasingly transparent, down to fully invisible at 0.')}
+        {maps?.['normal-gl'] && slider('Normal strength', draft.normalStrength ?? 1, 0, 2, 0.01, normalStrength => setDraft(previous => previous ? { ...previous, normalStrength } : previous),
+          "How strongly the surface's fine bumps and grooves affect lighting, without changing the actual geometry. Low = flattens the detail. High = exaggerates it, making small bumps look deeper than they really are.")}
+        {slider('Texture scale', draft.uv?.repeat[0] ?? 1, 0.1, 8, 0.05, scale => setDraft(previous => previous ? { ...previous, uv: { repeat: [scale, scale], offset: previous.uv?.offset ?? [0, 0], rotation: previous.uv?.rotation ?? 0 } } : previous),
+          'How large the material’s pattern appears. Low = the pattern repeats less often, so it looks bigger and coarser. High = it repeats more often, so it looks smaller and more finely detailed.')}
         {maps?.height && draft.depth && <div className="space-y-2 rounded border p-3">
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={draft.depth.enabled} onChange={event => setDraft(previous => previous?.depth ? { ...previous, depth: { ...previous.depth, enabled: event.target.checked } } : previous)} />Enable height relief</label>
-          {slider('Height amount (m)', draft.depth.scaleMeters, 0, 0.2, 0.001, scaleMeters => setDraft(previous => previous?.depth ? { ...previous, depth: { ...previous.depth, scaleMeters } } : previous))}
-          {slider('Height offset (m)', draft.depth.biasMeters, -0.1, 0.1, 0.001, biasMeters => setDraft(previous => previous?.depth ? { ...previous, depth: { ...previous.depth, biasMeters } } : previous))}
+          {slider('Height relief (m)', draft.depth.scaleMeters, 0, 0.2, 0.001, scaleMeters => setDraft(previous => previous?.depth ? { ...previous, depth: { ...previous.depth, scaleMeters } } : previous),
+            'How far the surface actually pushes outward in real 3D geometry, not just a lighting trick. Low = nearly flat. High = pronounced, chunky relief — useful for materials like rock or brick.')}
+          {slider('Height offset (m)', draft.depth.biasMeters, -0.1, 0.1, 0.001, biasMeters => setDraft(previous => previous?.depth ? { ...previous, depth: { ...previous.depth, biasMeters } } : previous),
+            'Shifts the whole relief up or down without changing how strong it is — use this if the surface looks too sunken or too raised overall.')}
           <p className="text-[11px] text-gray-500">Height uses bounded geometry relief on whole-object surfaces. On a box, Shift-click while painting to apply the material to the whole object; a normal click paints one face with normal detail but no height relief. Height values are provisional, not calibrated physical depth.</p>
         </div>}
         <div className="flex justify-end gap-2 border-t pt-4">

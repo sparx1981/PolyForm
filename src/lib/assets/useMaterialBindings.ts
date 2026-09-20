@@ -12,6 +12,7 @@ export interface ResolvedBindingMaps {
   opacity: number;
   normalStrength: number;
   depth: { enabled: boolean; scaleMeters: number; biasMeters: number; calibrated: boolean } | null;
+  uv: { repeat: [number, number]; offset: [number, number]; rotation: number };
 }
 
 export function useMaterialBindings(
@@ -46,6 +47,7 @@ export function useMaterialBindings(
         opacity: material.opacity,
         normalStrength: instance.normalStrength ?? 1,
         depth: material.depth,
+        uv: material.uv,
       }] as const;
     })).then(items => {
       if (!controller.signal.aborted) setResolved(Object.fromEntries(items.filter(item => item !== null)));
