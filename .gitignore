@@ -4,9 +4,6 @@ dist/
 coverage/
 .polyhaven/
 .firebase/
-public/polyhaven/releases/
-public/polyhaven/catalog.v1.json
-public/polyhaven/active-release.json
 .DS_Store
 *.log
 .env*
