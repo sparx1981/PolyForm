@@ -1,0 +1,4 @@
+.polyhaven/
+node_modules/
+.firebase/
+*.log
