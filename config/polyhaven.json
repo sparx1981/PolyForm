@@ -6,7 +6,7 @@
   "workDirectory": ".polyhaven",
   "publicDirectory": "public/polyhaven",
   "sourceCeiling": "4k",
-  "runtimeTiers": ["1k", "2k", "4k"],
+  "runtimeTiers": ["1k", "2k"],
   "metadataConcurrency": 2,
   "downloadConcurrency": 4,
   "requestPacingMs": 250,
