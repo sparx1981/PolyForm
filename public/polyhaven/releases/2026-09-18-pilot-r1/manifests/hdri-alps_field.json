@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "asset": {
+    "id": "ph:hdri:alps_field",
+    "sourceId": "alps_field",
+    "kind": "hdri",
+    "name": "Alps Field",
+    "source": "polyhaven",
+    "license": "CC0-1.0",
+    "revision": "2026-09-18-pilot-r1",
+    "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/hdri-alps_field.json",
+    "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/alps_field/preview.webp",
+    "categoryId": "7c6fee03-691b-54bd-9853-84499efb6ee9",
+    "categoryPath": "Mountains & Hills/Mountains & Alpine/Alpine Valleys",
+    "categorySlugPath": "mountains-and-hills/mountains-and-alpine/alpine-valleys",
+    "ancestorCategoryIds": [],
+    "legacyCategories": [
+      "natural light",
+      "outdoor",
+      "nature",
+      "high contrast",
+      "partly cloudy",
+      "morning-afternoon"
+    ],
+    "tags": [
+      "sun",
+      "grass",
+      "field",
+      "mountain",
+      "forest",
+      "alps",
+      "valley"
+    ],
+    "attributes": {
+      "time_of_day": "morning",
+      "weather": "partly_cloudy",
+      "light_type": "natural",
+      "contrast": "high",
+      "environment": "outdoor",
+      "sky_view": "open",
+      "sourceFilesHash": "2ea3280a997dbfceb22c9db30d8f7901ff0295e2"
+    },
+    "environmentGroup": "mountains-hills",
+    "availableTiers": [
+      "1k",
+      "2k"
+    ]
+  },
+  "tiers": {
+    "1k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/alps_field/1k/environment.hdr",
+        "sha256": "d7abfe1f1f6c6e9ee3da62b100a45acc43f27370fee35a5360fc16cfb9363569",
+        "byteLength": 1620979,
+        "width": 1024,
+        "height": 512,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    },
+    "2k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/alps_field/2k/environment.hdr",
+        "sha256": "eef94e775ccb3100643a90fa3bdbc39c7c58969c03f80bcf7f8491a5825e6bb5",
+        "byteLength": 6570571,
+        "width": 2048,
+        "height": 1024,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    }
+  },
+  "scalarFallbacks": {
+    "color": "#ffffff",
+    "roughness": 1,
+    "metalness": 0,
+    "opacity": 1
+  },
+  "coverage": [
+    {
+      "sourceKey": "tonemapped",
+      "status": "alternative",
+      "semantic": "preview",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "converted",
+      "semantic": "environment",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "colorchart",
+      "status": "alternative",
+      "reason": "Container/dependency inventory retained; not a texture map."
+    }
+  ],
+  "publication": {
+    "status": "staged"
+  }
+}
