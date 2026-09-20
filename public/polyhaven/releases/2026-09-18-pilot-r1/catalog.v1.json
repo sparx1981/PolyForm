@@ -1,0 +1,1025 @@
+{
+  "schemaVersion": 1,
+  "release": "2026-09-18-pilot-r1",
+  "generatedAt": "2026-09-20T13:29:06.959Z",
+  "assets": [
+    {
+      "id": "ph:material:aerial_rocks_02",
+      "sourceId": "aerial_rocks_02",
+      "kind": "material",
+      "name": "Aerial Rocks 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-aerial_rocks_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/aerial_rocks_02/preview.webp",
+      "categoryId": "bf84369c-cc7c-5347-ad17-173353e859b8",
+      "categoryPath": "Stone/Rock & Cliffs/Rough Rock Faces",
+      "categorySlugPath": "stone/rock-and-cliffs/rough-rock-faces",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "outdoor",
+        "natural",
+        "rock",
+        "aerial"
+      ],
+      "tags": [
+        "rocks",
+        "rough",
+        "moss",
+        "cliff",
+        "rock face",
+        "cave"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "mossy",
+          "weathered"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "76c3c2d202e28839b72e336a5b1839e58e2da2e3"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:asphalt_02",
+      "sourceId": "asphalt_02",
+      "kind": "material",
+      "name": "Asphalt 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-asphalt_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/asphalt_02/preview.webp",
+      "categoryId": "ae6df066-2cbf-5772-9092-3cd86ed6394e",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Cracked Asphalt",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/cracked-asphalt",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "road",
+        "man made",
+        "outdoor",
+        "floor"
+      ],
+      "tags": [
+        "asphalt",
+        "cracked",
+        "flat",
+        "road",
+        "asphalt road",
+        "tarmac road",
+        "gritty",
+        "weathered",
+        "grey",
+        "cracking",
+        "tar",
+        "cracks"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "weathered",
+          "cracked"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "2839a331f389f6ad1e30a78f24db58369d92f742"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:box_profile_metal_sheet",
+      "sourceId": "box_profile_metal_sheet",
+      "kind": "material",
+      "name": "Box Profile Metal Sheet",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-box_profile_metal_sheet.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/box_profile_metal_sheet/preview.webp",
+      "categoryId": "c10ee76b-cb81-546f-bba9-095bf5a18a6d",
+      "categoryPath": "Metal/Sheet & Corrugated/Corrugated Iron",
+      "categorySlugPath": "metal/sheet-and-corrugated/corrugated-iron",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wall",
+        "outdoor",
+        "roofing"
+      ],
+      "tags": [
+        "sheet",
+        "metal sheet",
+        "box profile",
+        "industrial",
+        "corrugated",
+        "steel",
+        "red",
+        "roofing material",
+        "metal roofing sheet",
+        "galvanized steel",
+        "corrugated iron"
+      ],
+      "attributes": {
+        "surface_use": "roof",
+        "condition": [
+          "painted",
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "f57400cd2f30b0b2ed4a54c1fd645fe835eb60f2"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brick_gravel",
+      "sourceId": "brick_gravel",
+      "kind": "material",
+      "name": "Brick Gravel",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-brick_gravel.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/brick_gravel/preview.webp",
+      "categoryId": "ff767449-ea44-5527-96f0-d74aa52df2d0",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Crushed Aggregate",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/crushed-aggregate",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "gravel",
+        "brick"
+      ],
+      "tags": [
+        "rough",
+        "uneven",
+        "brick",
+        "gravel",
+        "broken pieces",
+        "rubble",
+        "fragmented",
+        "crushed",
+        "aggregate",
+        "terracotta"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "047c561b95f0a53e69ca4083501a9b21eaced364"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brick_wall_001",
+      "sourceId": "brick_wall_001",
+      "kind": "material",
+      "name": "Brick Wall 001",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-brick_wall_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/brick_wall_001/preview.webp",
+      "categoryId": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+      "categoryPath": "Brick & Block/Clay Brick/Running-Bond",
+      "categorySlugPath": "brick-and-block/clay-brick/running-bond",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "brick",
+        "man made",
+        "outdoor",
+        "indoor",
+        "clean",
+        "wall"
+      ],
+      "tags": [
+        "red",
+        "rough",
+        "industrial",
+        "plain",
+        "baked"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "worn",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "either",
+        "sourceFilesHash": "fd60577b22b011e4f5ae6ac5b2ffddd8dacf9b3d"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brown_planks_03",
+      "sourceId": "brown_planks_03",
+      "kind": "material",
+      "name": "Brown Planks 03",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-brown_planks_03.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/brown_planks_03/preview.webp",
+      "categoryId": "30ac2613-5076-5364-b4da-130117ad592d",
+      "categoryPath": "Wood/Boards & Planks/Weathered Planks",
+      "categorySlugPath": "wood/boards-and-planks/weathered-planks",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wood",
+        "man made",
+        "indoor",
+        "outdoor",
+        "clean",
+        "wall"
+      ],
+      "tags": [
+        "planks",
+        "untreated",
+        "boat",
+        "costal",
+        "dry",
+        "old",
+        "withered"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "either",
+        "sourceFilesHash": "dc9ddbd1646f29747e9571f5bf7abd7a28975a80"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:clay_roof_tiles",
+      "sourceId": "clay_roof_tiles",
+      "kind": "material",
+      "name": "Clay Roof Tiles",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-clay_roof_tiles.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/preview.webp",
+      "categoryId": "6165a492-c53c-5b5f-96df-20c96a7763df",
+      "categoryPath": "Ceramic/Terracotta",
+      "categorySlugPath": "ceramic/terracotta",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "roofing"
+      ],
+      "tags": [
+        "weathered",
+        "rough",
+        "worn",
+        "uneven",
+        "discolored",
+        "clay",
+        "roof",
+        "roofing",
+        "tile roofing",
+        "exterior"
+      ],
+      "attributes": {
+        "surface_use": "roof",
+        "condition": [
+          "weathered",
+          "worn",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "045b0a54a86afd93f6571c76296aa2df436a4328"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:cobblestone_01",
+      "sourceId": "cobblestone_01",
+      "kind": "material",
+      "name": "Cobblestone 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-cobblestone_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/cobblestone_01/preview.webp",
+      "categoryId": "5aa99c3f-7783-51e3-90d1-2c496368ad24",
+      "categoryPath": "Stone/Cobblestone & Paving/Cut Setts & Pavers",
+      "categorySlugPath": "stone/cobblestone-and-paving/cut-setts-and-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "outdoor",
+        "dirty",
+        "cobblestone"
+      ],
+      "tags": [
+        "cobblestone",
+        "old",
+        "garden",
+        "moss"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn",
+          "mossy"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "b38b64aeccd1acb8b06d33f82b03e4f9862766fe"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:concrete_floor_worn_001",
+      "sourceId": "concrete_floor_worn_001",
+      "kind": "material",
+      "name": "Concrete Floor Worn 001",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-concrete_floor_worn_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/preview.webp",
+      "categoryId": "0a7b70c3-bc79-531b-8cf3-cadeb4cbf686",
+      "categoryPath": "Concrete/Cast Walls & Floors/Bare Cast",
+      "categorySlugPath": "concrete/cast-walls-and-floors/bare-cast",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "indoor",
+        "dirty",
+        "concrete",
+        "plaster-concrete"
+      ],
+      "tags": [
+        "worn",
+        "old",
+        "plain",
+        "grey",
+        "weathered",
+        "bare",
+        "discolored"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "worn",
+          "weathered",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "indoor",
+        "sourceFilesHash": "e3d93fd423c3db5bbc000a930cc8b9d770187ce4"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:dry_ground_01",
+      "sourceId": "dry_ground_01",
+      "kind": "material",
+      "name": "Dry Ground 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-dry_ground_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/dry_ground_01/preview.webp",
+      "categoryId": "804988d5-eb1b-5364-afc9-ce19b3edc12d",
+      "categoryPath": "Ground & Terrain/Soil & Mud/Cracked Dry Mud & Clay",
+      "categorySlugPath": "ground-and-terrain/soil-and-mud/cracked-dry-mud-and-clay",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "outdoor",
+        "natural"
+      ],
+      "tags": [
+        "dry",
+        "sand",
+        "mud",
+        "cracked",
+        "desert",
+        "baked",
+        "rough",
+        "fissured",
+        "baked earth",
+        "compact",
+        "brittle",
+        "parched"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "cracked"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "sourceFilesHash": "1ab2b8b9d6e1f7a8c82d90e327f0e2e3ff47e4f9"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:granite_tile",
+      "sourceId": "granite_tile",
+      "kind": "material",
+      "name": "Granite Tile",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-granite_tile.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/granite_tile/preview.webp",
+      "categoryId": "c1b6840e-81a6-56d1-9cf0-1ef10c0aa6a2",
+      "categoryPath": "Stone/Slabs & Tiles/Granite",
+      "categorySlugPath": "stone/slabs-and-tiles/granite",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made"
+      ],
+      "tags": [
+        "granite",
+        "tiles",
+        "tiled",
+        "stone tile",
+        "granite tile",
+        "flooring",
+        "interior",
+        "home decor",
+        "square tiles",
+        "grid",
+        "decorative tiles"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "origin": "man_made",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "e9721ed5c35b6d2dc5ad0dc9f8e9fd1b407949ff"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:grass_ground",
+      "sourceId": "grass_ground",
+      "kind": "material",
+      "name": "Grass Ground",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-grass_ground.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/grass_ground/preview.webp",
+      "categoryId": "e9516d71-1efd-51d6-b3c4-ce945ee92604",
+      "categoryPath": "Ground & Terrain/Grass & Vegetation/Dry & Sparse Grass",
+      "categorySlugPath": "ground-and-terrain/grass-and-vegetation/dry-and-sparse-grass",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "natural",
+        "terrain",
+        "dirty"
+      ],
+      "tags": [
+        "grass",
+        "dry grass",
+        "dirt",
+        "root",
+        "dead grass",
+        "turf",
+        "dry"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "dirty"
+        ],
+        "sourceFilesHash": "0835c92f7cacee85b306c2a35d2c006be11ea3c2"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:marble_01",
+      "sourceId": "marble_01",
+      "kind": "material",
+      "name": "Marble 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-marble_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/marble_01/preview.webp",
+      "categoryId": "332a7c92-1556-5937-b7a9-8a0f52d20df4",
+      "categoryPath": "Stone/Slabs & Tiles/Marble",
+      "categorySlugPath": "stone/slabs-and-tiles/marble",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "indoor",
+        "clean",
+        "wall"
+      ],
+      "tags": [
+        "marble",
+        "smooth",
+        "even",
+        "tiles"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "origin": "man_made",
+        "setting": "indoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "11a4d204569907b76e1c4f7ef06a8b3fa90b5930"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:snow_01",
+      "sourceId": "snow_01",
+      "kind": "material",
+      "name": "Snow 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-snow_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/snow_01/preview.webp",
+      "categoryId": "6e705b25-3316-525c-9bf4-63b587afeea9",
+      "categoryPath": "Ground & Terrain/Snow/Trampled Snow",
+      "categorySlugPath": "ground-and-terrain/snow/trampled-snow",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "natural",
+        "outdoor",
+        "snow"
+      ],
+      "tags": [
+        "snow",
+        "rough",
+        "uneven",
+        "footprints",
+        "powdery",
+        "trail",
+        "snowfield"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "worn"
+        ],
+        "sourceFilesHash": "0f733845a3441bcd0204ff2f72449295c757becf"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:stone_brick_wall_001",
+      "sourceId": "stone_brick_wall_001",
+      "kind": "material",
+      "name": "Stone Brick Wall 001",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-stone_brick_wall_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/preview.webp",
+      "categoryId": "bc20bc70-284a-5f14-93eb-78274f6a1fa9",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Ashlar & Coursed Stone",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/ashlar-and-coursed-stone",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "wall",
+        "brick"
+      ],
+      "tags": [
+        "stones",
+        "bricks",
+        "blocks",
+        "castle",
+        "fort",
+        "dungeon",
+        "dark"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "47f7ec5ea40d1c4a247f45adf2e0c83cca72eee6"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:terrain_red_01",
+      "sourceId": "terrain_red_01",
+      "kind": "material",
+      "name": "Terrain Red 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-terrain_red_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/terrain_red_01/preview.webp",
+      "categoryId": "ff767449-ea44-5527-96f0-d74aa52df2d0",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Crushed Aggregate",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/crushed-aggregate",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "natural",
+        "outdoor",
+        "road",
+        "rock"
+      ],
+      "tags": [
+        "gravel",
+        "stones",
+        "rough",
+        "pebbles",
+        "railroad",
+        "pathway",
+        "path"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "16bb30d34d23a75c1dea32f0d01cd89212160bc8"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:white_stucco",
+      "sourceId": "white_stucco",
+      "kind": "material",
+      "name": "White Stucco",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-white_stucco.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/white_stucco/preview.webp",
+      "categoryId": "ebaa964c-b45c-52e2-bd50-892d64616d87",
+      "categoryPath": "Concrete/Plaster & Stucco/Bare Plaster",
+      "categorySlugPath": "concrete/plaster-and-stucco/bare-plaster",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wall",
+        "man made",
+        "wall",
+        "man made",
+        "plaster",
+        "indoor"
+      ],
+      "tags": [
+        "rough",
+        "wall",
+        "painted",
+        "stucco",
+        "white",
+        "granular",
+        "matte",
+        "uneven",
+        "porous",
+        "plaster"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "clean"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "6130f832c1ced67099984a28a99031483624ce44"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:wood_chips",
+      "sourceId": "wood_chips",
+      "kind": "material",
+      "name": "Wood Chips",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-wood_chips.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/wood_chips/preview.webp",
+      "categoryId": "f5a6cc7b-b773-5091-a757-09cbd29ee323",
+      "categoryPath": "Ground & Terrain/Forest Floor/Mulch & Wood Chips",
+      "categorySlugPath": "ground-and-terrain/forest-floor/mulch-and-wood-chips",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "natural",
+        "raw wood",
+        "wood"
+      ],
+      "tags": [
+        "weathered",
+        "wood",
+        "ground",
+        "brown",
+        "nature",
+        "leaves"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "sourceFilesHash": "1772ad0fb8c2185c641433c2ddffa88cb001eaf0"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:worn_corrugated_iron",
+      "sourceId": "worn_corrugated_iron",
+      "kind": "material",
+      "name": "Worn Corrugated Iron",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-worn_corrugated_iron.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/preview.webp",
+      "categoryId": "c10ee76b-cb81-546f-bba9-095bf5a18a6d",
+      "categoryPath": "Metal/Sheet & Corrugated/Corrugated Iron",
+      "categorySlugPath": "metal/sheet-and-corrugated/corrugated-iron",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "man made",
+        "metal"
+      ],
+      "tags": [
+        "rough",
+        "weathered",
+        "worn",
+        "chipped",
+        "corrugated",
+        "corrugation",
+        "metal",
+        "metal sheet",
+        "iron",
+        "steel sheeting",
+        "roof",
+        "sheet",
+        "steel",
+        "galvanized",
+        "paint",
+        "cracking paint",
+        "peeling paint",
+        "deteriorated",
+        "weatherbeaten",
+        "roofing",
+        "metallic",
+        "corrugated iron"
+      ],
+      "attributes": {
+        "surface_use": "roof",
+        "condition": [
+          "weathered",
+          "damaged",
+          "worn",
+          "painted"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "37704a467103c27e83e12d9f5b81bb8e73ad9473"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:hdri:kloofendal_48d_partly_cloudy_puresky",
+      "sourceId": "kloofendal_48d_partly_cloudy_puresky",
+      "kind": "hdri",
+      "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/hdri-kloofendal_48d_partly_cloudy_puresky.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/kloofendal_48d_partly_cloudy_puresky/preview.webp",
+      "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+      "categoryPath": "Pure Skies",
+      "categorySlugPath": "pure-skies",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "skies",
+        "nature",
+        "midday",
+        "partly cloudy",
+        "high contrast",
+        "natural light",
+        "pure skies"
+      ],
+      "tags": [
+        "pure skies"
+      ],
+      "attributes": {
+        "time_of_day": "midday",
+        "weather": "partly_cloudy",
+        "light_type": "natural",
+        "contrast": "high",
+        "environment": "outdoor",
+        "sky_view": "open",
+        "sourceFilesHash": "4cce3bc9b9588036541551fe5ae8077af6b37e45"
+      },
+      "environmentGroup": "pure-skies",
+      "availableTiers": [
+        "1k",
+        "2k"
+      ]
+    },
+    {
+      "id": "ph:hdri:alps_field",
+      "sourceId": "alps_field",
+      "kind": "hdri",
+      "name": "Alps Field",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/hdri-alps_field.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/alps_field/preview.webp",
+      "categoryId": "7c6fee03-691b-54bd-9853-84499efb6ee9",
+      "categoryPath": "Mountains & Hills/Mountains & Alpine/Alpine Valleys",
+      "categorySlugPath": "mountains-and-hills/mountains-and-alpine/alpine-valleys",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "natural light",
+        "outdoor",
+        "nature",
+        "high contrast",
+        "partly cloudy",
+        "morning-afternoon"
+      ],
+      "tags": [
+        "sun",
+        "grass",
+        "field",
+        "mountain",
+        "forest",
+        "alps",
+        "valley"
+      ],
+      "attributes": {
+        "time_of_day": "morning",
+        "weather": "partly_cloudy",
+        "light_type": "natural",
+        "contrast": "high",
+        "environment": "outdoor",
+        "sky_view": "open",
+        "sourceFilesHash": "2ea3280a997dbfceb22c9db30d8f7901ff0295e2"
+      },
+      "environmentGroup": "mountains-hills",
+      "availableTiers": [
+        "1k",
+        "2k"
+      ]
+    },
+    {
+      "id": "ph:hdri:birchwood",
+      "sourceId": "birchwood",
+      "kind": "hdri",
+      "name": "Birchwood",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-18-pilot-r1",
+      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/hdri-birchwood.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/birchwood/preview.webp",
+      "categoryId": "69311129-a02a-5409-875f-803d4c3e7e16",
+      "categoryPath": "Forest & Woodland/Forest/Deciduous Forest",
+      "categorySlugPath": "forest-and-woodland/forest/deciduous-forest",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "nature",
+        "sunrise-sunset",
+        "clear",
+        "low contrast",
+        "natural light"
+      ],
+      "tags": [
+        "tree",
+        "snow",
+        "winter",
+        "river",
+        "frozen"
+      ],
+      "attributes": {
+        "time_of_day": "sunset",
+        "weather": "clear",
+        "light_type": "natural",
+        "contrast": "low",
+        "season": "winter",
+        "environment": "outdoor",
+        "sky_view": "obstructed",
+        "sourceFilesHash": "2b03bbde37757980621563a2d39c3997eb44de6e"
+      },
+      "environmentGroup": "forest-woodland",
+      "availableTiers": [
+        "1k",
+        "2k"
+      ]
+    }
+  ]
+}
