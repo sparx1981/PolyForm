@@ -225,10 +225,10 @@
     "opacity": 1
   },
   "height": {
-    "scaleMeters": 0.05,
+    "scaleMeters": 0.1,
     "biasMeters": 0,
     "calibrated": false,
-    "provenance": "Poly Haven displacement map; default pilot scale pending asset-specific calibration."
+    "provenance": "Poly Haven displacement map; pilot scale doubled from initial 0.05m default per user feedback, still pending asset-specific calibration."
   },
   "coverage": [
     {
