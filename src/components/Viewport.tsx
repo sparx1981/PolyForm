@@ -4076,12 +4076,27 @@ function Scene() {
         });
       }
       // Temporary diagnostic: the exact position/args/quaternion being written into each wall
-      // Shape - if the rendered wall doesn't match these numbers, the bug is in rendering
-      // (stale geometry / reconciliation), not in this corner math.
+      // Shape, plus its actual 2D footprint corners (top-down, world space) - if the rendered
+      // wall doesn't match these numbers, the bug is in rendering (stale geometry /
+      // reconciliation), not in this corner math. The footprint corners make it possible to
+      // directly check, from the log alone, whether two neighboring walls' solids truly cover
+      // their shared corner (no arithmetic-by-hand required).
       diagLog('WALL_MITER', `Applying ${updatesByShapeId.size} wall updates`, {
-        updates: [...updatesByShapeId.entries()].map(([id, s]) => ({
-          id, position: s.position, args: s.args, quaternion: s.quaternion,
-        })),
+        updates: [...updatesByShapeId.entries()].map(([id, s]) => {
+          const [len, , thick] = s.args as [number, number, number];
+          const q = new THREE.Quaternion(...(s.quaternion as [number, number, number, number]));
+          const dir = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+          const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+          const [cx, , cz] = s.position;
+          const hl = len / 2, ht = thick / 2;
+          const footprint = [
+            [cx - dir.x * hl - normal.x * ht, cz - dir.z * hl - normal.z * ht],
+            [cx + dir.x * hl - normal.x * ht, cz + dir.z * hl - normal.z * ht],
+            [cx + dir.x * hl + normal.x * ht, cz + dir.z * hl + normal.z * ht],
+            [cx - dir.x * hl + normal.x * ht, cz - dir.z * hl + normal.z * ht],
+          ];
+          return { id, position: s.position, args: s.args, quaternion: s.quaternion, footprint };
+        }),
       });
 
       next = next.map(s => updatesByShapeId.get(s.id) ?? s);

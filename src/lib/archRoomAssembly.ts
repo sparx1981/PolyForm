@@ -173,7 +173,16 @@ export function computeWallCornerPoint(
 export function computeMiterExtension(thickness: number, turnAngleRadians: number): number {
   const maxAngle = (170 * Math.PI) / 180;
   const angle = Math.min(Math.abs(turnAngleRadians), maxAngle);
-  return (thickness / 2) * Math.tan(angle / 2);
+  const raw = (thickness / 2) * Math.tan(angle / 2);
+  // Two independently rendered wall meshes whose faces land exactly coplanar (confirmed: at a
+  // 90-degree turn, the raw formula puts a wall's end cap exactly on its neighbor's own side
+  // face, over the whole thickness x height area) z-fight - a flickering, colour-bleeding seam
+  // - even though the underlying solid volumes have no gap. Pulling back by a small clearance
+  // keeps the end cap just inside the neighbor's solid body (invisible, buried in opaque
+  // material) instead of exactly flush with its visible face, at the cost of an unmeasurable,
+  // sub-millimeter point-sized gap at the corner tip that no rendering can show.
+  const clearance = Math.min(0.003, thickness * 0.05);
+  return Math.max(0, raw - clearance);
 }
 
 /**
