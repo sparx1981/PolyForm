@@ -4399,9 +4399,11 @@ function Scene() {
       // drawn clockwise or counter-clockwise - the actual cause of corners either overlapping
       // or gapping depending on draw direction).
       const loopLen = loopVectors.length;
+      const currentStoryTag = `story-${activeStory || 1}`;
       next = next.map(s => {
-        if (s.type === 'wall') {
+        if (s.type === 'wall' && s.tags?.includes(currentStoryTag)) {
           const wPos = new THREE.Vector3(...s.position);
+          const thickness0 = Array.isArray(s.args) ? (s.args[2] || 0.2) : 0.2;
           let bestEdge = -1, bestDist = Infinity;
           for (let i = 0; i < loopLen; i++) {
             const pA = loopVectors[i];
@@ -4411,8 +4413,12 @@ function Scene() {
             const d = Math.hypot(wPos.x - midX, wPos.z - midZ);
             if (d < bestDist) { bestDist = d; bestEdge = i; }
           }
-          const wLen = Array.isArray(s.args) ? (s.args[0] || 3.0) : 3.0;
-          const isPartOfRoom = bestEdge >= 0 && bestDist < Math.max(2.5, wLen);
+          // A wall genuinely belonging to this loop edge was created with its center at the
+          // edge midpoint, offset by at most half its own thickness for justification - so the
+          // match distance should stay tight regardless of wall length or story, preventing
+          // walls from other stories/rooms (matched only loosely before) from being warped here.
+          const matchMargin = Math.max(thickness0 * 4, 0.5);
+          const isPartOfRoom = bestEdge >= 0 && bestDist < matchMargin;
           if (isPartOfRoom) {
             const wallH = Array.isArray(s.args) ? (s.args[1] || 2.8) : 2.8;
             const thickness = Array.isArray(s.args) ? (s.args[2] || 0.2) : 0.2;

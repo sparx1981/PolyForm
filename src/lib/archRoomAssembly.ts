@@ -108,10 +108,13 @@ export function computeOutwardWallNormal2D(
   roomPolygon2D: Array<[number, number]>
 ): THREE.Vector3 {
   const dir = new THREE.Vector3().subVectors(pB, pA);
+  const edgeLength = dir.length();
   const normal = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
   const midX = (pA.x + pB.x) / 2;
   const midZ = (pA.z + pB.z) / 2;
-  const testDist = 0.2;
+  // Scale the probe distance down for short edges so it can't cross past a nearby
+  // concave (reflex) vertex and land on the wrong side of the polygon.
+  const testDist = Math.min(0.2, edgeLength * 0.25);
   const testX = midX + normal.x * testDist;
   const testZ = midZ + normal.z * testDist;
   return isPointInPolygon2D(testX, testZ, roomPolygon2D) ? normal.negate() : normal;
