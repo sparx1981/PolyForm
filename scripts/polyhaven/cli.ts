@@ -66,6 +66,11 @@ async function main() {
         }
         if (totalMatches === 0) throw new Error(`No discovered assets matched category: ${categories.join(', ')}`);
       }
+      // Drops specific ids after manifest/category selection - for the case a category
+      // sweep pulls in an asset whose source files don't fit the normalizer's expectations
+      // (an unresolved-map plan.json entry), which isn't worth debugging Poly Haven's own
+      // file layout for one texture when the release doesn't need it kept.
+      for (const id of optionAll(args, '--exclude')) selectedIds.delete(id);
     }
     const plan = await createPlan(config, snapshot, out, selectedIds);
     const canonical = resolve(config.workDirectory, 'releases', release, 'plan.json');
@@ -76,7 +81,7 @@ async function main() {
   if (command === 'convert') { if (!release) throw new Error('--release is required'); console.log(JSON.stringify(await convertRelease(config, release), null, 2)); return; }
   if (command === 'validate') { if (!release) throw new Error('--release is required'); const report = await validateRelease(config, release); console.log(JSON.stringify(report, null, 2)); if (!report.valid) process.exitCode = 1; return; }
   if (command === 'publish') { if (!release) throw new Error('--release is required'); await publishRelease(config, release, args.includes('--dry-run')); return; }
-  throw new Error('Usage: discover | plan --release ID [--manifest FILE] [--category SLUG ...] [--limit N] [--out FILE] | ingest --plan FILE --resume | convert --release ID | validate --release ID | publish --release ID [--dry-run]');
+  throw new Error('Usage: discover | plan --release ID [--manifest FILE] [--category SLUG ...] [--limit N] [--exclude ID ...] [--out FILE] | ingest --plan FILE --resume | convert --release ID | validate --release ID | publish --release ID [--dry-run]');
 }
 
 main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
