@@ -19,6 +19,15 @@ export interface ResolvedSurfaceHit {
   isBackface: boolean;
 }
 
+/** Only rendered architectural meshes participate; editor helpers never do. */
+export function isPortalSurface(object: THREE.Object3D): boolean {
+  if (!object.userData?.isShape && !object.userData?.isKernelGeometry) return false;
+  for (let parent: THREE.Object3D | null = object; parent; parent = parent.parent) {
+    if (!parent.visible) return false;
+  }
+  return true;
+}
+
 /**
  * Resolves a raycast intersection to a world-space point/normal via the
  * hit object's matrixWorld, using the inverse-transpose (normalMatrix) so
@@ -44,7 +53,8 @@ export function resolveWorldHit(
   const alignment = rayDirection.dot(worldNormal);
   let isBackface = alignment > 0.0;
   if (mesh.matrixWorld.determinant() < 0) isBackface = !isBackface;
-  if (isBackface) worldNormal.negate();
+  // Mirroring changes winding metadata, not which side the viewer is on.
+  if (alignment > 0) worldNormal.negate();
 
   return { worldPoint, worldNormal, hitObject: mesh, isBackface };
 }
@@ -74,16 +84,18 @@ export function resolveExitPoint(
   maxWallThickness: number
 ): THREE.Vector3 {
   const raycaster = new THREE.Raycaster();
-  const probeOrigin = enterHit.worldPoint.clone().addScaledVector(enterHit.worldNormal, 0.001);
-  const probeDirection = enterHit.worldNormal.clone().negate();
+  // Approach the exit from outside the wall. Looking from the entry into
+  // the solid misses the exit entirely with normal FrontSide materials.
+  const probeOrigin = enterHit.worldPoint.clone().addScaledVector(enterHit.worldNormal, -maxWallThickness);
+  const probeDirection = enterHit.worldNormal.clone();
   raycaster.set(probeOrigin, probeDirection);
   raycaster.near = 0.0;
   raycaster.far = maxWallThickness;
 
   const hits = raycaster.intersectObjects(raycastRoots, true);
-  for (const hit of hits) {
-    if (hit.object === enterHit.hitObject && hit.distance < 0.002) continue;
-    if (!hit.face || !hit.object.userData?.isShape) continue;
+  for (const hit of hits.reverse()) {
+    if (hit.point.distanceTo(enterHit.worldPoint) < 0.002) continue;
+    if (!hit.face || !isPortalSurface(hit.object)) continue;
 
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
     const candidateNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
@@ -166,7 +178,7 @@ function landingCandidate(
   // grows, so shortening `far` risked stopping just short of a thin
   // obstruction the candidate point actually sits behind.
   raycaster.far = dist;
-  const hits = raycaster.intersectObjects(raycastRoots, true).filter(h => h.object.userData?.isShape);
+  const hits = raycaster.intersectObjects(raycastRoots, true).filter(h => isPortalSurface(h.object));
   return { eye: candidate, clear: hits.length === 0 };
 }
 
@@ -227,7 +239,7 @@ function hasFloorBelow(raycastRoots: THREE.Object3D[], point: THREE.Vector3, y: 
   const raycaster = new THREE.Raycaster(probeOrigin, new THREE.Vector3(0, -1, 0), 0, 4.0);
   const hits = raycaster.intersectObjects(raycastRoots, true);
   for (const hit of hits) {
-    if (!hit.face || !hit.object.userData?.isShape) continue;
+    if (!hit.face || !isPortalSurface(hit.object)) continue;
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
     const n = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
     if (n.y >= 0.9 && Math.abs(hit.point.y - y) < 0.3) return true;
@@ -253,7 +265,7 @@ export function resolveFloorLanding(
       raycaster.set(eye, dir);
       raycaster.near = 0.01;
       raycaster.far = personalSpace;
-      const hit = raycaster.intersectObjects(raycastRoots, true).find(h => h.object.userData?.isShape);
+      const hit = raycaster.intersectObjects(raycastRoots, true).find(h => isPortalSurface(h.object));
       if (hit && hit.distance < personalSpace) {
         const candidate = eye.clone().addScaledVector(dir, -(personalSpace - hit.distance));
         // Only accept the nudge if solid floor still exists under the new
@@ -297,7 +309,7 @@ export function computeClearanceRadius(
       const direction = new THREE.Vector3(Math.sin(rad), 0, Math.cos(rad)).normalize();
       const origin = targetEye.clone().add(new THREE.Vector3(0, yOffset, 0));
       raycaster.set(origin, direction);
-      const hits = raycaster.intersectObjects(raycastRoots, true).filter(h => h.object.userData?.isShape);
+      const hits = raycaster.intersectObjects(raycastRoots, true).filter(h => isPortalSurface(h.object));
       if (hits.length > 0 && hits[0].distance < minRadius) {
         minRadius = hits[0].distance;
       }
@@ -417,7 +429,7 @@ export function resolvePortalDestination(
   params: PortalDestinationParams
 ): PortalDestination {
   const exitPoint = resolveExitPoint(raycastRoots, enterHit, params.maxWallThickness);
-  const fallbackY = params.camEye.y;
+  const fallbackY = params.camEye.y - params.eyeHeight;
   const floorY = sampleFloorDatum(raycastRoots, exitPoint, enterHit.worldNormal, fallbackY);
   const targetY = floorY + params.eyeHeight;
 
