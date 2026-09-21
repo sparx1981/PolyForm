@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "asset": {
+    "id": "ph:hdri:kloofendal_48d_partly_cloudy_puresky",
+    "sourceId": "kloofendal_48d_partly_cloudy_puresky",
+    "kind": "hdri",
+    "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+    "source": "polyhaven",
+    "license": "CC0-1.0",
+    "revision": "2026-09-21-pilot-r2",
+    "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-kloofendal_48d_partly_cloudy_puresky.json",
+    "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/kloofendal_48d_partly_cloudy_puresky/preview.webp",
+    "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+    "categoryPath": "Pure Skies",
+    "categorySlugPath": "pure-skies",
+    "ancestorCategoryIds": [],
+    "legacyCategories": [
+      "outdoor",
+      "skies",
+      "nature",
+      "midday",
+      "partly cloudy",
+      "high contrast",
+      "natural light",
+      "pure skies"
+    ],
+    "tags": [
+      "pure skies"
+    ],
+    "attributes": {
+      "time_of_day": "midday",
+      "weather": "partly_cloudy",
+      "light_type": "natural",
+      "contrast": "high",
+      "environment": "outdoor",
+      "sky_view": "open",
+      "sourceFilesHash": "4cce3bc9b9588036541551fe5ae8077af6b37e45"
+    },
+    "environmentGroup": "pure-skies",
+    "availableTiers": [
+      "1k",
+      "2k"
+    ]
+  },
+  "tiers": {
+    "1k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/kloofendal_48d_partly_cloudy_puresky/1k/environment.hdr",
+        "sha256": "f243bc11ba7d53de1589806e6a6428d4ab7780af4b930244c3501435fe7087b6",
+        "byteLength": 1461131,
+        "width": 1024,
+        "height": 512,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    },
+    "2k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/kloofendal_48d_partly_cloudy_puresky/2k/environment.hdr",
+        "sha256": "5244534e9cf5b606f2ff513aa00ddb161b0a4826ffd88a0d3bd03ac29247d198",
+        "byteLength": 5451493,
+        "width": 2048,
+        "height": 1024,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    }
+  },
+  "scalarFallbacks": {
+    "color": "#ffffff",
+    "roughness": 1,
+    "metalness": 0,
+    "opacity": 1
+  },
+  "coverage": [
+    {
+      "sourceKey": "tonemapped",
+      "status": "alternative",
+      "semantic": "preview",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "converted",
+      "semantic": "environment",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    }
+  ],
+  "publication": {
+    "status": "staged"
+  }
+}

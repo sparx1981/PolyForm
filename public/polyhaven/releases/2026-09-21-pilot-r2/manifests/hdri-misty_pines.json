@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "asset": {
+    "id": "ph:hdri:misty_pines",
+    "sourceId": "misty_pines",
+    "kind": "hdri",
+    "name": "Misty Pines",
+    "source": "polyhaven",
+    "license": "CC0-1.0",
+    "revision": "2026-09-21-pilot-r2",
+    "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-misty_pines.json",
+    "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/misty_pines/preview.webp",
+    "categoryId": "43dbb783-1b2e-521d-a21f-487248097504",
+    "categoryPath": "Forest & Woodland/Forest/Coniferous Forest",
+    "categorySlugPath": "forest-and-woodland/forest/coniferous-forest",
+    "ancestorCategoryIds": [],
+    "legacyCategories": [
+      "outdoor",
+      "nature",
+      "overcast",
+      "morning-afternoon",
+      "low contrast",
+      "natural light"
+    ],
+    "tags": [
+      "tree",
+      "forest",
+      "bush",
+      "pine",
+      "mist"
+    ],
+    "attributes": {
+      "time_of_day": "morning",
+      "weather": "fog",
+      "light_type": "natural",
+      "contrast": "low",
+      "environment": "outdoor",
+      "sky_view": "obstructed",
+      "sourceFilesHash": "f7d877fc6c40366c320c870bd47085475e2c3aa0"
+    },
+    "environmentGroup": "forest-woodland",
+    "availableTiers": [
+      "1k",
+      "2k"
+    ]
+  },
+  "tiers": {
+    "1k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/misty_pines/1k/environment.hdr",
+        "sha256": "88cec2a54a49601b8748ccc4b932f438c6ff5b0befbeb6e578c37c28e3b11594",
+        "byteLength": 1837348,
+        "width": 1024,
+        "height": 512,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    },
+    "2k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/misty_pines/2k/environment.hdr",
+        "sha256": "5a26a81fdc124ed4e58640d3200375fbe4d20dd2abd7a00936fca1680175fc2a",
+        "byteLength": 7050831,
+        "width": 2048,
+        "height": 1024,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    }
+  },
+  "scalarFallbacks": {
+    "color": "#ffffff",
+    "roughness": 1,
+    "metalness": 0,
+    "opacity": 1
+  },
+  "coverage": [
+    {
+      "sourceKey": "tonemapped",
+      "status": "alternative",
+      "semantic": "preview",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "converted",
+      "semantic": "environment",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    }
+  ],
+  "publication": {
+    "status": "staged"
+  }
+}
