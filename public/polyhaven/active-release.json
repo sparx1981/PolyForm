@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "activeRelease": "2026-09-18-pilot-r1",
-  "catalogUrl": "/polyhaven/releases/2026-09-18-pilot-r1/catalog.v1.json",
-  "catalogSha256": "71443ae96cb70d6b6e45772461e2fb68f9222b7899f0236180bc8fce985e0644",
-  "updatedAt": "2026-09-20T15:19:39.433Z"
+  "activeRelease": "2026-09-21-pilot-r2",
+  "catalogUrl": "/polyhaven/releases/2026-09-21-pilot-r2/catalog.v1.json",
+  "catalogSha256": "0e56bf4cc3c58d61e7863307c58793e35302dd227cd3c2e5d3f3baa64f57fa32",
+  "updatedAt": "2026-09-21T08:04:51.106Z"
 }

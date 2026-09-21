@@ -1,8 +1,323 @@
 {
   "schemaVersion": 1,
-  "release": "2026-09-18-pilot-r1",
-  "generatedAt": "2026-09-20T13:29:06.959Z",
+  "release": "2026-09-21-pilot-r2",
+  "generatedAt": "2026-09-21T08:02:27.636Z",
   "assets": [
+    {
+      "id": "ph:material:aerial_asphalt_01",
+      "sourceId": "aerial_asphalt_01",
+      "kind": "material",
+      "name": "Aerial Asphalt 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_asphalt_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_asphalt_01/preview.webp",
+      "categoryId": "8871debe-40cf-5e4d-a5e5-1ddfe979f14f",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Worn Road Surface",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/worn-road-surface",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "asphalt",
+        "outdoor",
+        "floor",
+        "road",
+        "man made",
+        "aerial"
+      ],
+      "tags": [
+        "road",
+        "flat",
+        "cracked"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "weathered",
+          "cracked",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "cdf3c8f091b3589407bdf0697a2deb2c6b40650d"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:aerial_beach_01",
+      "sourceId": "aerial_beach_01",
+      "kind": "material",
+      "name": "Aerial Beach 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_beach_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_beach_01/preview.webp",
+      "categoryId": "2bed9a9d-8f5f-5f1f-815c-e33cfa63bf69",
+      "categoryPath": "Ground & Terrain/Sand/Beach & Coastal Sand",
+      "categorySlugPath": "ground-and-terrain/sand/beach-and-coastal-sand",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "sand",
+        "outdoor",
+        "natural",
+        "aerial"
+      ],
+      "tags": [
+        "beach",
+        "wavy",
+        "costal",
+        "ocean",
+        "seaside"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "b25ab01641da8f9b025dabf1f057e0ab8d2124de"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:aerial_beach_02",
+      "sourceId": "aerial_beach_02",
+      "kind": "material",
+      "name": "Aerial Beach 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_beach_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_beach_02/preview.webp",
+      "categoryId": "2bed9a9d-8f5f-5f1f-815c-e33cfa63bf69",
+      "categoryPath": "Ground & Terrain/Sand/Beach & Coastal Sand",
+      "categorySlugPath": "ground-and-terrain/sand/beach-and-coastal-sand",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "sand",
+        "natural",
+        "outdoor",
+        "aerial"
+      ],
+      "tags": [
+        "beach",
+        "flat",
+        "costal",
+        "ocean",
+        "seaside"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "c1b18f5ec3ebf888e2dbd57c6cd2dd72a7bc3293"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:aerial_beach_03",
+      "sourceId": "aerial_beach_03",
+      "kind": "material",
+      "name": "Aerial Beach 03",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_beach_03.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_beach_03/preview.webp",
+      "categoryId": "2262e1f2-20db-5ba4-9915-764041ba9c4c",
+      "categoryPath": "Ground & Terrain/Sand/Compacted & Trampled Sand",
+      "categorySlugPath": "ground-and-terrain/sand/compacted-and-trampled-sand",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "terrain",
+        "sand",
+        "natural",
+        "aerial"
+      ],
+      "tags": [
+        "beach",
+        "seaside",
+        "sand",
+        "trampled",
+        "uneven",
+        "brown",
+        "footprints",
+        "costal",
+        "ocean"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "worn"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "2deaf3ec2538aeb11993aa95ef89a979d2a7eb34"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:aerial_grass_rock",
+      "sourceId": "aerial_grass_rock",
+      "kind": "material",
+      "name": "Aerial Grass Rock",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_grass_rock.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_grass_rock/preview.webp",
+      "categoryId": "e8121dc9-96d3-59b8-b8ee-83104e60ba82",
+      "categoryPath": "Stone/Rock & Cliffs/Mossy & Lichened Rock",
+      "categorySlugPath": "stone/rock-and-cliffs/mossy-and-lichened-rock",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "rock",
+        "outdoor",
+        "natural",
+        "aerial"
+      ],
+      "tags": [
+        "moss",
+        "grass",
+        "cliff",
+        "cave",
+        "rock face"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "mossy",
+          "weathered"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "d610669c24e20d7c2effc4c116c718176f5b044a"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:aerial_ground_rock",
+      "sourceId": "aerial_ground_rock",
+      "kind": "material",
+      "name": "Aerial Ground Rock",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_ground_rock.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/preview.webp",
+      "categoryId": "c650da98-1200-549c-ade9-c3756c2f327c",
+      "categoryPath": "Ground & Terrain/Rocky Ground/Stony Dirt",
+      "categorySlugPath": "ground-and-terrain/rocky-ground/stony-dirt",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "outdoor",
+        "natural",
+        "aerial"
+      ],
+      "tags": [
+        "mud",
+        "rocks",
+        "stones",
+        "dirt",
+        "dry"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "weathered",
+          "cracked"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "dfc637c0aca2c8bf1864528b9d586681cbcf8c88"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:aerial_rocks_01",
+      "sourceId": "aerial_rocks_01",
+      "kind": "material",
+      "name": "Aerial Rocks 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_rocks_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_rocks_01/preview.webp",
+      "categoryId": "e8121dc9-96d3-59b8-b8ee-83104e60ba82",
+      "categoryPath": "Stone/Rock & Cliffs/Mossy & Lichened Rock",
+      "categorySlugPath": "stone/rock-and-cliffs/mossy-and-lichened-rock",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "outdoor",
+        "natural",
+        "rock",
+        "aerial"
+      ],
+      "tags": [
+        "rocks",
+        "moss",
+        "cliff",
+        "rock face",
+        "cave"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "mossy",
+          "weathered"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "ea281839fd9f0d5d67f3cc675bddbac76ef26b27"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
     {
       "id": "ph:material:aerial_rocks_02",
       "sourceId": "aerial_rocks_02",
@@ -10,9 +325,9 @@
       "name": "Aerial Rocks 02",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-aerial_rocks_02.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/aerial_rocks_02/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_rocks_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_rocks_02/preview.webp",
       "categoryId": "bf84369c-cc7c-5347-ad17-173353e859b8",
       "categoryPath": "Stone/Rock & Cliffs/Rough Rock Faces",
       "categorySlugPath": "stone/rock-and-cliffs/rough-rock-faces",
@@ -50,15 +365,148 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:aerial_rocks_04",
+      "sourceId": "aerial_rocks_04",
+      "kind": "material",
+      "name": "Aerial Rocks 04",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_rocks_04.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_rocks_04/preview.webp",
+      "categoryId": "e8121dc9-96d3-59b8-b8ee-83104e60ba82",
+      "categoryPath": "Stone/Rock & Cliffs/Mossy & Lichened Rock",
+      "categorySlugPath": "stone/rock-and-cliffs/mossy-and-lichened-rock",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "outdoor",
+        "natural",
+        "rock",
+        "aerial"
+      ],
+      "tags": [
+        "rough",
+        "rocks",
+        "moss",
+        "cliff",
+        "rock face",
+        "cave"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "mossy",
+          "weathered"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "dc43dffab8e915bc54ac64899dcfe8cec826f8b9"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:aerial_sand",
+      "sourceId": "aerial_sand",
+      "kind": "material",
+      "name": "Aerial Sand",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_sand.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_sand/preview.webp",
+      "categoryId": "2262e1f2-20db-5ba4-9915-764041ba9c4c",
+      "categoryPath": "Ground & Terrain/Sand/Compacted & Trampled Sand",
+      "categorySlugPath": "ground-and-terrain/sand/compacted-and-trampled-sand",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "terrain",
+        "sand",
+        "outdoor",
+        "natural",
+        "aerial"
+      ],
+      "tags": [
+        "sand",
+        "costal",
+        "seaside",
+        "ocean",
+        "sea"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "worn"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "565565540b90dade32a407cdd8315dd05684d05e"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:asphalt_01",
+      "sourceId": "asphalt_01",
+      "kind": "material",
+      "name": "Asphalt 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_01/preview.webp",
+      "categoryId": "8871debe-40cf-5e4d-a5e5-1ddfe979f14f",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Worn Road Surface",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/worn-road-surface",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "asphalt",
+        "floor",
+        "outdoor",
+        "road"
+      ],
+      "tags": [
+        "rough",
+        "dirty",
+        "asphalt",
+        "road",
+        "worn"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "61bdb4dc064585ce3e749a4dcaf13216575ae794"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:asphalt_02",
       "sourceId": "asphalt_02",
       "kind": "material",
       "name": "Asphalt 02",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-asphalt_02.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/asphalt_02/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_02/preview.webp",
       "categoryId": "ae6df066-2cbf-5772-9092-3cd86ed6394e",
       "categoryPath": "Asphalt & Bitumen/Asphalt/Cracked Asphalt",
       "categorySlugPath": "asphalt-and-bitumen/asphalt/cracked-asphalt",
@@ -101,15 +549,423 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:asphalt_03",
+      "sourceId": "asphalt_03",
+      "kind": "material",
+      "name": "Asphalt 03",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_03.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_03/preview.webp",
+      "categoryId": "8871debe-40cf-5e4d-a5e5-1ddfe979f14f",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Worn Road Surface",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/worn-road-surface",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "man made",
+        "dirty",
+        "road",
+        "asphalt"
+      ],
+      "tags": [
+        "rough",
+        "worn",
+        "dirty",
+        "floor",
+        "road",
+        "asphalt",
+        "city",
+        "urban"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "43fb4f1e6c03b6cff2ae0783f403d5b9e52268be"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:asphalt_05",
+      "sourceId": "asphalt_05",
+      "kind": "material",
+      "name": "Asphalt 05",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_05.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_05/preview.webp",
+      "categoryId": "8871debe-40cf-5e4d-a5e5-1ddfe979f14f",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Worn Road Surface",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/worn-road-surface",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "asphalt"
+      ],
+      "tags": [
+        "rough",
+        "floor",
+        "road",
+        "asphalt",
+        "coarse",
+        "brown",
+        "street",
+        "roadway"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "469f692cdaa4323128466d4aa3d59531239e2e82"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:asphalt_06",
+      "sourceId": "asphalt_06",
+      "kind": "material",
+      "name": "Asphalt 06",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_06.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_06/preview.webp",
+      "categoryId": "8871debe-40cf-5e4d-a5e5-1ddfe979f14f",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Worn Road Surface",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/worn-road-surface",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "asphalt",
+        "outdoor",
+        "floor",
+        "road"
+      ],
+      "tags": [
+        "rough",
+        "dirty",
+        "scuffed",
+        "driveway texture",
+        "sidewalk",
+        "hard surface",
+        "handmade",
+        "raw"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "5d444c0a7c2b024e98b802df57170a5ee51e631d"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:asphalt_07",
+      "sourceId": "asphalt_07",
+      "kind": "material",
+      "name": "Asphalt 07",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_07.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_07/preview.webp",
+      "categoryId": "8871debe-40cf-5e4d-a5e5-1ddfe979f14f",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Worn Road Surface",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/worn-road-surface",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "asphalt",
+        "man made",
+        "road"
+      ],
+      "tags": [
+        "rough",
+        "weathered",
+        "asphalt",
+        "chipped",
+        "granular",
+        "abrasive",
+        "road",
+        "paving"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "weathered",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "536cd04f7600bc912ccc4ed244fdff50bcd6fb2f"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:asphalt_floor",
+      "sourceId": "asphalt_floor",
+      "kind": "material",
+      "name": "Asphalt Floor",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_floor.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_floor/preview.webp",
+      "categoryId": "bc174825-be31-5e80-9911-2eb9128cfee9",
+      "categoryPath": "Asphalt & Bitumen/Asphalt/Fresh Asphalt",
+      "categorySlugPath": "asphalt-and-bitumen/asphalt/fresh-asphalt",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "man made",
+        "floor",
+        "clean",
+        "concrete",
+        "road",
+        "asphalt",
+        "plaster-concrete"
+      ],
+      "tags": [
+        "flat",
+        "asphalt",
+        "brown",
+        "even",
+        "dry",
+        "smooth",
+        "ground"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "origin": "man_made",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "12f555317411ad74c385f67210226d20ac73c262"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:asphalt_pit_lane",
+      "sourceId": "asphalt_pit_lane",
+      "kind": "material",
+      "name": "Asphalt Pit Lane",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-asphalt_pit_lane.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/asphalt_pit_lane/preview.webp",
+      "categoryId": "330aa03f-5063-50ab-a052-4f6b7214707e",
+      "categoryPath": "Asphalt & Bitumen/Tracks/Race Tracks",
+      "categorySlugPath": "asphalt-and-bitumen/tracks/race-tracks",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "asphalt",
+        "road"
+      ],
+      "tags": [
+        "asphalt",
+        "asphalt road",
+        "road",
+        "roadway",
+        "tarmac road",
+        "race track",
+        "pit lane"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "a04beb641ce5cbf5307a31f51f402f5a9fb675a0"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:baseball_playground",
+      "sourceId": "baseball_playground",
+      "kind": "material",
+      "name": "Baseball Playground",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-baseball_playground.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/preview.webp",
+      "categoryId": "2262e1f2-20db-5ba4-9915-764041ba9c4c",
+      "categoryPath": "Ground & Terrain/Sand/Compacted & Trampled Sand",
+      "categorySlugPath": "ground-and-terrain/sand/compacted-and-trampled-sand",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "terrain",
+        "sand"
+      ],
+      "tags": [
+        "dirt",
+        "playground",
+        "sand",
+        "baseball",
+        "ground",
+        "brown",
+        "dry",
+        "trampled",
+        "footprints"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "worn"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "sourceFilesHash": "c083ac67214c3ffa08830da1a06f14f0f1ea2594"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:bicolour_gravel",
+      "sourceId": "bicolour_gravel",
+      "kind": "material",
+      "name": "Bicolour Gravel",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-bicolour_gravel.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/bicolour_gravel/preview.webp",
+      "categoryId": "a97bb631-d60c-54fb-ba1b-2121cbed91c6",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Driveway Gravel",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/driveway-gravel",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "gravel"
+      ],
+      "tags": [
+        "gravel",
+        "gravelly",
+        "driveway gravel",
+        "driveway stones",
+        "driveway",
+        "garden walkway",
+        "stones",
+        "garden path gravel"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "40a59d8983ce5e3b179ecaf41f7160034e2c4e4a"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:blue_floor_tiles_01",
+      "sourceId": "blue_floor_tiles_01",
+      "kind": "material",
+      "name": "Blue Floor Tiles 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-blue_floor_tiles_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/blue_floor_tiles_01/preview.webp",
+      "categoryId": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+      "categoryPath": "Brick & Block/Clay Brick/Running-Bond",
+      "categorySlugPath": "brick-and-block/clay-brick/running-bond",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "outdoor",
+        "dirty",
+        "brick"
+      ],
+      "tags": [
+        "floor",
+        "moss",
+        "damp",
+        "wet",
+        "bright",
+        "walkway",
+        "pavement"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "mossy",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "03a501d429f8e6de11c84336c8f5c34304f3384f"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:box_profile_metal_sheet",
       "sourceId": "box_profile_metal_sheet",
       "kind": "material",
       "name": "Box Profile Metal Sheet",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-box_profile_metal_sheet.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/box_profile_metal_sheet/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-box_profile_metal_sheet.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/box_profile_metal_sheet/preview.webp",
       "categoryId": "c10ee76b-cb81-546f-bba9-095bf5a18a6d",
       "categoryPath": "Metal/Sheet & Corrugated/Corrugated Iron",
       "categorySlugPath": "metal/sheet-and-corrugated/corrugated-iron",
@@ -149,15 +1005,242 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:brick_4",
+      "sourceId": "brick_4",
+      "kind": "material",
+      "name": "Brick 4",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_4.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_4/preview.webp",
+      "categoryId": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+      "categoryPath": "Brick & Block/Clay Brick/Running-Bond",
+      "categorySlugPath": "brick-and-block/clay-brick/running-bond",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wall",
+        "man made",
+        "dirty",
+        "outdoor",
+        "brick"
+      ],
+      "tags": [
+        "red",
+        "moss",
+        "urban",
+        "city",
+        "damp",
+        "wet"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "mossy"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "e38995ecc649eb71f1b8dde6b34c86f0f8005da3"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brick_crosswalk",
+      "sourceId": "brick_crosswalk",
+      "kind": "material",
+      "name": "Brick Crosswalk",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_crosswalk.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_crosswalk/preview.webp",
+      "categoryId": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+      "categoryPath": "Brick & Block/Clay Brick/Running-Bond",
+      "categorySlugPath": "brick-and-block/clay-brick/running-bond",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "brick"
+      ],
+      "tags": [
+        "brick",
+        "bricks",
+        "multicoloured",
+        "pedestrian crossing ",
+        "crosswalk",
+        "street",
+        "sidewalk",
+        "urban"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "mossy"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "6c472df509fcadc2397cad561e8b2130eb920f1a"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brick_floor",
+      "sourceId": "brick_floor",
+      "kind": "material",
+      "name": "Brick Floor",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_floor.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_floor/preview.webp",
+      "categoryId": "fd95b70a-91f7-556e-a9d5-e1d6fe6637be",
+      "categoryPath": "Brick & Block/Clay Brick/Herringbone",
+      "categorySlugPath": "brick-and-block/clay-brick/herringbone",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "dirty",
+        "outdoor",
+        "brick"
+      ],
+      "tags": [
+        "herringbone",
+        "diagonal",
+        "brick",
+        "paving",
+        "repeat pattern",
+        "aged"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "4e67c1567a9667e73d10fdbbbe6613e4879ecfbc"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brick_floor_003",
+      "sourceId": "brick_floor_003",
+      "kind": "material",
+      "name": "Brick Floor 003",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_floor_003.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_floor_003/preview.webp",
+      "categoryId": "5aa99c3f-7783-51e3-90d1-2c496368ad24",
+      "categoryPath": "Stone/Cobblestone & Paving/Cut Setts & Pavers",
+      "categorySlugPath": "stone/cobblestone-and-paving/cut-setts-and-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "brick",
+        "man made",
+        "outdoor",
+        "indoor",
+        "clean",
+        "wall"
+      ],
+      "tags": [
+        "brown",
+        "floor",
+        "pavement"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "either",
+        "sourceFilesHash": "d678724ce0f1e0b7dda21265e6e2b50e135222dc"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brick_floor_04",
+      "sourceId": "brick_floor_04",
+      "kind": "material",
+      "name": "Brick Floor 04",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_floor_04.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_floor_04/preview.webp",
+      "categoryId": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+      "categoryPath": "Brick & Block/Clay Brick/Running-Bond",
+      "categorySlugPath": "brick-and-block/clay-brick/running-bond",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "wall",
+        "brick",
+        "dirty",
+        "man made"
+      ],
+      "tags": [
+        "dark",
+        "weathered",
+        "scratched",
+        "dirty",
+        "smooth",
+        "rough",
+        "grout",
+        "staggered",
+        "rectangular"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "origin": "man_made",
+        "setting": "outdoor",
+        "condition": [
+          "dirty",
+          "weathered",
+          "worn"
+        ],
+        "sourceFilesHash": "8c6d296ef4bf630449f6958528f4836deaac0bb7"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:brick_gravel",
       "sourceId": "brick_gravel",
       "kind": "material",
       "name": "Brick Gravel",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-brick_gravel.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/brick_gravel/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_gravel.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_gravel/preview.webp",
       "categoryId": "ff767449-ea44-5527-96f0-d74aa52df2d0",
       "categoryPath": "Ground & Terrain/Gravel & Pebbles/Crushed Aggregate",
       "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/crushed-aggregate",
@@ -195,15 +1278,121 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:brick_moss_001",
+      "sourceId": "brick_moss_001",
+      "kind": "material",
+      "name": "Brick Moss 001",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_moss_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_moss_001/preview.webp",
+      "categoryId": "9ef0955b-87fa-5826-aa87-98b047ad9143",
+      "categoryPath": "Brick & Block/Clay Brick/Running-Bond",
+      "categorySlugPath": "brick-and-block/clay-brick/running-bond",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "floor",
+        "man made",
+        "brick",
+        "road"
+      ],
+      "tags": [
+        "moss",
+        "pavement",
+        "dirty",
+        "discolored",
+        "damp",
+        "pattern"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn",
+          "mossy"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "95c6236acb56be3c3935b9d2d600f4abfacc0568"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brick_pavement",
+      "sourceId": "brick_pavement",
+      "kind": "material",
+      "name": "Brick Pavement",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_pavement.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_pavement/preview.webp",
+      "categoryId": "ce26ba57-ef4b-54d4-a954-9a85bb053b9e",
+      "categoryPath": "Brick & Block/Concrete Block & Paver/Interlocking Pavers",
+      "categorySlugPath": "brick-and-block/concrete-block-and-paver/interlocking-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "brick",
+        "cobblestone",
+        "dirty",
+        "man made",
+        "road"
+      ],
+      "tags": [
+        "brick",
+        "pavement",
+        "sidewalk",
+        "bricks",
+        "red brick",
+        "interlocking bricks",
+        "pavement patterned",
+        "patterned",
+        "interlocking",
+        "pavers",
+        "building",
+        "sidewalk texture",
+        "roadway",
+        "concrete",
+        "urban",
+        "architecture",
+        "urban",
+        "city",
+        "street",
+        "walkway",
+        "pathway",
+        "stone pathway"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "26792d327857a0bf88835c691bfca9684aaf93e5"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:brick_wall_001",
       "sourceId": "brick_wall_001",
       "kind": "material",
       "name": "Brick Wall 001",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-brick_wall_001.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/brick_wall_001/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brick_wall_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brick_wall_001/preview.webp",
       "categoryId": "9ef0955b-87fa-5826-aa87-98b047ad9143",
       "categoryPath": "Brick & Block/Clay Brick/Running-Bond",
       "categorySlugPath": "brick-and-block/clay-brick/running-bond",
@@ -241,15 +1430,108 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:broken_wall",
+      "sourceId": "broken_wall",
+      "kind": "material",
+      "name": "Broken Wall",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-broken_wall.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/broken_wall/preview.webp",
+      "categoryId": "6b87bb89-210e-5f4c-a78b-3a4bdfac7fe0",
+      "categoryPath": "Stone/Walls & Rubble/Rubble & Random Stone",
+      "categorySlugPath": "stone/walls-and-rubble/rubble-and-random-stone",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "rock",
+        "outdoor",
+        "indoor",
+        "wall",
+        "man made"
+      ],
+      "tags": [
+        "rough",
+        "wall",
+        "stacked",
+        "stones",
+        "castle",
+        "old",
+        "ancient",
+        "modern"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "mossy",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "either",
+        "sourceFilesHash": "85d12694ac2bf2287dfad26f2db85a6568cc1622"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:brown_floor_tiles",
+      "sourceId": "brown_floor_tiles",
+      "kind": "material",
+      "name": "Brown Floor Tilles",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brown_floor_tiles.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brown_floor_tiles/preview.webp",
+      "categoryId": "6165a492-c53c-5b5f-96df-20c96a7763df",
+      "categoryPath": "Ceramic/Terracotta",
+      "categorySlugPath": "ceramic/terracotta",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "tiles",
+        "floor"
+      ],
+      "tags": [
+        "tiles",
+        "ceramic",
+        "square",
+        "outdoor flooring",
+        "flat",
+        "continuous",
+        "consistent",
+        "brown",
+        "terracotta",
+        "grout lines",
+        "grid pattern"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "worn"
+        ],
+        "origin": "man_made",
+        "sourceFilesHash": "62bd8dd15a6650e1472169aa9a83de5c05b4de5b"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:brown_planks_03",
       "sourceId": "brown_planks_03",
       "kind": "material",
       "name": "Brown Planks 03",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-brown_planks_03.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/brown_planks_03/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-brown_planks_03.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/brown_planks_03/preview.webp",
       "categoryId": "30ac2613-5076-5364-b4da-130117ad592d",
       "categoryPath": "Wood/Boards & Planks/Weathered Planks",
       "categorySlugPath": "wood/boards-and-planks/weathered-planks",
@@ -287,15 +1569,154 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:castle_wall_slates",
+      "sourceId": "castle_wall_slates",
+      "kind": "material",
+      "name": "Castle Wall Slates",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-castle_wall_slates.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/castle_wall_slates/preview.webp",
+      "categoryId": "bc20bc70-284a-5f14-93eb-78274f6a1fa9",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Ashlar & Coursed Stone",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/ashlar-and-coursed-stone",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "rock",
+        "outdoor",
+        "wall",
+        "clean",
+        "man made"
+      ],
+      "tags": [
+        "wall",
+        "rough",
+        "blocks",
+        "stacked",
+        "old",
+        "castle",
+        "medieval"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "aed373c9c14d89c082783202d576ee49be2a5045"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:castle_wall_varriation",
+      "sourceId": "castle_wall_varriation",
+      "kind": "material",
+      "name": "Castle Wall Variation",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-castle_wall_varriation.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/castle_wall_varriation/preview.webp",
+      "categoryId": "7b0fe897-0a1b-5b8b-9d28-7c5928b4b614",
+      "categoryPath": "Stone/Walls & Rubble/Fortress & Castle Walls",
+      "categorySlugPath": "stone/walls-and-rubble/fortress-and-castle-walls",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "rock",
+        "wall",
+        "outdoor",
+        "clean",
+        "man made"
+      ],
+      "tags": [
+        "wall",
+        "rough",
+        "blocks",
+        "old",
+        "castle"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "ee6d2ac06b3ffeddcc317661897db55d28b040fd"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:checkered_pavement_tiles",
+      "sourceId": "checkered_pavement_tiles",
+      "kind": "material",
+      "name": "Checkered Pavement Tiles",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-checkered_pavement_tiles.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/preview.webp",
+      "categoryId": "ce26ba57-ef4b-54d4-a954-9a85bb053b9e",
+      "categoryPath": "Brick & Block/Concrete Block & Paver/Interlocking Pavers",
+      "categorySlugPath": "brick-and-block/concrete-block-and-paver/interlocking-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "tiles"
+      ],
+      "tags": [
+        "rough",
+        "outdoor",
+        "outdoor flooring",
+        "concrete",
+        "tiled",
+        "pavement",
+        "urban",
+        "sidewalk",
+        "rough  ",
+        "checkerboard",
+        "sidewalk texture",
+        "pavement patterned",
+        "pavers",
+        "square pattern"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "4e77026e2a69f31aa3ce40ce35a908665c2a5e5c"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:clay_roof_tiles",
       "sourceId": "clay_roof_tiles",
       "kind": "material",
       "name": "Clay Roof Tiles",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-clay_roof_tiles.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-clay_roof_tiles.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/clay_roof_tiles/preview.webp",
       "categoryId": "6165a492-c53c-5b5f-96df-20c96a7763df",
       "categoryPath": "Ceramic/Terracotta",
       "categorySlugPath": "ceramic/terracotta",
@@ -333,15 +1754,217 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:clean_pebbles",
+      "sourceId": "clean_pebbles",
+      "kind": "material",
+      "name": "Clean Pebbles",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-clean_pebbles.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/clean_pebbles/preview.webp",
+      "categoryId": "4276b1ed-fbfe-5689-abd6-a58335e780e9",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/River Pebbles",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/river-pebbles",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "rock",
+        "natural",
+        "outdoor"
+      ],
+      "tags": [
+        "rock",
+        "gravel",
+        "pebbles",
+        "stones",
+        "uneven",
+        "path"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "9acc8ceda2e81c3ec20ad6144d88d6c94fa7406d"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:coast_land_rocks_01",
+      "sourceId": "coast_land_rocks_01",
+      "kind": "material",
+      "name": "Coast Land Rocks 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-coast_land_rocks_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/coast_land_rocks_01/preview.webp",
+      "categoryId": "6f927474-95dd-5ec5-b756-e9299996aeee",
+      "categoryPath": "Stone/Rock & Cliffs/Coastal Rock",
+      "categorySlugPath": "stone/rock-and-cliffs/coastal-rock",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "natural",
+        "terrain",
+        "aerial",
+        "sand",
+        "collection: smugglers_cove"
+      ],
+      "tags": [
+        "rough",
+        "uneven",
+        "stones",
+        "moss",
+        "rock",
+        "dirt",
+        "cracked",
+        "seaside",
+        "ocean",
+        "costal",
+        "rocks",
+        "brown",
+        "gravel",
+        "nature",
+        "ground",
+        "cliff"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "weathered",
+          "mossy",
+          "cracked"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "7edca0ae2eea88339632bcb8c96a04ec591de36b"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:coast_sand_01",
+      "sourceId": "coast_sand_01",
+      "kind": "material",
+      "name": "Coast Sand 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-coast_sand_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/coast_sand_01/preview.webp",
+      "categoryId": "2bed9a9d-8f5f-5f1f-815c-e33cfa63bf69",
+      "categoryPath": "Ground & Terrain/Sand/Beach & Coastal Sand",
+      "categorySlugPath": "ground-and-terrain/sand/beach-and-coastal-sand",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "terrain",
+        "sand",
+        "natural",
+        "aerial",
+        "collection: smugglers_cove",
+        "collection: verdant_trail"
+      ],
+      "tags": [
+        "beach",
+        "costal",
+        "ocean",
+        "seaside",
+        "sand",
+        "brown",
+        "rough",
+        "gravel",
+        "damp",
+        "dirt",
+        "stones"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "sourceFilesHash": "79f1efcc1f7dedcc546d529a09e1a09cfeb0b9b8"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:coast_sand_02",
+      "sourceId": "coast_sand_02",
+      "kind": "material",
+      "name": "Coast Sand 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-coast_sand_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/coast_sand_02/preview.webp",
+      "categoryId": "2bed9a9d-8f5f-5f1f-815c-e33cfa63bf69",
+      "categoryPath": "Ground & Terrain/Sand/Beach & Coastal Sand",
+      "categorySlugPath": "ground-and-terrain/sand/beach-and-coastal-sand",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "terrain",
+        "sand",
+        "natural",
+        "collection: smugglers_cove",
+        "aerial"
+      ],
+      "tags": [
+        "beach",
+        "sand",
+        "seaside",
+        "rough",
+        "coastal",
+        "ocean",
+        "uneven",
+        "stones",
+        "brown",
+        "dirt"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "aerial": true,
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "f0a2615f231cff3567d9a4239c4a6070181a304a"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:cobblestone_01",
       "sourceId": "cobblestone_01",
       "kind": "material",
       "name": "Cobblestone 01",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-cobblestone_01.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/cobblestone_01/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-cobblestone_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/cobblestone_01/preview.webp",
       "categoryId": "5aa99c3f-7783-51e3-90d1-2c496368ad24",
       "categoryPath": "Stone/Cobblestone & Paving/Cut Setts & Pavers",
       "categorySlugPath": "stone/cobblestone-and-paving/cut-setts-and-pavers",
@@ -377,15 +2000,346 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:cobblestone_02",
+      "sourceId": "cobblestone_02",
+      "kind": "material",
+      "name": "Cobblestone 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-cobblestone_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/cobblestone_02/preview.webp",
+      "categoryId": "e68bcb96-6d27-562a-bac7-d821ebdaa2a7",
+      "categoryPath": "Stone/Cobblestone & Paving/Rounded Cobbles & Pebbles",
+      "categorySlugPath": "stone/cobblestone-and-paving/rounded-cobbles-and-pebbles",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "man made",
+        "floor",
+        "outdoor",
+        "cobblestone"
+      ],
+      "tags": [
+        "cobblestone",
+        "path",
+        "footpath",
+        "stones",
+        "pebbles",
+        "dirty",
+        "walkway",
+        "garden walkway",
+        "outdoors",
+        "dry"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "b3831d19cdfdb8277b2f945c1652618345468505"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:cobblestone_03",
+      "sourceId": "cobblestone_03",
+      "kind": "material",
+      "name": "Cobblestone 03",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-cobblestone_03.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/cobblestone_03/preview.webp",
+      "categoryId": "ce26ba57-ef4b-54d4-a954-9a85bb053b9e",
+      "categoryPath": "Brick & Block/Concrete Block & Paver/Interlocking Pavers",
+      "categorySlugPath": "brick-and-block/concrete-block-and-paver/interlocking-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "dirty",
+        "cobblestone"
+      ],
+      "tags": [
+        "rough",
+        "weathered",
+        "concrete",
+        "cobblestone",
+        "walkway",
+        "pavement",
+        "outdoor",
+        "floor",
+        "outdoor flooring",
+        "pavement patterned"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "e792e3fc8796341f183821ee88cb5973886b71de"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:cobblestone_04",
+      "sourceId": "cobblestone_04",
+      "kind": "material",
+      "name": "Cobblestone 04",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-cobblestone_04.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/cobblestone_04/preview.webp",
+      "categoryId": "5aa99c3f-7783-51e3-90d1-2c496368ad24",
+      "categoryPath": "Stone/Cobblestone & Paving/Cut Setts & Pavers",
+      "categorySlugPath": "stone/cobblestone-and-paving/cut-setts-and-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "cobblestone",
+        "plaster-concrete",
+        "concrete"
+      ],
+      "tags": [
+        "rough",
+        "concrete",
+        "uneven",
+        "weathered",
+        "exterior",
+        "cobblestone",
+        "paving",
+        "stonework",
+        "square",
+        "grid",
+        "weatherbeaten",
+        "coarse",
+        "rough  ",
+        "timeworn",
+        "stone blocks"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "b759abf25e034fd6f575c110515469c17d9e4307"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:cobblestone_05",
+      "sourceId": "cobblestone_05",
+      "kind": "material",
+      "name": "Cobblestone 05",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-cobblestone_05.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/cobblestone_05/preview.webp",
+      "categoryId": "5aa99c3f-7783-51e3-90d1-2c496368ad24",
+      "categoryPath": "Stone/Cobblestone & Paving/Cut Setts & Pavers",
+      "categorySlugPath": "stone/cobblestone-and-paving/cut-setts-and-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "outdoor",
+        "dirty",
+        "road",
+        "cobblestone"
+      ],
+      "tags": [
+        "cobblestone",
+        "old",
+        "garden",
+        "pathway",
+        "moss",
+        "pavement"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn",
+          "mossy"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "6a3be9faa99dc73865cb941e3ded4c0350086fd3"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:cobblestone_color",
+      "sourceId": "cobblestone_color",
+      "kind": "material",
+      "name": "Cobblestone Color",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-cobblestone_color.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/cobblestone_color/preview.webp",
+      "categoryId": "5aa99c3f-7783-51e3-90d1-2c496368ad24",
+      "categoryPath": "Stone/Cobblestone & Paving/Cut Setts & Pavers",
+      "categorySlugPath": "stone/cobblestone-and-paving/cut-setts-and-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "outdoor",
+        "dirty",
+        "cobblestone"
+      ],
+      "tags": [
+        "cobblestone",
+        "old",
+        "moss",
+        "pavement"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn",
+          "mossy"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "b829b803d7c29ca4d6fa532ddf5e917a31677c0a"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:cobblestone_floor_001",
+      "sourceId": "cobblestone_floor_001",
+      "kind": "material",
+      "name": "Cobblestone Floor 001",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-cobblestone_floor_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/cobblestone_floor_001/preview.webp",
+      "categoryId": "5aa99c3f-7783-51e3-90d1-2c496368ad24",
+      "categoryPath": "Stone/Cobblestone & Paving/Cut Setts & Pavers",
+      "categorySlugPath": "stone/cobblestone-and-paving/cut-setts-and-pavers",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "road",
+        "man made",
+        "outdoor",
+        "dirty",
+        "floor",
+        "cobblestone"
+      ],
+      "tags": [
+        "cobblestone",
+        "mud",
+        "path",
+        "pathway",
+        "uneven",
+        "medieval"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "worn",
+          "mossy"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "41439589d13c50ea939f76751b9a9c1664e96d60"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:concrete_brick_wall_001",
+      "sourceId": "concrete_brick_wall_001",
+      "kind": "material",
+      "name": "Concrete Brick Wall 001",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-concrete_brick_wall_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_brick_wall_001/preview.webp",
+      "categoryId": "92b71894-91d3-5943-a35a-29645474eb3b",
+      "categoryPath": "Brick & Block/Concrete Block & Paver/Concrete Brick",
+      "categorySlugPath": "brick-and-block/concrete-block-and-paver/concrete-brick",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "sandstone",
+        "wall",
+        "man made",
+        "outdoor",
+        "indoor",
+        "brick"
+      ],
+      "tags": [
+        "wall",
+        "blocks",
+        "modern",
+        "slab"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "either",
+        "sourceFilesHash": "e12dbe903acfbf75e736e60c75b874b4f4dc2ca0"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:concrete_floor_worn_001",
       "sourceId": "concrete_floor_worn_001",
       "kind": "material",
       "name": "Concrete Floor Worn 001",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-concrete_floor_worn_001.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-concrete_floor_worn_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_floor_worn_001/preview.webp",
       "categoryId": "0a7b70c3-bc79-531b-8cf3-cadeb4cbf686",
       "categoryPath": "Concrete/Cast Walls & Floors/Bare Cast",
       "categorySlugPath": "concrete/cast-walls-and-floors/bare-cast",
@@ -425,15 +2379,108 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:concrete_tiles_02",
+      "sourceId": "concrete_tiles_02",
+      "kind": "material",
+      "name": "Concrete Tiles 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-concrete_tiles_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/preview.webp",
+      "categoryId": "3d66fbeb-75a0-5a98-97b4-d2630544da3f",
+      "categoryPath": "Brick & Block/Concrete Block & Paver",
+      "categorySlugPath": "brick-and-block/concrete-block-and-paver",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "tiles",
+        "concrete",
+        "plaster-concrete"
+      ],
+      "tags": [
+        "concrete",
+        "rough concrete",
+        "outdoor",
+        "pavement",
+        "walkway",
+        "sidewalk texture",
+        "sidewalk",
+        "urban",
+        "outdoor flooring",
+        "pavers",
+        "outdoor walkway"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "757bb94eddbc082d1b92cd46dfed1428d51871a0"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:dirty_tiles",
+      "sourceId": "dirty_tiles",
+      "kind": "material",
+      "name": "Dirty Tiles",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-dirty_tiles.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/dirty_tiles/preview.webp",
+      "categoryId": "3a92bf01-5218-5998-86bc-598021427fb9",
+      "categoryPath": "Ceramic/Quarry & Unglazed",
+      "categorySlugPath": "ceramic/quarry-and-unglazed",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "tiles"
+      ],
+      "tags": [
+        "dirty",
+        "tiles",
+        "indoor",
+        "indoor flooring",
+        "grout",
+        "scuffed",
+        "square tiles",
+        "square",
+        "grout lines",
+        "ceramic"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "worn",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "sourceFilesHash": "385002cf82c5f6fd39f376c5015a900f5e6c666d"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:dry_ground_01",
       "sourceId": "dry_ground_01",
       "kind": "material",
       "name": "Dry Ground 01",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-dry_ground_01.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/dry_ground_01/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-dry_ground_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/dry_ground_01/preview.webp",
       "categoryId": "804988d5-eb1b-5364-afc9-ce19b3edc12d",
       "categoryPath": "Ground & Terrain/Soil & Mud/Cracked Dry Mud & Clay",
       "categorySlugPath": "ground-and-terrain/soil-and-mud/cracked-dry-mud-and-clay",
@@ -473,15 +2520,64 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:flower_scattered_gravel",
+      "sourceId": "flower_scattered_gravel",
+      "kind": "material",
+      "name": "Flower Scattered Gravel",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-flower_scattered_gravel.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/flower_scattered_gravel/preview.webp",
+      "categoryId": "a97bb631-d60c-54fb-ba1b-2121cbed91c6",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Driveway Gravel",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/driveway-gravel",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "gravel"
+      ],
+      "tags": [
+        "gravel",
+        "stones",
+        "driveway gravel",
+        "gravelly ground",
+        "petals",
+        "scattered",
+        "scattered petals",
+        "jacaranda",
+        "driveway stones",
+        "scattered flowers",
+        "leaves",
+        "plant debris",
+        "floral debris",
+        "gravelly"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "956a277ec38eccb1d29a74337b9193f4e7f85c22"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:granite_tile",
       "sourceId": "granite_tile",
       "kind": "material",
       "name": "Granite Tile",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-granite_tile.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/granite_tile/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-granite_tile.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/granite_tile/preview.webp",
       "categoryId": "c1b6840e-81a6-56d1-9cf0-1ef10c0aa6a2",
       "categoryPath": "Stone/Slabs & Tiles/Granite",
       "categorySlugPath": "stone/slabs-and-tiles/granite",
@@ -518,15 +2614,59 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:granite_tile_03",
+      "sourceId": "granite_tile_03",
+      "kind": "material",
+      "name": "Granite Tile 03",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-granite_tile_03.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/granite_tile_03/preview.webp",
+      "categoryId": "c1b6840e-81a6-56d1-9cf0-1ef10c0aa6a2",
+      "categoryPath": "Stone/Slabs & Tiles/Granite",
+      "categorySlugPath": "stone/slabs-and-tiles/granite",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wall",
+        "tiles"
+      ],
+      "tags": [
+        "granite",
+        "granite tile",
+        "granite blocks",
+        "wall",
+        "urban",
+        "speckled ",
+        "slab",
+        "outdoor",
+        "stone tile"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "origin": "man_made",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "08d41e4cbee63de142b19caa392247f0e441baa3"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:grass_ground",
       "sourceId": "grass_ground",
       "kind": "material",
       "name": "Grass Ground",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-grass_ground.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/grass_ground/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-grass_ground.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/grass_ground/preview.webp",
       "categoryId": "e9516d71-1efd-51d6-b3c4-ce945ee92604",
       "categoryPath": "Ground & Terrain/Grass & Vegetation/Dry & Sparse Grass",
       "categorySlugPath": "ground-and-terrain/grass-and-vegetation/dry-and-sparse-grass",
@@ -562,15 +2702,448 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:gravel_floor",
+      "sourceId": "gravel_floor",
+      "kind": "material",
+      "name": "Gravel Floor",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-gravel_floor.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/preview.webp",
+      "categoryId": "a97bb631-d60c-54fb-ba1b-2121cbed91c6",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Driveway Gravel",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/driveway-gravel",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "gravel"
+      ],
+      "tags": [
+        "rough",
+        "uneven",
+        "stones",
+        "gravel",
+        "pathway",
+        "driveway stones",
+        "path",
+        "pebbles",
+        "outdoor flooring",
+        "gravelly ground",
+        "driveway gravel",
+        "coarse",
+        "gravelly texture",
+        "walkway",
+        "gravelly",
+        "pebbly",
+        "driveway",
+        "stony"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "88754f2598990c0849176de944b0745ed569b018"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:gravel_floor_02",
+      "sourceId": "gravel_floor_02",
+      "kind": "material",
+      "name": "Gravel Floor 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-gravel_floor_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor_02/preview.webp",
+      "categoryId": "a97bb631-d60c-54fb-ba1b-2121cbed91c6",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Driveway Gravel",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/driveway-gravel",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "gravel"
+      ],
+      "tags": [
+        "rough",
+        "rocks",
+        "gravel",
+        "gravelly",
+        "gravelly ground",
+        "driveway gravel",
+        "driveway",
+        "stones",
+        "coarse",
+        "gray",
+        "driveway stones",
+        "stony",
+        "outdoors"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "410a3bd10ee2eb1b23f599b4be1b5a30034a7859"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:gravel_floor_04",
+      "sourceId": "gravel_floor_04",
+      "kind": "material",
+      "name": "Gravel Floor 04",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-gravel_floor_04.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor_04/preview.webp",
+      "categoryId": "e4c482d4-5f4d-57db-a79b-0f90d1f6f961",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Sandy Gravel",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/sandy-gravel",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "gravel"
+      ],
+      "tags": [
+        "rough",
+        "uneven",
+        "granular",
+        "gravel",
+        "gravelly",
+        "coarse",
+        "gritty",
+        "gravelly ground",
+        "stones",
+        "rock fragments",
+        "weathered",
+        "ground",
+        "sand",
+        "sandy",
+        "dusty"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "condition": [
+          "weathered"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "sourceFilesHash": "f300e96e617b8a6c41ea7906f702a975afce29df"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:gravel_stones",
+      "sourceId": "gravel_stones",
+      "kind": "material",
+      "name": "Gravel Stones",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-gravel_stones.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_stones/preview.webp",
+      "categoryId": "a97bb631-d60c-54fb-ba1b-2121cbed91c6",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Driveway Gravel",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/driveway-gravel",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "gravel",
+        "natural"
+      ],
+      "tags": [
+        "rough",
+        "uneven",
+        "stones",
+        "gravel",
+        "gritty",
+        "grey",
+        "pebbles",
+        "coarse",
+        "pebbly",
+        "pathway",
+        "driveway",
+        "gravelly",
+        "gray",
+        "garden walkway",
+        "rocky",
+        "scattered pebbles",
+        "gritty texture",
+        "stony",
+        "driveway stones"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "ae0f7dde221a2d90d24f41188912bef9ca21e8bd"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:gravelly_sand",
+      "sourceId": "gravelly_sand",
+      "kind": "material",
+      "name": "Gravelly Sand",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-gravelly_sand.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravelly_sand/preview.webp",
+      "categoryId": "e4c482d4-5f4d-57db-a79b-0f90d1f6f961",
+      "categoryPath": "Ground & Terrain/Gravel & Pebbles/Sandy Gravel",
+      "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/sandy-gravel",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "natural",
+        "terrain",
+        "sand",
+        "gravel",
+        "collection: namaqualand"
+      ],
+      "tags": [
+        "sand",
+        "gravel",
+        "stony",
+        "terrain",
+        "ground",
+        "dirt",
+        "coarse",
+        "debris",
+        "dusty"
+      ],
+      "attributes": {
+        "surface_use": "ground",
+        "origin": "natural",
+        "setting": "outdoor",
+        "condition": [
+          "clean"
+        ],
+        "sourceFilesHash": "e8fe004684171971d9a3119f0bbcdfc1d8f7d53d"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:grey_cartago_01",
+      "sourceId": "grey_cartago_01",
+      "kind": "material",
+      "name": "Grey Cartago 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-grey_cartago_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/grey_cartago_01/preview.webp",
+      "categoryId": "db1d43cc-c340-5d57-b85c-a4ccbdab9ec8",
+      "categoryPath": "Stone/Slabs & Tiles/Polished Stone",
+      "categorySlugPath": "stone/slabs-and-tiles/polished-stone",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "tiles"
+      ],
+      "tags": [
+        "rock",
+        "tiles",
+        "marble",
+        "flooring",
+        "cartago",
+        "smooth",
+        "stone",
+        "stone tile",
+        "granite tile"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "clean"
+        ],
+        "origin": "man_made",
+        "sourceFilesHash": "60b4fc0757b520c9bda38b49b6f82e1545658b4a"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:grey_cartago_03",
+      "sourceId": "grey_cartago_03",
+      "kind": "material",
+      "name": "Grey Cartago 03",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-grey_cartago_03.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/grey_cartago_03/preview.webp",
+      "categoryId": "db1d43cc-c340-5d57-b85c-a4ccbdab9ec8",
+      "categoryPath": "Stone/Slabs & Tiles/Polished Stone",
+      "categorySlugPath": "stone/slabs-and-tiles/polished-stone",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "tiles"
+      ],
+      "tags": [
+        "rock",
+        "tiles",
+        "marble",
+        "flooring",
+        "cartago",
+        "smooth",
+        "stone",
+        "stone tile",
+        "granite tile"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "clean"
+        ],
+        "origin": "man_made",
+        "sourceFilesHash": "3168c856a12a1ee8b309ebbdacc307ebc5fbff2c"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:interior_tiles",
+      "sourceId": "interior_tiles",
+      "kind": "material",
+      "name": "Interior Tiles",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-interior_tiles.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/interior_tiles/preview.webp",
+      "categoryId": "ce781525-aa20-5d90-9d19-8530e8e243ba",
+      "categoryPath": "Ceramic/Glazed Tiles/Glossy Glazed",
+      "categorySlugPath": "ceramic/glazed-tiles/glossy-glazed",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "floor",
+        "man made",
+        "tiles"
+      ],
+      "tags": [
+        "tiles",
+        "tiled",
+        "floor",
+        "indoor flooring",
+        "grout lines",
+        "square tiles",
+        "ceramic",
+        "ceramic tiles",
+        "beige",
+        "squares",
+        "speckle"
+      ],
+      "attributes": {
+        "surface_use": "floor",
+        "condition": [
+          "worn"
+        ],
+        "origin": "man_made",
+        "sourceFilesHash": "2572aac325742047c9cf5ac676685699d94eaf0c"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:large_sandstone_blocks",
+      "sourceId": "large_sandstone_blocks",
+      "kind": "material",
+      "name": "Large Sandstone Blocks",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-large_sandstone_blocks.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/large_sandstone_blocks/preview.webp",
+      "categoryId": "711f00d1-14a5-537f-addc-52bc3da7cd0e",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Sandstone Brick & Block",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/sandstone-brick-and-block",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wall",
+        "outdoor",
+        "sandstone",
+        "man made",
+        "dirty"
+      ],
+      "tags": [
+        "grey",
+        "discolored",
+        "blocks",
+        "sandstone",
+        "wall",
+        "trimsheet",
+        "urban",
+        "stained"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "30af88ff503fd58680f84125c6231883fa4ed3f5"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:marble_01",
       "sourceId": "marble_01",
       "kind": "material",
       "name": "Marble 01",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-marble_01.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/marble_01/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-marble_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/marble_01/preview.webp",
       "categoryId": "332a7c92-1556-5937-b7a9-8a0f52d20df4",
       "categoryPath": "Stone/Slabs & Tiles/Marble",
       "categorySlugPath": "stone/slabs-and-tiles/marble",
@@ -604,15 +3177,328 @@
       "hasHeight": true
     },
     {
+      "id": "ph:material:mossy_sandstone",
+      "sourceId": "mossy_sandstone",
+      "kind": "material",
+      "name": "Mossy Sandstone",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-mossy_sandstone.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/mossy_sandstone/preview.webp",
+      "categoryId": "711f00d1-14a5-537f-addc-52bc3da7cd0e",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Sandstone Brick & Block",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/sandstone-brick-and-block",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wall",
+        "man made",
+        "sandstone"
+      ],
+      "tags": [
+        "rough",
+        "weathered",
+        "uneven",
+        "old",
+        "worn",
+        "wall",
+        "mosscovered",
+        "mossy",
+        "mossy ",
+        "outdoor",
+        "rock",
+        "timeworn",
+        "weatherbeaten",
+        "fortress walls",
+        "moss",
+        "rocks"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "mossy",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "787b2e588f6dc6ec9fb0a33333189ddae5627e77"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:old_sandstone_02",
+      "sourceId": "old_sandstone_02",
+      "kind": "material",
+      "name": "Old Sandstone 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-old_sandstone_02.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/old_sandstone_02/preview.webp",
+      "categoryId": "711f00d1-14a5-537f-addc-52bc3da7cd0e",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Sandstone Brick & Block",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/sandstone-brick-and-block",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "man made",
+        "sandstone",
+        "wall"
+      ],
+      "tags": [
+        "rough",
+        "weathered",
+        "wall",
+        "stone",
+        "sandstone",
+        "old",
+        "worn",
+        "chipped",
+        "aged",
+        "stonework",
+        "brown",
+        "timeworn"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "worn",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "a336dea63c883feba28f6b0ca94a8795b6b8ed80"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:red_sandstone_pavement",
+      "sourceId": "red_sandstone_pavement",
+      "kind": "material",
+      "name": "Red Sandstone Pavement",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-red_sandstone_pavement.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/red_sandstone_pavement/preview.webp",
+      "categoryId": "711f00d1-14a5-537f-addc-52bc3da7cd0e",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Sandstone Brick & Block",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/sandstone-brick-and-block",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "floor",
+        "sandstone",
+        "man made",
+        "rock"
+      ],
+      "tags": [
+        "weathered",
+        "plaster",
+        "rock",
+        "sandstone",
+        "concrete",
+        "pavement",
+        "floor",
+        "dirty",
+        "discolored",
+        "brown",
+        "red",
+        "rocks",
+        "pathway",
+        "grey"
+      ],
+      "attributes": {
+        "surface_use": "paving",
+        "condition": [
+          "weathered",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "32d99d2030a56f578ae8d81e478856ed09a0f2d7"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:red_sandstone_wall",
+      "sourceId": "red_sandstone_wall",
+      "kind": "material",
+      "name": "Red Sandstone Wall",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-red_sandstone_wall.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/red_sandstone_wall/preview.webp",
+      "categoryId": "711f00d1-14a5-537f-addc-52bc3da7cd0e",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Sandstone Brick & Block",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/sandstone-brick-and-block",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "man made",
+        "wall",
+        "outdoor",
+        "dirty",
+        "sandstone"
+      ],
+      "tags": [
+        "rough",
+        "uneven",
+        "old",
+        "weathered",
+        "wall",
+        "worn",
+        "chipped",
+        "damaged",
+        "cracked",
+        "discolored",
+        "dirty",
+        "concrete",
+        "sandstone",
+        "crumbling",
+        "brown",
+        "dusty"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "damaged",
+          "cracked",
+          "worn"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "1ec500ec43df1fb88ec3f183c88b49a9bb4577ed"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:rock_pitted_mossy",
+      "sourceId": "rock_pitted_mossy",
+      "kind": "material",
+      "name": "Rock Pitted Mossy",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-rock_pitted_mossy.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/preview.webp",
+      "categoryId": "78e4c120-24c3-5f41-b48a-01617c52bc26",
+      "categoryPath": "Stone/Rock & Cliffs/Boulder Surfaces",
+      "categorySlugPath": "stone/rock-and-cliffs/boulder-surfaces",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "rock",
+        "terrain",
+        "natural",
+        "sandstone"
+      ],
+      "tags": [
+        "cracked",
+        "weathered",
+        "rock face",
+        "rock",
+        "boulder",
+        "red",
+        "discolored",
+        "eroded",
+        "moss",
+        "stone",
+        "uneven",
+        "rough",
+        "orange"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "mossy"
+        ],
+        "origin": "natural",
+        "setting": "outdoor",
+        "sourceFilesHash": "831788b7bbeb28eb4fdc5a410c6a42a449bb7c45"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
+      "id": "ph:material:sandstone_brick_wall_01",
+      "sourceId": "sandstone_brick_wall_01",
+      "kind": "material",
+      "name": "Sandstone Brick Wall 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-sandstone_brick_wall_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/sandstone_brick_wall_01/preview.webp",
+      "categoryId": "711f00d1-14a5-537f-addc-52bc3da7cd0e",
+      "categoryPath": "Brick & Block/Stone Block & Paver/Sandstone Brick & Block",
+      "categorySlugPath": "brick-and-block/stone-block-and-paver/sandstone-brick-and-block",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "wall",
+        "brick",
+        "man made",
+        "outdoor",
+        "sandstone"
+      ],
+      "tags": [
+        "red",
+        "rough",
+        "uneven",
+        "industrial",
+        "baked",
+        "urban",
+        "weathered"
+      ],
+      "attributes": {
+        "surface_use": "wall",
+        "condition": [
+          "weathered",
+          "damaged"
+        ],
+        "origin": "man_made",
+        "setting": "outdoor",
+        "sourceFilesHash": "d07198d3b906fd46ec1b358d73a9ed14f23ebf57"
+      },
+      "availableTiers": [
+        "1k",
+        "2k"
+      ],
+      "hasHeight": true
+    },
+    {
       "id": "ph:material:snow_01",
       "sourceId": "snow_01",
       "kind": "material",
       "name": "Snow 01",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-snow_01.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/snow_01/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-snow_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/snow_01/preview.webp",
       "categoryId": "6e705b25-3316-525c-9bf4-63b587afeea9",
       "categoryPath": "Ground & Terrain/Snow/Trampled Snow",
       "categorySlugPath": "ground-and-terrain/snow/trampled-snow",
@@ -654,9 +3540,9 @@
       "name": "Stone Brick Wall 001",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-stone_brick_wall_001.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-stone_brick_wall_001.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/stone_brick_wall_001/preview.webp",
       "categoryId": "bc20bc70-284a-5f14-93eb-78274f6a1fa9",
       "categoryPath": "Brick & Block/Stone Block & Paver/Ashlar & Coursed Stone",
       "categorySlugPath": "brick-and-block/stone-block-and-paver/ashlar-and-coursed-stone",
@@ -697,9 +3583,9 @@
       "name": "Terrain Red 01",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-terrain_red_01.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/terrain_red_01/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-terrain_red_01.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/terrain_red_01/preview.webp",
       "categoryId": "ff767449-ea44-5527-96f0-d74aa52df2d0",
       "categoryPath": "Ground & Terrain/Gravel & Pebbles/Crushed Aggregate",
       "categorySlugPath": "ground-and-terrain/gravel-and-pebbles/crushed-aggregate",
@@ -742,9 +3628,9 @@
       "name": "White Stucco",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-white_stucco.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/white_stucco/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-white_stucco.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/white_stucco/preview.webp",
       "categoryId": "ebaa964c-b45c-52e2-bd50-892d64616d87",
       "categoryPath": "Concrete/Plaster & Stucco/Bare Plaster",
       "categorySlugPath": "concrete/plaster-and-stucco/bare-plaster",
@@ -791,9 +3677,9 @@
       "name": "Wood Chips",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-wood_chips.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/wood_chips/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-wood_chips.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/wood_chips/preview.webp",
       "categoryId": "f5a6cc7b-b773-5091-a757-09cbd29ee323",
       "categoryPath": "Ground & Terrain/Forest Floor/Mulch & Wood Chips",
       "categorySlugPath": "ground-and-terrain/forest-floor/mulch-and-wood-chips",
@@ -834,9 +3720,9 @@
       "name": "Worn Corrugated Iron",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/material-worn_corrugated_iron.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-worn_corrugated_iron.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/worn_corrugated_iron/preview.webp",
       "categoryId": "c10ee76b-cb81-546f-bba9-095bf5a18a6d",
       "categoryPath": "Metal/Sheet & Corrugated/Corrugated Iron",
       "categorySlugPath": "metal/sheet-and-corrugated/corrugated-iron",
@@ -895,9 +3781,9 @@
       "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/hdri-kloofendal_48d_partly_cloudy_puresky.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/kloofendal_48d_partly_cloudy_puresky/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-kloofendal_48d_partly_cloudy_puresky.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/kloofendal_48d_partly_cloudy_puresky/preview.webp",
       "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
       "categoryPath": "Pure Skies",
       "categorySlugPath": "pure-skies",
@@ -931,15 +3817,142 @@
       ]
     },
     {
+      "id": "ph:hdri:qwantani_puresky",
+      "sourceId": "qwantani_puresky",
+      "kind": "hdri",
+      "name": "Qwantani (Pure Sky)",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-qwantani_puresky.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/qwantani_puresky/preview.webp",
+      "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+      "categoryPath": "Pure Skies",
+      "categorySlugPath": "pure-skies",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "skies",
+        "nature",
+        "morning-afternoon",
+        "clear",
+        "high contrast",
+        "natural light",
+        "pure skies"
+      ],
+      "tags": [
+        "pure skies"
+      ],
+      "attributes": {
+        "time_of_day": "afternoon",
+        "weather": "clear",
+        "light_type": "natural",
+        "contrast": "high",
+        "environment": "outdoor",
+        "sky_view": "open",
+        "sourceFilesHash": "da86fd9b2f8c1a8699777ae7c1184b3abc5a98f4"
+      },
+      "environmentGroup": "pure-skies",
+      "availableTiers": [
+        "1k",
+        "2k"
+      ]
+    },
+    {
+      "id": "ph:hdri:sunflowers_puresky",
+      "sourceId": "sunflowers_puresky",
+      "kind": "hdri",
+      "name": "Sunflowers (Pure Sky)",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-sunflowers_puresky.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/sunflowers_puresky/preview.webp",
+      "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+      "categoryPath": "Pure Skies",
+      "categorySlugPath": "pure-skies",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "skies",
+        "nature",
+        "midday",
+        "partly cloudy",
+        "high contrast",
+        "natural light",
+        "pure skies"
+      ],
+      "tags": [
+        "pure skies"
+      ],
+      "attributes": {
+        "time_of_day": "midday",
+        "weather": "partly_cloudy",
+        "light_type": "natural",
+        "contrast": "high",
+        "season": "summer",
+        "environment": "outdoor",
+        "sky_view": "open",
+        "sourceFilesHash": "4c1a24f165b1f71a7d8fb29a7ba4ff4c5c6743e6"
+      },
+      "environmentGroup": "pure-skies",
+      "availableTiers": [
+        "1k",
+        "2k"
+      ]
+    },
+    {
+      "id": "ph:hdri:syferfontein_18d_clear_puresky",
+      "sourceId": "syferfontein_18d_clear_puresky",
+      "kind": "hdri",
+      "name": "Syferfontein 18d Clear (Pure Sky)",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-syferfontein_18d_clear_puresky.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/syferfontein_18d_clear_puresky/preview.webp",
+      "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+      "categoryPath": "Pure Skies",
+      "categorySlugPath": "pure-skies",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "skies",
+        "nature",
+        "morning-afternoon",
+        "clear",
+        "high contrast",
+        "natural light",
+        "pure skies"
+      ],
+      "tags": [
+        "pure skies"
+      ],
+      "attributes": {
+        "time_of_day": "afternoon",
+        "weather": "clear",
+        "light_type": "natural",
+        "contrast": "high",
+        "environment": "outdoor",
+        "sky_view": "open",
+        "sourceFilesHash": "cf21ce7095b3c7df54fcc3d94f484a52a821a245"
+      },
+      "environmentGroup": "pure-skies",
+      "availableTiers": [
+        "1k",
+        "2k"
+      ]
+    },
+    {
       "id": "ph:hdri:alps_field",
       "sourceId": "alps_field",
       "kind": "hdri",
       "name": "Alps Field",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/hdri-alps_field.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/alps_field/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-alps_field.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/alps_field/preview.webp",
       "categoryId": "7c6fee03-691b-54bd-9853-84499efb6ee9",
       "categoryPath": "Mountains & Hills/Mountains & Alpine/Alpine Valleys",
       "categorySlugPath": "mountains-and-hills/mountains-and-alpine/alpine-valleys",
@@ -983,9 +3996,9 @@
       "name": "Birchwood",
       "source": "polyhaven",
       "license": "CC0-1.0",
-      "revision": "2026-09-18-pilot-r1",
-      "manifestUrl": "/polyhaven/releases/2026-09-18-pilot-r1/manifests/hdri-birchwood.json",
-      "thumbnailUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/hdris/birchwood/preview.webp",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-birchwood.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/birchwood/preview.webp",
       "categoryId": "69311129-a02a-5409-875f-803d4c3e7e16",
       "categoryPath": "Forest & Woodland/Forest/Deciduous Forest",
       "categorySlugPath": "forest-and-woodland/forest/deciduous-forest",
@@ -1014,6 +4027,50 @@
         "environment": "outdoor",
         "sky_view": "obstructed",
         "sourceFilesHash": "2b03bbde37757980621563a2d39c3997eb44de6e"
+      },
+      "environmentGroup": "forest-woodland",
+      "availableTiers": [
+        "1k",
+        "2k"
+      ]
+    },
+    {
+      "id": "ph:hdri:misty_pines",
+      "sourceId": "misty_pines",
+      "kind": "hdri",
+      "name": "Misty Pines",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "revision": "2026-09-21-pilot-r2",
+      "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-misty_pines.json",
+      "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/misty_pines/preview.webp",
+      "categoryId": "43dbb783-1b2e-521d-a21f-487248097504",
+      "categoryPath": "Forest & Woodland/Forest/Coniferous Forest",
+      "categorySlugPath": "forest-and-woodland/forest/coniferous-forest",
+      "ancestorCategoryIds": [],
+      "legacyCategories": [
+        "outdoor",
+        "nature",
+        "overcast",
+        "morning-afternoon",
+        "low contrast",
+        "natural light"
+      ],
+      "tags": [
+        "tree",
+        "forest",
+        "bush",
+        "pine",
+        "mist"
+      ],
+      "attributes": {
+        "time_of_day": "morning",
+        "weather": "fog",
+        "light_type": "natural",
+        "contrast": "low",
+        "environment": "outdoor",
+        "sky_view": "obstructed",
+        "sourceFilesHash": "f7d877fc6c40366c320c870bd47085475e2c3aa0"
       },
       "environmentGroup": "forest-woodland",
       "availableTiers": [
