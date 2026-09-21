@@ -8,7 +8,7 @@ import {
   flattenTerrainForFloorSlabs,
   intersectLines2D,
   computeWallCornerPoint,
-  computeMiterExtension,
+  computeWallFaceCorner,
 } from './archRoomAssembly';
 import { createTerrainShape } from './terrain/terrainFactory';
 import { Shape } from '../types';
@@ -146,24 +146,32 @@ describe('ArchRoomAssembly & Site Terracing', () => {
     expect(intersectLines2D([0, 0], [1, 0], [5, 0], [1, 0])).toBeNull();
   });
 
-  it('computes close to the half-thickness miter extension at a 90-degree corner, pulled back a hair to avoid z-fighting', () => {
-    // Derived from first principles (two width-t strips crossing at a right angle, cut flush
-    // at the shared centerline point): the naive flush cut leaves an uncovered t/2 x t/2
-    // square at the corner unless each wall is additionally extended by close to t/2 - exactly
-    // t/2 lands a wall's end cap exactly coplanar with its neighbor's own side face (a
-    // z-fighting seam), so the real result is t/2 minus a small rendering clearance.
-    const ext = computeMiterExtension(0.2, Math.PI / 2);
-    expect(ext).toBeLessThan(0.1);
-    expect(ext).toBeGreaterThan(0.09);
+  it('computes matching true outer/inner face corners for two walls meeting at a non-90-degree angle', () => {
+    // Two walls of thickness 0.2 meeting at vertex (10,0): one arriving along +X, the other
+    // leaving at 135 degrees from it - a case a fixed box extension cannot close flush. The
+    // outer (and separately, the inner) face corner computed from EACH wall's own edge data
+    // must be the exact same point, since that's what makes two independently-built wall
+    // polygons share a flush edge with no gap and no overlap.
+    const dirAfter = new THREE.Vector2(Math.cos((Math.PI * 3) / 4), Math.sin((Math.PI * 3) / 4));
+    const before = { linePoint: new THREE.Vector2(0, 0), dir: new THREE.Vector2(1, 0), outwardNormal: new THREE.Vector2(0, -1), thickness: 0.2 };
+    const after = { linePoint: new THREE.Vector2(10, 0), dir: dirAfter, outwardNormal: new THREE.Vector2(0, -1), thickness: 0.2 };
+    const vertex = new THREE.Vector3(10, 0, 0);
+
+    const outerFromBeforeSide = computeWallFaceCorner(vertex, before, after, 1);
+    const outerFromAfterSide = computeWallFaceCorner(vertex, before, after, 1);
+    expect(outerFromBeforeSide.x).toBeCloseTo(outerFromAfterSide.x);
+    expect(outerFromBeforeSide.y).toBeCloseTo(outerFromAfterSide.y);
+
+    // The outer and inner corners must be genuinely different points (one on each side of the
+    // centerline corner), not both collapsing to the same value.
+    const inner = computeWallFaceCorner(vertex, before, after, -1);
+    expect(Math.abs(outerFromBeforeSide.x - inner.x) + Math.abs(outerFromBeforeSide.y - inner.y)).toBeGreaterThan(0.05);
   });
 
-  it('needs no miter extension for a straight (non-turning) join', () => {
-    expect(computeMiterExtension(0.2, 0)).toBeCloseTo(0);
-  });
-
-  it('caps the miter extension near a 180-degree fold instead of diverging to infinity', () => {
-    const ext = computeMiterExtension(0.2, Math.PI * 0.999);
-    expect(Number.isFinite(ext)).toBe(true);
-    expect(ext).toBeLessThan(10);
+  it('falls back to a wall\'s own face offset at an open (neighborless) end', () => {
+    const self = { linePoint: new THREE.Vector2(0, 0), dir: new THREE.Vector2(1, 0), outwardNormal: new THREE.Vector2(0, 1), thickness: 0.2 };
+    const corner = computeWallFaceCorner(new THREE.Vector3(0, 0, 0), null, self, 1);
+    expect(corner.x).toBeCloseTo(0);
+    expect(corner.y).toBeCloseTo(0.1);
   });
 });

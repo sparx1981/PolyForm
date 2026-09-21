@@ -113,7 +113,7 @@ import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
-import { buildRoomAssembly, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeMiterExtension } from '../lib/archRoomAssembly';
+import { buildRoomAssembly, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
 import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
@@ -1023,7 +1023,7 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
           }
         }
 
-        let wallGeom = createWallWithOpeningsGeometry(wallLength, wallHeight, wallThick, openings, shape.wallStyle || shape.archStyle);
+        let wallGeom = createWallWithOpeningsGeometry(wallLength, wallHeight, wallThick, openings, shape.wallStyle || shape.archStyle, shape.wallMiterFootprint);
 
         if (portholeWindows.length > 0) {
           try {
@@ -1116,11 +1116,12 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
     shape.parametricData?.stepCount,
     shape.parametricData?.actualStepHeight,
     shape.parametricData?.treadDepth,
-    args[0], 
-    args[1], 
-    args[2], 
-    args[3], 
-    openingsHash
+    args[0],
+    args[1],
+    args[2],
+    args[3],
+    openingsHash,
+    shape.wallMiterFootprint
   ]);
 
   useEffect(() => {
@@ -3981,7 +3982,7 @@ function Scene() {
       // closed exactly by intersecting each pair of neighboring walls' own offset lines, not by
       // guessing a fixed extension that only happens to work at exactly 90 degrees.
       const useExactChainMatch = chainShapeIds.length === loopLen;
-      interface EdgeWall { shapeId: string; thickness: number; wallH: number; linePoint: THREE.Vector2; dir: THREE.Vector2; }
+      interface EdgeWall { shapeId: string; thickness: number; wallH: number; linePoint: THREE.Vector2; dir: THREE.Vector2; outwardNormal: THREE.Vector2; }
       const edgeWalls: (EdgeWall | null)[] = loopVectors.map((pA, i) => {
         const pB = loopVectors[(i + 1) % loopLen];
         let best: Shape | null = null;
@@ -4003,14 +4004,16 @@ function Scene() {
         const wallH = Array.isArray(best.args) ? (best.args[1] || 2.8) : 2.8;
         const dir2D = new THREE.Vector2(pB.x - pA.x, pB.z - pA.z).normalize();
         const trueNormal = computeOutwardWallNormal2D(pA, pB, roomPoly2D);
+        const outwardNormal2D = new THREE.Vector2(trueNormal.x, trueNormal.z);
         const offsetScalar = best.tags?.includes('wall-exterior') ? thickness0 / 2
           : best.tags?.includes('wall-interior') ? -thickness0 / 2 : 0;
-        const linePoint = new THREE.Vector2(pA.x, pA.z).addScaledVector(new THREE.Vector2(trueNormal.x, trueNormal.z), offsetScalar);
-        return { shapeId: best.id, thickness: thickness0, wallH, linePoint, dir: dir2D };
+        const linePoint = new THREE.Vector2(pA.x, pA.z).addScaledVector(outwardNormal2D, offsetScalar);
+        return { shapeId: best.id, thickness: thickness0, wallH, linePoint, dir: dir2D, outwardNormal: outwardNormal2D };
       });
 
-      // The exact point where each vertex's two flanking walls' offset lines meet - shared as
-      // one wall's start and the previous wall's end, so both sides land on it precisely.
+      // The exact point where each vertex's two flanking walls' CENTERLINE offset lines meet -
+      // used only to report a wall's nominal length (for the UI / opening placement), not for
+      // its rendered geometry.
       const cornerPoints: THREE.Vector2[] = loopVectors.map((pV, i) => {
         const before = edgeWalls[(i - 1 + loopLen) % loopLen];
         const after = edgeWalls[i];
@@ -4019,6 +4022,22 @@ function Scene() {
           before ? { offsetPoint: before.linePoint, dir: before.dir } : null,
           after ? { offsetPoint: after.linePoint, dir: after.dir } : null
         );
+      });
+
+      // The wall's true OUTER and INNER face corners at each vertex - where this wall's own
+      // exterior (or interior) face-line actually meets its neighbors', not an extended-box
+      // approximation. The outer corner computed at a shared vertex is the exact same point for
+      // both flanking walls, so their rendered polygons share a flush edge with zero gap and
+      // zero overlap, at any angle.
+      const outerCornerPoints: THREE.Vector2[] = loopVectors.map((pV, i) => {
+        const before = edgeWalls[(i - 1 + loopLen) % loopLen];
+        const after = edgeWalls[i];
+        return computeWallFaceCorner(pV, before, after, 1);
+      });
+      const innerCornerPoints: THREE.Vector2[] = loopVectors.map((pV, i) => {
+        const before = edgeWalls[(i - 1 + loopLen) % loopLen];
+        const after = edgeWalls[i];
+        return computeWallFaceCorner(pV, before, after, -1);
       });
 
       // Temporary diagnostic: prints exactly which edges resolved to a wall (and via which
@@ -4031,42 +4050,26 @@ function Scene() {
           ? { i, shapeId: ew.shapeId, thickness: ew.thickness, linePoint: [ew.linePoint.x, ew.linePoint.y], dir: [ew.dir.x, ew.dir.y] }
           : { i, shapeId: null }),
         cornerPoints: cornerPoints.map(p => [p.x, p.y]),
-      });
-
-      // Turn angle each wall's own direction makes with its neighbor at each loop vertex - the
-      // angle between two flat, perpendicular box end caps meeting at that vertex's corner
-      // point. At any angle other than exactly straight-through, those flat caps don't align
-      // with each other, leaving a wedge-shaped gap on the corner's outer side unless each
-      // wall is extended past the shared corner point (see computeMiterExtension).
-      const turnAngleAtVertex: number[] = loopVectors.map((_, i) => {
-        const before = edgeWalls[(i - 1 + loopLen) % loopLen];
-        const after = edgeWalls[i];
-        if (!before || !after) return 0;
-        const dot = before.dir.dot(after.dir);
-        return Math.acos(Math.min(1, Math.max(-1, dot)));
+        outerCornerPoints: outerCornerPoints.map(p => [p.x, p.y]),
+        innerCornerPoints: innerCornerPoints.map(p => [p.x, p.y]),
       });
 
       const updatesByShapeId = new Map<string, Shape>();
+      // Each wall's true mitered footprint (outer-start, inner-start, inner-end, outer-end), in
+      // WORLD space - converted to the wall's own local space once its FINAL orientation is
+      // known below, since orientRoomWallsToExterior may still flip the wall's quaternion.
+      const worldFootprintByShapeId = new Map<string, [THREE.Vector2, THREE.Vector2, THREE.Vector2, THREE.Vector2]>();
       for (let i = 0; i < loopLen; i++) {
         const ew = edgeWalls[i];
         if (!ew) continue;
         const start = cornerPoints[i];
         const end = cornerPoints[(i + 1) % loopLen];
-        const baseLength = start.distanceTo(end);
-        if (baseLength < 0.01) continue;
-        const extStart = computeMiterExtension(ew.thickness, turnAngleAtVertex[i]);
-        const extEnd = computeMiterExtension(ew.thickness, turnAngleAtVertex[(i + 1) % loopLen]);
-        const length = baseLength + extStart + extEnd;
+        const length = start.distanceTo(end);
+        if (length < 0.01) continue;
         const angle = Math.atan2(ew.dir.y, ew.dir.x);
         const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
-        // Naive midpoint of the two corner points, then nudged along the wall's own direction
-        // by the (possibly asymmetric) extension so the lengthened box stays centered between
-        // its now-further-out end caps rather than only growing on one side.
-        const naiveMidX = (start.x + end.x) / 2;
-        const naiveMidZ = (start.y + end.y) / 2;
-        const shift = (extEnd - extStart) / 2;
-        const midX = naiveMidX + ew.dir.x * shift;
-        const midZ = naiveMidZ + ew.dir.y * shift;
+        const midX = (start.x + end.x) / 2;
+        const midZ = (start.y + end.y) / 2;
         const original = wallsForStory.find(s => s.id === ew.shapeId)!;
         updatesByShapeId.set(ew.shapeId, {
           ...original,
@@ -4074,30 +4077,11 @@ function Scene() {
           quaternion: [quat.x, quat.y, quat.z, quat.w] as [number, number, number, number],
           args: [length, ew.wallH, ew.thickness],
         });
+        worldFootprintByShapeId.set(ew.shapeId, [
+          outerCornerPoints[i], innerCornerPoints[i],
+          innerCornerPoints[(i + 1) % loopLen], outerCornerPoints[(i + 1) % loopLen],
+        ]);
       }
-      // Temporary diagnostic: the exact position/args/quaternion being written into each wall
-      // Shape, plus its actual 2D footprint corners (top-down, world space) - if the rendered
-      // wall doesn't match these numbers, the bug is in rendering (stale geometry /
-      // reconciliation), not in this corner math. The footprint corners make it possible to
-      // directly check, from the log alone, whether two neighboring walls' solids truly cover
-      // their shared corner (no arithmetic-by-hand required).
-      diagLog('WALL_MITER', `Applying ${updatesByShapeId.size} wall updates`, {
-        updates: [...updatesByShapeId.entries()].map(([id, s]) => {
-          const [len, , thick] = s.args as [number, number, number];
-          const q = new THREE.Quaternion(...(s.quaternion as [number, number, number, number]));
-          const dir = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
-          const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-          const [cx, , cz] = s.position;
-          const hl = len / 2, ht = thick / 2;
-          const footprint = [
-            [cx - dir.x * hl - normal.x * ht, cz - dir.z * hl - normal.z * ht],
-            [cx + dir.x * hl - normal.x * ht, cz + dir.z * hl - normal.z * ht],
-            [cx + dir.x * hl + normal.x * ht, cz + dir.z * hl + normal.z * ht],
-            [cx - dir.x * hl + normal.x * ht, cz - dir.z * hl + normal.z * ht],
-          ];
-          return { id, position: s.position, args: s.args, quaternion: s.quaternion, footprint };
-        }),
-      });
 
       next = next.map(s => updatesByShapeId.get(s.id) ?? s);
 
@@ -4106,9 +4090,25 @@ function Scene() {
       if (flipped.length) {
         diagLog('WALL_MITER', `orientRoomWallsToExterior flipped ${flipped.length} wall(s)`, { flipped });
       }
+
+      // Convert each wall's world-space mitered footprint into its own local space (X = along
+      // length, Z = thickness, origin at its now-final position), using its FINAL quaternion so
+      // the footprint matches whatever orientRoomWallsToExterior settled on above.
+      const withMiterFootprints = oriented.map(s => {
+        const worldFootprint = worldFootprintByShapeId.get(s.id);
+        if (!worldFootprint) return s;
+        const pos = new THREE.Vector3(...s.position);
+        const invQuat = new THREE.Quaternion(...(s.quaternion || [0, 0, 0, 1])).invert();
+        const localFootprint = worldFootprint.map(p => {
+          const local = new THREE.Vector3(p.x - pos.x, 0, p.y - pos.z).applyQuaternion(invQuat);
+          return [local.x, local.z] as [number, number];
+        }) as [[number, number], [number, number], [number, number], [number, number]];
+        return { ...s, wallMiterFootprint: localFootprint };
+      });
+
       return assembly.updatedTerrainData && assembly.modifiedTerrainShapeId
-        ? oriented.map(s => s.id === assembly.modifiedTerrainShapeId ? { ...s, terrainData: assembly.updatedTerrainData! } : s)
-        : oriented;
+        ? withMiterFootprints.map(s => s.id === assembly.modifiedTerrainShapeId ? { ...s, terrainData: assembly.updatedTerrainData! } : s)
+        : withMiterFootprints;
     });
 
     commitHistory();
