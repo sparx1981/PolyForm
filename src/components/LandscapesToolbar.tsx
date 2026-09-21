@@ -49,6 +49,8 @@ import { applyPadGradingToTerrain } from '../lib/terrain/padGeometry';
 import { flattenTerrainForFloorSlabs } from '../lib/archRoomAssembly';
 import { ROAD_MATERIALS } from '../lib/terrain/roadMaterials';
 import { regradeTerrainWithModifiers } from '../lib/terrain/roadGeometry';
+import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
+import { isMaterialAssetId, type AssetSummary } from '../lib/assets/types';
 
 const WILDFLOWER_PRESETS = [
   { name: 'Daisies', primary: '#ffffff', secondary: '#f59e0b', stem: '#2e6128', type: 'daisy', density: 0.3, baseHeight: 0.05, animationStrength: 0.02 },
@@ -176,10 +178,42 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     isToolModifierDocked,
     setIsToolModifierDocked,
     activePlantSpecies,
-    setActivePlantSpecies
+    setActivePlantSpecies,
+    setMaterialBindings
   } = useApp();
 
   const [isCivilPanelCollapsed, setIsCivilPanelCollapsed] = useState(false);
+
+  const { assets: catalogMaterials } = useAssetCatalog('material');
+  // Registers a Poly Haven catalog asset in the shared materialBindings map (idempotent - a
+  // no-op if this exact revision is already bound), so terrain/road meshes can resolve it
+  // through the same KTX2-managed texture pipeline used for painted walls and floors.
+  const registerMaterialBinding = (asset: AssetSummary) => {
+    if (!isMaterialAssetId(asset.id)) return;
+    const assetId = asset.id;
+    setMaterialBindings(prev => ({
+      ...prev,
+      [assetId]: prev[assetId]?.ref.revision === asset.revision
+        ? prev[assetId]
+        : { ref: { assetId, revision: asset.revision } },
+    }));
+  };
+  const groundMaterials = React.useMemo(
+    () => catalogMaterials.filter(a => a.categoryPath.startsWith('Ground & Terrain') || a.legacyCategories.includes('terrain')),
+    [catalogMaterials]
+  );
+  const roadMaterials = React.useMemo(
+    () => catalogMaterials.filter(a =>
+      a.categoryPath.startsWith('Asphalt & Bitumen') || a.legacyCategories.includes('road') || a.legacyCategories.includes('asphalt')
+    ),
+    [catalogMaterials]
+  );
+  const pathwayMaterials = React.useMemo(
+    () => catalogMaterials.filter(a =>
+      a.categoryPath.startsWith('Stone') || a.categoryPath.startsWith('Brick & Block') || a.legacyCategories.includes('sandstone')
+    ),
+    [catalogMaterials]
+  );
 
   const selectedTerrain = shapes.find(s => s.id === selectedId && s.type === 'terrain' && s.terrainData);
   const existingTerrain = shapes.find(s => s.type === 'terrain' && !s.hidden);
@@ -1113,14 +1147,34 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                   <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 block mb-1">Ground Material</label>
                   <select
                     value={terrainOptions.textureId}
-                    onChange={(e) => setTerrainOptions(o => ({ ...o, textureId: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setTerrainOptions(o => ({ ...o, textureId: value }));
+                      const asset = groundMaterials.find(a => a.id === value);
+                      if (asset) {
+                        registerMaterialBinding(asset);
+                        if (activeTerrain) {
+                          setShapes(prev => prev.map(s => s.id === activeTerrain.id ? { ...s, materialBindingId: asset.id } : s));
+                          commitHistory();
+                        }
+                      }
+                    }}
                     className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
                   >
-                    {LANDSCAPE_TEXTURES.map(tex => (
-                      <option key={tex.id} value={tex.id}>
-                        {tex.name}
-                      </option>
-                    ))}
+                    <optgroup label="Poly Haven">
+                      {groundMaterials.map(asset => (
+                        <option key={asset.id} value={asset.id}>
+                          {asset.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Procedural">
+                      {LANDSCAPE_TEXTURES.map(tex => (
+                        <option key={tex.id} value={tex.id}>
+                          {tex.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
 
@@ -1994,17 +2048,36 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                   <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 block mb-1">Road / Pathway Material</label>
                   <select
                     value={civilRoadSettings.material || 'asphalt-weathered'}
-                    onChange={(e) => handleUpdateRoadSetting({ material: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const asset = [...roadMaterials, ...pathwayMaterials].find(a => a.id === value);
+                      if (asset) registerMaterialBinding(asset);
+                      handleUpdateRoadSetting({ material: value });
+                    }}
                     className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
                   >
-                    <optgroup label="Roadways">
+                    <optgroup label="Roadways · Poly Haven">
+                      {roadMaterials.map(asset => (
+                        <option key={asset.id} value={asset.id}>
+                          {asset.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Pathways & Trails · Poly Haven">
+                      {pathwayMaterials.map(asset => (
+                        <option key={asset.id} value={asset.id}>
+                          {asset.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Roadways · Procedural">
                       {ROAD_MATERIALS.filter(m => m.category === 'road').map(mat => (
                         <option key={mat.id} value={mat.id}>
                           {mat.name}
                         </option>
                       ))}
                     </optgroup>
-                    <optgroup label="Pathways & Trails">
+                    <optgroup label="Pathways & Trails · Procedural">
                       {ROAD_MATERIALS.filter(m => m.category === 'pathway').map(mat => (
                         <option key={mat.id} value={mat.id}>
                           {mat.name}

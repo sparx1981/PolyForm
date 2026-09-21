@@ -6,13 +6,21 @@
 
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
+import { useThree } from '@react-three/fiber';
 import { Html, Line } from '@react-three/drei';
 import { useApp } from '../../AppContext';
 import { RoadModifier, RoadMarkingPreset } from '../../types';
 import { generateRoadRibbonGeometry, applyRoadGradingToTerrain } from '../../lib/terrain/roadGeometry';
 import { evaluateCatmullRomSpline, calculateGradePercentage, validateSplineAlignment } from '../../lib/terrain/math';
 import { getRoadMaterial, getCachedRoadTexture } from '../../lib/terrain/roadMaterials';
+import { useMaterialBindings } from '../../lib/assets/useMaterialBindings';
+import { useManagedBindingTextures } from '../../lib/assets/useManagedBindingTextures';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+
+// Poly Haven materials don't carry a road-specific "tile size" the way the procedural
+// ROAD_MATERIALS presets do - this is a reasonable real-world tile size (in meters) for a
+// typical ground/paving photo texture, used the same way to derive a physically-scaled repeat.
+const POLYHAVEN_ROAD_TILE_METERS = 2;
 
 export default function RoadSplineOverlay() {
   const {
@@ -28,7 +36,21 @@ export default function RoadSplineOverlay() {
     updateTerrainModifier,
     shapes,
     setShapes,
+    materialBindings,
   } = useApp();
+
+  const { gl } = useThree();
+  const usedRoadMaterialBindings = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of terrainModifiers) {
+      if (m.type === 'road' && m.material?.startsWith('ph:material:') && materialBindings[m.material]) {
+        ids.add(m.material);
+      }
+    }
+    return Object.fromEntries([...ids].map(id => [id, materialBindings[id]]));
+  }, [terrainModifiers, materialBindings]);
+  const { resolved: resolvedRoadBindings } = useMaterialBindings(usedRoadMaterialBindings, '2k');
+  const roadManagedTextures = useManagedBindingTextures(gl, resolvedRoadBindings);
 
   const activeRoads = useMemo(() => {
     return terrainModifiers.filter((m): m is RoadModifier => m.type === 'road' && m.enabled);
@@ -126,23 +148,28 @@ export default function RoadSplineOverlay() {
           >
             {/* Road Corridor Surface Mesh */}
             {(() => {
-              const roadMat = getRoadMaterial(road.material);
-              const roadTexture = getCachedRoadTexture(road.material);
+              const isPolyHaven = road.material?.startsWith('ph:material:');
+              const polyHavenBinding = isPolyHaven ? resolvedRoadBindings[road.material!] : undefined;
+              const polyHavenTexture = isPolyHaven ? roadManagedTextures[road.material!]?.basecolor : undefined;
+              const roadMat = !isPolyHaven ? getRoadMaterial(road.material) : null;
+              const proceduralTexture = !isPolyHaven ? getCachedRoadTexture(road.material) : null;
+              const roadTexture = polyHavenTexture || proceduralTexture;
+              const tileSizeMeters = roadMat?.tileSizeMeters ?? POLYHAVEN_ROAD_TILE_METERS;
               if (roadTexture) {
                 // UVs are physically scaled: u spans 0..1 across road.width, v is cumulative
                 // station distance in meters - so repeat directly yields real-world tiling.
                 roadTexture.repeat.set(
-                  road.width / roadMat.tileSizeMeters,
-                  1 / roadMat.tileSizeMeters
+                  road.width / tileSizeMeters,
+                  1 / tileSizeMeters
                 );
               }
               return (
                 <mesh geometry={roadGeo}>
                   <meshStandardMaterial
                     map={roadTexture || undefined}
-                    color={roadTexture ? '#ffffff' : roadMat.color}
-                    roughness={roadMat.roughness}
-                    metalness={roadMat.metalness}
+                    color={roadTexture ? '#ffffff' : (roadMat?.color ?? '#888888')}
+                    roughness={polyHavenBinding?.roughness ?? roadMat?.roughness ?? 0.8}
+                    metalness={polyHavenBinding?.metalness ?? roadMat?.metalness ?? 0.05}
                     emissive={isSelected ? '#0284c7' : '#000000'}
                     emissiveIntensity={isSelected ? 0.3 : 0}
                     side={THREE.DoubleSide}

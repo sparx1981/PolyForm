@@ -88,11 +88,17 @@ export function createTerrainShape(options: TerrainCreationOptions, existingId?:
   });
 
   const textureId = options.textureId || 'lush_grass';
-  const activePreset: LandscapeTexturePreset = 
-    LANDSCAPE_TEXTURES.find(t => t.id === textureId) || LANDSCAPE_TEXTURES[0];
-  
-  const generatedDataUrl = activePreset.generate();
-  const initialTexture = generatedDataUrl || activePreset.previewColor;
+  // A Poly Haven catalog id (e.g. "ph:material:aerial_asphalt_01") is rendered through the
+  // shape's materialBindingId + the KTX2-managed material pipeline, not this procedural
+  // canvas generator - the caller is responsible for setting materialBindingId on the
+  // returned shape. Skip generating a canvas texture for it and use a neutral placeholder.
+  const isPolyHavenMaterial = textureId.startsWith('ph:material:');
+  const activePreset: LandscapeTexturePreset | null = isPolyHavenMaterial
+    ? null
+    : (LANDSCAPE_TEXTURES.find(t => t.id === textureId) || LANDSCAPE_TEXTURES[0]);
+
+  const generatedDataUrl = activePreset?.generate() ?? '';
+  const initialTexture = isPolyHavenMaterial ? '#9c9c9c' : (generatedDataUrl || activePreset!.previewColor);
 
   const terrainData: TerrainData = {
     gridX: grid,
@@ -103,7 +109,7 @@ export function createTerrainShape(options: TerrainCreationOptions, existingId?:
     baseHeights: [...heights],
     shadingMode: 'default',
     textureUrl: initialTexture,
-    textureScale: options.textureScale ?? activePreset.defaultRepeat ?? 8,
+    textureScale: options.textureScale ?? activePreset?.defaultRepeat ?? 8,
     roughness,
     topography: options.topography,
   };
@@ -120,7 +126,8 @@ export function createTerrainShape(options: TerrainCreationOptions, existingId?:
     terrainData,
     color: initialTexture,
     textureUrl: initialTexture,
-    roughness: activePreset.roughness,
-    metalness: activePreset.metalness
+    roughness: activePreset?.roughness ?? 0.8,
+    metalness: activePreset?.metalness ?? 0.05,
+    materialBindingId: isPolyHavenMaterial ? textureId : undefined,
   };
 }

@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { afterEach, describe, it, vi } from 'vitest';
+import { cleanup, render } from '@testing-library/react';
 import React from 'react';
+
+// Without this, the two renders below stay mounted side by side for the rest of the file,
+// so a pending async effect (e.g. an asset-catalog fetch) from the first App can still be
+// scheduled to update React state after this test file's jsdom environment is torn down.
+afterEach(cleanup);
 
 vi.mock('./firebase', () => ({
   db: {},
