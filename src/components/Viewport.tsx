@@ -4298,7 +4298,9 @@ function Scene() {
       type: 'wall',
       position: [center.x, center.y, center.z],
       quaternion: [quat.x, quat.y, quat.z, quat.w],
-      args: [dist, actualHeight, actualThickness],
+      // Extend past each endpoint by half the thickness so a chained wall's box overlaps its
+      // neighbor's at the shared corner vertex instead of leaving a thickness-sized gap there.
+      args: [dist + actualThickness, actualHeight, actualThickness],
       color: activeMaterial || '#e2e8f0',
       roughness: activePBR.roughness,
       metalness: activePBR.metalness,
@@ -4436,7 +4438,9 @@ function Scene() {
               ...s,
               position: [midX, assembly.datumZ + wallH / 2, midZ],
               quaternion: [quat.x, quat.y, quat.z, quat.w] as [number, number, number, number],
-              args: [dir.length(), wallH, thickness],
+              // Extend past each endpoint by half the thickness to overlap the neighboring
+              // wall at the shared corner vertex, matching createWallSegment/buildRoomAssembly.
+              args: [dir.length() + thickness, wallH, thickness],
             };
           }
         }

@@ -406,13 +406,18 @@ export function buildRoomAssembly(
     const angle = Math.atan2(dirZ, dirX);
     const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
 
+    // Each wall box spans only the exact distance between its two corner vertices, so at a
+    // shared corner the two adjoining walls only touch along their centerline point - their
+    // thickness never overlaps, leaving a thickness-sized gap at every corner. Extending the
+    // length by one full thickness (half past each endpoint) fills that gap for the common
+    // orthogonal case without needing a true per-angle miter.
     const wallShape: Shape = {
       id: Math.random().toString(36).substr(2, 9),
       name: `Exterior Wall St-${story} (${(i + 1)})`,
       type: 'wall',
       position: [midX, midY, midZ],
       quaternion: [quat.x, quat.y, quat.z, quat.w],
-      args: [dist, wallHeight, wallThickness],
+      args: [dist + wallThickness, wallHeight, wallThickness],
       color: options.wallColor || '#f1f5f9',
       roughness: 0.7,
       metalness: 0.05,
