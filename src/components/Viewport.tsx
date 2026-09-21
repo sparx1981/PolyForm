@@ -113,7 +113,7 @@ import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
-import { buildRoomAssembly, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint } from '../lib/archRoomAssembly';
+import { buildRoomAssembly, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeMiterExtension } from '../lib/archRoomAssembly';
 import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
@@ -4033,18 +4033,40 @@ function Scene() {
         cornerPoints: cornerPoints.map(p => [p.x, p.y]),
       });
 
+      // Turn angle each wall's own direction makes with its neighbor at each loop vertex - the
+      // angle between two flat, perpendicular box end caps meeting at that vertex's corner
+      // point. At any angle other than exactly straight-through, those flat caps don't align
+      // with each other, leaving a wedge-shaped gap on the corner's outer side unless each
+      // wall is extended past the shared corner point (see computeMiterExtension).
+      const turnAngleAtVertex: number[] = loopVectors.map((_, i) => {
+        const before = edgeWalls[(i - 1 + loopLen) % loopLen];
+        const after = edgeWalls[i];
+        if (!before || !after) return 0;
+        const dot = before.dir.dot(after.dir);
+        return Math.acos(Math.min(1, Math.max(-1, dot)));
+      });
+
       const updatesByShapeId = new Map<string, Shape>();
       for (let i = 0; i < loopLen; i++) {
         const ew = edgeWalls[i];
         if (!ew) continue;
         const start = cornerPoints[i];
         const end = cornerPoints[(i + 1) % loopLen];
-        const length = start.distanceTo(end);
-        if (length < 0.01) continue;
+        const baseLength = start.distanceTo(end);
+        if (baseLength < 0.01) continue;
+        const extStart = computeMiterExtension(ew.thickness, turnAngleAtVertex[i]);
+        const extEnd = computeMiterExtension(ew.thickness, turnAngleAtVertex[(i + 1) % loopLen]);
+        const length = baseLength + extStart + extEnd;
         const angle = Math.atan2(ew.dir.y, ew.dir.x);
         const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
-        const midX = (start.x + end.x) / 2;
-        const midZ = (start.y + end.y) / 2;
+        // Naive midpoint of the two corner points, then nudged along the wall's own direction
+        // by the (possibly asymmetric) extension so the lengthened box stays centered between
+        // its now-further-out end caps rather than only growing on one side.
+        const naiveMidX = (start.x + end.x) / 2;
+        const naiveMidZ = (start.y + end.y) / 2;
+        const shift = (extEnd - extStart) / 2;
+        const midX = naiveMidX + ew.dir.x * shift;
+        const midZ = naiveMidZ + ew.dir.y * shift;
         const original = wallsForStory.find(s => s.id === ew.shapeId)!;
         updatesByShapeId.set(ew.shapeId, {
           ...original,
@@ -4053,9 +4075,22 @@ function Scene() {
           args: [length, ew.wallH, ew.thickness],
         });
       }
+      // Temporary diagnostic: the exact position/args/quaternion being written into each wall
+      // Shape - if the rendered wall doesn't match these numbers, the bug is in rendering
+      // (stale geometry / reconciliation), not in this corner math.
+      diagLog('WALL_MITER', `Applying ${updatesByShapeId.size} wall updates`, {
+        updates: [...updatesByShapeId.entries()].map(([id, s]) => ({
+          id, position: s.position, args: s.args, quaternion: s.quaternion,
+        })),
+      });
+
       next = next.map(s => updatesByShapeId.get(s.id) ?? s);
 
       const oriented = orientRoomWallsToExterior(next, roomPoly2D);
+      const flipped = oriented.filter((s, idx) => s.type === 'wall' && s.quaternion !== next[idx]?.quaternion).map(s => s.id);
+      if (flipped.length) {
+        diagLog('WALL_MITER', `orientRoomWallsToExterior flipped ${flipped.length} wall(s)`, { flipped });
+      }
       return assembly.updatedTerrainData && assembly.modifiedTerrainShapeId
         ? oriented.map(s => s.id === assembly.modifiedTerrainShapeId ? { ...s, terrainData: assembly.updatedTerrainData! } : s)
         : oriented;

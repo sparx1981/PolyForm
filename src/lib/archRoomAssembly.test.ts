@@ -8,6 +8,7 @@ import {
   flattenTerrainForFloorSlabs,
   intersectLines2D,
   computeWallCornerPoint,
+  computeMiterExtension,
 } from './archRoomAssembly';
 import { createTerrainShape } from './terrain/terrainFactory';
 import { Shape } from '../types';
@@ -143,5 +144,22 @@ describe('ArchRoomAssembly & Site Terracing', () => {
     expect(corner.x).toBeCloseTo(0);
     expect(corner.y).toBeCloseTo(-0.1);
     expect(intersectLines2D([0, 0], [1, 0], [5, 0], [1, 0])).toBeNull();
+  });
+
+  it('computes the exact half-thickness miter extension at a 90-degree corner', () => {
+    // Derived from first principles (two width-t strips crossing at a right angle, cut flush
+    // at the shared centerline point): the naive flush cut leaves an uncovered t/2 x t/2
+    // square at the corner unless each wall is additionally extended by exactly t/2.
+    expect(computeMiterExtension(0.2, Math.PI / 2)).toBeCloseTo(0.1);
+  });
+
+  it('needs no miter extension for a straight (non-turning) join', () => {
+    expect(computeMiterExtension(0.2, 0)).toBeCloseTo(0);
+  });
+
+  it('caps the miter extension near a 180-degree fold instead of diverging to infinity', () => {
+    const ext = computeMiterExtension(0.2, Math.PI * 0.999);
+    expect(Number.isFinite(ext)).toBe(true);
+    expect(ext).toBeLessThan(10);
   });
 });
