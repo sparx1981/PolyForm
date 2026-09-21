@@ -121,6 +121,44 @@ export function computeOutwardWallNormal2D(
 }
 
 /**
+ * Intersects two infinite 2D lines, each given as a point and a direction vector. Returns
+ * null when the lines are parallel (or nearly so) rather than dividing by ~0.
+ */
+export function intersectLines2D(
+  p1: [number, number], d1: [number, number],
+  p2: [number, number], d2: [number, number]
+): [number, number] | null {
+  const denom = d1[0] * d2[1] - d1[1] * d2[0];
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((p2[0] - p1[0]) * d2[1] - (p2[1] - p1[1]) * d2[0]) / denom;
+  return [p1[0] + d1[0] * t, p1[1] + d1[1] * t];
+}
+
+/**
+ * Where two adjoining walls actually meet at a shared corner vertex, once each wall's own
+ * justification offset has shifted its centerline off the raw drawn point. A fixed
+ * "extend both ends by half the thickness" only reproduces this correctly at exactly 90
+ * degrees - at any other angle it overshoots (overlap) or undershoots (gap). This instead
+ * intersects the two walls' own offset centerlines directly, which is exact at any angle
+ * and for any combination of exterior/interior/center justification.
+ */
+export function computeWallCornerPoint(
+  vertex: THREE.Vector3,
+  beforeEdge: { offsetPoint: THREE.Vector2; dir: THREE.Vector2 } | null,
+  afterEdge: { offsetPoint: THREE.Vector2; dir: THREE.Vector2 } | null
+): THREE.Vector2 {
+  const raw = new THREE.Vector2(vertex.x, vertex.z);
+  if (!beforeEdge || !afterEdge) return beforeEdge?.offsetPoint ?? afterEdge?.offsetPoint ?? raw;
+  const hit = intersectLines2D(
+    [beforeEdge.offsetPoint.x, beforeEdge.offsetPoint.y], [beforeEdge.dir.x, beforeEdge.dir.y],
+    [afterEdge.offsetPoint.x, afterEdge.offsetPoint.y], [afterEdge.dir.x, afterEdge.dir.y]
+  );
+  // Parallel (a straight-through vertex, or a 180-degree fold): no single miter point exists,
+  // so just butt against the incoming wall's own offset line.
+  return hit ? new THREE.Vector2(hit[0], hit[1]) : beforeEdge.offsetPoint;
+}
+
+/**
  * Automatically orients room perimeter walls so their local +Z face (the exterior/cladding face)
  * is guaranteed to point outward towards the exterior, regardless of whether the user drew
  * the room in a clockwise or counter-clockwise fashion.
