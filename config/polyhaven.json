@@ -5,7 +5,7 @@
   "operatorContact": "craigtrickett@gmail.com",
   "workDirectory": ".polyhaven",
   "publicDirectory": "public/polyhaven",
-  "sourceCeiling": "4k",
+  "sourceCeiling": "2k",
   "runtimeTiers": ["1k", "2k"],
   "metadataConcurrency": 2,
   "downloadConcurrency": 4,
