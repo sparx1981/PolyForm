@@ -47,10 +47,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "63486ad20bcbffc4bb0f312a03e6a0e87f25d0bef30e0621d08d8986257c320a",
-        "fallbackByteLength": 620832,
         "sha256": "58c0ecf621a84269c1463ba192b479fdb5e158f6b2d6a1d31fe39665f0ffbb89",
         "byteLength": 224214,
         "width": 1024,
@@ -70,10 +66,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "50a89e2b1023e7808d6dbea44a97b1db7f0b1ada8d78c6e029ba1416be8f056f",
-        "fallbackByteLength": 5851507,
         "sha256": "c71d26e8932a57aefad9b256e951ee078a569fed5a53c89a2103e7a735e373eb",
         "byteLength": 1331344,
         "width": 1024,
@@ -92,10 +84,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "e4820ee4f0f3029f97e545cc84ea1c6e6d77048baa18dd6466d493133a0b809d",
-        "fallbackByteLength": 4432594,
         "sha256": "6dfa8aeef11f6b6894fff8a85966f67188edc225f4f275b70847a1eae462b688",
         "byteLength": 1189019,
         "width": 1024,
@@ -132,10 +120,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "1bca04f7b26cd8fdff3a6cebc940f1fdaeb96a2ef80063da5153781883a8112b",
-        "fallbackByteLength": 2513372,
         "sha256": "b5d3eea2d4e9383b11c5525c8d70c1589f41077792810ae1cbaf4c88ba8de979",
         "byteLength": 844577,
         "width": 2048,
@@ -155,10 +139,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "be989ae8b5bae674a91774c673f83e959a581777478569af04c525f3269e3bc4",
-        "fallbackByteLength": 23340959,
         "sha256": "b5d9436498e1f93dd5dfac886a2674dffaa08eef833eeb31d3bcade6e2646bfc",
         "byteLength": 5319207,
         "width": 2048,
@@ -177,10 +157,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/stone_brick_wall_001/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "06c88c09aacb2116eedc3bf74c59f04ce89f37a9f57d0fe917aa6d4c5d6bb843",
-        "fallbackByteLength": 17604083,
         "sha256": "4fb74121c13164dbc00565e3763b931430d4c467f0b1779487ad7c140bf7db84",
         "byteLength": 4683576,
         "width": 2048,

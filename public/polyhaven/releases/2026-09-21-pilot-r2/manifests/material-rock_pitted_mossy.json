@@ -56,10 +56,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "bda27fd93d77bf17cecd41be98726548d2941bc1f8e05624b0ae091d82f7d051",
-        "fallbackByteLength": 746174,
         "sha256": "81d3cb5029540968800980ce525e939c57858cb99a16846158d1eb8438820466",
         "byteLength": 259936,
         "width": 1024,
@@ -79,10 +75,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "f71ba76393debd09778afba4d007718a3aa6c1c97b817aaaff0c8c3d1baa249c",
-        "fallbackByteLength": 5814223,
         "sha256": "e0d284b99d095771a7f9ceac8090bbfef24459bae1e5a1a438a30c26a3a55e43",
         "byteLength": 1335496,
         "width": 1024,
@@ -101,10 +93,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "21de092dd01cf5ab4d31e8e1e64ff22d34ef5b8b37061a56548b809e84f05c1d",
-        "fallbackByteLength": 4306538,
         "sha256": "bb49a46422964585bd8456d9167be9a833d62941281b70b79de9d6c57377c553",
         "byteLength": 1196537,
         "width": 1024,
@@ -141,10 +129,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "0eb5c301c9639fe3f3e3a39234fefc631118c91b05ff1c463eeb75724d97e6b1",
-        "fallbackByteLength": 2910986,
         "sha256": "20a98da877963dd24c57b250a64e8ba5f1c6d97d415bf4faea7256bb0e931098",
         "byteLength": 981797,
         "width": 2048,
@@ -164,10 +148,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "f79e6a5acdb844de3ade6b7d4f7991f4fefa604b959e47de193f59e4b9b0c25d",
-        "fallbackByteLength": 23308504,
         "sha256": "d26f9d8b1d13bcbf88a43f1018f2171f616da7c9011746d9b25021b2c8f0196d",
         "byteLength": 5341597,
         "width": 2048,
@@ -186,10 +166,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/rock_pitted_mossy/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "008049fd7ec422108f8964db7d0a58a3b4bc78c2c426aa2027bcf2d9cac153b3",
-        "fallbackByteLength": 17071414,
         "sha256": "78ee502afaf51ce8028e54979fae06889e220b5c43403676a3a6ba4aba69e6f5",
         "byteLength": 4667080,
         "width": 2048,

@@ -52,10 +52,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "e325698fbb82e988e1c9d8d76ddad87af1e13cdb9d08b9a50111f6ef2c6ffa72",
-        "fallbackByteLength": 304632,
         "sha256": "1b8257843aa203cb17a4e8ca89116b05db9048ec179cdb01856f364934696589",
         "byteLength": 169910,
         "width": 1024,
@@ -75,10 +71,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "1e44886cd732ff7363d41dbad652b7d3fbb36dff53b08c002e7a24452d46fc59",
-        "fallbackByteLength": 5484982,
         "sha256": "8d3d707246dc4fab730a9a77a167dbeebb1765058d328467234e613270341912",
         "byteLength": 1015580,
         "width": 1024,
@@ -97,10 +89,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "2203ac97f37e047e222babe75e74ff660e0bdae5d896f0131473427351f461e5",
-        "fallbackByteLength": 4271066,
         "sha256": "8a6b27a061a83e86a21c901526239920e705d7dd1024ba5301e764cae9373e47",
         "byteLength": 1073056,
         "width": 1024,
@@ -137,10 +125,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "5c019777e6660ea6b8d64c58671e4115cab2967eefc517da67d2428647b86b2e",
-        "fallbackByteLength": 1189126,
         "sha256": "d4345cdea0949b07ed41f47f61670a66b25d5a82bdc6e6d1f62cf6755596b354",
         "byteLength": 636903,
         "width": 2048,
@@ -160,10 +144,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "c990697c42509ae8ce3c1ed6b1c2c549958ccd88f9b1158b0edb983cf441bd00",
-        "fallbackByteLength": 22793529,
         "sha256": "888331b6f8b1c02378b3628b1b64b6e1b55a93a733799d9c0db4c66a6b06296b",
         "byteLength": 4540011,
         "width": 2048,
@@ -182,10 +162,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/concrete_floor_worn_001/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "6362936127bc82d4c4a42e3a22d5aad2e154629acc7ff5b4fd1870c0af3cc206",
-        "fallbackByteLength": 17285455,
         "sha256": "2304ffa4938970214a4dbb0f53465e7d2b0bfddf5b3ce022ec8576fd20fea93b",
         "byteLength": 4282776,
         "width": 2048,

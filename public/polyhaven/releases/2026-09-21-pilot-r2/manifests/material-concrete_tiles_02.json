@@ -52,10 +52,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "148bf0af6f2057a0e4e2cb75f592f6e6fff7c63cb4becd8df50df487d5e41830",
-        "fallbackByteLength": 370458,
         "sha256": "8bd114499500d055bfca364ddbe98472632061980f531023742eef6ed10931d0",
         "byteLength": 187018,
         "width": 1024,
@@ -75,10 +71,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "6aedc88b52b3747186a253d2fcd1f63d5b19ae2d1f8852f9f41d070dc6dc586d",
-        "fallbackByteLength": 5257890,
         "sha256": "f485ea6011970dd6a4154bb4db9ce8aa095e999e069eb943f87120c1b382973b",
         "byteLength": 1038241,
         "width": 1024,
@@ -97,10 +89,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "dc3b69a5f668b6f65aaf6cde9c993d7e1feb257105b82f447c871f33fcd95080",
-        "fallbackByteLength": 3699566,
         "sha256": "d0285bbc414f4a76effcd7bb36459cb97db8610763812cfdda495a619229722c",
         "byteLength": 836004,
         "width": 1024,
@@ -137,10 +125,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "c11a34732e825a253e1620a2a8df2dcb9cd174b2ab044ea54b2cc489de560be7",
-        "fallbackByteLength": 1737366,
         "sha256": "8066267907c3b4d401241d35a1b7c8f0f72019caf6731f9579ae3c77ecf0c086",
         "byteLength": 718231,
         "width": 2048,
@@ -160,10 +144,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "f8e6193b947399554348f5f5c3019da5dc8b6fec88dd2db41b5fa72a7ebdbea3",
-        "fallbackByteLength": 21129537,
         "sha256": "0d78f0df5cee90faa349d47e19b4793340425ef8341b4cdd55c6b23245e1ea4f",
         "byteLength": 4153207,
         "width": 2048,
@@ -182,10 +162,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/concrete_tiles_02/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "89a18ef7a8cca7fd64675495b8970a968269632289acfe6d1b358bced8f6fc9b",
-        "fallbackByteLength": 15221838,
         "sha256": "f1a8ffb6fefc5f14c68e2e5d6a7a0d38f71e79c9bd6d01b086d07cc7618cf37f",
         "byteLength": 3426018,
         "width": 2048,

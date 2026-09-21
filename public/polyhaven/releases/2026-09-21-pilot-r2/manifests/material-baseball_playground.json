@@ -49,10 +49,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "b915cfb5146331b4b7c0964be88ad2c17f1c55cbee2049489211afbae06f4302",
-        "fallbackByteLength": 360634,
         "sha256": "449d1e2eb0ffd987f13ff2b22e8b985c10839d2606a6dbe564d77367fffdbf55",
         "byteLength": 181625,
         "width": 1024,
@@ -72,10 +68,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "20e248c0ae210a9eb90f9472fe22f3a1ecae6b4428b6546994544ddcb94872d6",
-        "fallbackByteLength": 5747651,
         "sha256": "a6526de2396021e75c0cc63a53db224ccdf0783e4b5cd47672d14f253f9ce586",
         "byteLength": 1256385,
         "width": 1024,
@@ -94,10 +86,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "2e4392d8058f7c8c6a09f92c0b114c86e9d07ed5bf9e4bbe768d843cd31750eb",
-        "fallbackByteLength": 4323628,
         "sha256": "b7f9e3c5315a86a24ceec304fdeeba2b55d224fb40f17d62564a2499eaabb538",
         "byteLength": 1084422,
         "width": 1024,
@@ -134,10 +122,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "7ed8ad77f57837dd06f803d3b0e3471dd40f5ca8a6928445f5aee3286852962b",
-        "fallbackByteLength": 1771570,
         "sha256": "bb46e6baafe82b80fbeb3572124bce2d871a95c2050a85e74f17f649ee90ca31",
         "byteLength": 712648,
         "width": 2048,
@@ -157,10 +141,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "38894a5fc696fc147a1f0afdcd6953f585790c3d1b7eed404e4858f9decc80dd",
-        "fallbackByteLength": 22757175,
         "sha256": "13be055dd5a46c46a6b3cc8f71f1459501892b26966fbc79451a33491d9ab180",
         "byteLength": 4201965,
         "width": 2048,
@@ -179,10 +159,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/baseball_playground/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "6b2bb09f3220b4075f86b203bcdd1fa72618ce4b85613c63b1d6eaa7b69d3f9f",
-        "fallbackByteLength": 17620649,
         "sha256": "3f603920c1992858df5a01b938c3ed0a11aa7e92d8a3644a1cdc5c9b817b2dc1",
         "byteLength": 4349776,
         "width": 2048,

@@ -50,10 +50,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "0c23c7bc1fb083b7d122f0b5d3bc5680ecd596208bf13339c1def93f3ad1dbc5",
-        "fallbackByteLength": 586036,
         "sha256": "4eff8dac0bb0a5c45813337d663ab716e18185479ed880d81ee3f50a6d05648d",
         "byteLength": 240157,
         "width": 1024,
@@ -73,10 +69,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "4eaed060a0bed30975d8e5f7e8c093aec04db942d9219e1d782ffbea8e40112d",
-        "fallbackByteLength": 5775152,
         "sha256": "95c12dbbd55dacaeffedecbac7d155c6709a9737a457492c076730c331f13ae1",
         "byteLength": 1299216,
         "width": 1024,
@@ -95,10 +87,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "e792777311804e3dd83ade993762a5b7c5633397fd4c0d23cdedfc0b9342d872",
-        "fallbackByteLength": 4045711,
         "sha256": "9055b4039983017df52f8e9ab942bcac2269569525dc8ebe03c1a718b37e007c",
         "byteLength": 1138412,
         "width": 1024,
@@ -135,10 +123,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "218a7855bb19af1e0b06b02d5c3e83f292f73c7254dcab945803318441de4769",
-        "fallbackByteLength": 2029464,
         "sha256": "b3c992084345acca79412af306944727132c31ed58d3b8c60e6bd38691ea6c77",
         "byteLength": 877287,
         "width": 2048,
@@ -158,10 +142,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "9b6cee4c9f0353a0e9ed95bcfe539b43e37d5793578107f40eadc87b66df1766",
-        "fallbackByteLength": 22781277,
         "sha256": "5edce9f8038e0984784e5ef0d85f1a3a88d5575361fe1795aa22c9f5c2b4e6f5",
         "byteLength": 5245039,
         "width": 2048,
@@ -180,10 +160,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/clay_roof_tiles/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "6c8311990f4bae3b336b02806f56d43215df4af8fc66d03af653b76355129dd3",
-        "fallbackByteLength": 15801433,
         "sha256": "47de2eea52593d4930a824dc8705e5016fae7aef98eb6ec8a57552035411a34b",
         "byteLength": 4522755,
         "width": 2048,

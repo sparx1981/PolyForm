@@ -55,10 +55,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "9ef40c818953a8d01b355e15a8f3a8cc80c2496a550e83f5e0c0c17e9b2c43bb",
-        "fallbackByteLength": 368310,
         "sha256": "ee12979c7faf48e81c51948a187892334539695a0f2aadcc042039878b900a40",
         "byteLength": 191255,
         "width": 1024,
@@ -78,10 +74,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "5df0fff24d5184a65cd71a39a2aadb1e351e23e301d4a92d3ff98088919c0335",
-        "fallbackByteLength": 4759525,
         "sha256": "bc7fb8bc5eb7a36b677beff6db466bce1644b6169f97c6b71e1602893c0e64b2",
         "byteLength": 635706,
         "width": 1024,
@@ -100,10 +92,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "7954b81a07c9c0db7f53ec668bb8745f4043956bfcddb54a22562a0b53b5d05e",
-        "fallbackByteLength": 3624762,
         "sha256": "28401f42047e4276f3f56a7965d8f28ae9e501fc144645a4d3164d6f49bd1a35",
         "byteLength": 854310,
         "width": 1024,
@@ -140,10 +128,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "5c9f3f869ba5462c9df5bb5770e5c06361c3600d46b2843cdcd69b2d448474d2",
-        "fallbackByteLength": 1821024,
         "sha256": "07f2352c8dc165b29fe0e18014fdab47c60914d0b460f77b7c87a6a6cd03efe9",
         "byteLength": 725242,
         "width": 2048,
@@ -163,10 +147,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "57e10ada97065f70cc6dd774147ad862c8f64fc7a631d9ef7552d4c444f3adca",
-        "fallbackByteLength": 21051520,
         "sha256": "aeea21209dcc5ef5f56ac1eb4aed69a789158123e27e37d625966bb53e5e9c95",
         "byteLength": 3395783,
         "width": 2048,
@@ -185,10 +165,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/checkered_pavement_tiles/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "0428e7473afd2a1d8596305c550a98bf02be60b43e1d7accf026e79dccfa46eb",
-        "fallbackByteLength": 13654383,
         "sha256": "4d2a0c2f117a8f6836d21a245de8f41a56a845c3d0c9de2ba6dbf8852c124b1c",
         "byteLength": 3737504,
         "width": 2048,

@@ -57,10 +57,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "8192d4900e4aa91f4f362cc9c2c3a7d1f847d3df1a30b6e02e9dd6416d2739e9",
-        "fallbackByteLength": 910964,
         "sha256": "46a7eacf96cef122aea71076ee6e13a9c3c29422f2e6ec84a658d98e0387ae77",
         "byteLength": 258669,
         "width": 1024,
@@ -80,10 +76,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "ef7732562a2ebc83357e99e39883ae383de80d0bf5f698d3e47d60a1e3713e93",
-        "fallbackByteLength": 6163718,
         "sha256": "31d5a963c0a71e9dbb3be898cdfdcc8445d9271dc2963583d3896d071be20dbe",
         "byteLength": 1325062,
         "width": 1024,
@@ -102,10 +94,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "61634bb520ba0ce1ec8ea0bcf788207a0c3a1994a7def1a5f9f7e347df07a349",
-        "fallbackByteLength": 4714889,
         "sha256": "6b7ffb51ff925b0d2d7ad9708dea7e17c6e73e713671354f57126dad7e4ab2f8",
         "byteLength": 1186543,
         "width": 1024,
@@ -142,10 +130,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "895ee77e7a91c174582b49af95bc51b333c78e9a726271288a2c6dd5bf7e364a",
-        "fallbackByteLength": 3361588,
         "sha256": "7c14fc0960a5a412a5fc38eeb9775f123dd78b89a49641f4d7fbaa2eb636171b",
         "byteLength": 1008866,
         "width": 2048,
@@ -165,10 +149,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "b4266afa8068e6fb9e7a014e1b75bf1f26210fcef77c031f99e091655a91d934",
-        "fallbackByteLength": 24391045,
         "sha256": "3253b4be365bf6edd7621bff57499f41b5b4fd178e99d7758cdbcfdcbc64ba2b",
         "byteLength": 4989747,
         "width": 2048,
@@ -187,10 +167,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/gravel_floor/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "8768ebdba306a60a95d6e831017ac7104f4b12c9e6c3fd770931564385d4992d",
-        "fallbackByteLength": 18595806,
         "sha256": "1a9fd02b1e2723c9d2a589d579f3706b88f7132151b19689852f17fcbe3157bd",
         "byteLength": 4516354,
         "width": 2048,

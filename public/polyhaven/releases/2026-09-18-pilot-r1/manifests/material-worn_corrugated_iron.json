@@ -65,10 +65,6 @@
     "1k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/1k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/1k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "f25e23f33804504410c8168a745e05d4b49969ec0833df283b43dafcce571ace",
-        "fallbackByteLength": 571810,
         "sha256": "a58d53e8e7f3ba2ab60f3bbdefdfcd3d9e5e1eda582234f8235e60f43092114d",
         "byteLength": 233113,
         "width": 1024,
@@ -88,10 +84,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/1k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/1k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "36c29eae2cf2eeb18ae4cd6b61ba1dd433b444272a9473926a48f4ac6ce36e30",
-        "fallbackByteLength": 5747852,
         "sha256": "a4b444d82a0106fc9083cebbb0bbb65dc8d64243e002fd95b048d58a1ff62e65",
         "byteLength": 1303197,
         "width": 1024,
@@ -110,10 +102,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/1k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/1k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "6bab6f0d5bbc45ec614e715dec3bb6a315161c54f63e2010f5eff688fc48b5e2",
-        "fallbackByteLength": 4325312,
         "sha256": "9d7959b7a607a7794d5558a84f131f45107710654f7342aafc9e9a5504173227",
         "byteLength": 1192989,
         "width": 1024,
@@ -150,10 +138,6 @@
     "2k": {
       "basecolor": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/2k/basecolor.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/2k/basecolor.webp",
-        "fallbackFormat": "webp",
-        "fallbackSha256": "3fbcf0b3272e40e2f12a9005fe92964d2621129c1b9752c43d96f5f958f51a6e",
-        "fallbackByteLength": 2079648,
         "sha256": "774f083b1d3b63bafef5fd0316f589d5fa821b5c7625e4a5dabedea4f7caea22",
         "byteLength": 861926,
         "width": 2048,
@@ -173,10 +157,6 @@
       },
       "normal-gl": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/2k/normal-gl.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/2k/normal-gl.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "af2d35d398bd73ab09995dc806617e4c848073fe18c247e24bddaa70223b4664",
-        "fallbackByteLength": 23098663,
         "sha256": "5a7a145e6ff2be57215865faccd08b1c50015fbc8fa6f70e9af6809f299dac22",
         "byteLength": 5243761,
         "width": 2048,
@@ -195,10 +175,6 @@
       },
       "orm": {
         "url": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/2k/orm.ktx2",
-        "fallbackUrl": "/polyhaven/releases/2026-09-18-pilot-r1/assets/materials/worn_corrugated_iron/2k/orm.png",
-        "fallbackFormat": "png",
-        "fallbackSha256": "c9868f16b9e08027ba282cc7f43fcf872bda932ef35733b9e1a605128beb260d",
-        "fallbackByteLength": 17196565,
         "sha256": "92201d5c26230e5ae1fe1105c0ddbaaa49c3dc13efed87511242dffe6ebc6eeb",
         "byteLength": 4711375,
         "width": 2048,
