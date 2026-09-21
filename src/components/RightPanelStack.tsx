@@ -325,6 +325,11 @@ export default function RightPanelStack() {
     }
   }, [openMaterialsSignal]);
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
+  // A double-click delivers a click event first - applying-and-closing the dialog immediately
+  // on that first click unmounts the button before the browser can ever fire dblclick, so a
+  // double-click could never reach the edit action. Defer the single-click action briefly and
+  // cancel it if a dblclick follows within that window.
+  const premadeClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editorAsset, setEditorAsset] = useState<AssetSummary | null>(null);
   const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'premade' | 'ai'>('color');
   const [hfToken, setHfTokenState] = useState<string>(() => HuggingFaceService.getToken());
@@ -387,7 +392,13 @@ export default function RightPanelStack() {
   // HeightMapPicker has something to derive a height map from as soon as it's ready,
   // without waiting on that handler's Firebase persistence step.
   const [newTextureDataUrl, setNewTextureDataUrl] = useState<string | undefined>(undefined);
-  useEffect(() => { if (!isAddMaterialOpen) { setNewMaterialSurfaceDepth(null); setNewTextureDataUrl(undefined); } }, [isAddMaterialOpen]);
+  useEffect(() => {
+    if (!isAddMaterialOpen) {
+      setNewMaterialSurfaceDepth(null);
+      setNewTextureDataUrl(undefined);
+      if (premadeClickTimer.current) { clearTimeout(premadeClickTimer.current); premadeClickTimer.current = null; }
+    }
+  }, [isAddMaterialOpen]);
   const [tagSearch, setTagSearch] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
@@ -4683,11 +4694,16 @@ export default function RightPanelStack() {
                         type="button"
                         key={mat.id || `premade-${mat.name || i}-${i}`}
                         onClick={() => {
-                          const asset = catalogMaterials.find(item => item.id === mat.id);
-                          if (asset) selectCatalogMaterial(asset);
-                          setIsAddMaterialOpen(false);
+                          if (premadeClickTimer.current) clearTimeout(premadeClickTimer.current);
+                          premadeClickTimer.current = setTimeout(() => {
+                            premadeClickTimer.current = null;
+                            const asset = catalogMaterials.find(item => item.id === mat.id);
+                            if (asset) selectCatalogMaterial(asset);
+                            setIsAddMaterialOpen(false);
+                          }, 250);
                         }}
                         onDoubleClick={() => {
+                          if (premadeClickTimer.current) { clearTimeout(premadeClickTimer.current); premadeClickTimer.current = null; }
                           const asset = catalogMaterials.find(item => item.id === mat.id);
                           if (asset) { setEditorAsset(asset); setIsAddMaterialOpen(false); }
                         }}
