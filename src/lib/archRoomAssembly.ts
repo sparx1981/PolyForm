@@ -159,6 +159,24 @@ export function computeWallCornerPoint(
 }
 
 /**
+ * How far past the shared centerline corner point (from computeWallCornerPoint) a wall's
+ * flat, perpendicular box end cap must be extended along its own length axis to fully cover
+ * an angled seam with its neighbor, given the angle this wall's direction turns through at
+ * that corner. A plain box's end cap is flat and perpendicular to its own length, so it only
+ * closes flush against a neighbor's end cap when they meet at exactly 90 degrees (where this
+ * reduces to the classic "half-thickness" extension); at any other angle the flat caps are
+ * tilted relative to one another and leave a wedge-shaped gap unless each is extended by this
+ * amount. Standard architectural/CAD miter-join formula: extension = (t/2) * tan(turn/2).
+ * turnAngleRadians is clamped away from PI (a near-180-degree fold, i.e. walls doubling back
+ * on themselves) to avoid the extension blowing up to infinity.
+ */
+export function computeMiterExtension(thickness: number, turnAngleRadians: number): number {
+  const maxAngle = (170 * Math.PI) / 180;
+  const angle = Math.min(Math.abs(turnAngleRadians), maxAngle);
+  return (thickness / 2) * Math.tan(angle / 2);
+}
+
+/**
  * Automatically orients room perimeter walls so their local +Z face (the exterior/cladding face)
  * is guaranteed to point outward towards the exterior, regardless of whether the user drew
  * the room in a clockwise or counter-clockwise fashion.
