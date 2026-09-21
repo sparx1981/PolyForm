@@ -20,6 +20,7 @@ export default function AIDiagnosticLog() {
     
     let textToCopy = `=== AI DIAGNOSTIC LOG ===\n`;
     textToCopy += `App: DraftUp | Stack: Three.js, R3F, React 18, TypeScript, Vite, Firebase\n`;
+    textToCopy += `Build: ${__BUILD_COMMIT__} (${__BUILD_TIME__})\n`;
     textToCopy += `Captured: ${new Date().toISOString()}\n`;
     textToCopy += `========================\n\n`;
 
@@ -100,6 +101,12 @@ export default function AIDiagnosticLog() {
               <span className="font-bold text-sm tracking-tight">AI Diagnostic Log</span>
               <span className="bg-[#2dd4bf]/20 text-[#2dd4bf] text-[10px] px-1.5 py-0.5 rounded-full font-mono border border-[#2dd4bf]/30">
                 {diagnosticLogs.length}
+              </span>
+              <span
+                className="bg-white/5 text-gray-400 text-[9px] px-1.5 py-0.5 rounded font-mono border border-white/10"
+                title={`Built ${__BUILD_TIME__}`}
+              >
+                build {__BUILD_COMMIT__}
               </span>
             </div>
             
