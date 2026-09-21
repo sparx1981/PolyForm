@@ -4393,6 +4393,15 @@ function Scene() {
         if (key === 'z') {
           e.preventDefault();
           if (activeTool === 'wall' && wallVertices.length > 0) {
+            // Undoing a vertex mid-chain must also remove the wall segment that click created
+            // and drop its id from the chain tracking - otherwise a stray, never-updated wall
+            // is left in the scene, and the length mismatch this leaves in
+            // wallChainShapeIdsRef silently falls back to the old nearest-distance edge match
+            // (which can grab a wall from a different, nearby room) for the rest of this room.
+            if (wallVertices.length > 1) {
+              const undoneWallId = wallChainShapeIdsRef.current.pop();
+              if (undoneWallId) removeShape(undoneWallId);
+            }
             setWallVertices(prev => prev.slice(0, -1));
             if (wallVertices.length <= 1) {
               finalizeWallChain();

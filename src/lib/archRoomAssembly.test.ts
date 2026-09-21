@@ -6,6 +6,8 @@ import {
   calculateBalancedDatumElevation,
   buildRoomAssembly,
   flattenTerrainForFloorSlabs,
+  intersectLines2D,
+  computeWallCornerPoint,
 } from './archRoomAssembly';
 import { createTerrainShape } from './terrain/terrainFactory';
 import { Shape } from '../types';
@@ -104,5 +106,42 @@ describe('ArchRoomAssembly & Site Terracing', () => {
     const withGroundOnly = flattenTerrainForFloorSlabs(terrainShape, [groundFloor.slabShape], 1.0);
     const withBoth = flattenTerrainForFloorSlabs(terrainShape, [groundFloor.slabShape, upperFloorSlab], 1.0);
     expect(Array.from(withBoth!.heights)).toEqual(Array.from(withGroundOnly!.heights));
+  });
+
+  it('miters a 90-degree exterior-justified corner to the exact offset-line intersection', () => {
+    // Two walls of thickness 0.2 meeting at a right angle at the raw vertex (10, 0), each
+    // pushed outward by half its thickness (0.1) - the true corner is where their offset
+    // centerlines cross, not the raw vertex itself.
+    const before = { offsetPoint: new THREE.Vector2(0, -0.1), dir: new THREE.Vector2(1, 0) };
+    const after = { offsetPoint: new THREE.Vector2(10.1, 0), dir: new THREE.Vector2(0, 1) };
+    const corner = computeWallCornerPoint(new THREE.Vector3(10, 0, 0), before, after);
+    expect(corner.x).toBeCloseTo(10.1);
+    expect(corner.y).toBeCloseTo(-0.1);
+  });
+
+  it('miters a non-90-degree corner exactly, unlike a fixed half-thickness extension', () => {
+    // A 135-degree turn (post-turn direction at +135deg from the incoming direction) - a fixed
+    // "extend by half the thickness" would either gap or overlap here; the true miter point is
+    // the exact intersection of the two offset lines regardless of the angle between them.
+    const before = { offsetPoint: new THREE.Vector2(0, -0.1), dir: new THREE.Vector2(1, 0) };
+    const dirAfter = new THREE.Vector2(Math.cos(Math.PI * 3 / 4), Math.sin(Math.PI * 3 / 4));
+    const normalAfter = new THREE.Vector2(-dirAfter.y, dirAfter.x).multiplyScalar(0.1);
+    const after = { offsetPoint: new THREE.Vector2(10, 0).add(normalAfter), dir: dirAfter };
+    const corner = computeWallCornerPoint(new THREE.Vector3(10, 0, 0), before, after);
+    // Verify the corner actually lies on BOTH offset lines (the defining property of a correct
+    // miter join), rather than pinning to a single hand-computed value.
+    const onBeforeLine = corner.clone().sub(before.offsetPoint).cross(before.dir);
+    const onAfterLine = corner.clone().sub(after.offsetPoint).cross(dirAfter);
+    expect(Math.abs(onBeforeLine)).toBeLessThan(1e-9);
+    expect(Math.abs(onAfterLine)).toBeLessThan(1e-9);
+  });
+
+  it('falls back to the incoming wall\'s own offset point for a degenerate (parallel) join', () => {
+    const before = { offsetPoint: new THREE.Vector2(0, -0.1), dir: new THREE.Vector2(1, 0) };
+    const after = { offsetPoint: new THREE.Vector2(5, -0.1), dir: new THREE.Vector2(1, 0) };
+    const corner = computeWallCornerPoint(new THREE.Vector3(5, 0, 0), before, after);
+    expect(corner.x).toBeCloseTo(0);
+    expect(corner.y).toBeCloseTo(-0.1);
+    expect(intersectLines2D([0, 0], [1, 0], [5, 0], [1, 0])).toBeNull();
   });
 });
