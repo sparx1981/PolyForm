@@ -8,7 +8,7 @@
 // beyond texture resolution, and no LOD selection to make.
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
@@ -119,10 +119,25 @@ export async function downloadModels(
     });
   }
 
+  // Merge into any existing catalog.json (keyed by id) rather than overwrite it outright - a
+  // partial `--slugs` run (e.g. resuming after a crash, or fetching one model at a time) would
+  // otherwise silently drop every previously-downloaded model's entry, even though its files
+  // are still sitting on disk untouched.
   const catalogPath = join(outDir, 'catalog.json');
   await mkdir(outDir, { recursive: true });
-  await writeFile(catalogPath, `${JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), assets: catalog }, null, 2)}\n`);
-  console.log(`\nWrote catalog for ${catalog.length} model(s) to ${catalogPath}`);
+  let existingAssets: ModelCatalogEntry[] = [];
+  try {
+    const existing = JSON.parse(await readFile(catalogPath, 'utf8')) as { assets?: ModelCatalogEntry[] };
+    existingAssets = Array.isArray(existing.assets) ? existing.assets : [];
+  } catch {
+    // No existing catalog (or it's unreadable/corrupt) - start fresh.
+  }
+  const mergedById = new Map(existingAssets.map(asset => [asset.id, asset]));
+  for (const asset of catalog) mergedById.set(asset.id, asset);
+  const mergedAssets = [...mergedById.values()];
 
-  return { outDir, catalog };
+  await writeFile(catalogPath, `${JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), assets: mergedAssets }, null, 2)}\n`);
+  console.log(`\nWrote catalog for ${mergedAssets.length} model(s) (${catalog.length} from this run) to ${catalogPath}`);
+
+  return { outDir, catalog: mergedAssets };
 }
