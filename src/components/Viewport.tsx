@@ -5820,7 +5820,8 @@ function Scene() {
         color: species ? (species.foliageColor || colorMap[activeTool]) : (colorMap[activeTool] || '#2d6a4f'),
         roughness: 0.7,
         metalness: 0.1,
-        plantSpeciesId: (activeTool === 'tree' || activeTool === 'bush') ? activePlantSpecies : undefined,
+        plantSpeciesId: (activeTool === 'tree' || activeTool === 'bush') ? activePlantSpecies
+          : activeTool === 'rock' ? 'ph_boulder_01' : undefined,
         plantVariation: (activeTool === 'tree' || activeTool === 'bush') ? activePlantVariation : undefined
       };
 
@@ -10232,7 +10233,7 @@ function Scene() {
           </mesh>
         );
 
-        if ((shape.type === 'tree' || shape.type === 'bush') && shape.plantSpeciesId) {
+        if ((shape.type === 'tree' || shape.type === 'bush' || shape.type === 'rock') && shape.plantSpeciesId) {
           {
             return (
               <PlantModelMesh

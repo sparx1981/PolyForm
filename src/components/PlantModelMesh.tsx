@@ -11,7 +11,8 @@ interface PlantModelMeshProps { shape: Shape; selectedId: string | null; meshPro
 /** Editable plants and instanced plants use identical normalized asset templates. */
 export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighlight }: PlantModelMeshProps) {
   const { graphicsSettings } = useApp();
-  const speciesId = shape.plantSpeciesId || (shape.type === 'tree' ? 'english_oak' : 'boxwood_hedge_bush');
+  const speciesId = shape.plantSpeciesId || (shape.type === 'tree' ? 'english_oak' : shape.type === 'rock' ? 'ph_boulder_01' : 'boxwood_hedge_bush');
+  const isRigid = shape.type === 'rock';
   const key = speciesId + '/' + (shape.plantVariation || '');
   const [loaded, setLoaded] = useState<{ key: string; primitives: PlantPrimitive[] } | null>(null);
   const fallback = useMemo(() => proceduralPlantPrimitives(speciesId), [speciesId]);
@@ -39,13 +40,15 @@ export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighligh
       const mesh = new THREE.Mesh(primitive.geometry, material);
       mesh.castShadow = mesh.receiveShadow = Boolean(meshProps.castShadow);
       mesh.userData = { isShape: true, id: shape.id };
-      mesh.geometry.computeBoundingBox(); const box = mesh.geometry.boundingBox!;
-      cleanups.push(wind.attachMesh(mesh, box.min.y, Math.max(0.001, box.max.y - box.min.y)));
+      if (!isRigid) {
+        mesh.geometry.computeBoundingBox(); const box = mesh.geometry.boundingBox!;
+        cleanups.push(wind.attachMesh(mesh, box.min.y, Math.max(0.001, box.max.y - box.min.y)));
+      }
       root.add(mesh);
     }
     setGroup(root);
     return () => { cleanups.forEach(cleanup => cleanup()); root.children.forEach(child => ((child as THREE.Mesh).material as THREE.Material).dispose()); };
-  }, [primitives, selectedId === shape.id, shape.id, shape.opacity, shape.color, speciesId, meshProps.castShadow, wind]);
+  }, [primitives, selectedId === shape.id, shape.id, shape.opacity, shape.color, speciesId, meshProps.castShadow, wind, isRigid]);
   useFrame(state => wind.setTime(state.clock.elapsedTime));
   return <group {...meshProps}>{group && <primitive object={group} dispose={null} />}{selectionHighlight}</group>;
 }

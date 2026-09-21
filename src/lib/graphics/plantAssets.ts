@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PLANT_SPECIES_CATALOG } from '../plantLibrary';
-import { createTreeGeometry, createBushGeometry } from '../landscapeGeometry';
+import { createTreeGeometry, createBushGeometry, createRockGeometry } from '../landscapeGeometry';
 import { loadPlantGLTF, loadPlantFBX, loadPlantUSD, getCachedPlantTexture } from '../plantModelLoader';
 
 export interface PlantPrimitive { geometry: THREE.BufferGeometry; material: THREE.MeshStandardMaterial }
@@ -26,8 +26,12 @@ const fallbacks = new Map<string, PlantPrimitive[]>();
 export function proceduralPlantPrimitives(speciesId: string): PlantPrimitive[] {
   if (!fallbacks.has(speciesId)) {
     const species = PLANT_SPECIES_CATALOG.find(item => item.id === speciesId);
-    fallbacks.set(speciesId, [{ geometry: species?.category === 'tree' ? createTreeGeometry(speciesId) : createBushGeometry(speciesId),
-      material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }) }]);
+    const geometry = species?.category === 'rock' ? createRockGeometry(species.defaultSpread)
+      : species?.category === 'tree' ? createTreeGeometry(speciesId) : createBushGeometry(speciesId);
+    const material = species?.category === 'rock'
+      ? new THREE.MeshStandardMaterial({ color: species.foliageColor, roughness: 0.9, side: THREE.DoubleSide })
+      : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide });
+    fallbacks.set(speciesId, [{ geometry, material }]);
   }
   return fallbacks.get(speciesId)!;
 }
@@ -38,7 +42,8 @@ export function loadPlantPrimitives(speciesId: string, variation?: string): Prom
   if (templates.has(key)) return templates.get(key)!;
   const procedural = () => proceduralPlantPrimitives(speciesId);
   const promise = !species || species.modelType === 'procedural' ? Promise.resolve(procedural()) : new Promise<THREE.Group>((resolve, reject) => {
-    if (species.modelType === 'gltf') loadPlantGLTF(`${species.modelPath}${chosen.toLowerCase()}.glb`, resolve, reject);
+    if (species.modelType === 'gltf' && species.modelUrl) loadPlantGLTF(species.modelUrl, resolve, reject);
+    else if (species.modelType === 'gltf') loadPlantGLTF(`${species.modelPath}${chosen.toLowerCase()}.glb`, resolve, reject);
     else if (species.modelType === 'fbx') loadPlantFBX(`${species.modelPath}${chosen}_LOD0.fbx`, resolve, reject);
     else loadPlantUSD(`${species.modelPath}${chosen}.usd`, resolve, reject);
   }).then(root => {
