@@ -160,6 +160,15 @@ export interface Shape {
   hostWallId?: string; // For door/window shapes hosted on a wall
   archStyle?: string; // Style identifier for architectural doors, windows, and stairs
   wallStyle?: string;
+  // True mitered footprint for a wall that closes a room corner at a non-90-degree angle: the
+  // wall's 4 actual top-down corners (outer-start, inner-start, inner-end, outer-end, in that
+  // winding order), in the wall's own LOCAL space (X = along length, Z = thickness, origin at
+  // `position`) - a plain box's flat, perpendicular end caps can only close flush against a
+  // neighbor at exactly 90 degrees; at any other angle each end needs its own angled cut,
+  // computed from where this wall's outer/inner offset lines truly meet its neighbors'. Only
+  // set for walls assembled by the room tool at a non-90-degree vertex; a wall without this
+  // renders as the plain box described by `args`.
+  wallMiterFootprint?: [[number, number], [number, number], [number, number], [number, number]];
   stairStyle?: 'straight' | 'l-shape' | 'u-shape' | 'c-shape' | 'winder' | 'spiral' | 'curved' | 'bifurcated' | string;
   stairStructure?: 'closed' | 'open' | 'floating' | 'mono-stringer';
   railingMode?: 'none' | 'left' | 'right' | 'both';

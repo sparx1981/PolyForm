@@ -46,6 +46,33 @@ export function createWallGeometry(length = 3.0, height = 2.8, thickness = 0.2):
 }
 
 /**
+ * Extrudes a wall's true mitered top-down footprint (4 corners in the wall's own local space:
+ * X = along length, Z = thickness) into a solid prism, in place of a plain box - a box's flat,
+ * perpendicular end caps can only close flush against a neighboring wall at exactly 90 degrees;
+ * at any other angle each end needs its own angled cut, computed from where this wall's
+ * outer/inner offset lines truly meet its neighbors' (see computeWallFaceCorner). The footprint
+ * must be wound outer-start, inner-start, inner-end, outer-end (counter-clockwise in local X/Z)
+ * for THREE.ExtrudeGeometry to produce correctly outward-facing normals.
+ */
+export function createWallMiterFootprintGeometry(
+  footprint: [number, number][],
+  height: number
+): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  shape.moveTo(footprint[0][0], footprint[0][1]);
+  for (let i = 1; i < footprint.length; i++) shape.lineTo(footprint[i][0], footprint[i][1]);
+  shape.closePath();
+  const geom = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, steps: 1 });
+  // ExtrudeGeometry extrudes the shape's local (X, Y) along +Z from 0..height. Center it, then
+  // rotate +90 degrees about X - a proper (non-mirroring) rotation, so winding/normals from the
+  // shape survive intact - mapping (shapeX, shapeY, extrudeZ) to local (X, height, Z) exactly as
+  // a wall's other geometry expects, with the shape's own Y axis landing unflipped on local Z.
+  geom.translate(0, 0, -height / 2);
+  geom.rotateX(Math.PI / 2);
+  return geom;
+}
+
+/**
  * Creates an architectural Wall geometry with accurate cutouts/holes for doors and windows.
  */
 export function createWallWithOpeningsGeometry(
@@ -53,7 +80,8 @@ export function createWallWithOpeningsGeometry(
   height = 2.8,
   thickness = 0.2,
   openings: WallOpening[] = [],
-  style?: string
+  style?: string,
+  miterFootprint?: [number, number][]
 ): THREE.BufferGeometry {
   let baseGeom: THREE.BufferGeometry;
 
@@ -84,7 +112,9 @@ export function createWallWithOpeningsGeometry(
   }
 
   if (intervals.length === 0) {
-    baseGeom = new THREE.BoxGeometry(length, height, thickness);
+    baseGeom = miterFootprint
+      ? createWallMiterFootprintGeometry(miterFootprint, height)
+      : new THREE.BoxGeometry(length, height, thickness);
   } else {
     intervals.sort((a, b) => a.xMin - b.xMin);
 

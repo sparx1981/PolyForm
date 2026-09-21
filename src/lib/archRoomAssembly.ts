@@ -159,30 +159,28 @@ export function computeWallCornerPoint(
 }
 
 /**
- * How far past the shared centerline corner point (from computeWallCornerPoint) a wall's
- * flat, perpendicular box end cap must be extended along its own length axis to fully cover
- * an angled seam with its neighbor, given the angle this wall's direction turns through at
- * that corner. A plain box's end cap is flat and perpendicular to its own length, so it only
- * closes flush against a neighbor's end cap when they meet at exactly 90 degrees (where this
- * reduces to the classic "half-thickness" extension); at any other angle the flat caps are
- * tilted relative to one another and leave a wedge-shaped gap unless each is extended by this
- * amount. Standard architectural/CAD miter-join formula: extension = (t/2) * tan(turn/2).
- * turnAngleRadians is clamped away from PI (a near-180-degree fold, i.e. walls doubling back
- * on themselves) to avoid the extension blowing up to infinity.
+ * Where a wall's own OUTER (or INNER) face-line actually meets a neighbor's, for building a
+ * true mitered wall polygon instead of approximating the corner with an extended box. A box's
+ * flat, perpendicular end cap can only close flush against a neighbor at exactly 90 degrees;
+ * at any other angle each end needs its own angled cut. Reuses the same offset-line
+ * intersection as computeWallCornerPoint (which does this for the centerline) - the outer
+ * corner computed for one wall's end is the exact same point as its neighbor's outer corner at
+ * that shared vertex, so two mitered wall polygons share an exact edge with zero gap and zero
+ * overlap, at any angle - no extension formula, epsilon clearance, or z-fighting risk needed.
  */
-export function computeMiterExtension(thickness: number, turnAngleRadians: number): number {
-  const maxAngle = (170 * Math.PI) / 180;
-  const angle = Math.min(Math.abs(turnAngleRadians), maxAngle);
-  const raw = (thickness / 2) * Math.tan(angle / 2);
-  // Two independently rendered wall meshes whose faces land exactly coplanar (confirmed: at a
-  // 90-degree turn, the raw formula puts a wall's end cap exactly on its neighbor's own side
-  // face, over the whole thickness x height area) z-fight - a flickering, colour-bleeding seam
-  // - even though the underlying solid volumes have no gap. Pulling back by a small clearance
-  // keeps the end cap just inside the neighbor's solid body (invisible, buried in opaque
-  // material) instead of exactly flush with its visible face, at the cost of an unmeasurable,
-  // sub-millimeter point-sized gap at the corner tip that no rendering can show.
-  const clearance = Math.min(0.003, thickness * 0.05);
-  return Math.max(0, raw - clearance);
+export function computeWallFaceCorner(
+  vertex: THREE.Vector3,
+  beforeEdge: { linePoint: THREE.Vector2; dir: THREE.Vector2; outwardNormal: THREE.Vector2; thickness: number } | null,
+  afterEdge: { linePoint: THREE.Vector2; dir: THREE.Vector2; outwardNormal: THREE.Vector2; thickness: number } | null,
+  side: 1 | -1
+): THREE.Vector2 {
+  const offsetOf = (edge: { linePoint: THREE.Vector2; outwardNormal: THREE.Vector2; thickness: number }) =>
+    edge.linePoint.clone().addScaledVector(edge.outwardNormal, side * edge.thickness / 2);
+  return computeWallCornerPoint(
+    vertex,
+    beforeEdge ? { offsetPoint: offsetOf(beforeEdge), dir: beforeEdge.dir } : null,
+    afterEdge ? { offsetPoint: offsetOf(afterEdge), dir: afterEdge.dir } : null
+  );
 }
 
 /**
