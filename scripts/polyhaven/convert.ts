@@ -154,23 +154,25 @@ export async function convertRelease(config: ImporterConfig, release: string): P
         await resize(oiio, input, hdr, width, height);
         maps.environment = await makeVariant(hdr, publicUrl(release, join(relativeRoot, tier, 'environment.hdr')), width, height, 'hdr', 'linear-color', environment.sourceKey, { color: 'r' });
       } else {
-        const recipes: Array<{ semantic: 'basecolor' | 'normal-gl' | 'orm' | 'specular' | 'transmission'; mode: 'color' | 'normal' | 'data'; fallback: 'webp' | 'png'; channels: Variant['channels'] }> = [
-          { semantic: 'basecolor', mode: 'color', fallback: 'webp', channels: { red: 'r', green: 'g', blue: 'b', alpha: 'a' } },
-          { semantic: 'normal-gl', mode: 'normal', fallback: 'png', channels: { x: 'r', y: 'g', z: 'b' } },
-          { semantic: 'orm', mode: 'data', fallback: 'png', channels: { ao: 'r', roughness: 'g', metalness: 'b' } },
-          { semantic: 'specular', mode: 'data', fallback: 'png', channels: { specular: 'r' } },
-          { semantic: 'transmission', mode: 'data', fallback: 'png', channels: { transmission: 'r' } },
+        // No delivered PNG/WebP fallback: it doubled published storage (every map shipped
+        // twice) for a case - a browser with no KTX2/WebGL2 support - rare enough that the
+        // pilot library's total size matters more. The intermediate PNG below only feeds
+        // toktx; it never leaves convert-work.
+        const recipes: Array<{ semantic: 'basecolor' | 'normal-gl' | 'orm' | 'specular' | 'transmission'; mode: 'color' | 'normal' | 'data'; channels: Variant['channels'] }> = [
+          { semantic: 'basecolor', mode: 'color', channels: { red: 'r', green: 'g', blue: 'b', alpha: 'a' } },
+          { semantic: 'normal-gl', mode: 'normal', channels: { x: 'r', y: 'g', z: 'b' } },
+          { semantic: 'orm', mode: 'data', channels: { ao: 'r', roughness: 'g', metalness: 'b' } },
+          { semantic: 'specular', mode: 'data', channels: { specular: 'r' } },
+          { semantic: 'transmission', mode: 'data', channels: { transmission: 'r' } },
         ];
         for (const recipe of recipes) {
           const choice = selected(asset, recipe.semantic);
           if (!choice) continue;
           const input = sourcePath(releaseDir, asset.id, choice);
-          const fallback = join(tierDir, `${recipe.semantic}.${recipe.fallback}`);
-          await resize(oiio, input, fallback, width, height, recipe.fallback === 'webp' ? ['--attrib', 'webp:quality', '88'] : []);
-          const ktxInput = recipe.fallback === 'webp' ? join(workDir, relativeRoot, tier, `${recipe.semantic}.png`) : fallback;
-          if (recipe.fallback === 'webp') await resize(oiio, input, ktxInput, width, height);
+          const intermediate = join(workDir, relativeRoot, tier, `${recipe.semantic}.png`);
+          await resize(oiio, input, intermediate, width, height);
           const ktx = join(tierDir, `${recipe.semantic}.ktx2`);
-          await compressKtx(toktx, ktxInput, ktx, recipe.mode);
+          await compressKtx(toktx, intermediate, ktx, recipe.mode);
           maps[recipe.semantic] = await makeVariant(
             ktx,
             publicUrl(release, join(relativeRoot, tier, `${recipe.semantic}.ktx2`)),
@@ -180,7 +182,6 @@ export async function convertRelease(config: ImporterConfig, release: string): P
             recipe.mode === 'color' ? 'srgb' : 'data',
             choice.sourceKey,
             recipe.channels,
-            { path: fallback, url: publicUrl(release, join(relativeRoot, tier, `${recipe.semantic}.${recipe.fallback}`)), format: recipe.fallback },
           );
         }
         const heightChoice = selected(asset, 'height');
