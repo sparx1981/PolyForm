@@ -4021,6 +4021,18 @@ function Scene() {
         );
       });
 
+      // Temporary diagnostic: prints exactly which edges resolved to a wall (and via which
+      // matching strategy) so a reported corner gap/overlap can be checked against real data
+      // instead of guessed at from a screenshot. Safe to remove once the corner issue is
+      // confirmed fixed.
+      diagLog('WALL_MITER', `Closing room: ${loopLen} edges, chain ids=${chainShapeIds.length}, exactMatch=${useExactChainMatch}`, {
+        loopLen, chainShapeIds, useExactChainMatch,
+        edges: edgeWalls.map((ew, i) => ew
+          ? { i, shapeId: ew.shapeId, thickness: ew.thickness, linePoint: [ew.linePoint.x, ew.linePoint.y], dir: [ew.dir.x, ew.dir.y] }
+          : { i, shapeId: null }),
+        cornerPoints: cornerPoints.map(p => [p.x, p.y]),
+      });
+
       const updatesByShapeId = new Map<string, Shape>();
       for (let i = 0; i < loopLen; i++) {
         const ew = edgeWalls[i];
