@@ -7,8 +7,11 @@
 // quality tier - only the tier's textures differ - so there is nothing to choose per tier
 // beyond texture resolution, and no LOD selection to make.
 import { createHash } from 'node:crypto';
+import { createWriteStream } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import { PolyHavenApi } from './api';
 import { DEFAULT_MODEL_SLUGS } from './discoverModels';
 import type { ImporterConfig, Quality } from './types';
@@ -40,17 +43,27 @@ export interface ModelCatalogEntry {
   byteLength: number;
 }
 
+// Streams the response directly to disk while hashing it incrementally, rather than buffering
+// the whole file (some of these models' textures run into the hundreds of MB) into a single
+// in-memory Buffer - which reliably exhausted available memory partway through a batch of
+// several large models in a row.
 async function downloadVerified(url: string, destPath: string, expectedMd5: string): Promise<number> {
   await mkdir(dirname(destPath), { recursive: true });
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed (${response.status}): ${url}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const actualMd5 = createHash('md5').update(buffer).digest('hex');
+  if (!response.body) throw new Error(`Empty response body: ${url}`);
+
+  const hash = createHash('md5');
+  let byteLength = 0;
+  const source = Readable.fromWeb(response.body as any);
+  source.on('data', (chunk: Buffer) => { hash.update(chunk); byteLength += chunk.byteLength; });
+  await pipeline(source, createWriteStream(destPath));
+
+  const actualMd5 = hash.digest('hex');
   if (actualMd5.toLowerCase() !== expectedMd5.toLowerCase()) {
     throw new Error(`MD5 mismatch for ${url}: expected ${expectedMd5}, got ${actualMd5}`);
   }
-  await writeFile(destPath, buffer);
-  return buffer.byteLength;
+  return byteLength;
 }
 
 function basenameFromUrl(url: string): string {
