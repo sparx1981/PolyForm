@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import {
   resolveWorldHit,
+  isPortalSurface,
   isNavigableSurface,
   isFloorSurface,
   resolveExitPoint,
@@ -148,6 +149,7 @@ describe('resolveWorldHit', () => {
     // mirror - the mirrored component's backface classification must
     // come out inverted relative to the plain one.
     expect(mirroredHit.isBackface).toBe(!plainHit.isBackface);
+    expect(mirroredHit.worldNormal.dot(rayDir)).toBeLessThan(0);
   });
 
   it('returns null when the intersection has no face', () => {
@@ -158,6 +160,42 @@ describe('resolveWorldHit', () => {
 });
 
 describe('resolveExitPoint', () => {
+  it('keeps eye elevation when no floor is modeled beyond a wall', () => {
+    const { front, back } = wallPair(0.2);
+    const destination = resolvePortalDestination([front, back], {
+      worldPoint: new THREE.Vector3(0, 1.6, -0.1),
+      worldNormal: new THREE.Vector3(0, 0, -1), hitObject: front, isBackface: false,
+    }, { camEye: new THREE.Vector3(0, 1.6, -3), maxWallThickness: 0.6,
+      eyeHeight: 1.6, clearanceDMax: 3.5 });
+    expect(destination.eye.y).toBeCloseTo(1.6);
+    expect(destination.obstructed).toBe(false);
+  });
+
+  it('finds the exit of an opaque FrontSide wall without changing its material', () => {
+    const wall = markShape(new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.4),
+      new THREE.MeshBasicMaterial({ side: THREE.FrontSide })), 'opaque-wall');
+    wall.position.y = 1.5;
+    wall.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster(new THREE.Vector3(0, 1.6, -3), new THREE.Vector3(0, 0, 1));
+    const entry = resolveWorldHit(ray.intersectObject(wall)[0], ray.ray.direction)!;
+    const exit = resolveExitPoint([wall], entry, 0.6);
+    expect(entry.worldPoint.z).toBeCloseTo(-0.2);
+    expect(exit.z).toBeCloseTo(0.2);
+    expect((wall.material as THREE.Material).side).toBe(THREE.FrontSide);
+  });
+
+  it('supports kernel walls and ignores hidden opposing faces', () => {
+    const { front, back } = wallPair(0.4);
+    front.userData = back.userData = { isKernelGeometry: true };
+    const hit = { worldPoint: front.position.clone(), worldNormal: new THREE.Vector3(0, 0, -1),
+      hitObject: front, isBackface: false };
+    expect(resolveExitPoint([front, back], hit, 0.6).z).toBeCloseTo(0.2);
+    const hidden = new THREE.Group();
+    hidden.add(back);
+    hidden.visible = false;
+    expect(isPortalSurface(back)).toBe(false);
+    expect(resolveExitPoint([front, hidden], hit, 0.6).z).toBeCloseTo(-0.2);
+  });
   it('finds the anti-parallel far face of a two-leaf wall assembly', () => {
     const { front, back } = wallPair(0.2);
     const enterHit: ResolvedSurfaceHit = {
