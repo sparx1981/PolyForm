@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "asset": {
+    "id": "ph:hdri:qwantani_puresky",
+    "sourceId": "qwantani_puresky",
+    "kind": "hdri",
+    "name": "Qwantani (Pure Sky)",
+    "source": "polyhaven",
+    "license": "CC0-1.0",
+    "revision": "2026-09-21-pilot-r2",
+    "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-qwantani_puresky.json",
+    "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/qwantani_puresky/preview.webp",
+    "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+    "categoryPath": "Pure Skies",
+    "categorySlugPath": "pure-skies",
+    "ancestorCategoryIds": [],
+    "legacyCategories": [
+      "outdoor",
+      "skies",
+      "nature",
+      "morning-afternoon",
+      "clear",
+      "high contrast",
+      "natural light",
+      "pure skies"
+    ],
+    "tags": [
+      "pure skies"
+    ],
+    "attributes": {
+      "time_of_day": "afternoon",
+      "weather": "clear",
+      "light_type": "natural",
+      "contrast": "high",
+      "environment": "outdoor",
+      "sky_view": "open",
+      "sourceFilesHash": "da86fd9b2f8c1a8699777ae7c1184b3abc5a98f4"
+    },
+    "environmentGroup": "pure-skies",
+    "availableTiers": [
+      "1k",
+      "2k"
+    ]
+  },
+  "tiers": {
+    "1k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/qwantani_puresky/1k/environment.hdr",
+        "sha256": "3d867fc563d57ccb5cd04885ee77d99c2294d612503b5f13f15f01fa42813779",
+        "byteLength": 1228089,
+        "width": 1024,
+        "height": 512,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    },
+    "2k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/qwantani_puresky/2k/environment.hdr",
+        "sha256": "2759431583bc32ae741f276c10b0d7993375c81ca050c87cde844975bb9c0ea3",
+        "byteLength": 4584320,
+        "width": 2048,
+        "height": 1024,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    }
+  },
+  "scalarFallbacks": {
+    "color": "#ffffff",
+    "roughness": 1,
+    "metalness": 0,
+    "opacity": 1
+  },
+  "coverage": [
+    {
+      "sourceKey": "tonemapped",
+      "status": "alternative",
+      "semantic": "preview",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "converted",
+      "semantic": "environment",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    }
+  ],
+  "publication": {
+    "status": "staged"
+  }
+}

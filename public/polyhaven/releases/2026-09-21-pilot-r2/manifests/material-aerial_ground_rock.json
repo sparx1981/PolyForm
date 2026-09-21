@@ -1,0 +1,539 @@
+{
+  "schemaVersion": 1,
+  "asset": {
+    "id": "ph:material:aerial_ground_rock",
+    "sourceId": "aerial_ground_rock",
+    "kind": "material",
+    "name": "Aerial Ground Rock",
+    "source": "polyhaven",
+    "license": "CC0-1.0",
+    "revision": "2026-09-21-pilot-r2",
+    "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/material-aerial_ground_rock.json",
+    "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/preview.webp",
+    "categoryId": "c650da98-1200-549c-ade9-c3756c2f327c",
+    "categoryPath": "Ground & Terrain/Rocky Ground/Stony Dirt",
+    "categorySlugPath": "ground-and-terrain/rocky-ground/stony-dirt",
+    "ancestorCategoryIds": [],
+    "legacyCategories": [
+      "terrain",
+      "outdoor",
+      "natural",
+      "aerial"
+    ],
+    "tags": [
+      "mud",
+      "rocks",
+      "stones",
+      "dirt",
+      "dry"
+    ],
+    "attributes": {
+      "surface_use": "ground",
+      "condition": [
+        "weathered",
+        "cracked"
+      ],
+      "origin": "natural",
+      "setting": "outdoor",
+      "aerial": true,
+      "sourceFilesHash": "dfc637c0aca2c8bf1864528b9d586681cbcf8c88"
+    },
+    "availableTiers": [
+      "1k",
+      "2k"
+    ],
+    "hasHeight": true
+  },
+  "tiers": {
+    "1k": {
+      "basecolor": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/1k/basecolor.ktx2",
+        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/1k/basecolor.webp",
+        "fallbackFormat": "webp",
+        "fallbackSha256": "f4b878b17bdd587a49f2ec5f5d597a3b40f9a0d683dc0b9077cadcbcfebf85ed",
+        "fallbackByteLength": 662720,
+        "sha256": "777d461b5adaf7d1252d1818322e06d2e56b7acbd392364b44cb193779d26d9f",
+        "byteLength": 234261,
+        "width": 1024,
+        "height": 1024,
+        "format": "ktx2",
+        "encoding": "srgb",
+        "channels": {
+          "red": "r",
+          "green": "g",
+          "blue": "b",
+          "alpha": "a"
+        },
+        "sourceKeys": [
+          "Diffuse"
+        ],
+        "uvChannel": 0
+      },
+      "normal-gl": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/1k/normal-gl.ktx2",
+        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/1k/normal-gl.png",
+        "fallbackFormat": "png",
+        "fallbackSha256": "bee2842b93dfac3dd35fa1764803bc03cb2482e63638b6267330fb42a26eb51b",
+        "fallbackByteLength": 6303285,
+        "sha256": "0cda1eb228e9721c1e94be4fae11d384ac469221f6e8f1b8ea6621f6e5394e5b",
+        "byteLength": 1219602,
+        "width": 1024,
+        "height": 1024,
+        "format": "ktx2",
+        "encoding": "data",
+        "channels": {
+          "x": "r",
+          "y": "g",
+          "z": "b"
+        },
+        "sourceKeys": [
+          "nor_gl"
+        ],
+        "uvChannel": 0
+      },
+      "orm": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/1k/orm.ktx2",
+        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/1k/orm.png",
+        "fallbackFormat": "png",
+        "fallbackSha256": "09049ac7ce3f924bf2acf20047158396a129f57aa9dbbfcf579f0f5702ed1dbe",
+        "fallbackByteLength": 4577589,
+        "sha256": "a8ac0c81842724340bc53cd8397c3046a32303619f161ba2c6092eb312575884",
+        "byteLength": 1200616,
+        "width": 1024,
+        "height": 1024,
+        "format": "ktx2",
+        "encoding": "data",
+        "channels": {
+          "ao": "r",
+          "roughness": "g",
+          "metalness": "b"
+        },
+        "sourceKeys": [
+          "arm"
+        ],
+        "uvChannel": 0
+      },
+      "height": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/1k/height.exr",
+        "sha256": "551923eb1b17193eb78dbe06c5f4ae343727ad4204e9263ebc8469aeb2e13b80",
+        "byteLength": 300380,
+        "width": 1024,
+        "height": 1024,
+        "format": "exr",
+        "encoding": "data",
+        "channels": {
+          "height": "r"
+        },
+        "sourceKeys": [
+          "Displacement"
+        ],
+        "uvChannel": 0
+      }
+    },
+    "2k": {
+      "basecolor": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/2k/basecolor.ktx2",
+        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/2k/basecolor.webp",
+        "fallbackFormat": "webp",
+        "fallbackSha256": "e922d8480deafac54c08940a61f202c8e829b5c0e8402989dd9869a4aa558d3a",
+        "fallbackByteLength": 2520848,
+        "sha256": "2a3d0ac3d8ecc594d85787a83188d9517b7027b8485f84a916b14dc4f9dda7c2",
+        "byteLength": 883182,
+        "width": 2048,
+        "height": 2048,
+        "format": "ktx2",
+        "encoding": "srgb",
+        "channels": {
+          "red": "r",
+          "green": "g",
+          "blue": "b",
+          "alpha": "a"
+        },
+        "sourceKeys": [
+          "Diffuse"
+        ],
+        "uvChannel": 0
+      },
+      "normal-gl": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/2k/normal-gl.ktx2",
+        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/2k/normal-gl.png",
+        "fallbackFormat": "png",
+        "fallbackSha256": "bfc4e45dd94e821f768b0d8534c4e38576d143cea6769f10d7ae9bc7735d1b76",
+        "fallbackByteLength": 24607543,
+        "sha256": "745b100223d5fb8500d249caa5a3e5a27c8b685012a201e88b69f83f0db12f4a",
+        "byteLength": 4777330,
+        "width": 2048,
+        "height": 2048,
+        "format": "ktx2",
+        "encoding": "data",
+        "channels": {
+          "x": "r",
+          "y": "g",
+          "z": "b"
+        },
+        "sourceKeys": [
+          "nor_gl"
+        ],
+        "uvChannel": 0
+      },
+      "orm": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/2k/orm.ktx2",
+        "fallbackUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/2k/orm.png",
+        "fallbackFormat": "png",
+        "fallbackSha256": "6dcc99cdeff82b77f091d5dd482689a2056934d93802b40b8d9753d292d9d9c3",
+        "fallbackByteLength": 17945718,
+        "sha256": "77fe96f789a1163408d6caffa260497b6d1b2a7d0607d58714790a720ff3e06b",
+        "byteLength": 4686494,
+        "width": 2048,
+        "height": 2048,
+        "format": "ktx2",
+        "encoding": "data",
+        "channels": {
+          "ao": "r",
+          "roughness": "g",
+          "metalness": "b"
+        },
+        "sourceKeys": [
+          "arm"
+        ],
+        "uvChannel": 0
+      },
+      "height": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/materials/aerial_ground_rock/2k/height.exr",
+        "sha256": "3606f53d3180ec0f23c78244c71403954e30a765cb306dff750db482c6d95296",
+        "byteLength": 686990,
+        "width": 2048,
+        "height": 2048,
+        "format": "exr",
+        "encoding": "data",
+        "channels": {
+          "height": "r"
+        },
+        "sourceKeys": [
+          "Displacement"
+        ],
+        "uvChannel": 0
+      }
+    }
+  },
+  "scalarFallbacks": {
+    "color": "#ffffff",
+    "roughness": 1,
+    "metalness": 0,
+    "opacity": 1
+  },
+  "height": {
+    "scaleMeters": 0.05,
+    "biasMeters": 0,
+    "calibrated": false,
+    "provenance": "Poly Haven displacement map; default pilot scale pending asset-specific calibration."
+  },
+  "coverage": [
+    {
+      "sourceKey": "Diffuse",
+      "status": "converted",
+      "semantic": "basecolor",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "Diffuse",
+      "status": "alternative",
+      "semantic": "basecolor",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Diffuse",
+      "status": "alternative",
+      "semantic": "basecolor",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Diffuse",
+      "status": "alternative",
+      "semantic": "basecolor",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Diffuse",
+      "status": "alternative",
+      "semantic": "basecolor",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Diffuse",
+      "status": "alternative",
+      "semantic": "basecolor",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_dx",
+      "status": "alternative",
+      "semantic": "normal-dx",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "nor_dx",
+      "status": "alternative",
+      "semantic": "normal-dx",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_dx",
+      "status": "alternative",
+      "semantic": "normal-dx",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_dx",
+      "status": "alternative",
+      "semantic": "normal-dx",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_dx",
+      "status": "alternative",
+      "semantic": "normal-dx",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_dx",
+      "status": "alternative",
+      "semantic": "normal-dx",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_gl",
+      "status": "converted",
+      "semantic": "normal-gl",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "nor_gl",
+      "status": "alternative",
+      "semantic": "normal-gl",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_gl",
+      "status": "alternative",
+      "semantic": "normal-gl",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_gl",
+      "status": "alternative",
+      "semantic": "normal-gl",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_gl",
+      "status": "alternative",
+      "semantic": "normal-gl",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "nor_gl",
+      "status": "alternative",
+      "semantic": "normal-gl",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "blend",
+      "status": "alternative",
+      "reason": "Container/dependency inventory retained; not a texture map."
+    },
+    {
+      "sourceKey": "gltf",
+      "status": "alternative",
+      "reason": "Container/dependency inventory retained; not a texture map."
+    },
+    {
+      "sourceKey": "rough_ao",
+      "status": "alternative",
+      "semantic": "roughness-ao",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "rough_ao",
+      "status": "alternative",
+      "semantic": "roughness-ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "rough_ao",
+      "status": "alternative",
+      "semantic": "roughness-ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "rough_ao",
+      "status": "alternative",
+      "semantic": "roughness-ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "rough_ao",
+      "status": "alternative",
+      "semantic": "roughness-ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "rough_ao",
+      "status": "alternative",
+      "semantic": "roughness-ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "arm",
+      "status": "converted",
+      "semantic": "orm",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "arm",
+      "status": "alternative",
+      "semantic": "orm",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "arm",
+      "status": "alternative",
+      "semantic": "orm",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "arm",
+      "status": "alternative",
+      "semantic": "orm",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "arm",
+      "status": "alternative",
+      "semantic": "orm",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "arm",
+      "status": "alternative",
+      "semantic": "orm",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "AO",
+      "status": "alternative",
+      "semantic": "ao",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "AO",
+      "status": "alternative",
+      "semantic": "ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "AO",
+      "status": "alternative",
+      "semantic": "ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "AO",
+      "status": "alternative",
+      "semantic": "ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "AO",
+      "status": "alternative",
+      "semantic": "ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "AO",
+      "status": "alternative",
+      "semantic": "ao",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Displacement",
+      "status": "converted",
+      "semantic": "height",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "Displacement",
+      "status": "alternative",
+      "semantic": "height",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Displacement",
+      "status": "alternative",
+      "semantic": "height",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Displacement",
+      "status": "alternative",
+      "semantic": "height",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Displacement",
+      "status": "alternative",
+      "semantic": "height",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Displacement",
+      "status": "alternative",
+      "semantic": "height",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Rough",
+      "status": "alternative",
+      "semantic": "roughness",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "Rough",
+      "status": "alternative",
+      "semantic": "roughness",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Rough",
+      "status": "alternative",
+      "semantic": "roughness",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Rough",
+      "status": "alternative",
+      "semantic": "roughness",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Rough",
+      "status": "alternative",
+      "semantic": "roughness",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "Rough",
+      "status": "alternative",
+      "semantic": "roughness",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "mtlx",
+      "status": "alternative",
+      "reason": "Container/dependency inventory retained; not a texture map."
+    }
+  ],
+  "publication": {
+    "status": "staged"
+  }
+}

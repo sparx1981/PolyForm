@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "asset": {
+    "id": "ph:hdri:birchwood",
+    "sourceId": "birchwood",
+    "kind": "hdri",
+    "name": "Birchwood",
+    "source": "polyhaven",
+    "license": "CC0-1.0",
+    "revision": "2026-09-21-pilot-r2",
+    "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-birchwood.json",
+    "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/birchwood/preview.webp",
+    "categoryId": "69311129-a02a-5409-875f-803d4c3e7e16",
+    "categoryPath": "Forest & Woodland/Forest/Deciduous Forest",
+    "categorySlugPath": "forest-and-woodland/forest/deciduous-forest",
+    "ancestorCategoryIds": [],
+    "legacyCategories": [
+      "outdoor",
+      "nature",
+      "sunrise-sunset",
+      "clear",
+      "low contrast",
+      "natural light"
+    ],
+    "tags": [
+      "tree",
+      "snow",
+      "winter",
+      "river",
+      "frozen"
+    ],
+    "attributes": {
+      "time_of_day": "sunset",
+      "weather": "clear",
+      "light_type": "natural",
+      "contrast": "low",
+      "season": "winter",
+      "environment": "outdoor",
+      "sky_view": "obstructed",
+      "sourceFilesHash": "2b03bbde37757980621563a2d39c3997eb44de6e"
+    },
+    "environmentGroup": "forest-woodland",
+    "availableTiers": [
+      "1k",
+      "2k"
+    ]
+  },
+  "tiers": {
+    "1k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/birchwood/1k/environment.hdr",
+        "sha256": "5ec2372ea8a56484ced0717c4eb8d274161980cb988b0139014cb35ba5f110f8",
+        "byteLength": 1515637,
+        "width": 1024,
+        "height": 512,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    },
+    "2k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/birchwood/2k/environment.hdr",
+        "sha256": "863c4ba31fc06110d4d284445519f58ba07075271ad8f2c2554ac89d29eb944f",
+        "byteLength": 5936634,
+        "width": 2048,
+        "height": 1024,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    }
+  },
+  "scalarFallbacks": {
+    "color": "#ffffff",
+    "roughness": 1,
+    "metalness": 0,
+    "opacity": 1
+  },
+  "coverage": [
+    {
+      "sourceKey": "tonemapped",
+      "status": "alternative",
+      "semantic": "preview",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "converted",
+      "semantic": "environment",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    }
+  ],
+  "publication": {
+    "status": "staged"
+  }
+}

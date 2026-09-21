@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "asset": {
+    "id": "ph:hdri:syferfontein_18d_clear_puresky",
+    "sourceId": "syferfontein_18d_clear_puresky",
+    "kind": "hdri",
+    "name": "Syferfontein 18d Clear (Pure Sky)",
+    "source": "polyhaven",
+    "license": "CC0-1.0",
+    "revision": "2026-09-21-pilot-r2",
+    "manifestUrl": "/polyhaven/releases/2026-09-21-pilot-r2/manifests/hdri-syferfontein_18d_clear_puresky.json",
+    "thumbnailUrl": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/syferfontein_18d_clear_puresky/preview.webp",
+    "categoryId": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+    "categoryPath": "Pure Skies",
+    "categorySlugPath": "pure-skies",
+    "ancestorCategoryIds": [],
+    "legacyCategories": [
+      "outdoor",
+      "skies",
+      "nature",
+      "morning-afternoon",
+      "clear",
+      "high contrast",
+      "natural light",
+      "pure skies"
+    ],
+    "tags": [
+      "pure skies"
+    ],
+    "attributes": {
+      "time_of_day": "afternoon",
+      "weather": "clear",
+      "light_type": "natural",
+      "contrast": "high",
+      "environment": "outdoor",
+      "sky_view": "open",
+      "sourceFilesHash": "cf21ce7095b3c7df54fcc3d94f484a52a821a245"
+    },
+    "environmentGroup": "pure-skies",
+    "availableTiers": [
+      "1k",
+      "2k"
+    ]
+  },
+  "tiers": {
+    "1k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/syferfontein_18d_clear_puresky/1k/environment.hdr",
+        "sha256": "93271a9773f5b5ddcd210f81b072c726040b2ebb88678cfa63d09b6fcffab4da",
+        "byteLength": 1220169,
+        "width": 1024,
+        "height": 512,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    },
+    "2k": {
+      "environment": {
+        "url": "/polyhaven/releases/2026-09-21-pilot-r2/assets/hdris/syferfontein_18d_clear_puresky/2k/environment.hdr",
+        "sha256": "8990870ab8a3ae86d0d680c7b587ee8e71f31ee3ef3142ee5b0c77b17e59d448",
+        "byteLength": 4193025,
+        "width": 2048,
+        "height": 1024,
+        "format": "hdr",
+        "encoding": "linear-color",
+        "channels": {
+          "color": "r"
+        },
+        "sourceKeys": [
+          "hdri"
+        ],
+        "uvChannel": 0
+      }
+    }
+  },
+  "scalarFallbacks": {
+    "color": "#ffffff",
+    "roughness": 1,
+    "metalness": 0,
+    "opacity": 1
+  },
+  "coverage": [
+    {
+      "sourceKey": "tonemapped",
+      "status": "alternative",
+      "semantic": "preview",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "converted",
+      "semantic": "environment",
+      "reason": "Selected source accounted for by the deterministic pilot recipe."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    },
+    {
+      "sourceKey": "hdri",
+      "status": "alternative",
+      "semantic": "environment",
+      "reason": "Available duplicate retained in inventory."
+    }
+  ],
+  "publication": {
+    "status": "staged"
+  }
+}
