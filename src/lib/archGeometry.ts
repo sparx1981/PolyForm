@@ -2,6 +2,32 @@ import * as THREE from 'three';
 // @ts-ignore
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+// Real-world size (in meters) one texture tile represents when painted onto a wall - matches
+// the scale used elsewhere (e.g. road/pathway materials) so a material looks consistent in
+// scale across every surface type.
+export const WALL_MATERIAL_TILE_METERS = 2;
+
+/**
+ * Rewrites a wall geometry's UV coordinates directly from each vertex's own local X/Y position
+ * (in meters, scaled by tileMeters) instead of the default per-box 0..1 UV. A wall with door or
+ * window openings is built as several separate BoxGeometry pieces merged together - each one
+ * keeps its own independent 0..1 UV space regardless of its actual size or position, so a
+ * repeating texture (bricks, boards, stone coursing) restarts and rescales at every opening's
+ * edge instead of continuing seamlessly across it. Projecting UV straight from world-local
+ * position instead makes every sub-box share one continuous, physically-scaled coordinate
+ * space, so the texture lines up across door/window jambs and lintels exactly as it does on an
+ * unbroken span of wall.
+ */
+export function applyPhysicalWallUVs(geom: THREE.BufferGeometry, tileMeters: number = WALL_MATERIAL_TILE_METERS): void {
+  const pos = geom.attributes.position;
+  const uv = geom.attributes.uv;
+  if (!pos || !uv) return;
+  for (let i = 0; i < pos.count; i++) {
+    uv.setXY(i, pos.getX(i) / tileMeters, pos.getY(i) / tileMeters);
+  }
+  uv.needsUpdate = true;
+}
+
 export interface WallOpening {
   id?: string;
   type?: 'door' | 'window' | string;
@@ -126,6 +152,8 @@ export function createWallWithOpeningsGeometry(
       baseGeom = new THREE.BoxGeometry(length, height, thickness);
     }
   }
+
+  applyPhysicalWallUVs(baseGeom);
 
   // If no cladding style or default flush render, return base wall geometry
   if (!style || style === 'smooth-render' || style === 'flush') {

@@ -162,38 +162,6 @@ const KERNEL_SNAP_TOOLS: string[] = [
 const _polyformBodyPortalRef: { current: HTMLElement | null } = { current: typeof document !== 'undefined' ? document.body : null };
 const _polyformNoteZIndexRange: [number, number] = [1000, 2000];
 const _polyformTextureCache = new Map<string, THREE.Texture>();
-
-// Wall meshes are plain THREE.BoxGeometry, whose UVs always span 0..1 per face regardless of
-// the box's actual size - so a fixed texture repeat (the default, before any per-material UV
-// customization) stretches the same source image across the whole face either way, making an
-// identical material look wildly different in scale between a short wall and a long one.
-// Rescale the repeat by the wall's own physical length/height against an assumed real-world
-// tile size instead, so the same material tiles at a consistent physical scale on every wall;
-// the material's own uv.repeat setting still applies on top as a multiplier.
-const WALL_MATERIAL_TILE_METERS = 2;
-const _wallPhysicalTextureCache = new Map<string, { source: THREE.Texture; texture: THREE.Texture }>();
-function getPhysicallyScaledWallTexture(
-  source: THREE.Texture | undefined,
-  cacheKeyPrefix: string,
-  widthMeters: number,
-  heightMeters: number,
-  repeatMultiplier: [number, number]
-): THREE.Texture | undefined {
-  if (!source) return undefined;
-  const cacheKey = `${cacheKeyPrefix}:${widthMeters.toFixed(3)}x${heightMeters.toFixed(3)}:${repeatMultiplier[0]}x${repeatMultiplier[1]}`;
-  const cached = _wallPhysicalTextureCache.get(cacheKey);
-  if (cached && cached.source === source) return cached.texture;
-  const clone = source.clone();
-  clone.repeat.set(
-    (widthMeters / WALL_MATERIAL_TILE_METERS) * repeatMultiplier[0],
-    (heightMeters / WALL_MATERIAL_TILE_METERS) * repeatMultiplier[1]
-  );
-  clone.wrapS = THREE.RepeatWrapping;
-  clone.wrapT = THREE.RepeatWrapping;
-  clone.needsUpdate = true;
-  _wallPhysicalTextureCache.set(cacheKey, { source, texture: clone });
-  return clone;
-}
 const _polyformTextureLoader = new THREE.TextureLoader();
 _polyformTextureLoader.setCrossOrigin('anonymous');
 
@@ -3851,6 +3819,11 @@ function Scene() {
   const [wallCandidatePos, setWallCandidatePos] = useState<THREE.Vector3 | null>(null);
   const [wallHoveredVertex, setWallHoveredVertex] = useState<number | null>(null);
   const wallDragStartRef = useRef<{ point: THREE.Vector3; time: number } | null>(null);
+  // Ids of the wall shapes created for the CURRENT wall-drawing chain, in click order - lets
+  // closeWallLoopAndAssembleRoom match each loop edge to its exact wall by position in this
+  // list instead of a nearest-distance guess, which could mismatch a wall from a different,
+  // nearby room sharing the same story tag and warp/miter it against the wrong neighbors.
+  const wallChainShapeIdsRef = useRef<string[]>([]);
   const lastWallClickTimeRef = useRef<number>(0);
 
   const [fenceVertices, setFenceVertices] = useState<THREE.Vector3[]>([]);
@@ -4232,6 +4205,7 @@ function Scene() {
     setTrackingGuide(null);
     setMeasurements('');
     wallDragStartRef.current = null;
+    wallChainShapeIdsRef.current = [];
   }, [setMeasurements]);
 
   const findWallObstacleIntersection = useCallback((pA: THREE.Vector3, pB: THREE.Vector3) => {
@@ -4384,20 +4358,28 @@ function Scene() {
 
   const closeWallLoopAndAssembleRoom = useCallback(() => {
     if (wallVertices.length < 2) return;
-    
-    // Sanitize wall vertices: ensure we don't have duplicate near-identical points at the end
+
+    // Sanitize wall vertices: ensure we don't have duplicate near-identical points at the end.
+    // The click that triggered this (landing back near the start point) already created its own
+    // interactive wall segment via the normal per-click flow before this ever runs - popping
+    // that near-duplicate vertex here without also dropping the stray wall drawn for it would
+    // leave that extra, slightly-off segment sitting in the scene alongside the proper closing
+    // wall created just below, doubling up geometry right at the closed corner.
     let cleanVertices = [...wallVertices];
+    let staleClosingWallId: string | null = null;
     if (cleanVertices.length >= 3) {
       const last = cleanVertices[cleanVertices.length - 1];
       if (last.distanceTo(cleanVertices[0]) < 0.25) {
         cleanVertices.pop();
+        staleClosingWallId = wallChainShapeIdsRef.current.pop() ?? null;
       }
     }
-    
+
     if (cleanVertices.length >= 2) {
       const prev = cleanVertices[cleanVertices.length - 1];
       if (prev.distanceTo(cleanVertices[0]) >= 0.15) {
-        createWallSegment(prev, cleanVertices[0]);
+        const closingWall = createWallSegment(prev, cleanVertices[0]);
+        if (closingWall) wallChainShapeIdsRef.current.push(closingWall.id);
       }
     }
 
@@ -4405,6 +4387,10 @@ function Scene() {
     const terrainShape = shapes.find(s => s.type === 'terrain') || null;
     const loopVectors = cleanVertices.length >= 3 ? [...cleanVertices] : [...wallVertices];
     const roomPoly2D: [number, number][] = loopVectors.map(v => [v.x, v.z]);
+    // Exact wall-to-edge correspondence, in click order, for the mitering pass below - falls
+    // back to a nearest-distance guess only when the chain bookkeeping doesn't line up (e.g. a
+    // room assembled some other way than the interactive click-to-draw flow).
+    const chainShapeIds = [...wallChainShapeIdsRef.current];
     const assembly = buildRoomAssembly(
       loopVectors,
       terrainShape,
@@ -4418,7 +4404,7 @@ function Scene() {
     );
 
     setShapes(prevShapes => {
-      let next = [...prevShapes];
+      let next = staleClosingWallId ? prevShapes.filter(s => s.id !== staleClosingWallId) : [...prevShapes];
       if (assembly.slabShape) {
         next.push(assembly.slabShape);
       }
@@ -4442,24 +4428,26 @@ function Scene() {
       // raw drawn vertices once justification has shifted it sideways, so a corner can only be
       // closed exactly by intersecting each pair of neighboring walls' own offset lines, not by
       // guessing a fixed extension that only happens to work at exactly 90 degrees.
+      const useExactChainMatch = chainShapeIds.length === loopLen;
       interface EdgeWall { shapeId: string; thickness: number; wallH: number; linePoint: THREE.Vector2; dir: THREE.Vector2; }
       const edgeWalls: (EdgeWall | null)[] = loopVectors.map((pA, i) => {
         const pB = loopVectors[(i + 1) % loopLen];
-        const midX = (pA.x + pB.x) / 2;
-        const midZ = (pA.z + pB.z) / 2;
-        let best: Shape | null = null, bestDist = Infinity;
-        for (const s of wallsForStory) {
-          const d = Math.hypot(s.position[0] - midX, s.position[2] - midZ);
-          if (d < bestDist) { bestDist = d; best = s; }
+        let best: Shape | null = null;
+        if (useExactChainMatch) {
+          best = wallsForStory.find(s => s.id === chainShapeIds[i]) ?? null;
+        } else {
+          const midX = (pA.x + pB.x) / 2;
+          const midZ = (pA.z + pB.z) / 2;
+          let bestDist = Infinity;
+          for (const s of wallsForStory) {
+            const d = Math.hypot(s.position[0] - midX, s.position[2] - midZ);
+            if (d < bestDist) { bestDist = d; best = s; }
+          }
+          const thicknessGuess = Array.isArray(best?.args) ? (best!.args[2] || 0.2) : 0.2;
+          if (bestDist >= Math.max(thicknessGuess * 4, 0.5)) best = null;
         }
         if (!best) return null;
         const thickness0 = Array.isArray(best.args) ? (best.args[2] || 0.2) : 0.2;
-        // A wall genuinely belonging to this loop edge was created with its center at the
-        // edge midpoint, offset by at most half its own thickness for justification - so the
-        // match distance should stay tight regardless of wall length or story, preventing
-        // walls from other stories/rooms (matched only loosely before) from being warped here.
-        const matchMargin = Math.max(thickness0 * 4, 0.5);
-        if (bestDist >= matchMargin) return null;
         const wallH = Array.isArray(best.args) ? (best.args[1] || 2.8) : 2.8;
         const dir2D = new THREE.Vector2(pB.x - pA.x, pB.z - pA.z).normalize();
         const trueNormal = computeOutwardWallNormal2D(pA, pB, roomPoly2D);
@@ -5588,6 +5576,7 @@ function Scene() {
         const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), p);
         setWallPlane(plane);
         setWallVertices([p]);
+        wallChainShapeIdsRef.current = [];
         diagLog("TOOL", "Wall started at point", { pos: [p.x, p.y, p.z] });
       } else {
         if (!pointToPlace) pointToPlace = e.point.clone();
@@ -5607,7 +5596,8 @@ function Scene() {
 
         const prev = wallVertices[wallVertices.length - 1];
         if (prev.distanceTo(pointToPlace) >= 0.10) {
-          createWallSegment(prev, pointToPlace);
+          const newSegment = createWallSegment(prev, pointToPlace);
+          if (newSegment) wallChainShapeIdsRef.current.push(newSegment.id);
           setWallVertices(prevVerts => [...prevVerts, pointToPlace]);
           diagLog("TOOL", "Wall segment placed", { 
             from: [prev.x, prev.y, prev.z], 
@@ -10544,35 +10534,20 @@ function Scene() {
           if (!binding) return undefined;
           const textures = bindingId ? managedBindingTextures[bindingId] : undefined;
           const ormUrl = runtimeImageUrl(binding.maps.orm);
-          let basecolorTex = textures?.basecolor;
-          let normalTex = textures?.['normal-gl'] ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps['normal-gl']));
-          let ormTex = textures?.orm ?? getCachedPBRMapTexture(ormUrl);
-          // Wall boxes' UVs always span 0..1 per face regardless of the wall's own length/height,
-          // so the same material would otherwise stretch differently on every differently-sized
-          // wall - rescale this shape's own texture instances to a consistent physical tile size.
-          if (shape.type === 'wall' && Array.isArray(shape.args) && bindingId) {
-            const wallLength = shape.args[0] || 1;
-            const wallHeight = shape.args[1] || 1;
-            const repeatMultiplier: [number, number] = binding.uv?.repeat ?? [1, 1];
-            const cacheKeyPrefix = `${bindingId}:${shape.id}`;
-            basecolorTex = getPhysicallyScaledWallTexture(basecolorTex, `${cacheKeyPrefix}:basecolor`, wallLength, wallHeight, repeatMultiplier) ?? basecolorTex;
-            normalTex = getPhysicallyScaledWallTexture(normalTex, `${cacheKeyPrefix}:normal`, wallLength, wallHeight, repeatMultiplier) ?? normalTex;
-            ormTex = getPhysicallyScaledWallTexture(ormTex, `${cacheKeyPrefix}:orm`, wallLength, wallHeight, repeatMultiplier) ?? ormTex;
-          }
           return {
             baseColorUrl: runtimeImageUrl(binding.maps.basecolor),
-            baseColorTexture: basecolorTex,
+            baseColorTexture: textures?.basecolor,
             color: binding.color,
             roughness: binding.roughness,
             metalness: binding.metalness,
             opacity: binding.opacity,
             depth: binding.depth,
             pbr: {
-              normalMap: normalTex,
+              normalMap: textures?.['normal-gl'] ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps['normal-gl'])),
               normalScale: binding.maps['normal-gl'] ? new THREE.Vector2(binding.normalStrength, binding.normalStrength) : undefined,
-              roughnessMap: ormTex,
-              metalnessMap: ormTex,
-              aoMap: ormTex,
+              roughnessMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              metalnessMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              aoMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
               aoMapIntensity: ormUrl ? 1 : undefined,
               specularIntensityMap: textures?.specular ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps.specular)),
               transmissionMap: textures?.transmission ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps.transmission)),
