@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "apiBaseUrl": "https://api.polyhaven.com",
+  "userAgent": "PolyformAssetImporter/1.0",
+  "operatorContact": "craigtrickett@gmail.com",
+  "workDirectory": "I:/PolyformAssets/.polyhaven",
+  "publicDirectory": "public/polyhaven",
+  "sourceCeiling": "2k",
+  "runtimeTiers": ["1k", "2k"],
+  "metadataConcurrency": 2,
+  "downloadConcurrency": 4,
+  "requestPacingMs": 250,
+  "maxRetries": 5,
+  "allowedDownloadHosts": ["dl.polyhaven.org", "cdn.polyhaven.com", "polyhaven.com"],
+  "environmentRoots": {
+    "pure-skies": "61ac0f4c-0977-548f-b345-f34c2d9eff35",
+    "mountains-hills": "e2be213c-5874-5d77-bd68-611f48865362",
+    "forest-woodland": "0adcf5c3-a3af-5e36-a317-c5450a6c6b69"
+  },
+  "publish": {
+    "destination": "gs://gen-lang-client-0540185995.firebasestorage.app/polyhaven",
+    "catalogOrigin": "https://polyform.ai.studio/polyhaven"
+  },
+  "tools": {
+    "toktx": "4.4.2",
+    "toktxPath": "I:/PolyformAssets/.polyhaven/tools/ktx-4.4.2/bin/toktx.exe",
+    "oiiotool": "3.1.17.0",
+    "oiiotoolPath": "I:/PolyformAssets/.polyhaven/tools/oiio-3.1.17.0/Lib/site-packages/OpenImageIO/bin/oiiotool.exe"
+  },
+  "deployment": {
+    "firebaseProjectId": "gen-lang-client-0540185995",
+    "firestoreDatabaseId": "ai-studio-remixdraftup-aef4769a-09cf-4cce-89b2-898369165644",
+    "storageBucket": "gen-lang-client-0540185995.firebasestorage.app",
+    "allowedOrigins": [
+      "https://polyform.ai.studio",
+      "https://aistudio.google.com"
+    ]
+  },
+  "_comment": "Copy this file to config/polyhaven.local.json (already gitignored) and pass --config config/polyhaven.local.json to every polyhaven CLI command. workDirectory and the tool paths point at I: so source downloads and conversion intermediates land there instead of the checkout's own drive - move the ktx/oiio tool installs there too the first time, or just re-download them once at the new path."
+}

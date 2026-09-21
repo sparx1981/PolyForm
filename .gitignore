@@ -3,6 +3,7 @@ build/
 dist/
 coverage/
 .polyhaven/
+config/*.local.json
 .firebase/
 .DS_Store
 *.log
