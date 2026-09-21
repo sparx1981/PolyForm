@@ -496,4 +496,3 @@ function resolveGroundPlaneFloorHit(raycaster: THREE.Raycaster, scene: THREE.Sce
     isBackface: false,
   };
 }
-
