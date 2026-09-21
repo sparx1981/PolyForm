@@ -351,8 +351,21 @@ export default function RightPanelStack() {
     revision: asset.revision,
     texture: asset.thumbnailUrl,
     category: asset.categoryPath,
+    // categoryPath is a deep hierarchy (e.g. "Asphalt & Bitumen/Asphalt/Worn Road Surface") -
+    // too granular for a filter row, so group by its top-level segment instead.
+    topCategory: asset.categoryPath.split('/')[0] || 'Other',
     hasHeight: asset.hasHeight,
   })), [catalogMaterials]);
+  const [premadeCategoryFilter, setPremadeCategoryFilter] = useState<string>('all');
+  const premadeCategories = useMemo(() => {
+    const seen = new Set<string>();
+    for (const mat of premadeMaterials) seen.add(mat.topCategory);
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [premadeMaterials]);
+  const filteredPremadeMaterials = useMemo(
+    () => premadeCategoryFilter === 'all' ? premadeMaterials : premadeMaterials.filter(m => m.topCategory === premadeCategoryFilter),
+    [premadeMaterials, premadeCategoryFilter]
+  );
   const selectCatalogMaterial = (asset: AssetSummary) => {
     if (!isMaterialAssetId(asset.id)) return;
     const assetId = asset.id;
@@ -2517,25 +2530,6 @@ export default function RightPanelStack() {
                 </div>
               )}
 
-              <div className="space-y-2 border-t border-gray-100 pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Poly Haven PBR materials</span>
-                  <span className="text-[9px] text-gray-400">Double-click to edit</span>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {catalogMaterials.map(asset => <button type="button" key={asset.id}
-                    onClick={() => selectCatalogMaterial(asset)}
-                    onDoubleClick={() => setEditorAsset(asset)}
-                    className={cn('overflow-hidden rounded border text-left hover:border-trimble-blue', activeMaterialBindingId === asset.id ? 'border-trimble-blue ring-1 ring-trimble-blue' : 'border-gray-300')}
-                    title={`${asset.name} — click to paint, double-click to edit`}>
-                    <img src={asset.thumbnailUrl} alt="" loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
-                    <span className="block truncate px-1 py-0.5 text-[9px]">{asset.name}</span>
-                  </button>)}
-                </div>
-                {catalogLoading && <p className="text-[10px] text-gray-500">Loading materials…</p>}
-                {!catalogLoading && catalogFallback && <p className="text-[10px] text-gray-500">Catalog unavailable; existing colours and uploads remain usable.</p>}
-              </div>
-
               <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
                 <span className="text-gray-500">Active:</span>
                 {activeMaterial.startsWith('#') ? (
@@ -4655,8 +4649,36 @@ export default function RightPanelStack() {
                     )}
                   </div>
                 ) : activeTab === 'premade' ? (
+                  <div className="space-y-3">
+                    {premadeCategories.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setPremadeCategoryFilter('all')}
+                          className={cn(
+                            "px-2.5 py-1 text-[10px] font-medium rounded-full border transition-colors",
+                            premadeCategoryFilter === 'all' ? "bg-trimble-blue text-white border-trimble-blue" : "border-gray-200 text-gray-500 hover:border-trimble-blue"
+                          )}
+                        >
+                          All
+                        </button>
+                        {premadeCategories.map(cat => (
+                          <button
+                            type="button"
+                            key={cat}
+                            onClick={() => setPremadeCategoryFilter(cat)}
+                            className={cn(
+                              "px-2.5 py-1 text-[10px] font-medium rounded-full border transition-colors",
+                              premadeCategoryFilter === cat ? "bg-trimble-blue text-white border-trimble-blue" : "border-gray-200 text-gray-500 hover:border-trimble-blue"
+                            )}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   <div className="grid grid-cols-2 gap-4">
-                    {premadeMaterials.map((mat: any, i: number) => (
+                    {filteredPremadeMaterials.map((mat: any, i: number) => (
                       <button
                         type="button"
                         key={mat.id || `premade-${mat.name || i}-${i}`}
@@ -4665,6 +4687,11 @@ export default function RightPanelStack() {
                           if (asset) selectCatalogMaterial(asset);
                           setIsAddMaterialOpen(false);
                         }}
+                        onDoubleClick={() => {
+                          const asset = catalogMaterials.find(item => item.id === mat.id);
+                          if (asset) { setEditorAsset(asset); setIsAddMaterialOpen(false); }
+                        }}
+                        title={`${mat.name} — click to apply, double-click to edit`}
                         className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-trimble-blue transition-all text-left"
                       >
                         <div className="aspect-square bg-gray-100 relative">
@@ -4697,6 +4724,12 @@ export default function RightPanelStack() {
                         The material catalog is temporarily unavailable. Custom uploads and colours remain available.
                       </div>
                     )}
+                    {!catalogLoading && !catalogFallback && premadeMaterials.length > 0 && filteredPremadeMaterials.length === 0 && (
+                      <div className="col-span-2 py-8 text-center text-xs text-gray-400">
+                        No materials in this category.
+                      </div>
+                    )}
+                  </div>
                   </div>
                 ) : (
                   <div className="space-y-5">
