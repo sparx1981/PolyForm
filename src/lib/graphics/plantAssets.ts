@@ -42,7 +42,17 @@ export function loadPlantPrimitives(speciesId: string, variation?: string): Prom
   if (templates.has(key)) return templates.get(key)!;
   const procedural = () => proceduralPlantPrimitives(speciesId);
   const promise = !species || species.modelType === 'procedural' ? Promise.resolve(procedural()) : new Promise<THREE.Group>((resolve, reject) => {
-    if (species.modelType === 'gltf' && species.modelUrl) loadPlantGLTF(species.modelUrl, resolve, reject);
+    if (species.modelType === 'gltf' && species.modelUrl) {
+      // GLTFLoader resolves the .gltf's own internal relative URIs (its .bin, its textures) by
+      // appending them to the .gltf's own URL - which doesn't reliably match a remote host's
+      // actual file layout (confirmed against Poly Haven). `modelIncludes` gives the real URL
+      // for each relative path directly from the source API, so remap by the URL GLTFLoader
+      // will actually request (that relative path resolved against modelUrl) to the real one.
+      const urlRemap = species.modelIncludes && Object.fromEntries(
+        Object.entries(species.modelIncludes).map(([relativePath, realUrl]) => [new URL(relativePath, species.modelUrl).href, realUrl])
+      );
+      loadPlantGLTF(species.modelUrl, resolve, reject, urlRemap);
+    }
     else if (species.modelType === 'gltf') loadPlantGLTF(`${species.modelPath}${chosen.toLowerCase()}.glb`, resolve, reject);
     else if (species.modelType === 'fbx') loadPlantFBX(`${species.modelPath}${chosen}_LOD0.fbx`, resolve, reject);
     else loadPlantUSD(`${species.modelPath}${chosen}.usd`, resolve, reject);

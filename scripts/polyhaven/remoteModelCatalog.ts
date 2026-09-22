@@ -16,6 +16,7 @@ interface FileLeaf {
   url: string;
   md5: string;
   size: number;
+  include?: Record<string, FileLeaf>;
 }
 
 interface ModelInfo {
@@ -35,6 +36,13 @@ export interface RemoteModelCatalogEntry {
   tags: string[];
   tier: Quality;
   gltfUrl: string;
+  // Every file the .gltf references (its .bin plus textures), keyed by the exact relative path
+  // Poly Haven's own /files response uses for it, mapped to that file's real CDN URL. A GLTF's
+  // internal relative URIs don't reliably resolve by simply appending them to the .gltf's own
+  // URL - Poly Haven's actual file layout can differ from that assumption (confirmed: several
+  // multi-part models 404 that way) - so the app resolves each referenced file through this map
+  // instead of letting GLTFLoader's default relative-URL resolution guess.
+  includes: Record<string, string>;
 }
 
 export async function buildRemoteModelCatalog(
@@ -60,7 +68,9 @@ export async function buildRemoteModelCatalog(
       continue;
     }
 
-    console.log(`OK ${slug}: ${tierEntry.url}`);
+    console.log(`OK ${slug}: ${tierEntry.url} (${Object.keys(tierEntry.include || {}).length} included files)`);
+    const includes: Record<string, string> = {};
+    for (const [relativePath, leaf] of Object.entries(tierEntry.include || {})) includes[relativePath] = leaf.url;
     catalog.push({
       id: `ph:model:${slug}`,
       sourceId: slug,
@@ -72,6 +82,7 @@ export async function buildRemoteModelCatalog(
       tags: info.tags || [],
       tier,
       gltfUrl: tierEntry.url,
+      includes,
     });
   }
 

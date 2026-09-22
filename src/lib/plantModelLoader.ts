@@ -24,7 +24,16 @@ export function getCachedPlantTexture(url: string, isColorData: boolean = true):
   return texture;
 }
 
-export function loadPlantGLTF(url: string, onLoad: (model: THREE.Group) => void, onError?: (err: any) => void) {
+/**
+ * @param urlRemap Absolute URL -> the actual URL to fetch instead, for a GLTF whose internal
+ * relative URIs (its .bin, its textures) don't reliably resolve by appending them to the
+ * .gltf's own URL - a remote host's real file layout can differ from that assumption (confirmed
+ * against Poly Haven: several multi-part models' textures 404 that way, even though the exact
+ * same files download fine via their own dedicated CDN URL from the /files API). Keyed by the
+ * absolute URL GLTFLoader will actually request (i.e. the relative URI already resolved against
+ * `url`), not the bare relative path, since that's what a LoadingManager's urlModifier receives.
+ */
+export function loadPlantGLTF(url: string, onLoad: (model: THREE.Group) => void, onError?: (err: any) => void, urlRemap?: Record<string, string>) {
   if (modelCache.has(url)) {
     onLoad(modelCache.get(url)!.clone(true));
     return;
@@ -40,7 +49,9 @@ export function loadPlantGLTF(url: string, onLoad: (model: THREE.Group) => void,
   }
 
   const promise = new Promise<THREE.Group>((resolve, reject) => {
-    const loader = new GLTFLoader();
+    const manager = new THREE.LoadingManager();
+    if (urlRemap) manager.setURLModifier(requested => urlRemap[requested] ?? requested);
+    const loader = new GLTFLoader(manager);
     loader.load(
       url,
       (gltf) => {
