@@ -54,6 +54,7 @@ async function main() {
     const ratioArg = option(args, '--simplify-ratio');
     const errorArg = option(args, '--simplify-error');
     const textureSizeArg = option(args, '--texture-size');
+    const maxMbArg = option(args, '--max-mb');
     await decimateModels(config, {
       slugs: slugsArg ? slugsArg.split(',') : undefined,
       tier: tierArg,
@@ -62,6 +63,7 @@ async function main() {
       simplifyRatio: ratioArg ? Number(ratioArg) : undefined,
       simplifyError: errorArg ? Number(errorArg) : undefined,
       textureSize: textureSizeArg ? Number(textureSizeArg) : undefined,
+      maxOutputBytes: maxMbArg ? Number(maxMbArg) * 1_000_000 : undefined,
     });
     return;
   }
@@ -127,7 +129,7 @@ async function main() {
   if (command === 'convert') { if (!release) throw new Error('--release is required'); console.log(JSON.stringify(await convertRelease(config, release), null, 2)); return; }
   if (command === 'validate') { if (!release) throw new Error('--release is required'); const report = await validateRelease(config, release); console.log(JSON.stringify(report, null, 2)); if (!report.valid) process.exitCode = 1; return; }
   if (command === 'publish') { if (!release) throw new Error('--release is required'); await publishRelease(config, release, args.includes('--dry-run')); return; }
-  throw new Error('Usage: discover | discover-models [--slugs a,b,c] | download-models [--slugs a,b,c] [--tier 1k] [--out DIR] | remote-model-catalog [--slugs a,b,c] [--tier 1k] [--out FILE] | decimate-models [--slugs a,b,c] [--tier 1k] [--out DIR] [--catalog FILE] [--simplify-ratio 0.25] [--simplify-error 0.01] [--texture-size 1024] | plan --release ID [--manifest FILE] [--category SLUG ...] [--limit N] [--exclude ID ...] [--out FILE] | ingest --plan FILE --resume | convert --release ID | validate --release ID | publish --release ID [--dry-run]');
+  throw new Error('Usage: discover | discover-models [--slugs a,b,c] | download-models [--slugs a,b,c] [--tier 1k] [--out DIR] | remote-model-catalog [--slugs a,b,c] [--tier 1k] [--out FILE] | decimate-models [--slugs a,b,c] [--tier 1k] [--out DIR] [--catalog FILE] [--simplify-ratio 0.12] [--simplify-error 0.03] [--texture-size 1024] [--max-mb 90] | plan --release ID [--manifest FILE] [--category SLUG ...] [--limit N] [--exclude ID ...] [--out FILE] | ingest --plan FILE --resume | convert --release ID | validate --release ID | publish --release ID [--dry-run]');
 }
 
 main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });

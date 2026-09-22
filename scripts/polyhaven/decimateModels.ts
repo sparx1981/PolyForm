@@ -73,6 +73,8 @@ export interface DecimateOptions {
   simplifyError?: number;
   /** Max texture width/height in pixels after resize. */
   textureSize?: number;
+  /** Retries with escalating aggressiveness while the output stays above this size. */
+  maxOutputBytes?: number;
 }
 
 async function downloadVerified(url: string, destPath: string, expectedMd5: string): Promise<number> {
@@ -107,9 +109,19 @@ export async function decimateModels(
   const tier = options.tier ?? '1k';
   const outDir = options.outDir ?? join('public', 'polyhaven-models-decimated');
   const catalogPath = options.catalogPath ?? join('src', 'lib', 'graphics', 'polyhavenModelCatalog.json');
-  const simplifyRatio = options.simplifyRatio ?? 0.25;
-  const simplifyError = options.simplifyError ?? 0.01;
+  // `error` is a cap, not a target: meshoptimizer's simplifier stops collapsing edges the
+  // moment doing so would exceed it, even short of `ratio` - so a tight error budget silently
+  // under-reduces exactly the meshes that need it most (foliage-heavy trees, made of thousands
+  // of small, disconnected leaf-card triangles, hit that ceiling almost immediately). 0.03 is
+  // loose enough to actually reach the ratio target on that geometry; a slightly deformed leaf
+  // silhouette is imperceptible at normal viewing distance and is exactly the tradeoff asked for.
+  const simplifyRatio = options.simplifyRatio ?? 0.12;
+  const simplifyError = options.simplifyError ?? 0.03;
   const textureSize = options.textureSize ?? 1024;
+  // GitHub hard-rejects any pushed file over 100MB - a decimation pass that still clears that
+  // bar hasn't just under-performed, it has produced something that can never be committed.
+  // 90MB leaves headroom before that wall rather than cutting it exactly at 100.
+  const maxOutputBytes = options.maxOutputBytes ?? 90_000_000;
   // The package's "bin" entry isn't listed in its "exports" map, so it can't be resolved
   // directly under strict ESM resolution - resolve the package's main export instead and
   // derive the bin script's path from its own root (main is always <root>/dist/cli.mjs).
@@ -149,18 +161,31 @@ export async function decimateModels(
       // --instance are single-model no-ops (palette merges materials across multiple assets,
       // instancing needs repeated node references) so are turned off rather than left to do
       // unpredictable per-model material surgery.
-      await execFileAsync(process.execPath, [
-        cliPath, 'optimize', inputGltf, outputGlb,
-        '--compress', 'quantize',
-        '--texture-compress', 'webp',
-        '--texture-size', String(textureSize),
-        '--simplify-ratio', String(simplifyRatio),
-        '--simplify-error', String(simplifyError),
-        '--palette', 'false',
-        '--instance', 'false',
-      ], { maxBuffer: 1024 * 1024 * 64 });
-
-      const decimatedBytes = (await stat(outputGlb)).size;
+      let ratio = simplifyRatio, error = simplifyError, texSize = textureSize, decimatedBytes = Infinity;
+      // Some assets (dense foliage especially) don't hit the byte target even at the requested
+      // aggressiveness - rather than silently ship whatever came out, escalate a few times
+      // (smaller ratio, looser error, smaller textures) before giving up and flagging it.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await execFileAsync(process.execPath, [
+          cliPath, 'optimize', inputGltf, outputGlb,
+          '--compress', 'quantize',
+          '--texture-compress', 'webp',
+          '--texture-size', String(texSize),
+          '--simplify-ratio', String(ratio),
+          '--simplify-error', String(error),
+          '--palette', 'false',
+          '--instance', 'false',
+        ], { maxBuffer: 1024 * 1024 * 64 });
+        decimatedBytes = (await stat(outputGlb)).size;
+        if (decimatedBytes <= maxOutputBytes) break;
+        const nextRatio = Math.max(0.02, ratio * 0.5), nextError = Math.min(0.15, error * 1.5), nextTexSize = Math.max(512, texSize / 2);
+        if (nextRatio === ratio && nextError === error && nextTexSize === texSize) break; // no more room to escalate
+        console.log(`  ${(decimatedBytes / 1_000_000).toFixed(1)}MB still over the ${(maxOutputBytes / 1_000_000).toFixed(0)}MB target - retrying more aggressively (ratio ${nextRatio}, error ${nextError}, texture ${nextTexSize})`);
+        ratio = nextRatio; error = nextError; texSize = nextTexSize;
+      }
+      if (decimatedBytes > maxOutputBytes) {
+        console.log(`  WARNING: ${slug} is still ${(decimatedBytes / 1_000_000).toFixed(1)}MB after maximum escalation - this will be rejected by a git push over GitHub's 100MB limit.`);
+      }
       console.log(`  OK: ${(originalBytes / 1_000_000).toFixed(1)}MB -> ${(decimatedBytes / 1_000_000).toFixed(2)}MB`);
 
       catalog.push({
