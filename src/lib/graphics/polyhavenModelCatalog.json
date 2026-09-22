@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-22T08:10:04.136Z",
+  "generatedAt": "2026-09-22T08:50:44.265Z",
   "assets": [
     {
       "id": "ph:model:tree_small_02",
@@ -42,7 +42,7 @@
       "gltfUrl": "/polyhaven-models-decimated/tree_small_02.glb",
       "includes": {},
       "originalBytes": 100974143,
-      "decimatedBytes": 9669172
+      "decimatedBytes": 10375992
     },
     {
       "id": "ph:model:island_tree_01",
@@ -81,7 +81,7 @@
       "gltfUrl": "/polyhaven-models-decimated/island_tree_01.glb",
       "includes": {},
       "originalBytes": 66337268,
-      "decimatedBytes": 8135224
+      "decimatedBytes": 8891124
     },
     {
       "id": "ph:model:jacaranda_tree",
@@ -118,7 +118,7 @@
       "gltfUrl": "/polyhaven-models-decimated/jacaranda_tree.glb",
       "includes": {},
       "originalBytes": 214609299,
-      "decimatedBytes": 23971292
+      "decimatedBytes": 24691508
     },
     {
       "id": "ph:model:grass_medium_01",
@@ -151,7 +151,7 @@
       "gltfUrl": "/polyhaven-models-decimated/grass_medium_01.glb",
       "includes": {},
       "originalBytes": 3065099,
-      "decimatedBytes": 537780
+      "decimatedBytes": 812600
     },
     {
       "id": "ph:model:fir_sapling_medium",
@@ -184,7 +184,7 @@
       "gltfUrl": "/polyhaven-models-decimated/fir_sapling_medium.glb",
       "includes": {},
       "originalBytes": 78056936,
-      "decimatedBytes": 12637684
+      "decimatedBytes": 13089768
     },
     {
       "id": "ph:model:fir_tree_01",
@@ -220,7 +220,7 @@
       "gltfUrl": "/polyhaven-models-decimated/fir_tree_01.glb",
       "includes": {},
       "originalBytes": 487358833,
-      "decimatedBytes": 63280316
+      "decimatedBytes": 64247648
     },
     {
       "id": "ph:model:pine_tree_01",
@@ -257,7 +257,7 @@
       "gltfUrl": "/polyhaven-models-decimated/pine_tree_01.glb",
       "includes": {},
       "originalBytes": 958118530,
-      "decimatedBytes": 56274964
+      "decimatedBytes": 56557328
     },
     {
       "id": "ph:model:boulder_01",
@@ -287,7 +287,7 @@
       "gltfUrl": "/polyhaven-models-decimated/boulder_01.glb",
       "includes": {},
       "originalBytes": 5771986,
-      "decimatedBytes": 2078972
+      "decimatedBytes": 2323148
     },
     {
       "id": "ph:model:flower_heliophila",
@@ -320,7 +320,7 @@
       "gltfUrl": "/polyhaven-models-decimated/flower_heliophila.glb",
       "includes": {},
       "originalBytes": 3849137,
-      "decimatedBytes": 388276
+      "decimatedBytes": 586292
     },
     {
       "id": "ph:model:fern_02",
@@ -353,7 +353,7 @@
       "gltfUrl": "/polyhaven-models-decimated/fern_02.glb",
       "includes": {},
       "originalBytes": 1146361,
-      "decimatedBytes": 148176
+      "decimatedBytes": 296508
     },
     {
       "id": "ph:model:flower_gazania",
@@ -385,7 +385,7 @@
       "gltfUrl": "/polyhaven-models-decimated/flower_gazania.glb",
       "includes": {},
       "originalBytes": 2848844,
-      "decimatedBytes": 504520
+      "decimatedBytes": 777672
     },
     {
       "id": "ph:model:shrub_03",
@@ -423,7 +423,7 @@
       "gltfUrl": "/polyhaven-models-decimated/shrub_03.glb",
       "includes": {},
       "originalBytes": 1628793,
-      "decimatedBytes": 216716
+      "decimatedBytes": 434868
     },
     {
       "id": "ph:model:leipoldtia_schultzei",
@@ -451,7 +451,7 @@
       "gltfUrl": "/polyhaven-models-decimated/leipoldtia_schultzei.glb",
       "includes": {},
       "originalBytes": 13101968,
-      "decimatedBytes": 1081180
+      "decimatedBytes": 1222988
     }
   ]
 }
