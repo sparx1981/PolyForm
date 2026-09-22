@@ -72,6 +72,33 @@ describe('vegetation GPU lifecycle', () => {
     batch.dispose(); expect(geometry.attributes.position.count).toBeGreaterThan(0);
     geometry.dispose(); material.dispose();
   });
+
+  it('shares loaded tree geometry between cells without disposing it with a batch', () => {
+    const geometry = new THREE.BoxGeometry(1, 4, 1);
+    const material = new THREE.MeshStandardMaterial();
+    const wind = new VegetationWind();
+    const first = new VegetationBatch(geometry, material, wind, 1);
+    const second = new VegetationBatch(geometry, material, wind, 1);
+    first.setInstances([{ id: 'one', position: new THREE.Vector3(0, 0, 0) }]);
+    second.setInstances([{ id: 'two', position: new THREE.Vector3(100, 0, 0) }]);
+    expect(first.mesh.geometry).toBe(second.mesh.geometry);
+    expect(first.mesh.boundingSphere!.center.x).toBeLessThan(second.mesh.boundingSphere!.center.x);
+    first.dispose();
+    expect(geometry.getAttribute('position').count).toBeGreaterThan(0);
+    second.dispose(); geometry.dispose(); material.dispose();
+  });
+
+  it('keeps a standalone tree wind bound when the same geometry enters a batch', () => {
+    const geometry = new THREE.BoxGeometry(1, 4, 1);
+    const material = new THREE.MeshStandardMaterial();
+    const wind = new VegetationWind();
+    const standalone = new THREE.Mesh(geometry, material.clone());
+    const cleanup = wind.attachMesh(standalone);
+    const padded = geometry.boundingBox!.clone();
+    const batch = new VegetationBatch(geometry, material, wind, 1);
+    expect(geometry.boundingBox).toEqual(padded);
+    batch.dispose(); cleanup(); standalone.material.dispose(); geometry.dispose(); material.dispose();
+  });
 });
 
 describe('surface depth', () => {

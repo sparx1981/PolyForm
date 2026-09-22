@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PLANT_SPECIES_CATALOG } from '../plantLibrary';
 import { createTreeGeometry, createBushGeometry, createRockGeometry } from '../landscapeGeometry';
 import { loadPlantGLTF, loadPlantFBX, loadPlantUSD, getCachedPlantTexture } from '../plantModelLoader';
+import { treeLodUrl, type TreeDetail } from './treeLod';
 
 export interface PlantPrimitive { geometry: THREE.BufferGeometry; material: THREE.MeshStandardMaterial }
 export function plantTint(speciesId: string, color: string): THREE.Color {
@@ -44,7 +45,7 @@ export function isolateMaterialGroup(geometry: THREE.BufferGeometry, materialInd
   return indices.length > 0;
 }
 // Cached templates own their geometry/materials for the application lifetime. Instances
-// clone materials and batches clone both; shared textures are never disposed by consumers.
+// clone materials; shared textures and geometry are never disposed by consumers.
 const templates = new Map<string, Promise<PlantPrimitive[]>>();
 const fallbacks = new Map<string, PlantPrimitive[]>();
 export function proceduralPlantPrimitives(speciesId: string): PlantPrimitive[] {
@@ -59,10 +60,11 @@ export function proceduralPlantPrimitives(speciesId: string): PlantPrimitive[] {
   }
   return fallbacks.get(speciesId)!;
 }
-export function loadPlantPrimitives(speciesId: string, variation?: string): Promise<PlantPrimitive[]> {
+export function loadPlantPrimitives(speciesId: string, variation?: string, detail: TreeDetail = 0): Promise<PlantPrimitive[]> {
   const species = PLANT_SPECIES_CATALOG.find(item => item.id === speciesId);
   const chosen = variation || species?.variations?.[0] || '';
-  const key = `${speciesId}/${chosen}`;
+  const lodUrl = treeLodUrl(speciesId, detail);
+  const key = `${speciesId}/${chosen}/${lodUrl ?? 'original'}`;
   if (templates.has(key)) return templates.get(key)!;
   const procedural = () => proceduralPlantPrimitives(speciesId);
   const promise = !species || species.modelType === 'procedural' ? Promise.resolve(procedural()) : new Promise<THREE.Group>((resolve, reject) => {
@@ -75,7 +77,7 @@ export function loadPlantPrimitives(speciesId: string, variation?: string): Prom
       const urlRemap = species.modelIncludes && Object.fromEntries(
         Object.entries(species.modelIncludes).map(([relativePath, realUrl]) => [new URL(relativePath, species.modelUrl).href, realUrl])
       );
-      loadPlantGLTF(species.modelUrl, resolve, reject, urlRemap);
+      loadPlantGLTF(lodUrl ?? species.modelUrl, resolve, reject, lodUrl ? undefined : urlRemap);
     }
     else if (species.modelType === 'gltf') loadPlantGLTF(`${species.modelPath}${chosen.toLowerCase()}.glb`, resolve, reject);
     else if (species.modelType === 'fbx') loadPlantFBX(`${species.modelPath}${chosen}_LOD0.fbx`, resolve, reject);

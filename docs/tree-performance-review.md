@@ -11,9 +11,26 @@ Measured from the checked-in `public/polyhaven-models-decimated/*.glb` files on 
 | Island Tree 01 | 5.1 MiB | 377,044 | 430,818 | 0.6 MiB |
 | Fir Sapling | 8.2 MiB | 366,408 | 660,423 | 0.3 MiB |
 
-The current pipeline already compresses and decimates source assets, caches loaded templates, batches eligible plants by species/variation and 48 m spatial cell, and retains frustum culling with wind-padded bounds. The largest remaining cost is drawing the same dense mesh at every distance. File compression reduces transfer size but does not reduce triangles submitted to the GPU. The pine alone still has nearly three million triangles.
+The source pipeline already compresses and decimates assets. The pine's close mesh still has nearly three million triangles, so this review led to two additional geometry tiers for each of the six Poly Haven trees.
 
-## Recommended order
+## Implemented detail tiers
+
+| Tree | Close triangles | Middle triangles | Distant triangles |
+| --- | ---: | ---: | ---: |
+| Pine Tree 01 | 2,970,695 | 731,530 (24.6%) | 148,466 (5.0%) |
+| Fir Tree 01 | 1,666,034 | 412,335 (24.7%) | 79,931 (4.8%) |
+| Jacaranda Tree | 909,159 | 225,835 (24.8%) | 74,008 (8.1%) |
+| Small Tree 02 | 492,075 | 122,425 (24.9%) | 24,531 (5.0%) |
+| Island Tree 01 | 377,044 | 91,336 (24.2%) | 18,593 (4.9%) |
+| Fir Sapling | 366,408 | 90,406 (24.7%) | 17,507 (4.8%) |
+
+Projected tree height controls detail: close above 150 screen pixels, middle from 50–150, and distant below 50. Hysteresis widens the return thresholds to 190 and 68 pixels. Instanced plants are grouped by detail as well as species, variation, and spatial cell. Editable plants also use distance tiers; a selected tree always uses the original close mesh. The original meshes are retained for inspection.
+
+Near trees cast shadows from the middle mesh, middle trees from the distant mesh, and distant trees do not cast shadows. Instanced cells share immutable geometry across batches, while keeping separate materials, instance bounds, and wind hooks. Eraser mode can keep the batches active, with instance IDs mapped back to the original plant shapes.
+
+Run `node scripts/polyhaven/buildTreeLods.mjs` to regenerate the assets or pass `--verify-only` to check them. The verifier checks triangle reduction plus material, image, texture, UV, alpha, and texture-transform bindings. Browser previews of the pine, fir, and jacaranda showed intact trunks and foliage, with the reduced distant silhouettes intended only for the small on-screen switch size. The production build, typecheck, and focused graphics tests passed. GPU frame time and multi-tree FPS remain scene and device dependent and should be measured in the editor.
+
+## Original recommendations
 
 1. **Add distance-based geometry tiers per tree.** Keep the current mesh for close inspection. Build a middle tier around 15–25% of current triangles and a distant tier around 2–5%, then choose by projected screen height with hysteresis. Preserve the crown silhouette, trunk profile, UV sets, alpha behavior, and material assignments when simplifying. Validate each species at several camera distances before shipping. [Three.js LOD](https://threejs.org/docs/pages/LOD.html) describes the underlying switch; the app's existing spatial batches should be grouped by both cell and tier.
 2. **Render simpler shadows.** Foliage geometry is currently submitted for shadows as well as the main view. Use a much simpler trunk/canopy shadow proxy or stop expensive tree shadows beyond a measured distance. Keep near-tree shadows for visual grounding.

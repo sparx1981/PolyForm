@@ -42,7 +42,11 @@
       "gltfUrl": "/polyhaven-models-decimated/tree_small_02.glb",
       "includes": {},
       "originalBytes": 100974143,
-      "decimatedBytes": 6560900
+      "decimatedBytes": 6560900,
+      "lodUrls": [
+        "/polyhaven-models-decimated/tree_small_02_lod1.glb",
+        "/polyhaven-models-decimated/tree_small_02_lod2.glb"
+      ]
     },
     {
       "id": "ph:model:island_tree_01",
@@ -81,7 +85,11 @@
       "gltfUrl": "/polyhaven-models-decimated/island_tree_01.glb",
       "includes": {},
       "originalBytes": 66337268,
-      "decimatedBytes": 5348424
+      "decimatedBytes": 5348424,
+      "lodUrls": [
+        "/polyhaven-models-decimated/island_tree_01_lod1.glb",
+        "/polyhaven-models-decimated/island_tree_01_lod2.glb"
+      ]
     },
     {
       "id": "ph:model:jacaranda_tree",
@@ -118,7 +126,11 @@
       "gltfUrl": "/polyhaven-models-decimated/jacaranda_tree.glb",
       "includes": {},
       "originalBytes": 214609299,
-      "decimatedBytes": 14010636
+      "decimatedBytes": 14010636,
+      "lodUrls": [
+        "/polyhaven-models-decimated/jacaranda_tree_lod1.glb",
+        "/polyhaven-models-decimated/jacaranda_tree_lod2.glb"
+      ]
     },
     {
       "id": "ph:model:grass_medium_01",
@@ -184,7 +196,11 @@
       "gltfUrl": "/polyhaven-models-decimated/fir_sapling_medium.glb",
       "includes": {},
       "originalBytes": 78056936,
-      "decimatedBytes": 8639908
+      "decimatedBytes": 8639908,
+      "lodUrls": [
+        "/polyhaven-models-decimated/fir_sapling_medium_lod1.glb",
+        "/polyhaven-models-decimated/fir_sapling_medium_lod2.glb"
+      ]
     },
     {
       "id": "ph:model:fir_tree_01",
@@ -220,7 +236,11 @@
       "gltfUrl": "/polyhaven-models-decimated/fir_tree_01.glb",
       "includes": {},
       "originalBytes": 487358833,
-      "decimatedBytes": 41917616
+      "decimatedBytes": 41917616,
+      "lodUrls": [
+        "/polyhaven-models-decimated/fir_tree_01_lod1.glb",
+        "/polyhaven-models-decimated/fir_tree_01_lod2.glb"
+      ]
     },
     {
       "id": "ph:model:pine_tree_01",
@@ -257,7 +277,11 @@
       "gltfUrl": "/polyhaven-models-decimated/pine_tree_01.glb",
       "includes": {},
       "originalBytes": 958118530,
-      "decimatedBytes": 44166688
+      "decimatedBytes": 44166688,
+      "lodUrls": [
+        "/polyhaven-models-decimated/pine_tree_01_lod1.glb",
+        "/polyhaven-models-decimated/pine_tree_01_lod2.glb"
+      ]
     },
     {
       "id": "ph:model:boulder_01",

@@ -26,14 +26,14 @@ export class VegetationBatch {
     if (!Number.isInteger(capacity) || capacity < 1) throw new RangeError('capacity must be a positive integer');
     finite(maxWindStrength, 'maxWindStrength', 0);
     if (maxWindStrength < wind.maxStrength) throw new RangeError('Batch bounds must cover wind.maxStrength');
-    // Private clones avoid mutating cached loader assets and shared material hooks.
-    this.mesh = new THREE.InstancedMesh(geometry.clone(), material.clone(), capacity);
+    // Only materials need private shader hooks. Geometry is immutable and shared across cells.
+    this.mesh = new THREE.InstancedMesh(geometry, material.clone(), capacity);
     this.mesh.count = 0;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.castShadow = this.mesh.receiveShadow = true;
-    this.mesh.geometry.computeBoundingBox();
+    if (!this.mesh.geometry.boundingBox) this.mesh.geometry.computeBoundingBox();
     const box = this.mesh.geometry.boundingBox!;
-    this.cleanup = wind.attachMesh(this.mesh, box.min.y, Math.max(0.001, box.max.y - box.min.y));
+    this.cleanup = wind.attachMesh(this.mesh, box.min.y, Math.max(0.001, box.max.y - box.min.y), false);
     this.mesh.frustumCulled = true;
   }
 
@@ -77,6 +77,6 @@ export class VegetationBatch {
   /** Update the shared wind once per frame, not once per batch. */
   dispose() {
     this.mesh.removeFromParent(); this.cleanup(); this.mesh.dispose();
-    this.mesh.geometry.dispose(); this.mesh.material.dispose();
+    this.mesh.material.dispose();
   }
 }

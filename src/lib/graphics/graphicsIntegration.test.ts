@@ -5,6 +5,7 @@ import { batchablePlant } from './vegetationEligibility';
 import { subdivideDepthGeometry, canApplySurfaceDepth, shouldHideAutoNormalMap } from './depthGeometry';
 import { WeatherSystem } from './WeatherSystem';
 import { isolateMaterialGroup } from './plantAssets';
+import { chooseTreeDetail, hasTreeLod, treeLodUrl, treeScreenHeight } from './treeLod';
 import type { Shape } from '../../types';
 
 it('restricts single-material plant primitives to their own triangles', () => {
@@ -44,7 +45,21 @@ it('keeps selected, hidden, grouped and edit-tool plants outside batches', () =>
   expect(eligible()).toBe(true); expect(eligible(shape, new Set(['plant']))).toBe(false);
   expect(eligible({ ...shape, hidden: true })).toBe(false); expect(eligible({ ...shape, groupId: 'group' })).toBe(false);
   expect(eligible(shape, new Set(), 'paint')).toBe(false); expect(eligible(shape, new Set(), 'move')).toBe(false);
+  expect(eligible(shape, new Set(), 'eraser')).toBe(true);
   expect(batchablePlant({ ...shape, tags: ['hidden'] }, new Set(), [{ id: 'hidden', visible: false } as any], true, 'select')).toBe(false);
+});
+
+it('switches tree detail by projected height with hysteresis and catalog assets', () => {
+  expect(hasTreeLod('ph_pine_tree_01')).toBe(true);
+  expect(treeLodUrl('ph_pine_tree_01', 2)).toMatch(/pine_tree_01_lod2\.glb$/);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+  camera.position.set(0, 0, 0); camera.lookAt(0, 0, -1); camera.updateMatrixWorld();
+  expect(treeScreenHeight(camera, 1000, new THREE.Vector3(0, 0, -50), 8)).toBeGreaterThan(100);
+  expect(chooseTreeDetail(140, 0)).toBe(1);
+  expect(chooseTreeDetail(170, 1)).toBe(1);
+  expect(chooseTreeDetail(200, 1)).toBe(0);
+  expect(chooseTreeDetail(45, 1)).toBe(2);
+  expect(chooseTreeDetail(60, 2)).toBe(2);
 });
 
 it('subdivides only the render geometry under a fixed vertex budget', () => {

@@ -34,6 +34,7 @@ pfSlope = (position.y > pfWindHeight.x && position.y < pfWindHeight.x + pfWindHe
 
 /** One clock per landscape, shared by all visible and shadow programs. */
 export class VegetationWind {
+  private static readonly paddedGeometries = new WeakSet<THREE.BufferGeometry>();
   constructor(readonly maxStrength = 0.4) { finite(maxStrength, 'maxStrength', 0.12); }
   readonly uniforms = {
     pfWindTime: { value: 0 }, pfWindStrength: { value: 0.12 },
@@ -79,7 +80,7 @@ export class VegetationWind {
   }
 
   /** Static mesh. Call cleanup before disposing/replacing its material. */
-  attachMesh(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]>, base = 0, height = 1) {
+  attachMesh(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]>, base = 0, height = 1, padGeometryBounds = true) {
     if (mesh.customDepthMaterial || mesh.customDistanceMaterial) throw new Error('Attach wind before other custom shadow effects.');
     const sources = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const source = sources[0];
@@ -101,11 +102,14 @@ export class VegetationWind {
     // still-attached instances of the same species, and an oversized bound only costs a slightly
     // later cull, never a wrong one.
     const geometry = mesh.geometry;
-    const padding = 1.35 * this.maxStrength;
-    geometry.computeBoundingSphere();
-    if (geometry.boundingSphere) geometry.boundingSphere.radius += padding;
-    geometry.computeBoundingBox();
-    if (geometry.boundingBox) geometry.boundingBox.expandByScalar(padding);
+    if (padGeometryBounds && !VegetationWind.paddedGeometries.has(geometry)) {
+      const padding = 1.35 * this.maxStrength;
+      geometry.computeBoundingSphere();
+      if (geometry.boundingSphere) geometry.boundingSphere.radius += padding;
+      geometry.computeBoundingBox();
+      if (geometry.boundingBox) geometry.boundingBox.expandByScalar(padding);
+      VegetationWind.paddedGeometries.add(geometry);
+    }
     return () => {
       undo.forEach(fn => fn());
       mesh.customDepthMaterial = undefined; mesh.customDistanceMaterial = undefined;
