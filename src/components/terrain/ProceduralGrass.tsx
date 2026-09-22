@@ -14,10 +14,13 @@ const GRASS_VERTEX_SHADER = /* glsl */ `
 attribute vec4 aShapeOffset;
 attribute float aHeightVariance;
 attribute float aHeightPercent;
+attribute float aBladeTone;
 
 varying float vHeightPercent;
 varying vec3 vWorldPos;
 varying float vColorJitter;
+varying float vBladeTone;
+varying float vLight;
 
 uniform float uTime;
 uniform float uWindStrength;
@@ -28,38 +31,30 @@ uniform float uHeightVariance;
 void main() {
   vHeightPercent = aHeightPercent;
   vColorJitter = aShapeOffset.w;
+  vBladeTone = aBladeTone;
 
   // 1. Local vertex position
   vec3 pos = position;
 
-  // Scale blade height: baseHeight + randomVariance * heightVariance
+  // Scale the whole tuft in metres; scaling Y alone makes short lawn grass broad and flat.
   float hScale = uBaseHeight + aHeightVariance * uHeightVariance;
-  pos.y *= hScale;
+  pos *= hScale;
 
   // Width & profile shape offsets (individual lean, taper, and width)
-  pos.x *= aShapeOffset.z;
+  pos.xz *= aShapeOffset.z;
   pos.x += aShapeOffset.x * (aHeightPercent * aHeightPercent) * hScale;
   pos.z += aShapeOffset.y * (aHeightPercent * aHeightPercent) * hScale;
 
-  // 2. Instance world center to orient cylinder around local up-vector
-  vec4 instCenter = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  // Radial blades have volume from every viewing angle without billboarding.
+  mat4 plantMatrix = modelMatrix * instanceMatrix;
+  vec3 worldNormal = normalize(mat3(plantMatrix) * normal);
+  vLight = 0.88 + 0.18 * abs(dot(worldNormal, vec3(0.31, 0.82, 0.48)));
 
-  // 3. Cylindrical Billboarding:
-  // Rotate the card around its local up-vector (Y-axis) to face camera direction
-  vec2 toCam = cameraPosition.xz - instCenter.xz;
-  float angle = atan(toCam.x, toCam.y);
-  float cosA = cos(angle);
-  float sinA = sin(angle);
-
-  vec3 billboardPos = pos;
-  billboardPos.x = pos.x * cosA + pos.z * sinA;
-  billboardPos.z = -pos.x * sinA + pos.z * cosA;
-
-  // 4. World position before wind
-  vec4 worldPos4 = modelMatrix * instanceMatrix * vec4(billboardPos, 1.0);
+  // World position before wind
+  vec4 worldPos4 = plantMatrix * vec4(pos, 1.0);
   vec3 worldPos = worldPos4.xyz;
 
-  // 5. Wind Animation:
+  // Wind Animation:
   // Horizontal displacement proportional to (aHeightPercent)^2
   float windWave = sin(uTime * 2.2 + worldPos.x * 0.45 + worldPos.z * 0.45) * uWindStrength;
   windWave += cos(uTime * 3.4 + worldPos.x * 0.85 + worldPos.z * 0.65) * (uWindStrength * 0.35);
@@ -80,6 +75,8 @@ precision highp float;
 varying float vHeightPercent;
 varying vec3 vWorldPos;
 varying float vColorJitter;
+varying float vBladeTone;
+varying float vLight;
 
 uniform vec3 uRootColor;
 uniform vec3 uTipColor;
@@ -93,8 +90,8 @@ void main() {
   vec3 finalColor = gradColor * (1.0 + jitter);
 
   // Vertical light factor (roots darker for ambient depth, tips brighter)
-  float verticalShading = mix(0.82, 1.14, vHeightPercent);
-  finalColor *= verticalShading;
+  float verticalShading = mix(0.92, 1.12, vHeightPercent);
+  finalColor *= verticalShading * vBladeTone * vLight;
 
   // Near-plane fading when walk camera gets close
   float distToCamera = length(vWorldPos - cameraPosition);
@@ -127,6 +124,7 @@ export function ProceduralGrass({
   const baseGeometry = useMemo(() => {
     return createGrassBladeGeometry();
   }, []);
+  useEffect(() => () => baseGeometry.dispose(), [baseGeometry]);
 
   // Compute instances based on density, terrain geometry, slope culling, and slab exclusion
   const instanceData = useMemo(() => {
@@ -179,6 +177,7 @@ export function ProceduralGrass({
     });
     return mat;
   }, [uniforms]);
+  useEffect(() => () => material.dispose(), [material]);
 
   // Keep wind strength uniform instantly synced when user drags slider or toggles animation
   useEffect(() => {
@@ -208,6 +207,9 @@ export function ProceduralGrass({
       mesh.setMatrixAt(i, mat4);
     }
     mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    // Shader growth and wind extend beyond the static tuft. Keep culling conservative.
+    if (mesh.boundingSphere) mesh.boundingSphere.radius += Math.max(0, (grassSettings.baseHeight + grassSettings.heightVariance) * 1.2 - 1) + effectiveWindStrength + 0.2;
 
     // Attach instanced attributes to base geometry
     const geo = mesh.geometry;
@@ -219,7 +221,7 @@ export function ProceduralGrass({
     // Disable raycasting and assign visual-only obstacle flag for Walk Mode
     mesh.raycast = () => {};
     mesh.userData = { isGrass: true, isObstacle: false };
-  }, [instanceData]);
+  }, [instanceData, grassSettings.baseHeight, grassSettings.heightVariance, effectiveWindStrength]);
 
   if (instanceData.instanceCount === 0) {
     return null;
@@ -231,7 +233,8 @@ export function ProceduralGrass({
       ref={meshRef}
       name="procedural-grass-mesh"
       args={[baseGeometry, material, instanceData.instanceCount]}
-      frustumCulled={false}
+      frustumCulled
+      dispose={null}
       raycast={() => {}}
       userData={{ isGrass: true, isObstacle: false }}
     />

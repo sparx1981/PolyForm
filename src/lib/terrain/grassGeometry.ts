@@ -23,7 +23,7 @@ export interface SlabFootprint {
 }
 
 /**
- * Creates low-poly 2D card base geometry with 3-4 distinct blade silhouettes (3-5 triangles each).
+ * Creates a radial tuft of curved, tapered blades with three triangles per blade.
  * NO alpha cutouts or transparent PNG textures used.
  *
  * Each vertex includes:
@@ -34,87 +34,48 @@ export interface SlabFootprint {
  */
 export function createGrassBladeGeometry(): THREE.BufferGeometry {
   const positions: number[] = [];
-  const normals: number[] = [];
   const uvs: number[] = [];
   const heightPercents: number[] = [];
+  const bladeTones: number[] = [];
   const indices: number[] = [];
 
   let vertOffset = 0;
 
-  function addVertex(x: number, y: number, z: number, nx: number, ny: number, nz: number, u: number, v: number, hPct: number) {
+  function addVertex(x: number, y: number, z: number, u: number, v: number, hPct: number, tone: number) {
     positions.push(x, y, z);
-    normals.push(nx, ny, nz);
     uvs.push(u, v);
     heightPercents.push(hPct);
+    bladeTones.push(tone);
     return vertOffset++;
   }
 
-  // Helper to add a triangle
-  function addTri(a: number, b: number, c: number) {
-    indices.push(a, b, c);
-    // Double-sided rendering support
-    indices.push(c, b, a);
-  }
-
-  // --- Blade 1 (Left blade: curved outward left, 3 triangles) ---
-  {
-    const b0 = addVertex(-0.045, 0.0, 0.005, 0, 0, 1, 0.0, 0.0, 0.0);
-    const b1 = addVertex(-0.015, 0.0, 0.005, 0, 0, 1, 0.3, 0.0, 0.0);
-    const m0 = addVertex(-0.065, 0.45, 0.015, -0.2, 0.1, 0.98, 0.0, 0.45, 0.45);
-    const m1 = addVertex(-0.035, 0.45, 0.01, -0.2, 0.1, 0.98, 0.3, 0.45, 0.45);
-    const tip = addVertex(-0.09, 0.95, 0.025, -0.3, 0.2, 0.93, 0.15, 1.0, 1.0);
-
-    addTri(b0, b1, m1);
-    addTri(b0, m1, m0);
-    addTri(m0, m1, tip);
-  }
-
-  // --- Blade 2 (Center tall blade: slightly fanned, 4 triangles) ---
-  {
-    const b0 = addVertex(-0.015, 0.0, 0.015, 0, 0, 1, 0.35, 0.0, 0.0);
-    const b1 = addVertex(0.018, 0.0, -0.015, 0, 0, 1, 0.65, 0.0, 0.0);
-    const m0 = addVertex(-0.01, 0.38, 0.02, 0.05, 0.1, 0.99, 0.35, 0.38, 0.38);
-    const m1 = addVertex(0.02, 0.38, -0.01, 0.05, 0.1, 0.99, 0.65, 0.38, 0.38);
-    const u0 = addVertex(0.0, 0.75, 0.01, 0.1, 0.15, 0.98, 0.4, 0.75, 0.75);
-    const u1 = addVertex(0.025, 0.75, 0.0, 0.1, 0.15, 0.98, 0.6, 0.75, 0.75);
-    const tip = addVertex(0.02, 1.1, 0.0, 0.15, 0.2, 0.96, 0.5, 1.0, 1.0);
-
-    addTri(b0, b1, m1);
-    addTri(b0, m1, m0);
-    addTri(m0, m1, u1);
-    addTri(m0, u1, u0);
-    addTri(u0, u1, tip);
-  }
-
-  // --- Blade 3 (Right blade: leaning right, 3 triangles) ---
-  {
-    const b0 = addVertex(0.015, 0.0, -0.01, 0, 0, 1, 0.7, 0.0, 0.0);
-    const b1 = addVertex(0.045, 0.0, 0.01, 0, 0, 1, 1.0, 0.0, 0.0);
-    const m0 = addVertex(0.055, 0.42, -0.015, 0.2, 0.1, 0.98, 0.7, 0.42, 0.42);
-    const m1 = addVertex(0.08, 0.42, 0.005, 0.2, 0.1, 0.98, 1.0, 0.42, 0.42);
-    const tip = addVertex(0.105, 0.85, -0.01, 0.3, 0.2, 0.93, 0.85, 1.0, 1.0);
-
-    addTri(b0, b1, m1);
-    addTri(b0, m1, m0);
-    addTri(m0, m1, tip);
-  }
-
-  // --- Blade 4 (Accent short sprout / blade in back, 2 triangles) ---
-  {
-    const b0 = addVertex(-0.02, 0.0, -0.025, 0, 0, -1, 0.3, 0.0, 0.0);
-    const b1 = addVertex(0.01, 0.0, -0.025, 0, 0, -1, 0.6, 0.0, 0.0);
-    const m0 = addVertex(-0.01, 0.25, -0.03, 0, 0.1, -0.99, 0.35, 0.5, 0.5);
-    const tip = addVertex(0.0, 0.52, -0.035, 0, 0.2, -0.98, 0.45, 1.0, 1.0);
-
-    addTri(b0, b1, m0);
-    addTri(b1, tip, m0);
+  const blades = [
+    { angle: 0.15, height: 1.0, lean: 0.24, width: 0.085, tone: 0.93 },
+    { angle: 1.18, height: 0.78, lean: 0.30, width: 0.073, tone: 1.06 },
+    { angle: 2.25, height: 1.12, lean: 0.19, width: 0.077, tone: 0.88 },
+    { angle: 3.32, height: 0.64, lean: 0.34, width: 0.090, tone: 1.10 },
+    { angle: 4.38, height: 0.93, lean: 0.27, width: 0.080, tone: 0.97 },
+    { angle: 5.42, height: 0.72, lean: 0.31, width: 0.075, tone: 1.03 },
+  ];
+  for (const blade of blades) {
+    const dx = Math.cos(blade.angle), dz = Math.sin(blade.angle);
+    const acrossX = -dz, acrossZ = dx;
+    const point = (outward: number, halfWidth: number, height: number, side: number, hPct: number) =>
+      addVertex(dx * outward + acrossX * halfWidth * side, height, dz * outward + acrossZ * halfWidth * side,
+        (side + 1) * 0.5, hPct, hPct, blade.tone);
+    const baseL = point(0.025, blade.width * 0.5, 0, -1, 0);
+    const baseR = point(0.025, blade.width * 0.5, 0, 1, 0);
+    const midL = point(blade.lean * 0.34, blade.width * 0.55, blade.height * 0.52, -1, 0.52);
+    const midR = point(blade.lean * 0.34, blade.width * 0.55, blade.height * 0.52, 1, 0.52);
+    const tip = point(blade.lean, 0, blade.height, 0, 1);
+    indices.push(baseL, baseR, midR, baseL, midR, midL, midL, midR, tip);
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setAttribute('aHeightPercent', new THREE.Float32BufferAttribute(heightPercents, 1));
+  geometry.setAttribute('aBladeTone', new THREE.Float32BufferAttribute(bladeTones, 1));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
 
@@ -470,7 +431,7 @@ export function generateGrassInstances(
   // Total area in m²
   const area = width * depth;
   const rawTargetCount = Math.round(area * density);
-  // Cap at 100,000 instances to guarantee 60 FPS on any GPU
+  // Cap instances to bound draw work on large terrain shapes.
   const targetCount = Math.min(100000, rawTargetCount);
 
   // Stratified jittered grid sampling

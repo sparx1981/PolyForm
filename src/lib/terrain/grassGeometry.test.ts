@@ -4,13 +4,17 @@ import { createGrassBladeGeometry, generateGrassInstances, extractExclusionFootp
 import { Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, RoadModifier } from '../../types';
 
 describe('Procedural Grass Geometry & Instancing Engine', () => {
-  it('creates low-poly 2D card base geometry with height attributes and no transparent cutout textures', () => {
+  it('creates a tapered radial tuft within the original triangle budget', () => {
     const geo = createGrassBladeGeometry();
 
     expect(geo.getAttribute('position')).toBeDefined();
     expect(geo.getAttribute('normal')).toBeDefined();
     expect(geo.getAttribute('aHeightPercent')).toBeDefined();
+    expect(geo.getAttribute('aBladeTone')).toBeDefined();
     expect(geo.getIndex()).toBeDefined();
+    expect(geo.getIndex()!.count / 3).toBe(18);
+    // The fuller default lawn still submits fewer blade triangles per square metre than before.
+    expect((geo.getIndex()!.count / 3) * DEFAULT_GRASS_SETTINGS.density).toBeLessThanOrEqual(26 * 8);
 
     const posCount = geo.getAttribute('position').count;
     const hPct = geo.getAttribute('aHeightPercent');
@@ -28,6 +32,11 @@ describe('Procedural Grass Geometry & Instancing Engine', () => {
     }
     expect(minH).toBe(0.0);
     expect(maxH).toBe(1.0);
+    const bounds = new THREE.Box3().setFromBufferAttribute(geo.getAttribute('position') as THREE.BufferAttribute);
+    expect(bounds.max.y).toBeGreaterThan(1);
+    expect(bounds.max.x - bounds.min.x).toBeGreaterThan(0.25);
+    expect(bounds.max.z - bounds.min.z).toBeGreaterThan(0.25);
+    geo.dispose();
   });
 
   it('generates zero instances when grass is disabled', () => {

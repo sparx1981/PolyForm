@@ -52,9 +52,9 @@ export interface GrassSettings {
 
 export const DEFAULT_GRASS_SETTINGS: GrassSettings = {
   enabled: false,
-  rootColor: '#1e3f20',
-  tipColor: '#88bb44',
-  density: 8,
+  rootColor: '#4f7340',
+  tipColor: '#91b364',
+  density: 10,
   baseHeight: 0.05,
   heightVariance: 0.10,
   maxSlopeAngle: 35,

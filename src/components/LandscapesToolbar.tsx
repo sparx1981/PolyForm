@@ -1276,8 +1276,8 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                         {/* Quick Presets */}
                         <div className="flex gap-1 mt-2">
                           {[
-                            { name: 'Lawn', root: '#1e3f20', tip: '#88bb44' },
-                            { name: 'Meadow', root: '#284e1b', tip: '#a3e635' },
+                            { name: 'Lawn', root: '#4f7340', tip: '#91b364' },
+                            { name: 'Meadow', root: '#587a45', tip: '#a8bd70' },
                             { name: 'Autumn', root: '#362b18', tip: '#d97706' },
                             { name: 'Alpine', root: '#8f9992', tip: '#aec1b5' },
                             { name: 'Savanna', root: '#42381c', tip: '#eab308' },
@@ -1313,7 +1313,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                         />
                         <div className="flex justify-between text-[8px] text-gray-600 dark:text-gray-400 font-mono mt-0.5">
                           <span>Sparse (1)</span>
-                          <span>Balanced (8)</span>
+                          <span>Balanced (10)</span>
                           <span>Dense (25)</span>
                         </div>
                       </div>
