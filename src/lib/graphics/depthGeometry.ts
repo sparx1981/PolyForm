@@ -73,58 +73,107 @@ function distanceToSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3)
 }
 
 /**
- * Adds a `pfEdgeFade` vertex attribute (0 at the mesh's true silhouette/boundary edges,
- * ramping to 1 within `marginMeters`) that SurfaceDepth multiplies its vertex displacement by,
- * so a height-mapped surface's relief tapers off right at its own edge instead of displacing
- * that edge's vertices outward/inward - which, for two separate meshes that are meant to butt
- * flush against each other (e.g. two walls meeting at a corner), otherwise re-opens a visible
- * gap or overlap that the underlying (non-displaced) geometry closed correctly.
+ * Adds a `pfEdgeFade` vertex attribute (0 at the mesh's true silhouette/boundary edges *and*
+ * at its internal crease edges, ramping to 1 within `marginMeters`) that SurfaceDepth
+ * multiplies its vertex displacement by, so a height-mapped surface's relief tapers off right
+ * at its own edge instead of displacing that edge's vertices outward/inward - which, for two
+ * surfaces that are meant to butt flush against each other, otherwise re-opens a visible gap
+ * or overlap that the underlying (non-displaced) geometry closed correctly.
  *
- * Deliberately based on true geometric distance to a boundary edge, never on the surface's own
+ * Deliberately based on true geometric distance to a flagged edge, never on the surface's own
  * (often tiled/repeating) UV coordinates - a texture-space fade would instead fade at every
  * texture tile repeat, putting a visible grid of flattened lines across any large tiled surface
  * (a long wall, terrain) rather than just its true outer edge.
  *
- * A "boundary edge" is found the standard way: on a non-indexed triangle soup, an edge shared
- * by only one triangle (as opposed to two, for an interior edge) sits on the mesh's silhouette.
- * Closed, gapless shapes (a full sphere, a solid box) have no boundary edges at all - the fade
- * is then 1 everywhere, a no-op, since there is no edge that another mesh could ever need to
- * align flush against.
+ * Two kinds of edge are flagged, both found on a non-indexed triangle soup by grouping edges
+ * that share the same (rounded) endpoint positions:
+ *  - an open/boundary edge, one that only ever belongs to a single triangle - the classic case,
+ *    e.g. the perimeter of an open plane.
+ *  - a crease edge, one whose adjoining triangles' face normals diverge sharply (e.g. a wall's
+ *    front face meeting its end/miter face at 90 degrees). A solid, watertight extrusion (the
+ *    walls this was built for are exactly this: `ExtrudeGeometry` from a closed footprint, with
+ *    top/bottom caps) has NO open edges anywhere on it - every edge belongs to exactly two
+ *    triangles - so relying on open-edge detection alone is a no-op for any solid/closed shape.
+ *    But two faces of the same watertight solid, displaced independently along their own
+ *    (different) normals, still pull apart at the edge where they meet, exactly like two
+ *    separate meshes would - so that edge needs the same fade treatment.
+ * A fully smooth, gapless surface with no creases anywhere (a sphere, a smooth terrain patch)
+ * has no flagged edges at all - the fade is then 1 everywhere, a true no-op, since there is no
+ * edge whose independent displacement could ever reveal a seam.
  */
-export function applyDepthEdgeFade(geometry: THREE.BufferGeometry, marginMeters = 0.04): void {
+export function applyDepthEdgeFade(geometry: THREE.BufferGeometry, marginMeters = 0.04, creaseCosineThreshold = 0.9): void {
   const position = geometry.getAttribute('position');
   const vertexCount = position.count;
   const precision = 1e5; // 10 micron key resolution - well below any real seam tolerance
   const key = (x: number, y: number, z: number) =>
     `${Math.round(x * precision)},${Math.round(y * precision)},${Math.round(z * precision)}`;
-
-  const edgeCounts = new Map<string, number>();
   const get = (i: number) => new THREE.Vector3(position.getX(i), position.getY(i), position.getZ(i));
+  const edgeKeyOf = (a: THREE.Vector3, b: THREE.Vector3) => {
+    const ka = key(a.x, a.y, a.z), kb = key(b.x, b.y, b.z);
+    return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+  };
+  // A degenerate (zero-area) triangle has no well-defined normal; treat its edges as flagged
+  // rather than let a NaN/zero normal silently poison a real neighbour's crease comparison.
+  const triangleNormal = (tri: number): THREE.Vector3 | null => {
+    const a = get(tri), b = get(tri + 1), c = get(tri + 2);
+    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+    return n.lengthSq() > 1e-12 ? n.normalize() : null;
+  };
+
+  const edgeNormals = new Map<string, (THREE.Vector3 | null)[]>();
   for (let tri = 0; tri < vertexCount; tri += 3) {
+    const normal = triangleNormal(tri);
     for (let e = 0; e < 3; e++) {
-      const a = get(tri + e), b = get(tri + ((e + 1) % 3));
-      const ka = key(a.x, a.y, a.z), kb = key(b.x, b.y, b.z);
-      const edgeKey = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
-      edgeCounts.set(edgeKey, (edgeCounts.get(edgeKey) ?? 0) + 1);
+      const edgeKey = edgeKeyOf(get(tri + e), get(tri + ((e + 1) % 3)));
+      const list = edgeNormals.get(edgeKey);
+      if (list) list.push(normal); else edgeNormals.set(edgeKey, [normal]);
     }
   }
+  const isFlaggedEdge = (normals: (THREE.Vector3 | null)[]) => {
+    if (normals.length === 1) return true; // open/boundary edge
+    for (let i = 0; i < normals.length; i++) for (let j = i + 1; j < normals.length; j++) {
+      const a = normals[i], b = normals[j];
+      if (!a || !b || a.dot(b) < creaseCosineThreshold) return true; // crease, or degenerate neighbour
+    }
+    return false;
+  };
 
-  const boundarySegments: [THREE.Vector3, THREE.Vector3][] = [];
+  // Flagged edges are a small fraction of a dense mesh's total edges (roughly proportional to
+  // its silhouette/crease length, not its triangle count), but a naive check-every-vertex-
+  // against-every-segment search is still O(vertexCount * segmentCount) - for a heavily
+  // subdivided solid (tens of thousands of vertices) that is seconds of main-thread work per
+  // mesh. Since only segments within `marginMeters` of a vertex matter at all (anything farther
+  // saturates to fade 1 regardless of exact distance), bucket segments into a uniform grid of
+  // that cell size and look a vertex up only in its own cell - registering each segment into
+  // every cell its (margin-expanded) bounding box touches makes that single-cell lookup exact.
+  const cellSize = Math.max(marginMeters, 1e-6);
+  const cellOf = (v: number) => Math.floor(v / cellSize);
+  const cellKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
+  const grid = new Map<string, [THREE.Vector3, THREE.Vector3][]>();
+  let segmentCount = 0;
   for (let tri = 0; tri < vertexCount; tri += 3) {
     for (let e = 0; e < 3; e++) {
       const a = get(tri + e), b = get(tri + ((e + 1) % 3));
-      const ka = key(a.x, a.y, a.z), kb = key(b.x, b.y, b.z);
-      const edgeKey = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
-      if (edgeCounts.get(edgeKey) === 1) boundarySegments.push([a, b]);
+      if (!isFlaggedEdge(edgeNormals.get(edgeKeyOf(a, b))!)) continue;
+      segmentCount++;
+      const minX = cellOf(Math.min(a.x, b.x) - marginMeters), maxX = cellOf(Math.max(a.x, b.x) + marginMeters);
+      const minY = cellOf(Math.min(a.y, b.y) - marginMeters), maxY = cellOf(Math.max(a.y, b.y) + marginMeters);
+      const minZ = cellOf(Math.min(a.z, b.z) - marginMeters), maxZ = cellOf(Math.max(a.z, b.z) + marginMeters);
+      for (let cx = minX; cx <= maxX; cx++) for (let cy = minY; cy <= maxY; cy++) for (let cz = minZ; cz <= maxZ; cz++) {
+        const k = cellKey(cx, cy, cz);
+        const list = grid.get(k);
+        if (list) list.push([a, b]); else grid.set(k, [[a, b]]);
+      }
     }
   }
 
   const fade = new Float32Array(vertexCount).fill(1);
-  if (boundarySegments.length > 0) {
+  if (segmentCount > 0) {
     for (let i = 0; i < vertexCount; i++) {
       const p = get(i);
-      let minDist = Infinity;
-      for (const [a, b] of boundarySegments) minDist = Math.min(minDist, distanceToSegment(p, a, b));
+      const segments = grid.get(cellKey(cellOf(p.x), cellOf(p.y), cellOf(p.z)));
+      let minDist = segments ? Infinity : marginMeters;
+      if (segments) for (const [a, b] of segments) minDist = Math.min(minDist, distanceToSegment(p, a, b));
       const t = Math.max(0, Math.min(1, minDist / marginMeters));
       fade[i] = t * t * (3 - 2 * t); // smoothstep
     }
