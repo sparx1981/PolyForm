@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three-stdlib';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { USDLoader } from 'three/examples/jsm/loaders/USDLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 // Global cache for loaded model templates and promises to avoid duplicate loads
 const modelCache = new Map<string, THREE.Group>();
@@ -52,6 +53,11 @@ export function loadPlantGLTF(url: string, onLoad: (model: THREE.Group) => void,
     const manager = new THREE.LoadingManager();
     if (urlRemap) manager.setURLModifier(requested => urlRemap[requested] ?? requested);
     const loader = new GLTFLoader(manager);
+    // The decimated Poly Haven catalog compresses geometry with EXT_meshopt_compression
+    // (see scripts/polyhaven/decimateModels.ts) rather than mesh simplification, which was
+    // destroying alpha-cutout foliage geometry (leaf/needle cards collapsed into long spikes).
+    // Meshopt shrinks the encoded buffers losslessly instead, so it needs this decoder wired up.
+    loader.setMeshoptDecoder(MeshoptDecoder);
     loader.load(
       url,
       (gltf) => {

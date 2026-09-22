@@ -109,14 +109,17 @@ export async function decimateModels(
   const tier = options.tier ?? '1k';
   const outDir = options.outDir ?? join('public', 'polyhaven-models-decimated');
   const catalogPath = options.catalogPath ?? join('src', 'lib', 'graphics', 'polyhavenModelCatalog.json');
-  // `error` is a cap, not a target: meshoptimizer's simplifier stops collapsing edges the
-  // moment doing so would exceed it, even short of `ratio` - so a tight error budget silently
-  // under-reduces exactly the meshes that need it most (foliage-heavy trees, made of thousands
-  // of small, disconnected leaf-card triangles, hit that ceiling almost immediately). 0.03 is
-  // loose enough to actually reach the ratio target on that geometry; a slightly deformed leaf
-  // silhouette is imperceptible at normal viewing distance and is exactly the tradeoff asked for.
-  const simplifyRatio = options.simplifyRatio ?? 0.12;
-  const simplifyError = options.simplifyError ?? 0.03;
+  // A real run at ratio 0.12 / error 0.03 produced trees that rendered as a spiky black
+  // "hedgehog" mess instead of foliage: mesh simplification only minimizes GEOMETRIC surface
+  // deviation, and has no notion that most of a leaf/needle card is transparent (alpha cutout).
+  // Collapsing those cards at an aggressive ratio doesn't shrink the visible silhouette the way
+  // it would on a solid mesh - it mangles the card's internal layout into degenerate slivers,
+  // since the simplifier is "successfully" preserving a shape that isn't the one that's actually
+  // visible. These defaults are conservative enough to avoid that (mostly cleaning up truly
+  // redundant coplanar subdivisions on trunks/rocks); the real size win now comes from meshopt
+  // compression instead of destructive simplification (see --compress below).
+  const simplifyRatio = options.simplifyRatio ?? 0.6;
+  const simplifyError = options.simplifyError ?? 0.005;
   const textureSize = options.textureSize ?? 1024;
   // GitHub hard-rejects any pushed file over 100MB - a decimation pass that still clears that
   // bar hasn't just under-performed, it has produced something that can never be committed.
@@ -155,26 +158,31 @@ export async function decimateModels(
       }
 
       const outputGlb = join(outDir, `${slug}.glb`);
-      // quantize (not meshopt/draco) so the existing GLTFLoader - which has no Draco/Meshopt
-      // decoder wired up (see plantModelLoader.ts) - can still load the result unmodified;
-      // KHR_mesh_quantization decodes automatically in three.js's GLTFLoader. --palette and
-      // --instance are single-model no-ops (palette merges materials across multiple assets,
-      // instancing needs repeated node references) so are turned off rather than left to do
-      // unpredictable per-model material surgery.
+      // meshopt (not quantize) as the primary size lever: it re-encodes the vertex/index
+      // buffers into a far more compact form WITHOUT changing the actual geometry, unlike
+      // simplification, which is destructive and - per the comment above - actively unsafe on
+      // alpha-cutout foliage. Requires a decoder wired into the loader; see
+      // src/lib/plantModelLoader.ts's `loader.setMeshoptDecoder(MeshoptDecoder)`.
       //
       // --texture-compress is deliberately "auto" (resize + recompress in the SOURCE format),
       // not "webp": a real run produced foliage that rendered pitch black, with the browser
       // console repeating "Texture marked for update but no image data found" - the embedded
       // EXT_texture_webp images were failing to decode. "auto" keeps the original JPEG/PNG
       // encoding, which has no such extension-support risk, at the cost of a smaller size win.
+      //
+      // --palette and --instance are single-model no-ops (palette merges materials across
+      // multiple assets, instancing needs repeated node references), so are turned off rather
+      // than left to do unpredictable per-model material surgery.
       let ratio = simplifyRatio, error = simplifyError, texSize = textureSize, decimatedBytes = Infinity;
       // Some assets (dense foliage especially) don't hit the byte target even at the requested
       // aggressiveness - rather than silently ship whatever came out, escalate a few times
-      // (smaller ratio, looser error, smaller textures) before giving up and flagging it.
+      // before giving up and flagging it. Texture size is escalated hardest since it carries no
+      // simplification risk; the simplify ratio is only nudged down mildly and floored well
+      // short of the wireframe-destroying territory a full halving-per-attempt reached before.
       for (let attempt = 0; attempt < 4; attempt++) {
         await execFileAsync(process.execPath, [
           cliPath, 'optimize', inputGltf, outputGlb,
-          '--compress', 'quantize',
+          '--compress', 'meshopt',
           '--texture-compress', 'auto',
           '--texture-size', String(texSize),
           '--simplify-ratio', String(ratio),
@@ -184,10 +192,10 @@ export async function decimateModels(
         ], { maxBuffer: 1024 * 1024 * 64 });
         decimatedBytes = (await stat(outputGlb)).size;
         if (decimatedBytes <= maxOutputBytes) break;
-        const nextRatio = Math.max(0.02, ratio * 0.5), nextError = Math.min(0.15, error * 1.5), nextTexSize = Math.max(512, texSize / 2);
-        if (nextRatio === ratio && nextError === error && nextTexSize === texSize) break; // no more room to escalate
-        console.log(`  ${(decimatedBytes / 1_000_000).toFixed(1)}MB still over the ${(maxOutputBytes / 1_000_000).toFixed(0)}MB target - retrying more aggressively (ratio ${nextRatio}, error ${nextError}, texture ${nextTexSize})`);
-        ratio = nextRatio; error = nextError; texSize = nextTexSize;
+        const nextRatio = Math.max(0.35, ratio * 0.85), nextTexSize = Math.max(512, texSize / 2);
+        if (nextRatio === ratio && nextTexSize === texSize) break; // no more room to escalate
+        console.log(`  ${(decimatedBytes / 1_000_000).toFixed(1)}MB still over the ${(maxOutputBytes / 1_000_000).toFixed(0)}MB target - retrying more aggressively (ratio ${nextRatio}, texture ${nextTexSize})`);
+        ratio = nextRatio; texSize = nextTexSize;
       }
       if (decimatedBytes > maxOutputBytes) {
         console.log(`  WARNING: ${slug} is still ${(decimatedBytes / 1_000_000).toFixed(1)}MB after maximum escalation - this will be rejected by a git push over GitHub's 100MB limit.`);
