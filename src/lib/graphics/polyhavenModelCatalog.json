@@ -1,5 +1,418 @@
 {
   "schemaVersion": 1,
-  "generatedAt": null,
-  "assets": []
+  "generatedAt": "2026-09-22T04:52:21.538Z",
+  "assets": [
+    {
+      "id": "ph:model:tree_small_02",
+      "sourceId": "tree_small_02",
+      "kind": "model",
+      "name": "Tree Small 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "trees",
+        "collection: verdant_trail"
+      ],
+      "tags": [
+        "tree",
+        "natural",
+        "nature",
+        "plant",
+        "outdoor",
+        "green",
+        "botany",
+        "leaf",
+        "leaves",
+        "forest",
+        "jungle",
+        "foliage",
+        "geometry nodes",
+        "trunk",
+        "bark",
+        "medium",
+        "garden",
+        "branches",
+        "burkea africana",
+        "wild syringa",
+        "small"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/tree_small_02/tree_small_02_1k.gltf"
+    },
+    {
+      "id": "ph:model:island_tree_01",
+      "sourceId": "island_tree_01",
+      "kind": "model",
+      "name": "Island Tree 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "trees",
+        "collection: verdant_trail"
+      ],
+      "tags": [
+        "tree",
+        "natural",
+        "nature",
+        "green",
+        "plant",
+        "outdoor",
+        "leaf",
+        "botany",
+        "leaves",
+        "forest",
+        "bush",
+        "jungle",
+        "foliage",
+        "island",
+        "coastal",
+        "geometry nodes",
+        "trunk",
+        "bark"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/island_tree_01/island_tree_01_1k.gltf"
+    },
+    {
+      "id": "ph:model:jacaranda_tree",
+      "sourceId": "jacaranda_tree",
+      "kind": "model",
+      "name": "Jacaranda Tree",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "trees",
+        "collection: verdant_trail"
+      ],
+      "tags": [
+        "tree",
+        "natural",
+        "nature",
+        "green",
+        "plant",
+        "outdoor",
+        "leaf",
+        "botany",
+        "leaves",
+        "forest",
+        "jungle",
+        "foliage",
+        "geometry nodes",
+        "bark",
+        "trunk",
+        "jacaranda"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/jacaranda_tree/jacaranda_tree_1k.gltf"
+    },
+    {
+      "id": "ph:model:grass_medium_01",
+      "sourceId": "grass_medium_01",
+      "kind": "model",
+      "name": "Grass Medium 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "grass",
+        "nature",
+        "ground cover",
+        "collection: pine_forest"
+      ],
+      "tags": [
+        "plant",
+        "grass",
+        "nature",
+        "green",
+        "shrub",
+        "outdoor",
+        "field",
+        "meadow",
+        "natural",
+        "foliage",
+        "small",
+        "botany"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_medium_01/grass_medium_01_1k.gltf"
+    },
+    {
+      "id": "ph:model:fir_sapling_medium",
+      "sourceId": "fir_sapling_medium",
+      "kind": "model",
+      "name": "Fir Sapling Medium",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "plants",
+        "nature",
+        "trees",
+        "collection: pine_forest"
+      ],
+      "tags": [
+        "fir",
+        "sapling",
+        "medium",
+        "needles",
+        "woodland",
+        "branches",
+        "environment",
+        "coniferous",
+        "tree",
+        "plants",
+        "foliage",
+        "geometry nodes"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fir_sapling_medium/fir_sapling_medium_1k.gltf"
+    },
+    {
+      "id": "ph:model:fir_tree_01",
+      "sourceId": "fir_tree_01",
+      "kind": "model",
+      "name": "Fir Tree 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "trees",
+        "collection: pine_forest"
+      ],
+      "tags": [
+        "fir",
+        "tree",
+        "geometry nodes",
+        "woodland",
+        "needles",
+        "branches",
+        "environment",
+        "coniferous",
+        "plants",
+        "forest",
+        "tall",
+        "trunk",
+        "bark",
+        "foliage",
+        "twig"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fir_tree_01/fir_tree_01_1k.gltf"
+    },
+    {
+      "id": "ph:model:pine_tree_01",
+      "sourceId": "pine_tree_01",
+      "kind": "model",
+      "name": "Pine Tree 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "trees",
+        "collection: pine_forest"
+      ],
+      "tags": [
+        "pine",
+        "tree",
+        "needles",
+        "branches",
+        "woodland",
+        "coniferous",
+        "plants",
+        "geometry nodes",
+        "foliage",
+        "natural",
+        "trunk",
+        "bark",
+        "environment",
+        "vegetation",
+        "evergreen",
+        "forest"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/pine_tree_01/pine_tree_01_1k.gltf"
+    },
+    {
+      "id": "ph:model:boulder_01",
+      "sourceId": "boulder_01",
+      "kind": "model",
+      "name": "Boulder 01",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "rocks",
+        "nature",
+        "collection: verdant_trail"
+      ],
+      "tags": [
+        "rocks",
+        "boulder",
+        "lichen",
+        "landscape",
+        "rock",
+        "geology",
+        "formation",
+        "weathered",
+        "rock face",
+        "cliff"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/boulder_01/boulder_01_1k.gltf"
+    },
+    {
+      "id": "ph:model:flower_heliophila",
+      "sourceId": "flower_heliophila",
+      "kind": "model",
+      "name": "Flower Heliophila",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "ground cover",
+        "grass",
+        "collection: namaqualand"
+      ],
+      "tags": [
+        "plant",
+        "natural",
+        "botany",
+        "tiny",
+        "small",
+        "karoo",
+        "desert",
+        "south africa",
+        "white",
+        "wildflower",
+        "floral"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/flower_heliophila/flower_heliophila_1k.gltf"
+    },
+    {
+      "id": "ph:model:fern_02",
+      "sourceId": "fern_02",
+      "kind": "model",
+      "name": "Fern 02",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "plants",
+        "nature",
+        "collection: smugglers_cove",
+        "collection: pine_forest"
+      ],
+      "tags": [
+        "plant",
+        "fern",
+        "foliage",
+        "jungle",
+        "shrub",
+        "bush",
+        "leaf",
+        "leaves",
+        "green",
+        "nature",
+        "forest",
+        "outdoor"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fern_02/fern_02_1k.gltf"
+    },
+    {
+      "id": "ph:model:flower_gazania",
+      "sourceId": "flower_gazania",
+      "kind": "model",
+      "name": "Flower Gazania",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "flowers",
+        "ground cover",
+        "collection: namaqualand"
+      ],
+      "tags": [
+        "karoo",
+        "outdoor",
+        "field",
+        "orange",
+        "botanical",
+        "floral",
+        "african",
+        "wildflower",
+        "daisy",
+        "south africa"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/flower_gazania/flower_gazania_1k.gltf"
+    },
+    {
+      "id": "ph:model:shrub_03",
+      "sourceId": "shrub_03",
+      "kind": "model",
+      "name": "Shrub 03",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "nature",
+        "plants",
+        "ground cover",
+        "collection: verdant_trail"
+      ],
+      "tags": [
+        "meadow",
+        "field",
+        "shrub",
+        "botany",
+        "green",
+        "nature",
+        "plant",
+        "leaf",
+        "bush",
+        "foliage",
+        "small",
+        "ground cover",
+        "undergrowth",
+        "garden",
+        "flora",
+        "environment",
+        "vegetation"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_03/shrub_03_1k.gltf"
+    },
+    {
+      "id": "ph:model:leipoldtia_schultzei",
+      "sourceId": "leipoldtia_schultzei",
+      "kind": "model",
+      "name": "Leipoldtia Schultzei",
+      "source": "polyhaven",
+      "license": "CC0-1.0",
+      "categories": [
+        "plants",
+        "collection: namaqualand"
+      ],
+      "tags": [
+        "succulent",
+        "wildflower",
+        "flower",
+        "floral",
+        "african",
+        "purple",
+        "plant",
+        "flora",
+        "nature"
+      ],
+      "tier": "1k",
+      "gltfUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/leipoldtia_schultzei/leipoldtia_schultzei_1k.gltf"
+    }
+  ]
 }
