@@ -5433,7 +5433,15 @@ function Scene() {
     if (activeTool === 'tape') {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      // Any real surface counts, not just Shape-typed objects - a `userData.isShape`-only
+      // check silently ignored kernel-rendered geometry, terrain, landscape props, roads and
+      // every other non-Shape mesh, falling through to whatever ground-plane/generic point
+      // the underlying click handler happened to compute instead of the actual surface hit.
+      const shapeIntersect = intersects.find(i =>
+        !i.object.userData.isHelper && !i.object.userData.isPreview && !i.object.userData.isGizmo &&
+        (i.object.userData.isShape || i.object.userData.isKernelGeometry ||
+         ((i.object as any).isMesh && i.object.name !== 'previewMesh'))
+      );
       const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
 
       if (!tapeStart) {
@@ -6057,7 +6065,11 @@ function Scene() {
 
     if (activeTool === 'tape' && tapeStart) {
       const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData.isShape);
+      const shapeIntersect = intersects.find(i =>
+        !i.object.userData.isHelper && !i.object.userData.isPreview && !i.object.userData.isGizmo &&
+        (i.object.userData.isShape || i.object.userData.isKernelGeometry ||
+         ((i.object as any).isMesh && i.object.name !== 'previewMesh'))
+      );
       const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
       setTapeEnd(point);
       setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
