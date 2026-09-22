@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-22T09:08:54.134Z",
+  "generatedAt": "2026-09-22T09:31:46.292Z",
   "assets": [
     {
       "id": "ph:model:tree_small_02",
@@ -42,7 +42,7 @@
       "gltfUrl": "/polyhaven-models-decimated/tree_small_02.glb",
       "includes": {},
       "originalBytes": 100974143,
-      "decimatedBytes": 14561840
+      "decimatedBytes": 14637672
     },
     {
       "id": "ph:model:island_tree_01",
@@ -118,7 +118,7 @@
       "gltfUrl": "/polyhaven-models-decimated/jacaranda_tree.glb",
       "includes": {},
       "originalBytes": 214609299,
-      "decimatedBytes": 28846936
+      "decimatedBytes": 29004056
     },
     {
       "id": "ph:model:grass_medium_01",
@@ -220,7 +220,7 @@
       "gltfUrl": "/polyhaven-models-decimated/fir_tree_01.glb",
       "includes": {},
       "originalBytes": 487358833,
-      "decimatedBytes": 82914296
+      "decimatedBytes": 83343192
     },
     {
       "id": "ph:model:pine_tree_01",
@@ -257,7 +257,7 @@
       "gltfUrl": "/polyhaven-models-decimated/pine_tree_01.glb",
       "includes": {},
       "originalBytes": 958118530,
-      "decimatedBytes": 88973328
+      "decimatedBytes": 89530172
     },
     {
       "id": "ph:model:boulder_01",
@@ -385,7 +385,7 @@
       "gltfUrl": "/polyhaven-models-decimated/flower_gazania.glb",
       "includes": {},
       "originalBytes": 2848844,
-      "decimatedBytes": 729068
+      "decimatedBytes": 730476
     },
     {
       "id": "ph:model:shrub_03",
