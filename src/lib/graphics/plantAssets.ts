@@ -8,6 +8,30 @@ export function plantTint(speciesId: string, color: string): THREE.Color {
   const species = PLANT_SPECIES_CATALOG.find(item => item.id === speciesId);
   return new THREE.Color(color !== species?.foliageColor && /^(?:#[\da-f]{3}|#[\da-f]{6})$/i.test(color) ? color : '#ffffff');
 }
+/**
+ * KHR_mesh_quantization-compressed geometry (used by the decimated Poly Haven catalog's
+ * EXT_meshopt_compression) stores POSITION/NORMAL as normalized integers - BufferAttribute.setXYZ
+ * on a `normalized` attribute re-quantizes the value it's given back into that integer's range.
+ * applyMatrix4 below bakes each node's own real-world scale/translation (its dequantization
+ * transform) directly into the geometry, producing values far outside [-1,1] - writing those back
+ * through the normalized setter clamps them straight back onto the unit cube, collapsing the mesh
+ * onto its own bounding-box faces (confirmed: every Poly Haven tree rendered as a flat black
+ * "spiky building" - literally the clamped geometry - until this ran first). Converting to plain
+ * float attributes first makes applyMatrix4 write real coordinates instead of re-quantizing them.
+ */
+export function dequantizeAttributes(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  for (const name of Object.keys(geometry.attributes)) {
+    const attribute = geometry.attributes[name] as THREE.BufferAttribute;
+    if (!attribute.normalized) continue;
+    const itemSize = attribute.itemSize;
+    const array = new Float32Array(attribute.count * itemSize);
+    for (let i = 0; i < attribute.count; i++) {
+      for (let component = 0; component < itemSize; component++) array[i * itemSize + component] = attribute.getComponent(i, component);
+    }
+    geometry.setAttribute(name, new THREE.BufferAttribute(array, itemSize, false));
+  }
+  return geometry;
+}
 /** A single-material Mesh ignores geometry groups, so restrict the actual index. */
 export function isolateMaterialGroup(geometry: THREE.BufferGeometry, materialIndex: number): boolean {
   const groups = geometry.groups.filter(group => group.materialIndex === materialIndex);
@@ -67,7 +91,7 @@ export function loadPlantPrimitives(speciesId: string, variation?: string): Prom
       if (!(object instanceof THREE.Mesh) || (object as THREE.SkinnedMesh).isSkinnedMesh) return;
       const originals = Array.isArray(object.material) ? object.material : [object.material];
       originals.forEach((original, index) => {
-        const geometry = object.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(normalize, object.matrixWorld));
+        const geometry = dequantizeAttributes(object.geometry.clone()).applyMatrix4(new THREE.Matrix4().multiplyMatrices(normalize, object.matrixWorld));
         if (originals.length > 1) {
           if (!isolateMaterialGroup(geometry, index)) { geometry.dispose(); return; }
         }
