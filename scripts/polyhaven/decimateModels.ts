@@ -115,11 +115,17 @@ export async function decimateModels(
   // Collapsing those cards at an aggressive ratio doesn't shrink the visible silhouette the way
   // it would on a solid mesh - it mangles the card's internal layout into degenerate slivers,
   // since the simplifier is "successfully" preserving a shape that isn't the one that's actually
-  // visible. These defaults are conservative enough to avoid that (mostly cleaning up truly
-  // redundant coplanar subdivisions on trunks/rocks); the real size win now comes from meshopt
-  // compression instead of destructive simplification (see --compress below).
-  const simplifyRatio = options.simplifyRatio ?? 0.6;
-  const simplifyError = options.simplifyError ?? 0.005;
+  // visible.
+  //
+  // 0.4 / 0.01 sits well short of that failure: confirmed by rendering pine_tree_01 (7.4M tris
+  // before, the worst offender) and fir_tree_01 (4.2M), jacaranda_tree, and tree_small_02 at both
+  // ratios side by side headlessly - the 0.4 output is visually indistinguishable from the
+  // in-repo 0.6 baseline (same silhouette, same leaf-card density) while roughly halving triangle
+  // count and file size on the dense foliage models that dominated app-level frame time. Below
+  // this the loose 0.01 error budget stops constraining the simplifier much and the risk profile
+  // starts approaching the broken 0.12/0.03 run above - re-verify visually before going lower.
+  const simplifyRatio = options.simplifyRatio ?? 0.4;
+  const simplifyError = options.simplifyError ?? 0.01;
   const textureSize = options.textureSize ?? 1024;
   // GitHub hard-rejects any pushed file over 100MB - a decimation pass that still clears that
   // bar hasn't just under-performed, it has produced something that can never be committed.

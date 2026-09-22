@@ -34,6 +34,25 @@ describe('vegetation GPU lifecycle', () => {
     material.dispose(); mesh.geometry.dispose();
   });
 
+  it('keeps frustum culling on for individually-placed plants by padding bounds instead of disabling it', () => {
+    // A scene can have many large, individually-placed trees (PlantModelMesh); disabling
+    // frustumCulled per plant meant every one of them rendered every frame regardless of whether
+    // it was on-screen, which is the dominant cost once tree geometry is dense.
+    const wind = new VegetationWind();
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    geometry.computeBoundingSphere();
+    const unpaddedRadius = geometry.boundingSphere!.radius;
+    const material = new THREE.MeshStandardMaterial();
+    const mesh = new THREE.Mesh(geometry, material);
+    expect(mesh.frustumCulled).toBe(true);
+    const cleanup = wind.attachMesh(mesh);
+    expect(mesh.frustumCulled).toBe(true);
+    expect(mesh.geometry.boundingSphere!.radius).toBeCloseTo(unpaddedRadius + 1.35 * wind.maxStrength);
+    cleanup();
+    expect(mesh.frustumCulled).toBe(true);
+    material.dispose(); mesh.geometry.dispose();
+  });
+
   it('handles capacity, duplicate ids, conservative bounds and immutable frame data', () => {
     const geometry = new THREE.BoxGeometry(1, 4, 1); geometry.translate(0, 2, 0);
     const material = new THREE.MeshStandardMaterial();

@@ -91,14 +91,24 @@ export class VegetationWind {
     const undo = [...new Set<THREE.Material>([...sources, depth, distance])].map(mat => this.attach(mat, base, height));
     mesh.customDepthMaterial = depth;
     mesh.customDistanceMaterial = distance;
-    // Shader deformation is invisible to CPU bounds. Individual editor meshes are small;
-    // instanced batches below use conservative expanded bounds instead.
-    const oldCulling = mesh.frustumCulled;
-    mesh.frustumCulled = false;
+    // Shader deformation is invisible to CPU bounds, so a plain computed bounding volume would
+    // cull a swaying plant the instant its rest-pose bounds leave the frustum. Rather than
+    // disabling culling outright (every placed tree would then render even fully off-screen -
+    // the actual cause of the reported frame-rate drop with many large trees), pad the
+    // geometry's own bounding sphere/box by the worst-case sway (1.35x matches the shader's own
+    // wave amplitude; see `bend` above) so culling stays conservative instead of absent. Padding
+    // is left in place after cleanup: the geometry may be a cached template shared by other
+    // still-attached instances of the same species, and an oversized bound only costs a slightly
+    // later cull, never a wrong one.
+    const geometry = mesh.geometry;
+    const padding = 1.35 * this.maxStrength;
+    geometry.computeBoundingSphere();
+    if (geometry.boundingSphere) geometry.boundingSphere.radius += padding;
+    geometry.computeBoundingBox();
+    if (geometry.boundingBox) geometry.boundingBox.expandByScalar(padding);
     return () => {
       undo.forEach(fn => fn());
       mesh.customDepthMaterial = undefined; mesh.customDistanceMaterial = undefined;
-      mesh.frustumCulled = oldCulling;
       depth.dispose(); distance.dispose();
     };
   }
