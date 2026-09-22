@@ -208,6 +208,8 @@ export default function RightPanelStack() {
     setFloorEnabled,
     floorColor,
     setFloorColor,
+    fpsCounterEnabled,
+    setFpsCounterEnabled,
     skyboxBlur,
     setSkyboxBlur,
     environmentIntensity,
@@ -4169,14 +4171,30 @@ export default function RightPanelStack() {
                   {floorEnabled && (
                     <div className="flex items-center justify-between pl-2">
                       <span className="text-[10px] text-gray-500 uppercase font-bold">Floor Color</span>
-                      <input 
-                        type="color" 
+                      <input
+                        type="color"
                         value={floorColor}
                         onChange={(e) => setFloorColor(e.target.value)}
                         className="w-6 h-6 rounded cursor-pointer border border-gray-200 p-0.5"
                       />
                     </div>
                   )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>FPS Counter</span>
+                  <button
+                    onClick={() => setFpsCounterEnabled(!fpsCounterEnabled)}
+                    className={cn(
+                      "w-8 h-4 rounded-full relative transition-colors",
+                      fpsCounterEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                      fpsCounterEnabled ? "left-4.5" : "left-0.5"
+                    )} />
+                  </button>
                 </div>
               </SubSection>
             </div>

@@ -240,7 +240,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     resolution: 32,
     topography: 'flat',
     roughness: 0.5,
-    textureId: 'lush_grass'
+    textureId: 'ph:material:aerial_grass_rock'
   });
 
   const [padSubTab, setPadSubTab] = useState<'geometry' | 'surface'>('geometry');
@@ -414,6 +414,8 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
   }>) => {
     const opts = { ...terrainOptions, ...customOpts };
     const targetId = activeTerrain?.id;
+    const polyHavenAsset = groundMaterials.find(a => a.id === opts.textureId);
+    if (polyHavenAsset) registerMaterialBinding(polyHavenAsset);
     const newTerrain = createTerrainShape({
       width: opts.width,
       depth: opts.depth,
@@ -1393,8 +1395,8 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                               const nextAnimate = !(grassOptions.animate !== false);
                               const patch: Partial<GrassSettings> = { animate: nextAnimate };
                               if (nextAnimate) {
-                                patch.animationStrength = 0.08;
-                                patch.windStrength = 0.08;
+                                patch.animationStrength = 0.01;
+                                patch.windStrength = 0.01;
                               }
                               handleUpdateGrass(patch);
                             }}
@@ -1417,7 +1419,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                             <div className="flex justify-between items-center">
                               <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Animation Strength</label>
                               <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                                {Math.round(((grassOptions.animationStrength ?? grassOptions.windStrength ?? 0.08) * 100))}%
+                                {Math.round(((grassOptions.animationStrength ?? grassOptions.windStrength ?? 0.01) * 100))}%
                               </span>
                             </div>
                             <input
@@ -1425,7 +1427,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                               min="0.01"
                               max="1.00"
                               step="0.01"
-                              value={grassOptions.animationStrength ?? grassOptions.windStrength ?? 0.08}
+                              value={grassOptions.animationStrength ?? grassOptions.windStrength ?? 0.01}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value);
                                 handleUpdateGrass({ animationStrength: val, windStrength: val });
@@ -2617,7 +2619,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
 
                 <div className="grid grid-cols-2 gap-1.5 max-h-72 overflow-y-auto pr-0.5">
                   {PLANT_SPECIES_CATALOG
-                    .filter(species => activeTool === 'tree' ? species.category === 'tree' : species.category !== 'tree')
+                    .filter(species => activeTool === 'tree' ? species.category === 'tree' : species.category !== 'tree' && species.category !== 'rock')
                     .map(species => (
                       <button
                         key={species.id}

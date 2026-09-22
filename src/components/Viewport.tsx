@@ -90,6 +90,7 @@ import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { runtimeImageUrl, useMaterialBindings } from '../lib/assets/useMaterialBindings';
 import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
+import { isMaterialAssetId } from '../lib/assets/types';
 import { loadAssetManifest } from '../lib/assets/catalog';
 import { chooseTier } from '../lib/assets/materialResolver';
 import { EnvironmentManager } from '../lib/assets/environmentManager';
@@ -1448,6 +1449,7 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
 
 function Scene() {
   const { graphicsSettings } = useApp();
+  const { assets: groundMaterialAssets } = useAssetCatalog('material');
   const { 
     activeTool, 
     setActiveTool,
@@ -1462,9 +1464,10 @@ function Scene() {
     removeShape,
     selectedId, 
     setSelectedId, 
-    activeMaterial, 
+    activeMaterial,
     activeMaterialBindingId,
     materialBindings,
+    setMaterialBindings,
     activePBR,
     activeSurfaceDepth,
     updateShapeColor,
@@ -5304,6 +5307,15 @@ function Scene() {
           topography: 'flat',
           position: [0, 0, 0]
         });
+        if (newTerrain.materialBindingId) {
+          const defaultGroundAsset = groundMaterialAssets.find(a => a.id === newTerrain.materialBindingId);
+          if (defaultGroundAsset && isMaterialAssetId(defaultGroundAsset.id)) {
+            const assetId = defaultGroundAsset.id;
+            setMaterialBindings(prev => prev[assetId]?.ref.revision === defaultGroundAsset.revision
+              ? prev
+              : { ...prev, [assetId]: { ref: { assetId, revision: defaultGroundAsset.revision } } });
+          }
+        }
         addShape(newTerrain);
         setSelectedId(newTerrain.id);
         setSelectedIds([newTerrain.id]);

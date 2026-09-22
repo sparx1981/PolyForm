@@ -2013,14 +2013,14 @@ export default function UnifiedToolRail() {
               <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium">
                 <span>{activeTool === 'tree' ? 'Available Tree Species' : 'Bushes, Grasses & Flora'}</span>
                 <span className="text-[10px] bg-trimble-blue/15 text-trimble-blue px-2 py-0.5 rounded-full font-bold">
-                  {PLANT_SPECIES_CATALOG.filter(s => activeTool === 'tree' ? s.category === 'tree' : s.category !== 'tree').length} Species
+                  {PLANT_SPECIES_CATALOG.filter(s => activeTool === 'tree' ? s.category === 'tree' : s.category !== 'tree' && s.category !== 'rock').length} Species
                 </span>
               </div>
 
               {/* Plant Species Grid */}
               <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                 {PLANT_SPECIES_CATALOG
-                  .filter(s => activeTool === 'tree' ? s.category === 'tree' : s.category !== 'tree')
+                  .filter(s => activeTool === 'tree' ? s.category === 'tree' : s.category !== 'tree' && s.category !== 'rock')
                   .map(species => {
                     const isSelected = activePlantSpecies === species.id;
                     return (

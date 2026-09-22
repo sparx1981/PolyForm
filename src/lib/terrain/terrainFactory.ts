@@ -87,7 +87,7 @@ export function createTerrainShape(options: TerrainCreationOptions, existingId?:
     roughness
   });
 
-  const textureId = options.textureId || 'lush_grass';
+  const textureId = options.textureId || 'ph:material:aerial_grass_rock';
   // A Poly Haven catalog id (e.g. "ph:material:aerial_asphalt_01") is rendered through the
   // shape's materialBindingId + the KTX2-managed material pipeline, not this procedural
   // canvas generator - the caller is responsible for setting materialBindingId on the

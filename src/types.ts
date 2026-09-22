@@ -55,12 +55,12 @@ export const DEFAULT_GRASS_SETTINGS: GrassSettings = {
   rootColor: '#1e3f20',
   tipColor: '#88bb44',
   density: 8,
-  baseHeight: 0.10,
-  heightVariance: 0.35,
+  baseHeight: 0.05,
+  heightVariance: 0.10,
   maxSlopeAngle: 35,
   animate: true,
-  animationStrength: 0.08,
-  windStrength: 0.08,
+  animationStrength: 0.01,
+  windStrength: 0.01,
   windSpeed: 2.0
 };
 
@@ -475,6 +475,8 @@ export interface AppState {
   setMiniAxisIndicatorEnabled: (enabled: boolean) => void;
   floorEnabled: boolean;
   setFloorEnabled: (enabled: boolean) => void;
+  fpsCounterEnabled: boolean;
+  setFpsCounterEnabled: (enabled: boolean) => void;
   walkModePhase: WalkModePhase;
   setWalkModePhase: (phase: WalkModePhase) => void;
   walkMovementSpeed: number;

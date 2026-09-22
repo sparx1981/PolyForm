@@ -5,6 +5,7 @@ import { Shape } from '../types';
 import { useApp } from '../AppContext';
 import { VegetationWind } from '../lib/graphics/VegetationWind';
 import { loadPlantPrimitives, proceduralPlantPrimitives, plantTint, type PlantPrimitive } from '../lib/graphics/plantAssets';
+import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 
 interface PlantModelMeshProps { shape: Shape; selectedId: string | null; meshProps: any; selectionHighlight?: React.ReactNode }
 
@@ -12,7 +13,10 @@ interface PlantModelMeshProps { shape: Shape; selectedId: string | null; meshPro
 export function PlantModelMesh({ shape, selectedId, meshProps, selectionHighlight }: PlantModelMeshProps) {
   const { graphicsSettings } = useApp();
   const speciesId = shape.plantSpeciesId || (shape.type === 'tree' ? 'english_oak' : shape.type === 'rock' ? 'ph_boulder_01' : 'boxwood_hedge_bush');
-  const isRigid = shape.type === 'rock';
+  // Keyed off the species' own category (not just shape.type === 'rock') so a rock-category
+  // model never sways even if it was placed through a non-boulder tool - e.g. a legacy shape
+  // saved before the Bushes & Flora picker stopped listing boulders as a bush species.
+  const isRigid = shape.type === 'rock' || PLANT_SPECIES_CATALOG.find(s => s.id === speciesId)?.category === 'rock';
   const key = speciesId + '/' + (shape.plantVariation || '');
   const [loaded, setLoaded] = useState<{ key: string; primitives: PlantPrimitive[] } | null>(null);
   const fallback = useMemo(() => proceduralPlantPrimitives(speciesId), [speciesId]);

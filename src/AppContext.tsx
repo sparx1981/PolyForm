@@ -251,6 +251,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [miniAxisIndicatorEnabled, setMiniAxisIndicatorEnabled] = useState(true);
   const [floorEnabled, setFloorEnabled] = useState(false);
   const [floorColor, setFloorColor] = useState('#f9fafb');
+  // A debug/performance overlay, not project data - deliberately not persisted with the
+  // scene helpers above.
+  const [fpsCounterEnabled, setFpsCounterEnabled] = useState(false);
 
   // Walk Mode (see src/lib/walkMode/ and the Walk Mode spec). Not
   // persisted as the active tool on reload/autosave - it's a transient
@@ -290,7 +293,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // for why WalkModeController and WalkModeOverlay need this instead of props.
   const walkBridgeRef = useRef(createWalkBridge());
   const [skyboxBlur, setSkyboxBlur] = useState(0);
-  const [environmentIntensity, setEnvironmentIntensity] = useState(1.0);
+  const [environmentIntensity, setEnvironmentIntensity] = useState(0.6);
   const [skyboxRotation, setSkyboxRotation] = useState(0);
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [toolbarVisibility, setToolbarVisibility] = useState<Record<string, boolean>>({
@@ -2169,6 +2172,8 @@ console.log("Created rectangle:", myRect.id);`);
       setMiniAxisIndicatorEnabled: handleSetMiniAxisIndicatorEnabled,
       floorEnabled,
       setFloorEnabled: handleSetFloorEnabled,
+      fpsCounterEnabled,
+      setFpsCounterEnabled,
       walkModePhase,
       setWalkModePhase,
       walkMovementSpeed,

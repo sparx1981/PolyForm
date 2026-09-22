@@ -18,7 +18,7 @@ import {
 } from '../../lib/walkMode/constants';
 import { lockLossClassifier } from '../../lib/walkMode/lockLossClassifier';
 import type { WalkBridge } from '../../lib/walkMode/inputState';
-import { isFloorSurface, extractYawFromQuaternion } from '../../lib/portalNavigation';
+import { isFloorSurface, extractYawFromQuaternion, buildPortalOrientation } from '../../lib/portalNavigation';
 
 interface SavedCameraState {
   fov: number;
@@ -91,6 +91,14 @@ export default function WalkModeController({
       camera.fov = saved.fov;
       camera.near = saved.near;
       camera.updateProjectionMatrix();
+      // Position/quaternion must be restored too, not just fov/near: OrbitControls' own
+      // `target` was never touched while walking, so leaving the camera at the walked-to spot
+      // makes them mutually inconsistent - its next update() (re-enabled the instant walk mode
+      // exits) derives a fresh offset from that mismatched pair and can clamp/reorient the
+      // camera to an unrelated position on the very first frame back. Restoring the exact
+      // pre-walk transform keeps camera and target consistent, so that update() is a no-op.
+      camera.position.copy(saved.position);
+      camera.quaternion.copy(saved.quaternion);
     }
     savedCameraRef.current = null;
   }, [camera]);
@@ -292,7 +300,11 @@ export default function WalkModeController({
       camera.near = WALK_NEAR;
       camera.updateProjectionMatrix();
       camera.position.set(hit.point.x, hit.point.y + EYE_HEIGHT, hit.point.z);
-      camera.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
+      // buildPortalOrientation's forward convention matches extractYawFromQuaternion's
+      // (see that function's own doc comment); a plain Euler(0, yaw, 0, 'YXZ') does not - it's
+      // offset by pi, which previously spun the walk-mode camera to face the opposite direction
+      // from whatever the user was actually looking at when they clicked to start walking.
+      camera.quaternion.copy(buildPortalOrientation(camera.position, yaw).quaternion);
 
       setPhase('walking');
       if (!isTouchOnlyDevice()) {

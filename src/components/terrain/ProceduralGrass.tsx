@@ -146,7 +146,7 @@ export function ProceduralGrass({
 
   const isAnimated = grassSettings.animate !== false;
   const effectiveWindStrength = isAnimated
-    ? (grassSettings.animationStrength ?? grassSettings.windStrength ?? 0.08)
+    ? (grassSettings.animationStrength ?? grassSettings.windStrength ?? DEFAULT_GRASS_SETTINGS.animationStrength)
     : 0.0;
 
   const uniforms = useMemo(() => {
@@ -154,8 +154,8 @@ export function ProceduralGrass({
       uTime: { value: 0.0 },
       uWindStrength: { value: effectiveWindStrength },
       uWindDir: { value: new THREE.Vector2(0.707, 0.707) },
-      uBaseHeight: { value: grassSettings.baseHeight ?? 0.10 },
-      uHeightVariance: { value: grassSettings.heightVariance ?? 0.35 },
+      uBaseHeight: { value: grassSettings.baseHeight ?? DEFAULT_GRASS_SETTINGS.baseHeight },
+      uHeightVariance: { value: grassSettings.heightVariance ?? DEFAULT_GRASS_SETTINGS.heightVariance },
       uRootColor: { value: new THREE.Color(grassSettings.rootColor || '#1e3f20') },
       uTipColor: { value: new THREE.Color(grassSettings.tipColor || '#88bb44') }
     };
