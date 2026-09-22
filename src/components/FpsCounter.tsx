@@ -41,7 +41,7 @@ export default function FpsCounter() {
   if (!fpsCounterEnabled) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 z-40 pointer-events-none select-none">
+    <div className="fixed bottom-12 left-4 z-[60] pointer-events-none select-none">
       <div className="bg-gray-900/85 text-white text-[11px] font-mono rounded-lg shadow-xl border border-gray-700 px-2.5 py-1.5 flex gap-3">
         <span>FPS <span className="font-bold text-emerald-400">{stats.current}</span></span>
         <span>Min <span className="font-bold text-amber-400">{stats.min}</span></span>

@@ -1044,32 +1044,31 @@ export function createDoorGeometry(
         frameParts.push(archSegment);
       }
 
-      // The wall cuts a plain rectangular hole sized to this shape's own width/height
-      // (same as every other door style), but a round arch doesn't reach that
-      // rectangle's top corners - without infill there, the two corners above the
-      // arch's springline are just an open gap through to whatever's behind the wall.
-      // Fill them with a solid panel shaped as "rectangle above the springline, minus
-      // the arch's own half-disc", i.e. exactly those two corners and nothing else.
-      const spandrelShape = new THREE.Shape();
-      spandrelShape.moveTo(-width / 2, springlineY);
-      spandrelShape.lineTo(-width / 2, height / 2);
-      spandrelShape.lineTo(width / 2, height / 2);
-      spandrelShape.lineTo(width / 2, springlineY);
-      spandrelShape.closePath();
+      // The rectangular wall cut leaves two corners above the arched opening.
+      // Each is a separate solid. A half-disc used as a hole touches the outer
+      // contour at three points and can triangulate into a bar across the opening.
+      const arcControl = archRadius * 0.5522847498;
+      const leftSpandrel = new THREE.Shape();
+      leftSpandrel.moveTo(-archRadius, springlineY);
+      leftSpandrel.lineTo(-archRadius, height / 2);
+      leftSpandrel.lineTo(0, height / 2);
+      leftSpandrel.bezierCurveTo(-arcControl, height / 2, -archRadius, springlineY + arcControl, -archRadius, springlineY);
+      leftSpandrel.closePath();
 
-      const archHole = new THREE.Path();
-      archHole.absarc(0, springlineY, archRadius, 0, Math.PI, false);
-      archHole.closePath();
-      spandrelShape.holes.push(archHole);
+      const rightSpandrel = new THREE.Shape();
+      rightSpandrel.moveTo(0, height / 2);
+      rightSpandrel.lineTo(archRadius, height / 2);
+      rightSpandrel.lineTo(archRadius, springlineY);
+      rightSpandrel.bezierCurveTo(archRadius, springlineY + arcControl, arcControl, height / 2, 0, height / 2);
+      rightSpandrel.closePath();
 
-      // A Shape with a hole makes ExtrudeGeometry emit non-indexed output, while every
-      // other frame part (plain BoxGeometry) is indexed - mergeGeometries below requires
-      // one or the other consistently, so re-index this one to match.
-      const spandrelGeo = BufferGeometryUtils.mergeVertices(
-        new THREE.ExtrudeGeometry(spandrelShape, { depth: frameDepth, bevelEnabled: false })
-      );
-      spandrelGeo.translate(0, 0, -frameDepth / 2);
-      frameParts.push(spandrelGeo);
+      for (const corner of [leftSpandrel, rightSpandrel]) {
+        const infill = BufferGeometryUtils.mergeVertices(
+          new THREE.ExtrudeGeometry(corner, { depth: frameDepth, bevelEnabled: false })
+        );
+        infill.translate(0, 0, -frameDepth / 2);
+        frameParts.push(infill);
+      }
       break;
     }
 
@@ -1183,7 +1182,8 @@ export function createWindowGeometry(
   const hardwareParts: THREE.BufferGeometry[] = [];
 
   const frameThick = 0.045;
-  const frameDepth = depth;
+  // Bay depth is its projection, not the thickness of every sash member.
+  const frameDepth = style === 'bay' ? Math.min(depth, 0.14) : depth;
   const mullionDepth = frameDepth * 0.7;
 
   // 1. Outer Frame (Left, Right, Top, Bottom)
@@ -1207,9 +1207,11 @@ export function createWindowGeometry(
   const sillWidth = width + 0.1;
   const sillHeight = 0.04;
   const sillDepth = frameDepth + 0.06;
-  const sill = new THREE.BoxGeometry(sillWidth, sillHeight, sillDepth);
-  sill.translate(0, -height / 2 - sillHeight / 2 + frameThick / 2, 0.03);
-  frameParts.push(sill);
+  if (style !== 'bay') {
+    const sill = new THREE.BoxGeometry(sillWidth, sillHeight, sillDepth);
+    sill.translate(0, -height / 2 - sillHeight / 2 + frameThick / 2, 0.03);
+    frameParts.push(sill);
+  }
 
   const innerW = width - frameThick * 2;
   const innerH = height - frameThick * 2;
@@ -1361,88 +1363,39 @@ export function createWindowGeometry(
     }
 
     case 'bay': {
-      // 3-Sided Architectural Cantilevered Bay Window (Projecting Outward towards Exterior +Z)
-      // FIX: was projecting toward -Z, but this file's own established
-      // convention elsewhere (see the cladding-generation comment
-      // above: "outward-facing exterior face (+Z)") puts +Z as
-      // exterior, not -Z — confirmed directly as the cause of the
-      // reported "bay window intrudes into the room" bug. Verified
-      // directly (not assumed): computed the actual world-space
-      // corners of a wing pane before and after, confirming the
-      // rotations themselves don't need to change, only the sign of
-      // every Z-translation — the 45° angled wings are symmetric
-      // enough that mirroring their position alone (without touching
-      // rotateY's own angle) still connects the wall edge to the
-      // center pane correctly, just toward +Z instead of -Z.
-      const bayDepth = Math.max(0.35, depth * 2.5);
-      const centerW = innerW * 0.55;
-      const wingW = (innerW - centerW) / 1.414; // 45 degree projection
+      // Project into exterior +Z. At 45 degrees each wing's horizontal
+      // run equals its outward projection, so all three glazing planes meet.
+      const bayDepth = Math.min(Math.max(depth, 0.15), innerW * 0.38);
+      const centerW = innerW - 2 * bayDepth;
+      const wingW = bayDepth * Math.SQRT2;
       const angle45 = Math.PI / 4;
 
-      // Projecting Base Platform Shelf & Top Roof Soffit Hip Cap
-      // FIX (design improvement): these were previously a single flat
-      // box spanning the full width, which doesn't actually trace the
-      // window's own 3-sided angled footprint — a bay window's sill
-      // and hip roof are one of its most recognizable features
-      // precisely because they follow the hexagonal plan, not a plain
-      // rectangle. Each is now 3 segments (center + both 45° wings),
-      // using the exact same positions and rotations already verified
-      // correct for the frame elements above, just wider for a visible
-      // overhang and thin enough to read as a sill/cap rather than a
-      // slab.
-      const shelfOverhang = 0.1;
-      const shelfThick = 0.06;
-      const roofThick = 0.08;
+      // The sill and cap trace the same three-sided footprint as the glazing.
+      // A single extrusion avoids overlaps and seams at the corners.
+      const overhang = 0.06;
+      const footprint: [number, number][] = [
+        [-width / 2 - overhang, -frameDepth / 2 - overhang],
+        [width / 2 + overhang, -frameDepth / 2 - overhang],
+        [width / 2 + overhang, overhang],
+        [centerW / 2 + overhang, bayDepth + frameDepth / 2 + overhang],
+        [-centerW / 2 - overhang, bayDepth + frameDepth / 2 + overhang],
+        [-width / 2 - overhang, overhang],
+      ];
+      const sillThickness = 0.045;
+      const capThickness = 0.065;
+      const sill = createWallMiterFootprintGeometry(footprint, sillThickness);
+      sill.translate(0, -height / 2 - sillThickness / 2, 0);
+      frameParts.push(BufferGeometryUtils.mergeVertices(sill));
+      const cap = createWallMiterFootprintGeometry(footprint, capThickness);
+      cap.translate(0, height / 2 + capThickness / 2, 0);
+      frameParts.push(BufferGeometryUtils.mergeVertices(cap));
 
-      const shelfCenter = new THREE.BoxGeometry(centerW + shelfOverhang * 2, shelfThick, bayDepth + frameDepth + shelfOverhang);
-      shelfCenter.translate(0, -height / 2 - shelfThick / 2, bayDepth / 2);
-      frameParts.push(shelfCenter);
-
-      const roofCenter = new THREE.BoxGeometry(centerW + shelfOverhang * 2, roofThick, bayDepth + frameDepth + shelfOverhang);
-      roofCenter.translate(0, height / 2 + roofThick / 2, bayDepth / 2);
-      frameParts.push(roofCenter);
-
-      const wingPlanDepth = (wingW + shelfOverhang * 2) * Math.SQRT1_2; // 45°-projected footprint depth of one wing segment
-      for (const side of [-1, 1] as const) {
-        const wingCenterX = side * (centerW / 2 + (wingW / 2) * Math.cos(angle45));
-        const wingCenterZ = bayDepth - (wingW / 2) * Math.sin(angle45);
-        const wingAngle = side * angle45;
-
-        const shelfWing = new THREE.BoxGeometry(wingW + shelfOverhang * 2, shelfThick, wingPlanDepth + shelfOverhang);
-        shelfWing.rotateY(wingAngle);
-        shelfWing.translate(wingCenterX, -height / 2 - shelfThick / 2, wingCenterZ);
-        frameParts.push(shelfWing);
-
-        const roofWing = new THREE.BoxGeometry(wingW + shelfOverhang * 2, roofThick, wingPlanDepth + shelfOverhang);
-        roofWing.rotateY(wingAngle);
-        roofWing.translate(wingCenterX, height / 2 + roofThick / 2, wingCenterZ);
-        frameParts.push(roofWing);
-      }
-
-      // Cantilever Support Brackets — real bay windows always show
-      // visible structural support underneath, since they project out
-      // past the wall's own face with nothing below; this was entirely
-      // absent before. Three simple angled corbels (center + both
-      // wings) reading clearly from below without needing full,
-      // separately-modeled bracket geometry.
-      const bracketDepth = 0.04;
-      const bracketDrop = 0.14;
-      for (const bx of [-centerW / 3, 0, centerW / 3]) {
-        const bracket = new THREE.BoxGeometry(0.05, bracketDrop, bayDepth * 0.85);
-        bracket.rotateX(-Math.PI / 10);
-        bracket.translate(bx, -height / 2 - shelfThick - bracketDrop * 0.4, bayDepth * 0.4);
+      // Two small supports carry the front edge beneath the sill.
+      for (const bx of [-centerW / 2, centerW / 2]) {
+        const bracket = new THREE.BoxGeometry(0.045, 0.12, bayDepth * 0.8);
+        bracket.translate(bx, -height / 2 - sillThickness - 0.06, bayDepth * 0.4);
         frameParts.push(bracket);
       }
-      for (const side of [-1, 1] as const) {
-        const bx = side * (centerW / 2 + (wingW / 2) * Math.cos(angle45) * 0.6);
-        const bz = bayDepth - (wingW / 2) * Math.sin(angle45) * 0.6;
-        const bracket = new THREE.BoxGeometry(0.05, bracketDrop, bayDepth * 0.6);
-        bracket.rotateY(side * angle45);
-        bracket.rotateX(-Math.PI / 10);
-        bracket.translate(bx, -height / 2 - shelfThick - bracketDrop * 0.4, bz);
-        frameParts.push(bracket);
-      }
-
       // 1. Center Picture Pane (Facing outward at +bayDepth)
       const centerFrameT = new THREE.BoxGeometry(centerW, frameThick, frameDepth);
       centerFrameT.translate(0, innerH / 2 - frameThick / 2, bayDepth);
@@ -1469,17 +1422,17 @@ export function createWindowGeometry(
       const leftCenterZ = bayDepth - (wingW / 2) * Math.sin(angle45);
 
       const leftFrameT = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
-      leftFrameT.rotateY(angle45);
+      leftFrameT.rotateY(-angle45);
       leftFrameT.translate(leftCenterX, innerH / 2 - frameThick / 2, leftCenterZ);
       frameParts.push(leftFrameT);
 
       const leftFrameB = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
-      leftFrameB.rotateY(angle45);
+      leftFrameB.rotateY(-angle45);
       leftFrameB.translate(leftCenterX, -innerH / 2 + frameThick / 2, leftCenterZ);
       frameParts.push(leftFrameB);
 
       const leftGlass = new THREE.BoxGeometry(wingW - frameThick * 2, innerH - frameThick * 2, 0.008);
-      leftGlass.rotateY(angle45);
+      leftGlass.rotateY(-angle45);
       leftGlass.translate(leftCenterX, 0, leftCenterZ);
       glassParts.push(leftGlass);
 
@@ -1488,17 +1441,17 @@ export function createWindowGeometry(
       const rightCenterZ = bayDepth - (wingW / 2) * Math.sin(angle45);
 
       const rightFrameT = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
-      rightFrameT.rotateY(-angle45);
+      rightFrameT.rotateY(angle45);
       rightFrameT.translate(rightCenterX, innerH / 2 - frameThick / 2, rightCenterZ);
       frameParts.push(rightFrameT);
 
       const rightFrameB = new THREE.BoxGeometry(wingW, frameThick, frameDepth);
-      rightFrameB.rotateY(-angle45);
+      rightFrameB.rotateY(angle45);
       rightFrameB.translate(rightCenterX, -innerH / 2 + frameThick / 2, rightCenterZ);
       frameParts.push(rightFrameB);
 
       const rightGlass = new THREE.BoxGeometry(wingW - frameThick * 2, innerH - frameThick * 2, 0.008);
-      rightGlass.rotateY(-angle45);
+      rightGlass.rotateY(angle45);
       rightGlass.translate(rightCenterX, 0, rightCenterZ);
       glassParts.push(rightGlass);
 

@@ -130,8 +130,39 @@ describe('createDoorGeometry - open archway styles (no physical door leaf)', () 
     expect(foundCorner).toBe(true);
   });
 
+  it('keeps the walk-through clear below the rounded head', () => {
+    const geom = createDoorGeometry(1, 2.2, 0.15, 'archway-round');
+    const positions = geom.getAttribute('position');
+    const index = geom.getIndex();
+    const frameGroup = geom.groups[0];
+    const springlineY = 2.2 / 2 - 0.5;
+    for (let i = frameGroup.start; i < frameGroup.start + frameGroup.count; i += 3) {
+      const vertexIds = [0, 1, 2].map(offset => index ? index.getX(i + offset) : i + offset);
+      const x = vertexIds.reduce((sum, id) => sum + positions.getX(id), 0) / 3;
+      const y = vertexIds.reduce((sum, id) => sum + positions.getY(id), 0) / 3;
+      expect(Math.abs(x) < 0.35 && y < springlineY - 0.05).toBe(false);
+    }
+  });
+
   it('still produces the normal flush-panel geometry for unrelated styles', () => {
     const geom = createDoorGeometry(0.9, 2.1, 0.15, 'flush');
     expect(geom.groups.length).toBeGreaterThan(1);
+  });
+});
+
+describe('createWindowGeometry - three-sided bay', () => {
+  it('joins the side glazing to the wall and limits the projected sill', () => {
+    const geom = createWindowGeometry(2, 1.5, 0.45, 'bay');
+    const positions = geom.getAttribute('position');
+    const index = geom.getIndex();
+    const glassGroup = geom.groups[1];
+    const glassVertices = Array.from({ length: glassGroup.count }, (_, offset) =>
+      index ? index.getX(glassGroup.start + offset) : glassGroup.start + offset
+    );
+    const zValues = glassVertices.map(id => positions.getZ(id));
+    expect(Math.min(...zValues)).toBeLessThan(0.1);
+    expect(Math.max(...zValues)).toBeGreaterThan(0.44);
+    geom.computeBoundingBox();
+    expect(geom.boundingBox!.max.z).toBeLessThan(0.65);
   });
 });

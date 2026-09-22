@@ -10358,14 +10358,19 @@ function Scene() {
           )}
           {shape.type === 'door' || shape.type === 'window' ? (
             <>
-              {/* Material 0: Frame and solid panels (White / custom finish) */}
-              <meshStandardMaterial 
+              {/* Material 0: frame and panels use the same applied material as other shapes. */}
+              <meshPhysicalMaterial
                 attach="material-0"
-                color={shape.color || '#ffffff'} 
-                roughness={shape.roughness ?? 0.4}
-                metalness={shape.metalness ?? 0.05}
-                transparent={effectiveOpacity < 1 || (shape.opacity !== undefined && shape.opacity < 1)}
-                opacity={effectiveOpacity}
+                map={objectBinding?.baseColorTexture ?? (objectBinding?.baseColorUrl || isTextureUrl(shape.color)
+                  ? getCachedTexture(objectBinding?.baseColorUrl ?? shape.color)
+                  : null)}
+                color={objectBinding?.color ?? (isTextureUrl(shape.color) ? '#ffffff' : (shape.color || '#ffffff'))}
+                roughness={objectBinding?.roughness ?? shape.roughness ?? 0.4}
+                metalness={objectBinding?.metalness ?? shape.metalness ?? 0.05}
+                {...pbrMapProps}
+                transparent={effectiveOpacity < 1 || (objectBinding?.opacity ?? shape.opacity ?? 1) < 1}
+                opacity={Math.min(effectiveOpacity, objectBinding?.opacity ?? 1)}
+                depthWrite={Math.min(effectiveOpacity, objectBinding?.opacity ?? 1) >= 0.85}
                 side={THREE.DoubleSide}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.35 : 0}
