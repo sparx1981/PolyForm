@@ -5,6 +5,7 @@ import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { shouldHideAutoNormalMap } from '../lib/graphics/depthGeometry';
 import { LampLightBinding } from './graphics/LampLightBinding';
 import { batchablePlant } from '../lib/graphics/vegetationEligibility';
+import { pickHostedFixture } from '../lib/hostedFixturePicking';
 import { createPortal } from 'react-dom';
 import { Canvas, useThree, ThreeEvent, useFrame } from '@react-three/fiber';
 import { 
@@ -8247,8 +8248,8 @@ function Scene() {
     if (e.nativeEvent) e.nativeEvent.preventDefault();
     else if (e.preventDefault) e.preventDefault();
     
-    const clientX = e.nativeEvent?.clientX || e.clientX;
-    const clientY = e.nativeEvent?.clientY || e.clientY;
+    const clientX = e.nativeEvent?.clientX ?? e.clientX;
+    const clientY = e.nativeEvent?.clientY ?? e.clientY;
 
     if (type === 'light') {
       setSelectedLightId(id);
@@ -8257,6 +8258,27 @@ function Scene() {
       setSelectedSurface(null);
       setContextMenu({ x: clientX, y: clientY, type: 'light', data: id });
       return;
+    }
+
+    // A height-mapped wall can win the raycast just in front of a hosted
+    // door/window. Give the fixture under this pointer its own context menu.
+    const clickedShape = shapes.find(s => s.id === id);
+    if (clickedShape?.type === 'wall' && Number.isFinite(clientX) && Number.isFinite(clientY)) {
+      const bounds = gl.domElement.getBoundingClientRect();
+      if (bounds.width > 0 && bounds.height > 0) {
+        const pointer = new THREE.Vector2(
+          ((clientX - bounds.left) / bounds.width) * 2 - 1,
+          -((clientY - bounds.top) / bounds.height) * 2 + 1,
+        );
+        const fixtureId = pickHostedFixture(id, shapes, camera, pointer, getSceneObjectById);
+        if (fixtureId) {
+          setSelectedId(fixtureId);
+          setSelectedIds([fixtureId]);
+          setSelectedSurface(null);
+          setContextMenu({ x: clientX, y: clientY, type: 'multi', data: [fixtureId] });
+          return;
+        }
+      }
     }
 
     // Check if we clicked on a surface
@@ -8603,9 +8625,13 @@ function Scene() {
                 ? Math.max(0.01, ((shape.args as any)?.height || 1) / 2)
                 : 1
       });
-    } else if (activeTool === 'paint' || activeTool === 'eraser') {
+    } else if (activeTool === 'paint') {
       e.stopPropagation();
       handleMeshClick(e as any, shape.id);
+    } else if (activeTool === 'eraser') {
+      // Delete on click, after pointer down/up have completed. Removing the
+      // front mesh here makes the same gesture click the object behind it.
+      e.stopPropagation();
     } else if (['move', 'rotate', 'scale'].includes(activeTool)) {
       e.stopPropagation();
       setSelectedId(shape.id);
@@ -9341,11 +9367,13 @@ function Scene() {
           alignment="bottom-left"
           margin={[60, 60]}
         >
-          <GizmoViewport
-            axisColors={['#ef4444', '#22c55e', '#3b82f6']}
-            labelColor="#ffffff"
-            disabled={walkModePhase !== 'inactive'}
-          />
+          <group onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+            <GizmoViewport
+              axisColors={['#ef4444', '#22c55e', '#3b82f6']}
+              labelColor="#ffffff"
+              disabled={walkModePhase !== 'inactive'}
+            />
+          </group>
         </GizmoHelper>
       )}
 
