@@ -161,6 +161,12 @@ export async function decimateModels(
       // --instance are single-model no-ops (palette merges materials across multiple assets,
       // instancing needs repeated node references) so are turned off rather than left to do
       // unpredictable per-model material surgery.
+      //
+      // --texture-compress is deliberately "auto" (resize + recompress in the SOURCE format),
+      // not "webp": a real run produced foliage that rendered pitch black, with the browser
+      // console repeating "Texture marked for update but no image data found" - the embedded
+      // EXT_texture_webp images were failing to decode. "auto" keeps the original JPEG/PNG
+      // encoding, which has no such extension-support risk, at the cost of a smaller size win.
       let ratio = simplifyRatio, error = simplifyError, texSize = textureSize, decimatedBytes = Infinity;
       // Some assets (dense foliage especially) don't hit the byte target even at the requested
       // aggressiveness - rather than silently ship whatever came out, escalate a few times
@@ -169,7 +175,7 @@ export async function decimateModels(
         await execFileAsync(process.execPath, [
           cliPath, 'optimize', inputGltf, outputGlb,
           '--compress', 'quantize',
-          '--texture-compress', 'webp',
+          '--texture-compress', 'auto',
           '--texture-size', String(texSize),
           '--simplify-ratio', String(ratio),
           '--simplify-error', String(error),

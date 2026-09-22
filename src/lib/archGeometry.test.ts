@@ -1,6 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { createWindowGeometry, createDoorGeometry } from './archGeometry';
+import { createWindowGeometry, createDoorGeometry, createWallWithOpeningsGeometry, createWallMiterFootprintGeometry } from './archGeometry';
+
+describe('createWallWithOpeningsGeometry - mitered footprint with a door/window cutout', () => {
+  it('keeps the true mitered footprint (not a plain box) when an opening is present', () => {
+    // A mitered corner extends past the wall's own thickness on one end (e.g. footprint.ts's
+    // outer/inner corner offsets) - a flat box reconstruction of the same length/thickness
+    // would be narrower there. Comparing bounding boxes catches the regression where an
+    // opening silently discarded the mitered footprint and fell back to a plain box.
+    const length = 3, height = 2.4, thickness = 0.2;
+    const footprint: [number, number][] = [
+      [-length / 2, -thickness / 2], [length / 2, -thickness / 2],
+      [length / 2, thickness / 2], [-length / 2 - 0.5, thickness / 2], // extended miter corner
+    ];
+    const openings = [{ localX: 0, localY: -0.4, width: 0.9, height: 1.6 }];
+
+    const withOpening = createWallWithOpeningsGeometry(length, height, thickness, openings, undefined, footprint);
+    const noOpening = createWallMiterFootprintGeometry(footprint, height);
+
+    withOpening.computeBoundingBox();
+    noOpening.computeBoundingBox();
+    expect(withOpening.boundingBox!.min.x).toBeCloseTo(noOpening.boundingBox!.min.x, 2);
+    expect(withOpening.boundingBox!.max.x).toBeCloseTo(noOpening.boundingBox!.max.x, 2);
+
+    const posAttr = withOpening.getAttribute('position');
+    expect(posAttr).toBeDefined();
+    expect(posAttr.count).toBeGreaterThan(0);
+  });
+});
 
 describe('createWindowGeometry - porthole style', () => {
   it('produces a valid geometry with position data', () => {

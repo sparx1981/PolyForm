@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 // @ts-ignore
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 
 // Real-world size (in meters) one texture tile represents when painted onto a wall - matches
 // the scale used elsewhere (e.g. road/pathway materials) so a material looks consistent in
@@ -115,6 +116,27 @@ export function createWallWithOpeningsGeometry(
     baseGeom = miterFootprint
       ? createWallMiterFootprintGeometry(miterFootprint, height)
       : new THREE.BoxGeometry(length, height, thickness);
+  } else if (miterFootprint) {
+    // A mitered wall's opening cutout used to fall through to the plain-box reconstruction
+    // below, discarding the true mitered footprint entirely - a wall with a door or window
+    // lost its correctly-mitered corners the moment an opening was added. CSG-subtracting each
+    // opening from the actual mitered solid instead keeps both: the true miter join at the
+    // corners, AND accurate door/window cutouts.
+    let currentBrush = new Brush(BufferGeometryUtils.mergeVertices(createWallMiterFootprintGeometry(miterFootprint, height)));
+    currentBrush.updateMatrixWorld();
+    const evaluator = new Evaluator();
+    // Deep enough to fully pierce the wall at any point along its mitered footprint, including
+    // corners extended past `thickness` by the miter join itself.
+    const cutterDepth = thickness * 6 + 1;
+    for (const iv of intervals) {
+      const cutterGeo = new THREE.BoxGeometry(iv.xMax - iv.xMin, iv.yMax - iv.yMin, cutterDepth);
+      cutterGeo.translate((iv.xMin + iv.xMax) / 2, (iv.yMin + iv.yMax) / 2, 0);
+      const cutterBrush = new Brush(cutterGeo);
+      cutterBrush.updateMatrixWorld();
+      const result = evaluator.evaluate(currentBrush, cutterBrush, SUBTRACTION);
+      if (result && result.geometry) currentBrush = result;
+    }
+    baseGeom = BufferGeometryUtils.mergeVertices(currentBrush.geometry);
   } else {
     intervals.sort((a, b) => a.xMin - b.xMin);
 
