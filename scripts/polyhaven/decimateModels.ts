@@ -174,15 +174,19 @@ export async function decimateModels(
       // multiple assets, instancing needs repeated node references), so are turned off rather
       // than left to do unpredictable per-model material surgery.
       //
-      // --prune-attributes is force-disabled: confirmed by reproducing it locally (a synthetic
-      // glTF with two UV channels, one bound to a KHR_texture_transform, put through `optimize`
-      // with and without this flag) that its default "unused attribute" detection doesn't
-      // recognize a UV channel referenced only via a material extension's texCoord index - it
-      // silently drops TEXCOORD_1 as "unused". Poly Haven's foliage materials bind exactly that:
-      // KHR_texture_transform on TEXCOORD_1, offsetting each leaf into a different region of one
-      // shared atlas texture. Losing that channel is why decimated foliage rendered as a
-      // black/mangled mess even after the mesh-simplification and texture-format fixes - every
-      // leaf was sampling whatever coordinate the now-missing channel happened to fall back to.
+      // --prune is force-disabled (not just --prune-attributes): confirmed locally, with a
+      // synthetic glTF carrying two UV channels where the second is bound to a
+      // KHR_texture_transform, that the OVERALL prune step - not the vertex-attribute-specific
+      // one - is what discards that binding. --prune-attributes false alone keeps the TEXCOORD_1
+      // accessor itself, but prune's separate "unused property/extension" pass still judged the
+      // material's texCoord=1 override and its KHR_texture_transform extension object orphaned
+      // and stripped BOTH, resetting the texture lookup back to TEXCOORD_0. Poly Haven's foliage
+      // materials rely on exactly that binding to offset each leaf into a different region of one
+      // shared atlas texture, so every leaf ended up sampling the wrong part of the atlas - the
+      // actual cause of the black/mangled mess, confirmed by re-inspecting a real decimated file:
+      // the TEXCOORD_1 accessor was present, but the material's texCoord and extension were gone.
+      // Losing prune's other cleanup (orphaned accessors/nodes left behind by earlier transforms)
+      // is an acceptable size cost next to shipping a foliage model that doesn't render.
       let ratio = simplifyRatio, error = simplifyError, texSize = textureSize, decimatedBytes = Infinity;
       // Some assets (dense foliage especially) don't hit the byte target even at the requested
       // aggressiveness - rather than silently ship whatever came out, escalate a few times
@@ -199,7 +203,7 @@ export async function decimateModels(
           '--simplify-error', String(error),
           '--palette', 'false',
           '--instance', 'false',
-          '--prune-attributes', 'false',
+          '--prune', 'false',
         ], { maxBuffer: 1024 * 1024 * 64 });
         decimatedBytes = (await stat(outputGlb)).size;
         if (decimatedBytes <= maxOutputBytes) break;
