@@ -5,6 +5,7 @@ import { patchMaterial, type Shader } from './shaderHooks';
 import { createTreeGeometry, createBushGeometry } from '../landscapeGeometry';
 import { PLANT_SPECIES_CATALOG } from '../plantLibrary';
 import { SURFACE_DEPTH_PRESETS, DEFAULT_SURFACE_DEPTH_PARAMS, findSurfaceDepthPreset } from './proceduralSurface';
+import { subdivideDepthGeometry } from './depthGeometry';
 
 function compile(material: THREE.Material, name: 'standard' | 'physical' | 'depth' | 'distance' = 'standard') {
   const shader = { uniforms: {}, vertexShader: THREE.ShaderLib[name].vertexShader,
@@ -110,6 +111,24 @@ describe('surface depth', () => {
     for (const mat of materials) expect(mat.displacementMap).toBe(null);
     expect(mesh.customDepthMaterial).toBeUndefined(); expect(mesh.customDistanceMaterial).toBeUndefined();
     geometry.dispose(); materials.forEach(m => m.dispose()); texture.dispose();
+  });
+
+  it('scales vertex displacement by the geometry-provided edge fade, so shared edges do not re-open a gap', () => {
+    // Two separate box meshes (like two walls meeting at a corner) whose subdivided geometry
+    // carries a pfEdgeFade attribute at zero along their touching face - displacement there
+    // must be fully suppressed regardless of pfDepthScale/bias, so the flush corner the
+    // underlying (non-displaced) geometry already established stays flush.
+    const base = new THREE.BoxGeometry(2, 2, 2);
+    const subdivided = subdivideDepthGeometry(base, 8);
+    expect(subdivided.getAttribute('pfEdgeFade')).toBeDefined();
+    const texture = new THREE.Texture();
+    const material = new THREE.MeshStandardMaterial();
+    const mesh = new THREE.Mesh(subdivided, material);
+    const depth = new SurfaceDepth(texture).init(mesh);
+    const shader = compile(material);
+    expect(shader.vertexShader).toContain('pfEdgeFade');
+    expect(shader.vertexShader).toMatch(/pfDepthBias\)\s*\*\s*pfEdgeFade/);
+    depth.dispose(); base.dispose(); subdivided.dispose(); material.dispose(); texture.dispose();
   });
 });
 

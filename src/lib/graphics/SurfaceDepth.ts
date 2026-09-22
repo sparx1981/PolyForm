@@ -49,11 +49,11 @@ export class SurfaceDepth {
       mat.displacementScale = 1; mat.displacementBias = 0;
       return patchMaterial(mat, { key: 'pf-depth-v1', apply: shader => {
         Object.assign(shader.uniforms, this.uniforms);
-        shader.vertexShader = 'uniform float pfDepthScale;\nuniform float pfDepthBias;\n' + shader.vertexShader;
+        shader.vertexShader = 'uniform float pfDepthScale;\nuniform float pfDepthBias;\nattribute float pfEdgeFade;\n' + shader.vertexShader;
         shader.vertexShader = inject(shader.vertexShader, '#include <displacementmap_vertex>', `
           #ifdef USE_DISPLACEMENTMAP
             float pfHeight = clamp(texture2D(displacementMap, vDisplacementMapUv).r, 0.0, 1.0);
-            transformed += normalize(objectNormal) * (pfHeight * pfDepthScale + pfDepthBias);
+            transformed += normalize(objectNormal) * (pfHeight * pfDepthScale + pfDepthBias) * pfEdgeFade;
           #endif
         `);
       } });

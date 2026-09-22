@@ -59,5 +59,75 @@ export function subdivideDepthGeometry(source: THREE.BufferGeometry, detail = 16
     geometry.groups.forEach(group => next.addGroup(group.start * 4, group.count * 4, group.materialIndex));
     geometry.dispose(); geometry = next;
   }
-  geometry.normalizeNormals(); return geometry;
+  geometry.normalizeNormals();
+  applyDepthEdgeFade(geometry);
+  return geometry;
+}
+
+/** Point-to-segment distance in 3D. */
+function distanceToSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
+  const ab = new THREE.Vector3().subVectors(b, a);
+  const lenSq = ab.lengthSq();
+  const t = lenSq > 1e-12 ? Math.max(0, Math.min(1, new THREE.Vector3().subVectors(p, a).dot(ab) / lenSq)) : 0;
+  return p.distanceTo(a.clone().addScaledVector(ab, t));
+}
+
+/**
+ * Adds a `pfEdgeFade` vertex attribute (0 at the mesh's true silhouette/boundary edges,
+ * ramping to 1 within `marginMeters`) that SurfaceDepth multiplies its vertex displacement by,
+ * so a height-mapped surface's relief tapers off right at its own edge instead of displacing
+ * that edge's vertices outward/inward - which, for two separate meshes that are meant to butt
+ * flush against each other (e.g. two walls meeting at a corner), otherwise re-opens a visible
+ * gap or overlap that the underlying (non-displaced) geometry closed correctly.
+ *
+ * Deliberately based on true geometric distance to a boundary edge, never on the surface's own
+ * (often tiled/repeating) UV coordinates - a texture-space fade would instead fade at every
+ * texture tile repeat, putting a visible grid of flattened lines across any large tiled surface
+ * (a long wall, terrain) rather than just its true outer edge.
+ *
+ * A "boundary edge" is found the standard way: on a non-indexed triangle soup, an edge shared
+ * by only one triangle (as opposed to two, for an interior edge) sits on the mesh's silhouette.
+ * Closed, gapless shapes (a full sphere, a solid box) have no boundary edges at all - the fade
+ * is then 1 everywhere, a no-op, since there is no edge that another mesh could ever need to
+ * align flush against.
+ */
+export function applyDepthEdgeFade(geometry: THREE.BufferGeometry, marginMeters = 0.04): void {
+  const position = geometry.getAttribute('position');
+  const vertexCount = position.count;
+  const precision = 1e5; // 10 micron key resolution - well below any real seam tolerance
+  const key = (x: number, y: number, z: number) =>
+    `${Math.round(x * precision)},${Math.round(y * precision)},${Math.round(z * precision)}`;
+
+  const edgeCounts = new Map<string, number>();
+  const get = (i: number) => new THREE.Vector3(position.getX(i), position.getY(i), position.getZ(i));
+  for (let tri = 0; tri < vertexCount; tri += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = get(tri + e), b = get(tri + ((e + 1) % 3));
+      const ka = key(a.x, a.y, a.z), kb = key(b.x, b.y, b.z);
+      const edgeKey = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+      edgeCounts.set(edgeKey, (edgeCounts.get(edgeKey) ?? 0) + 1);
+    }
+  }
+
+  const boundarySegments: [THREE.Vector3, THREE.Vector3][] = [];
+  for (let tri = 0; tri < vertexCount; tri += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = get(tri + e), b = get(tri + ((e + 1) % 3));
+      const ka = key(a.x, a.y, a.z), kb = key(b.x, b.y, b.z);
+      const edgeKey = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+      if (edgeCounts.get(edgeKey) === 1) boundarySegments.push([a, b]);
+    }
+  }
+
+  const fade = new Float32Array(vertexCount).fill(1);
+  if (boundarySegments.length > 0) {
+    for (let i = 0; i < vertexCount; i++) {
+      const p = get(i);
+      let minDist = Infinity;
+      for (const [a, b] of boundarySegments) minDist = Math.min(minDist, distanceToSegment(p, a, b));
+      const t = Math.max(0, Math.min(1, minDist / marginMeters));
+      fade[i] = t * t * (3 - 2 * t); // smoothstep
+    }
+  }
+  geometry.setAttribute('pfEdgeFade', new THREE.Float32BufferAttribute(fade, 1));
 }
