@@ -98,8 +98,10 @@ export function updateRingUniforms(uniforms: BladeRingUniforms, ring: GrassRing,
   ringOrigin(ring, x, z, uniforms.uOrigin.value);
   uniforms.uSpacing.value = ring.spacing;
   uniforms.uCells.value = ring.cells;
-  uniforms.uFade.value.set(ring.radius * 0.6, ring.radius * 0.95);
-  if (finer) uniforms.uFadeIn.value.set(finer.radius * 0.6, finer.radius * 0.95);
+  uniforms.uWidthScale.value = ring.widthScale;
+  // Hand over late and quickly: the full-density ring should reach as far as its square allows.
+  uniforms.uFade.value.set(ring.radius * 0.8, ring.radius * 0.97);
+  if (finer) uniforms.uFadeIn.value.set(finer.radius * 0.8, finer.radius * 0.97);
   else uniforms.uFadeIn.value.set(0, -1);
 }
 

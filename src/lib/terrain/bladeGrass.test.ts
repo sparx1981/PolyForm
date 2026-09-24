@@ -18,21 +18,26 @@ describe('Dense blade grass', () => {
     expect(bladesPerSquareMetre(DEFAULT_GRASS_SETTINGS.density)).toBeGreaterThanOrEqual(300);
     for (const density of [1, 10, 25]) {
       const rings = grassRings({ ...DEFAULT_GRASS_SETTINGS, density });
-      expect(rings).toHaveLength(2);
+      expect(rings).toHaveLength(3);
       rings.forEach((ring, i) => {
         expect(ring.cells * ring.cells).toBeLessThanOrEqual(MAX_RING_BLADES[i] * 1.02);
         expect(ring.cells * ring.spacing).toBeGreaterThanOrEqual(2 * ring.radius - 1e-6);
       });
-      expect(rings[1].radius).toBeGreaterThan(rings[0].radius);
-      expect(rings[1].spacing).toBeGreaterThan(rings[0].spacing);
-      expect(rings[1].segments).toBeLessThan(rings[0].segments);
+      for (let i = 1; i < rings.length; i++) {
+        expect(rings[i].radius).toBeGreaterThan(rings[i - 1].radius);
+        expect(rings[i].spacing).toBeGreaterThan(rings[i - 1].spacing);
+        expect(rings[i].segments).toBeLessThan(rings[i - 1].segments);
+        // Sparser rings get wider blades so ground coverage doesn't drop off.
+        expect(rings[i].widthScale).toBeGreaterThanOrEqual(rings[i - 1].widthScale);
+      }
+      expect(rings[0].widthScale).toBe(1);
     }
   });
 
   it('keeps taller grass visible further away', () => {
     const lawn = grassRings({ density: 10, baseHeight: 0.05, heightVariance: 0.1 });
     const meadow = grassRings({ density: 10, baseHeight: 0.8, heightVariance: 0.5 });
-    expect(meadow[1].radius).toBeGreaterThan(lawn[1].radius);
+    expect(meadow[2].radius).toBeGreaterThan(lawn[2].radius);
   });
 
   it('builds a blade template with a centre ridge per row', () => {
