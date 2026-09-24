@@ -5,6 +5,7 @@ import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
+import { WaterDrawPreview } from './WaterDrawPreview';
 import { terrainsWithWaterBasins, defaultWaterLevel } from '../lib/water/waterBody';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
 import { fenceStyleInfo } from '../lib/fence/fenceTypes';
@@ -4385,6 +4386,13 @@ function Scene() {
     recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
     diagLog('TOOL', 'Fence placed', { style: settings.style, points: vertices.length, closed, length });
   }, [fenceToolSettings, shapes, setShapes, unit, addShape, commitHistory, recordAction, diagLog]);
+
+  /** Ground height for the pond outline preview (the terrain as drawn, basins included). */
+  const waterPreviewGround = useCallback((x: number, z: number) => {
+    const terrain = shapes.find(s => s.type === 'terrain' && !s.hidden && s.terrainData
+      && Math.abs(x - s.position[0]) <= s.terrainData.width / 2 && Math.abs(z - s.position[2]) <= s.terrainData.depth / 2);
+    return terrain ? sampleTerrainElevation(x, z, dugTerrains.get(terrain.id) ?? terrain) : 0;
+  }, [shapes, dugTerrains]);
 
   /** The water tool fills the clicked outline, digging a basin into the terrain under it. */
   const commitWaterBody = useCallback((vertices: THREE.Vector3[]) => {
@@ -11509,7 +11517,10 @@ function Scene() {
       )}
 
       {/* Fence / Railing Path Drawing Preview */}
-      {(activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0 && (
+      {activeTool === 'water' && (
+        <WaterDrawPreview vertices={fenceVertices} candidate={fenceCandidatePos} closing={fenceHoveredVertex === 0} groundAt={waterPreviewGround} />
+      )}
+      {(activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0 && (
         <group>
           {/* Active 3D Segment Preview */}
           {fenceCandidatePos && (() => {
@@ -11524,7 +11535,7 @@ function Scene() {
 
             return (
               <group>
-                {activeTool !== 'water' && <mesh position={[center.x, center.y, center.z]} quaternion={quat}>
+                <mesh position={[center.x, center.y, center.z]} quaternion={quat}>
                   {activeTool === 'fence' ? (
                     <primitive object={createFenceGeometry(dist, height)} attach="geometry" />
                   ) : (
@@ -11537,7 +11548,7 @@ function Scene() {
                     transparent 
                     opacity={0.65} 
                   />
-                </mesh>}
+                </mesh>
                 {/* Baseline Guide */}
                 <Line
                   points={[
