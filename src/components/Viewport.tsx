@@ -3,6 +3,7 @@ import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
+import { groundUnderRay } from '../lib/terrain/groundRay';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
 import { WaterDrawPreview } from './WaterDrawPreview';
@@ -4394,6 +4395,9 @@ function Scene() {
     return terrain ? sampleTerrainElevation(x, z, dugTerrains.get(terrain.id) ?? terrain) : 0;
   }, [shapes, dugTerrains]);
 
+  /** Where a pointer ray meets the ground, for the fence and water tools (see groundUnderRay). */
+  const pointerGround = (ray: THREE.Ray) => groundUnderRay(ray, waterPreviewGround);
+
   /** The water tool fills the clicked outline, digging a basin into the terrain under it. */
   const commitWaterBody = useCallback((vertices: THREE.Vector3[]) => {
     if (vertices.length < 3) {
@@ -5331,7 +5335,11 @@ function Scene() {
         let normal = new THREE.Vector3(0, 1, 0);
         let p = new THREE.Vector3();
 
-        if (shapeIntersect && shapeIntersect.face) {
+        const groundHit = activeTool === 'railing' ? null : pointerGround(raycaster.ray);
+        if (groundHit) {
+          // Fences and ponds sit on the ground; a level plane keeps later points from drifting.
+          p = groundHit;
+        } else if (shapeIntersect && shapeIntersect.face) {
           normal = shapeIntersect.face.normal.clone().applyQuaternion(shapeIntersect.object.quaternion).normalize();
           p = shapeIntersect.point.clone();
         } else {
@@ -6636,7 +6644,9 @@ function Scene() {
     if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
       const plane = fencePlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
       const target = new THREE.Vector3();
-      if (raycaster.ray.intersectPlane(plane, target)) {
+      const groundHit = activeTool === 'railing' ? null : pointerGround(raycaster.ray);
+      if (groundHit) target.copy(groundHit);
+      if (groundHit || raycaster.ray.intersectPlane(plane, target)) {
         let finalPos = target.clone();
 
         // 1. Check start vertex snap to close fence loop

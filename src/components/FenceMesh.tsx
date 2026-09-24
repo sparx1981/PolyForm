@@ -92,13 +92,6 @@ export function FenceMesh({ shape, terrain, selected, meshProps, selectionHighli
     requestFenceBuild(data, snapshot, terrain?.position[1] ?? 0).then(result => {
       if (cancelled) return;
       if (result.ok) {
-        // World-space triangles into the fence's own frame.
-        const inverse = fenceMatrix(shape).invert(), p = new THREE.Vector3();
-        for (const batch of result.batches) {
-          for (let i = 0; i < batch.positions.length; i += 3) {
-            p.fromArray(batch.positions, i).applyMatrix4(inverse).toArray(batch.positions, i);
-          }
-        }
         setBatches(result.batches); setError(null);
         diagLog('RENDER', `Fence built: ${shape.name || shape.id}`, { style: data.style, length: Math.round(result.length * 10) / 10, ms: Math.round(result.ms) });
       } else {
@@ -133,14 +126,21 @@ export function FenceMesh({ shape, terrain, selected, meshProps, selectionHighli
   }, [meshes.length, error, worldPoints]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { outline?.geometry.dispose(); (outline?.material as THREE.Material | undefined)?.dispose(); }, [outline]);
 
+  // The triangles stay in world space and this undoes the fence's own transform, so a build
+  // made for an earlier path still shows where it was built (never shifted by a moved centre)
+  // until the new one replaces it, while dragging the fence still carries it along.
+  const worldToLocal = useMemo(() => fenceMatrix(shape).invert(), [buildKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const set = materials(selected);
   return (
     <group {...meshProps}>
-      {meshes.map(mesh => (
-        <mesh key={mesh.kind} geometry={mesh.geometry} material={set[mesh.kind]}
-          castShadow={meshProps.castShadow} receiveShadow={meshProps.receiveShadow}
-          userData={{ isShape: true, id: shape.id }} />
-      ))}
+      <group matrixAutoUpdate={false} matrix={worldToLocal}>
+        {meshes.map(mesh => (
+          <mesh key={mesh.kind} geometry={mesh.geometry} material={set[mesh.kind]}
+            castShadow={meshProps.castShadow} receiveShadow={meshProps.receiveShadow}
+            userData={{ isShape: true, id: shape.id }} />
+        ))}
+      </group>
       {outline && <primitive object={outline} />}
       {selectionHighlight}
     </group>
