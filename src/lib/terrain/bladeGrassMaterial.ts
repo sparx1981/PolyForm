@@ -236,7 +236,8 @@ float gReach = uBaseHeight + uHeightVariance;
 vec4 gClip = projectionMatrix * viewMatrix * vec4(gRoot + vec3(0.0, gReach * 0.5, 0.0), 1.0);
 float gMargin = gClip.w * 1.15 + gReach * 2.0;
 if (gClip.w < -gReach || abs(gClip.x) > gMargin || abs(gClip.y) > gMargin) gKeep = 0.0;
-vFar = smoothstep(6.0, 40.0, gDist);
+// Shading fades toward the ground by true distance where there is one (perspective views).
+vFar = smoothstep(6.0, 40.0, uLodVertical > 0.5 ? distance(cameraPosition, gRoot) : gDist);
 
 // Blade shape.
 float gHeight = (uBaseHeight + uHeightVariance * mix(gClumpSeed, gSeed, 0.35)) * (0.75 + 0.5 * gHash(gCell + 5.2));

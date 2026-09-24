@@ -3,8 +3,8 @@ import * as THREE from 'three';
 /**
  * Planar reflection at a water level: the scene rendered from the camera mirrored in the water
  * plane, clipped at the surface, into a half-resolution texture. The water shader samples it at
- * the fragment's screen position, nudged by the wave normal. Grass and water are left out of the
- * reflection render (grass is the most expensive thing in the scene and barely visible there).
+ * the fragment's screen position, nudged by the wave normal. The caller chooses what is left out
+ * of the reflection render (grass, water itself, falling rain and snow).
  */
 export class WaterReflection {
   readonly target: THREE.WebGLRenderTarget;

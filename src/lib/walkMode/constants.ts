@@ -14,6 +14,12 @@ export const GROUND_DAMPING = 10; // /s, exponential decay of x/z when no input
 export const AIR_CONTROL = 0.3; // multiplier on accel while airborne
 export const SPRINT_MULTIPLIER = 1.6; // multiplies Movement Speed while Shift is held
 
+// Crouch (hold C): a shorter capsule so the player fits under low obstacles, lower eyes, slower walk.
+export const CROUCH_HEIGHT = 1.1; // top of capsule while crouched
+export const CROUCH_EYE_HEIGHT = 0.95;
+export const CROUCH_SPEED_MULTIPLIER = 0.45;
+export const CROUCH_TRANSITION_MS = 110; // eye height easing between standing and crouched
+
 export const PHYSICS_SUBSTEPS = 5;
 export const MAX_FRAME_DT = 0.05; // seconds, clamp to avoid tunnelling after a hitch/tab-switch
 export const FALL_RESPAWN_DEPTH = 10; // meters below bounds.min.y before respawning

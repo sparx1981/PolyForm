@@ -28,7 +28,6 @@ import {
   OrbitControls, 
   Grid, 
   TransformControls, 
-  ContactShadows, 
   Environment,
   GizmoHelper,
   GizmoViewport
@@ -124,6 +123,7 @@ import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
+import { SunShadowRig } from './graphics/SunShadowRig';
 import { buildRoomAssembly, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
 import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
@@ -9457,8 +9457,8 @@ function Scene() {
         position={lightPosition} 
         intensity={sunIntensity} 
         castShadow={shadowsEnabled} 
-        shadow-mapSize={[1024, 1024]}
       />
+      <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />
       
       {godRaysEnabled && (
         <mesh ref={sunMeshRef} position={lightPosition}>
@@ -10871,10 +10871,6 @@ function Scene() {
           */}
           <Edges threshold={15} color="#000000" transparent opacity={0.6} depthTest={false} renderOrder={6} />
         </mesh>
-      )}
-
-      {shadowsEnabled && (
-        <ContactShadows position={[0, 0, 0]} opacity={shadowOpacity} scale={10} blur={1.5} far={0.8} />
       )}
 
       {/* Show All Dimensions - per-shape labels, toggled from the Measure tool popout */}

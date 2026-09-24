@@ -277,4 +277,42 @@ describe('stepPlayer', () => {
     stepPlayer(state, idleInput({ move: { x: -1, z: 0, magnitude: 1 }, speed: 50 }), 1.0, bvh, OPEN_BOUNDS);
     expect(state.feet.x).toBeLessThan(2.9);
   });
+
+  it('crouching fits under a low overhang and only stands up once there is headroom', () => {
+    // A 1.3 m high slab over the floor from z = 1 onward: too low to stand under, high enough to crouch.
+    const overhang = new THREE.BoxGeometry(8, 0.2, 6);
+    overhang.translate(0, 1.4, 4);
+    const bvh = buildBVH([flatFloorGeom(), overhang]);
+    const state = createPlayerState(new THREE.Vector3(0, 0, 0));
+    for (let i = 0; i < 30; i++) stepPlayer(state, idleInput(), 1 / 60, bvh, OPEN_BOUNDS);
+
+    // Standing, walking forward is blocked at the overhang's edge.
+    const standing = createPlayerState(state.feet.clone());
+    for (let i = 0; i < 180; i++) stepPlayer(standing, idleInput({ move: { x: 0, z: 1, magnitude: 1 } }), 1 / 60, bvh, OPEN_BOUNDS);
+    expect(standing.feet.z).toBeLessThan(1);
+
+    // Crouched, the player walks in underneath.
+    for (let i = 0; i < 80; i++) stepPlayer(state, idleInput({ move: { x: 0, z: 1, magnitude: 1 }, crouch: true }), 1 / 60, bvh, OPEN_BOUNDS);
+    expect(state.feet.z).toBeGreaterThan(2);
+    expect(state.feet.z).toBeLessThan(6);
+    expect(state.crouched).toBe(true);
+
+    // Releasing C under the overhang keeps the player crouched (no headroom)...
+    stepPlayer(state, idleInput(), 1 / 60, bvh, OPEN_BOUNDS);
+    expect(state.crouched).toBe(true);
+    expect(state.feet.y).toBeCloseTo(0, 1);
+
+    // ...until they walk back out into the open.
+    for (let i = 0; i < 240; i++) stepPlayer(state, idleInput({ move: { x: 0, z: -1, magnitude: 1 } }), 1 / 60, bvh, OPEN_BOUNDS);
+    expect(state.crouched).toBe(false);
+    expect(state.height).toBeGreaterThan(1.5);
+  });
+
+  it('cannot jump while crouched', () => {
+    const bvh = buildBVH([flatFloorGeom()]);
+    const state = createPlayerState(new THREE.Vector3(0, 0, 0));
+    for (let i = 0; i < 30; i++) stepPlayer(state, idleInput(), 1 / 60, bvh, OPEN_BOUNDS);
+    stepPlayer(state, idleInput({ jumpRequested: true, crouch: true }), 1 / 60, bvh, OPEN_BOUNDS);
+    expect(state.velocity.y).toBeLessThanOrEqual(0);
+  });
 });

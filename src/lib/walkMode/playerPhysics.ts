@@ -3,6 +3,7 @@ import type { MeshBVH } from 'three-mesh-bvh';
 import { isFloorSurface } from '../portalNavigation';
 import {
   PLAYER_HEIGHT,
+  CROUCH_HEIGHT,
   CAPSULE_RADIUS,
   MAX_STEP_HEIGHT,
   GRAVITY,
@@ -34,6 +35,10 @@ export interface PlayerState {
   /** Camera Y offset above `feet.y + EYE_HEIGHT`, eased toward 0 after a step-up so stairs don't feel jerky (spec §7.5 step 5). Never affects `feet` itself. */
   cameraYOffset: number;
   startSpot: THREE.Vector3;
+  /** Current capsule height: PLAYER_HEIGHT standing, CROUCH_HEIGHT crouched. */
+  height: number;
+  /** True while crouched, including while C was released but there is no headroom to stand. */
+  crouched: boolean;
 }
 
 export function createPlayerState(startFeet: THREE.Vector3): PlayerState {
@@ -43,6 +48,8 @@ export function createPlayerState(startFeet: THREE.Vector3): PlayerState {
     grounded: false,
     cameraYOffset: 0,
     startSpot: startFeet.clone(),
+    height: PLAYER_HEIGHT,
+    crouched: false,
   };
 }
 
@@ -79,9 +86,9 @@ const contactPool: ContactInfo[] = Array.from({ length: 8 }, () => ({ direction:
  * corrected position (spec §7.5's "Collision resolve" - the standard
  * three-mesh-bvh capsule pattern).
  */
-function resolveCapsuleCollisions(bvh: MeshBVH, feet: THREE.Vector3): ResolveResult {
+function resolveCapsuleCollisions(bvh: MeshBVH, feet: THREE.Vector3, height = PLAYER_HEIGHT): ResolveResult {
   _segment.start.set(feet.x, feet.y + CAPSULE_RADIUS, feet.z);
-  _segment.end.set(feet.x, feet.y + PLAYER_HEIGHT - CAPSULE_RADIUS, feet.z);
+  _segment.end.set(feet.x, feet.y + Math.max(height, CAPSULE_RADIUS * 2) - CAPSULE_RADIUS, feet.z);
 
   let contactCount = 0;
   let totalPush = 0;
@@ -156,6 +163,18 @@ export interface StepInput {
   jumpRequested: boolean;
   cameraYaw: number;
   speed: number;
+  /** Crouch held. Standing back up waits until there is headroom. */
+  crouch?: boolean;
+}
+
+const _standTest = new THREE.Vector3();
+/** Whether a full-height capsule fits where the crouched player is (nothing low overhead). */
+function hasHeadroomToStand(bvh: MeshBVH, feet: THREE.Vector3): boolean {
+  _standTest.copy(feet);
+  // Anything overhead pushes the full-height capsule out of place (a surface cutting right
+  // through it can push it either way); resting on the floor moves it by a hair at most.
+  resolveCapsuleCollisions(bvh, _standTest, PLAYER_HEIGHT);
+  return _standTest.distanceTo(feet) < 0.02;
 }
 
 /**
@@ -168,7 +187,14 @@ export interface StepInput {
 export function stepPlayer(state: PlayerState, input: StepInput, rawDt: number, bvh: MeshBVH, bounds: PhysicsBounds): void {
   const clampedDt = Math.min(rawDt, MAX_FRAME_DT);
   const substepDt = clampedDt / PHYSICS_SUBSTEPS;
-  let jumpAvailable = input.jumpRequested;
+  if (input.crouch) {
+    state.crouched = true;
+  } else if (state.crouched && hasHeadroomToStand(bvh, state.feet)) {
+    state.crouched = false;
+  }
+  state.height = state.crouched ? CROUCH_HEIGHT : PLAYER_HEIGHT;
+  // No jumping from a crouch.
+  let jumpAvailable = input.jumpRequested && !state.crouched;
 
   for (let i = 0; i < PHYSICS_SUBSTEPS; i++) {
     computeWishDirection(input.move, input.cameraYaw, _wishDir);
@@ -202,7 +228,7 @@ export function stepPlayer(state: PlayerState, input: StepInput, rawDt: number, 
     _preMoveFeet.copy(state.feet);
     state.feet.addScaledVector(state.velocity, substepDt);
 
-    let { contacts } = resolveCapsuleCollisions(bvh, state.feet);
+    let { contacts } = resolveCapsuleCollisions(bvh, state.feet, state.height);
 
     // Step-up assist: only when the horizontal move was actually blocked
     // by a non-floor (wall-type) contact while grounded (spec §7.5's
@@ -224,7 +250,7 @@ export function stepPlayer(state: PlayerState, input: StepInput, rawDt: number, 
       // narrow geometry involved at all.
       _stepUpProbeDir.set(-wallContact!.direction.x, 0, -wallContact!.direction.z);
       if (_stepUpProbeDir.lengthSq() < 1e-8) _stepUpProbeDir.copy(_wishDir);
-      const stepUp = tryStepUp(bvh, _preMoveFeet, _stepUpProbeDir);
+      const stepUp = tryStepUp(bvh, _preMoveFeet, _stepUpProbeDir, state.height);
       if (stepUp) {
         const cameraRise = stepUp.feet.y - state.feet.y;
         state.feet.copy(stepUp.feet);
@@ -309,7 +335,7 @@ interface StepUpResult {
 const STEP_UP_PROBE_DISTANCE = CAPSULE_RADIUS + 0.1;
 
 /** See spec §7.5 "Step-up assist". Lifts, probes forward past the blocking contact, resolves, then confirms with a downward raycast that the landing is a real, close-enough floor before accepting it. */
-function tryStepUp(bvh: MeshBVH, preMoveFeet: THREE.Vector3, wishDir: THREE.Vector3): StepUpResult | null {
+function tryStepUp(bvh: MeshBVH, preMoveFeet: THREE.Vector3, wishDir: THREE.Vector3, height = PLAYER_HEIGHT): StepUpResult | null {
   const dirLengthSq = wishDir.x * wishDir.x + wishDir.z * wishDir.z;
   if (dirLengthSq < 1e-8) return null;
   const invLen = STEP_UP_PROBE_DISTANCE / Math.sqrt(dirLengthSq);
@@ -320,7 +346,7 @@ function tryStepUp(bvh: MeshBVH, preMoveFeet: THREE.Vector3, wishDir: THREE.Vect
     preMoveFeet.z + wishDir.z * invLen
   );
 
-  const { contacts } = resolveCapsuleCollisions(bvh, _liftedFeet);
+  const { contacts } = resolveCapsuleCollisions(bvh, _liftedFeet, height);
 
   _rayOrigin.set(_liftedFeet.x, _liftedFeet.y + CAPSULE_RADIUS + 0.02, _liftedFeet.z);
   _downRay.origin.copy(_rayOrigin);
@@ -344,7 +370,7 @@ function tryStepUp(bvh: MeshBVH, preMoveFeet: THREE.Vector3, wishDir: THREE.Vect
   // overlap is exactly what it's for. Only a large push - suggesting the
   // capsule doesn't actually fit here at all (e.g. a low ceiling) - should
   // disqualify the landing.
-  const { totalPush } = resolveCapsuleCollisions(bvh, landedFeet);
+  const { totalPush } = resolveCapsuleCollisions(bvh, landedFeet, height);
   if (totalPush > CAPSULE_RADIUS) return null;
 
   return { feet: landedFeet, contacts };

@@ -15,6 +15,9 @@ import {
   STEP_UP_SMOOTH_MS,
   TOUCH_LOOK_DEG_PER_PX,
   SPRINT_MULTIPLIER,
+  CROUCH_EYE_HEIGHT,
+  CROUCH_SPEED_MULTIPLIER,
+  CROUCH_TRANSITION_MS,
 } from '../../lib/walkMode/constants';
 import { lockLossClassifier } from '../../lib/walkMode/lockLossClassifier';
 import type { WalkBridge } from '../../lib/walkMode/inputState';
@@ -75,6 +78,7 @@ export default function WalkModeController({
   const savedCameraRef = useRef<SavedCameraState | null>(null);
   const phaseRef = useRef<WalkModePhase>(phase);
   const recentBlurRef = useRef(0);
+  const eyeHeightRef = useRef(EYE_HEIGHT);
   const rebuildTimeoutRef = useRef<number | null>(null);
   const hoverRef = useRef<{ point: THREE.Vector3; valid: boolean } | null>(null);
   const markerRef = useRef<THREE.Mesh>(null);
@@ -300,6 +304,7 @@ export default function WalkModeController({
       camera.near = WALK_NEAR;
       camera.updateProjectionMatrix();
       camera.position.set(hit.point.x, hit.point.y + EYE_HEIGHT, hit.point.z);
+      eyeHeightRef.current = EYE_HEIGHT;
       // buildPortalOrientation's forward convention matches extractYawFromQuaternion's
       // (see that function's own doc comment); a plain Euler(0, yaw, 0, 'YXZ') does not - it's
       // offset by pi, which previously spun the walk-mode camera to face the opposite direction
@@ -427,11 +432,13 @@ export default function WalkModeController({
     const move = bridge.inputState.getMove();
     const jumpRequested = bridge.inputState.consumeJumpPressed();
     const cameraYaw = extractYawFromQuaternion(camera.quaternion);
-    const speed = bridge.inputState.isSprinting() ? movementSpeed * SPRINT_MULTIPLIER : movementSpeed;
+    const crouch = bridge.inputState.isCrouching();
+    const speed = playerState.crouched || crouch ? movementSpeed * CROUCH_SPEED_MULTIPLIER
+      : bridge.inputState.isSprinting() ? movementSpeed * SPRINT_MULTIPLIER : movementSpeed;
 
     stepPlayer(
       playerState,
-      { move, jumpRequested, cameraYaw, speed },
+      { move, jumpRequested, cameraYaw, speed, crouch },
       rawDt,
       world.bvh,
       { min: world.bounds.min, max: world.bounds.max }
@@ -442,7 +449,11 @@ export default function WalkModeController({
     const t = 1 - Math.exp(-rawDt / tau);
     playerState.cameraYOffset *= 1 - t;
 
-    camera.position.set(playerState.feet.x, playerState.feet.y + EYE_HEIGHT + playerState.cameraYOffset, playerState.feet.z);
+    // Ease the eyes down into a crouch and back up when standing.
+    const targetEye = playerState.crouched ? CROUCH_EYE_HEIGHT : EYE_HEIGHT;
+    eyeHeightRef.current += (targetEye - eyeHeightRef.current) * (1 - Math.exp(-rawDt / (CROUCH_TRANSITION_MS / 1000)));
+
+    camera.position.set(playerState.feet.x, playerState.feet.y + eyeHeightRef.current + playerState.cameraYOffset, playerState.feet.z);
   });
 
   return (

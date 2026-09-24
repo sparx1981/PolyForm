@@ -545,6 +545,75 @@ export function createGablePedimentWallsGeometry(
   });
 }
 
+type RoofPoint = [number, number, number];
+type AddQuadFn = (p1: RoofPoint, p2: RoofPoint, p3: RoofPoint, p4: RoofPoint, normal?: RoofPoint) => void;
+type AddTriangleFn = (p1: RoofPoint, p2: RoofPoint, p3: RoofPoint, normal?: RoofPoint) => void;
+
+/**
+ * A ridge cap that sits on the roof like a real one: an inverted-V saddle straddling the ridge
+ * line from `a` to `b`, its two wings lying along the slopes (`slope` = rise per horizontal
+ * metre) and raised just clear of them, with small edge faces so it reads as a solid piece.
+ * Earlier caps were flat plates hovering a few centimetres above the ridge.
+ */
+function addRidgeSaddle(addQuad: AddQuadFn, a: RoofPoint, b: RoofPoint, slope: number,
+  halfWidth = 0.14, thickness = 0.035, overhang = 0.05) {
+  const dx = b[0] - a[0], dz = b[2] - a[2];
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-6) return;
+  const ux = dx / len, uz = dz / len;
+  const nx = -uz * halfWidth, nz = ux * halfWidth;
+  const drop = halfWidth * Math.max(0, slope);
+  const A: RoofPoint = [a[0] - ux * overhang, a[1], a[2] - uz * overhang];
+  const B: RoofPoint = [b[0] + ux * overhang, b[1], b[2] + uz * overhang];
+  const at = (p: RoofPoint, side: number, lift: number, down: number): RoofPoint =>
+    [p[0] + nx * side, p[1] - down + lift, p[2] + nz * side];
+  for (const side of [1, -1]) {
+    // Top of the wing, from the ridge down the slope.
+    addQuad(at(A, 0, thickness, 0), at(B, 0, thickness, 0), at(B, side, thickness, drop), at(A, side, thickness, drop));
+    // Drip edge along the bottom of the wing.
+    addQuad(at(A, side, 0, drop), at(B, side, 0, drop), at(B, side, thickness, drop), at(A, side, thickness, drop));
+  }
+  // Closed ends.
+  for (const [P, sign] of [[A, -1], [B, 1]] as const) {
+    const normal: RoofPoint = [ux * sign, 0, uz * sign];
+    addQuad(at(P, 1, 0, drop), at(P, -1, 0, drop), at(P, -1, thickness, drop), at(P, 1, thickness, drop), normal);
+    addQuad(at(P, 1, thickness, drop), at(P, -1, thickness, drop), at(P, 0, thickness, 0), at(P, 0, thickness, 0), normal);
+  }
+}
+
+/**
+ * Apex of the general polygonal (pyramid fan) roof: shared by the slopes and their apex cap so
+ * the cap always sits exactly on the point the slopes rise to.
+ */
+export function computeGeneralRoofApex(eavePoly: [number, number][], ridgeHeight: number, pitchAngleDeg = 35): RoofPoint {
+  const slope = Math.tan(THREE.MathUtils.degToRad(pitchAngleDeg));
+  const [cx, cz] = findInteriorApexPoint2D(eavePoly);
+  const centerDist = distToPolygonBoundary2D(cx, cz, eavePoly);
+  return [cx, Math.min(ridgeHeight, Math.max(0.6, centerDist * slope)), cz];
+}
+
+/**
+ * Cap over the single apex of a pyramid-style roof. There is no ridge line to cap, so this is
+ * a small hipped cap following each roof face a short way down from the apex.
+ */
+export function createApexCapGeometry(eavePoly: [number, number][], apex: RoofPoint, reach = 0.22, thickness = 0.035): THREE.BufferGeometry {
+  return createGeometryFromBuilder((addTriangle, addQuad) => {
+    const top: RoofPoint = [apex[0], apex[1] + thickness, apex[2]];
+    const n = eavePoly.length;
+    const rim = eavePoly.map(([x, z]): RoofPoint => {
+      const dx = x - apex[0], dz = z - apex[2], dy = -apex[1];
+      const len = Math.hypot(dx, dy, dz) || 1;
+      const t = Math.min(1, reach / len);
+      return [apex[0] + dx * t, apex[1] + dy * t, apex[2] + dz * t];
+    });
+    for (let i = 0; i < n; i++) {
+      const p = rim[i], q = rim[(i + 1) % n];
+      addTriangle(top, [p[0], p[1] + thickness, p[2]], [q[0], q[1] + thickness, q[2]]);
+      addQuad(p, q, [q[0], q[1] + thickness, q[2]], [p[0], p[1] + thickness, p[2]]);
+    }
+  });
+}
+
 /**
  * 3. Gable Apex Ridge Capping Beam
  */
@@ -553,38 +622,19 @@ export function createGableRidgeCapGeometry(
   buildingDepth: number,
   ridgeHeight: number,
   eaveOverhang: number = 0.30,
-  ridgeCapRadius: number = 0.08
+  _ridgeCapRadius: number = 0.08
 ): THREE.BufferGeometry {
   return createGeometryFromBuilder((_addTriangle, addQuad) => {
-    const hw_wall = buildingWidth / 2;
-    const hd_wall = buildingDepth / 2;
-    const hw_eave = hw_wall + eaveOverhang;
-    const hd_eave = hd_wall + eaveOverhang;
+    const hw_eave = buildingWidth / 2 + eaveOverhang;
+    const hd_eave = buildingDepth / 2 + eaveOverhang;
     const isWidthLonger = buildingWidth >= buildingDepth;
     const ridgeY = ridgeHeight;
 
+    // The ridge runs the full length of the roof, gable end to gable end.
     if (isWidthLonger) {
-      const capW = hw_eave + 0.04;
-      const capH = ridgeCapRadius;
-      const capZ = 0.12;
-
-      // Top quad (+Y)
-      addQuad([-capW, ridgeY + capH, -capZ], [capW, ridgeY + capH, -capZ], [capW, ridgeY + capH, capZ], [-capW, ridgeY + capH, capZ], [0, 1, 0]);
-      // Front quad (+Z)
-      addQuad([-capW, ridgeY, capZ], [capW, ridgeY, capZ], [capW, ridgeY + capH, capZ], [-capW, ridgeY + capH, capZ], [0, 0, 1]);
-      // Back quad (-Z)
-      addQuad([capW, ridgeY, -capZ], [-capW, ridgeY, -capZ], [-capW, ridgeY + capH, -capZ], [capW, ridgeY + capH, -capZ], [0, 0, -1]);
+      addRidgeSaddle(addQuad, [-hw_eave, ridgeY, 0], [hw_eave, ridgeY, 0], ridgeY / hd_eave, 0.14, 0.035, 0.03);
     } else {
-      const capD = hd_eave + 0.04;
-      const capH = ridgeCapRadius;
-      const capX = 0.12;
-
-      // Top quad (+Y)
-      addQuad([-capX, ridgeY + capH, -capD], [capX, ridgeY + capH, -capD], [capX, ridgeY + capH, capD], [-capX, ridgeY + capH, capD], [0, 1, 0]);
-      // Right quad (+X)
-      addQuad([capX, ridgeY, -capD], [capX, ridgeY, capD], [capX, ridgeY + capH, capD], [capX, ridgeY + capH, -capD], [1, 0, 0]);
-      // Left quad (-X)
-      addQuad([-capX, ridgeY, capD], [-capX, ridgeY, -capD], [-capX, ridgeY + capH, -capD], [-capX, ridgeY + capH, capD], [-1, 0, 0]);
+      addRidgeSaddle(addQuad, [0, ridgeY, -hd_eave], [0, ridgeY, hd_eave], ridgeY / hw_eave, 0.14, 0.035, 0.03);
     }
   });
 }
@@ -883,35 +933,18 @@ export function createHipRidgeCapGeometry(
   eaveOverhang: number = 0.30
 ): THREE.BufferGeometry {
   return createGeometryFromBuilder((_addTriangle, addQuad) => {
-    const hw_wall = buildingWidth / 2;
-    const hd_wall = buildingDepth / 2;
-    const hw_eave = hw_wall + eaveOverhang;
-    const hd_eave = hd_wall + eaveOverhang;
+    const hw_eave = buildingWidth / 2 + eaveOverhang;
+    const hd_eave = buildingDepth / 2 + eaveOverhang;
     const isWidthLonger = buildingWidth >= buildingDepth;
     const ridgeY = ridgeHeight;
 
+    // Same ridge line as createHipRoofSlopesGeometry, so the cap always sits on the slopes.
     if (isWidthLonger) {
-      const hipOffset = hd_eave;
-      const ridgeHalfLen = Math.max(0.2, hw_eave - hipOffset);
-      const capZ = 0.12;
-      addQuad(
-        [-ridgeHalfLen - 0.05, ridgeY + 0.06, -capZ],
-        [ridgeHalfLen + 0.05, ridgeY + 0.06, -capZ],
-        [ridgeHalfLen + 0.05, ridgeY + 0.06, capZ],
-        [-ridgeHalfLen - 0.05, ridgeY + 0.06, capZ],
-        [0, 1, 0]
-      );
+      const ridgeHalfLen = Math.max(0.2, hw_eave - hd_eave);
+      addRidgeSaddle(addQuad, [-ridgeHalfLen, ridgeY, 0], [ridgeHalfLen, ridgeY, 0], ridgeY / hd_eave);
     } else {
-      const hipOffset = hw_eave;
-      const ridgeHalfLen = Math.max(0.2, hd_eave - hipOffset);
-      const capX = 0.12;
-      addQuad(
-        [-capX, ridgeY + 0.06, -ridgeHalfLen - 0.05],
-        [capX, ridgeY + 0.06, -ridgeHalfLen - 0.05],
-        [capX, ridgeY + 0.06, ridgeHalfLen + 0.05],
-        [-capX, ridgeY + 0.06, ridgeHalfLen + 0.05],
-        [0, 1, 0]
-      );
+      const ridgeHalfLen = Math.max(0.2, hd_eave - hw_eave);
+      addRidgeSaddle(addQuad, [0, ridgeY, -ridgeHalfLen], [0, ridgeY, ridgeHalfLen], ridgeY / hw_eave);
     }
   });
 }
@@ -1351,22 +1384,11 @@ export function createLShapedRidgeCapGeometry(
     const E = getCanonicalLPolygon(eavePoly, reflexIdx);
     const { rJunc, rEnd1, rEnd2 } = computeLRidgeNodes(V, E, ridgeHeight, isHip);
 
-    const capR = 0.08;
-    const rY = ridgeHeight + 0.04;
-
+    // Each wing's slope: ridge height over the distance from its ridge to the eaves.
     const buildCapSegment = (pA: [number, number, number], pB: [number, number, number]) => {
-      const dx = pB[0] - pA[0];
-      const dz = pB[2] - pA[2];
-      const len = Math.hypot(dx, dz) || 1e-6;
-      const nx = -dz / len * capR;
-      const nz = dx / len * capR;
-
-      const p1: [number, number, number] = [pA[0] + nx, rY, pA[2] + nz];
-      const p2: [number, number, number] = [pB[0] + nx, rY, pB[2] + nz];
-      const p3: [number, number, number] = [pB[0] - nx, rY, pB[2] - nz];
-      const p4: [number, number, number] = [pA[0] - nx, rY, pA[2] - nz];
-
-      addQuad(p1, p2, p3, p4, [0, 1, 0]);
+      const midX = (pA[0] + pB[0]) / 2, midZ = (pA[2] + pB[2]) / 2;
+      const run = Math.max(0.3, distToPolygonBoundary2D(midX, midZ, E));
+      addRidgeSaddle(addQuad, pA, pB, ridgeHeight / run, 0.14, 0.035, 0);
     };
 
     buildCapSegment(rJunc, rEnd1);
@@ -1471,18 +1493,12 @@ export function createGeneralPolygonalRoofSlopesGeometry(
   pitchAngleDeg: number = 35
 ): THREE.BufferGeometry {
   return createGeometryFromBuilder((addTriangle) => {
-    const rad = THREE.MathUtils.degToRad(pitchAngleDeg);
-    const slope = Math.tan(rad);
     const n = eavePoly.length;
 
     // The vertex-mean centroid can land outside a concave (reflex-cornered)
-    // polygon; use the pole-of-inaccessibility approximation instead so the
-    // apex always stays inside the actual footprint.
-    const [cx, cz] = findInteriorApexPoint2D(eavePoly);
-
-    const centerDist = distToPolygonBoundary2D(cx, cz, eavePoly);
-    const centerH = Math.min(ridgeHeight, Math.max(0.6, centerDist * slope));
-    const center3D: [number, number, number] = [cx, centerH, cz];
+    // polygon; the apex uses the pole-of-inaccessibility approximation instead
+    // so it always stays inside the actual footprint.
+    const center3D = computeGeneralRoofApex(eavePoly, ridgeHeight, pitchAngleDeg);
 
     // Fan triangles from perimeter edges up to skeleton center (outward/upward facing)
     for (let i = 0; i < n; i++) {
@@ -1782,7 +1798,9 @@ export function buildRoofAssemblyForRoom(
   } else {
     // General N-sided polygonal roof
     slopesGeom = createGeneralPolygonalRoofSlopesGeometry(localWallPoly, localEavePoly, ridgeH, params.pitchAngleDeg ?? 35);
-    ridgeCapGeom = createHipRidgeCapGeometry(width, depth, ridgeH, eaveOverhang);
+    // A fan roof rises to a single apex, which is rarely at the bounding-box centre or at the
+    // full ridge height: a straight ridge cap there floated above the roof. Cap the apex itself.
+    ridgeCapGeom = createApexCapGeometry(localEavePoly, computeGeneralRoofApex(localEavePoly, ridgeH, params.pitchAngleDeg ?? 35));
     fasciaGeom = createPolygonalFasciaGeometry(localWallPoly, localEavePoly, fasciaHeight, false);
     soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
   }
@@ -3301,7 +3319,7 @@ export function updateRoofAssembly(
     soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
   } else {
     slopesGeom = createGeneralPolygonalRoofSlopesGeometry(localWallPoly, localEavePoly, clampedHeight, pitchAngleDeg);
-    ridgeCapGeom = createHipRidgeCapGeometry(width, depth, clampedHeight, eaveOverhang);
+    ridgeCapGeom = createApexCapGeometry(localEavePoly, computeGeneralRoofApex(localEavePoly, clampedHeight, pitchAngleDeg));
     fasciaGeom = createPolygonalFasciaGeometry(localWallPoly, localEavePoly, fasciaHeight, false);
     soffitGeom = createPolygonalSoffitsGeometry(localWallPoly, localEavePoly, fasciaHeight);
   }

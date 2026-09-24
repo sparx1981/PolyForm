@@ -90,9 +90,13 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
     }
   }, [uniforms, data, heights, terrain]);
 
+  const { diagLog, graphicsSettings } = useApp();
+  // Rain rings the surface with drop ripples; heavier (denser, more opaque) rain rings it more.
+  const rainLayer = graphicsSettings.weather.layers.rain;
+  const rain = graphicsSettings.weather.enabled && rainLayer.enabled
+    ? THREE.MathUtils.clamp(rainLayer.density * (0.4 + rainLayer.opacity) * Math.min(1, rainLayer.count / 12000), 0.15, 1) : 0;
   // If the ground at the pond's deepest point is above the water, it can't be seen: say why.
   // (The shape's position is the points' average, which lies outside C-shaped ponds.)
-  const { diagLog } = useApp();
   useEffect(() => {
     const [, level] = shape.position;
     const inner = deepestPoint(waterWorldOutline(shape));
@@ -111,7 +115,9 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
   const stats = useRef({ since: 0, frames: 0, drawn: 0, hidden: 0, mirror: 0, simUpdates: 0, reports: 0 });
 
   const group = useRef<THREE.Group>(null);
-  useFrame(({ gl, scene, clock, camera }) => {
+  useFrame(({ gl, scene, clock, camera }, delta) => {
+    uniforms.uRain.value = rain;
+    if (rain > 0) uniforms.uRainTime.value += delta;
     if (!sharedSim) return;
     const frame = gl.info.render.frame;
     if (clock.elapsedTime - lastSunLookup > 1) { findSun(scene, sunDirection); lastSunLookup = clock.elapsedTime; }
@@ -136,7 +142,9 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
     surface.envMapIntensity = useMirror ? 0 : 1;
     if (useMirror) {
       reflection.render(gl, scene, camera, uniforms.uLevel.value,
-        object => object.name === 'procedural-grass-mesh' || object.userData?.isWater === true);
+        object => object.name === 'procedural-grass-mesh' || object.userData?.isWater === true
+          // Falling rain and snow mirrored in the water reads as streaks under the surface.
+          || object.name === 'weather-rain' || object.name === 'weather-snow');
       uniforms.uReflectionMatrix.value.copy(reflection.textureMatrix);
       st.mirror++;
     }

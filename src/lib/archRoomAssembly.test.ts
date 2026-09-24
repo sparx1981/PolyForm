@@ -11,6 +11,7 @@ import {
   computeWallFaceCorner,
 } from './archRoomAssembly';
 import { createTerrainShape } from './terrain/terrainFactory';
+import { sampleTerrainElevation } from './archRoomAssembly';
 import { Shape } from '../types';
 
 describe('ArchRoomAssembly & Site Terracing', () => {
@@ -173,5 +174,31 @@ describe('ArchRoomAssembly & Site Terracing', () => {
     const corner = computeWallFaceCorner(new THREE.Vector3(0, 0, 0), null, self, 1);
     expect(corner.x).toBeCloseTo(0);
     expect(corner.y).toBeCloseTo(0.1);
+  });
+
+  it('grades the ground to the base of the walls, burying the slab and foundation skirt', () => {
+    const terrainShape = createTerrainShape({ width: 30, depth: 30, resolution: 32, topography: 'flat' });
+    const vertices = [
+      new THREE.Vector3(-3, 0, -2),
+      new THREE.Vector3(3, 0, -2),
+      new THREE.Vector3(3, 0, 2),
+      new THREE.Vector3(-3, 0, 2),
+    ];
+    const assembly = buildRoomAssembly(vertices, terrainShape, undefined, { story: 1 });
+    const graded: Shape = { ...terrainShape, terrainData: assembly.updatedTerrainData ?? terrainShape.terrainData };
+    const wallBase = assembly.wallShapes[0].position[1] - (assembly.wallShapes[0].args as number[])[1] / 2;
+    expect(wallBase).toBeCloseTo(assembly.datumZ);
+    // Just outside the walls the ground is at the wall base (a hair below, never below the slab top).
+    const outside = sampleTerrainElevation(4, 0, graded);
+    expect(outside).toBeLessThanOrEqual(assembly.datumZ);
+    expect(outside).toBeGreaterThan(assembly.datumZ - 0.05);
+    // Inside, the ground stays hidden inside the slab, below its top face.
+    const inside = sampleTerrainElevation(0, 0, graded);
+    expect(inside).toBeLessThan(assembly.datumZ);
+    const slabBottom = assembly.slabShape.position[1] - (assembly.slabShape.args as { height: number }).height / 2;
+    expect(inside).toBeGreaterThan(slabBottom);
+    // The foundation skirt sits entirely below ground.
+    const skirt = assembly.foundationShape!;
+    expect(skirt.position[1] + (skirt.args as { height: number }).height / 2).toBeLessThanOrEqual(slabBottom + 1e-9);
   });
 });

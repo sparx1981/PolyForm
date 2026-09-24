@@ -314,7 +314,7 @@ export interface FogSettings {
 
 export interface SceneAnimation {
   id: string;
-  type: 'none' | 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura' | 'bird' | 'bee';
+  type: 'none' | 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura' | 'bird' | 'bee' | 'flock';
   position: [number, number, number];
   density: number;
   scale?: number;
@@ -326,6 +326,10 @@ export interface SceneAnimation {
   birdBodyColor?: string;
   birdBreastColor?: string;
   birdBeakColor?: string;
+  // Flock-only: a flock of birds crossing the sky. `density` is the number of birds.
+  flockBirdType?: 'starling' | 'geese' | 'seagull';
+  /** Height above the placed position, metres. */
+  flockAltitude?: number;
 }
 
 export interface SceneNote {

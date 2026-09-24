@@ -251,8 +251,9 @@ export function calculateBalancedDatumElevation(
 
 /**
  * Performs terrain excavation with safety apron ($Z = Z_0$ with Buffer).
- * Any terrain that clashes with a floor slab is automatically flattened below the slab underside so it does not protrude through.
- * 1m of terrain around the floor slab is also flattened.
+ * Finished ground level is the top of the floor slab (the base of the walls): the slab and
+ * foundation skirt are buried. Terrain inside the footprint is cut to just under the slab top.
+ * 1m of terrain around the floor slab is graded to ground level.
  * Surrounding terrain beyond 1m is smoothly transitioned with a daylight batter slope.
  */
 export function excavateTerrainMesh(
@@ -269,13 +270,16 @@ export function excavateTerrainMesh(
   const posZ = terrain.position[2];
 
   const newHeights = [...heights];
-  // datumZ is top of floor slab. Underside of floor slab is datumZ - slabThickness.
-  // Excavate 0.15m below underside of floor slab to guarantee zero clashes or peaking through slab.
-  const targetUndersideWorld = datumZ - Math.max(0.05, slabThickness) - 0.15;
+  // datumZ is the top of the floor slab, which is also where the walls start. Like a real
+  // building, finished ground level meets the base of the walls: the slab and the foundation
+  // skirt below it sit inside the ground. Inside the footprint the terrain is cut to just under
+  // the slab's top face (so it stays hidden inside the slab and never pokes through the floor);
+  // the apron is graded a hair below the wall base so the two never z-fight.
+  const targetUndersideWorld = datumZ - Math.min(0.03, Math.max(0.01, slabThickness / 2));
   const targetUndersideLocal = targetUndersideWorld - posY;
 
-  // 1m perimeter apron around the floor slab is graded 50mm below slab top/edge
-  const apronElevWorld = datumZ - Math.max(0.05, slabThickness) - 0.05;
+  // Perimeter apron around the floor slab is graded to finished ground level (the wall base).
+  const apronElevWorld = datumZ - 0.02;
   const apronElevLocal = apronElevWorld - posY;
   let modified = false;
 

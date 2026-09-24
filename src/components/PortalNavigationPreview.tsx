@@ -33,6 +33,106 @@ const HOVER_HOLD_MS = 120;
 // mouse-hardware jitter.
 const HOVER_STILL_PX = 2;
 
+// Frosted-glass rim around the look-through disc: a glass tube that bends and blurs the edge of
+// the destination view, catches a highlight along its bevel, and carries a soft white/cyan light
+// that sweeps continuously around it, with a faint halo outside. Drawn in the ring's local plane
+// (the disc has radius 1): glass from 0.9 to 1.12, halo out to 1.24.
+const RING_INNER = 0.9;
+const RING_GLASS = 1.12;
+const RING_OUTER = 1.24;
+
+function createGlassRingMaterial(view: THREE.Texture) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uView: { value: view },
+      uHasView: { value: 1 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vLocal;
+      void main() {
+        vLocal = position.xy;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform sampler2D uView;
+      uniform float uHasView;
+      varying vec2 vLocal;
+      const float INNER = ${RING_INNER.toFixed(3)};
+      const float GLASS = ${RING_GLASS.toFixed(3)};
+      const float OUTER = ${RING_OUTER.toFixed(3)};
+      const float TAU = 6.28318530718;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      void main() {
+        float r = length(vLocal);
+        vec2 dir = vLocal / max(r, 1e-4);
+        float angle = atan(vLocal.y, vLocal.x);
+        // Light sweeping around the rim: a bright head with a long fading tail, plus a fainter
+        // counter-sweep, breathing gently.
+        float phase = fract(angle / TAU - uTime * 0.22);
+        float lead = smoothstep(0.93, 1.0, phase);
+        float sweep = pow(1.0 - phase, 5.0) + lead * lead;
+        float phase2 = fract(-angle / TAU - uTime * 0.13 + 0.5);
+        float lead2 = smoothstep(0.95, 1.0, phase2);
+        sweep += 0.35 * (pow(1.0 - phase2, 8.0) + lead2 * lead2);
+        float breathe = 0.85 + 0.15 * sin(uTime * 2.1);
+
+        if (r > GLASS) {
+          // Soft halo outside the glass.
+          float h = (r - GLASS) / (OUTER - GLASS);
+          float halo = exp(-h * 4.0) * (1.0 - smoothstep(0.7, 1.0, h));
+          vec3 col = mix(vec3(0.45, 0.85, 1.0), vec3(1.0), sweep * 0.6);
+          float a = halo * (0.18 + 0.55 * sweep) * breathe;
+          if (a < 0.003) discard;
+          gl_FragColor = vec4(col * (0.8 + sweep), a);
+          return;
+        }
+
+        // Across the tube: -1 at the inner edge, +1 at the outer edge; the surface bulges toward
+        // the viewer like a rounded glass bead.
+        float x = (r - INNER) / (GLASS - INNER) * 2.0 - 1.0;
+        float bulge = sqrt(max(0.0, 1.0 - x * x));
+        vec3 n = normalize(vec3(dir * x * 0.9, bulge + 0.15));
+
+        // Refraction: the glass bends the edge of the destination view into the rim, frosted
+        // by a small jittered blur.
+        vec3 behind = vec3(0.0);
+        float bend = INNER - 0.1 * x - 0.06 * bulge;
+        for (int i = 0; i < 6; i++) {
+          float fi = float(i);
+          vec2 jitter = vec2(hash(vLocal * 91.0 + fi), hash(vLocal * 57.0 + fi * 3.1)) - 0.5;
+          vec2 uv = 0.5 + 0.5 * (dir * bend + jitter * 0.045);
+          behind += texture2D(uView, clamp(uv, 0.0, 1.0)).rgb;
+        }
+        behind /= 6.0;
+        vec3 frost = vec3(0.86, 0.93, 1.0);
+        vec3 glass = mix(frost, behind * 1.05 + frost * 0.25, 0.65 * uHasView);
+        // Fine frosted grain.
+        glass *= 0.94 + 0.08 * hash(floor(vLocal * 900.0));
+
+        // Bevel lighting: a key highlight from the upper left, Fresnel brightening at the edges.
+        vec3 L = normalize(vec3(-0.45, 0.6, 0.66));
+        float spec = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 28.0);
+        float fresnel = pow(1.0 - n.z, 2.5);
+        vec3 glow = mix(vec3(0.35, 0.82, 1.0), vec3(1.0), clamp(sweep, 0.0, 1.0)) * sweep * breathe;
+
+        vec3 col = glass * (0.75 + 0.25 * bulge) + fresnel * 0.45 + spec * 1.2 + glow * (0.55 + 0.9 * bulge);
+        // Thin bright lines where the glass meets the view and the halo.
+        float edges = exp(-pow((x + 1.0) * 14.0, 2.0)) + exp(-pow((1.0 - x) * 14.0, 2.0));
+        col += edges * (0.35 + 0.6 * sweep);
+        float aa = smoothstep(-1.0, -0.9, x) * (1.0 - smoothstep(0.9, 1.0, x));
+        float alpha = clamp(0.55 + 0.3 * fresnel + spec + 0.35 * sweep + edges * 0.4, 0.0, 1.0);
+        gl_FragColor = vec4(col, alpha * max(aa, edges * 0.8));
+      }`,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+}
+
 function resolvePreviewDestination(scene: THREE.Scene, camera: THREE.Camera, hit: ResolvedSurfaceHit): PortalDestination | null {
   const params = { camEye: camera.position, camYaw: extractYawFromQuaternion(camera.quaternion),
     eyeHeight: PORTAL_EYE_HEIGHT, clearanceDMax: 3.5, maxWallThickness: 0.6 };
@@ -82,6 +182,9 @@ export function TeleportPortalPreview({
     () => new THREE.WebGLRenderTarget(384, 384, { generateMipmaps: false }),
     []
   );
+  const ringMaterial = useMemo(() => createGlassRingMaterial(renderTarget.texture), [renderTarget]);
+  useEffect(() => () => ringMaterial.dispose(), [ringMaterial]);
+  useEffect(() => { ringMaterial.uniforms.uHasView.value = postprocessingActive ? 0 : 1; }, [ringMaterial, postprocessingActive]);
   const frameCountRef = useRef(0);
   const destinationRef = useRef<PortalDestination | null>(null);
   const lastHitObjectRef = useRef<THREE.Object3D | null>(null);
@@ -182,7 +285,8 @@ export function TeleportPortalPreview({
     // were previously each tearing this component down and rebuilding it.
   }, [renderTarget, camera]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    ringMaterial.uniforms.uTime.value += delta;
     const disc = discRef.current;
     const ring = ringRef.current;
     const portalCam = portalCameraRef.current;
@@ -446,9 +550,8 @@ export function TeleportPortalPreview({
           <meshBasicMaterial map={renderTarget.texture} transparent toneMapped={false} depthTest={false} depthWrite={false} />
         )}
       </mesh>
-      <mesh ref={ringRef} renderOrder={999} visible={false}>
-        <ringGeometry args={[0.95, 1.02, 48]} />
-        <meshBasicMaterial color="#0063A3" transparent toneMapped={false} side={THREE.DoubleSide} depthTest={false} depthWrite={false} />
+      <mesh ref={ringRef} renderOrder={1000} visible={false} material={ringMaterial}>
+        <ringGeometry args={[RING_INNER, RING_OUTER, 128, 1]} />
       </mesh>
       {hoverTooltip && (
         <Html position={hoverTooltip.point} center occlude={false} zIndexRange={[50, 60]} style={{ pointerEvents: 'none' }}>

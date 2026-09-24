@@ -36,6 +36,9 @@ export interface WaterUniforms {
   uReflection: { value: THREE.Texture | null };
   uReflectionMatrix: { value: THREE.Matrix4 };
   uUseReflection: { value: number };
+  /** 0 when dry; up to 1 in heavy rain, which rings the surface with drop ripples. */
+  uRain: { value: number };
+  uRainTime: { value: number };
 }
 
 export function createWaterUniforms(): WaterUniforms {
@@ -46,6 +49,7 @@ export function createWaterUniforms(): WaterUniforms {
     uLakeWaves: { value: 0 }, uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.2).normalize() },
     uHeights: { value: null }, uBounds: { value: new THREE.Vector4(0, 0, 1, 1) }, uBaseY: { value: 0 }, uHasTerrain: { value: 0 },
     uReflection: { value: null }, uReflectionMatrix: { value: new THREE.Matrix4() }, uUseReflection: { value: 0 },
+    uRain: { value: 0 }, uRainTime: { value: 0 },
   };
 }
 
@@ -54,10 +58,39 @@ uniform sampler2D uSurf, uCaus, uHeights, uReflection;
 uniform mat4 uReflectionMatrix;
 uniform float uUseReflection;
 uniform vec2 uCausShift;
-uniform float uL, uLevel, uFallbackDepth, uLakeWaves, uBaseY, uHasTerrain;
+uniform float uL, uLevel, uFallbackDepth, uLakeWaves, uBaseY, uHasTerrain, uRain, uRainTime;
 uniform vec3 uAbsorb, uScatter, uSunDir;
 uniform vec4 uBounds;
 const float WATER_IOR = 1.3335;
+
+float rainHash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+// Raindrop rings: each cell of a few offset grids holds one drop at a random time and place,
+// whose ring expands and dies away. Returns the surface slope the rings add.
+vec2 rainRipples(vec2 xz) {
+  vec2 slope = vec2(0.0);
+  for (int layer = 0; layer < 3; layer++) {
+    float fl = float(layer);
+    vec2 p = xz * 3.2 + vec2(fl * 17.3, fl * 29.1);
+    vec2 cell = floor(p), f = fract(p);
+    float h = rainHash(cell + fl * 7.7);
+    // Heavier rain: more of the cells hold a drop at any moment.
+    if (h > 0.25 + 0.75 * uRain) continue;
+    float t = fract(uRainTime * (0.7 + 0.4 * h) + h * 13.0);
+    vec2 centre = 0.25 + 0.5 * vec2(rainHash(cell + 3.1 + fl), rainHash(cell + 8.9 + fl));
+    vec2 d = f - centre;
+    float r = length(d);
+    float x = r - t * 0.45;
+    float envelope = exp(-x * x * 900.0) * (1.0 - t) * (1.0 - t);
+    float wave = cos(x * 70.0) * envelope;
+    slope += (r > 1e-4 ? d / r : vec2(0.0)) * wave;
+  }
+  return slope * 0.35;
+}
 
 // Three octaves of the same tiling FFT patch, rotated so the tiling never lines up:
 // the patch itself, a finer copy for close-up detail, and a larger copy for lake swell.
@@ -71,6 +104,7 @@ vec3 waterNormal(vec2 xz, float distanceToEye) {
   float calm = mix(0.55, 1.0, uLakeWaves);
   vec2 slope = calm * (A.yz + 0.10 * (transpose(M) * B.yz) * exp(-distanceToEye * 0.05))
     + 0.6 * uLakeWaves * (transpose(M3) * D.yz);
+  if (uRain > 0.0) slope += rainRipples(xz) * uRain * (1.0 - smoothstep(15.0, 45.0, distanceToEye));
   // Sub-pixel slope spread (LEAN mapping): widens distant glints instead of sparkling noise.
   gSlopeVariance = calm * calm * (max(A.w - dot(A.yz, A.yz), 0.0) + 0.01 * max(B.w - dot(B.yz, B.yz), 0.0));
   return normalize(vec3(-slope.x, 1.0, -slope.y));
@@ -211,6 +245,6 @@ export function createWaterSurfaceMaterial(uniforms: WaterUniforms): THREE.MeshS
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-water-surface-v3';
+  material.customProgramCacheKey = () => 'polyform-water-surface-v4';
   return material;
 }

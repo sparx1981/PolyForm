@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useApp } from '../AppContext';
 import { BirdSystem, BeeSystem } from './animations/NatureAnimations';
+import { FlockSystem, FLOCK_DEFAULTS } from './animations/FlockSystem';
 
 interface ParticleSystemProps {
   type: 'confetti' | 'fire' | 'smoke' | 'sparks' | 'magic_aura';
@@ -178,6 +179,23 @@ export const Effects: React.FC = () => {
               bodyColor={anim.birdBodyColor}
               breastColor={anim.birdBreastColor}
               beakColor={anim.birdBeakColor}
+            />
+          );
+        }
+        if (anim.type === 'flock') {
+          const birdType = anim.flockBirdType ?? 'starling';
+          return (
+            <FlockSystem
+              key={anim.id}
+              id={anim.id}
+              position={anim.position}
+              count={anim.density}
+              altitude={anim.flockAltitude ?? FLOCK_DEFAULTS[birdType].altitude}
+              birdType={birdType}
+              scale={anim.scale}
+              speed={anim.speed}
+              looping={anim.looping}
+              playing={anim.playing}
             />
           );
         }

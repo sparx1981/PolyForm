@@ -58,7 +58,7 @@ export default function WalkModeOverlay() {
       {walkModePhase === 'walking' && hudVisible && !isTouchDevice && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
           <div className="bg-gray-900/80 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg border border-gray-700 text-center">
-            WASD to move · Mouse to look · Space to jump · Esc to exit
+            WASD to move · Mouse to look · Space to jump · Shift to sprint · C to crouch · Esc to exit
           </div>
         </div>
       )}
@@ -82,6 +82,7 @@ export default function WalkModeOverlay() {
 function TouchControls({ bridge }: { bridge: ReturnType<typeof useApp>['walkBridgeRef']['current'] }) {
   const joystickBaseRef = useRef<HTMLDivElement>(null);
   const [knobOffset, setKnobOffset] = useState({ x: 0, y: 0 });
+  const [crouched, setCrouched] = useState(false);
   const activeJoystickTouchRef = useRef<number | null>(null);
   const activeLookTouchRef = useRef<{ id: number; x: number; y: number } | null>(null);
 
@@ -200,6 +201,17 @@ function TouchControls({ bridge }: { bridge: ReturnType<typeof useApp>['walkBrid
         }}
       >
         Jump
+      </button>
+
+      <button
+        className={`absolute bottom-28 right-8 w-16 h-16 rounded-full border text-white text-xs font-semibold ${crouched ? 'bg-white/40 border-white/80' : 'bg-white/15 border-white/40'}`}
+        style={{ pointerEvents: 'auto' }}
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          setCrouched(bridge.inputState.toggleTouchCrouch());
+        }}
+      >
+        Crouch
       </button>
 
       <button

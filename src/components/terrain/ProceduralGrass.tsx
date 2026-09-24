@@ -5,6 +5,7 @@ import { Shape, TerrainModifier, GrassSettings, DEFAULT_GRASS_SETTINGS } from '.
 import { useApp } from '../../AppContext';
 import { sampleTerrainElevation } from '../../lib/archRoomAssembly';
 import { extractExclusionFootprints } from '../../lib/terrain/grassGeometry';
+import { groundUnderRay } from '../../lib/terrain/groundRay';
 import { createBladeTemplate, createGrassField, grassRings, GrassTrail, TRAIL_RECOVERY_SECONDS } from '../../lib/terrain/bladeGrass';
 import {
   bladeWindStrength, createBladeGrassMaterial, createBladeGrassUniforms, createBladeRingUniforms,
@@ -21,7 +22,27 @@ const forward = new THREE.Vector3();
 const cameraPosition = new THREE.Vector3();
 const focus = new THREE.Vector3();
 const centre = new THREE.Vector3();
+const nearGround = new THREE.Vector3();
+const bottomRay = new THREE.Ray();
 const horizontalDistance = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
+
+/**
+ * The closest ground the camera can see: where the ray through the bottom centre of the screen
+ * meets the terrain, or straight below when the view looks down far enough to include it.
+ */
+function nearestVisibleGround(camera: THREE.Camera, terrain: Shape, target: THREE.Vector3) {
+  camera.getWorldPosition(cameraPosition);
+  const groundBelow = sampleTerrainElevation(cameraPosition.x, cameraPosition.z, terrain);
+  camera.getWorldDirection(forward);
+  bottomRay.origin.copy(cameraPosition);
+  bottomRay.direction.set(0, -1, 0.5).unproject(camera).sub(cameraPosition).normalize();
+  const forwardFlat = Math.hypot(forward.x, forward.z);
+  const bottomAlong = forwardFlat > 1e-4 ? (bottomRay.direction.x * forward.x + bottomRay.direction.z * forward.z) / forwardFlat : 0;
+  // The bottom edge already points past straight down: the ground under the camera is in view.
+  if (bottomAlong <= 0 || cameraPosition.y <= groundBelow) return target.set(cameraPosition.x, groundBelow, cameraPosition.z);
+  const hit = groundUnderRay(bottomRay, (x, z) => sampleTerrainElevation(x, z, terrain), 400);
+  return hit ? target.copy(hit) : target.set(cameraPosition.x, groundBelow, cameraPosition.z);
+}
 
 /**
  * Where the grass rings are centred. Walking: under the walker. Editor views: where the view
@@ -129,8 +150,8 @@ export function ProceduralGrass({
     grassFocus(camera, terrainShape, walking, focus);
     if (walking) trail.step(focus.x, focus.z, clock.elapsedTime);
 
-    // Level of detail is measured from the camera while walking or close to the ground; from
-    // far editor views it is measured around the focus so the viewed area keeps its blades.
+    // Level of detail is measured from the camera in perspective views; plan (orthographic)
+    // views measure it around the focus so the viewed area keeps its blades.
     const orthographic = (camera as THREE.OrthographicCamera).isOrthographicCamera;
     // Pixel footprint, so the shader can keep distant blades at least a pixel wide.
     if (orthographic) {
@@ -143,19 +164,27 @@ export function ProceduralGrass({
       shared.uPixelAngle.value = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) / Math.max(1, size.height);
     }
     const viewDistance = cameraPosition.distanceTo(focus);
-    if (walking || (!orthographic && viewDistance < 25)) {
+    if (walking || !orthographic) {
+      // Perspective views: density always falls off with the true distance from the camera, so
+      // the ground nearest the viewer is always the densest. Measuring from the look-at point
+      // instead left a dense band far away and only coarse, sparse blades at the viewer's feet.
       shared.uLodOrigin.value.copy(cameraPosition);
       shared.uLodVertical.value = 1;
-      shared.uLodBias.value = 0;
-      // Centre slightly ahead of the camera: blades behind it are never seen.
-      const ahead = Math.min(horizontalDistance(cameraPosition, focus), rings[0].radius * 0.3);
-      if (ahead > 1e-3) centre.copy(focus).sub(cameraPosition).setY(0).setLength(ahead).add(cameraPosition);
-      else centre.copy(cameraPosition);
+      // From high up, the nearest visible ground still gets the finest ring: distances are
+      // counted from there rather than from the camera itself.
+      const near = walking ? cameraPosition : nearestVisibleGround(camera, terrainShape, nearGround);
+      const nearDistance = cameraPosition.distanceTo(near);
+      shared.uLodBias.value = walking ? 0 : -Math.max(0, nearDistance - 2);
+      // Centre slightly ahead of the nearest ground: blades behind or below the view are never seen.
+      const start = walking || nearDistance < 2 ? cameraPosition : near;
+      const ahead = Math.min(horizontalDistance(start, focus), rings[0].radius * 0.3);
+      if (ahead > 1e-3) centre.copy(focus).sub(start).setY(0).setLength(ahead).add(start);
+      else centre.copy(start);
     } else {
       shared.uLodOrigin.value.copy(focus);
       shared.uLodVertical.value = 0;
       const ortho = camera as THREE.OrthographicCamera;
-      const viewSpan = orthographic ? (ortho.top - ortho.bottom) / ortho.zoom : viewDistance;
+      const viewSpan = (ortho.top - ortho.bottom) / ortho.zoom;
       shared.uLodBias.value = Math.max(0, viewSpan - 15) * 0.3;
       centre.copy(focus);
     }

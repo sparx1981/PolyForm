@@ -42,6 +42,10 @@ uniform float maxPointSize;
 uniform float kind;
 uniform float altitude;
 uniform float thickness;
+uniform sampler2D occlusionMap;
+uniform mat4 occlusionMatrix;
+uniform float occlusionEnabled;
+uniform float occlusionBias;
 varying float particleAlpha;
 varying float angle;
 varying float cloudSeed;
@@ -65,11 +69,20 @@ void main() {
   p.xz = mod(p.xz + bounds.xz * 0.5, bounds.xz) - bounds.xz * 0.5;
   vec2 edge = 1.0 - abs(p.xz) / (bounds.xz * 0.5);
   particleAlpha *= smoothstep(0.0, 0.08, min(edge.x, edge.y));
+  if (kind < 1.5 && occlusionEnabled > 0.5) {
+    // Rain and snow stop at the first solid surface below the sky: roofs, floors, terrain.
+    // The occlusion map is a depth image of the scene seen straight down from above.
+    vec4 fromAbove = occlusionMatrix * modelMatrix * vec4(p, 1.0);
+    if (all(greaterThan(fromAbove.xy, vec2(0.0))) && all(lessThan(fromAbove.xy, vec2(1.0)))) {
+      float surface = texture2D(occlusionMap, fromAbove.xy).r;
+      if (fromAbove.z > surface + occlusionBias) particleAlpha = 0.0;
+    }
+  }
   vec4 view = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * view;
   float perspective = projectionMatrix[2][3] == -1.0 ? 1.0 / max(0.1, -view.z) : 1.0;
   gl_PointSize = clamp(particleSize * pixelScale * abs(projectionMatrix[1][1]) * perspective, 1.0, maxPointSize);
-  if (view.z >= 0.0) { gl_PointSize = 1.0; particleAlpha = 0.0; }
+  if (view.z >= 0.0 || particleAlpha <= 0.0) { gl_PointSize = 1.0; particleAlpha = 0.0; }
   vec3 viewVelocity = mat3(modelViewMatrix) * vec3(wind.x, -(fallSpeed + gravity * age), wind.y);
   angle = atan(viewVelocity.y, viewVelocity.x) - 1.570796327;
   cloudSeed = seed.w * 53.0;
@@ -132,12 +145,37 @@ void main() {
 }
 `;
 
+/** Scene layer used only by the weather's top-down occlusion render. */
+export const WEATHER_OCCLUDER_LAYER = 30;
+const OCCLUSION_RESOLUTION = 1024;
+/** The occlusion camera sits this far above the top of the weather volume. */
+const OCCLUSION_HEADROOM = 150;
+const OCCLUSION_DEPTH = 700;
+
+/** Solid scene geometry that stops rain and snow: modelled shapes, kernel geometry and terrain. */
+export function isWeatherOccluder(object: THREE.Object3D): boolean {
+  const mesh = object as THREE.Mesh;
+  if (!mesh.isMesh || (object as THREE.Points).isPoints || (object as THREE.Line).isLine) return false;
+  if (object.name === 'procedural-grass-mesh' || object.name.startsWith('weather-')) return false;
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  if (materials.every(material => !material || material.visible === false || (material.transparent && material.opacity < 0.05))) return false;
+  for (let node: THREE.Object3D | null = object; node; node = node.parent) {
+    if (node.userData?.isShape || node.userData?.isKernelGeometry) return true;
+  }
+  return false;
+}
+
 /** Analytic GPU particles: no per-frame attribute writes, simulation loops or readbacks. */
 export class WeatherSystem {
   readonly group = new THREE.Group();
   private layers = new Map<WeatherKind, { points: THREE.Points; options: WeatherLayerOptions }>();
   private shared = { time: { value: 0 }, bounds: { value: new THREE.Vector3(80, 40, 80) },
-    wind: { value: new THREE.Vector2(1.2, 0.3) }, pixelScale: { value: 540 }, maxPointSize: { value: 64 }, volumetric: { value: 0 } };
+    wind: { value: new THREE.Vector2(1.2, 0.3) }, pixelScale: { value: 540 }, maxPointSize: { value: 64 }, volumetric: { value: 0 },
+    occlusionMap: { value: null as THREE.Texture | null }, occlusionMatrix: { value: new THREE.Matrix4() },
+    occlusionEnabled: { value: 0 }, occlusionBias: { value: 0.08 / OCCLUSION_DEPTH } };
+  private occlusionTarget?: THREE.WebGLRenderTarget;
+  private readonly occlusionCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, OCCLUSION_DEPTH);
+  private readonly occlusionMaterial = new THREE.MeshDepthMaterial({ side: THREE.DoubleSide });
   private seed: number;
   private parent?: THREE.Object3D;
 
@@ -216,10 +254,74 @@ export class WeatherSystem {
       ['turbulence', 'turbulence'], ['particleSize', 'size']] as const) material.uniforms[uniform].value = options[option];
   }
   setEnabled(kind: WeatherKind, enabled: boolean) { const layer = this.layers.get(kind); if (layer) layer.points.visible = enabled; }
+
+  /** Whether any falling layer (rain or snow) is showing, i.e. whether occlusion matters. */
+  get hasPrecipitation() {
+    return (['rain', 'snow'] as const).some(kind => this.layers.get(kind)?.points.visible);
+  }
+
+  /**
+   * Renders the solid scene straight down from above the weather volume into a depth map, so
+   * rain and snow disappear beneath roofs, floors and the ground instead of falling through
+   * them into buildings. Cheap enough to refresh every few frames (depth only, no shadows).
+   */
+  updateOcclusion(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
+    if (!this.occlusionTarget) {
+      this.occlusionTarget = new THREE.WebGLRenderTarget(OCCLUSION_RESOLUTION, OCCLUSION_RESOLUTION, {
+        depthTexture: new THREE.DepthTexture(OCCLUSION_RESOLUTION, OCCLUSION_RESOLUTION, THREE.UnsignedIntType),
+        depthBuffer: true, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false,
+      });
+      this.occlusionTarget.depthTexture!.minFilter = this.occlusionTarget.depthTexture!.magFilter = THREE.NearestFilter;
+      this.shared.occlusionMap.value = this.occlusionTarget.depthTexture;
+    }
+    const bounds = this.shared.bounds.value;
+    const span = Math.max(bounds.x, bounds.z);
+    // Snap to whole texels so the map does not shimmer as the camera moves.
+    const texel = span / OCCLUSION_RESOLUTION;
+    const centre = this.group.getWorldPosition(new THREE.Vector3());
+    const cx = Math.round(centre.x / texel) * texel, cz = Math.round(centre.z / texel) * texel;
+    const top = centre.y + bounds.y + OCCLUSION_HEADROOM;
+    const camera = this.occlusionCamera;
+    camera.left = -span / 2; camera.right = span / 2; camera.top = span / 2; camera.bottom = -span / 2;
+    camera.near = 1; camera.far = OCCLUSION_DEPTH;
+    camera.position.set(cx, top, cz);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(cx, top - 1, cz);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    camera.layers.set(WEATHER_OCCLUDER_LAYER);
+    scene.traverse(object => {
+      if (isWeatherOccluder(object)) object.layers.enable(WEATHER_OCCLUDER_LAYER);
+      else object.layers.disable(WEATHER_OCCLUDER_LAYER);
+    });
+    // uv = xy, depth = z, all in [0, 1].
+    this.shared.occlusionMatrix.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
+      .multiply(camera.projectionMatrix).multiply(camera.matrixWorldInverse);
+
+    const previousTarget = renderer.getRenderTarget();
+    const previousOverride = scene.overrideMaterial;
+    const previousBackground = scene.background;
+    const previousShadowAuto = renderer.shadowMap.autoUpdate;
+    try {
+      scene.overrideMaterial = this.occlusionMaterial;
+      scene.background = null;
+      renderer.shadowMap.autoUpdate = false;
+      renderer.setRenderTarget(this.occlusionTarget);
+      renderer.clear(true, true, false);
+      renderer.render(scene, camera);
+      this.shared.occlusionEnabled.value = 1;
+    } finally {
+      renderer.setRenderTarget(previousTarget);
+      scene.overrideMaterial = previousOverride;
+      scene.background = previousBackground;
+      renderer.shadowMap.autoUpdate = previousShadowAuto;
+    }
+  }
   update(deltaTime: number) { this.shared.time.value += finite(deltaTime, 'deltaTime', 0); }
   dispose() {
     this.group.removeFromParent();
     for (const { points } of this.layers.values()) { points.geometry.dispose(); (points.material as THREE.Material).dispose(); }
+    this.occlusionTarget?.depthTexture?.dispose(); this.occlusionTarget?.dispose(); this.occlusionMaterial.dispose();
     this.layers.clear(); this.group.clear(); this.parent = undefined;
   }
 }

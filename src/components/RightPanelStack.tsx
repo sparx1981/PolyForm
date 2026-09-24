@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WeatherControls } from './graphics/WeatherControls';
+import { FLOCK_DEFAULTS } from './animations/FlockSystem';
 import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
 import { HeightMapPicker } from './graphics/HeightMapPicker';
@@ -2804,7 +2805,7 @@ export default function RightPanelStack() {
                         <div className="space-y-2">
                           <label className="text-[8px] text-gray-400 uppercase font-bold">Effect Type</label>
                           <div className="grid grid-cols-2 gap-1 px-1">
-                            {['none', 'confetti', 'fire', 'smoke', 'sparks', 'magic_aura', 'bird', 'bee'].map((type) => (
+                            {['none', 'confetti', 'fire', 'smoke', 'sparks', 'magic_aura', 'bird', 'bee', 'flock'].map((type) => (
                               <button
                                 key={type}
                                 onClick={() => setAnimations(prev => prev.map(a => {
@@ -2817,7 +2818,13 @@ export default function RightPanelStack() {
                                   } else if (type === 'bee' && (a.density > 50 || a.density < 3)) {
                                     newDensity = 8;
                                     newScale = 1;
-                                  } else if (type !== 'bird' && type !== 'bee' && a.density < 100) {
+                                  } else if (type === 'flock' && a.type !== 'flock') {
+                                    const birdType = a.flockBirdType ?? 'starling';
+                                    newDensity = FLOCK_DEFAULTS[birdType].count;
+                                    newScale = 1;
+                                    return { ...a, type: 'flock', density: newDensity, scale: newScale, flockBirdType: birdType,
+                                      flockAltitude: a.flockAltitude ?? FLOCK_DEFAULTS[birdType].altitude };
+                                  } else if (type !== 'bird' && type !== 'bee' && type !== 'flock' && a.density < 100) {
                                     newDensity = 1000;
                                   }
                                   return { ...a, type: type as any, density: newDensity, scale: newScale };
@@ -2834,6 +2841,54 @@ export default function RightPanelStack() {
                             ))}
                           </div>
                         </div>
+
+                        {anim.type === 'flock' && (
+                          <div className="space-y-2">
+                            <label className="text-[8px] text-gray-400 uppercase font-bold">Bird type</label>
+                            <div className="grid grid-cols-3 gap-1 px-1">
+                              {([
+                                ['starling', 'Starlings', 'Swirling murmuration'],
+                                ['geese', 'Geese', 'V formation, slow wing beats'],
+                                ['seagull', 'Seagulls', 'Soaring circles, mostly gliding'],
+                              ] as const).map(([birdType, label, hint]) => (
+                                <button
+                                  key={birdType}
+                                  title={hint}
+                                  onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? {
+                                    ...a,
+                                    flockBirdType: birdType,
+                                    // Each kind of bird has its own natural flock size.
+                                    density: (a.flockBirdType ?? 'starling') === birdType ? a.density : FLOCK_DEFAULTS[birdType].count,
+                                  } : a))}
+                                  className={cn(
+                                    "py-1 text-[8px] font-bold rounded border transition-all truncate px-1",
+                                    (anim.flockBirdType ?? 'starling') === birdType
+                                      ? "bg-trimble-blue text-white border-trimble-blue"
+                                      : "bg-transparent text-gray-500 border-gray-200 hover:border-gray-300 dark:border-gray-600"
+                                  )}
+                                >
+                                  {label.toUpperCase()}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
+                                <span>Altitude</span>
+                                <span>{Math.round(anim.flockAltitude ?? FLOCK_DEFAULTS[anim.flockBirdType ?? 'starling'].altitude)} m</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={10}
+                                max={250}
+                                step={5}
+                                value={anim.flockAltitude ?? FLOCK_DEFAULTS[anim.flockBirdType ?? 'starling'].altitude}
+                                onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, flockAltitude: parseFloat(e.target.value) } : a))}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                              />
+                            </div>
+                            <p className="text-[8px] text-gray-400 italic px-1">The flock crosses the sky over the animation's position. Use Set Position to choose where it passes.</p>
+                          </div>
+                        )}
 
                         {anim.type === 'bird' && (
                           <div className="space-y-2">
@@ -2861,15 +2916,15 @@ export default function RightPanelStack() {
                         <div className="space-y-1">
                           <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
                             <span>
-                              {anim.type === 'bird' ? 'Bird Count' : anim.type === 'bee' ? 'Bee Swarm Size' : 'Density'}
+                              {anim.type === 'bird' || anim.type === 'flock' ? 'Bird Count' : anim.type === 'bee' ? 'Bee Swarm Size' : 'Density'}
                             </span>
                             <span>{anim.density}</span>
                           </div>
                           <input 
                             type="range" 
-                            min={anim.type === 'bird' ? 1 : anim.type === 'bee' ? 3 : 100} 
-                            max={anim.type === 'bird' ? 5 : anim.type === 'bee' ? 30 : 5000} 
-                            step={anim.type === 'bird' || anim.type === 'bee' ? 1 : 100}
+                            min={anim.type === 'bird' ? 1 : anim.type === 'bee' ? 3 : anim.type === 'flock' ? 3 : 100} 
+                            max={anim.type === 'bird' ? 5 : anim.type === 'bee' ? 30 : anim.type === 'flock' ? FLOCK_DEFAULTS[anim.flockBirdType ?? 'starling'].maxCount : 5000} 
+                            step={anim.type === 'bird' || anim.type === 'bee' || anim.type === 'flock' ? 1 : 100}
                             value={anim.density}
                             onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, density: parseInt(e.target.value) } : a))}
                             className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
@@ -2878,13 +2933,13 @@ export default function RightPanelStack() {
 
                         <div className="space-y-1">
                           <div className="flex justify-between text-[8px] text-gray-400 uppercase font-bold">
-                            <span>{anim.type === 'bird' || anim.type === 'bee' ? 'Scale' : 'Scale (Size)'}</span>
+                            <span>{anim.type === 'bird' || anim.type === 'bee' || anim.type === 'flock' ? 'Scale' : 'Scale (Size)'}</span>
                             <span>{(anim.scale || 1).toFixed(1)}</span>
                           </div>
                           <input 
                             type="range" 
-                            min={anim.type === 'bird' ? 0.4 : anim.type === 'bee' ? 0.5 : 0.1} 
-                            max={anim.type === 'bird' ? 3.0 : anim.type === 'bee' ? 3.0 : 100} 
+                            min={anim.type === 'bird' ? 0.4 : anim.type === 'bee' ? 0.5 : anim.type === 'flock' ? 0.5 : 0.1} 
+                            max={anim.type === 'bird' ? 3.0 : anim.type === 'bee' ? 3.0 : anim.type === 'flock' ? 4.0 : 100} 
                             step={0.1}
                             value={anim.scale || 1}
                             onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, scale: parseFloat(e.target.value) } : a))}

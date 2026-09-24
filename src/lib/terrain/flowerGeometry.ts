@@ -7,151 +7,348 @@ import {
   computeTerrainNormal
 } from './grassGeometry';
 
+/** Flower species with their own modelled geometry. */
+export type FlowerKind = 'daisy' | 'poppy' | 'buttercup' | 'lavender' | 'alpine';
+export const FLOWER_KINDS: FlowerKind[] = ['daisy', 'poppy', 'buttercup', 'lavender', 'alpine'];
+
 /**
- * Creates low-poly 3D geometry for low-lying wildflowers.
- * Features:
- *  - Low-lying leafy green stem base (aIsPetal = 0.0)
- *  - Cross-card and angled petal blossom at top (aIsPetal = 1.0)
- *  - aCenterDist (0.0 = center stamen, 1.0 = petal edge)
- *  - aHeightPercent for wind animation swaying
+ * What each vertex is, for colouring in the shader (aPart):
+ * stem, leaf, petal, flower centre, dark centre (poppy seed pod), lavender floret.
  */
-export function createWildflowerGeometry(): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const heightPercents: number[] = [];
-  const isPetalAttrs: number[] = [];
-  const centerDists: number[] = [];
-  const indices: number[] = [];
+export const FLOWER_PART = { stem: 0, leaf: 1, petal: 2, centre: 3, pod: 4, floret: 5 } as const;
 
-  let vertIdx = 0;
+type Vec3 = [number, number, number];
 
-  function addVertex(
-    x: number, y: number, z: number,
-    nx: number, ny: number, nz: number,
-    u: number, v: number,
-    hPct: number,
-    isPetal: number,
-    cDist: number
-  ): number {
-    positions.push(x, y, z);
-    normals.push(nx, ny, nz);
-    uvs.push(u, v);
-    heightPercents.push(hPct);
-    isPetalAttrs.push(isPetal);
-    centerDists.push(cDist);
-    return vertIdx++;
+/**
+ * Accumulates one flower model. Every vertex is attached to the stem at a fraction of its
+ * height (aAttach): the attach point is stretched with the instance's height in the shader
+ * while the vertex's offset from it keeps its real size in metres. So a taller flower has a
+ * longer stem, not bigger petals. Position y is stored as attach + offset.
+ */
+class FlowerBuilder {
+  positions: number[] = [];
+  attach: number[] = [];
+  part: number[] = [];
+  shade: number[] = [];
+  indices: number[] = [];
+
+  vertex(p: Vec3, attach: number, part: number, shade: number): number {
+    this.positions.push(p[0], p[1] + attach, p[2]);
+    this.attach.push(attach);
+    this.part.push(part);
+    this.shade.push(shade);
+    return this.attach.length - 1;
   }
 
-  function addQuad(
-    v0: [number, number, number, number, number, number, number, number, number, number, number],
-    v1: [number, number, number, number, number, number, number, number, number, number, number],
-    v2: [number, number, number, number, number, number, number, number, number, number, number],
-    v3: [number, number, number, number, number, number, number, number, number, number, number]
-  ) {
-    const idx0 = addVertex(...v0);
-    const idx1 = addVertex(...v1);
-    const idx2 = addVertex(...v2);
-    const idx3 = addVertex(...v3);
-
-    // Front face
-    indices.push(idx0, idx1, idx2);
-    indices.push(idx0, idx2, idx3);
-
-    // Double-sided back face
-    indices.push(idx2, idx1, idx0);
-    indices.push(idx3, idx2, idx0);
+  /**
+   * A curved strip (petal or leaf): the spine starts at `origin`, heads outward at `yaw`
+   * (radians around +y), starting at `tiltStart` above horizontal and bending to `tiltEnd` at
+   * the tip. `width(s)` is the full width along the strip (s = 0 base .. 1 tip); `cup` raises
+   * the edges into a spoon or bowl. `transform` places head parts (tilt/nod) around the stem top.
+   */
+  strip(opts: {
+    origin: Vec3; yaw: number; length: number; tiltStart: number; tiltEnd: number;
+    width: (s: number) => number; cup?: number; segments?: number; attach: number; part: number;
+    transform?: THREE.Matrix4; crinkle?: number; twist?: number;
+  }) {
+    const { origin, yaw, length, tiltStart, tiltEnd, width, cup = 0, segments = 3, attach, part, transform, crinkle = 0, twist = 0 } = opts;
+    const radial = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
+    const side = new THREE.Vector3(-Math.sin(yaw), 0, Math.cos(yaw));
+    const spine = new THREE.Vector3(...origin);
+    const step = length / segments;
+    const rows: number[][] = [];
+    for (let k = 0; k <= segments; k++) {
+      const s = k / segments;
+      if (k > 0) {
+        const tilt = tiltStart + (tiltEnd - tiltStart) * (s - 0.5 / segments);
+        spine.addScaledVector(radial, Math.cos(tilt) * step).add(new THREE.Vector3(0, Math.sin(tilt) * step, 0));
+      }
+      const w = width(s) / 2;
+      const tilt = tiltStart + (tiltEnd - tiltStart) * s;
+      // Up direction of the strip surface (perpendicular to the spine, in the radial plane).
+      const up = new THREE.Vector3(0, Math.cos(tilt), 0).addScaledVector(radial, -Math.sin(tilt));
+      const sideDir = side.clone().applyAxisAngle(radial, twist * s);
+      const row: number[] = [];
+      for (const t of [-1, 0, 1]) {
+        const wobble = crinkle * Math.sin((s * 7 + t * 3.1 + yaw * 5) * 2.3) * w;
+        const p = spine.clone().addScaledVector(sideDir, t * w).addScaledVector(up, Math.abs(t) * cup * w + wobble * Math.abs(t));
+        if (transform) p.applyMatrix4(transform);
+        row.push(this.vertex([p.x, p.y, p.z], attach, part, s));
+      }
+      rows.push(row);
+    }
+    for (let k = 0; k < segments; k++) {
+      const a = rows[k], b = rows[k + 1];
+      this.indices.push(a[0], a[1], b[1], a[0], b[1], b[0], a[1], a[2], b[2], a[1], b[2], b[1]);
+    }
   }
 
-  // --- 1. Main Stem (Vertical quad from 0.0 to 0.70) ---
-  const stemWidth = 0.025;
-  addQuad(
-    [-stemWidth, 0.0, 0.0,  0, 0, 1,  0.0, 0.0,  0.0,  0.0, 0.0],
-    [ stemWidth, 0.0, 0.0,  0, 0, 1,  1.0, 0.0,  0.0,  0.0, 0.0],
-    [ stemWidth * 0.8, 0.70, 0.0,  0, 0, 1,  1.0, 0.70, 0.70, 0.0, 0.0],
-    [-stemWidth * 0.8, 0.70, 0.0,  0, 0, 1,  0.0, 0.70, 0.70, 0.0, 0.0]
-  );
-
-  // --- 2. Low-lying Leaf blades at base (y = 0.15 to 0.40) ---
-  // Left leaf
-  addQuad(
-    [-0.01, 0.15, 0.0,  -0.5, 0.5, 0.7,  0.0, 0.15, 0.15, 0.0, 0.0],
-    [-0.01, 0.25, 0.0,  -0.5, 0.5, 0.7,  0.0, 0.25, 0.25, 0.0, 0.0],
-    [-0.09, 0.32, 0.04, -0.5, 0.5, 0.7,  1.0, 0.35, 0.35, 0.0, 0.0],
-    [-0.06, 0.18, 0.02, -0.5, 0.5, 0.7,  1.0, 0.18, 0.18, 0.0, 0.0]
-  );
-  // Right leaf
-  addQuad(
-    [ 0.01, 0.18, 0.0,   0.5, 0.5, 0.7,  0.0, 0.18, 0.18, 0.0, 0.0],
-    [ 0.06, 0.22, -0.03, 0.5, 0.5, 0.7,  1.0, 0.22, 0.22, 0.0, 0.0],
-    [ 0.09, 0.36, -0.05, 0.5, 0.5, 0.7,  1.0, 0.38, 0.38, 0.0, 0.0],
-    [ 0.01, 0.28, 0.0,   0.5, 0.5, 0.7,  0.0, 0.28, 0.28, 0.0, 0.0]
-  );
-
-  // --- 3. Blossom Petal Cards at Top (y = 0.65 to 1.05) ---
-  // We place 3 crossed vertical/angled petal quads rotated at 0°, 60°, and 120°
-  // and a horizontal top blossom disk to make it vibrant from top-down and isometric angles
-  const petalRadius = 0.14;
-  const flowerCenterY = 0.85;
-
-  const angles = [0, Math.PI / 3, (2 * Math.PI) / 3];
-  for (const rot of angles) {
-    const cosR = Math.cos(rot);
-    const sinR = Math.sin(rot);
-
-    const xL = -petalRadius * cosR;
-    const zL = -petalRadius * sinR;
-    const xR =  petalRadius * cosR;
-    const zR =  petalRadius * sinR;
-
-    const yBottom = flowerCenterY - 0.14;
-    const yTop = flowerCenterY + 0.14;
-
-    addQuad(
-      [xL, yBottom, zL,  -sinR, 0, cosR,  0.0, 0.0,  0.72, 1.0, 1.0],
-      [xR, yBottom, zR,  -sinR, 0, cosR,  1.0, 0.0,  0.72, 1.0, 1.0],
-      [xR, yTop,    zR,  -sinR, 0, cosR,  1.0, 1.0,  1.00, 1.0, 1.0],
-      [xL, yTop,    zL,  -sinR, 0, cosR,  0.0, 1.0,  1.00, 1.0, 1.0]
-    );
+  /** A thin three-sided stem from `from` (attach a0) to `to` (attach a1), in sections. */
+  stem(from: Vec3, to: Vec3, a0: number, a1: number, radius: number, sections = 3, part: number = FLOWER_PART.stem) {
+    const rings: number[][] = [];
+    for (let k = 0; k <= sections; k++) {
+      const s = k / sections;
+      const x = from[0] + (to[0] - from[0]) * s, z = from[2] + (to[2] - from[2]) * s;
+      const attach = a0 + (a1 - a0) * s;
+      const r = radius * (1 - 0.35 * s);
+      const ring: number[] = [];
+      for (let j = 0; j < 3; j++) {
+        const angle = (j / 3) * Math.PI * 2;
+        ring.push(this.vertex([x + Math.cos(angle) * r, 0, z + Math.sin(angle) * r], attach, part, s));
+      }
+      rings.push(ring);
+    }
+    for (let k = 0; k < sections; k++) {
+      for (let j = 0; j < 3; j++) {
+        const j2 = (j + 1) % 3;
+        const a = rings[k][j], b = rings[k][j2], c = rings[k + 1][j2], d = rings[k + 1][j];
+        this.indices.push(a, b, c, a, c, d);
+      }
+    }
   }
 
-  // --- 4. Horizontal Top Petal Star Disk (y = 0.88) ---
-  // Central stamen disc with petals radiating outward
-  const numPetals = 6;
-  const centerIdx = addVertex(0, flowerCenterY + 0.02, 0, 0, 1, 0, 0.5, 0.5, 0.88, 1.0, 0.0);
-
-  const ringIndices: number[] = [];
-  for (let p = 0; p < numPetals; p++) {
-    const th = (p / numPetals) * Math.PI * 2;
-    const px = Math.cos(th) * petalRadius;
-    const pz = Math.sin(th) * petalRadius;
-    ringIndices.push(addVertex(px, flowerCenterY + 0.01, pz, 0, 1, 0, 0.5 + px * 3, 0.5 + pz * 3, 0.87, 1.0, 1.0));
+  /** A low dome (flower centre / seed pod) of `radius` and `height` around the head origin. */
+  dome(radius: number, height: number, attach: number, part: number, transform?: THREE.Matrix4, sides = 8, lift = 0) {
+    const place = (x: number, y: number, z: number) => {
+      const p = new THREE.Vector3(x, y + lift, z);
+      if (transform) p.applyMatrix4(transform);
+      return p;
+    };
+    const top = place(0, height, 0);
+    const topIndex = this.vertex([top.x, top.y, top.z], attach, part, 1);
+    const mid: number[] = [], rim: number[] = [];
+    for (let j = 0; j < sides; j++) {
+      const angle = (j / sides) * Math.PI * 2;
+      const m = place(Math.cos(angle) * radius * 0.7, height * 0.75, Math.sin(angle) * radius * 0.7);
+      const r = place(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      mid.push(this.vertex([m.x, m.y, m.z], attach, part, 0.7));
+      rim.push(this.vertex([r.x, r.y, r.z], attach, part, 0.2));
+    }
+    for (let j = 0; j < sides; j++) {
+      const j2 = (j + 1) % sides;
+      this.indices.push(topIndex, mid[j2], mid[j], mid[j], mid[j2], rim[j2], mid[j], rim[j2], rim[j]);
+    }
   }
 
-  for (let p = 0; p < numPetals; p++) {
-    const next = (p + 1) % numPetals;
-    indices.push(centerIdx, ringIndices[p], ringIndices[next]);
-    indices.push(centerIdx, ringIndices[next], ringIndices[p]);
+  /** A tiny closed bud (lavender floret): a four-sided spindle. */
+  bud(centre: Vec3, size: number, attach: number, yaw: number, shade: number) {
+    const up = this.vertex([centre[0], centre[1] + size * 1.2, centre[2]], attach, FLOWER_PART.floret, shade);
+    const down = this.vertex([centre[0], centre[1] - size * 0.6, centre[2]], attach, FLOWER_PART.floret, shade * 0.8);
+    const ring: number[] = [];
+    for (let j = 0; j < 4; j++) {
+      const angle = yaw + (j / 4) * Math.PI * 2;
+      ring.push(this.vertex([centre[0] + Math.cos(angle) * size, centre[1], centre[2] + Math.sin(angle) * size], attach, FLOWER_PART.floret, shade));
+    }
+    for (let j = 0; j < 4; j++) {
+      const j2 = (j + 1) % 4;
+      this.indices.push(up, ring[j2], ring[j], down, ring[j], ring[j2]);
+    }
   }
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setAttribute('aHeightPercent', new THREE.Float32BufferAttribute(heightPercents, 1));
-  geometry.setAttribute('aIsPetal', new THREE.Float32BufferAttribute(isPetalAttrs, 1));
-  geometry.setAttribute('aCenterDist', new THREE.Float32BufferAttribute(centerDists, 1));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-
-  return geometry;
+  build(): THREE.BufferGeometry {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
+    geometry.setAttribute('aAttach', new THREE.Float32BufferAttribute(this.attach, 1));
+    geometry.setAttribute('aPart', new THREE.Float32BufferAttribute(this.part, 1));
+    geometry.setAttribute('aShade', new THREE.Float32BufferAttribute(this.shade, 1));
+    geometry.setIndex(this.indices);
+    // Normals from the curved, shared-vertex strips give petals soft, rounded shading. They are
+    // computed on a model with a short (15%) stem, close to how flowers are actually shown, so
+    // the stored unit-height stretch doesn't skew the stem's normals.
+    const flat = new Float32Array(this.positions);
+    for (let i = 0; i < this.attach.length; i++) flat[i * 3 + 1] -= this.attach[i] * 0.85;
+    const normalSource = new THREE.BufferGeometry();
+    normalSource.setAttribute('position', new THREE.BufferAttribute(flat, 3));
+    normalSource.setIndex(this.indices);
+    normalSource.computeVertexNormals();
+    geometry.setAttribute('normal', normalSource.getAttribute('normal'));
+    normalSource.dispose();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
 }
+
+const deg = THREE.MathUtils.degToRad;
+/** Rotation (nod) of a flower head about the horizontal axis, plus an offset. */
+function headTransform(nodDeg: number, offset: Vec3 = [0, 0, 0], yawDeg = 0) {
+  return new THREE.Matrix4().makeTranslation(...offset)
+    .multiply(new THREE.Matrix4().makeRotationY(deg(yawDeg)))
+    .multiply(new THREE.Matrix4().makeRotationX(deg(nodDeg)));
+}
+
+/** Basal rosette of leaves lying low around the stem foot. */
+function rosette(b: FlowerBuilder, count: number, length: number, width: number, tiltStart: number, tiltEnd: number, cup = 0.3, yawOffset = 0) {
+  for (let i = 0; i < count; i++) {
+    const yaw = yawOffset + (i / count) * Math.PI * 2 + (i % 2) * 0.35;
+    b.strip({
+      origin: [0, 0.002, 0], yaw, length: length * (0.8 + 0.2 * ((i * 7) % 3) / 2), tiltStart: deg(tiltStart), tiltEnd: deg(tiltEnd),
+      width: s => width * Math.sin(Math.PI * Math.min(1, 0.12 + s * 0.95)) ** 0.8, cup, segments: 3, attach: 0, part: FLOWER_PART.leaf,
+    });
+  }
+}
+
+function buildDaisy(): THREE.BufferGeometry {
+  const b = new FlowerBuilder();
+  b.stem([0, 0, 0], [0, 0, 0], 0, 1, 0.0011, 4);
+  rosette(b, 5, 0.032, 0.011, 25, 8, 0.25);
+  const head = headTransform(12);
+  // Ray florets: many narrow white petals, gently cupped at the base, tips relaxing outward.
+  const petals = 18;
+  for (let i = 0; i < petals; i++) {
+    const yaw = (i / petals) * Math.PI * 2 + (i % 2) * 0.08;
+    b.strip({
+      origin: [Math.cos(yaw) * 0.0045, 0.0012, Math.sin(yaw) * 0.0045], yaw, length: 0.016 + (i % 3) * 0.001,
+      tiltStart: deg(16), tiltEnd: deg(-6), width: s => 0.0042 * Math.min(1, Math.sin(Math.PI * (0.08 + s * 0.9)) * 1.6),
+      cup: 0.15, segments: 3, attach: 1, part: FLOWER_PART.petal, transform: head, twist: (i % 2 ? 0.25 : -0.25),
+    });
+  }
+  // Golden disc florets: a low dome.
+  b.dome(0.0058, 0.004, 1, FLOWER_PART.centre, head, 10);
+  return b.build();
+}
+
+function buildPoppy(): THREE.BufferGeometry {
+  const b = new FlowerBuilder();
+  // Slightly curved hairy stem with a pair of lobed leaves low down.
+  b.stem([0, 0, 0], [0.004, 0, 0.002], 0, 1, 0.0014, 4);
+  rosette(b, 4, 0.05, 0.016, 35, 10, 0.2);
+  for (const yaw of [0.4, 0.4 + Math.PI]) {
+    b.strip({ origin: [0, 0, 0], yaw, length: 0.03, tiltStart: deg(40), tiltEnd: deg(15), width: s => 0.009 * Math.sin(Math.PI * Math.min(1, 0.1 + s)) ** 0.7,
+      cup: 0.2, segments: 3, attach: 0.35, part: FLOWER_PART.leaf, crinkle: 0.25 });
+  }
+  const head = headTransform(8, [0.004, 0, 0.002]);
+  // Four broad, crinkled petals forming an open bowl; the outer pair a little larger.
+  for (let i = 0; i < 4; i++) {
+    const yaw = (i / 4) * Math.PI * 2 + (i % 2) * 0.12;
+    const size = i % 2 ? 1 : 1.12;
+    b.strip({
+      origin: [Math.cos(yaw) * 0.002, 0.001 + (i % 2) * 0.0015, Math.sin(yaw) * 0.002], yaw, length: 0.026 * size,
+      tiltStart: deg(62), tiltEnd: deg(22), width: s => 0.036 * size * Math.sin(Math.PI * (0.06 + s * 0.62)) ** 0.55,
+      cup: 0.28, segments: 4, attach: 1, part: FLOWER_PART.petal, transform: head, crinkle: 0.12,
+    });
+  }
+  // Seed pod with its flat, rayed cap, ringed by dark stamens.
+  b.dome(0.0055, 0.004, 1, FLOWER_PART.pod, head, 8, 0.003);
+  b.dome(0.0045, 0.0012, 1, FLOWER_PART.centre, head, 8, 0.007);
+  return b.build();
+}
+
+function buildButtercup(): THREE.BufferGeometry {
+  const b = new FlowerBuilder();
+  b.stem([0, 0, 0], [0, 0, 0], 0, 1, 0.0011, 4);
+  // Deeply lobed basal leaves: three broad lobes per leaf.
+  for (let i = 0; i < 3; i++) {
+    const yaw = (i / 3) * Math.PI * 2;
+    for (const lobe of [-0.45, 0, 0.45]) {
+      b.strip({ origin: [0, 0.003, 0], yaw: yaw + lobe, length: 0.02 * (lobe ? 0.8 : 1), tiltStart: deg(40), tiltEnd: deg(5),
+        width: s => 0.012 * Math.sin(Math.PI * Math.min(1, 0.15 + s * 0.85)) ** 0.6, cup: 0.35, segments: 2, attach: 0, part: FLOWER_PART.leaf });
+    }
+  }
+  // A small stem leaf where the stem branches.
+  b.strip({ origin: [0, 0, 0], yaw: 1.2, length: 0.014, tiltStart: deg(45), tiltEnd: deg(20), width: s => 0.004 * Math.sin(Math.PI * Math.min(1, 0.1 + s)),
+    segments: 2, attach: 0.55, part: FLOWER_PART.leaf });
+  const head = headTransform(15);
+  // Five glossy, rounded petals forming a shallow cup.
+  for (let i = 0; i < 5; i++) {
+    const yaw = (i / 5) * Math.PI * 2;
+    b.strip({
+      origin: [Math.cos(yaw) * 0.0018, 0.0008, Math.sin(yaw) * 0.0018], yaw, length: 0.013,
+      tiltStart: deg(52), tiltEnd: deg(24), width: s => 0.014 * Math.sin(Math.PI * (0.12 + s * 0.8)) ** 0.5,
+      cup: 0.4, segments: 3, attach: 1, part: FLOWER_PART.petal, transform: head,
+    });
+  }
+  b.dome(0.003, 0.0026, 1, FLOWER_PART.centre, head, 8, 0.0008);
+  return b.build();
+}
+
+function buildLavender(): THREE.BufferGeometry {
+  const b = new FlowerBuilder();
+  // A small clump: narrow grey-green leaves and three flower spikes of different heights.
+  for (let i = 0; i < 7; i++) {
+    const yaw = (i / 7) * Math.PI * 2 + 0.3;
+    b.strip({ origin: [0, 0.002, 0], yaw, length: 0.045 + (i % 3) * 0.006, tiltStart: deg(62), tiltEnd: deg(35),
+      width: s => 0.0035 * Math.sin(Math.PI * Math.min(1, 0.1 + s * 0.9)) ** 0.5, cup: 0.1, segments: 3, attach: 0, part: FLOWER_PART.leaf });
+  }
+  const spikes: Array<{ top: Vec3; reach: number; yaw: number }> = [
+    { top: [0, 0, 0], reach: 1, yaw: 0 },
+    { top: [0.022, 0, 0.01], reach: 0.86, yaw: 1.1 },
+    { top: [-0.016, 0, 0.02], reach: 0.78, yaw: 2.3 },
+  ];
+  for (const spike of spikes) {
+    b.stem([0, 0, 0], spike.top, 0, spike.reach, 0.001, 4);
+    // Whorls of tiny buds along the top third, tapering to the tip.
+    const whorls = 9;
+    for (let w = 0; w < whorls; w++) {
+      const s = w / (whorls - 1);
+      const attach = spike.reach * (0.66 + 0.34 * s);
+      const x = spike.top[0] * (attach / spike.reach), z = spike.top[2] * (attach / spike.reach);
+      const size = 0.0038 * (1 - 0.4 * s);
+      // Opposite pairs, each whorl turned a quarter from the last.
+      for (let j = 0; j < 2; j++) {
+        const yaw = spike.yaw + w * Math.PI / 2 + j * Math.PI;
+        b.bud([x + Math.cos(yaw) * size * 1.1, 0, z + Math.sin(yaw) * size * 1.1], size, attach, yaw, s);
+      }
+    }
+  }
+  return b.build();
+}
+
+function buildAlpine(): THREE.BufferGeometry {
+  const b = new FlowerBuilder();
+  rosette(b, 6, 0.016, 0.006, 20, 5, 0.3);
+  // A little cushion of three short stems, each with a starry five-petalled flower.
+  const heads: Array<{ top: Vec3; reach: number; nod: number; yaw: number }> = [
+    { top: [0, 0, 0], reach: 1, nod: 10, yaw: 0 },
+    { top: [0.012, 0, -0.006], reach: 0.8, nod: 25, yaw: 70 },
+    { top: [-0.01, 0, 0.009], reach: 0.66, nod: 30, yaw: 200 },
+  ];
+  for (const h of heads) {
+    b.stem([0, 0, 0], h.top, 0, h.reach, 0.0011, 3);
+    const head = headTransform(h.nod, h.top, h.yaw);
+    for (let i = 0; i < 5; i++) {
+      const yaw = (i / 5) * Math.PI * 2;
+      b.strip({
+        origin: [Math.cos(yaw) * 0.0014, 0.0006, Math.sin(yaw) * 0.0014], yaw, length: 0.0095,
+        tiltStart: deg(30), tiltEnd: deg(4), width: s => 0.007 * Math.sin(Math.PI * (0.1 + s * 0.9)) ** 0.9,
+        cup: 0.2, segments: 2, attach: h.reach, part: FLOWER_PART.petal, transform: head,
+      });
+    }
+    b.dome(0.0021, 0.0014, h.reach, FLOWER_PART.centre, head, 6);
+  }
+  return b.build();
+}
+
+const BUILDERS: Record<FlowerKind, () => THREE.BufferGeometry> = {
+  daisy: buildDaisy, poppy: buildPoppy, buttercup: buildButtercup, lavender: buildLavender, alpine: buildAlpine,
+};
+
+/** Detailed geometry for one flower species (see FlowerBuilder for the attribute layout). */
+export function createFlowerGeometry(kind: FlowerKind): THREE.BufferGeometry {
+  return BUILDERS[kind]();
+}
+
+/** Stem height multiplier per species, relative to the meadow's height settings. */
+export const FLOWER_HEIGHT_SCALE: Record<FlowerKind, number> = {
+  daisy: 0.8, poppy: 1.35, buttercup: 1.05, lavender: 1.45, alpine: 0.55,
+};
 
 export interface WildflowerInstanceData {
   instanceCount: number;
   matrices: Float32Array;
   shapeOffsets: Float32Array; // vec4: (leanX, leanZ, scaleMultiplier, colorJitter)
   heightVariances: Float32Array; // 0.0 to 1.0
+  /** Index into FLOWER_KINDS for each instance (all the same unless the meadow is mixed). */
+  kinds: Uint8Array;
+}
+
+/** The species a meadow grows; a mixed meadow grows patches of each. */
+export function meadowKinds(flowerType: WildflowerSettings['flowerType']): FlowerKind[] {
+  return !flowerType || flowerType === 'mixed' ? FLOWER_KINDS : [flowerType];
+}
+
+function patchHash(x: number, z: number): number {
+  const h = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+  return h - Math.floor(h);
 }
 
 /**
@@ -169,7 +366,8 @@ export function generateWildflowerInstances(
       instanceCount: 0,
       matrices: new Float32Array(0),
       shapeOffsets: new Float32Array(0),
-      heightVariances: new Float32Array(0)
+      heightVariances: new Float32Array(0),
+      kinds: new Uint8Array(0)
     };
   }
 
@@ -190,6 +388,8 @@ export function generateWildflowerInstances(
   const matrices: number[] = [];
   const shapeOffsets: number[] = [];
   const heightVariances: number[] = [];
+  const kinds: number[] = [];
+  const species = meadowKinds(settings.flowerType);
 
   const halfW = terrainWidth / 2;
   const halfD = terrainDepth / 2;
@@ -284,6 +484,11 @@ export function generateWildflowerInstances(
 
     shapeOffsets.push(leanX, leanZ, widthScale, colorJitter);
     heightVariances.push(hVar);
+    // Mixed meadows grow in drifts: each ~3 m patch favours one species.
+    const patch = patchHash(Math.floor(wx / 3), Math.floor(wz / 3));
+    const kind = species.length === 1 ? species[0]
+      : species[Math.floor((lcg() < 0.7 ? patch : lcg()) * species.length) % species.length];
+    kinds.push(FLOWER_KINDS.indexOf(kind));
   }
 
   const validCount = heightVariances.length;
@@ -291,6 +496,7 @@ export function generateWildflowerInstances(
     instanceCount: validCount,
     matrices: new Float32Array(matrices),
     shapeOffsets: new Float32Array(shapeOffsets),
-    heightVariances: new Float32Array(heightVariances)
+    heightVariances: new Float32Array(heightVariances),
+    kinds: new Uint8Array(kinds)
   };
 }

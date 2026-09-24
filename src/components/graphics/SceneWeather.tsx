@@ -10,6 +10,7 @@ export function SceneWeather() {
   const { scene, gl, size, viewport } = useThree();
   const system = useRef<WeatherSystem | null>(null);
   const center = useRef(new THREE.Vector3());
+  const occlusion = useRef({ frames: 0, at: new THREE.Vector3(Infinity, 0, 0) });
   useEffect(() => {
     if (!settings.enabled) return;
     const weather = new WeatherSystem().init(scene, gl); system.current = weather;
@@ -31,6 +32,13 @@ export function SceneWeather() {
     if (!system.current) return;
     center.current.set(camera.position.x, 0, camera.position.z);
     system.current.setCenter(center.current); system.current.update(delta);
+    // Refresh the roof/ground occlusion map when the view has moved, and a few times a second
+    // otherwise so edited or moving geometry is picked up.
+    const state = occlusion.current;
+    if (system.current.hasPrecipitation && (++state.frames >= 12 || state.at.distanceToSquared(center.current) > 4)) {
+      state.frames = 0; state.at.copy(center.current);
+      system.current.updateOcclusion(gl, scene);
+    }
   });
   return null;
 }

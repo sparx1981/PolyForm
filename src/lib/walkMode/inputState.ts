@@ -5,7 +5,7 @@ export interface MoveIntent {
   magnitude: number;
 }
 
-const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight']);
+const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'KeyC']);
 
 /**
  * Combines keyboard state and touch joystick/look state into one
@@ -21,6 +21,7 @@ const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown
 export class WalkInputState {
   private keys = new Set<string>();
   private jumpQueued = false;
+  private touchCrouch = false;
   private touchMove: MoveIntent = { x: 0, z: 0, magnitude: 0 };
   private lookDelta = { dx: 0, dy: 0 };
   private listenersAttached = false;
@@ -115,6 +116,17 @@ export class WalkInputState {
     this.jumpQueued = true;
   }
 
+  /** True while C is held or the touch Crouch button is on - crouch. */
+  isCrouching(): boolean {
+    return this.keys.has('KeyC') || this.touchCrouch;
+  }
+
+  /** Called by the touch Crouch button (a toggle: holding a button while steering is awkward). */
+  toggleTouchCrouch() {
+    this.touchCrouch = !this.touchCrouch;
+    return this.touchCrouch;
+  }
+
   /** True while either Shift key is held - sprint (spec follow-up: hold Shift to sprint). */
   isSprinting(): boolean {
     return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
@@ -123,6 +135,7 @@ export class WalkInputState {
   reset() {
     this.keys.clear();
     this.jumpQueued = false;
+    this.touchCrouch = false;
     this.touchMove = { x: 0, z: 0, magnitude: 0 };
     this.lookDelta = { dx: 0, dy: 0 };
   }
