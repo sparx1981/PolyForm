@@ -1,110 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { createGrassBladeGeometry, generateGrassInstances, extractExclusionFootprints, isPointExcluded, seededRandom, nearestClump, partitionGrassChunks, grassKeepFraction, grassLodRange } from './grassGeometry';
-import { Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, RoadModifier } from '../../types';
+import { extractExclusionFootprints, isPointExcluded } from './grassGeometry';
+import { bakeGrassMask } from './bladeGrass';
+import { Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, RoadModifier, TerrainModifier } from '../../types';
 
-describe('Procedural Grass Geometry & Instancing Engine', () => {
-  it('creates a tapered radial tuft within the original triangle budget', () => {
-    const geo = createGrassBladeGeometry();
-
-    expect(geo.getAttribute('position')).toBeDefined();
-    expect(geo.getAttribute('normal')).toBeDefined();
-    expect(geo.getAttribute('aHeightPercent')).toBeDefined();
-    expect(geo.getAttribute('aBladeTone')).toBeDefined();
-    expect(geo.getIndex()).toBeDefined();
-    expect(geo.getIndex()!.count / 3).toBe(18);
-    // The fuller default lawn still submits fewer blade triangles per square metre than before.
-    expect((geo.getIndex()!.count / 3) * DEFAULT_GRASS_SETTINGS.density).toBeLessThanOrEqual(26 * 8);
-
-    const posCount = geo.getAttribute('position').count;
-    const hPct = geo.getAttribute('aHeightPercent');
-
-    expect(posCount).toBeGreaterThan(0);
-    expect(hPct.count).toBe(posCount);
-
-    // Root vertices should be 0.0 and tip vertices should reach 1.0
-    let minH = 1.0;
-    let maxH = 0.0;
-    for (let i = 0; i < hPct.count; i++) {
-      const val = hPct.getX(i);
-      if (val < minH) minH = val;
-      if (val > maxH) maxH = val;
+/** Grass-growing mask cells as instance-style positions, so placement tests read naturally. */
+function generateGrassInstances(terrain: Shape, shapes: Shape[], modifiers: TerrainModifier[], settings: GrassSettings) {
+  const mask = bakeGrassMask(terrain, shapes, modifiers, settings);
+  const { width = 50, depth = 50 } = terrain.terrainData!;
+  const matrices: number[] = [];
+  for (let iz = 0; iz < mask.height; iz++) {
+    for (let ix = 0; ix < mask.width; ix++) {
+      if (!mask.data[iz * mask.width + ix]) continue;
+      const x = terrain.position[0] - width / 2 + ((ix + 0.5) / mask.width) * width;
+      const z = terrain.position[2] - depth / 2 + ((iz + 0.5) / mask.height) * depth;
+      matrices.push(...new THREE.Matrix4().makeTranslation(x, 0, z).elements);
     }
-    expect(minH).toBe(0.0);
-    expect(maxH).toBe(1.0);
-    const bounds = new THREE.Box3().setFromBufferAttribute(geo.getAttribute('position') as THREE.BufferAttribute);
-    expect(bounds.max.y).toBeGreaterThan(1);
-    expect(bounds.max.x - bounds.min.x).toBeGreaterThan(0.25);
-    expect(bounds.max.z - bounds.min.z).toBeGreaterThan(0.25);
-    geo.dispose();
-  });
+  }
+  return { instanceCount: matrices.length / 16, matrices: new Float32Array(matrices) };
+}
 
-  it('generates zero instances when grass is disabled', () => {
-    const dummyTerrain: Shape = {
-      id: 't-1',
-      name: 'Terrain',
-      type: 'terrain',
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      color: '#ffffff',
-      args: [30, 0, 30],
-      terrainData: {
-        gridX: 16,
-        gridY: 16,
-        width: 30,
-        depth: 30,
-        heights: new Array(16 * 16).fill(0),
-        grass: {
-          ...DEFAULT_GRASS_SETTINGS,
-          enabled: false
-        }
-      }
-    };
-
-    const instances = generateGrassInstances(dummyTerrain, [], [], {
-      ...DEFAULT_GRASS_SETTINGS,
-      enabled: false
-    });
-
-    expect(instances.instanceCount).toBe(0);
-    expect(instances.matrices.length).toBe(0);
-  });
-
-  it('generates instanced positions and attributes across terrain', () => {
-    const dummyTerrain: Shape = {
-      id: 't-1',
-      name: 'Terrain',
-      type: 'terrain',
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      color: '#ffffff',
-      args: [20, 0, 20],
-      terrainData: {
-        gridX: 16,
-        gridY: 16,
-        width: 20,
-        depth: 20,
-        heights: new Array(16 * 16).fill(0)
-      }
-    };
-
-    const settings: GrassSettings = {
-      ...DEFAULT_GRASS_SETTINGS,
-      enabled: true,
-      density: 4,
-      maxSlopeAngle: 45
-    };
-
-    const instances = generateGrassInstances(dummyTerrain, [], [], settings);
-
-    expect(instances.instanceCount).toBeGreaterThan(0);
-    expect(instances.matrices.length).toBe(instances.instanceCount * 16);
-    expect(instances.shapeOffsets.length).toBe(instances.instanceCount * 4);
-    expect(instances.heightVariances.length).toBe(instances.instanceCount);
-  });
-
+describe('Procedural grass placement (presence mask)', () => {
   it('discards grass instances located within floor slab footprints', () => {
     // Floor slab placed in center [0, 0, 0] with width 10m x depth 10m
     const slabShape: Shape = {
@@ -311,58 +227,5 @@ describe('Procedural Grass Geometry & Instancing Engine', () => {
       const inPoly = Math.abs(pos.x) <= 4.0 && Math.abs(pos.z) <= 4.0;
       expect(inPoly).toBe(false);
     }
-  });
-
-  it('uses a random sequence that does not repeat within a large lawn', () => {
-    const rng = seededRandom(42);
-    const first = [rng(), rng(), rng(), rng()];
-    // The old LCG repeated after 233,280 values; a 100k-tuft lawn draws about 700k.
-    for (let i = 0; i < 700000; i++) rng();
-    const later = [rng(), rng(), rng(), rng()];
-    expect(later).not.toEqual(first);
-    const again = seededRandom(42);
-    expect([again(), again(), again(), again()]).toEqual(first);
-  });
-
-  it('groups nearby tufts into stable clumps', () => {
-    const a = nearestClump(3.01, 5.02, 0.5);
-    const b = nearestClump(3.01, 5.02, 0.5);
-    expect(a).toEqual(b);
-    expect(a.distance).toBeLessThan(0.5 * Math.SQRT2 * 1.5);
-    expect(Math.hypot(a.dirX, a.dirZ)).toBeCloseTo(1, 5);
-    expect(a.hash).toBeGreaterThanOrEqual(0);
-    expect(a.hash).toBeLessThan(1);
-  });
-
-  it('partitions instances into shuffled tiles without losing any', () => {
-    const terrain: Shape = {
-      id: 't-1', name: 'Terrain', type: 'terrain', position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1],
-      color: '#ffffff', args: [40, 0, 40],
-      terrainData: { gridX: 8, gridY: 8, width: 40, depth: 40, heights: new Array(64).fill(0) }
-    };
-    const data = generateGrassInstances(terrain, [], [], { ...DEFAULT_GRASS_SETTINGS, enabled: true, density: 4 });
-    const chunks = partitionGrassChunks(data, 16);
-    expect(chunks.length).toBeGreaterThan(1);
-    expect(chunks.reduce((sum, chunk) => sum + chunk.instanceCount, 0)).toBe(data.instanceCount);
-    for (const chunk of chunks) {
-      expect(chunk.ranks[0]).toBe(0);
-      expect(chunk.ranks[chunk.instanceCount - 1]).toBeLessThan(1);
-      for (let i = 0; i < chunk.instanceCount; i++) {
-        const dx = chunk.matrices[i * 16 + 12] - chunk.center[0];
-        const dz = chunk.matrices[i * 16 + 14] - chunk.center[2];
-        expect(Math.hypot(dx, dz)).toBeLessThanOrEqual(chunk.radius + 1e-4);
-      }
-    }
-  });
-
-  it('thins grass with distance, starting later for taller grass', () => {
-    const lawn = grassLodRange({ baseHeight: 0.05, heightVariance: 0.1 });
-    expect(grassKeepFraction(0, lawn)).toBe(1);
-    expect(grassKeepFraction(lawn.near, lawn)).toBe(1);
-    expect(grassKeepFraction(lawn.far * 2, lawn)).toBeCloseTo(lawn.minKeep);
-    expect(grassKeepFraction((lawn.near + lawn.far) / 2, lawn)).toBeLessThan(1);
-    const meadow = grassLodRange({ baseHeight: 0.8, heightVariance: 0.5 });
-    expect(meadow.near).toBeGreaterThan(lawn.near);
-    expect(meadow.far).toBeGreaterThan(lawn.far);
   });
 });

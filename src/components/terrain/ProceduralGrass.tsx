@@ -3,11 +3,13 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Shape, TerrainModifier, GrassSettings, DEFAULT_GRASS_SETTINGS } from '../../types';
 import { useApp } from '../../AppContext';
+import { sampleTerrainElevation } from '../../lib/archRoomAssembly';
+import { extractExclusionFootprints } from '../../lib/terrain/grassGeometry';
+import { createBladeTemplate, createGrassField, grassRings, GrassTrail, TRAIL_RECOVERY_SECONDS } from '../../lib/terrain/bladeGrass';
 import {
-  createGrassBladeGeometry, generateGrassInstances, partitionGrassChunks,
-  grassKeepFraction, grassLodRange
-} from '../../lib/terrain/grassGeometry';
-import { createGrassMaterial, createGrassUniforms, grassBendStrength, setGrassColors } from '../../lib/terrain/grassMaterial';
+  bladeWindStrength, createBladeGrassMaterial, createBladeGrassUniforms, createBladeRingUniforms,
+  setBladeColors, updateRingUniforms
+} from '../../lib/terrain/bladeGrassMaterial';
 
 interface ProceduralGrassProps {
   terrainShape: Shape;
@@ -15,122 +17,142 @@ interface ProceduralGrassProps {
   terrainModifiers?: TerrainModifier[];
 }
 
-/** Tile edge in metres. Each tile is one draw call with its own bounds for frustum culling. */
-const CHUNK_SIZE = 16;
+const forward = new THREE.Vector3();
+const cameraPosition = new THREE.Vector3();
+const focus = new THREE.Vector3();
+const centre = new THREE.Vector3();
+const horizontalDistance = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
+
+/**
+ * Where the grass rings are centred. Walking: under the walker. Editor views: where the view
+ * direction meets the terrain (clamped), so an orbiting or plan camera sees grass around what it
+ * looks at rather than underneath itself.
+ */
+function grassFocus(camera: THREE.Camera, terrain: Shape, walking: boolean, target: THREE.Vector3) {
+  camera.getWorldPosition(cameraPosition);
+  if (walking) return target.copy(cameraPosition);
+  camera.getWorldDirection(forward);
+  let groundY = sampleTerrainElevation(cameraPosition.x, cameraPosition.z, terrain);
+  // Two refinements of the ray/terrain hit are plenty for gently rolling terrain.
+  for (let i = 0; i < 2; i++) {
+    const drop = cameraPosition.y - groundY;
+    if (forward.y > -0.02 || drop <= 0) return target.copy(cameraPosition);
+    const distance = Math.min(drop / -forward.y, 150);
+    target.copy(cameraPosition).addScaledVector(forward, distance);
+    groundY = sampleTerrainElevation(target.x, target.z, terrain);
+  }
+  return target.setY(groundY);
+}
 
 export function ProceduralGrass({
   terrainShape,
   shapes,
   terrainModifiers = []
 }: ProceduralGrassProps) {
-  const { graphicsSettings } = useApp();
-  const grassSettings: GrassSettings = useMemo(() => {
-    return {
-      ...DEFAULT_GRASS_SETTINGS,
-      ...(terrainShape.terrainData?.grass || {})
-    };
-  }, [terrainShape.terrainData?.grass]);
+  const { graphicsSettings, walkModePhase } = useApp();
+  const grassSettings: GrassSettings = useMemo(() => ({
+    ...DEFAULT_GRASS_SETTINGS,
+    ...(terrainShape.terrainData?.grass || {})
+  }), [terrainShape.terrainData?.grass]);
   // Hooks below always run; the enabled check happens at render time so toggling is safe.
   const visible = grassSettings.enabled && Boolean(terrainShape.terrainData);
+  const walking = walkModePhase === 'walking';
 
-  // Generate low-poly tuft geometry
-  const baseGeometry = useMemo(() => createGrassBladeGeometry(), []);
-  useEffect(() => () => baseGeometry.dispose(), [baseGeometry]);
+  // Only rebake the presence mask when something that affects it changes, not on every edit.
+  const footprintKey = useMemo(() => JSON.stringify(extractExclusionFootprints(shapes, terrainModifiers)),
+    [shapes, terrainModifiers]);
+  const field = useMemo(() => visible
+    ? createGrassField(terrainShape, shapes, terrainModifiers, grassSettings)
+    : null,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [visible, footprintKey, terrainShape.terrainData?.heights, terrainShape.terrainData?.width,
+    terrainShape.terrainData?.depth, terrainShape.position, grassSettings.maxSlopeAngle]);
+  useEffect(() => () => { field?.heights.dispose(); field?.mask.dispose(); }, [field]);
 
-  // Compute instances based on density, terrain geometry, slope culling, and slab exclusion
-  const instanceData = useMemo(() => {
-    return generateGrassInstances(terrainShape, shapes, terrainModifiers, { ...grassSettings, enabled: visible });
-  }, [
-    terrainShape.id,
-    terrainShape.terrainData?.heights,
-    terrainShape.terrainData?.width,
-    terrainShape.terrainData?.depth,
-    terrainShape.position,
-    shapes,
-    terrainModifiers,
-    grassSettings.density,
-    grassSettings.maxSlopeAngle,
-    grassSettings.baseHeight,
-    grassSettings.heightVariance,
-    visible
-  ]);
+  const rings = useMemo(() => grassRings(grassSettings),
+    [grassSettings.density, grassSettings.baseHeight, grassSettings.heightVariance]);
+  const shared = useMemo(() => createBladeGrassUniforms(), []);
+  const trail = useMemo(() => new GrassTrail(), []);
+  useEffect(() => { shared.uTrail.value = trail.points; shared.uTrailRecovery.value = TRAIL_RECOVERY_SECONDS; }, [shared, trail]);
+
+  const meshes = useMemo(() => rings.map(ring => {
+    const ringUniforms = createBladeRingUniforms();
+    const geometry = createBladeTemplate(ring.segments);
+    geometry.instanceCount = ring.cells * ring.cells;
+    const mesh = new THREE.Mesh(geometry, createBladeGrassMaterial(shared, ringUniforms));
+    // The rings follow the camera and are built in world space in the shader.
+    mesh.frustumCulled = false;
+    mesh.matrixAutoUpdate = false;
+    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.name = 'procedural-grass-mesh';
+    // Disable raycasting and assign visual-only obstacle flag for Walk Mode
+    mesh.raycast = () => {};
+    mesh.userData = { isGrass: true, isObstacle: false, ringUniforms };
+    return mesh;
+  }), [rings, shared]);
+  useEffect(() => () => meshes.forEach(mesh => { mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); }), [meshes]);
 
   const isAnimated = grassSettings.animate !== false;
-  const effectiveWindStrength = isAnimated
+  const animationStrength = isAnimated
     ? (grassSettings.animationStrength ?? grassSettings.windStrength ?? DEFAULT_GRASS_SETTINGS.animationStrength ?? 0)
-    : 0.0;
-  const lod = grassLodRange(grassSettings);
-
-  const uniforms = useMemo(() => createGrassUniforms(), []);
-  const material = useMemo(() => createGrassMaterial(uniforms), [uniforms]);
-  useEffect(() => () => material.dispose(), [material]);
-
-  // Settings only change uniform values, never the compiled program.
+    : 0;
   useEffect(() => {
-    uniforms.uWindStrength.value = grassBendStrength(effectiveWindStrength);
-    uniforms.uBaseHeight.value = grassSettings.baseHeight ?? DEFAULT_GRASS_SETTINGS.baseHeight;
-    uniforms.uHeightVariance.value = grassSettings.heightVariance ?? DEFAULT_GRASS_SETTINGS.heightVariance;
-    setGrassColors(uniforms, grassSettings.rootColor || DEFAULT_GRASS_SETTINGS.rootColor, grassSettings.tipColor || DEFAULT_GRASS_SETTINGS.tipColor);
-    uniforms.uLod.value.set(lod.near, lod.far, lod.minKeep);
-  }, [uniforms, effectiveWindStrength, grassSettings.baseHeight, grassSettings.heightVariance,
-    grassSettings.rootColor, grassSettings.tipColor, lod.near, lod.far, lod.minKeep]);
+    shared.uWindStrength.value = bladeWindStrength(animationStrength);
+    shared.uBaseHeight.value = grassSettings.baseHeight ?? DEFAULT_GRASS_SETTINGS.baseHeight;
+    shared.uHeightVariance.value = grassSettings.heightVariance ?? DEFAULT_GRASS_SETTINGS.heightVariance;
+    shared.uClumpSize.value = THREE.MathUtils.clamp((grassSettings.baseHeight + grassSettings.heightVariance) * 3, 0.3, 1.2);
+    setBladeColors(shared, grassSettings.rootColor || DEFAULT_GRASS_SETTINGS.rootColor, grassSettings.tipColor || DEFAULT_GRASS_SETTINGS.tipColor);
+  }, [shared, animationStrength, grassSettings.baseHeight, grassSettings.heightVariance, grassSettings.rootColor, grassSettings.tipColor]);
+
+  useEffect(() => {
+    if (!field) return;
+    shared.uBounds.value.copy(field.bounds);
+    shared.uHeights.value = field.heights;
+    shared.uMask.value = field.mask;
+    shared.uBaseY.value = field.baseY;
+  }, [shared, field]);
 
   // Grass follows the same wind direction as trees and bushes.
   const windDirection = graphicsSettings.vegetation.direction;
   useEffect(() => {
     const radians = windDirection * Math.PI / 180;
-    uniforms.uWindDir.value.set(Math.cos(radians), Math.sin(radians));
-  }, [uniforms, windDirection]);
+    shared.uWindDir.value.set(Math.cos(radians), Math.sin(radians));
+  }, [shared, windDirection]);
 
-  // One InstancedMesh per tile. Tiles share the tuft's vertex attributes; only the per-instance
-  // attributes differ.
-  const meshes = useMemo(() => {
-    if (!visible) return [];
-    const height = (grassSettings.baseHeight + grassSettings.heightVariance) * 1.2;
-    return partitionGrassChunks(instanceData, CHUNK_SIZE).map(chunk => {
-      const geometry = new THREE.BufferGeometry();
-      for (const [name, attribute] of Object.entries(baseGeometry.attributes)) geometry.setAttribute(name, attribute);
-      geometry.setIndex(baseGeometry.index);
-      geometry.setAttribute('aShapeOffset', new THREE.InstancedBufferAttribute(chunk.shapeOffsets, 4));
-      geometry.setAttribute('aHeightVariance', new THREE.InstancedBufferAttribute(chunk.heightVariances, 1));
-      geometry.setAttribute('aRank', new THREE.InstancedBufferAttribute(chunk.ranks, 1));
-      const mesh = new THREE.InstancedMesh(geometry, material, chunk.instanceCount);
-      mesh.instanceMatrix.array.set(chunk.matrices);
-      mesh.instanceMatrix.needsUpdate = true;
-      // Shader growth, lean, distance widening and wind extend beyond the roots. Keep culling
-      // conservative with explicit bounds rather than the unit-height template's.
-      mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(...chunk.center), chunk.radius + height * 2.5 + 0.2);
-      mesh.frustumCulled = true;
-      mesh.receiveShadow = true;
-      mesh.castShadow = false;
-      mesh.name = 'procedural-grass-mesh';
-      // Disable raycasting and assign visual-only obstacle flag for Walk Mode
-      mesh.raycast = () => {};
-      mesh.userData = { isGrass: true, isObstacle: false, total: chunk.instanceCount };
-      return mesh;
-    });
-  }, [visible, instanceData, baseGeometry, material, grassSettings.baseHeight, grassSettings.heightVariance]);
-  // Only the per-tile geometry is disposed: the shared tuft attributes are re-uploaded on demand.
-  useEffect(() => () => meshes.forEach(mesh => mesh.geometry.dispose()), [meshes]);
+  useEffect(() => { if (!walking) trail.clear(); }, [walking, trail]);
 
-  const cameraPosition = useMemo(() => new THREE.Vector3(), []);
-  useFrame(({ camera }, delta) => {
-    if (isAnimated) uniforms.uTime.value += delta * (grassSettings.windSpeed ?? 2.0);
-    // Orthographic plan views sit far away but show grass at full size: never thin them.
-    const thin = !(camera as THREE.OrthographicCamera).isOrthographicCamera;
-    uniforms.uLodEnabled.value = thin ? 1 : 0;
-    camera.getWorldPosition(cameraPosition);
-    for (const mesh of meshes) {
-      const total = mesh.userData.total as number;
-      if (!thin) { mesh.count = total; continue; }
-      const sphere = mesh.boundingSphere!;
-      // Nearest root in the tile decides how many tufts the shader may still want to draw.
-      const nearest = Math.max(0, cameraPosition.distanceTo(sphere.center) - sphere.radius);
-      mesh.count = Math.min(total, Math.ceil(total * grassKeepFraction(nearest, lod) * 1.08));
+  useFrame(({ camera, clock }, delta) => {
+    if (!field) return;
+    if (isAnimated) shared.uTime.value += delta * (grassSettings.windSpeed ?? 2.0);
+    shared.uClock.value = clock.elapsedTime;
+    grassFocus(camera, terrainShape, walking, focus);
+    if (walking) trail.step(focus.x, focus.z, clock.elapsedTime);
+
+    // Level of detail is measured from the camera while walking or close to the ground; from
+    // far editor views it is measured around the focus so the viewed area keeps its blades.
+    const orthographic = (camera as THREE.OrthographicCamera).isOrthographicCamera;
+    const viewDistance = cameraPosition.distanceTo(focus);
+    if (walking || (!orthographic && viewDistance < 25)) {
+      shared.uLodOrigin.value.copy(cameraPosition);
+      shared.uLodVertical.value = 1;
+      shared.uLodBias.value = 0;
+      // Centre slightly ahead of the camera: blades behind it are never seen.
+      const ahead = Math.min(horizontalDistance(cameraPosition, focus), rings[0].radius * 0.3);
+      if (ahead > 1e-3) centre.copy(focus).sub(cameraPosition).setY(0).setLength(ahead).add(cameraPosition);
+      else centre.copy(cameraPosition);
+    } else {
+      shared.uLodOrigin.value.copy(focus);
+      shared.uLodVertical.value = 0;
+      const ortho = camera as THREE.OrthographicCamera;
+      const viewSpan = orthographic ? (ortho.top - ortho.bottom) / ortho.zoom : viewDistance;
+      shared.uLodBias.value = Math.max(0, viewSpan - 15) * 0.3;
+      centre.copy(focus);
     }
+    meshes.forEach((mesh, index) => updateRingUniforms(mesh.userData.ringUniforms, rings[index], rings[index - 1], centre.x, centre.z));
   });
 
-  if (!visible || meshes.length === 0) {
+  if (!visible || !field) {
     return null;
   }
 
