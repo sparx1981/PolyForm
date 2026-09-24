@@ -4,6 +4,7 @@ import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
 import { groundUnderRay } from '../lib/terrain/groundRay';
+import { GlassWeatherDriver, WetGlassMaterial, useGlassWeather } from './graphics/WetGlass';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
 import { WaterDrawPreview } from './WaterDrawPreview';
@@ -4339,6 +4340,7 @@ function Scene() {
    * clicking the first point) never discards what was drawn.
    */
   const liveFenceIdRef = useRef<string | null>(null);
+  const glassWeather = useGlassWeather();
   const commitFenceRun = useCallback((vertices: THREE.Vector3[], closed: boolean) => {
     if (vertices.length < 2) return;
     const cx = vertices.reduce((sum, v) => sum + v.x, 0) / vertices.length;
@@ -10570,8 +10572,10 @@ function Scene() {
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.35 : 0}
               />
-              {/* Material 1: Crystal Clear See-Through Architectural Glass */}
-              <meshStandardMaterial 
+              {/* Material 1: glass; wet with rain or snow when the weather has any. */}
+              {glassWeather && effectiveOpacity >= 1 ? (
+                <WetGlassMaterial attach="material-1" selected={selectedId === shape.id} />
+              ) : <meshStandardMaterial 
                 attach="material-1"
                 color="#e0f2fe" 
                 roughness={0.05}
@@ -10582,7 +10586,7 @@ function Scene() {
                 side={THREE.DoubleSide}
                 emissive={selectedId === shape.id ? '#0063A3' : '#000000'}
                 emissiveIntensity={selectedId === shape.id ? 0.2 : 0}
-              />
+              />}
               {/* Material 2: Architectural Brushed Hardware (Knobs / Lever Handles / Pulls) */}
               <meshStandardMaterial 
                 attach="material-2"
@@ -10680,6 +10684,8 @@ function Scene() {
         </mesh>
       );
     })}
+
+      {glassWeather && <GlassWeatherDriver />}
 
       {/* Procedural Grass Instances for active terrain shapes */}
       {shapes
