@@ -3,6 +3,10 @@ import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
+import { WaterMesh } from './WaterMesh';
+import { WaterEditHandles } from './WaterEditHandles';
+import { terrainsWithWaterBasins, defaultWaterLevel } from '../lib/water/waterBody';
+import { sampleTerrainElevation } from '../lib/archRoomAssembly';
 import { fenceStyleInfo } from '../lib/fence/fenceTypes';
 import { shouldHideAutoNormalMap, terrainGeometryDeps } from '../lib/graphics/depthGeometry';
 import { LampLightBinding } from './graphics/LampLightBinding';
@@ -1643,6 +1647,7 @@ function Scene() {
     addTerrainModifier,
     updateTerrainModifier,
     fenceToolSettings,
+    waterToolSettings,
     walkModePhase,
     setWalkModePhase,
     walkMovementSpeed,
@@ -4323,6 +4328,9 @@ function Scene() {
     };
   }, [activeTool, closeBezierLoop, finishBezierOpenPath]);
 
+  // Terrains as drawn: ponds and lakes dig their basins on the fly (never saved into the terrain).
+  const dugTerrains = useMemo(() => terrainsWithWaterBasins(shapes), [shapes]);
+
   /** The fence tool builds one editable fence from the whole clicked path. */
   const commitFenceRun = useCallback((vertices: THREE.Vector3[], closed: boolean) => {
     if (vertices.length < 2) return;
@@ -4358,14 +4366,55 @@ function Scene() {
     diagLog('TOOL', 'Fence placed', { style: settings.style, points: vertices.length, closed, length });
   }, [fenceToolSettings, shapes, unit, addShape, commitHistory, recordAction, diagLog]);
 
+  /** The water tool fills the clicked outline, digging a basin into the terrain under it. */
+  const commitWaterBody = useCallback((vertices: THREE.Vector3[]) => {
+    if (vertices.length < 3) {
+      setMeasurements('Water outline needs at least 3 points.');
+      return;
+    }
+    const outline = vertices.map(v => ({ x: v.x, z: v.z }));
+    const cx = outline.reduce((sum, p) => sum + p.x, 0) / outline.length;
+    const cz = outline.reduce((sum, p) => sum + p.z, 0) / outline.length;
+    const terrain = shapes.find(s => s.type === 'terrain' && !s.hidden && s.terrainData
+      && Math.abs(cx - s.position[0]) <= s.terrainData.width / 2 && Math.abs(cz - s.position[2]) <= s.terrainData.depth / 2);
+    const level = terrain
+      ? defaultWaterLevel(outline, (x, z) => sampleTerrainElevation(x, z, terrain))
+      : vertices[0].y + 0.02;
+    const xs = outline.map(p => p.x), zs = outline.map(p => p.z);
+    const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+    const kind = extent > 30 ? 'Lake' : 'Pond';
+    const count = shapes.filter(s => s.type === 'water').length + 1;
+    const newShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: `${kind} ${count}`,
+      type: 'water',
+      position: [cx, level, cz],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      args: [],
+      color: '#3d7a8c',
+      waterData: {
+        points: outline.map(p => [p.x - cx, p.z - cz] as [number, number]),
+        depth: waterToolSettings.depth,
+        clarity: waterToolSettings.clarity,
+        dig: true,
+      },
+    };
+    addShape(newShape);
+    commitHistory();
+    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    diagLog('TOOL', `${kind} placed`, { points: vertices.length, level, extent });
+  }, [shapes, waterToolSettings, addShape, commitHistory, recordAction, diagLog, setMeasurements]);
+
   const finalizeFenceChain = useCallback((closed = false) => {
     if (activeTool === 'fence') commitFenceRun(fenceVertices, closed);
+    if (activeTool === 'water') commitWaterBody(fenceVertices);
     setFenceVertices([]);
     setFencePlane(null);
     setFenceCandidatePos(null);
     setFenceHoveredVertex(null);
     setMeasurements('');
-  }, [setMeasurements, activeTool, commitFenceRun, fenceVertices]);
+  }, [setMeasurements, activeTool, commitFenceRun, commitWaterBody, fenceVertices]);
 
   const createFenceRailingSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, tool: 'fence' | 'railing') => {
     const dist = pA.distanceTo(pB);
@@ -4512,7 +4561,7 @@ function Scene() {
               finalizeWallChain();
             }
             return;
-          } else if ((activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0) {
+          } else if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
             setFenceVertices(prev => prev.slice(0, -1));
             if (fenceVertices.length <= 1) {
               finalizeFenceChain();
@@ -4549,7 +4598,7 @@ function Scene() {
         if (activeTool === 'wall' && wallVertices.length > 0) {
           diagLog('TOOL', 'Wall drawing cancelled', { vertexCount: wallVertices.length });
         }
-        if ((activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0) {
+        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
           diagLog('TOOL', `${activeTool} drawing cancelled`, { vertexCount: fenceVertices.length });
         }
         if (activeTool === 'poly' && polyVertices.length > 0) {
@@ -4672,7 +4721,7 @@ function Scene() {
           finalizeCivilRoadDraft();
           return;
         }
-        if ((activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0) {
+        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
           e.preventDefault();
           finalizeFenceChain();
           return;
@@ -5223,7 +5272,7 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'fence' || activeTool === 'railing') {
+    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
       e.stopPropagation();
 
       // If clicking first vertex -> close loop & finalize
@@ -5266,7 +5315,7 @@ function Scene() {
         setFencePlane(plane);
         setFenceVertices([p]);
         diagLog("TOOL", `${activeTool} started at point`, { pos: [p.x, p.y, p.z] });
-        setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
+        setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
       } else {
         if (!pointToPlace) pointToPlace = e.point.clone();
         const prev = fenceVertices[fenceVertices.length - 1];
@@ -5279,7 +5328,7 @@ function Scene() {
             from: [prev.x, prev.y, prev.z], 
             to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] 
           });
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'} Path: ${nextVerts.length} points placed · Click next point · Double-click/Enter to finish.`);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: ${nextVerts.length} points placed · Click next point · Double-click/Enter to finish.`);
         }
       }
       return;
@@ -6553,7 +6602,7 @@ function Scene() {
       }
     }
 
-    if (activeTool === 'fence' || activeTool === 'railing') {
+    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
       const plane = fencePlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
       const target = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, target)) {
@@ -6592,9 +6641,9 @@ function Scene() {
         if (fenceVertices.length > 0) {
           const lastVertex = fenceVertices[fenceVertices.length - 1];
           const dist = lastVertex.distanceTo(finalPos);
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'}: Section ${formatValue(dist, unit, 2)} (${fenceVertices.length} placed) · Click next point · Double-click/Enter to finish`);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'}: Section ${formatValue(dist, unit, 2)} (${fenceVertices.length} placed) · Click next point · Double-click/Enter to finish`);
         } else {
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : 'Railing'}: Click terrain or ground to start drawing path`);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'}: Click terrain or ground to start drawing path`);
         }
       }
     }
@@ -8679,7 +8728,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape' || activeTool === 'teleport') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
@@ -9493,7 +9542,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -10326,18 +10375,38 @@ function Scene() {
           </mesh>
         );
 
+        if (shape.type === 'water' && shape.waterData) {
+          const [wx, , wz] = shape.position;
+          const waterTerrain = shapes.find(s => s.type === 'terrain' && !s.hidden && s.terrainData
+            && Math.abs(wx - s.position[0]) <= s.terrainData.width / 2 && Math.abs(wz - s.position[2]) <= s.terrainData.depth / 2);
+          return (
+            <React.Fragment key={shape.id}>
+              <WaterMesh
+                shape={shape}
+                terrain={waterTerrain ? dugTerrains.get(waterTerrain.id) ?? waterTerrain : undefined}
+                meshProps={meshProps}
+                selectionHighlight={selectionHighlight}
+              />
+              {selectedId === shape.id && activeTool === 'select' && (
+                <WaterEditHandles shape={shape} terrain={waterTerrain ? dugTerrains.get(waterTerrain.id) ?? waterTerrain : undefined} />
+              )}
+            </React.Fragment>
+          );
+        }
+
         if (shape.type === 'fence' && shape.fenceData) {
           const fenceTerrain = terrainUnder(fenceWorldPoints(shape), shapes);
+          const fenceGround = fenceTerrain ? dugTerrains.get(fenceTerrain.id) ?? fenceTerrain : undefined;
           return (
             <React.Fragment key={shape.id}>
               <FenceMesh
                 shape={shape}
-                terrain={fenceTerrain}
+                terrain={fenceGround}
                 selected={selectedId === shape.id}
                 meshProps={meshProps}
                 selectionHighlight={selectionHighlight}
               />
-              {selectedId === shape.id && activeTool === 'select' && <FenceEditHandles shape={shape} terrain={fenceTerrain} />}
+              {selectedId === shape.id && activeTool === 'select' && <FenceEditHandles shape={shape} terrain={fenceGround} />}
             </React.Fragment>
           );
         }
@@ -10391,7 +10460,7 @@ function Scene() {
         return (
           <mesh key={shape.id} {...meshProps}>
           {((shape.surfaceDepthEnabled && shape.displacementMapUrl) || (objectBinding?.depth?.enabled && shape.materialBindingId && managedBindingTextures[shape.materialBindingId]?.height)) &&
-            <SurfaceDepthBinding shape={shape} materialDepth={objectBinding?.depth}
+            <SurfaceDepthBinding shape={dugTerrains.get(shape.id) ?? shape} materialDepth={objectBinding?.depth}
               heightTexture={shape.materialBindingId ? managedBindingTextures[shape.materialBindingId]?.height : undefined} />}
           {shape.type === 'lamp' && <LampLightBinding shape={shape} />}
           {((shape.type === 'circle' || shape.type === 'triangle' || shape.type === 'prism')
@@ -10437,7 +10506,7 @@ function Scene() {
           ) : shape.type === 'custom' ? (
             <CustomGeometry shape={shape} />
           ) : shape.type === 'terrain' ? (
-            <TerrainGeometry terrainData={shape.terrainData} />
+            <TerrainGeometry terrainData={dugTerrains.get(shape.id)?.terrainData ?? shape.terrainData} />
           ) : (
             <boxGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 1, 1]) as any} />
           )}
@@ -10577,7 +10646,7 @@ function Scene() {
         .map(terrainShape => (
           <ProceduralGrass
             key={`procedural-grass-${terrainShape.id}`}
-            terrainShape={terrainShape}
+            terrainShape={dugTerrains.get(terrainShape.id) ?? terrainShape}
             shapes={shapes}
             terrainModifiers={terrainModifiers}
           />
@@ -10589,7 +10658,7 @@ function Scene() {
         .map(terrainShape => (
           <ProceduralWildflowers
             key={`procedural-flowers-${terrainShape.id}`}
-            terrainShape={terrainShape}
+            terrainShape={dugTerrains.get(terrainShape.id) ?? terrainShape}
             shapes={shapes}
             terrainModifiers={terrainModifiers}
           />
@@ -11417,7 +11486,7 @@ function Scene() {
       )}
 
       {/* Fence / Railing Path Drawing Preview */}
-      {(activeTool === 'fence' || activeTool === 'railing') && fenceVertices.length > 0 && (
+      {(activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0 && (
         <group>
           {/* Active 3D Segment Preview */}
           {fenceCandidatePos && (() => {
@@ -11432,7 +11501,7 @@ function Scene() {
 
             return (
               <group>
-                <mesh position={[center.x, center.y, center.z]} quaternion={quat}>
+                {activeTool !== 'water' && <mesh position={[center.x, center.y, center.z]} quaternion={quat}>
                   {activeTool === 'fence' ? (
                     <primitive object={createFenceGeometry(dist, height)} attach="geometry" />
                   ) : (
@@ -11445,7 +11514,7 @@ function Scene() {
                     transparent 
                     opacity={0.65} 
                   />
-                </mesh>
+                </mesh>}
                 {/* Baseline Guide */}
                 <Line
                   points={[

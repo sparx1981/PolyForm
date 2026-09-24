@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
-import { useThree } from '@react-three/fiber';
 import type { Shape } from '../types';
 import { useApp } from '../AppContext';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
 import { fenceMaterials } from '../lib/fence/splitRail/zaun-material.js';
 import { requestFenceBuild } from '../lib/fence/fenceWorkerClient';
+import { PathEditHandles } from './PathEditHandles';
 import type { FenceBatch, TerrainSnapshot } from '../lib/fence/fenceTypes';
 
 type Materials = Record<FenceBatch['kind'], THREE.MeshStandardMaterial>;
@@ -147,77 +147,21 @@ export function FenceMesh({ shape, terrain, selected, meshProps, selectionHighli
   );
 }
 
-/**
- * Corner handles for a selected fence: drag a yellow handle to move a corner, click a small
- * white midpoint handle to add a corner there, right-click a corner to remove it. Each edit is
- * one undo step; the fence rebuilds against the terrain when the drag ends.
- */
+/** Corner handles for a selected fence; see PathEditHandles. */
 export function FenceEditHandles({ shape, terrain }: { shape: Shape; terrain: Shape | undefined }) {
   const { setShapes } = useApp();
-  const controls = useThree(state => state.controls) as unknown as { enabled: boolean } | null;
-  const [drag, setDrag] = useState<{ index: number; point: [number, number] } | null>(null);
   const data = shape.fenceData!;
-  const world = fenceWorldPoints(shape);
-  if (drag) world[drag.index] = drag.point;
-  const groundAt = (x: number, z: number) => sampleTerrainElevation(x, z, terrain ?? shape);
-  const plane = useMemo(() => new THREE.Plane(), []);
-
-  const commit = (points: [number, number][], closed = data.closed) => {
-    const inverse = fenceMatrix(shape).invert(), p = new THREE.Vector3();
-    const local = points.map(([x, z]) => { p.set(x, 0, z).applyMatrix4(inverse); return [p.x, p.z] as [number, number]; });
-    setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, fenceData: { ...data, points: local, closed } } : s));
-  };
-  const endDrag = () => {
-    if (controls) controls.enabled = true;
-    if (drag) commit(world);
-    setDrag(null);
-  };
-
-  const segments = data.closed && world.length > 2 ? world.length : world.length - 1;
   return (
-    <group>
-      {world.map(([x, z], index) => (
-        <mesh key={`corner-${index}`} position={[x, groundAt(x, z) + 0.2, z]} renderOrder={10}
-          onPointerDown={event => {
-            event.stopPropagation();
-            (event.target as Element).setPointerCapture?.(event.pointerId);
-            if (controls) controls.enabled = false;
-            plane.set(new THREE.Vector3(0, 1, 0), -(groundAt(x, z) + 0.2));
-            setDrag({ index, point: [x, z] });
-          }}
-          onPointerMove={event => {
-            if (!drag || drag.index !== index) return;
-            event.stopPropagation();
-            const hit = new THREE.Vector3();
-            if (event.ray.intersectPlane(plane, hit)) setDrag({ index, point: [hit.x, hit.z] });
-          }}
-          onPointerUp={event => { event.stopPropagation(); endDrag(); }}
-          onContextMenu={event => {
-            event.stopPropagation();
-            event.nativeEvent.preventDefault();
-            if (world.length > 2) commit(world.filter((_, i) => i !== index), data.closed && world.length > 3);
-          }}>
-          <sphereGeometry args={[0.14, 14, 10]} />
-          <meshBasicMaterial color={drag?.index === index ? '#ffffff' : '#ffd02f'} depthTest={false} transparent opacity={0.95} />
-        </mesh>
-      ))}
-      {!drag && Array.from({ length: segments }, (_, index) => {
-        const a = world[index], b = world[(index + 1) % world.length];
-        const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-        return (
-          <mesh key={`mid-${index}`} position={[mx, groundAt(mx, mz) + 0.2, mz]} renderOrder={10}
-            onPointerDown={event => event.stopPropagation()}
-            onClick={event => {
-              event.stopPropagation();
-              const next = [...world];
-              next.splice(index + 1, 0, [mx, mz]);
-              commit(next);
-            }}>
-            <sphereGeometry args={[0.08, 10, 8]} />
-            <meshBasicMaterial color="#ffffff" depthTest={false} transparent opacity={0.8} />
-          </mesh>
-        );
-      })}
-    </group>
+    <PathEditHandles
+      points={fenceWorldPoints(shape)}
+      closed={Boolean(data.closed)}
+      minPoints={2}
+      groundAt={(x, z) => sampleTerrainElevation(x, z, terrain ?? shape)}
+      onCommit={(points, closed) => {
+        const inverse = fenceMatrix(shape).invert(), p = new THREE.Vector3();
+        const local = points.map(([x, z]) => { p.set(x, 0, z).applyMatrix4(inverse); return [p.x, p.z] as [number, number]; });
+        setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, fenceData: { ...data, points: local, closed } } : s));
+      }}
+    />
   );
 }

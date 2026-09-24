@@ -11,7 +11,7 @@ import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
 import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimberFrameForRoof, generateTimberFrameForBuilding } from './lib/timberFrameGenerator';
 import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
-import { TimberFrameParams, TimberFrameRecomputeState, WalkModePhase, FenceToolSettings } from './types';
+import { TimberFrameParams, TimberFrameRecomputeState, WalkModePhase, FenceToolSettings, WaterToolSettings } from './types';
 import { createWalkBridge } from './lib/walkMode/inputState';
 import { MOVEMENT_SPEED_RANGE, MOUSE_SENSITIVITY_RANGE } from './lib/walkMode/constants';
 import { defaultGraphicsSettings, normalizeGraphicsSettings } from './lib/graphics/graphicsSettings';
@@ -260,6 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // navigation mode, never part of the saved model.
   const [walkModePhase, setWalkModePhase] = useState<WalkModePhase>('inactive');
   const [fenceToolSettings, setFenceToolSettings] = useState<FenceToolSettings>({ style: 'post-rail', height: 1.25, finish: 'weathered', color: '#7a5a3a' });
+  const [waterToolSettings, setWaterToolSettings] = useState<WaterToolSettings>({ depth: 1.2, clarity: 'lake' });
   const [walkMovementSpeed, setWalkMovementSpeedState] = useState<number>(() => {
     try {
       const stored = localStorage.getItem(MOVEMENT_SPEED_RANGE.storageKey);
@@ -2178,6 +2179,8 @@ console.log("Created rectangle:", myRect.id);`);
       walkModePhase,
       fenceToolSettings,
       setFenceToolSettings,
+      waterToolSettings,
+      setWaterToolSettings,
       setWalkModePhase,
       walkMovementSpeed,
       setWalkMovementSpeed,

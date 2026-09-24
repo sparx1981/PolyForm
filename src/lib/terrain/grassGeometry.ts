@@ -54,6 +54,18 @@ export function extractExclusionFootprints(
   for (const s of shapes) {
     if (s.hidden) continue;
 
+    // Ponds and lakes: nothing grows on the water surface.
+    if (s.type === 'water' && s.waterData && s.waterData.points.length >= 3) {
+      const polygon = s.waterData.points.map(([x, z]) => [s.position[0] + x, s.position[2] + z] as [number, number]);
+      const xs = polygon.map(p => p[0]), zs = polygon.map(p => p[1]);
+      footprints.push({
+        polygon,
+        boxMinX: Math.min(...xs), boxMaxX: Math.max(...xs), boxMinZ: Math.min(...zs), boxMaxZ: Math.max(...zs),
+        ceilingY: s.position[1] + 0.05,
+      });
+      continue;
+    }
+
     const name = (s.name || '').toLowerCase();
     const tags = s.tags || [];
 

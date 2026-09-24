@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { VegetationControls } from './graphics/VegetationControls';
 import {
   MousePointer2,
+  Waves,
   Lasso,
   Footprints,
   Eraser,
@@ -295,7 +296,7 @@ export default function UnifiedToolRail() {
       'landscape_plot', 'landscape_form', 'landscape_embed', 
       'landscape_sculpt', 'landscape_mask', 'landscape_road', 
       'landscape_zone', 'landscape_texture',
-      'tree', 'bush', 'fence', 'railing', 'lamp', 'bench', 'rock'
+      'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock'
     ];
     if (!landscapeTools.includes(activeTool)) {
       setActiveLandscapeCategory(null);
@@ -1262,16 +1263,30 @@ export default function UnifiedToolRail() {
         {
           id: 'fence',
           tool: 'fence',
-          label: 'Post & Rail Fence',
-          subtitle: 'Draw path-following perimeter fencing (click points, Enter to finish)',
+          label: 'Fence',
+          subtitle: 'Draw a fence that follows the ground: split-rail, zigzag, Skigard, close board, picket or panel (click points, Enter to finish)',
           icon: <Fence size={19} />,
           isActive: (s) => s.activeTool === 'fence',
           onClick: (s) => {
             s.setActiveTool('fence');
             setActiveLandscapeCategory(null);
-            setConsoleOutput(prev => [...prev, '[Landscapes] Fence Tool active: click along path to place fence sections, click start point or press Enter to finish.']);
+            setConsoleOutput(prev => [...prev, '[Landscapes] Fence Tool active: click points along the path, click the start point to close or press Enter to finish.']);
           },
           keywords: ['fence', 'post and rail', 'barrier', 'perimeter', 'enclosure']
+        },
+        {
+          id: 'water',
+          tool: 'water',
+          label: 'Pond / Lake',
+          subtitle: 'Draw a pond or lake outline; the ground is dug into a basin and filled with water',
+          icon: <Waves size={19} />,
+          isActive: (s) => s.activeTool === 'water',
+          onClick: (s) => {
+            s.setActiveTool('water');
+            setActiveLandscapeCategory(null);
+            setConsoleOutput(prev => [...prev, '[Landscapes] Water Tool active: click around the edge, then click the first point or press Enter to fill.']);
+          },
+          keywords: ['water', 'pond', 'lake', 'pool', 'river']
         },
         {
           id: 'railing',
