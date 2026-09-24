@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { applyDepthEdgeFade, subdivideDepthGeometry } from './depthGeometry';
+import { applyDepthEdgeFade, subdivideDepthGeometry, terrainGeometryDeps } from './depthGeometry';
 import { createWallMiterFootprintGeometry } from '../archGeometry';
 
 describe('applyDepthEdgeFade', () => {
@@ -101,5 +101,17 @@ describe('applyDepthEdgeFade', () => {
     for (let i = 0; i < position.count; i++) {
       if (Math.abs(position.getX(i)) < 2 && Math.abs(position.getY(i)) < 0.4) expect(fade.getX(i)).toBeCloseTo(1, 5);
     }
+  });
+});
+
+describe('terrainGeometryDeps', () => {
+  it('ignores grass and wildflower edits but tracks changes to the terrain shape', () => {
+    const heights = [0, 1, 2, 3];
+    const terrain = { gridX: 2, gridY: 2, width: 10, depth: 10, heights, grass: { density: 5 } };
+    const regrassed = { ...terrain, grass: { density: 20 }, flowers: { density: 3 } };
+    expect(terrainGeometryDeps(regrassed)).toEqual(terrainGeometryDeps(terrain));
+    terrainGeometryDeps(regrassed).forEach((dep, i) => expect(Object.is(dep, terrainGeometryDeps(terrain)[i])).toBe(true));
+    expect(terrainGeometryDeps({ ...terrain, heights: [...heights] })[4]).not.toBe(heights);
+    expect(terrainGeometryDeps({ ...terrain, width: 20 })).not.toEqual(terrainGeometryDeps(terrain));
   });
 });

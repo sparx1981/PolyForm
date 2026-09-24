@@ -180,3 +180,16 @@ export function applyDepthEdgeFade(geometry: THREE.BufferGeometry, marginMeters 
   }
   geometry.setAttribute('pfEdgeFade', new THREE.Float32BufferAttribute(fade, 1));
 }
+
+/**
+ * The terrain fields that shape its mesh. Grass, wildflowers, zones and textures also live in
+ * terrainData but never change the geometry, so depending on the whole object rebuilt the
+ * terrain (and its surface depth) on every grass slider tick.
+ */
+export function terrainGeometryDeps(terrainData?: {
+  gridX?: number; gridY?: number; width?: number; depth?: number; heights?: number[];
+  shadingMode?: string; textureScale?: number;
+} | null): unknown[] {
+  return [terrainData?.gridX, terrainData?.gridY, terrainData?.width, terrainData?.depth,
+    terrainData?.heights, terrainData?.shadingMode, terrainData?.textureScale];
+}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } fr
 import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
-import { shouldHideAutoNormalMap } from '../lib/graphics/depthGeometry';
+import { shouldHideAutoNormalMap, terrainGeometryDeps } from '../lib/graphics/depthGeometry';
 import { LampLightBinding } from './graphics/LampLightBinding';
 import { batchablePlant } from '../lib/graphics/vegetationEligibility';
 import { pickHostedFixture } from '../lib/hostedFixturePicking';
@@ -12553,7 +12553,9 @@ function TerrainGeometry({ terrainData }: { terrainData?: any }) {
     }
 
     return geo;
-  }, [terrainData]);
+  // Only fields that shape the mesh: grass and wildflower edits must not rebuild the terrain.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, terrainGeometryDeps(terrainData));
 
   useEffect(() => {
     return () => {

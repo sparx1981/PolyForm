@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { Shape } from '../../types';
 import { SurfaceDepth } from '../../lib/graphics';
-import { canApplySurfaceDepth, subdivideDepthGeometry } from '../../lib/graphics/depthGeometry';
+import { canApplySurfaceDepth, subdivideDepthGeometry, terrainGeometryDeps } from '../../lib/graphics/depthGeometry';
 import { useApp } from '../../AppContext';
 
 export interface MaterialDepth {
@@ -107,7 +107,7 @@ export function SurfaceDepthBinding({ shape, materialDepth, heightTexture }: {
       subdivided?.dispose(); ownedTexture?.dispose();
     };
   }, [shape.surfaceDepthEnabled, shape.displacementMapUrl, usingManagedHeight, heightTexture,
-    shape.surfaceDepthSegments, shape.type, shape.args, shape.geometryData, shape.terrainData, shape.surfaceMaterials, shape.bevelAmount]);
+    shape.surfaceDepthSegments, shape.type, shape.args, shape.geometryData, ...terrainGeometryDeps(shape.terrainData), shape.surfaceMaterials, shape.bevelAmount]);
   useLayoutEffect(() => { const { scale, bias } = values(); active.current?.configure(scale, bias); },
     [shape.displacementScale, shape.displacementBias, materialDepth?.scaleMeters, materialDepth?.biasMeters]);
   return <object3D ref={marker} />;
