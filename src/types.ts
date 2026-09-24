@@ -1,3 +1,4 @@
+import type { FenceData, FenceStyle, WoodFinish } from './lib/fence/fenceTypes';
 import type { KernelArcHost } from './tools/kernelArcHost';
 import type * as THREE from 'three';
 import type { FaceId } from './lib/geometry/types';
@@ -178,6 +179,8 @@ export interface Shape {
   customBounds?: { minU: number; maxU: number; minV: number; maxV: number };
   isRingSection?: boolean;
   plantSpeciesId?: string;
+  /** Whole-run fence (path, style, height). Legacy fence sections have none. Points are relative to `position`. */
+  fenceData?: FenceData;
   plantVariation?: string;
   roofData?: any;
   roofTileData?: any;
@@ -478,6 +481,9 @@ export interface AppState {
   fpsCounterEnabled: boolean;
   setFpsCounterEnabled: (enabled: boolean) => void;
   walkModePhase: WalkModePhase;
+  /** Style and size the fence tool uses for the next fence. */
+  fenceToolSettings: FenceToolSettings;
+  setFenceToolSettings: (settings: FenceToolSettings) => void;
   setWalkModePhase: (phase: WalkModePhase) => void;
   walkMovementSpeed: number;
   setWalkMovementSpeed: (speed: number) => void;
@@ -1356,3 +1362,10 @@ export type WalkModePhase = 'inactive' | 'preparing' | 'placing' | 'walking' | '
 
 
 
+
+export interface FenceToolSettings {
+  style: FenceStyle;
+  height: number;
+  finish: WoodFinish;
+  color: string;
+}

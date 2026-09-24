@@ -42,6 +42,7 @@ import {
   Wind
 } from 'lucide-react';
 import { bladesPerSquareMetre } from '../lib/terrain/bladeGrass';
+import { FenceControls } from './landscape/FenceControls';
 import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../types';
 import { createTerrainShape, generateTerrainHeights, TopographyPreset } from '../lib/terrain/terrainFactory';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
@@ -629,14 +630,16 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     setMeasurements?.('Selection, alignment drafts, and earthwork highlights cleared.');
   };
 
-  const [activeTier, setActiveTier] = useState<'terrain' | 'sculpt' | 'corridors' | 'pads' | 'vegetation' | null>(() => {
+  const [activeTier, setActiveTier] = useState<'terrain' | 'sculpt' | 'corridors' | 'pads' | 'vegetation' | 'fence' | null>(() => {
     if (activeTool === 'terrain') return 'terrain';
     if (activeTool === 'landscape_sculpt') return 'sculpt';
     if (activeTool === 'road') return 'corridors';
     if (activeTool === 'pad-rect' || activeTool === 'pad-circle' || activeTool === 'striping') return 'pads';
     if (activeTool === 'tree' || activeTool === 'bush') return 'vegetation';
+    if (activeTool === 'fence') return 'fence';
     return null;
   });
+  const selectedFenceId = shapes.find(s => s.id === selectedId && s.type === 'fence' && s.fenceData)?.id ?? null;
 
   useEffect(() => {
     if (activeTool === 'terrain') setActiveTier('terrain');
@@ -650,11 +653,13 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
       setPadSubTab('surface');
     } else if (activeTool === 'tree' || activeTool === 'bush') {
       setActiveTier('vegetation');
+    } else if (activeTool === 'fence' || (activeTool === 'select' && selectedFenceId)) {
+      setActiveTier('fence');
     } else {
       // Any other tool is active (wall, select, fence, railing, etc.) - hide all civil panels
       setActiveTier(null);
     }
-  }, [activeTool]);
+  }, [activeTool, selectedFenceId]);
 
   if (!isLandscapesToolbarEnabled) return null;
 
@@ -798,13 +803,13 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
         <div className="relative group">
           <CivilToolButton
             tool="fence"
-            label="Post & Rail Fence"
-            subtitle="Draw path-following perimeter fencing (click points, Enter to finish)"
+            label="Fence"
+            subtitle="Draw a fence that follows the ground: split-rail, zigzag, Skigard, close board, picket or panel (click points, Enter to finish)"
             icon={<Fence size={20} />}
             active={activeTool === 'fence'}
             onClick={() => {
               setActiveTool('fence');
-              setConsoleOutput(c => [...c, '[Landscapes] Fence Tool active: click along path to place fence sections, click start point or press Enter to finish.']);
+              setConsoleOutput(c => [...c, '[Landscapes] Fence Tool active: click points along the path, click the start point to close or press Enter to finish.']);
             }}
           />
         </div>
@@ -958,6 +963,12 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                     <span>Grading Pads</span>
                   </>
                 )}
+                {activeTier === 'fence' && (
+                  <>
+                    <Fence size={14} className="text-trimble-blue" />
+                    <span>Fences</span>
+                  </>
+                )}
                 {activeTier === 'vegetation' && (
                   <>
                     {activeTool === 'bush' ? <Sprout size={14} className="text-trimble-blue" /> : <Trees size={14} className="text-trimble-blue" />}
@@ -967,7 +978,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded font-bold">
-                  {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : activeTier === 'pads' ? 'PAD' : 'PLANT'}
+                  {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : activeTier === 'pads' ? 'PAD' : activeTier === 'fence' ? 'FENCE' : 'PLANT'}
                 </span>
                 {!isToolModifierDocked && (
                   <button
@@ -2580,6 +2591,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             )}
 
             {/* 5. Vegetation & Flora Species Picker (Trees / Bushes & Shrubs) */}
+            {activeTier === 'fence' && <FenceControls />}
             {activeTier === 'vegetation' && (
               <div className="space-y-3.5">
                 <VegetationControls />

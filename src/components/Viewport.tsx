@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } fr
 import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
+import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
+import { fenceStyleInfo } from '../lib/fence/fenceTypes';
 import { shouldHideAutoNormalMap, terrainGeometryDeps } from '../lib/graphics/depthGeometry';
 import { LampLightBinding } from './graphics/LampLightBinding';
 import { batchablePlant } from '../lib/graphics/vegetationEligibility';
@@ -1640,6 +1642,7 @@ function Scene() {
     civilStripingSettings,
     addTerrainModifier,
     updateTerrainModifier,
+    fenceToolSettings,
     walkModePhase,
     setWalkModePhase,
     walkMovementSpeed,
@@ -4320,13 +4323,49 @@ function Scene() {
     };
   }, [activeTool, closeBezierLoop, finishBezierOpenPath]);
 
-  const finalizeFenceChain = useCallback(() => {
+  /** The fence tool builds one editable fence from the whole clicked path. */
+  const commitFenceRun = useCallback((vertices: THREE.Vector3[], closed: boolean) => {
+    if (vertices.length < 2) return;
+    const cx = vertices.reduce((sum, v) => sum + v.x, 0) / vertices.length;
+    const cz = vertices.reduce((sum, v) => sum + v.z, 0) / vertices.length;
+    const settings = fenceToolSettings;
+    const count = shapes.filter(s => s.type === 'fence').length + 1;
+    let length = 0;
+    for (let i = 1; i < vertices.length; i++) length += Math.hypot(vertices[i].x - vertices[i - 1].x, vertices[i].z - vertices[i - 1].z);
+    if (closed) length += Math.hypot(vertices[0].x - vertices[vertices.length - 1].x, vertices[0].z - vertices[vertices.length - 1].z);
+    const newShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: `${fenceStyleInfo(settings.style).label} Fence ${count} (${formatValue(length, unit, 1)})`,
+      type: 'fence',
+      position: [cx, 0, cz],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      args: [length, settings.height],
+      color: settings.color,
+      fenceData: {
+        points: vertices.map(v => [v.x - cx, v.z - cz] as [number, number]),
+        closed,
+        style: settings.style,
+        height: settings.height,
+        seed: Math.floor(Math.random() * 12) + 1,
+        finish: settings.finish,
+        color: settings.color,
+      },
+    };
+    addShape(newShape);
+    commitHistory();
+    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    diagLog('TOOL', 'Fence placed', { style: settings.style, points: vertices.length, closed, length });
+  }, [fenceToolSettings, shapes, unit, addShape, commitHistory, recordAction, diagLog]);
+
+  const finalizeFenceChain = useCallback((closed = false) => {
+    if (activeTool === 'fence') commitFenceRun(fenceVertices, closed);
     setFenceVertices([]);
     setFencePlane(null);
     setFenceCandidatePos(null);
     setFenceHoveredVertex(null);
     setMeasurements('');
-  }, [setMeasurements]);
+  }, [setMeasurements, activeTool, commitFenceRun, fenceVertices]);
 
   const createFenceRailingSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, tool: 'fence' | 'railing') => {
     const dist = pA.distanceTo(pB);
@@ -5189,9 +5228,10 @@ function Scene() {
 
       // If clicking first vertex -> close loop & finalize
       if (fenceHoveredVertex === 0 && fenceVertices.length >= 2) {
-        const prev = fenceVertices[fenceVertices.length - 1];
-        createFenceRailingSegment(prev, fenceVertices[0], activeTool);
-        finalizeFenceChain();
+        if (activeTool === 'railing') {
+          createFenceRailingSegment(fenceVertices[fenceVertices.length - 1], fenceVertices[0], activeTool);
+        }
+        finalizeFenceChain(true);
         setMeasurements(`Closed ${activeTool} path loop.`);
         return;
       }
@@ -5231,7 +5271,8 @@ function Scene() {
         if (!pointToPlace) pointToPlace = e.point.clone();
         const prev = fenceVertices[fenceVertices.length - 1];
         if (prev.distanceTo(pointToPlace) >= 0.15) {
-          createFenceRailingSegment(prev, pointToPlace, activeTool);
+          // Railings are placed section by section; fences are built as one run when finished.
+          if (activeTool === 'railing') createFenceRailingSegment(prev, pointToPlace, activeTool);
           const nextVerts = [...fenceVertices, pointToPlace];
           setFenceVertices(nextVerts);
           diagLog("TOOL", `${activeTool} segment placed`, { 
@@ -10284,6 +10325,22 @@ function Scene() {
             <meshBasicMaterial color="#ef4444" wireframe transparent opacity={0.5} />
           </mesh>
         );
+
+        if (shape.type === 'fence' && shape.fenceData) {
+          const fenceTerrain = terrainUnder(fenceWorldPoints(shape), shapes);
+          return (
+            <React.Fragment key={shape.id}>
+              <FenceMesh
+                shape={shape}
+                terrain={fenceTerrain}
+                selected={selectedId === shape.id}
+                meshProps={meshProps}
+                selectionHighlight={selectionHighlight}
+              />
+              {selectedId === shape.id && activeTool === 'select' && <FenceEditHandles shape={shape} terrain={fenceTerrain} />}
+            </React.Fragment>
+          );
+        }
 
         if ((shape.type === 'tree' || shape.type === 'bush' || shape.type === 'rock') && shape.plantSpeciesId) {
           {
