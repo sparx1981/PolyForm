@@ -7,6 +7,9 @@ import { groundUnderRay } from '../lib/terrain/groundRay';
 import { GlassWeatherDriver, WetGlassMaterial, useGlassWeather } from './graphics/WetGlass';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
+import { PatioMesh } from './landscape/PatioMesh';
+import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint } from './landscape/PatioTool';
+import { denseOutline } from '../lib/patio/patioGeometry';
 import { WaterDrawPreview } from './WaterDrawPreview';
 import { terrainsWithWaterBasins, defaultWaterLevel } from '../lib/water/waterBody';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
@@ -1651,6 +1654,7 @@ function Scene() {
     updateTerrainModifier,
     fenceToolSettings,
     waterToolSettings,
+    patioToolSettings,
     walkModePhase,
     setWalkModePhase,
     walkMovementSpeed,
@@ -1662,6 +1666,7 @@ function Scene() {
     const ids = new Set<string>();
     for (const shape of shapes) {
       if (shape.materialBindingId) ids.add(shape.materialBindingId);
+      if (shape.patioData?.surfaceMaterialId) ids.add(shape.patioData.surfaceMaterialId);
       for (const id of Object.values(shape.surfaceMaterialBindings ?? {})) if (id) ids.add(id);
     }
     return Object.fromEntries([...ids].filter(id => materialBindings[id]).map(id => [id, materialBindings[id]]));
@@ -4449,6 +4454,68 @@ function Scene() {
     diagLog('TOOL', `${kind} placed`, { points: vertices.length, level, extent });
   }, [shapes, waterToolSettings, addShape, commitHistory, recordAction, diagLog, setMeasurements]);
 
+  // Ground for the patio tool: as drawn (for the cursor), and before patio levelling (for
+  // building patios and decks, so levelling never feeds back into itself). The latter is only
+  // rebuilt when a terrain itself changes, so editing a patio doesn't rebuild every other one.
+  const patioDrawnGround = useMemo(() => patioGroundHelpers(shapes, dugTerrains, sampleTerrainElevation).drawnGround, [shapes, dugTerrains]);
+  const originalGroundRef = useRef<{ terrains: Shape[]; groundAt: (x: number, z: number) => number } | null>(null);
+  const terrainShapes = shapes.filter(s => s.type === 'terrain');
+  if (!originalGroundRef.current || originalGroundRef.current.terrains.length !== terrainShapes.length
+    || originalGroundRef.current.terrains.some((t, i) => t !== terrainShapes[i])) {
+    originalGroundRef.current = { terrains: terrainShapes, groundAt: patioGroundHelpers(terrainShapes, new Map(), sampleTerrainElevation).originalGround };
+  }
+  const patioOriginalGround = originalGroundRef.current.groundAt;
+
+  /** A drawn outline becomes a patio or deck: level with the house floor when drawn against it. */
+  const commitPatio = useCallback((points: SnappedPoint[], bulges: number[]) => {
+    if (points.length < 3) return;
+    const settings = patioToolSettings;
+    const world = points.map(p => p.p);
+    const cx = world.reduce((sum, p) => sum + p[0], 0) / world.length;
+    const cz = world.reduce((sum, p) => sum + p[1], 0) / world.length;
+    const samples = denseOutline(world, bulges, 0.5).points.map(([x, z]) => patioOriginalGround(x, z)).sort((a, b) => a - b);
+    const walls = points.filter(p => p.wall).map(p => p.wall!.floor);
+    const level = walls.length ? Math.max(...walls)
+      : settings.kind === 'patio' ? samples[Math.floor(samples.length / 2)] + 0.02
+        : samples[samples.length - 1] + settings.deckHeight;
+    // An edge lies along a wall when its middle is on a wall face.
+    const faces = wallFaces(shapes);
+    const wallEdges = world.map((a, i) => {
+      const b = world[(i + 1) % world.length];
+      const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      return Math.abs(bulges[i] ?? 0) < 1e-4 && faces.some(face => {
+        const dx = face.b[0] - face.a[0], dz = face.b[1] - face.a[1], len2 = dx * dx + dz * dz;
+        const t = ((mid[0] - face.a[0]) * dx + (mid[1] - face.a[1]) * dz) / len2;
+        return t >= 0 && t <= 1 && Math.hypot(mid[0] - face.a[0] - dx * t, mid[1] - face.a[1] - dz * t) < 0.05;
+      });
+    });
+    const kind = settings.kind;
+    const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === kind).length + 1;
+    const newShape: Shape = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: `${kind === 'deck' ? 'Deck' : 'Patio'} ${count}`,
+      type: 'patio',
+      position: [cx, level, cz],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      args: [],
+      color: settings.template.color,
+      patioData: {
+        ...settings.template,
+        kind,
+        points: world.map(([x, z]) => [x - cx, z - cz] as [number, number]),
+        bulges,
+        wallEdges,
+        steps: [],
+      },
+    };
+    addShape(newShape);
+    commitHistory();
+    setSelectedId(newShape.id);
+    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    diagLog('TOOL', `${newShape.name} placed`, { points: points.length, level, againstWall: walls.length > 0 });
+  }, [patioToolSettings, patioOriginalGround, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog]);
+
   const finalizeFenceChain = useCallback((closed = false) => {
     // The fence already exists (built live); closing is the only change finishing can make.
     if (activeTool === 'fence' && closed) commitFenceRun(fenceVertices, true);
@@ -5110,7 +5177,8 @@ function Scene() {
     // WalkModeController) - every other tool's click behavior below
     // (selection, drawing, deselect-on-background, etc.) must not run
     // while it's active.
-    if (activeTool === 'walk' || activeTool === 'look') return;
+    // The patio tool draws through its own canvas listeners too (see PatioDrawTool).
+    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio') return;
     pointerUpHandledRef.current = false;
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
 
@@ -6144,7 +6212,7 @@ function Scene() {
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     // See handlePointerDown's identical guard - Walk Mode's own placement
     // hover lives entirely in WalkModeController.
-    if (activeTool === 'walk' || activeTool === 'look') return;
+    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio') return;
     if (activeTool === 'teleport') {
       // Portal Navigation's own hover tracking no longer happens here at
       // all - see TeleportPortalPreview's useFrame. Raycasting against the
@@ -7860,7 +7928,7 @@ function Scene() {
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
-    if (activeTool === 'walk' || activeTool === 'look') return;
+    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio') return;
 
     if (e?.stopPropagation) e.stopPropagation();
     if (pointerUpHandledRef.current) return;
@@ -10427,6 +10495,18 @@ function Scene() {
           </mesh>
         );
 
+        if (shape.type === 'patio' && shape.patioData) {
+          return (
+            <React.Fragment key={shape.id}>
+              <PatioMesh shape={shape} groundAt={patioOriginalGround} meshProps={meshProps} selectionHighlight={selectionHighlight}
+                surfaceBinding={bindingMaterial(shape.patioData.surfaceMaterialId)} />
+              {selectedId === shape.id && (activeTool === 'select' || activeTool === 'lasso' || activeTool === 'patio') && (
+                <PatioEditHandles shape={shape} />
+              )}
+            </React.Fragment>
+          );
+        }
+
         if (shape.type === 'water' && shape.waterData) {
           const [wx, , wz] = shape.position;
           const waterTerrain = shapes.find(s => s.type === 'terrain' && !s.hidden && s.terrainData
@@ -11535,6 +11615,10 @@ function Scene() {
             </mesh>
           ))}
         </group>
+      )}
+
+      {activeTool === 'patio' && (
+        <PatioDrawTool groundAt={patioDrawnGround} onCommit={commitPatio} paused={patioToolSettings.placingSteps} />
       )}
 
       {/* Fence / Railing Path Drawing Preview */}

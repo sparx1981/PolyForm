@@ -39,11 +39,13 @@ import {
   Lamp,
   Armchair,
   Disc,
-  Wind
+  Wind,
+  LayoutGrid,
 } from 'lucide-react';
 import { bladesPerSquareMetre } from '../lib/terrain/bladeGrass';
 import { FenceControls } from './landscape/FenceControls';
 import { WaterControls } from './landscape/WaterControls';
+import { PatioControls } from './landscape/PatioControls';
 import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../types';
 import { createTerrainShape, generateTerrainHeights, TopographyPreset } from '../lib/terrain/terrainFactory';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
@@ -631,7 +633,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     setMeasurements?.('Selection, alignment drafts, and earthwork highlights cleared.');
   };
 
-  const [activeTier, setActiveTier] = useState<'terrain' | 'sculpt' | 'corridors' | 'pads' | 'vegetation' | 'fence' | 'water' | null>(() => {
+  const [activeTier, setActiveTier] = useState<'terrain' | 'sculpt' | 'corridors' | 'pads' | 'vegetation' | 'fence' | 'water' | 'patio' | null>(() => {
     if (activeTool === 'terrain') return 'terrain';
     if (activeTool === 'landscape_sculpt') return 'sculpt';
     if (activeTool === 'road') return 'corridors';
@@ -639,10 +641,12 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
     if (activeTool === 'tree' || activeTool === 'bush') return 'vegetation';
     if (activeTool === 'fence') return 'fence';
     if (activeTool === 'water') return 'water';
+    if (activeTool === 'patio') return 'patio';
     return null;
   });
   const selectedWaterId = shapes.find(s => s.id === selectedId && s.type === 'water' && s.waterData)?.id ?? null;
   const selectedFenceId = shapes.find(s => s.id === selectedId && s.type === 'fence' && s.fenceData)?.id ?? null;
+  const selectedPatioId = shapes.find(s => s.id === selectedId && s.type === 'patio' && s.patioData)?.id ?? null;
 
   useEffect(() => {
     if (activeTool === 'terrain') setActiveTier('terrain');
@@ -660,6 +664,10 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
       setActiveTier('fence');
     } else if (activeTool === 'water') {
       setActiveTier('water');
+    } else if (activeTool === 'patio') {
+      setActiveTier('patio');
+    } else if (selectedPatioId) {
+      setActiveTier('patio');
     } else if (selectedFenceId) {
       // A selected fence or pond shows its settings under any selection tool (select, lasso…).
       setActiveTier('fence');
@@ -669,7 +677,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
       // Any other tool is active (wall, select, fence, railing, etc.) - hide all civil panels
       setActiveTier(null);
     }
-  }, [activeTool, selectedFenceId, selectedWaterId]);
+  }, [activeTool, selectedFenceId, selectedWaterId, selectedPatioId]);
 
   if (!isLandscapesToolbarEnabled) return null;
 
@@ -840,6 +848,20 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
 
         <div className="relative group">
           <CivilToolButton
+            tool="patio"
+            label="Patio / Decking"
+            subtitle="Draw a paved patio set into the ground or a raised timber deck: slabs, bricks, stone, porcelain, gravel or boards, with steps, railings and lights"
+            icon={<LayoutGrid size={20} />}
+            active={activeTool === 'patio'}
+            onClick={() => {
+              setActiveTool('patio');
+              setConsoleOutput(c => [...c, '[Landscapes] Patio / Decking Tool active: click the corners (Shift+click to curve an edge) or drag a rectangle; click the first point or press Enter to finish.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
             tool="railing"
             label="Safety Railing"
             subtitle="Draw path-following guardrails (click points, Enter to finish)"
@@ -999,6 +1021,12 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                     <span>Fences</span>
                   </>
                 )}
+                {activeTier === 'patio' && (
+                  <>
+                    <LayoutGrid size={14} className="text-trimble-blue" />
+                    <span>Patios & Decking</span>
+                  </>
+                )}
                 {activeTier === 'vegetation' && (
                   <>
                     {activeTool === 'bush' ? <Sprout size={14} className="text-trimble-blue" /> : <Trees size={14} className="text-trimble-blue" />}
@@ -1008,7 +1036,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded font-bold">
-                  {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : activeTier === 'pads' ? 'PAD' : activeTier === 'fence' ? 'FENCE' : activeTier === 'water' ? 'WATER' : 'PLANT'}
+                  {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : activeTier === 'pads' ? 'PAD' : activeTier === 'fence' ? 'FENCE' : activeTier === 'water' ? 'WATER' : activeTier === 'patio' ? 'PATIO' : 'PLANT'}
                 </span>
                 {!isToolModifierDocked && (
                   <button
@@ -2623,6 +2651,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             {/* 5. Vegetation & Flora Species Picker (Trees / Bushes & Shrubs) */}
             {activeTier === 'fence' && <FenceControls />}
             {activeTier === 'water' && <WaterControls />}
+            {activeTier === 'patio' && <PatioControls />}
             {activeTier === 'vegetation' && (
               <div className="space-y-3.5">
                 <VegetationControls />

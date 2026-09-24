@@ -1339,6 +1339,7 @@ export default function TopBar() {
                       { tool: 'bush', label: 'Plant Bush / Shrub' },
                       { tool: 'fence', label: 'Fence' },
                       { tool: 'water', label: 'Pond / Lake' },
+                      { tool: 'patio', label: 'Patio / Decking' },
                       { tool: 'railing', label: 'Safety Railing' },
                       { tool: 'lamp', label: 'Light Fixture' },
                       { tool: 'bench', label: 'Park / Garden Bench' },

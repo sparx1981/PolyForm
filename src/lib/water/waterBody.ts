@@ -1,4 +1,5 @@
 import type { Shape, TerrainData } from '../../types';
+import { gradePatioGround } from '../patio/patioGeometry';
 
 /** Optical presets: how fast each colour channel is absorbed and scattered per metre. */
 export type WaterClarity = 'clear' | 'lake' | 'pond' | 'murky';
@@ -185,19 +186,24 @@ export function defaultWaterLevel(outline: Vec[], groundAt: (x: number, z: numbe
 const basinCache = new WeakMap<TerrainData, { key: string; data: TerrainData | undefined }>();
 
 /**
- * Terrain shapes as they should be drawn and sampled, with water basins dug. Cached per
- * terrain until its heights or any digging water body change, so it is cheap to call each render.
+ * Terrain shapes as they should be drawn and sampled, with water basins dug and patios set
+ * into the ground. Cached per terrain until its heights or any water body or patio change, so
+ * it is cheap to call each render.
  */
 export function terrainsWithWaterBasins(shapes: Shape[]): Map<string, Shape> {
   const waters = shapes.filter(s => s.type === 'water' && s.waterData);
-  const key = JSON.stringify(waters.map(w => [w.position, w.hidden, w.waterData]));
+  const patios = shapes.filter(s => s.type === 'patio' && s.patioData);
+  const key = JSON.stringify([waters.map(w => [w.position, w.hidden, w.waterData]),
+    patios.map(p => [p.position, p.hidden, p.patioData!.kind, p.patioData!.points, p.patioData!.bulges, p.patioData!.paving])]);
   const result = new Map<string, Shape>();
   for (const terrain of shapes) {
     if (terrain.type !== 'terrain' || !terrain.terrainData) continue;
     let cached = basinCache.get(terrain.terrainData);
     const fullKey = key + JSON.stringify(terrain.position);
     if (!cached || cached.key !== fullKey) {
-      cached = { key: fullKey, data: digWaterBasins(terrain, waters) };
+      const dug = digWaterBasins(terrain, waters);
+      const graded = dug ? gradePatioGround({ ...terrain, terrainData: dug }, patios) : undefined;
+      cached = { key: fullKey, data: dug && graded && graded !== dug.heights ? { ...dug, heights: graded } : dug };
       basinCache.set(terrain.terrainData, cached);
     }
     result.set(terrain.id, cached.data === terrain.terrainData ? terrain : { ...terrain, terrainData: cached.data });

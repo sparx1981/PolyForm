@@ -3,6 +3,7 @@ import { VegetationControls } from './graphics/VegetationControls';
 import {
   MousePointer2,
   Waves,
+  LayoutGrid,
   Lasso,
   Footprints,
   Eraser,
@@ -296,7 +297,7 @@ export default function UnifiedToolRail() {
       'landscape_plot', 'landscape_form', 'landscape_embed', 
       'landscape_sculpt', 'landscape_mask', 'landscape_road', 
       'landscape_zone', 'landscape_texture',
-      'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock'
+      'tree', 'bush', 'fence', 'railing', 'water', 'patio', 'lamp', 'bench', 'rock'
     ];
     if (!landscapeTools.includes(activeTool)) {
       setActiveLandscapeCategory(null);
@@ -1287,6 +1288,20 @@ export default function UnifiedToolRail() {
             setConsoleOutput(prev => [...prev, '[Landscapes] Water Tool active: click around the edge, then click the first point or press Enter to fill.']);
           },
           keywords: ['water', 'pond', 'lake', 'pool', 'river']
+        },
+        {
+          id: 'patio',
+          tool: 'patio',
+          label: 'Patio / Decking',
+          subtitle: 'Draw a paved patio or a raised timber deck, with steps, railings and lights',
+          icon: <LayoutGrid size={19} />,
+          isActive: (s) => s.activeTool === 'patio',
+          onClick: (s) => {
+            s.setActiveTool('patio');
+            setActiveLandscapeCategory(null);
+            setConsoleOutput(prev => [...prev, '[Landscapes] Patio / Decking Tool active: click the corners (Shift+click to curve an edge) or drag a rectangle; click the first point or press Enter to finish.']);
+          },
+          keywords: ['patio', 'deck', 'decking', 'paving', 'slabs', 'terrace', 'porch', 'boards']
         },
         {
           id: 'railing',

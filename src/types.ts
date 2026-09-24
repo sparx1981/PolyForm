@@ -1,5 +1,6 @@
 import type { FenceData, FenceStyle, WoodFinish } from './lib/fence/fenceTypes';
 import type { WaterData, WaterClarity } from './lib/water/waterBody';
+import type { PatioData, PatioToolSettings } from './lib/patio/patioTypes';
 import type { KernelArcHost } from './tools/kernelArcHost';
 import type * as THREE from 'three';
 import type { FaceId } from './lib/geometry/types';
@@ -29,7 +30,7 @@ export type ToolType =
   | 'bevel' | 'subtract' | 'note' | 'deform'
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
-  | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'water'
+  | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'water' | 'patio'
   | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping'
   | 'block_picker'
   | CivilToolMode;
@@ -137,7 +138,7 @@ export function isTextureUrl(val?: any): boolean {
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
@@ -184,6 +185,8 @@ export interface Shape {
   fenceData?: FenceData;
   /** Lake or pond outline and depth; the shape's y position is the water level. */
   waterData?: WaterData;
+  /** Patio or deck outline and finish; the shape's y position is the level of its walking surface. */
+  patioData?: PatioData;
   plantVariation?: string;
   roofData?: any;
   roofTileData?: any;
@@ -493,6 +496,8 @@ export interface AppState {
   setFenceToolSettings: (settings: FenceToolSettings) => void;
   waterToolSettings: WaterToolSettings;
   setWaterToolSettings: (settings: WaterToolSettings) => void;
+  patioToolSettings: PatioToolSettings;
+  setPatioToolSettings: (settings: PatioToolSettings | ((prev: PatioToolSettings) => PatioToolSettings)) => void;
   setWalkModePhase: (phase: WalkModePhase) => void;
   walkMovementSpeed: number;
   setWalkMovementSpeed: (speed: number) => void;

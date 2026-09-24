@@ -1,3 +1,4 @@
+import { denseOutline } from '../patio/patioGeometry';
 import * as THREE from 'three';
 import { Shape, TerrainModifier, PadModifier, RoadModifier } from '../../types';
 import { sampleTerrainElevation } from '../archRoomAssembly';
@@ -64,6 +65,19 @@ export function extractExclusionFootprints(
         polygon,
         boxMinX: Math.min(...xs), boxMaxX: Math.max(...xs), boxMinZ: Math.min(...zs), boxMaxZ: Math.max(...zs),
         ceilingY: s.position[1] + 0.05,
+      });
+      continue;
+    }
+
+    // Patios and decks: nothing grows on the paving, and it's too dark under a deck.
+    if (s.type === 'patio' && s.patioData && s.patioData.points.length >= 3) {
+      const outline = denseOutline(s.patioData.points, s.patioData.bulges, 0.3).points;
+      const polygon = outline.map(([x, z]) => [s.position[0] + x, s.position[2] + z] as [number, number]);
+      const xs = polygon.map(p => p[0]), zs = polygon.map(p => p[1]);
+      footprints.push({
+        polygon,
+        boxMinX: Math.min(...xs), boxMaxX: Math.max(...xs), boxMinZ: Math.min(...zs), boxMaxZ: Math.max(...zs),
+        ceilingY: s.position[1] + 0.1,
       });
       continue;
     }

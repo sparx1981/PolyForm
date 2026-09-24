@@ -46,6 +46,24 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'patio-decking',
+    title: 'Patio / Decking Tool',
+    category: 'tools',
+    content: 'Draw a paved patio set level into the ground, or a raised timber deck on posts, with steps, railings and lights. Everything is built as real 3D slabs, bricks, stones and boards.',
+    steps: [
+      'Pick Patio / Decking from the Landscapes toolbar and choose Patio (paving) or Decking (timber) in its panel.',
+      'Click the corners of the outline and click the first point (or press Enter, or double-click) to finish. Or drag out a rectangle. Backspace removes the last point, Esc cancels.',
+      'Hold Shift and click a point to make the next edge curve through it.',
+      'Points snap to building walls (they turn blue). A patio or deck drawn against a building is set level with its floor, and the edges along the wall get no railing or steps.',
+      'Patios are set into the ground (the terrain is levelled under them) with an optional kerb and a retaining wall where the ground is higher. Choose slabs, block paving (herringbone, stretcher, basketweave), natural stone, porcelain or gravel, and set slab size, pattern angle, joint width and grout colour.',
+      'Decks sit on joists, beams and posts (or behind skirting boards). Choose softwood, hardwood, composite, weathered or painted boards, board width and gap, direction, picture-frame edging, grooved boards, a fascia, timber/glass/cable railings and built-in lights that glow at night.',
+      '"Choose from library" applies any Poly Haven material to the slabs or boards.',
+      'Select a patio or deck to change its settings live. Drag the yellow corners to reshape, click a white dot to add a corner, Shift-drag a dot to curve that edge, right-click a corner to remove it.',
+      'Click "Add steps: click an edge" and then click an edge to add a flight of steps down to the ground. The number of steps comes from the height.',
+      'The Quantities box shows the area, perimeter, slab/brick count or board length for estimating.',
+    ]
+  },
+  {
     id: 'walk-mode',
     title: 'Walk Mode',
     category: 'tools',
