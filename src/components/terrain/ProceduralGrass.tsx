@@ -122,7 +122,7 @@ export function ProceduralGrass({
 
   useEffect(() => { if (!walking) trail.clear(); }, [walking, trail]);
 
-  useFrame(({ camera, clock }, delta) => {
+  useFrame(({ camera, clock, size }, delta) => {
     if (!field) return;
     if (isAnimated) shared.uTime.value += delta * (grassSettings.windSpeed ?? 2.0);
     shared.uClock.value = clock.elapsedTime;
@@ -132,6 +132,16 @@ export function ProceduralGrass({
     // Level of detail is measured from the camera while walking or close to the ground; from
     // far editor views it is measured around the focus so the viewed area keeps its blades.
     const orthographic = (camera as THREE.OrthographicCamera).isOrthographicCamera;
+    // Pixel footprint, so the shader can keep distant blades at least a pixel wide.
+    if (orthographic) {
+      const ortho = camera as THREE.OrthographicCamera;
+      shared.uPixelWorld.value = (ortho.top - ortho.bottom) / ortho.zoom / Math.max(1, size.height);
+      shared.uPixelAngle.value = 0;
+    } else {
+      const fov = (camera as THREE.PerspectiveCamera).fov ?? 50;
+      shared.uPixelWorld.value = 0;
+      shared.uPixelAngle.value = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) / Math.max(1, size.height);
+    }
     const viewDistance = cameraPosition.distanceTo(focus);
     if (walking || (!orthographic && viewDistance < 25)) {
       shared.uLodOrigin.value.copy(cameraPosition);

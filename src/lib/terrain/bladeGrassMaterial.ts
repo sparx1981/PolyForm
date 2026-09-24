@@ -33,6 +33,9 @@ export interface BladeGrassUniforms {
   uTrail: { value: THREE.Vector4[] };
   uTrailRadius: { value: number };
   uTrailRecovery: { value: number };
+  /** Size of one screen pixel in metres: a constant part (orthographic) plus one per metre of distance. */
+  uPixelWorld: { value: number };
+  uPixelAngle: { value: number };
 }
 
 /** Per-ring values: each ring has its own grid and fade band. */
@@ -71,6 +74,8 @@ export function createBladeGrassUniforms(): BladeGrassUniforms {
     uTrail: { value: Array.from({ length: TRAIL_LENGTH }, () => new THREE.Vector4(0, 0, -1e6, 0)) },
     uTrailRadius: { value: 0.6 },
     uTrailRecovery: { value: 3 },
+    uPixelWorld: { value: 0 },
+    uPixelAngle: { value: 0.001 },
   };
 }
 
@@ -147,6 +152,8 @@ uniform float uCells;
 uniform vec2 uFadeIn;
 uniform vec2 uFade;
 uniform float uWidthScale;
+uniform float uPixelWorld;
+uniform float uPixelAngle;
 varying float vT;
 varying float vSide;
 varying float vClumpTone;
@@ -232,10 +239,11 @@ vFar = smoothstep(6.0, 40.0, gDist);
 // Blade shape.
 float gHeight = (uBaseHeight + uHeightVariance * mix(gClumpSeed, gSeed, 0.35)) * (0.75 + 0.5 * gHash(gCell + 5.2));
 gHeight *= gKeep;
-// Wider than a real blade: a few hundred blades per m² must cover like thousands.
-float gWidth = min(uSpacing * mix(0.4, 0.6, gHash(gCell + 2.9)), gHeight * (0.25 + 0.35 * vFar)) * uWidthScale;
-// Distant blades are sub-pixel slivers from above: widen them so the sward still covers the soil.
-gWidth *= 1.0 + 1.5 * vFar;
+// Real blade widths (a few millimetres), independent of how far apart blades are. Blades
+// never get thinner than about one pixel, so distant grass doesn't break up into shimmer.
+float gWidth = (mix(0.0035, 0.008, gHash(gCell + 2.9)) + gHeight * 0.012) * uWidthScale;
+float gPixel = uPixelWorld + uPixelAngle * distance(cameraPosition, gRoot);
+gWidth = max(gWidth, gPixel * 1.2) * step(1e-4, gHeight);
 float gYaw = atan(gOutward.y, gOutward.x) + (gHash(gCell + 8.8) - 0.5) * 2.4;
 vec2 gFacing = vec2(cos(gYaw), sin(gYaw));
 vec2 gSideDir = vec2(-gFacing.y, gFacing.x);

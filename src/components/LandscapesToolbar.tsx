@@ -41,6 +41,7 @@ import {
   Disc,
   Wind
 } from 'lucide-react';
+import { bladesPerSquareMetre } from '../lib/terrain/bladeGrass';
 import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../types';
 import { createTerrainShape, generateTerrainHeights, TopographyPreset } from '../lib/terrain/terrainFactory';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
@@ -1299,7 +1300,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                         <div className="flex justify-between items-center mb-1">
                           <label className="text-[10px] font-medium text-gray-600 dark:text-gray-400">Density</label>
                           <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                            {grassOptions.density} / m²
+                            {bladesPerSquareMetre(grassOptions.density).toLocaleString()} blades / m²
                           </span>
                         </div>
                         <input
