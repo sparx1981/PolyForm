@@ -6,7 +6,7 @@ import { useApp } from '../AppContext';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
 import { WaterSim } from '../lib/water/waterSim';
 import { WaterReflection } from '../lib/water/waterReflection';
-import { WATER_CLARITY, offsetOutline, waterMargin } from '../lib/water/waterBody';
+import { WATER_CLARITY, deepestPoint, offsetOutline, waterMargin, waterWorldOutline } from '../lib/water/waterBody';
 import { createHeightTexture } from '../lib/terrain/bladeGrass';
 import { createWaterSurfaceMaterial, createWaterTransmittanceMaterial, createWaterUniforms } from '../lib/water/waterMaterial';
 
@@ -90,24 +90,38 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
     }
   }, [uniforms, data, heights, terrain]);
 
-  // If the ground at the pond's centre is above the water, the water can't be seen: say why.
+  // If the ground at the pond's deepest point is above the water, it can't be seen: say why.
+  // (The shape's position is the points' average, which lies outside C-shaped ponds.)
   const { diagLog } = useApp();
   useEffect(() => {
-    const [cx, level, cz] = shape.position;
-    const ground = terrain ? sampleTerrainElevation(cx, cz, terrain) : level - data.depth;
-    const values = { shapeId: shape.id, level: +level.toFixed(2), groundAtCentre: +ground.toFixed(2), dig: data.dig !== false, terrain: terrain?.id ?? null };
+    const [, level] = shape.position;
+    const inner = deepestPoint(waterWorldOutline(shape));
+    const ground = terrain ? sampleTerrainElevation(inner.x, inner.z, terrain) : level - data.depth;
+    const values = { shapeId: shape.id, level: +level.toFixed(2), groundAtDeepest: +ground.toFixed(2), at: [+inner.x.toFixed(2), +inner.z.toFixed(2)], dig: data.dig !== false, terrain: terrain?.id ?? null };
     if (ground >= level) diagLog('ERROR', `${shape.name}: ground is above the water level, so the water is hidden`, values);
     else diagLog('RENDER', `${shape.name} water shown`, values);
-  }, [shape.id, shape.name, shape.position, data.depth, data.dig, terrain?.terrainData?.heights]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shape.id, shape.name, shape.position, data.points, data.depth, data.dig, terrain?.terrainData?.heights]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Flicker hunting: log mounts, and once a second how many frames drew this pond's water, how
+  // often the waves and mirror updated, and whether the water was hidden when the frame began.
+  useEffect(() => {
+    diagLog('RENDER', `${shape.name} water mounted`, { shapeId: shape.id, simUsers });
+    return () => diagLog('RENDER', `${shape.name} water unmounted`, { shapeId: shape.id });
+  }, [shape.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stats = useRef({ since: 0, frames: 0, drawn: 0, hidden: 0, mirror: 0, simUpdates: 0, reports: 0 });
 
   const group = useRef<THREE.Group>(null);
   useFrame(({ gl, scene, clock, camera }) => {
     if (!sharedSim) return;
     const frame = gl.info.render.frame;
     if (clock.elapsedTime - lastSunLookup > 1) { findSun(scene, sunDirection); lastSunLookup = clock.elapsedTime; }
+    const st = stats.current;
+    st.frames++;
+    if (group.current && !group.current.visible) st.hidden++;
     if (frame !== lastSimFrame) {
       lastSimFrame = frame;
       sharedSim.update(gl, clock.elapsedTime, sunDirection);
+      st.simUpdates++;
     }
     uniforms.uSunDir.value.copy(sunDirection);
     uniforms.uCausShift.value.copy(sharedSim.causticShift);
@@ -124,6 +138,16 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
       reflection.render(gl, scene, camera, uniforms.uLevel.value,
         object => object.name === 'procedural-grass-mesh' || object.userData?.isWater === true);
       uniforms.uReflectionMatrix.value.copy(reflection.textureMatrix);
+      st.mirror++;
+    }
+    // Only the first few seconds after mounting, so the log stays readable.
+    if (clock.elapsedTime - st.since >= 1) {
+      if (st.reports < 8 && st.since > 0) {
+        st.reports++;
+        diagLog('RENDER', `${shape.name} water frames`, { frames: st.frames, drawn: st.drawn, hiddenAtFrameStart: st.hidden,
+          mirrorRenders: st.mirror, waveUpdates: st.simUpdates, cameraAboveWater: camera.position.y > uniforms.uLevel.value });
+      }
+      st.since = clock.elapsedTime; st.frames = st.drawn = st.hidden = st.mirror = st.simUpdates = 0;
     }
   });
 
@@ -132,7 +156,8 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
   return (
     <group {...placement} ref={group}>
       <mesh geometry={geometry} material={transmittance} renderOrder={10} userData={{ isShape: true, id: shape.id, isWater: true }} />
-      <mesh geometry={geometry} material={surface} renderOrder={11} receiveShadow userData={{ isShape: true, id: shape.id, isWater: true }} />
+      <mesh geometry={geometry} material={surface} renderOrder={11} receiveShadow userData={{ isShape: true, id: shape.id, isWater: true }}
+        onAfterRender={() => { stats.current.drawn++; }} />
       {selectionHighlight}
     </group>
   );

@@ -49,15 +49,25 @@ export function signedEdgeDistance(x: number, z: number, polygon: Vec[]): number
   return pointInPolygon(x, z, polygon) ? best : -best;
 }
 
-/** Largest distance from the edge to any interior point, sampled: sets how quickly the bed deepens. */
-function inscribedRadius(polygon: Vec[]): number {
+/**
+ * The point deepest inside the outline (sampled) and its distance from the edge. Unlike the
+ * average of the points, it is always in the water, even for C-shaped or winding ponds.
+ */
+export function deepestPoint(polygon: Vec[]): { x: number; z: number; distance: number } {
   const xs = polygon.map(p => p.x), zs = polygon.map(p => p.z);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
-  let best = 0;
-  for (let i = 0; i <= 12; i++) for (let j = 0; j <= 12; j++) {
-    best = Math.max(best, signedEdgeDistance(minX + (maxX - minX) * i / 12, minZ + (maxZ - minZ) * j / 12, polygon));
+  let best = { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2, distance: -Infinity };
+  for (let i = 0; i <= 16; i++) for (let j = 0; j <= 16; j++) {
+    const x = minX + (maxX - minX) * i / 16, z = minZ + (maxZ - minZ) * j / 16;
+    const distance = signedEdgeDistance(x, z, polygon);
+    if (distance > best.distance) best = { x, z, distance };
   }
-  return Math.max(best, 0.1);
+  return best;
+}
+
+/** Largest distance from the edge to any interior point, sampled: sets how quickly the bed deepens. */
+function inscribedRadius(polygon: Vec[]): number {
+  return Math.max(deepestPoint(polygon).distance, 0.1);
 }
 
 /** Water depth at a signed edge distance: a short shallow shelf, then a smooth bowl. */

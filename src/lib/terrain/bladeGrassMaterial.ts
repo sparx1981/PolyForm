@@ -282,12 +282,14 @@ vec3 gSpine = gBezier(gP1, gP2, gTip, t);
 vec3 gTangent = normalize(gBezierTangent(gP1, gP2, gTip, max(t, 0.02)) + vec3(0.0, 1e-4, 0.0));
 
 vec3 gSide3 = vec3(gSideDir.x, 0.0, gSideDir.y);
-vec3 gNormal = normalize(cross(gSide3, gTangent));
+// A blade bent exactly sideways has its tangent along the side: keep the normal defined.
+vec3 gCross = cross(gSide3, gTangent);
+vec3 gNormal = dot(gCross, gCross) > 1e-12 ? normalize(gCross) : vec3(0.0, 1.0, 0.0);
 // Face the camera so both faces shade as the lit front (no back-face darkening).
 vec3 gView = normalize(cameraPosition - (gRoot + gSpine));
 if (dot(gNormal, gView) < 0.0) gNormal = -gNormal;
 
-float gTaper = pow(1.0 - t, 0.9) * (1.0 - t * 0.1);
+float gTaper = pow(max(1.0 - t, 0.0), 0.9) * (1.0 - t * 0.1);
 vec3 gPos = gRoot + gSpine + gSide3 * (side * gWidth * 0.5 * gTaper);
 // Raised centre ridge: a V cross-section with rounded normals.
 gPos += gNormal * (1.0 - abs(side)) * gWidth * 0.25 * gTaper;
@@ -331,12 +333,14 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
     shader.fragmentShader = fragmentDeclarations + shader.fragmentShader;
     shader.fragmentShader = inject(shader.fragmentShader, '#include <color_fragment>', `
       #include <color_fragment>
-      float gT = pow(vT, 1.2);
+      // vT can dip a hair below 0 when interpolated; pow() of a negative is NaN on GPUs.
+      float gVT = clamp(vT, 0.0, 1.0);
+      float gT = pow(gVT, 1.2);
       vec3 gCol = mix(uRootColor, uTipColor, gT);
       gCol *= mix(0.82, 1.12, vClumpTone) * mix(0.9, 1.08, vBladeTone);
       gCol = mix(gCol, uDryColor, vDry * 0.6);
       // Root occlusion from the surrounding sward, eased off in the distance.
-      gCol *= mix(mix(0.3, 1.0, pow(vT, 0.7)), 1.0, vFar * 0.5);
+      gCol *= mix(mix(0.3, 1.0, pow(gVT, 0.7)), 1.0, vFar * 0.5);
       // Faint lengthwise vein along the centre ridge.
       gCol *= 1.0 + 0.06 * (1.0 - abs(vSide)) * vT;
       diffuseColor.rgb *= gCol;
@@ -348,7 +352,7 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
     shader.fragmentShader = inject(shader.fragmentShader, '#include <opaque_fragment>', `
       {
         vec3 gToCamera = normalize(vViewPosition);
-        float gThin = pow(vT, 1.2) * (1.0 - vFar);
+        float gThin = pow(clamp(vT, 0.0, 1.0), 1.2) * (1.0 - vFar);
         #if NUM_DIR_LIGHTS > 0
           // Sun shining through the blade toward the camera; directDiffuse carries shadowing.
           float gBack = pow(clamp(dot(-gToCamera, directionalLights[0].direction), 0.0, 1.0), 2.5);
@@ -358,6 +362,6 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-blade-grass-v1';
+  material.customProgramCacheKey = () => 'polyform-blade-grass-v2';
   return material;
 }

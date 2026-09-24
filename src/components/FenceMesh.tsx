@@ -89,7 +89,9 @@ export function FenceMesh({ shape, terrain, selected, meshProps, selectionHighli
   useEffect(() => {
     let cancelled = false;
     const snapshot = fenceTerrainSnapshot(worldPoints, terrain);
-    requestFenceBuild(data, snapshot, terrain?.position[1] ?? 0).then(result => {
+    // Built in world space: the saved points are relative to the fence's transform, the terrain
+    // snapshot is in world coordinates, and the triangles are shown under worldToLocal below.
+    requestFenceBuild({ ...data, points: worldPoints }, snapshot, terrain?.position[1] ?? 0).then(result => {
       if (cancelled) return;
       if (result.ok) {
         setBatches(result.batches); setError(null);

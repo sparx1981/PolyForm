@@ -189,13 +189,22 @@ export function makeWetGlass(material: THREE.MeshPhysicalMaterial) {
     `);
     const transmission = THREE.ShaderChunk.transmission_fragment
       .replace('material.transmission = transmission;', 'material.transmission = transmission * (1. - gOpaque);')
-      .replace('material.thickness = thickness;', 'material.thickness = thickness + gH * 45.;');
+      .replace('material.thickness = thickness;', 'material.thickness = thickness + gH * 45.;')
+      // One NaN pixel anywhere behind the glass spreads through the blur mip chain into a black
+      // block: fall back to the sharp view, then to the glass's own lit colour.
+      .replace('material.transmissionAlpha = mix(', `if (any(isnan(transmitted)) || any(isinf(transmitted))) {
+        vec4 gNdc = projectionMatrix * viewMatrix * vec4(vWorldPosition, 1.0);
+        transmitted = vec4(textureLod(transmissionSamplerMap, gNdc.xy / gNdc.w * 0.5 + 0.5, 0.0).rgb, 1.0);
+        if (any(isnan(transmitted)) || any(isinf(transmitted))) transmitted = vec4(totalDiffuse, 1.0);
+      }
+      transmitted.rgb = min(transmitted.rgb, vec3(64.0));
+      material.transmissionAlpha = mix(`);
     if (transmission === THREE.ShaderChunk.transmission_fragment) throw new Error('PolyForm shader anchor missing: transmission_fragment');
     shader.fragmentShader = inject(shader.fragmentShader, '#include <transmission_fragment>', `
       ${transmission}
       totalDiffuse *= 1. - gRim * .45;
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-wet-glass-v1';
+  material.customProgramCacheKey = () => 'polyform-wet-glass-v2';
   return material;
 }

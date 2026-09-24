@@ -3857,7 +3857,15 @@ function Scene() {
     const baseY = Math.max(pA.y, effectivePB.y);
     center.y = baseY + actualHeight / 2;
 
-    const derivedStory = Math.max(1, Math.round(baseY / 2.8) + 1);
+    // Storey from the height above the ground under the wall (not above y = 0), so walls drawn
+    // on raised terrain are ground-floor walls rather than an upper storey.
+    const groundAt = (x: number, z: number) => {
+      const terrain = shapes.find(t => t.type === 'terrain' && !t.hidden && t.terrainData
+        && Math.abs(x - t.position[0]) <= t.terrainData.width / 2 && Math.abs(z - t.position[2]) <= t.terrainData.depth / 2);
+      return terrain ? sampleTerrainElevation(x, z, terrain) : 0;
+    };
+    const groundY = Math.min(groundAt(pA.x, pA.z), groundAt(effectivePB.x, effectivePB.z));
+    const derivedStory = Math.max(1, Math.round((baseY - groundY) / 2.8) + 1);
 
     const wallCount = shapes.filter(s => s.type === 'wall').length + 1;
     let wallName = `Exterior Wall ${wallCount}`;
@@ -4002,7 +4010,8 @@ function Scene() {
         const pB = loopVectors[(i + 1) % loopLen];
         let best: Shape | null = null;
         if (useExactChainMatch) {
-          best = wallsForStory.find(s => s.id === chainShapeIds[i]) ?? null;
+          // The chain ids are the walls drawn for this loop: trust them whatever storey tag they carry.
+          best = next.find(s => s.type === 'wall' && s.id === chainShapeIds[i]) ?? null;
         } else {
           const midX = (pA.x + pB.x) / 2;
           const midZ = (pA.z + pB.z) / 2;
@@ -4085,7 +4094,7 @@ function Scene() {
         const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
         const midX = (start.x + end.x) / 2;
         const midZ = (start.y + end.y) / 2;
-        const original = wallsForStory.find(s => s.id === ew.shapeId)!;
+        const original = next.find(s => s.id === ew.shapeId)!;
         updatesByShapeId.set(ew.shapeId, {
           ...original,
           position: [midX, assembly.datumZ + ew.wallH / 2, midZ],

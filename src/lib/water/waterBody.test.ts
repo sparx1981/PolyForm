@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Shape } from '../../types';
-import { bedDepth, defaultWaterLevel, digWaterBasins, offsetOutline, signedEdgeDistance, waterMargin } from './waterBody';
+import { bedDepth, deepestPoint, defaultWaterLevel, pointInPolygon, digWaterBasins, offsetOutline, signedEdgeDistance, waterMargin } from './waterBody';
 import { sampleTerrainElevation } from '../archRoomAssembly';
 
 const flat = (): Shape => ({
@@ -80,5 +80,16 @@ describe('small ponds on a coarse terrain grid', () => {
       expect(sampleTerrainElevation(x, z, dug)).toBeLessThan(-0.05);
     }
     expect(waterMargin(terrain)).toBeGreaterThan(50 / 31);
+  });
+});
+
+describe('deepestPoint', () => {
+  it('stays inside a C-shaped pond whose average point is dry land', () => {
+    const c = [[16.41, 11.28], [16.86, 6.24], [18.68, 2.8], [22.59, 1.29], [24.22, 3.43], [24.86, 8.31], [24.32, 11.31], [22.7, 14.63],
+      [20.18, 17.19], [18.48, 17.71], [16.89, 17.71], [16.43, 16.79], [17.68, 15], [19.09, 14.46], [21.27, 12.06], [22.15, 9.19],
+      [21, 7.31], [19.49, 7.74], [18.7, 9.78], [18.13, 11.16], [16.89, 12.19]].map(([x, z]) => ({ x, z }));
+    const inner = deepestPoint(c);
+    expect(pointInPolygon(inner.x, inner.z, c)).toBe(true);
+    expect(inner.distance).toBeGreaterThan(0.5);
   });
 });
