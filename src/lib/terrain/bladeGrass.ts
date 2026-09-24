@@ -29,7 +29,7 @@ export interface GrassRing {
 }
 
 /** Instanced blades per ring (near, middle, far) are capped to keep a GPU budget. */
-export const MAX_RING_BLADES = [240_000, 200_000, 160_000];
+export const MAX_RING_BLADES = [300_000, 280_000, 160_000];
 
 /** Blades per square metre for the 1–25 density slider (a real lawn has thousands). */
 export function bladesPerSquareMetre(density: number): number {
@@ -37,31 +37,30 @@ export function bladesPerSquareMetre(density: number): number {
 }
 
 /**
- * Near ring: full-resolution blades at the requested density. Middle and far rings: coarser,
- * sparser, proportionally wider blades, each drawn where the finer ring hands over. Taller
- * grass stays visible further away, so its rings are larger. Dense settings shrink the near
- * ring (down to a floor) before thinning it, because close-up density is what reads as grass.
+ * Near ring: full-resolution blades at the requested density, out to 5–12 m (dense settings
+ * shrink it rather than thinning it, so the slider is honoured close up). Middle ring: twice its
+ * radius at twice the spacing or more. Far ring: coarse blades to the horizon. Middle blades are
+ * at most 2x wider, far ones (a pixel or two across) at most 4x; distance itself keeps blades at
+ * least a pixel wide in the shader, so nearby grass never reads as a different, fatter model. Taller grass stays
+ * visible further away, so its rings are larger.
  */
 export function grassRings(settings: Pick<GrassSettings, 'density' | 'baseHeight' | 'heightVariance'>): GrassRing[] {
   const height = settings.baseHeight + settings.heightVariance;
   const reach = THREE.MathUtils.clamp(0.75 + height * 1.5, 1, 2.5);
   const wanted = 1 / Math.sqrt(bladesPerSquareMetre(settings.density));
-  const nearRadius = THREE.MathUtils.clamp(Math.sqrt(MAX_RING_BLADES[0]) * wanted / 2, 7 * reach, 12 * reach);
+  const nearRadius = THREE.MathUtils.clamp(Math.sqrt(MAX_RING_BLADES[0]) * wanted / 2, 5 * reach, 12 * reach);
   const specs = [
-    { radius: nearRadius, spacing: wanted, segments: 4 },
-    { radius: 28 * reach, spacing: wanted * 2, segments: 3 },
-    { radius: 60 * reach, spacing: wanted * 4, segments: 2 },
+    { radius: nearRadius, spacing: wanted, segments: 4, maxWiden: 1 },
+    { radius: nearRadius * 2, spacing: wanted * 2, segments: 3, maxWiden: 2 },
+    { radius: 60 * reach, spacing: wanted * 6, segments: 2, maxWiden: 4 },
   ];
   let nearSpacing = wanted;
-  return specs.map((spec, index) => {
+  return specs.map(({ maxWiden, ...spec }, index) => {
     // Widen the spacing (never shrink the area further) until the ring fits its blade budget.
     const minSpacing = (2 * spec.radius) / Math.sqrt(MAX_RING_BLADES[index]);
     const spacing = Math.max(spec.spacing, minSpacing);
     if (index === 0) nearSpacing = spacing;
-    // Coverage per square metre scales with width / spacing², so widen by the density ratio,
-    // capped so far blades never become obvious ribbons.
-    const widthScale = Math.min(6, (spacing / nearSpacing) ** 2);
-    return { ...spec, spacing, widthScale, cells: Math.ceil((2 * spec.radius) / spacing) };
+    return { ...spec, spacing, widthScale: Math.min(maxWiden, spacing / nearSpacing), cells: Math.ceil((2 * spec.radius) / spacing) };
   });
 }
 
