@@ -72,7 +72,7 @@ export function FenceControls() {
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Timber</label>
           <select value={current.finish} onChange={event => update({ finish: event.target.value as FenceToolSettings['finish'] })}
-            className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800">
+            className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
             {WOOD_FINISHES.map(finish => <option key={finish.id} value={finish.id}>{finish.label}</option>)}
           </select>
         </div>

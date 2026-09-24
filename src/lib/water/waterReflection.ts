@@ -66,19 +66,23 @@ export class WaterReflection {
 
     this.hidden.length = 0;
     scene.traverseVisible(object => { if (exclude(object)) this.hidden.push(object); });
-    this.hidden.forEach(object => { object.visible = false; });
     const previousTarget = renderer.getRenderTarget();
-    // Reuse this frame's shadow maps rather than re-rendering them for the mirror view. They
-    // only exist once the scene has been drawn, so the first frames update them normally
-    // (sampling a shadow map that was never created draws nothing).
     const previousShadowAuto = renderer.shadowMap.autoUpdate;
-    if (++this.renders > 3) renderer.shadowMap.autoUpdate = false;
-    renderer.setRenderTarget(this.target);
-    renderer.clear();
-    renderer.render(scene, this.camera);
-    renderer.setRenderTarget(previousTarget);
-    renderer.shadowMap.autoUpdate = previousShadowAuto;
-    this.hidden.forEach(object => { object.visible = true; });
+    try {
+      this.hidden.forEach(object => { object.visible = false; });
+      // Reuse this frame's shadow maps rather than re-rendering them for the mirror view. They
+      // only exist once the scene has been drawn, so the first frames update them normally
+      // (sampling a shadow map that was never created draws nothing).
+      if (++this.renders > 3) renderer.shadowMap.autoUpdate = false;
+      renderer.setRenderTarget(this.target);
+      renderer.clear();
+      renderer.render(scene, this.camera);
+    } finally {
+      // Always restore, even if the mirror render fails: hidden water must never stay hidden.
+      renderer.setRenderTarget(previousTarget);
+      renderer.shadowMap.autoUpdate = previousShadowAuto;
+      this.hidden.forEach(object => { object.visible = true; });
+    }
   }
 
   /** The mirrored camera from the last render (for debugging and tests). */

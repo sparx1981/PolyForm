@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Shape, TerrainModifier, PadModifier, RoadModifier } from '../../types';
 import { sampleTerrainElevation } from '../archRoomAssembly';
 import { evaluateCatmullRomSpline, distancePointToLineSegment2D } from './math';
+import { offsetOutline } from '../water/waterBody';
 
 /**
  * Floor slab and road footprint descriptor used for high-speed exclusion tests.
@@ -56,7 +57,8 @@ export function extractExclusionFootprints(
 
     // Ponds and lakes: nothing grows on the water surface.
     if (s.type === 'water' && s.waterData && s.waterData.points.length >= 3) {
-      const polygon = s.waterData.points.map(([x, z]) => [s.position[0] + x, s.position[2] + z] as [number, number]);
+      // The water reaches a grid cell past its outline; ground above the level keeps its grass.
+      const polygon = offsetOutline(s.waterData.points, 4).map(([x, z]) => [s.position[0] + x, s.position[2] + z] as [number, number]);
       const xs = polygon.map(p => p[0]), zs = polygon.map(p => p[1]);
       footprints.push({
         polygon,

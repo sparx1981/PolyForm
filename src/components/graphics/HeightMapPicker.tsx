@@ -171,7 +171,7 @@ export function HeightMapPicker({ value, onChange, sourceTextureUrl }: {
     {value.displacementMapUrl && <>
       <GraphicsSlider label="Depth amount" value={value.displacementScale ?? 0.04} min={0} max={0.2} step={0.001} unit=" m" onChange={displacementScale => onChange({ displacementScale })} />
       <GraphicsSlider label="Depth offset" value={value.displacementBias ?? 0} min={-0.2} max={0.2} step={0.001} unit=" m" onChange={displacementBias => onChange({ displacementBias })} />
-      <label className="block">Surface detail<select className="block w-full bg-white dark:bg-gray-800 border rounded" value={value.surfaceDepthSegments ?? 16} onChange={e => onChange({ surfaceDepthSegments: Number(e.target.value) })}>
+      <label className="block">Surface detail<select className="block w-full bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 border rounded" value={value.surfaceDepthSegments ?? 16} onChange={e => onChange({ surfaceDepthSegments: Number(e.target.value) })}>
         <option value={8}>Low</option><option value={16}>Balanced</option><option value={32}>High</option>
       </select></label>
       {value.surfaceDepthAutoNormal === false && value.normalMapUrl && <button className="text-blue-500" onClick={regenerateNormalFromCurrentHeight}>Regenerate normal map from height</button>}

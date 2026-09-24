@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import type { Shape } from '../types';
+import { useApp } from '../AppContext';
+import { sampleTerrainElevation } from '../lib/archRoomAssembly';
 import { WaterSim } from '../lib/water/waterSim';
 import { WaterReflection } from '../lib/water/waterReflection';
-import { WATER_CLARITY } from '../lib/water/waterBody';
+import { WATER_CLARITY, offsetOutline, waterMargin } from '../lib/water/waterBody';
 import { createHeightTexture } from '../lib/terrain/bladeGrass';
 import { createWaterSurfaceMaterial, createWaterTransmittanceMaterial, createWaterUniforms } from '../lib/water/waterMaterial';
 
@@ -57,13 +59,15 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
   }, [uniforms]);
 
   // Outline in the shape's frame; the surface sits at local y = 0 (the water level).
+  // Reaches the basin's dug margin; wherever the ground is above the level it hides the extra.
+  const margin = waterMargin(terrain);
   const geometry = useMemo(() => {
-    const outline = new THREE.Shape(data.points.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const outline = new THREE.Shape(offsetOutline(data.points, margin).map(([x, z]) => new THREE.Vector2(x, -z)));
     const g = new THREE.ShapeGeometry(outline);
     g.rotateX(-Math.PI / 2);
     g.computeBoundingSphere();
     return g;
-  }, [data.points]);
+  }, [data.points, margin]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
   const heights = useMemo(() => (terrain?.terrainData ? createHeightTexture(terrain) : null), [terrain?.terrainData?.heights, terrain?.terrainData?.gridX]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -85,6 +89,16 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
       uniforms.uBaseY.value = terrain.position[1];
     }
   }, [uniforms, data, heights, terrain]);
+
+  // If the ground at the pond's centre is above the water, the water can't be seen: say why.
+  const { diagLog } = useApp();
+  useEffect(() => {
+    const [cx, level, cz] = shape.position;
+    const ground = terrain ? sampleTerrainElevation(cx, cz, terrain) : level - data.depth;
+    const values = { shapeId: shape.id, level: +level.toFixed(2), groundAtCentre: +ground.toFixed(2), dig: data.dig !== false, terrain: terrain?.id ?? null };
+    if (ground >= level) diagLog('ERROR', `${shape.name}: ground is above the water level, so the water is hidden`, values);
+    else diagLog('RENDER', `${shape.name} water shown`, values);
+  }, [shape.id, shape.name, shape.position, data.depth, data.dig, terrain?.terrainData?.heights]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const group = useRef<THREE.Group>(null);
   useFrame(({ gl, scene, clock, camera }) => {

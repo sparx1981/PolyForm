@@ -67,6 +67,42 @@ export function bedDepth(distanceInside: number, depth: number, radius: number):
   return lip + (depth - lip) * t * t * (3 - 2 * t);
 }
 
+/** How far past the outline the basin is dug: one terrain grid cell (plus a little). */
+export function waterMargin(terrain: Shape | undefined): number {
+  const data = terrain?.terrainData;
+  if (!data) return 0;
+  const cell = Math.max(data.width / Math.max(1, data.gridX - 1), data.depth / Math.max(1, data.gridY - 1));
+  return Math.min(cell * 1.05, 4);
+}
+
+/**
+ * The outline pushed outward by `distance` (mitred, with long spikes clipped). The water
+ * surface uses it so it reaches the dug margin; ground above the level simply hides it.
+ */
+export function offsetOutline(points: [number, number][], distance: number): [number, number][] {
+  if (distance <= 0 || points.length < 3) return points;
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [ax, az] = points[i], [bx, bz] = points[(i + 1) % points.length];
+    area += ax * bz - bx * az;
+  }
+  const outward = area > 0 ? 1 : -1;
+  return points.map((p, i) => {
+    const prev = points[(i + points.length - 1) % points.length], next = points[(i + 1) % points.length];
+    const normal = (a: [number, number], b: [number, number]) => {
+      const dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz) || 1;
+      return [outward * dz / length, -outward * dx / length];
+    };
+    const n1 = normal(prev, p), n2 = normal(p, next);
+    let nx = n1[0] + n2[0], nz = n1[1] + n2[1];
+    const length = Math.hypot(nx, nz) || 1;
+    nx /= length; nz /= length;
+    // Mitre length, clipped so sharp corners don't shoot out.
+    const scale = Math.min(3, 1 / Math.max(0.2, nx * n1[0] + nz * n1[1]));
+    return [p[0] + nx * distance * scale, p[1] + nz * distance * scale];
+  });
+}
+
 /** Bank width outside the outline over which low ground is raised to hold the water in. */
 const BANK = 1.5;
 const FREEBOARD = 0.08;
@@ -85,13 +121,16 @@ export function digWaterBasins(terrain: Shape, waters: Shape[]): TerrainData | u
       const xs = outline.map(p => p.x), zs = outline.map(p => p.z);
       return {
         outline, level: w.position[1], depth: Math.max(0.1, w.waterData!.depth), radius: inscribedRadius(outline),
-        box: [Math.min(...xs) - BANK, Math.max(...xs) + BANK, Math.min(...zs) - BANK, Math.max(...zs) + BANK],
+        box: [Math.min(...xs) - BANK - 4, Math.max(...xs) + BANK + 4, Math.min(...zs) - BANK - 4, Math.max(...zs) + BANK + 4],
       };
     });
   if (!bodies.length) return data;
   const { gridX, gridY, width, depth } = data;
   const [px, py, pz] = terrain.position;
   const heights = data.heights.slice();
+  // The terrain is a grid: dig one cell past the outline, or triangles that straddle the edge
+  // (and whole small ponds on a coarse grid) stay above the water and hide it.
+  const margin = waterMargin(terrain);
   let changed = false;
   for (let iy = 0; iy < gridY; iy++) for (let ix = 0; ix < gridX; ix++) {
     const x = px - width / 2 + (ix / Math.max(1, gridX - 1)) * width;
@@ -101,14 +140,14 @@ export function digWaterBasins(terrain: Shape, waters: Shape[]): TerrainData | u
     for (const body of bodies) {
       if (x < body.box[0] || x > body.box[1] || z < body.box[2] || z > body.box[3]) continue;
       const d = signedEdgeDistance(x, z, body.outline);
-      if (d >= 0) {
-        y = Math.min(y, body.level - bedDepth(d, body.depth, body.radius));
-      } else if (-d < BANK) {
+      if (d >= -margin) {
+        y = Math.min(y, body.level - bedDepth(Math.max(d, 0), body.depth, body.radius));
+      } else if (-d < margin + BANK) {
         // Raise low ground just outside so the water has a bank to sit against.
         const bank = body.level + FREEBOARD;
         if (y < bank) {
           // Full height for the first 40% of the bank, then easing back to the natural ground.
-          const t = Math.max(0, Math.min(1, (-d / BANK - 0.4) / 0.6)), w = 1 - t * t * (3 - 2 * t);
+          const t = Math.max(0, Math.min(1, ((-d - margin) / BANK - 0.4) / 0.6)), w = 1 - t * t * (3 - 2 * t);
           y += (bank - y) * w;
         }
       }

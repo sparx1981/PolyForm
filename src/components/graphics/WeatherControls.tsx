@@ -42,10 +42,10 @@ export function WeatherControls() {
               <GraphicsSlider label={`${kind} thickness`} value={settings.thickness} min={0.1} max={kind === 'clouds' ? 60 : 15} step={0.1} unit=" m" onChange={thickness => layer(kind, { thickness })} />
             </>}
             {kind === 'clouds' && <>
-              <label className="block text-xs">Cloud type<select className="w-full p-1 rounded bg-white dark:bg-gray-800 border" value={settings.cloudType} onChange={e => layer(kind, { cloudType: e.target.value as WeatherLayerSettings['cloudType'] })}>
+              <label className="block text-xs">Cloud type<select className="w-full p-1 rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 border" value={settings.cloudType} onChange={e => layer(kind, { cloudType: e.target.value as WeatherLayerSettings['cloudType'] })}>
                 <option value="cumulus">Puffy (cumulus)</option><option value="cirrus">Wispy (cirrus)</option><option value="stratus">Layered (stratus)</option>
               </select></label>
-              <label className="block text-xs">Cloud rendering<select className="w-full p-1 rounded bg-white dark:bg-gray-800 border" value={weather.cloudsMode} onChange={e => update({ cloudsMode: e.target.value as typeof weather.cloudsMode })}>
+              <label className="block text-xs">Cloud rendering<select className="w-full p-1 rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 border" value={weather.cloudsMode} onChange={e => update({ cloudsMode: e.target.value as typeof weather.cloudsMode })}>
                 <option value="fast">Fast</option><option value="volumetric">Volumetric</option>
               </select></label>
               <p className="text-[10px] text-gray-500">Volumetric adds shaded depth inside each cloud and uses more GPU power.</p>

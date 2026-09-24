@@ -656,9 +656,14 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
       setPadSubTab('surface');
     } else if (activeTool === 'tree' || activeTool === 'bush') {
       setActiveTier('vegetation');
-    } else if (activeTool === 'fence' || (activeTool === 'select' && selectedFenceId)) {
+    } else if (activeTool === 'fence') {
       setActiveTier('fence');
-    } else if (activeTool === 'water' || (activeTool === 'select' && selectedWaterId)) {
+    } else if (activeTool === 'water') {
+      setActiveTier('water');
+    } else if (selectedFenceId) {
+      // A selected fence or pond shows its settings under any selection tool (select, lasso…).
+      setActiveTier('fence');
+    } else if (selectedWaterId) {
       setActiveTier('water');
     } else {
       // Any other tool is active (wall, select, fence, railing, etc.) - hide all civil panels

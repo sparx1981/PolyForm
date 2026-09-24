@@ -7,7 +7,7 @@ import { sampleTerrainElevation } from '../../lib/archRoomAssembly';
 import { extractExclusionFootprints } from '../../lib/terrain/grassGeometry';
 import { createBladeTemplate, createGrassField, grassRings, GrassTrail, TRAIL_RECOVERY_SECONDS } from '../../lib/terrain/bladeGrass';
 import {
-  bladeWindStrength, createBladeGrassMaterial, createBladeGrassUniforms, createBladeRingUniforms,
+  bladeWindStrength, createBladeGrassMaterial, createGrassCarpetMaterial, createBladeGrassUniforms, createBladeRingUniforms,
   setBladeColors, updateRingUniforms
 } from '../../lib/terrain/bladeGrassMaterial';
 
@@ -162,12 +162,36 @@ export function ProceduralGrass({
     meshes.forEach((mesh, index) => updateRingUniforms(mesh.userData.ringUniforms, rings[index], rings[index - 1], centre.x, centre.z));
   });
 
+  // Grass-coloured ground under distant blades (see createGrassCarpetMaterial).
+  const carpetFade = useMemo(() => ({ value: new THREE.Vector2() }), []);
+  useEffect(() => { carpetFade.value.set(rings[0].radius * 0.3, rings[0].radius * 0.9); }, [carpetFade, rings]);
+  const carpetMaterial = useMemo(() => createGrassCarpetMaterial(shared, carpetFade), [shared, carpetFade]);
+  useEffect(() => () => carpetMaterial.dispose(), [carpetMaterial]);
+  const carpet = useMemo(() => {
+    const data = terrainShape.terrainData;
+    if (!visible || !data?.heights) return null;
+    const geometry = new THREE.PlaneGeometry(data.width, data.depth, data.gridX - 1, data.gridY - 1);
+    geometry.rotateX(-Math.PI / 2);
+    const position = geometry.attributes.position;
+    for (let i = 0; i < position.count; i++) position.setY(i, (data.heights[i] ?? 0) + 0.02);
+    geometry.computeVertexNormals();
+    const mesh = new THREE.Mesh(geometry, carpetMaterial);
+    mesh.position.set(...terrainShape.position);
+    mesh.receiveShadow = true;
+    mesh.name = 'procedural-grass-mesh';
+    mesh.raycast = () => {};
+    mesh.userData = { isGrass: true, isObstacle: false };
+    return mesh;
+  }, [visible, terrainShape.terrainData?.heights, terrainShape.terrainData?.width, terrainShape.terrainData?.depth, terrainShape.position, carpetMaterial]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => carpet?.geometry.dispose(), [carpet]);
+
   if (!visible || !field) {
     return null;
   }
 
   return (
     <group name="procedural-grass" key={`grass-${terrainShape.id}`}>
+      {carpet && <primitive object={carpet} dispose={null} />}
       {meshes.map(mesh => <primitive key={mesh.uuid} object={mesh} dispose={null} />)}
     </group>
   );

@@ -10418,7 +10418,7 @@ function Scene() {
                 meshProps={meshProps}
                 selectionHighlight={selectionHighlight}
               />
-              {selectedId === shape.id && activeTool === 'select' && (
+              {selectedId === shape.id && (activeTool === 'select' || activeTool === 'lasso') && (
                 <WaterEditHandles shape={shape} terrain={waterTerrain ? dugTerrains.get(waterTerrain.id) ?? waterTerrain : undefined} />
               )}
             </React.Fragment>
@@ -10437,7 +10437,7 @@ function Scene() {
                 meshProps={meshProps}
                 selectionHighlight={selectionHighlight}
               />
-              {selectedId === shape.id && activeTool === 'select' && <FenceEditHandles shape={shape} terrain={fenceGround} />}
+              {selectedId === shape.id && (activeTool === 'select' || activeTool === 'lasso') && <FenceEditHandles shape={shape} terrain={fenceGround} />}
             </React.Fragment>
           );
         }

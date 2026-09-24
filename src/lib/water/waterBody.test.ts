@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Shape } from '../../types';
-import { bedDepth, defaultWaterLevel, digWaterBasins, signedEdgeDistance } from './waterBody';
+import { bedDepth, defaultWaterLevel, digWaterBasins, offsetOutline, signedEdgeDistance, waterMargin } from './waterBody';
 import { sampleTerrainElevation } from '../archRoomAssembly';
 
 const flat = (): Shape => ({
@@ -40,7 +40,8 @@ describe('water basins', () => {
     const terrain = flat();
     terrain.terrainData!.heights = terrain.terrainData!.heights.map(() => -0.3);
     const dug = { ...terrain, terrainData: digWaterBasins(terrain, [pond()]) };
-    expect(sampleTerrainElevation(5.5, 0, dug)).toBeGreaterThan(-0.05);
+    // Just past the dug margin (one 0.5 m grid cell).
+    expect(sampleTerrainElevation(6, 0, dug)).toBeGreaterThan(-0.05);
     expect(sampleTerrainElevation(12, 0, dug)).toBeCloseTo(-0.3);
   });
 
@@ -52,5 +53,32 @@ describe('water basins', () => {
   it('sets the default level just below the lowest ground on the outline', () => {
     const level = defaultWaterLevel([{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }], (x) => x * 0.1);
     expect(level).toBeCloseTo(-0.05);
+  });
+});
+
+describe('small ponds on a coarse terrain grid', () => {
+  it('pushes an outline outward whichever way it was drawn', () => {
+    const square: [number, number][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    for (const outline of [square, [...square].reverse()]) {
+      const grown = offsetOutline(outline, 0.5);
+      const xs = grown.map(p => p[0]), zs = grown.map(p => p[1]);
+      expect(Math.min(...xs)).toBeCloseTo(-0.5); expect(Math.max(...xs)).toBeCloseTo(1.5);
+      expect(Math.min(...zs)).toBeCloseTo(-0.5); expect(Math.max(...zs)).toBeCloseTo(1.5);
+    }
+  });
+
+  it('digs every grid point near a pond smaller than a grid cell, so the water is not hidden', () => {
+    // 50 m site at 32 x 32: 1.6 m cells. A 1.2 m pond contains no grid point at all.
+    const terrain: Shape = {
+      id: 't', name: 'Terrain', type: 'terrain', position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1], color: '#fff',
+      args: [50, 0, 50], terrainData: { gridX: 32, gridY: 32, width: 50, depth: 50, heights: new Array(32 * 32).fill(0) },
+    };
+    const small = pond({ position: [0.3, -0.05, 0.3], waterData: { points: [[-0.6, -0.6], [0.6, -0.6], [0.6, 0.6], [-0.6, 0.6]], depth: 1, clarity: 'pond', dig: true } });
+    const dug = { ...terrain, terrainData: digWaterBasins(terrain, [small]) };
+    // Every corner of the pond is below the water level, so the surface is visible there.
+    for (const [x, z] of [[-0.3, -0.3], [0.9, -0.3], [0.9, 0.9], [-0.3, 0.9], [0.3, 0.3]]) {
+      expect(sampleTerrainElevation(x, z, dug)).toBeLessThan(-0.05);
+    }
+    expect(waterMargin(terrain)).toBeGreaterThan(50 / 31);
   });
 });
