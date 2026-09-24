@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VegetationWind } from './VegetationWind';
+import { VegetationWind, isFoliageMaterial } from './VegetationWind';
 import { finite } from './shaderHooks';
 
 export interface PlantInstance {
@@ -67,7 +67,7 @@ export class VegetationBatch {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
     this.mesh.computeBoundingBox(); this.mesh.computeBoundingSphere();
-    const padding = 1.35 * this.maxWindStrength * this.maxScale;
+    const padding = VegetationWind.padding(this.maxWindStrength, isFoliageMaterial(this.mesh.material)) * this.maxScale;
     this.mesh.boundingBox?.expandByScalar(padding);
     if (this.mesh.boundingSphere) this.mesh.boundingSphere.radius += padding;
     this.mesh.visible = instances.length > 0;

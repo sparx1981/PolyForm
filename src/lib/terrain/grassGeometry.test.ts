@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { createGrassBladeGeometry, generateGrassInstances, extractExclusionFootprints, isPointExcluded } from './grassGeometry';
+import { createGrassBladeGeometry, generateGrassInstances, extractExclusionFootprints, isPointExcluded, seededRandom, nearestClump, partitionGrassChunks, grassKeepFraction, grassLodRange } from './grassGeometry';
 import { Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, RoadModifier } from '../../types';
 
 describe('Procedural Grass Geometry & Instancing Engine', () => {
@@ -311,5 +311,58 @@ describe('Procedural Grass Geometry & Instancing Engine', () => {
       const inPoly = Math.abs(pos.x) <= 4.0 && Math.abs(pos.z) <= 4.0;
       expect(inPoly).toBe(false);
     }
+  });
+
+  it('uses a random sequence that does not repeat within a large lawn', () => {
+    const rng = seededRandom(42);
+    const first = [rng(), rng(), rng(), rng()];
+    // The old LCG repeated after 233,280 values; a 100k-tuft lawn draws about 700k.
+    for (let i = 0; i < 700000; i++) rng();
+    const later = [rng(), rng(), rng(), rng()];
+    expect(later).not.toEqual(first);
+    const again = seededRandom(42);
+    expect([again(), again(), again(), again()]).toEqual(first);
+  });
+
+  it('groups nearby tufts into stable clumps', () => {
+    const a = nearestClump(3.01, 5.02, 0.5);
+    const b = nearestClump(3.01, 5.02, 0.5);
+    expect(a).toEqual(b);
+    expect(a.distance).toBeLessThan(0.5 * Math.SQRT2 * 1.5);
+    expect(Math.hypot(a.dirX, a.dirZ)).toBeCloseTo(1, 5);
+    expect(a.hash).toBeGreaterThanOrEqual(0);
+    expect(a.hash).toBeLessThan(1);
+  });
+
+  it('partitions instances into shuffled tiles without losing any', () => {
+    const terrain: Shape = {
+      id: 't-1', name: 'Terrain', type: 'terrain', position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1],
+      color: '#ffffff', args: [40, 0, 40],
+      terrainData: { gridX: 8, gridY: 8, width: 40, depth: 40, heights: new Array(64).fill(0) }
+    };
+    const data = generateGrassInstances(terrain, [], [], { ...DEFAULT_GRASS_SETTINGS, enabled: true, density: 4 });
+    const chunks = partitionGrassChunks(data, 16);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.reduce((sum, chunk) => sum + chunk.instanceCount, 0)).toBe(data.instanceCount);
+    for (const chunk of chunks) {
+      expect(chunk.ranks[0]).toBe(0);
+      expect(chunk.ranks[chunk.instanceCount - 1]).toBeLessThan(1);
+      for (let i = 0; i < chunk.instanceCount; i++) {
+        const dx = chunk.matrices[i * 16 + 12] - chunk.center[0];
+        const dz = chunk.matrices[i * 16 + 14] - chunk.center[2];
+        expect(Math.hypot(dx, dz)).toBeLessThanOrEqual(chunk.radius + 1e-4);
+      }
+    }
+  });
+
+  it('thins grass with distance, starting later for taller grass', () => {
+    const lawn = grassLodRange({ baseHeight: 0.05, heightVariance: 0.1 });
+    expect(grassKeepFraction(0, lawn)).toBe(1);
+    expect(grassKeepFraction(lawn.near, lawn)).toBe(1);
+    expect(grassKeepFraction(lawn.far * 2, lawn)).toBeCloseTo(lawn.minKeep);
+    expect(grassKeepFraction((lawn.near + lawn.far) / 2, lawn)).toBeLessThan(1);
+    const meadow = grassLodRange({ baseHeight: 0.8, heightVariance: 0.5 });
+    expect(meadow.near).toBeGreaterThan(lawn.near);
+    expect(meadow.far).toBeGreaterThan(lawn.far);
   });
 });

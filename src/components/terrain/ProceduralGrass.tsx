@@ -1,8 +1,13 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Shape, TerrainModifier, GrassSettings, DEFAULT_GRASS_SETTINGS } from '../../types';
-import { createGrassBladeGeometry, generateGrassInstances } from '../../lib/terrain/grassGeometry';
+import { useApp } from '../../AppContext';
+import {
+  createGrassBladeGeometry, generateGrassInstances, partitionGrassChunks,
+  grassKeepFraction, grassLodRange
+} from '../../lib/terrain/grassGeometry';
+import { createGrassMaterial, createGrassUniforms, grassBendStrength, setGrassColors } from '../../lib/terrain/grassMaterial';
 
 interface ProceduralGrassProps {
   terrainShape: Shape;
@@ -10,125 +15,31 @@ interface ProceduralGrassProps {
   terrainModifiers?: TerrainModifier[];
 }
 
-const GRASS_VERTEX_SHADER = /* glsl */ `
-attribute vec4 aShapeOffset;
-attribute float aHeightVariance;
-attribute float aHeightPercent;
-attribute float aBladeTone;
-
-varying float vHeightPercent;
-varying vec3 vWorldPos;
-varying float vColorJitter;
-varying float vBladeTone;
-varying float vLight;
-
-uniform float uTime;
-uniform float uWindStrength;
-uniform vec2 uWindDir;
-uniform float uBaseHeight;
-uniform float uHeightVariance;
-
-void main() {
-  vHeightPercent = aHeightPercent;
-  vColorJitter = aShapeOffset.w;
-  vBladeTone = aBladeTone;
-
-  // 1. Local vertex position
-  vec3 pos = position;
-
-  // Scale the whole tuft in metres; scaling Y alone makes short lawn grass broad and flat.
-  float hScale = uBaseHeight + aHeightVariance * uHeightVariance;
-  pos *= hScale;
-
-  // Width & profile shape offsets (individual lean, taper, and width)
-  pos.xz *= aShapeOffset.z;
-  pos.x += aShapeOffset.x * (aHeightPercent * aHeightPercent) * hScale;
-  pos.z += aShapeOffset.y * (aHeightPercent * aHeightPercent) * hScale;
-
-  // Radial blades have volume from every viewing angle without billboarding.
-  mat4 plantMatrix = modelMatrix * instanceMatrix;
-  vec3 worldNormal = normalize(mat3(plantMatrix) * normal);
-  vLight = 0.88 + 0.18 * abs(dot(worldNormal, vec3(0.31, 0.82, 0.48)));
-
-  // World position before wind
-  vec4 worldPos4 = plantMatrix * vec4(pos, 1.0);
-  vec3 worldPos = worldPos4.xyz;
-
-  // Wind Animation:
-  // Horizontal displacement proportional to (aHeightPercent)^2
-  float windWave = sin(uTime * 2.2 + worldPos.x * 0.45 + worldPos.z * 0.45) * uWindStrength;
-  windWave += cos(uTime * 3.4 + worldPos.x * 0.85 + worldPos.z * 0.65) * (uWindStrength * 0.35);
-
-  vec2 windDisp = uWindDir * (windWave * aHeightPercent * aHeightPercent);
-  worldPos.x += windDisp.x;
-  worldPos.z += windDisp.y;
-
-  vWorldPos = worldPos;
-
-  gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);
-}
-`;
-
-const GRASS_FRAGMENT_SHADER = /* glsl */ `
-precision highp float;
-
-varying float vHeightPercent;
-varying vec3 vWorldPos;
-varying float vColorJitter;
-varying float vBladeTone;
-varying float vLight;
-
-uniform vec3 uRootColor;
-uniform vec3 uTipColor;
-
-void main() {
-  // Two-Tone Gradient: interpolate mix(uRootColor, uTipColor, vHeightPercent)
-  vec3 gradColor = mix(uRootColor, uTipColor, vHeightPercent);
-
-  // Subtle per-instance hue/lightness jitter (±12% lightness shift)
-  float jitter = (vColorJitter - 0.5) * 0.24;
-  vec3 finalColor = gradColor * (1.0 + jitter);
-
-  // Vertical light factor (roots darker for ambient depth, tips brighter)
-  float verticalShading = mix(0.92, 1.12, vHeightPercent);
-  finalColor *= verticalShading * vBladeTone * vLight;
-
-  // Near-plane fading when walk camera gets close
-  float distToCamera = length(vWorldPos - cameraPosition);
-  float nearAlpha = smoothstep(0.18, 0.65, distToCamera);
-
-  if (nearAlpha < 0.05) discard;
-
-  gl_FragColor = vec4(finalColor, nearAlpha);
-}
-`;
+/** Tile edge in metres. Each tile is one draw call with its own bounds for frustum culling. */
+const CHUNK_SIZE = 16;
 
 export function ProceduralGrass({
   terrainShape,
   shapes,
   terrainModifiers = []
 }: ProceduralGrassProps) {
+  const { graphicsSettings } = useApp();
   const grassSettings: GrassSettings = useMemo(() => {
     return {
       ...DEFAULT_GRASS_SETTINGS,
       ...(terrainShape.terrainData?.grass || {})
     };
   }, [terrainShape.terrainData?.grass]);
+  // Hooks below always run; the enabled check happens at render time so toggling is safe.
+  const visible = grassSettings.enabled && Boolean(terrainShape.terrainData);
 
-  // Don't render anything if grass is toggled off
-  if (!grassSettings.enabled || !terrainShape.terrainData) {
-    return null;
-  }
-
-  // Generate low-poly card geometry
-  const baseGeometry = useMemo(() => {
-    return createGrassBladeGeometry();
-  }, []);
+  // Generate low-poly tuft geometry
+  const baseGeometry = useMemo(() => createGrassBladeGeometry(), []);
   useEffect(() => () => baseGeometry.dispose(), [baseGeometry]);
 
   // Compute instances based on density, terrain geometry, slope culling, and slab exclusion
   const instanceData = useMemo(() => {
-    return generateGrassInstances(terrainShape, shapes, terrainModifiers, grassSettings);
+    return generateGrassInstances(terrainShape, shapes, terrainModifiers, { ...grassSettings, enabled: visible });
   }, [
     terrainShape.id,
     terrainShape.terrainData?.heights,
@@ -139,104 +50,93 @@ export function ProceduralGrass({
     terrainModifiers,
     grassSettings.density,
     grassSettings.maxSlopeAngle,
-    grassSettings.enabled
+    grassSettings.baseHeight,
+    grassSettings.heightVariance,
+    visible
   ]);
 
   const isAnimated = grassSettings.animate !== false;
   const effectiveWindStrength = isAnimated
-    ? (grassSettings.animationStrength ?? grassSettings.windStrength ?? DEFAULT_GRASS_SETTINGS.animationStrength)
+    ? (grassSettings.animationStrength ?? grassSettings.windStrength ?? DEFAULT_GRASS_SETTINGS.animationStrength ?? 0)
     : 0.0;
+  const lod = grassLodRange(grassSettings);
 
-  const uniforms = useMemo(() => {
-    return {
-      uTime: { value: 0.0 },
-      uWindStrength: { value: effectiveWindStrength },
-      uWindDir: { value: new THREE.Vector2(0.707, 0.707) },
-      uBaseHeight: { value: grassSettings.baseHeight ?? DEFAULT_GRASS_SETTINGS.baseHeight },
-      uHeightVariance: { value: grassSettings.heightVariance ?? DEFAULT_GRASS_SETTINGS.heightVariance },
-      uRootColor: { value: new THREE.Color(grassSettings.rootColor || '#1e3f20') },
-      uTipColor: { value: new THREE.Color(grassSettings.tipColor || '#88bb44') }
-    };
-  }, [
-    effectiveWindStrength,
-    grassSettings.baseHeight,
-    grassSettings.heightVariance,
-    grassSettings.rootColor,
-    grassSettings.tipColor
-  ]);
-
-  const material = useMemo(() => {
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: GRASS_VERTEX_SHADER,
-      fragmentShader: GRASS_FRAGMENT_SHADER,
-      uniforms,
-      side: THREE.DoubleSide,
-      transparent: true,
-      depthWrite: true,
-      depthTest: true
-    });
-    return mat;
-  }, [uniforms]);
+  const uniforms = useMemo(() => createGrassUniforms(), []);
+  const material = useMemo(() => createGrassMaterial(uniforms), [uniforms]);
   useEffect(() => () => material.dispose(), [material]);
 
-  // Keep wind strength uniform instantly synced when user drags slider or toggles animation
+  // Settings only change uniform values, never the compiled program.
   useEffect(() => {
-    if (material.uniforms.uWindStrength) {
-      material.uniforms.uWindStrength.value = effectiveWindStrength;
-    }
-  }, [material, effectiveWindStrength]);
+    uniforms.uWindStrength.value = grassBendStrength(effectiveWindStrength);
+    uniforms.uBaseHeight.value = grassSettings.baseHeight ?? DEFAULT_GRASS_SETTINGS.baseHeight;
+    uniforms.uHeightVariance.value = grassSettings.heightVariance ?? DEFAULT_GRASS_SETTINGS.heightVariance;
+    setGrassColors(uniforms, grassSettings.rootColor || DEFAULT_GRASS_SETTINGS.rootColor, grassSettings.tipColor || DEFAULT_GRASS_SETTINGS.tipColor);
+    uniforms.uLod.value.set(lod.near, lod.far, lod.minKeep);
+  }, [uniforms, effectiveWindStrength, grassSettings.baseHeight, grassSettings.heightVariance,
+    grassSettings.rootColor, grassSettings.tipColor, lod.near, lod.far, lod.minKeep]);
 
-  // Dynamic animation loop
-  useFrame((_, delta) => {
-    if (material.uniforms.uTime && isAnimated) {
-      material.uniforms.uTime.value += delta * (grassSettings.windSpeed ?? 2.0);
+  // Grass follows the same wind direction as trees and bushes.
+  const windDirection = graphicsSettings.vegetation.direction;
+  useEffect(() => {
+    const radians = windDirection * Math.PI / 180;
+    uniforms.uWindDir.value.set(Math.cos(radians), Math.sin(radians));
+  }, [uniforms, windDirection]);
+
+  // One InstancedMesh per tile. Tiles share the tuft's vertex attributes; only the per-instance
+  // attributes differ.
+  const meshes = useMemo(() => {
+    if (!visible) return [];
+    const height = (grassSettings.baseHeight + grassSettings.heightVariance) * 1.2;
+    return partitionGrassChunks(instanceData, CHUNK_SIZE).map(chunk => {
+      const geometry = new THREE.BufferGeometry();
+      for (const [name, attribute] of Object.entries(baseGeometry.attributes)) geometry.setAttribute(name, attribute);
+      geometry.setIndex(baseGeometry.index);
+      geometry.setAttribute('aShapeOffset', new THREE.InstancedBufferAttribute(chunk.shapeOffsets, 4));
+      geometry.setAttribute('aHeightVariance', new THREE.InstancedBufferAttribute(chunk.heightVariances, 1));
+      geometry.setAttribute('aRank', new THREE.InstancedBufferAttribute(chunk.ranks, 1));
+      const mesh = new THREE.InstancedMesh(geometry, material, chunk.instanceCount);
+      mesh.instanceMatrix.array.set(chunk.matrices);
+      mesh.instanceMatrix.needsUpdate = true;
+      // Shader growth, lean, distance widening and wind extend beyond the roots. Keep culling
+      // conservative with explicit bounds rather than the unit-height template's.
+      mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(...chunk.center), chunk.radius + height * 2.5 + 0.2);
+      mesh.frustumCulled = true;
+      mesh.receiveShadow = true;
+      mesh.castShadow = false;
+      mesh.name = 'procedural-grass-mesh';
+      // Disable raycasting and assign visual-only obstacle flag for Walk Mode
+      mesh.raycast = () => {};
+      mesh.userData = { isGrass: true, isObstacle: false, total: chunk.instanceCount };
+      return mesh;
+    });
+  }, [visible, instanceData, baseGeometry, material, grassSettings.baseHeight, grassSettings.heightVariance]);
+  // Only the per-tile geometry is disposed: the shared tuft attributes are re-uploaded on demand.
+  useEffect(() => () => meshes.forEach(mesh => mesh.geometry.dispose()), [meshes]);
+
+  const cameraPosition = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera }, delta) => {
+    if (isAnimated) uniforms.uTime.value += delta * (grassSettings.windSpeed ?? 2.0);
+    // Orthographic plan views sit far away but show grass at full size: never thin them.
+    const thin = !(camera as THREE.OrthographicCamera).isOrthographicCamera;
+    uniforms.uLodEnabled.value = thin ? 1 : 0;
+    camera.getWorldPosition(cameraPosition);
+    for (const mesh of meshes) {
+      const total = mesh.userData.total as number;
+      if (!thin) { mesh.count = total; continue; }
+      const sphere = mesh.boundingSphere!;
+      // Nearest root in the tile decides how many tufts the shader may still want to draw.
+      const nearest = Math.max(0, cameraPosition.distanceTo(sphere.center) - sphere.radius);
+      mesh.count = Math.min(total, Math.ceil(total * grassKeepFraction(nearest, lod) * 1.08));
     }
   });
 
-  const meshRef = useRef<THREE.InstancedMesh | null>(null);
-
-  // Populate instances
-  useEffect(() => {
-    const mesh = meshRef.current;
-    if (!mesh || instanceData.instanceCount === 0) return;
-
-    // Set instance matrices
-    const mat4 = new THREE.Matrix4();
-    for (let i = 0; i < instanceData.instanceCount; i++) {
-      mat4.fromArray(instanceData.matrices, i * 16);
-      mesh.setMatrixAt(i, mat4);
-    }
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
-    // Shader growth and wind extend beyond the static tuft. Keep culling conservative.
-    if (mesh.boundingSphere) mesh.boundingSphere.radius += Math.max(0, (grassSettings.baseHeight + grassSettings.heightVariance) * 1.2 - 1) + effectiveWindStrength + 0.2;
-
-    // Attach instanced attributes to base geometry
-    const geo = mesh.geometry;
-    geo.setAttribute('aShapeOffset', new THREE.InstancedBufferAttribute(instanceData.shapeOffsets, 4));
-    geo.setAttribute('aHeightVariance', new THREE.InstancedBufferAttribute(instanceData.heightVariances, 1));
-    geo.attributes.aShapeOffset.needsUpdate = true;
-    geo.attributes.aHeightVariance.needsUpdate = true;
-
-    // Disable raycasting and assign visual-only obstacle flag for Walk Mode
-    mesh.raycast = () => {};
-    mesh.userData = { isGrass: true, isObstacle: false };
-  }, [instanceData, grassSettings.baseHeight, grassSettings.heightVariance, effectiveWindStrength]);
-
-  if (instanceData.instanceCount === 0) {
+  if (!visible || meshes.length === 0) {
     return null;
   }
 
   return (
-    <instancedMesh
-      key={`grass-${terrainShape.id}-${instanceData.instanceCount}`}
-      ref={meshRef}
-      name="procedural-grass-mesh"
-      args={[baseGeometry, material, instanceData.instanceCount]}
-      frustumCulled
-      dispose={null}
-      raycast={() => {}}
-      userData={{ isGrass: true, isObstacle: false }}
-    />
+    <group name="procedural-grass" key={`grass-${terrainShape.id}`}>
+      {meshes.map(mesh => <primitive key={mesh.uuid} object={mesh} dispose={null} />)}
+    </group>
   );
 }

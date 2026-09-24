@@ -53,6 +53,24 @@ describe('vegetation GPU lifecycle', () => {
     material.dispose(); mesh.geometry.dispose();
   });
 
+  it('adds leaf flutter only to alpha-tested foliage and pads its bounds for it', () => {
+    const wind = new VegetationWind();
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    geometry.computeBoundingSphere();
+    const unpaddedRadius = geometry.boundingSphere!.radius;
+    const leaves = new THREE.MeshStandardMaterial({ alphaTest: 0.5 });
+    const mesh = new THREE.Mesh(geometry, leaves);
+    const cleanup = wind.attachMesh(mesh);
+    expect(mesh.geometry.boundingSphere!.radius).toBeCloseTo(unpaddedRadius + VegetationWind.padding(wind.maxStrength, true));
+    expect(VegetationWind.padding(1, true)).toBeGreaterThan(VegetationWind.padding(1));
+    expect(leaves.customProgramCacheKey()).toContain('pf-wind-v1-leaves');
+    expect(mesh.customDepthMaterial!.customProgramCacheKey()).toContain('pf-wind-v1-leaves');
+    const bark = new THREE.MeshStandardMaterial();
+    const undo = wind.attach(bark);
+    expect(bark.customProgramCacheKey()).not.toContain('leaves');
+    undo(); cleanup(); leaves.dispose(); bark.dispose(); geometry.dispose();
+  });
+
   it('handles capacity, duplicate ids, conservative bounds and immutable frame data', () => {
     const geometry = new THREE.BoxGeometry(1, 4, 1); geometry.translate(0, 2, 0);
     const material = new THREE.MeshStandardMaterial();

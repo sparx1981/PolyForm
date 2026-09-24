@@ -384,6 +384,123 @@ export interface GrassInstanceData {
   heightVariances: Float32Array; // float per instance: (0.0 to 1.0)
 }
 
+/** Mulberry32: fast, deterministic and with a full 2^32 period. */
+export function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hash2D(x: number, z: number, salt: number): number {
+  let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(z | 0, 0x165667b1) ^ Math.imul(salt, 0x9e3779b9);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Clumps scale with the grass so a lawn and a meadow both read as clustered. */
+export function grassClumpSize(settings: Pick<GrassSettings, 'baseHeight' | 'heightVariance'>): number {
+  return Math.min(1.2, Math.max(0.3, (settings.baseHeight + settings.heightVariance) * 3));
+}
+
+/** Nearest jittered clump centre (a Voronoi cell) and two stable per-clump hashes. */
+export function nearestClump(x: number, z: number, size: number) {
+  const cx = Math.floor(x / size), cz = Math.floor(z / size);
+  let best = Infinity, bestX = cx, bestZ = cz, centreX = x, centreZ = z;
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const ix = cx + dx, iz = cz + dz;
+      const px = (ix + 0.15 + 0.7 * hash2D(ix, iz, 1)) * size;
+      const pz = (iz + 0.15 + 0.7 * hash2D(ix, iz, 2)) * size;
+      const d = (px - x) ** 2 + (pz - z) ** 2;
+      if (d < best) { best = d; bestX = ix; bestZ = iz; centreX = px; centreZ = pz; }
+    }
+  }
+  const distance = Math.sqrt(best);
+  return {
+    distance,
+    dirX: distance > 1e-6 ? (x - centreX) / distance : 0,
+    dirZ: distance > 1e-6 ? (z - centreZ) / distance : 0,
+    hash: hash2D(bestX, bestZ, 3),
+    hash2: hash2D(bestX, bestZ, 4),
+  };
+}
+
+/** A spatial tile of grass with its own bounds, so off-screen tiles are culled. */
+export interface GrassChunk extends GrassInstanceData {
+  /** Per-instance draw order in [0, 1); lower ranks survive distance thinning longest. */
+  ranks: Float32Array;
+  center: [number, number, number];
+  /** Radius of the tuft roots around `center`; callers pad it by the tuft size. */
+  radius: number;
+}
+
+/**
+ * Splits instances into square tiles and shuffles each tile, so drawing only the first N
+ * instances of a tile thins it evenly instead of removing one corner.
+ */
+export function partitionGrassChunks(data: GrassInstanceData, chunkSize = 16, seed = 7): GrassChunk[] {
+  const buckets = new Map<string, number[]>();
+  for (let i = 0; i < data.instanceCount; i++) {
+    const key = `${Math.floor(data.matrices[i * 16 + 12] / chunkSize)},${Math.floor(data.matrices[i * 16 + 14] / chunkSize)}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(i); else buckets.set(key, [i]);
+  }
+  const rng = seededRandom(seed);
+  const chunks: GrassChunk[] = [];
+  for (const indices of buckets.values()) {
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    const count = indices.length;
+    const chunk: GrassChunk = {
+      instanceCount: count,
+      matrices: new Float32Array(count * 16),
+      shapeOffsets: new Float32Array(count * 4),
+      heightVariances: new Float32Array(count),
+      ranks: new Float32Array(count),
+      center: [0, 0, 0],
+      radius: 0,
+    };
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    indices.forEach((source, i) => {
+      chunk.matrices.set(data.matrices.subarray(source * 16, source * 16 + 16), i * 16);
+      chunk.shapeOffsets.set(data.shapeOffsets.subarray(source * 4, source * 4 + 4), i * 4);
+      chunk.heightVariances[i] = data.heightVariances[source];
+      chunk.ranks[i] = i / count;
+      for (let axis = 0; axis < 3; axis++) {
+        const v = data.matrices[source * 16 + 12 + axis];
+        min[axis] = Math.min(min[axis], v); max[axis] = Math.max(max[axis], v);
+      }
+    });
+    chunk.center = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+    chunk.radius = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2;
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+/** Share of a tile's tufts drawn at a camera distance; the grass shader uses the same curve. */
+export function grassKeepFraction(distance: number, lod: GrassLodRange): number {
+  const t = Math.min(1, Math.max(0, (distance - lod.near) / Math.max(1e-3, lod.far - lod.near)));
+  const smooth = t * t * (3 - 2 * t);
+  return 1 + (lod.minKeep - 1) * smooth;
+}
+
+export interface GrassLodRange { near: number; far: number; minKeep: number }
+
+/** Thinning starts further away for taller grass, which stays visible for longer. */
+export function grassLodRange(settings: Pick<GrassSettings, 'baseHeight' | 'heightVariance'>): GrassLodRange {
+  const height = settings.baseHeight + settings.heightVariance;
+  return { near: Math.max(12, height * 120), far: Math.max(60, height * 600), minKeep: 0.12 };
+}
+
 /**
  * Computes surface normal on terrain at (x, z) using finite differences.
  */
@@ -448,12 +565,10 @@ export function generateGrassInstances(
   const validOffsets: number[] = [];
   const validHeightVars: number[] = [];
 
-  // Deterministic seed for stable placement across frames
-  let seed = 42;
-  function rng() {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  }
+  // Deterministic seed for stable placement across frames. A full 32-bit generator: the old
+  // 233,280-value LCG wrapped around on large lawns and repeated the same layout.
+  const rng = seededRandom(42);
+  const clumpSize = grassClumpSize(settings);
 
   const dummy = new THREE.Object3D();
   const upAxis = new THREE.Vector3(0, 1, 0);
@@ -495,20 +610,27 @@ export function generateGrassInstances(
 
       validMatrices.push(dummy.matrix.clone());
 
+      // Tufts in one clump share height, tone and an outward lean, like a real sward.
+      const clump = nearestClump(wx, wz, clumpSize);
+      const outward = Math.min(1, clump.distance / clumpSize) * 0.12;
+      const leanX = clump.dirX * outward + (rng() - 0.5) * 0.16;
+      const leanZ = clump.dirZ * outward + (rng() - 0.5) * 0.16;
+      // Lean is applied in the tuft's local frame, before its Y rotation.
+      const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+
       // Per-instance shape offsets:
-      // x: lean amount (-0.15 to +0.15)
-      // y: curvature/taper factor (-0.1 to +0.1)
-      // z: width scale (0.8 to 1.25)
-      // w: color jitter (0.0 to 1.0)
+      // x, z: local lean (clump-outward plus random)
+      // z: width scale (0.85 to 1.2)
+      // w: color jitter (0.0 to 1.0), mostly shared within a clump
       validOffsets.push(
-        (rng() - 0.5) * 0.3,
-        (rng() - 0.5) * 0.2,
+        leanX * cosY - leanZ * sinY,
+        leanX * sinY + leanZ * cosY,
         0.85 + rng() * 0.35,
-        rng()
+        clump.hash * 0.65 + rng() * 0.35
       );
 
-      // Per-instance height variance: (0.0 to 1.0)
-      validHeightVars.push(rng());
+      // Per-instance height variance: (0.0 to 1.0), mostly shared within a clump
+      validHeightVars.push(clump.hash2 * 0.6 + rng() * 0.4);
     }
   }
 

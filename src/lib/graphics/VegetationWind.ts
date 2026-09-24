@@ -31,11 +31,29 @@ pfBend = pfLocalDirection * (pfWindStrength * pfWave);
 pfSlope = (position.y > pfWindHeight.x && position.y < pfWindHeight.x + pfWindHeight.y)
   ? 2.0 * pfH / pfWindHeight.y : 0.0;
 `;
+/** Leaf flutter amplitude in mesh-local metres per unit of wind strength. */
+const LEAF_FLUTTER = 0.25;
+// Leaf clusters flutter on top of the whole-plant sway. The phase varies slowly across the
+// crown (about a radian per half metre), so each leaf card moves as one piece instead of shearing.
+const flutter = /* glsl */ `
+float pfLeafPhase = dot(position, vec3(1.7, 2.3, 1.1)) + pfPhase;
+vec3 pfFlutter = vec3(sin(pfWindTime * pfWindSpeed * 4.3 + pfLeafPhase),
+  0.5 * sin(pfWindTime * pfWindSpeed * 5.1 + pfLeafPhase * 1.7),
+  cos(pfWindTime * pfWindSpeed * 3.7 + pfLeafPhase * 0.6));
+transformed += pfFlutter * (pfWindStrength * ${LEAF_FLUTTER.toFixed(3)} * smoothstep(0.2, 0.7, pfH));
+`;
+
+/** Leaf cards are alpha-tested; bark and procedural fallbacks are not. */
+export function isFoliageMaterial(material: THREE.Material): boolean {
+  return material.alphaTest > 0 || Boolean((material as THREE.MeshStandardMaterial).alphaMap);
+}
 
 /** One clock per landscape, shared by all visible and shadow programs. */
 export class VegetationWind {
   private static readonly paddedGeometries = new WeakSet<THREE.BufferGeometry>();
   constructor(readonly maxStrength = 0.4) { finite(maxStrength, 'maxStrength', 0.12); }
+  /** Bounds padding for the worst-case sway plus leaf flutter (|flutter| <= 1.5 per unit). */
+  static padding(strength: number, leaves = false) { return (1.35 + (leaves ? 1.5 * LEAF_FLUTTER : 0)) * strength; }
   readonly uniforms = {
     pfWindTime: { value: 0 }, pfWindStrength: { value: 0.12 },
     pfWindSpeed: { value: 1.6 }, pfWindDirection: { value: new THREE.Vector2(1, 0.35).normalize() },
@@ -54,15 +72,16 @@ export class VegetationWind {
   }
 
   /** Height/strength are in mesh-local units. Attach once per material. */
-  attach(material: THREE.Material, base = 0, height = 1) {
+  attach(material: THREE.Material, base = 0, height = 1, leaves = false) {
     finite(base, 'base'); finite(height, 'height', 0.0001);
-    return patchMaterial(material, { key: 'pf-wind-v1', apply: shader => {
+    return patchMaterial(material, { key: leaves ? 'pf-wind-v1-leaves' : 'pf-wind-v1', apply: shader => {
       Object.assign(shader.uniforms, this.uniforms, { pfWindHeight: { value: new THREE.Vector2(base, height) } });
       shader.vertexShader = declarations + shader.vertexShader;
       shader.vertexShader = inject(shader.vertexShader, '#include <begin_vertex>', `
         #include <begin_vertex>
         ${bend}
         transformed.xz += pfBend * pfH * pfH;
+        ${leaves ? flutter : ''}
       `);
       // Normal inverse-Jacobian for the bend. Shadow shaders may omit normal chunks.
       if (shader.vertexShader.includes('#include <beginnormal_vertex>')) {
@@ -89,7 +108,9 @@ export class VegetationWind {
       displacementMap: source.displacementMap, displacementScale: source.displacementScale, displacementBias: source.displacementBias };
     const depth = new THREE.MeshDepthMaterial({ ...options, depthPacking: THREE.RGBADepthPacking });
     const distance = new THREE.MeshDistanceMaterial(options);
-    const undo = [...new Set<THREE.Material>([...sources, depth, distance])].map(mat => this.attach(mat, base, height));
+    // Shadow materials share the source's flutter so leaf shadows move with the leaves.
+    const leaves = isFoliageMaterial(source);
+    const undo = [...new Set<THREE.Material>([...sources, depth, distance])].map(mat => this.attach(mat, base, height, leaves));
     mesh.customDepthMaterial = depth;
     mesh.customDistanceMaterial = distance;
     // Shader deformation is invisible to CPU bounds, so a plain computed bounding volume would
@@ -97,13 +118,13 @@ export class VegetationWind {
     // disabling culling outright (every placed tree would then render even fully off-screen -
     // the actual cause of the reported frame-rate drop with many large trees), pad the
     // geometry's own bounding sphere/box by the worst-case sway (1.35x matches the shader's own
-    // wave amplitude; see `bend` above) so culling stays conservative instead of absent. Padding
+    // wave amplitude; see `bend` above, plus leaf flutter) so culling stays conservative instead of absent. Padding
     // is left in place after cleanup: the geometry may be a cached template shared by other
     // still-attached instances of the same species, and an oversized bound only costs a slightly
     // later cull, never a wrong one.
     const geometry = mesh.geometry;
     if (padGeometryBounds && !VegetationWind.paddedGeometries.has(geometry)) {
-      const padding = 1.35 * this.maxStrength;
+      const padding = VegetationWind.padding(this.maxStrength, leaves);
       geometry.computeBoundingSphere();
       if (geometry.boundingSphere) geometry.boundingSphere.radius += padding;
       geometry.computeBoundingBox();
