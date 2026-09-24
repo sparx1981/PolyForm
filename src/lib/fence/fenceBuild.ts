@@ -105,17 +105,35 @@ function compileSplitRail(data: FenceData, snapshot: TerrainSnapshot): Generator
     ? [[...points, points[0]]]
     : splitPath(closed ? [...points, points[0]] : points, MAX_RUN);
   const parts: GeneratorPart[] = [];
-  runs.forEach((run, index) => {
+  let serial = 0;
+  const compileRun = (run: Vec[]) => {
     const ox = run.reduce((sum, p) => sum + p.x, 0) / run.length, oz = run.reduce((sum, p) => sum + p.z, 0) / run.length;
     const local = run.map(p => ({ x: p.x - ox, z: p.z - oz }));
     const prepared = prepareFencePath(local, { layout, authored: true });
-    const plan = compileFence(prepared, { ...settings, seed: data.seed + index, terrain: localSnapshot(snapshot, ox, oz) });
+    const plan = compileFence(prepared, { ...settings, seed: data.seed + serial, terrain: localSnapshot(snapshot, ox, oz) });
     if (!plan.diagnostics.valid) throw new Error(describeInvalid(plan.diagnostics));
-    for (const part of plan.parts as GeneratorPart[]) {
-      parts.push({
-        ...part, id: `${index}-${part.id}`,
-        surface: part.surface.map(t => ({ ...t, points: t.points.map(p => ({ x: p.x + ox, y: p.y, z: p.z + oz })) })),
-      });
+    const tag = serial++;
+    return (plan.parts as GeneratorPart[]).map(part => ({
+      ...part, id: `${tag}-${part.id}`,
+      surface: part.surface.map(t => ({ ...t, points: t.points.map(p => ({ x: p.x + ox, y: p.y, z: p.z + oz })) })),
+    }));
+  };
+  runs.forEach(run => {
+    try {
+      parts.push(...compileRun(run));
+    } catch (error) {
+      // Sharp corners and closed rings can defeat the joint planner. Fall back to one straight
+      // run per side, which it always accepts; each corner then gets its own end posts.
+      if (run.length < 3) throw error;
+      let built = 0;
+      for (let i = 0; i < run.length - 1; i++) {
+        const side = [run[i], run[i + 1]];
+        if (pathLength(side, false) < 2.3) continue;
+        for (const piece of splitPath(side, MAX_RUN)) {
+          try { parts.push(...compileRun(piece)); built++; } catch { /* leave this piece out */ }
+        }
+      }
+      if (!built) throw error;
     }
   });
   return parts;

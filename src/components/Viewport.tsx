@@ -3460,7 +3460,7 @@ function Scene() {
       setWallVertices([]);
       setPolyVertices([]);
       setBezierKnots([]);
-      setFenceVertices([]);
+      setFenceVertices([]); liveFenceIdRef.current = null;
       setRoadPoints([]);
       setDrawingStart(null);
       setPreviewShape(null);
@@ -3637,7 +3637,7 @@ function Scene() {
       setWallHoveredVertex(null);
     }
     if (activeTool !== 'fence' && activeTool !== 'railing') {
-      setFenceVertices([]);
+      setFenceVertices([]); liveFenceIdRef.current = null;
       setFencePlane(null);
       setFenceCandidatePos(null);
       setFenceHoveredVertex(null);
@@ -4331,16 +4331,35 @@ function Scene() {
   // Terrains as drawn: ponds and lakes dig their basins on the fly (never saved into the terrain).
   const dugTerrains = useMemo(() => terrainsWithWaterBasins(shapes), [shapes]);
 
-  /** The fence tool builds one editable fence from the whole clicked path. */
+  /**
+   * The fence tool builds one editable fence from the clicked path, live: it appears at the
+   * second click and grows with each click, so finishing (Enter, double-click, Escape or
+   * clicking the first point) never discards what was drawn.
+   */
+  const liveFenceIdRef = useRef<string | null>(null);
   const commitFenceRun = useCallback((vertices: THREE.Vector3[], closed: boolean) => {
     if (vertices.length < 2) return;
     const cx = vertices.reduce((sum, v) => sum + v.x, 0) / vertices.length;
     const cz = vertices.reduce((sum, v) => sum + v.z, 0) / vertices.length;
     const settings = fenceToolSettings;
-    const count = shapes.filter(s => s.type === 'fence').length + 1;
     let length = 0;
     for (let i = 1; i < vertices.length; i++) length += Math.hypot(vertices[i].x - vertices[i - 1].x, vertices[i].z - vertices[i - 1].z);
     if (closed) length += Math.hypot(vertices[0].x - vertices[vertices.length - 1].x, vertices[0].z - vertices[vertices.length - 1].z);
+    const points = vertices.map(v => [v.x - cx, v.z - cz] as [number, number]);
+    const liveId = liveFenceIdRef.current;
+    const live = liveId ? shapes.find(s => s.id === liveId && s.fenceData) : undefined;
+    if (live) {
+      setShapes(prev => prev.map(s => s.id !== live.id ? s : {
+        ...s,
+        name: s.name.replace(/\([^)]*\)$/, `(${formatValue(length, unit, 1)})`),
+        position: [cx, 0, cz], rotation: [0, 0, 0], quaternion: undefined, scale: [1, 1, 1],
+        args: [length, settings.height],
+        fenceData: { ...s.fenceData!, points, closed },
+      }));
+      diagLog('TOOL', 'Fence extended', { points: vertices.length, closed, length });
+      return;
+    }
+    const count = shapes.filter(s => s.type === 'fence').length + 1;
     const newShape: Shape = {
       id: Math.random().toString(36).substr(2, 9),
       name: `${fenceStyleInfo(settings.style).label} Fence ${count} (${formatValue(length, unit, 1)})`,
@@ -4351,7 +4370,7 @@ function Scene() {
       args: [length, settings.height],
       color: settings.color,
       fenceData: {
-        points: vertices.map(v => [v.x - cx, v.z - cz] as [number, number]),
+        points,
         closed,
         style: settings.style,
         height: settings.height,
@@ -4360,11 +4379,12 @@ function Scene() {
         color: settings.color,
       },
     };
+    liveFenceIdRef.current = newShape.id;
     addShape(newShape);
     commitHistory();
     recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
     diagLog('TOOL', 'Fence placed', { style: settings.style, points: vertices.length, closed, length });
-  }, [fenceToolSettings, shapes, unit, addShape, commitHistory, recordAction, diagLog]);
+  }, [fenceToolSettings, shapes, setShapes, unit, addShape, commitHistory, recordAction, diagLog]);
 
   /** The water tool fills the clicked outline, digging a basin into the terrain under it. */
   const commitWaterBody = useCallback((vertices: THREE.Vector3[]) => {
@@ -4407,7 +4427,9 @@ function Scene() {
   }, [shapes, waterToolSettings, addShape, commitHistory, recordAction, diagLog, setMeasurements]);
 
   const finalizeFenceChain = useCallback((closed = false) => {
-    if (activeTool === 'fence') commitFenceRun(fenceVertices, closed);
+    // The fence already exists (built live); closing is the only change finishing can make.
+    if (activeTool === 'fence' && closed) commitFenceRun(fenceVertices, true);
+    liveFenceIdRef.current = null;
     if (activeTool === 'water') commitWaterBody(fenceVertices);
     setFenceVertices([]);
     setFencePlane(null);
@@ -4645,7 +4667,7 @@ function Scene() {
         setWallPlane(null);
         setWallCandidatePos(null);
         setWallHoveredVertex(null);
-        setFenceVertices([]);
+        setFenceVertices([]); liveFenceIdRef.current = null;
         setFencePlane(null);
         setFenceCandidatePos(null);
         setFenceHoveredVertex(null);
@@ -5320,9 +5342,10 @@ function Scene() {
         if (!pointToPlace) pointToPlace = e.point.clone();
         const prev = fenceVertices[fenceVertices.length - 1];
         if (prev.distanceTo(pointToPlace) >= 0.15) {
-          // Railings are placed section by section; fences are built as one run when finished.
+          // Railings are placed section by section; fences are one run that grows with each click.
           if (activeTool === 'railing') createFenceRailingSegment(prev, pointToPlace, activeTool);
           const nextVerts = [...fenceVertices, pointToPlace];
+          if (activeTool === 'fence') commitFenceRun(nextVerts, false);
           setFenceVertices(nextVerts);
           diagLog("TOOL", `${activeTool} segment placed`, { 
             from: [prev.x, prev.y, prev.z], 

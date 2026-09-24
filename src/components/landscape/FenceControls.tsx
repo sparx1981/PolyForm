@@ -36,7 +36,7 @@ export function FenceControls() {
     <div className="space-y-3.5">
       <p className="text-[10px] text-gray-500 dark:text-gray-400">
         {selected ? `Editing ${selected.name}. Drag yellow handles to move corners, click white dots to add one, right-click a corner to remove it.`
-          : 'Click points along the ground, click the first point to close, double-click or press Enter to finish.'}
+          : 'Click points along the ground: the fence appears from the second click and grows as you go. Click the first point to close it; press Enter or Escape to finish.'}
       </p>
       <div>
         <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Style</label>

@@ -86,3 +86,15 @@ describe('garden fence geometry', () => {
     }
   });
 });
+
+describe('fence fallbacks', () => {
+  it('builds the closed triangle from the bug report instead of failing', () => {
+    // Same shape and lengths as the reported fence (29 m, three corners, closed).
+    const terrain: TerrainSnapshot = { x: 20, z: 10, step: 0.5, columns: 81, rows: 61, heights: new Float32Array(81 * 61) };
+    for (let i = 0; i < terrain.heights.length; i++) terrain.heights[i] = 2 + 0.05 * (i % 81);
+    const result = buildFence({ points: [[37.47, 30.79], [45.63, 22.32], [48.2, 28.23]], closed: true, style: 'post-rail', height: 1.25, seed: 3 }, terrain);
+    expect(result.error).toBeUndefined();
+    expect(result.ok).toBe(true);
+    expect(result.batches!.length).toBeGreaterThan(0);
+  });
+});
