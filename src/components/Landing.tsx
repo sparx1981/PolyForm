@@ -4,6 +4,7 @@ import Home from './marketing/Home';
 import Features from './marketing/Features';
 import BuildWithClaude from './marketing/BuildWithClaude';
 import Developers from './marketing/Developers';
+import SdkDocs from './marketing/SdkDocs';
 import { ClosingCTA, Footer, Header, useMarketingRouter } from './marketing/shared';
 
 const TITLES: Record<string, string> = {
@@ -11,6 +12,7 @@ const TITLES: Record<string, string> = {
   features: 'Features · PolyForm',
   claude: 'Build with Claude · PolyForm',
   developers: 'Developers · PolyForm',
+  'sdk-docs': 'SDK reference · PolyForm',
 };
 
 /** The first page for visitors who aren't signed in. Everything else sits behind sign-in. */
@@ -30,7 +32,8 @@ export default function Landing() {
         {page === 'home' && <Home go={go} onLogin={() => setLoginOpen(true)} />}
         {page === 'features' && <Features />}
         {page === 'claude' && <BuildWithClaude />}
-        {page === 'developers' && <Developers onLogin={() => setLoginOpen(true)} />}
+        {page === 'developers' && <Developers onLogin={() => setLoginOpen(true)} go={go} />}
+        {page === 'sdk-docs' && <SdkDocs go={go} />}
         <ClosingCTA onLogin={() => setLoginOpen(true)} />
       </main>
 

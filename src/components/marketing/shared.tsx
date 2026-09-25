@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Box, LogIn } from 'lucide-react';
 
-export type Page = 'home' | 'features' | 'claude' | 'developers';
+export type Page = 'home' | 'features' | 'claude' | 'developers' | 'sdk-docs';
 
-const PATHS: Record<Page, string> = { home: '/', features: '/features', claude: '/claude', developers: '/developers' };
+const PATHS: Record<Page, string> = { home: '/', features: '/features', claude: '/claude', developers: '/developers', 'sdk-docs': '/developers/sdk' };
 
 function pageFromHash(): Page {
   const hash = window.location.hash.replace(/^#/, '');
   if (hash === '/features') return 'features';
   if (hash === '/claude') return 'claude';
+  if (hash === '/developers/sdk') return 'sdk-docs';
   if (hash === '/developers') return 'developers';
   return 'home';
 }
@@ -82,7 +83,7 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
               onClick={() => go(n.page)}
               className={
                 'text-sm font-semibold px-3.5 py-2 rounded-lg transition-colors '
-                + (page === n.page ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
+                + ((page === n.page || (n.page === 'developers' && page === 'sdk-docs')) ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
               }
             >
               {n.label}
@@ -127,7 +128,7 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
               onClick={() => { go(n.page); setMobileOpen(false); }}
               className={
                 'text-sm font-semibold px-3.5 py-2.5 rounded-lg text-left '
-                + (page === n.page ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
+                + ((page === n.page || (n.page === 'developers' && page === 'sdk-docs')) ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
               }
             >
               {n.label}

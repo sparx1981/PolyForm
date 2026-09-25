@@ -1,10 +1,11 @@
 import React from 'react';
+import { ArrowRight } from 'lucide-react';
 import { CODE_LONG, DEV_TOOLS, SDK_METHODS } from './data';
-import { Eyebrow, scrollToId } from './shared';
+import { Eyebrow, scrollToId, type Page } from './shared';
 
 const DEV_TABS = ['Console', 'Library', 'Documentation', 'Spec'];
 
-export default function Developers({ onLogin }: { onLogin: () => void }) {
+export default function Developers({ onLogin, go }: { onLogin: () => void; go: (p: Page, anchor?: string) => void }) {
   return (
     <>
       <section className="py-24 px-6 border-b border-gray-100">
@@ -75,11 +76,20 @@ export default function Developers({ onLogin }: { onLogin: () => void }) {
 
       <section id="sdk" className="bg-gray-light py-[104px] px-6 scroll-mt-[84px]">
         <div className="max-w-[1200px] mx-auto flex flex-col gap-8">
-          <div className="flex flex-col gap-3">
-            <Eyebrow>SDK reference</Eyebrow>
-            <h2 className="text-[clamp(30px,3.6vw,46px)] font-bold leading-[1.1] tracking-[-0.02em] text-polyform-dark-blue">
-              The <code className="text-[0.9em]">sdk</code> object
-            </h2>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex flex-col gap-3">
+              <Eyebrow>SDK reference</Eyebrow>
+              <h2 className="text-[clamp(30px,3.6vw,46px)] font-bold leading-[1.1] tracking-[-0.02em] text-polyform-dark-blue">
+                The <code className="text-[0.9em]">sdk</code> object
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => go('sdk-docs')}
+              className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-polyform-blue hover:text-polyform-dark-blue transition-colors"
+            >
+              View full SDK documentation <ArrowRight size={16} />
+            </button>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             {SDK_METHODS.map(m => (

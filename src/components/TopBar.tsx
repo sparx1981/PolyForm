@@ -32,7 +32,8 @@ import {
   Sliders,
   ZoomIn,
   Layout,
-  Cloud
+  Cloud,
+  ShieldAlert
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave, offloadLargeGeometryForSave, firebaseGeometryIO } from '../firebase';
@@ -52,6 +53,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { SkpService, HuggingFaceService } from '../services/skpService';
+import { LOGIN_ACTIVITY_ADMIN_EMAIL } from '../lib/loginActivity';
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
 import { readAssetProjectState } from '../lib/assets/projectCodec';
@@ -145,6 +147,7 @@ export default function TopBar() {
       setDefaultCameraTarget,
       isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
+      setIsLoginActivityOpen,
       diagLog,
       googleMapsApiKey,
       setGoogleMapsApiKey,
@@ -879,6 +882,9 @@ export default function TopBar() {
                 
                 <MenuButton icon={<Settings size={16} />} label="Settings" onClick={() => { setIsSettingsOpen(true); setIsMenuOpen(false); }} />
                 <MenuButton icon={<HelpCircle size={16} />} label="Help" onClick={() => { setIsChangelogOpen(true); setIsMenuOpen(false); }} />
+                {user?.email?.toLowerCase() === LOGIN_ACTIVITY_ADMIN_EMAIL && (
+                  <MenuButton icon={<ShieldAlert size={16} />} label="Login Activity" onClick={() => { setIsLoginActivityOpen(true); setIsMenuOpen(false); }} />
+                )}
                 
                 <div className="h-px bg-gray-100 my-1" />
                 

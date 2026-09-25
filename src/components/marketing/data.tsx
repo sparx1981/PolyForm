@@ -20,8 +20,8 @@ export type ShowcaseTab = {
 export const SHOWCASE_TABS: ShowcaseTab[] = [
   {
     icon: PenLine, label: 'Model', title: 'Draw it, then pull it up',
-    body: 'Lines, rectangles, circles and polygons become faces. Push/Pull turns them into solids, and Subtract carves one shape out of another.',
-    points: ['Push/Pull (P), Subtract (X) and Deform (D)', 'Snaps to endpoints, midpoints and axes', 'Type exact sizes in the status bar as you draw'],
+    body: 'Lines, rectangles, circles and polygons become faces. Extrude turns them into solids, and Subtract carves one shape out of another.',
+    points: ['Extrude (P), Subtract (X) and Deform (D)', 'Snaps to endpoints, midpoints and axes', 'Type exact sizes in the status bar as you draw'],
     shot: 'Screenshot: a rectangle being pulled into a box',
   },
   {
@@ -33,7 +33,7 @@ export const SHOWCASE_TABS: ShowcaseTab[] = [
   {
     icon: Leaf, label: 'Landscape', title: 'Gardens and landscape',
     body: 'Shape the terrain, lay grass and paths, plant trees and flowers, and add fences, patios, decks and ponds.',
-    points: ['Terrain from isolines or sculpting brushes', 'Grading pads with cut and fill volumes', 'Patio and deck quantities for estimating'],
+    points: ['Terrain from isolines or sculpting brushes', 'Parametric grass and wildflower meadows', 'Grading pads with cut and fill volumes', 'Patio and deck quantities for estimating'],
     shot: 'Screenshot: garden with pond, patio and planting',
   },
   {
@@ -74,7 +74,7 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
       it('Line', 'L', 'Connected segments that snap to axes and vertices.'),
       it('Rectangle', 'R', 'Drag, or click once and type width and depth.'),
       it('Circle and polygon', 'C', 'Trace shapes on the ground or on a face.'),
-      it('Push/Pull', 'P', 'Extrude faces into solids, or push them back in.'),
+      it('Extrude', 'P', 'Extrude faces into solids, or push them back in.'),
       it('Subtract', 'X', 'Carve a hole using one object as the cutter.'),
       it('Bevel, fillet and chamfer', '', 'Round or flatten edges.'),
       it('Deform', 'D', 'Sculpt vertices with a soft brush.'),
@@ -115,6 +115,8 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
     body: 'Plant trees and shrubs, grow grass and wildflowers, and build the garden: fences, ponds, patios, decks, railings, lights, benches and boulders.',
     items: [
       it('Plant Tree / Bush', '', 'Trees and shrubs that sway in the wind.'),
+      it('Grass', '', 'Parametric grass that grows to fit the ground, swaying in the wind.'),
+      it('Wildflowers', '', 'Parametric wildflower meadows scattered and coloured procedurally.'),
       it('Fence', '', 'Draw a run; posts and panels follow the ground.'),
       it('Pond / Lake', '', 'The ground is dug into a basin and filled with water.'),
       it('Patio / Decking', '', 'Paving set into the ground, or a timber deck on posts.'),
@@ -159,9 +161,10 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
   },
   {
     id: 'animation', icon: Sparkles, title: 'Animation and scenes',
-    body: 'Place particle effects in the scene, and save camera scenes to fly between viewpoints when you present.',
+    body: 'Place particle effects and wildlife in the scene, and save camera scenes to fly between viewpoints when you present.',
     items: [
       it('Effects', '', 'Confetti, fire, smoke, sparks and magic aura.'),
+      it('Wildlife', '', 'Birds taking off from a perch, starling flocks, and bees.'),
       it('Scale and density', '', 'Size each effect to the design.'),
       it('Looping', '', 'Loop, or play once.'),
       it('Scenes', '', 'Saved viewpoints with thumbnails; click to fly there.'),
@@ -305,7 +308,7 @@ export const DEV_TOOLS: { icon: LucideIcon; title: string; text: string }[] = [
 
 export const SDK_METHODS: { sig: string; text: string }[] = [
   { sig: 'sdk.createBox({ width, height, depth, position })', text: 'Create a box.' },
-  { sig: 'sdk.createPoly({ vertices: [[x, y, z], …] })', text: 'Create a polygon from world-space points. Ready for Push/Pull.' },
+  { sig: 'sdk.createPoly({ vertices: [[x, y, z], …] })', text: 'Create a polygon from world-space points. Ready for Extrude.' },
   { sig: 'sdk.pushPull(shape, amount)', text: 'Extrude or intrude a shape.' },
   { sig: 'sdk.applyColor(shape, color)', text: 'Colour a shape.' },
   { sig: 'sdk.setBevel(shape, { amount, type, segments })', text: 'Bevel a shape’s edges.' },

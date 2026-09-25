@@ -545,7 +545,7 @@ export const ToolModifierPalette: React.FC = () => {
                   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
                 }}
                 className="w-full py-2 px-3 bg-polyform-blue hover:bg-polyform-blue-hover text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
-                title="Close loop back to origin and generate a solid planar face ready for Push/Pull"
+                title="Close loop back to origin and generate a solid planar face ready for Extrude"
               >
                 <CheckCircle2 size={14} className="text-white" />
                 <span>Close Loop & Form Surface</span>

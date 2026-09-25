@@ -36,6 +36,7 @@ import Help from './components/Help';
 import Messaging from './components/Messaging';
 import WebpageModal from './components/WebpageModal';
 import AIDiagnosticLog from './components/AIDiagnosticLog';
+import LoginActivity from './components/LoginActivity';
 import { DeveloperSuite } from './components/DeveloperSuite';
 import { CodeRecorder } from './components/CodeRecorder';
 import { CustomToolbarOverlay } from './components/CustomToolbarOverlay';
@@ -540,6 +541,7 @@ function AppContent() {
         {isMessagingOpen && !isMessagingDocked && <Messaging />}
       </AnimatePresence>
       <AIDiagnosticLog />
+      <LoginActivity />
       <WebpageModal />
       <DeveloperSuite />
       <CodeRecorder />

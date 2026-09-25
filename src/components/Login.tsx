@@ -7,6 +7,7 @@ import {
 import { auth, googleProvider } from '../firebase';
 import { motion } from 'motion/react';
 import { LogIn, Mail, Lock, Chrome, Loader2, X } from 'lucide-react';
+import { recordLoginActivity } from '../lib/loginActivity';
 
 interface LoginProps {
   /** Shown over the landing page: a close button and Escape take you back to it. */
@@ -33,9 +34,11 @@ export default function Login({ onClose, note }: LoginProps = {}) {
     setLoading(true);
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      recordLoginActivity({ email: result.user.email || '', success: true, method: 'google' });
     } catch (err: any) {
       setError(err.message);
+      recordLoginActivity({ email, success: false, method: 'google', reason: err.code || err.message });
     } finally {
       setLoading(false);
     }
@@ -51,8 +54,10 @@ export default function Login({ onClose, note }: LoginProps = {}) {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
+      recordLoginActivity({ email, success: true, method: 'password' });
     } catch (err: any) {
       setError(err.message);
+      recordLoginActivity({ email, success: false, method: 'password', reason: err.code || err.message });
     } finally {
       setLoading(false);
     }

@@ -101,14 +101,14 @@ export const HELP_DOCS: HelpTopic[] = [
       'Select the Box tool.',
       'Click and drag to define the base of the box.',
       'Release to create the box with a default height.',
-      'Use the Push-Pull tool afterwards to adjust height precisely.'
+      'Use the Extrude tool afterwards to adjust height precisely.'
     ]
   },
   {
     id: 'poly-tool',
     title: 'Poly Tool',
     category: 'tools',
-    content: 'The Poly Tool allows you to trace custom polygons on the ground or existing object faces. It is ideal for creating irregular floor plans or custom profiles that can be extruded using the Push-Pull tool.',
+    content: 'The Poly Tool allows you to trace custom polygons on the ground or existing object faces. It is ideal for creating irregular floor plans or custom profiles that can be extruded using the Extrude tool.',
     steps: [
       'Select the Poly Tool from the Line sub-menu (click the Pen Line icon to reveal more tools).',
       'Set First Vertex: Click on the ground or a shape face to set the starting point and lock the drawing plane.',
@@ -116,7 +116,7 @@ export const HELP_DOCS: HelpTopic[] = [
       'Snap to Start: When your cursor is near the first vertex, it will highlight in yellow. Click to close the shape.',
       'Finalize via Keyboard: Press Enter to automatically close the shape from your last vertex back to the first.',
       'Undo & Cancel: Press Ctrl+Z to undo the last vertex placed, or Esc to cancel the entire drawing.',
-      'Extrude: Once the 2D surface is created, use the Push-Pull tool (P) to pull it into a 3D solid.'
+      'Extrude: Once the 2D surface is created, use the Extrude tool (P) to pull it into a 3D solid.'
     ]
   },
   {
@@ -147,11 +147,11 @@ export const HELP_DOCS: HelpTopic[] = [
   },
   {
     id: 'push-pull',
-    title: 'Push-Pull Tool',
+    title: 'Extrude Tool',
     category: 'tools',
-    content: 'The Push-Pull tool is the fundamental method for extruding 2D shapes into 3D volumes or adjusting the faces of existing 3D objects. It now features full support for Poly tool surfaces.',
+    content: 'The Extrude tool is the fundamental method for extruding 2D shapes into 3D volumes or adjusting the faces of existing 3D objects. It now features full support for Poly tool surfaces.',
     steps: [
-      'Select the Push-Pull tool (or press P).',
+      'Select the Extrude tool (or press P).',
       'Hover over a face; it will highlight in blue.',
       'Click and drag the face to extrude or intrude.',
       'Poly Strategy: Pull a polygon top/bottom cap to change its height, or pull a side face to uniformly scale its entire 2D profile.',
@@ -343,7 +343,7 @@ export const HELP_DOCS: HelpTopic[] = [
     id: 'sdk-poly-telemetry',
     title: 'Advanced SDK: Poly',
     category: 'advanced',
-    content: 'The SDK has been expanded to support programmatic polygon creation. This allows you to generate custom 2D surfaces that are immediately compatible with the Push-Pull tool.',
+    content: 'The SDK has been expanded to support programmatic polygon creation. This allows you to generate custom 2D surfaces that are immediately compatible with the Extrude tool.',
     steps: [
       'sdk.createPoly({ vertices: [[x,y,z], ...] }): Create custom 3D polygons by providing a list of world-space coordinates. The system automatically calculates the geometry plane.',
       'Snap highlighting: When manually drawing, the entire closing segment highlights in thick yellow when you hover over the start vertex.',

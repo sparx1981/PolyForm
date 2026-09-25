@@ -1997,7 +1997,7 @@ sdk.createCone({ radius: 1.2, height: 2.5, position: [-3, 1.25, 0] });
 sdk.createCylinder({ radius: 1.2, radiusTop: 0.6, height: 1.5, position: [6, 0.75, 0] });`
         },
         {
-          name: "Push-Pull Face Extrusion",
+          name: "Extrude a Face",
           code: `const rect = sdk.createRectangle({ width: 3, height: 3 });
 sdk.pushPull(rect, 2.5); // Extrudes 2D shape into 3D volume`
         },
@@ -2324,7 +2324,7 @@ sdk.addRectLight("#ffedd5", 3.0, [0, 4, 0], [2, 1]);`
 sdk.addProjectorLight({ color: "#ffffff", intensity: 4, position: [0, 5, 0] });`
         },
         {
-          name: "Deform an Object (Push/Pull Radial Sculpt)",
+          name: "Deform an Object (Extrude Radial Sculpt)",
           code: `// Create a sphere and select it first - deformObject acts on an existing shape
 const blob = sdk.createSphere({ radius: 1.5, position: [0, 1.5, 0] });
 sdk.select(blob.id);

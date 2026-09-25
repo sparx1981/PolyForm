@@ -767,7 +767,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         {
           id: 'pushpull',
           tool: 'pushpull',
-          label: 'Push/Pull',
+          label: 'Extrude',
           hotkey: 'P',
           subtitle: 'Extrude or recess 2D faces into 3D volumes',
           icon: <ArrowUpFromLine size={19} />,

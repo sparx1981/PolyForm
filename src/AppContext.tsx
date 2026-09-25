@@ -333,6 +333,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const incrementReads = (count: number) => setTotalReads(prev => prev + count);
 
   const [isDiagnosticLogOpen, setIsDiagnosticLogOpen] = useState(false);
+  const [isLoginActivityOpen, setIsLoginActivityOpen] = useState(false);
   const [lastInteractionData, setLastInteractionData] = useState<any>(null);
   const [diagnosticLogs, setDiagnosticLogs] = useState<DiagLogEntry[]>([]);
   const [embeddedWebpageUrl, setEmbeddedWebpageUrl] = useState<string | null>(null);
@@ -2506,6 +2507,8 @@ console.log("Created rectangle:", myRect.id);`);
       retrySync,
       isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
+      isLoginActivityOpen,
+      setIsLoginActivityOpen,
       // Architecture, Landscapes & Camera Toolbars
       isBasicToolbarEnabled,
       setIsBasicToolbarEnabled,

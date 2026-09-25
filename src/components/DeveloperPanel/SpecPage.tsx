@@ -370,7 +370,7 @@ const S: Record<string, React.CSSProperties> = {
 const TECH_TILES = [
   { title: 'Three.js + R3F', desc: 'WebGL 3D rendering engine with React Three Fiber for declarative scene management.' },
   { title: 'Google Gemini AI', desc: 'LLM integration for generative 3D logic, scripting assist, and project analysis.' },
-  { title: 'Three-BVH-CSG', desc: 'Optimised Constructive Solid Geometry for real-time boolean operations (Push/Pull, Subtract).' },
+  { title: 'Three-BVH-CSG', desc: 'Optimised Constructive Solid Geometry for real-time boolean operations (Extrude, Subtract).' },
   { title: 'Firebase / Firestore', desc: 'Real-time persistence, authentication, file storage, and multi-user presence sync.' },
   { title: 'TypeScript + Vite', desc: 'Strongly-typed codebase with fast HMR dev server and optimised production builds.' },
   { title: 'WorldView / OSM', desc: 'Geo-anchored satellite tile overlay using OpenStreetMap proxied tile service.' },

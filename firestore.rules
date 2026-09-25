@@ -98,6 +98,23 @@ service cloud.firestore {
              data.code is string && data.code.size() < 100000;
     }
 
+    // The one account allowed to read the sign-in activity log (see loginActivity below).
+    function isLoginActivityAdmin() {
+      return isAuthenticated() && ('email' in request.auth.token) &&
+        request.auth.token.email.lower() == 'craigtrickett@gmail.com';
+    }
+
+    function isValidLoginActivity(data) {
+      return data.keys().hasOnly(['email', 'success', 'method', 'reason', 'userAgent', 'timestamp']) &&
+             data.keys().hasAll(['email', 'success', 'method', 'timestamp']) &&
+             data.email is string && data.email.size() <= 320 &&
+             data.success is bool &&
+             data.method in ['google', 'password'] &&
+             (!('reason' in data) || data.reason == null || (data.reason is string && data.reason.size() <= 200)) &&
+             (!('userAgent' in data) || data.userAgent == null || (data.userAgent is string && data.userAgent.size() <= 300)) &&
+             data.timestamp == request.time;
+    }
+
     function isValidCollaboration(data) {
       return data.keys().hasAll(['modelId', 'email', 'role', 'status']) &&
              data.modelId is string && data.modelId.size() > 0 && data.modelId.size() <= 256 &&
@@ -180,6 +197,15 @@ service cloud.firestore {
         allow delete: if isAuthenticated() &&
           get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
       }
+    }
+
+    // Sign-in activity log (success and failure). Failed sign-ins happen before the user is
+    // authenticated, so writes are open to anyone but tightly validated and append-only; only
+    // the admin account can read it back, in the burger menu's Login Activity panel.
+    match /loginActivity/{entryId} {
+      allow create: if isValidLoginActivity(request.resource.data);
+      allow get, list: if isLoginActivityAdmin();
+      allow update, delete: if false;
     }
 
     match /materials/{materialId} {

@@ -668,6 +668,8 @@ export interface AppState {
   retrySync: () => void;
   isDiagnosticLogOpen: boolean;
   setIsDiagnosticLogOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  isLoginActivityOpen: boolean;
+  setIsLoginActivityOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   lastInteractionData: any;
   setLastInteractionData: (data: any) => void;
   // Embedded Webpage

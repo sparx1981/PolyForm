@@ -742,7 +742,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       
       <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
       
-      <ToolButton tool="pushpull" icon={<ArrowUpFromLine size={20} />} label="Push/Pull (P)" />
+      <ToolButton tool="pushpull" icon={<ArrowUpFromLine size={20} />} label="Extrude (P)" />
       <ToolButton tool="offset" icon={<Layers size={20} />} label="Offset" />
       <ToolButton tool="subtract" icon={<Scissors size={20} />} label="Subtract Tool - 1st click on the object to keep, 2nd click on object to subtract" />
       <div 
