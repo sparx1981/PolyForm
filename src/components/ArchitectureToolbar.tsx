@@ -57,7 +57,7 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey, children }: ArchT
         onMouseLeave={() => setHovered(false)}
         className={cn(
           "toolbar-btn relative flex items-center justify-center transition-all",
-          isActive && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+          isActive && "toolbar-btn-active ring-2 ring-offset-1 ring-polyform-blue shadow-md",
           theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
         )}
         style={isActive ? { borderColor: bannerColor, color: bannerColor } : undefined}
@@ -273,8 +273,8 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
             title="Parametric Roof Generator (Gable / Hip / Parapet)"
             className={cn(
               "toolbar-btn relative flex items-center justify-center transition-all",
-              (showRoofOptions || activeTool === 'roof') && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
-              theme === 'dark' ? "hover:bg-gray-700 text-sky-400 hover:text-sky-300" : "hover:bg-gray-100 text-trimble-blue hover:text-trimble-blue"
+              (showRoofOptions || activeTool === 'roof') && "toolbar-btn-active ring-2 ring-offset-1 ring-polyform-blue shadow-md",
+              theme === 'dark' ? "hover:bg-gray-700 text-sky-400 hover:text-sky-300" : "hover:bg-gray-100 text-polyform-blue hover:text-polyform-blue"
             )}
           >
             <Home size={18} />
@@ -298,21 +298,21 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
                 <div className="font-bold text-[10px] uppercase text-gray-400 px-1 py-0.5">Generate Roof</div>
                 <button
                   onClick={() => { handleGenerateRoof('gable'); setShowRoofOptions(false); }}
-                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-polyform-blue/15 hover:text-polyform-blue transition-colors flex items-center justify-between"
                 >
                   <span>Gable Roof (35°)</span>
                   <span className="text-[10px] text-gray-400 font-mono">35°</span>
                 </button>
                 <button
                   onClick={() => { handleGenerateRoof('hip'); setShowRoofOptions(false); }}
-                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-polyform-blue/15 hover:text-polyform-blue transition-colors flex items-center justify-between"
                 >
                   <span>Hip Roof (4 slopes)</span>
                   <span className="text-[10px] text-gray-400 font-mono">35°</span>
                 </button>
                 <button
                   onClick={() => { handleGenerateRoof('parapet'); setShowRoofOptions(false); }}
-                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-trimble-blue/15 hover:text-trimble-blue transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-polyform-blue/15 hover:text-polyform-blue transition-colors flex items-center justify-between"
                 >
                   <span>Parapet Roof (Flat / Coping)</span>
                   <span className="text-[10px] text-gray-400 font-mono">0°</span>
@@ -347,7 +347,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
             title="Reactive Timber Frame Engine (Studs, Plates, Headers, Joists & Rafters)"
             className={cn(
               "toolbar-btn relative flex items-center justify-center transition-all",
-              activeTool === 'timber-frame' && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+              activeTool === 'timber-frame' && "toolbar-btn-active ring-2 ring-offset-1 ring-polyform-blue shadow-md",
               theme === 'dark' ? "hover:bg-gray-700 text-amber-400 hover:text-amber-300" : "hover:bg-gray-100 text-amber-600 hover:text-amber-700"
             )}
           >
@@ -384,11 +384,11 @@ function WorldViewToolButton() {
         onMouseLeave={() => setHovered(false)}
         className={cn(
           "toolbar-btn relative flex items-center justify-center transition-all",
-          isWorldViewActive && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+          isWorldViewActive && "toolbar-btn-active ring-2 ring-offset-1 ring-polyform-blue shadow-md",
           theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
         )}
       >
-        <Globe size={18} className={isWorldViewActive ? "text-trimble-blue" : undefined} />
+        <Globe size={18} className={isWorldViewActive ? "text-polyform-blue" : undefined} />
 
         <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
           {hovered && (

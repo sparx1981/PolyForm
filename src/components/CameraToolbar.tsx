@@ -47,7 +47,7 @@ function CameraToolButton({ tool, icon, label, subtitle, onClick, isActive }: Ca
         title={label}
         className={cn(
           "toolbar-btn relative flex items-center justify-center transition-all",
-          active && "toolbar-btn-active ring-2 ring-offset-1 ring-trimble-blue shadow-md",
+          active && "toolbar-btn-active ring-2 ring-offset-1 ring-polyform-blue shadow-md",
           theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-100 text-gray-700"
         )}
         style={active ? { borderColor: bannerColor, color: bannerColor } : undefined}

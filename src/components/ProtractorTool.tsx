@@ -63,7 +63,7 @@ type Stage =
   | { step: 'angle'; centre: THREE.Vector3; normal: THREE.Vector3; base: THREE.Vector3 };
 
 /**
- * SketchUp-style protractor: click to place its centre on a surface (it lies flat on that
+ * Familiar protractor: click to place its centre on a surface (it lies flat on that
  * surface), click to set the base line, then move to measure the angle and click to place a
  * guide line through the centre at that angle. Angles snap to 15° steps; type a number and press
  * Enter for an exact angle. Esc starts again.
@@ -260,7 +260,7 @@ export function ProtractorMeasurement({ args, selected, onSelect }: { args: Prot
       <Line points={arc} color="#f59e0b" lineWidth={2} />
       <Html position={labelAt} center occlude={false}>
         <div onClick={(e: any) => { e.stopPropagation(); onSelect(); }}
-          className={`cursor-pointer whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium text-white shadow-lg ${selected ? 'border-white bg-trimble-blue' : 'border-sky-400/50 bg-black/80 hover:border-sky-300'}`}>
+          className={`cursor-pointer whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium text-white shadow-lg ${selected ? 'border-white bg-polyform-blue' : 'border-sky-400/50 bg-black/80 hover:border-sky-300'}`}>
           {Math.abs(args.angle).toFixed(1)}°
         </div>
       </Html>

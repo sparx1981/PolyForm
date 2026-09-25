@@ -11,7 +11,7 @@ const LandingHero3D = lazy(() => import('../LandingHero3D'));
 function ProductFrame() {
   return (
     <div className="mt-16 w-full max-w-[1200px] rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-[0_40px_80px_-24px_rgba(15,23,42,0.28),0_2px_6px_rgba(0,0,0,0.06)] flex flex-col text-left">
-      <div className="hidden sm:flex h-10 bg-trimble-blue text-white items-center gap-3.5 px-3.5 text-sm">
+      <div className="hidden sm:flex h-10 bg-polyform-blue text-white items-center gap-3.5 px-3.5 text-sm">
         <Menu size={18} />
         <span className="font-bold">PolyForm</span>
         <span className="w-px h-3.5 bg-white/25" />
@@ -24,7 +24,7 @@ function ProductFrame() {
           {HERO_RAIL_ICONS.map((r, i) => (
             <span
               key={i}
-              className={'w-8 h-[30px] rounded flex items-center justify-center ' + (r.active ? 'bg-trimble-blue text-white' : '')}
+              className={'w-8 h-[30px] rounded flex items-center justify-center ' + (r.active ? 'bg-polyform-blue text-white' : '')}
             >
               <r.icon size={16} />
             </span>
@@ -45,7 +45,7 @@ function ProductFrame() {
                   <>
                     <span className="h-1.5 rounded-sm bg-gray-200" />
                     <span className="h-1.5 w-[70%] rounded-sm bg-gray-200" />
-                    <span className="h-1 rounded-sm bg-gradient-to-r from-trimble-blue from-60% to-gray-200 to-60%" />
+                    <span className="h-1 rounded-sm bg-gradient-to-r from-polyform-blue from-60% to-gray-200 to-60%" />
                   </>
                 )}
               </div>
@@ -54,7 +54,7 @@ function ProductFrame() {
         </div>
       </div>
       <div className="hidden sm:flex h-7 border-t border-gray-200 items-center gap-2.5 px-3 text-[11px] text-gray-600">
-        <span className="flex items-center gap-1 text-trimble-green"><Cloud size={12} /> Synced</span>
+        <span className="flex items-center gap-1 text-polyform-green"><Cloud size={12} /> Synced</span>
         <span>Click a surface to apply the active material.</span>
       </div>
     </div>
@@ -72,10 +72,10 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
         className="pt-[88px] flex flex-col items-center text-center px-6"
         style={{ background: 'linear-gradient(180deg, #fff 0%, #fff 55%, var(--color-gray-light) 55%)' }}
       >
-        <span className="inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-trimble-blue bg-trimble-blue/10 px-3.5 py-1.5 rounded-full">
+        <span className="inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-polyform-blue bg-polyform-blue/10 px-3.5 py-1.5 rounded-full">
           3D design in your browser
         </span>
-        <h1 className="mt-7 text-[clamp(44px,7vw,84px)] font-bold leading-[1.02] tracking-[-0.03em] text-trimble-dark-blue max-w-[1000px]">
+        <h1 className="mt-7 text-[clamp(44px,7vw,84px)] font-bold leading-[1.02] tracking-[-0.03em] text-polyform-dark-blue max-w-[1000px]">
           Design the house.<br />Plant the garden.<br />Walk right in.
         </h1>
         <p className="mt-7 text-[clamp(17px,1.6vw,20px)] leading-[1.6] text-gray-600 max-w-[680px]">
@@ -85,14 +85,14 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
           <button
             type="button"
             onClick={onLogin}
-            className="inline-flex items-center gap-2 text-base font-semibold px-[26px] py-[14px] rounded-lg bg-trimble-blue text-white shadow-[0_8px_20px_rgb(0_99_163_/_0.25)] hover:bg-trimble-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-trimble-blue"
+            className="inline-flex items-center gap-2 text-base font-semibold px-[26px] py-[14px] rounded-lg bg-polyform-blue text-white shadow-[0_8px_20px_rgb(0_99_163_/_0.25)] hover:bg-polyform-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
           >
             <LogIn size={18} /> Start designing
           </button>
           <button
             type="button"
             onClick={() => go('features')}
-            className="inline-flex items-center gap-2 text-base font-semibold px-[22px] py-[14px] rounded-lg bg-white text-trimble-dark-blue border border-gray-200 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 text-base font-semibold px-[22px] py-[14px] rounded-lg bg-white text-polyform-dark-blue border border-gray-200 hover:bg-gray-50 transition-colors"
           >
             See what it does <ArrowRight size={16} />
           </button>
@@ -121,7 +121,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
           <div className="flex flex-wrap justify-between items-end gap-6">
             <div className="flex flex-col gap-3.5 max-w-[640px]">
               <Eyebrow>One model</Eyebrow>
-              <h2 className="text-[clamp(32px,4vw,52px)] font-bold leading-[1.08] tracking-[-0.02em] text-trimble-dark-blue">
+              <h2 className="text-[clamp(32px,4vw,52px)] font-bold leading-[1.08] tracking-[-0.02em] text-polyform-dark-blue">
                 Everything from foundations to flower beds
               </h2>
             </div>
@@ -144,7 +144,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
                 }}
                 className={
                   'flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors '
-                  + (i === tab ? 'bg-white text-trimble-blue shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'text-gray-600')
+                  + (i === tab ? 'bg-white text-polyform-blue shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : 'text-gray-600')
                 }
               >
                 <t.icon size={16} /> {t.label}
@@ -163,12 +163,12 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
               style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))' }}
             >
               <div className="flex flex-col gap-5">
-                <h3 className="text-[clamp(26px,2.6vw,34px)] font-bold leading-[1.15] tracking-[-0.01em] text-trimble-dark-blue">{active.title}</h3>
+                <h3 className="text-[clamp(26px,2.6vw,34px)] font-bold leading-[1.15] tracking-[-0.01em] text-polyform-dark-blue">{active.title}</h3>
                 <p className="text-[17px] leading-[1.65] text-gray-600">{active.body}</p>
                 <div className="flex flex-col border-t border-gray-200">
                   {active.points.map(p => (
                     <div key={p} className="flex items-center gap-3 py-3.5 border-b border-gray-200 text-[15px] text-gray-700">
-                      <Check size={16} className="text-trimble-blue shrink-0" /> {p}
+                      <Check size={16} className="text-polyform-blue shrink-0" /> {p}
                     </div>
                   ))}
                 </div>
@@ -188,7 +188,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
         <div className="max-w-[1200px] mx-auto flex flex-col gap-14">
           <div className="flex flex-col gap-3.5 max-w-[700px]">
             <Eyebrow>From plot to walk-through</Eyebrow>
-            <h2 className="text-[clamp(32px,4vw,52px)] font-bold leading-[1.08] tracking-[-0.02em] text-trimble-dark-blue">
+            <h2 className="text-[clamp(32px,4vw,52px)] font-bold leading-[1.08] tracking-[-0.02em] text-polyform-dark-blue">
               Start with the site. Finish at the front door.
             </h2>
           </div>
@@ -199,7 +199,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
                   <IconTile icon={<s.icon size={22} />} />
                   <span className="font-mono font-semibold text-[13px] text-gray-400">{s.n}</span>
                 </div>
-                <span className="text-xl font-bold text-trimble-dark-blue">{s.title}</span>
+                <span className="text-xl font-bold text-polyform-dark-blue">{s.title}</span>
                 <span className="text-[15px] leading-[1.6] text-gray-600">{s.body}</span>
               </div>
             ))}
@@ -208,7 +208,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
       </section>
 
       {/* Build with Claude band */}
-      <section className="bg-trimble-dark-blue text-white py-28 px-6">
+      <section className="bg-polyform-dark-blue text-white py-28 px-6">
         <div className="max-w-[1200px] mx-auto grid gap-16 items-center" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))' }}>
           <div className="flex flex-col gap-5">
             <Eyebrow dark icon={<Sparkles size={16} />}>Build with Claude</Eyebrow>
@@ -224,7 +224,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
             <button
               type="button"
               onClick={() => go('claude')}
-              className="self-start inline-flex items-center gap-2 text-[15px] font-semibold px-[22px] py-3 rounded-lg bg-white text-trimble-dark-blue hover:bg-gray-100 transition-colors"
+              className="self-start inline-flex items-center gap-2 text-[15px] font-semibold px-[22px] py-3 rounded-lg bg-white text-polyform-dark-blue hover:bg-gray-100 transition-colors"
             >
               How the connector works <ArrowRight size={16} />
             </button>
@@ -238,7 +238,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
         <div className="max-w-[1200px] mx-auto grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))' }}>
           <div className="border border-gray-200 rounded-2xl p-10 flex flex-col gap-4.5 bg-white">
             <Eyebrow>Developers</Eyebrow>
-            <h3 className="text-[30px] font-bold leading-[1.15] text-trimble-dark-blue">Script anything you can draw</h3>
+            <h3 className="text-[30px] font-bold leading-[1.15] text-polyform-dark-blue">Script anything you can draw</h3>
             <p className="text-base leading-[1.6] text-gray-600">
               Write JavaScript against the PolyForm SDK in the Developer Extensibility Suite, then save it to your script library.
             </p>
@@ -252,21 +252,21 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
             <button
               type="button"
               onClick={() => go('developers')}
-              className="self-start inline-flex items-center gap-1.5 text-[15px] font-semibold text-trimble-blue hover:text-trimble-dark-blue transition-colors"
+              className="self-start inline-flex items-center gap-1.5 text-[15px] font-semibold text-polyform-blue hover:text-polyform-dark-blue transition-colors"
             >
               Explore the SDK <ArrowRight size={16} />
             </button>
           </div>
 
           <div className="border border-gray-200 rounded-2xl p-10 flex flex-col gap-4.5 bg-gray-light">
-            <h3 className="text-[30px] font-bold leading-[1.15] text-trimble-dark-blue">Keep designs where you work</h3>
+            <h3 className="text-[30px] font-bold leading-[1.15] text-polyform-dark-blue">Keep designs where you work</h3>
             <p className="text-base leading-[1.6] text-gray-600">Choose where each model lives. Every model appears in one list, wherever it is stored.</p>
             <div className="flex flex-col gap-2.5">
               {STORAGE_OPTIONS.map(s => (
                 <div key={s.title} className="flex gap-3.5 items-start bg-white border border-gray-100 rounded-xl p-4 shadow-modus-1">
-                  <s.icon size={18} className="text-trimble-blue mt-0.5 shrink-0" />
+                  <s.icon size={18} className="text-polyform-blue mt-0.5 shrink-0" />
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[15px] font-semibold text-trimble-dark-blue">{s.title}</span>
+                    <span className="text-[15px] font-semibold text-polyform-dark-blue">{s.title}</span>
                     <span className="text-sm text-gray-600">{s.text}</span>
                   </div>
                 </div>

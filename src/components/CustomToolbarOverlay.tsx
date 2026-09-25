@@ -392,7 +392,7 @@ export const CustomToolbarOverlay: React.FC = () => {
         <div key={item.id} className="w-full px-1 py-1">
           <div className="flex items-center justify-between text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">
             <span>{item.label}</span>
-            <span className="font-mono text-trimble-blue">{item.value ?? item.min ?? 0}</span>
+            <span className="font-mono text-polyform-blue">{item.value ?? item.min ?? 0}</span>
           </div>
           <input
             type="range"
@@ -405,7 +405,7 @@ export const CustomToolbarOverlay: React.FC = () => {
               updateItemState(toolbar.id, item.id, { value: v });
               executeItem(item, toolbar.title, v);
             }}
-            className="w-full h-1 accent-trimble-blue"
+            className="w-full h-1 accent-polyform-blue"
           />
           {item.description && <p className="text-[10px] text-gray-400 mt-0.5">{item.description}</p>}
         </div>
@@ -423,7 +423,7 @@ export const CustomToolbarOverlay: React.FC = () => {
               updateItemState(toolbar.id, item.id, { checked: v });
               executeItem(item, toolbar.title, v);
             }}
-            className="accent-trimble-blue mt-0.5"
+            className="accent-polyform-blue mt-0.5"
           />
           <span>
             {item.label}
@@ -449,7 +449,7 @@ export const CustomToolbarOverlay: React.FC = () => {
                 }}
                 className={cn(
                   "w-6 h-6 rounded-md border-2 transition-transform hover:scale-110",
-                  item.selectedColor === c ? "border-trimble-blue" : "border-transparent"
+                  item.selectedColor === c ? "border-polyform-blue" : "border-transparent"
                 )}
                 style={{ backgroundColor: c }}
               />
@@ -485,7 +485,7 @@ export const CustomToolbarOverlay: React.FC = () => {
               }}
               className={cn(
                 "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap",
-                item.selected === opt ? "bg-trimble-blue text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                item.selected === opt ? "bg-polyform-blue text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
               )}
             >
               {opt}
@@ -566,13 +566,13 @@ export const CustomToolbarOverlay: React.FC = () => {
         style={item.color ? { color: item.color } : undefined}
       >
         {isRunning ? (
-          <Loader2 size={18} className="animate-spin text-trimble-blue" />
+          <Loader2 size={18} className="animate-spin text-polyform-blue" />
         ) : (
           <DynamicIcon nameOrEmoji={item.icon} size={18} />
         )}
 
         {item.badge && (
-          <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-trimble-blue text-white rounded text-[9px] font-bold leading-none shadow">
+          <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-polyform-blue text-white rounded text-[9px] font-bold leading-none shadow">
             {item.badge}
           </span>
         )}
@@ -704,7 +704,7 @@ export const CustomToolbarOverlay: React.FC = () => {
                   onClick={() => toggleDock(toolbar.id)}
                   className={cn(
                     "p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors",
-                    isFloating ? "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" : "text-trimble-blue bg-trimble-blue/10"
+                    isFloating ? "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" : "text-polyform-blue bg-polyform-blue/10"
                   )}
                   title={isFloating ? "Dock Toolbar" : "Undock Toolbar (Make Floating)"}
                 >

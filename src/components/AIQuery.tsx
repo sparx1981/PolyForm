@@ -68,7 +68,7 @@ export default function AIQuery() {
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-lg overflow-hidden flex flex-col"
           >
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
-              <div className="flex items-center gap-2 text-trimble-blue">
+              <div className="flex items-center gap-2 text-polyform-blue">
                 <Sparkles size={20} />
                 <h2 className="text-lg font-bold">AI Model Query</h2>
               </div>
@@ -83,7 +83,7 @@ export default function AIQuery() {
             <div className="p-6 space-y-4">
               <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 min-h-[100px] max-h-[300px] overflow-y-auto text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap border border-gray-100 dark:border-gray-700">
                 {loading ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-2 text-trimble-blue py-8">
+                  <div className="flex flex-col items-center justify-center h-full gap-2 text-polyform-blue py-8">
                     <Loader2 size={24} className="animate-spin" />
                     <span className="font-bold">Analyzing model...</span>
                   </div>
@@ -99,7 +99,7 @@ export default function AIQuery() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="Type your question..."
-                  className="w-full pl-4 pr-12 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none resize-none h-24 text-gray-900 dark:text-white"
+                  className="w-full pl-4 pr-12 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-polyform-blue focus:border-transparent outline-none resize-none h-24 text-gray-900 dark:text-white"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -110,7 +110,7 @@ export default function AIQuery() {
                 <button
                   onClick={handleQuery}
                   disabled={loading || !prompt.trim()}
-                  className="absolute right-3 bottom-3 p-2 bg-trimble-blue text-white rounded-lg hover:bg-trimble-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-trimble-blue/20"
+                  className="absolute right-3 bottom-3 p-2 bg-polyform-blue text-white rounded-lg hover:bg-polyform-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-polyform-blue/20"
                 >
                   <Send size={18} />
                 </button>

@@ -158,7 +158,7 @@ export default function AIRenderer() {
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
             <div className="flex items-center gap-2">
-              <Sparkles className="text-trimble-blue" size={20} />
+              <Sparkles className="text-polyform-blue" size={20} />
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">AI Renderer</h2>
             </div>
             <button 
@@ -174,7 +174,7 @@ export default function AIRenderer() {
             {!resultImage ? (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
-                  <ImageIcon className="text-trimble-blue shrink-0" size={24} />
+                  <ImageIcon className="text-polyform-blue shrink-0" size={24} />
                   <p className="text-sm text-gray-600 dark:text-gray-300">
                     Reimagine your 3D model. The AI will transform your current viewport into a professional render.
                   </p>
@@ -186,7 +186,7 @@ export default function AIRenderer() {
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder="e.g., A modern glass villa at sunset with realistic lighting and lush gardens..."
-                    className="w-full h-32 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none resize-none text-sm text-gray-900 dark:text-white transition-all"
+                    className="w-full h-32 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-polyform-blue focus:border-transparent outline-none resize-none text-sm text-gray-900 dark:text-white transition-all"
                     disabled={isRendering}
                   />
                 </div>
@@ -217,7 +217,7 @@ export default function AIRenderer() {
                   </button>
                   <button 
                     onClick={handleDownload}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-trimble-blue text-white rounded-xl hover:bg-trimble-blue/90 transition-colors text-sm font-bold shadow-lg shadow-trimble-blue/20"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-polyform-blue text-white rounded-xl hover:bg-polyform-blue/90 transition-colors text-sm font-bold shadow-lg shadow-polyform-blue/20"
                   >
                     <Download size={16} />
                     Download Render
@@ -236,7 +236,7 @@ export default function AIRenderer() {
               <button
                 onClick={handleRender}
                 disabled={isRendering || !prompt.trim()}
-                className="flex items-center gap-2 px-8 py-2.5 bg-trimble-blue text-white rounded-xl hover:bg-trimble-blue/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold shadow-lg shadow-trimble-blue/20"
+                className="flex items-center gap-2 px-8 py-2.5 bg-polyform-blue text-white rounded-xl hover:bg-polyform-blue/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold shadow-lg shadow-polyform-blue/20"
               >
                 {isRendering ? (
                   <>

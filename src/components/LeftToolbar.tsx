@@ -86,7 +86,7 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
       {icon}
       <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
-          <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+          <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
             {label}
           </div>
         )}
@@ -334,7 +334,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
 
         <FlyoutPortal anchorRef={aiGroupRef} open={aiGroupHovered && !isAIPopoutOpen} side={flyoutSide}>
           {aiGroupHovered && !isAIPopoutOpen && (
-            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               AI Model Query
             </div>
           )}
@@ -432,7 +432,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         */}
         <FlyoutPortal anchorRef={lineGroupRef} open={lineGroupHovered && !isLinePopoutOpen} side={flyoutSide}>
           {lineGroupHovered && !isLinePopoutOpen && (
-            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Line, Poly, Bézier & Arc Tools
             </div>
           )}
@@ -517,7 +517,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
 
         <FlyoutPortal anchorRef={circleGroupRef} open={circleGroupHovered && !isCirclePopoutOpen} side={flyoutSide}>
           {circleGroupHovered && !isCirclePopoutOpen && (
-            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Circle & Polygon Tools
             </div>
           )}
@@ -600,7 +600,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
 
         <FlyoutPortal anchorRef={threeDGroupRef} open={threeDGroupHovered && !is3DPopoutOpen} side={flyoutSide}>
           {threeDGroupHovered && !is3DPopoutOpen && (
-            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               3D Primitives
             </div>
           )}
@@ -694,7 +694,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
 
         <FlyoutPortal anchorRef={bevelGroupRef} open={bevelGroupHovered && !isBevelPopoutOpen} side={flyoutSide}>
           {bevelGroupHovered && !isBevelPopoutOpen && (
-            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Bevel Tool
             </div>
           )}
@@ -763,7 +763,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
 
         <FlyoutPortal anchorRef={measureGroupRef} open={measureGroupHovered && !isMeasurePopoutOpen} side={flyoutSide}>
           {measureGroupHovered && !isMeasurePopoutOpen && (
-            <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+            <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
               Measure Tool
             </div>
           )}
@@ -904,12 +904,12 @@ function PinnedScriptButton({ name, onClick }: { name: string; onClick: () => vo
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="toolbar-btn relative text-trimble-blue"
+      className="toolbar-btn relative text-polyform-blue"
     >
       <Code size={20} />
       <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
-          <div className="px-2 py-1 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
+          <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
             {name}
           </div>
         )}

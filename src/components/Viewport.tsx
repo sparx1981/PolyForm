@@ -4638,7 +4638,7 @@ function Scene() {
         }
       }
 
-      // Numeric length entry while drawing a line or shape (SketchUp-style inference)
+      // Numeric length entry while drawing a line or shape (familiar CAD-style inference)
       if (['line', 'circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStartRef.current && !e.ctrlKey && !e.metaKey) {
         if (/^[0-9.sS]$/.test(e.key)) {
           e.preventDefault();
@@ -7400,7 +7400,7 @@ function Scene() {
 
         if (activeTool === 'rectangle') {
           // Shift constrains the rectangle to a square — matches the
-          // standard convention other drawing tools use (SketchUp,
+          // standard convention other drawing tools use (many CAD apps,
           // Figma): take the larger of the two drag distances, keep
           // each axis's own sign so the square still extends in the
           // direction the cursor is actually in, not always toward one
@@ -9865,7 +9865,7 @@ function Scene() {
                 "p-4 rounded-2xl shadow-2xl border transition-all cursor-pointer min-w-[250px] space-y-2 select-none",
                 note.completed 
                   ? "bg-gray-50/90 dark:bg-gray-900/90 border-gray-200 dark:border-gray-800" 
-                  : "bg-white/95 dark:bg-gray-800/95 border-trimble-blue dark:border-trimble-blue shadow-modus-4"
+                  : "bg-white/95 dark:bg-gray-800/95 border-polyform-blue dark:border-polyform-blue shadow-modus-4"
               )}
               onClick={(e) => {
                 e.stopPropagation();
@@ -10043,7 +10043,7 @@ function Scene() {
               >
                 <div
                   onClick={(e: any) => { e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }}
-                  className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-trimble-blue border-white' : 'bg-black/80 border-yellow-500/50 hover:border-yellow-400'}`}
+                  className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-polyform-blue border-white' : 'bg-black/80 border-yellow-500/50 hover:border-yellow-400'}`}
                 >
                   {formatValue(mDist, unit, 2)}
                 </div>
@@ -10089,7 +10089,7 @@ function Scene() {
                 <Html position={midPt} center occlude={false}>
                   <div
                     onClick={(e: any) => { e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }}
-                    className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-trimble-blue border-white' : 'bg-black/80 border-green-500/50 hover:border-green-400'}`}
+                    className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-polyform-blue border-white' : 'bg-black/80 border-green-500/50 hover:border-green-400'}`}
                   >
                     {formatValue(totalLen, unit, 2)}
                   </div>
@@ -10186,7 +10186,7 @@ function Scene() {
                 <Html position={midPt} center occlude={false}>
                   <div
                     onClick={(e: any) => { e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }}
-                    className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-trimble-blue border-white' : 'bg-black/80 border-blue-500/50 hover:border-blue-400'}`}
+                    className={`text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border cursor-pointer transition-colors ${isSel ? 'bg-polyform-blue border-white' : 'bg-black/80 border-blue-500/50 hover:border-blue-400'}`}
                   >
                     {formatValue(totalLen, unit, 2)} ({bargs.resolution || 24}s)
                   </div>
@@ -10610,7 +10610,7 @@ function Scene() {
               {materialElements}
               {selectionHighlight}
               {subtractHighlight}
-              {/* Task #149: SketchUp-style dark edge lines between adjacent faces */}
+              {/* Task #149: dark edge lines between adjacent faces */}
               {edgeLinesEnabled && (
                 <Edges 
                   threshold={15} 
@@ -10795,7 +10795,7 @@ function Scene() {
           )}
           {selectionHighlight}
           {subtractHighlight}
-          {/* Task #149: SketchUp-style dark edge lines between adjacent faces */}
+          {/* Task #149: dark edge lines between adjacent faces */}
           {edgeLinesEnabled && (
             <Edges 
               threshold={15} 
@@ -11259,7 +11259,7 @@ function Scene() {
           center
           occlude={false}
         >
-          <div className="bg-trimble-blue text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap shadow-lg border border-white/30">
+          <div className="bg-polyform-blue text-white text-xs font-bold px-2 py-1 rounded whitespace-nowrap shadow-lg border border-white/30">
             {typedLength}{unit === 'mm' ? ' mm' : unit === 'cm' ? ' cm' : ' m'}<span className="animate-pulse">|</span>
           </div>
         </Html>
@@ -11636,7 +11636,7 @@ function Scene() {
                       e.stopPropagation();
                       closeWallLoopAndAssembleRoom();
                     }}
-                    className="px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xl flex items-center gap-1.5 border border-sky-300 ring-2 ring-sky-200 cursor-pointer whitespace-nowrap transition-all transform hover:scale-105 bg-trimble-blue text-white select-none"
+                    className="px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xl flex items-center gap-1.5 border border-sky-300 ring-2 ring-sky-200 cursor-pointer whitespace-nowrap transition-all transform hover:scale-105 bg-polyform-blue text-white select-none"
                     title="Click to Close Room & Assemble Floor Slab (or press C / Enter)"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
@@ -13121,7 +13121,7 @@ export default function Viewport() {
           >
             <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
               <div className="flex items-start gap-3 min-w-0">
-                <div className="shrink-0 w-10 h-10 rounded-xl bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-polyform-blue/10 text-polyform-blue flex items-center justify-center">
                   <StickyNote size={18} />
                 </div>
                 <div className="min-w-0">
@@ -13144,7 +13144,7 @@ export default function Viewport() {
                 ref={noteTextareaRef}
                 defaultValue=""
                 placeholder="What should someone know about this part of the model?"
-                className="w-full h-28 p-3 text-sm rounded-xl resize-none transition-colors bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                className="w-full h-28 p-3 text-sm rounded-xl resize-none transition-colors bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -13381,7 +13381,7 @@ export default function Viewport() {
                                 const newName = e.target.value;
                                 setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, name: newName } : s));
                               }}
-                              className="text-xs font-medium bg-transparent border-none outline-none focus:ring-1 focus:ring-trimble-blue rounded px-1 -ml-1"
+                              className="text-xs font-medium bg-transparent border-none outline-none focus:ring-1 focus:ring-polyform-blue rounded px-1 -ml-1"
                             />
                           </div>
 
@@ -13464,7 +13464,7 @@ export default function Viewport() {
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter') e.currentTarget.blur();
                                       }}
-                                      className="w-12 px-1 py-0.5 border rounded text-[10px] outline-none focus:border-trimble-blue"
+                                      className="w-12 px-1 py-0.5 border rounded text-[10px] outline-none focus:border-polyform-blue"
                                     />
                                   ) : (
                                     <button 
@@ -13500,7 +13500,7 @@ export default function Viewport() {
                                         setEditingDimIndex(null);
                                       }}
                                       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                                      className="w-12 px-1 py-0.5 border rounded text-[10px] outline-none focus:border-trimble-blue"
+                                      className="w-12 px-1 py-0.5 border rounded text-[10px] outline-none focus:border-polyform-blue"
                                     />
                                   ) : (
                                     <button 
@@ -13542,7 +13542,7 @@ export default function Viewport() {
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter') e.currentTarget.blur();
                                       }}
-                                      className="w-14 px-1 py-0.5 border rounded text-[10px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-trimble-blue outline-none"
+                                      className="w-14 px-1 py-0.5 border rounded text-[10px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-polyform-blue outline-none"
                                     />
                                   ) : (
                                     <button 
@@ -13550,7 +13550,7 @@ export default function Viewport() {
                                         setEditingPosIndex(idx);
                                         setPosValue(pos.toString());
                                       }}
-                                      className="text-[10px] font-mono text-trimble-blue bg-trimble-blue/5 px-1.5 py-0.5 rounded border border-trimble-blue/10 hover:bg-trimble-blue/10 transition-colors"
+                                      className="text-[10px] font-mono text-polyform-blue bg-polyform-blue/5 px-1.5 py-0.5 rounded border border-polyform-blue/10 hover:bg-polyform-blue/10 transition-colors"
                                     >
                                       {pos.toFixed(3)}
                                     </button>
@@ -13588,7 +13588,7 @@ export default function Viewport() {
                                         onKeyDown={(e) => {
                                           if (e.key === 'Enter') e.currentTarget.blur();
                                         }}
-                                        className="w-14 px-1 py-0.5 border rounded text-[10px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-trimble-blue outline-none"
+                                        className="w-14 px-1 py-0.5 border rounded text-[10px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-polyform-blue outline-none"
                                       />
                                     ) : (
                                       <button 
@@ -13688,7 +13688,7 @@ export default function Viewport() {
                                 navigator.clipboard.writeText(shape.id);
                                 alert('ID copied to clipboard');
                               }}
-                              className="text-[8px] text-trimble-blue hover:underline"
+                              className="text-[8px] text-polyform-blue hover:underline"
                             >
                               Copy ID
                             </button>
@@ -13709,11 +13709,11 @@ export default function Viewport() {
                         setContextMenu(null);
                       }}
                       className={cn(
-                        "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-trimble-blue",
-                        theme === 'dark' ? "hover:bg-gray-700 bg-trimble-blue/10" : "hover:bg-gray-100 bg-trimble-blue/5"
+                        "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-polyform-blue",
+                        theme === 'dark' ? "hover:bg-gray-700 bg-polyform-blue/10" : "hover:bg-gray-100 bg-polyform-blue/5"
                       )}
                     >
-                      <Palette size={14} className="text-trimble-blue shrink-0" />
+                      <Palette size={14} className="text-polyform-blue shrink-0" />
                       <span>Change Style...</span>
                     </button>
                   );
@@ -13730,11 +13730,11 @@ export default function Viewport() {
                         setContextMenu(null);
                       }}
                       className={cn(
-                        "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-trimble-blue",
-                        theme === 'dark' ? "hover:bg-gray-700 bg-trimble-blue/10" : "hover:bg-gray-100 bg-trimble-blue/5"
+                        "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-polyform-blue",
+                        theme === 'dark' ? "hover:bg-gray-700 bg-polyform-blue/10" : "hover:bg-gray-100 bg-polyform-blue/5"
                       )}
                     >
-                      <Palette size={14} className="text-trimble-blue shrink-0" />
+                      <Palette size={14} className="text-polyform-blue shrink-0" />
                       <span>Change Style...</span>
                     </button>
                   );
@@ -13903,11 +13903,11 @@ export default function Viewport() {
                           setContextMenu(null);
                         }}
                         className={cn(
-                          "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-trimble-blue",
-                          theme === 'dark' ? "hover:bg-gray-700 bg-trimble-blue/10" : "hover:bg-gray-100 bg-trimble-blue/5"
+                          "w-full text-left px-3 py-2 text-xs font-bold flex items-center gap-2 transition-colors border-b border-gray-100 dark:border-gray-800 text-polyform-blue",
+                          theme === 'dark' ? "hover:bg-gray-700 bg-polyform-blue/10" : "hover:bg-gray-100 bg-polyform-blue/5"
                         )}
                       >
-                        <Palette size={14} className="text-trimble-blue shrink-0" />
+                        <Palette size={14} className="text-polyform-blue shrink-0" />
                         <span>Change Style...</span>
                       </button>
                     );
@@ -14126,7 +14126,7 @@ export default function Viewport() {
                   }
                   setDivideSurfaceTarget(null);
                 }}
-                className="px-3 py-1.5 text-xs rounded bg-trimble-blue text-white hover:opacity-90"
+                className="px-3 py-1.5 text-xs rounded bg-polyform-blue text-white hover:opacity-90"
               >
                 Divide
               </button>
@@ -14161,7 +14161,7 @@ export default function Viewport() {
                   key={view}
                   onClick={() => handleViewChange(view.split(' ')[0].toLowerCase())}
                   className={cn(
-                    "w-full text-left px-3 py-2 text-[10px] font-medium hover:bg-trimble-blue hover:text-white transition-colors",
+                    "w-full text-left px-3 py-2 text-[10px] font-medium hover:bg-polyform-blue hover:text-white transition-colors",
                     theme === 'dark' ? "text-gray-300" : "text-gray-600"
                   )}
                 >
@@ -14177,7 +14177,7 @@ export default function Viewport() {
           title="Toggle 4-way split view"
           className={cn(
             "backdrop-blur-sm px-3 py-1.5 rounded border text-[10px] font-bold uppercase transition-all hover:bg-white/90 ",
-            quadView ? "bg-trimble-blue border-trimble-blue text-white" : (theme === 'dark' ? "bg-gray-800/80 border-gray-700 text-gray-300" : "bg-white/80 border-gray-200 text-gray-600")
+            quadView ? "bg-polyform-blue border-polyform-blue text-white" : (theme === 'dark' ? "bg-gray-800/80 border-gray-700 text-gray-300" : "bg-white/80 border-gray-200 text-gray-600")
           )}
         >
           <span className="">Split View</span>
@@ -14197,7 +14197,7 @@ export default function Viewport() {
                 className={cn(
                   "px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1",
                   selectionShapeMode === 'lasso'
-                    ? "bg-trimble-blue text-white shadow-xs"
+                    ? "bg-polyform-blue text-white shadow-xs"
                     : "text-gray-500 hover:text-gray-800 dark:hover:text-white"
                 )}
                 title="Lasso: Draw a custom loop around shapes or surfaces (Hotkey: L)"
@@ -14213,7 +14213,7 @@ export default function Viewport() {
                 className={cn(
                   "px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1",
                   selectionShapeMode === 'marquee'
-                    ? "bg-trimble-blue text-white shadow-xs"
+                    ? "bg-polyform-blue text-white shadow-xs"
                     : "text-gray-500 hover:text-gray-800 dark:hover:text-white"
                 )}
                 title="Marquee: Drag a rectangular window (Hotkey: L)"
@@ -14265,7 +14265,7 @@ export default function Viewport() {
                     value={divideValueX}
                     onChange={(e) => setDivideValueX(e.target.value)}
                     className={cn(
-                      "w-full px-2 py-1.5 border rounded text-xs outline-none focus:border-trimble-blue",
+                      "w-full px-2 py-1.5 border rounded text-xs outline-none focus:border-polyform-blue",
                       theme === 'dark' ? "bg-gray-700 border-gray-600 text-gray-200" : "bg-white border-gray-200 text-gray-700"
                     )}
                   />
@@ -14279,7 +14279,7 @@ export default function Viewport() {
                     value={divideValueY}
                     onChange={(e) => setDivideValueY(e.target.value)}
                     className={cn(
-                      "w-full px-2 py-1.5 border rounded text-xs outline-none focus:border-trimble-blue",
+                      "w-full px-2 py-1.5 border rounded text-xs outline-none focus:border-polyform-blue",
                       theme === 'dark' ? "bg-gray-700 border-gray-600 text-gray-200" : "bg-white border-gray-200 text-gray-700"
                     )}
                   />
@@ -14294,7 +14294,7 @@ export default function Viewport() {
                 </button>
                 <button 
                   onClick={() => handleDivideSurface(parseInt(divideValueX), parseInt(divideValueY))}
-                  className="flex-1 py-2 text-xs font-bold bg-trimble-blue text-white rounded hover:bg-trimble-dark-blue transition-all"
+                  className="flex-1 py-2 text-xs font-bold bg-polyform-blue text-white rounded hover:bg-polyform-dark-blue transition-all"
                 >
                   Divide
                 </button>
@@ -14328,7 +14328,7 @@ export default function Viewport() {
                 onChange={(e) => setDivideValueSingle(e.target.value)}
                 autoFocus
                 className={cn(
-                  "w-full px-3 py-2 border rounded text-sm outline-none focus:border-trimble-blue",
+                  "w-full px-3 py-2 border rounded text-sm outline-none focus:border-polyform-blue",
                   theme === 'dark' ? "bg-gray-700 border-gray-600" : "bg-white border-gray-200"
                 )}
               />
@@ -14353,7 +14353,7 @@ export default function Viewport() {
                       setShowDivideModal(false);
                     }
                   }}
-                  className="flex-1 px-3 py-2 text-xs font-bold uppercase bg-trimble-blue text-white rounded hover:bg-trimble-dark-blue"
+                  className="flex-1 px-3 py-2 text-xs font-bold uppercase bg-polyform-blue text-white rounded hover:bg-polyform-dark-blue"
                 >
                   Divide
                 </button>

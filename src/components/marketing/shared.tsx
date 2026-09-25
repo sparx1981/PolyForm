@@ -47,10 +47,10 @@ export function Logo({ onClick, size = 32, textSize = 'text-[19px]' }: { onClick
   return (
     <span
       onClick={onClick}
-      className={`flex items-center gap-2.5 font-bold ${textSize} tracking-[-0.01em] text-trimble-dark-blue ${onClick ? 'cursor-pointer' : ''}`}
+      className={`flex items-center gap-2.5 font-bold ${textSize} tracking-[-0.01em] text-polyform-dark-blue ${onClick ? 'cursor-pointer' : ''}`}
     >
       <span
-        className="rounded-lg bg-trimble-blue text-white flex items-center justify-center shadow-sm shrink-0"
+        className="rounded-lg bg-polyform-blue text-white flex items-center justify-center shadow-sm shrink-0"
         style={{ width: size, height: size }}
       >
         <Box size={Math.round(size * 0.56)} />
@@ -82,7 +82,7 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
               onClick={() => go(n.page)}
               className={
                 'text-sm font-semibold px-3.5 py-2 rounded-lg transition-colors '
-                + (page === n.page ? 'text-trimble-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
+                + (page === n.page ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
               }
             >
               {n.label}
@@ -94,14 +94,14 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
           <button
             type="button"
             onClick={onLogin}
-            className="text-sm font-semibold px-3.5 py-2 rounded-lg text-trimble-gray hover:bg-gray-50 transition-colors"
+            className="text-sm font-semibold px-3.5 py-2 rounded-lg text-polyform-gray hover:bg-gray-50 transition-colors"
           >
             Log in
           </button>
           <button
             type="button"
             onClick={onLogin}
-            className="text-sm font-semibold px-4 py-[9px] rounded-lg bg-trimble-blue text-white shadow-[0_4px_12px_rgb(0_99_163_/_0.2)] hover:bg-trimble-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-trimble-blue"
+            className="text-sm font-semibold px-4 py-[9px] rounded-lg bg-polyform-blue text-white shadow-[0_4px_12px_rgb(0_99_163_/_0.2)] hover:bg-polyform-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
           >
             Start designing
           </button>
@@ -110,7 +110,7 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
         <button
           type="button"
           onClick={() => setMobileOpen(v => !v)}
-          className="md:hidden text-sm font-semibold px-3 py-2 rounded-lg text-trimble-gray hover:bg-gray-50"
+          className="md:hidden text-sm font-semibold px-3 py-2 rounded-lg text-polyform-gray hover:bg-gray-50"
           aria-expanded={mobileOpen}
           aria-label="Menu"
         >
@@ -127,17 +127,17 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
               onClick={() => { go(n.page); setMobileOpen(false); }}
               className={
                 'text-sm font-semibold px-3.5 py-2.5 rounded-lg text-left '
-                + (page === n.page ? 'text-trimble-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
+                + (page === n.page ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
               }
             >
               {n.label}
             </button>
           ))}
           <div className="h-px bg-gray-100 my-2" />
-          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold px-3.5 py-2.5 rounded-lg text-left text-trimble-gray hover:bg-gray-50">
+          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold px-3.5 py-2.5 rounded-lg text-left text-polyform-gray hover:bg-gray-50">
             Log in
           </button>
-          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold px-4 py-2.5 rounded-lg bg-trimble-blue text-white text-center">
+          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold px-4 py-2.5 rounded-lg bg-polyform-blue text-white text-center">
             Start designing
           </button>
         </div>
@@ -148,7 +148,7 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
 
 export function ClosingCTA({ onLogin }: { onLogin: () => void }) {
   return (
-    <section className="bg-trimble-dark-blue text-white py-[88px]">
+    <section className="bg-polyform-dark-blue text-white py-[88px]">
       <div className="max-w-[1200px] mx-auto px-6 flex flex-wrap items-center justify-between gap-7">
         <div>
           <h2 className="text-[clamp(30px,3.6vw,46px)] font-bold tracking-[-0.02em]">Start your first design</h2>
@@ -157,7 +157,7 @@ export function ClosingCTA({ onLogin }: { onLogin: () => void }) {
         <button
           type="button"
           onClick={onLogin}
-          className="inline-flex items-center gap-2 rounded-lg bg-white text-trimble-dark-blue font-semibold text-base px-[26px] py-[14px] hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-trimble-dark-blue"
+          className="inline-flex items-center gap-2 rounded-lg bg-white text-polyform-dark-blue font-semibold text-base px-[26px] py-[14px] hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-polyform-dark-blue"
         >
           <LogIn size={18} /> Login Now
         </button>
@@ -201,7 +201,7 @@ export function Footer({ go, onLogin }: { go: (p: Page, anchor?: string) => void
                     key={link.label}
                     type="button"
                     onClick={link.onClick ?? (() => go(link.page!, link.anchor))}
-                    className="text-sm text-gray-600 hover:text-trimble-blue text-left transition-colors"
+                    className="text-sm text-gray-600 hover:text-polyform-blue text-left transition-colors"
                   >
                     {link.label}
                   </button>
@@ -218,7 +218,7 @@ export function Footer({ go, onLogin }: { go: (p: Page, anchor?: string) => void
 
 export function Eyebrow({ children, dark = false, icon }: { children: React.ReactNode; dark?: boolean; icon?: React.ReactNode }) {
   return (
-    <span className={'inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] ' + (dark ? 'text-white' : 'text-trimble-blue')}>
+    <span className={'inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.08em] ' + (dark ? 'text-white' : 'text-polyform-blue')}>
       {icon}
       {children}
     </span>
@@ -228,7 +228,7 @@ export function Eyebrow({ children, dark = false, icon }: { children: React.Reac
 export function IconTile({ icon, size = 44, iconSize = 22 }: { icon: React.ReactNode; size?: number; iconSize?: number }) {
   return (
     <span
-      className="rounded-[10px] bg-trimble-blue/10 text-trimble-blue flex items-center justify-center shrink-0"
+      className="rounded-[10px] bg-polyform-blue/10 text-polyform-blue flex items-center justify-center shrink-0"
       style={{ width: size, height: size }}
     >
       {icon}
@@ -253,8 +253,8 @@ export function FloorPlanTile({ label, variant = 1 }: { label: string; variant?:
 
 export function ChatCard() {
   return (
-    <div className="bg-white text-trimble-gray rounded-2xl p-[22px] flex flex-col gap-3.5 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.5)]">
-      <div className="ml-auto max-w-[85%] bg-trimble-blue text-white text-sm leading-[1.55] px-4 py-3 rounded-2xl rounded-br-[4px]">
+    <div className="bg-white text-polyform-gray rounded-2xl p-[22px] flex flex-col gap-3.5 shadow-[0_40px_80px_-24px_rgba(0,0,0,0.5)]">
+      <div className="ml-auto max-w-[85%] bg-polyform-blue text-white text-sm leading-[1.55] px-4 py-3 rounded-2xl rounded-br-[4px]">
         Build me an L-shaped house, two storeys, with four bedrooms and a bathroom upstairs.
       </div>
       <div className="max-w-[90%] bg-gray-100 text-sm leading-[1.55] px-4 py-3 rounded-2xl rounded-bl-[4px]">

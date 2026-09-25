@@ -917,7 +917,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
             id: `pinned_script_${scriptId}`,
             label: script.name,
             subtitle: `Pinned Developer Script: ${script.name}`,
-            icon: <Code size={19} className="text-trimble-blue" />,
+            icon: <Code size={19} className="text-polyform-blue" />,
             isActive: () => false,
             onClick: () => runPinnedScript(scriptId),
             keywords: ['script', 'code', 'developer', script.name.toLowerCase()]
@@ -1444,7 +1444,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         }`}>
           <div className="flex items-center justify-between font-bold pb-2 mb-2 border-b border-gray-200 dark:border-gray-800">
             <span className="flex items-center gap-1.5">
-              <Sliders size={14} className="text-trimble-blue" />
+              <Sliders size={14} className="text-polyform-blue" />
               {activeLandscapeCategory === 'create' && 'Plot Canvas Settings'}
               {activeLandscapeCategory === 'sculpt' && 'Sculpting Controls'}
               {activeLandscapeCategory === 'road' && 'Path & Road Settings'}
@@ -1475,7 +1475,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                         step={5} 
                         value={plotWidth} 
                         onChange={e => setPlotWidth(Math.max(5, Number(e.target.value)))}
-                        className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono text-gray-900 dark:text-gray-100 tabular-nums outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                        className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono text-gray-900 dark:text-gray-100 tabular-nums outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                       />
                       <span className="text-[10px] text-gray-400">m</span>
                     </div>
@@ -1490,7 +1490,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                         step={5} 
                         value={plotDepth} 
                         onChange={e => setPlotDepth(Math.max(5, Number(e.target.value)))}
-                        className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono text-gray-900 dark:text-gray-100 tabular-nums outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                        className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-xs font-mono text-gray-900 dark:text-gray-100 tabular-nums outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                       />
                       <span className="text-[10px] text-gray-400">m</span>
                     </div>
@@ -1515,7 +1515,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                       className={cn(
                         "text-[10px] px-1.5 py-0.5 rounded border transition-colors flex-1 text-center",
                         plotWidth === preset.w && plotDepth === preset.d 
-                          ? "bg-trimble-blue text-white border-trimble-blue font-bold" 
+                          ? "bg-polyform-blue text-white border-polyform-blue font-bold" 
                           : "border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
                       )}
                     >
@@ -1535,7 +1535,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                     step={8} 
                     value={plotResolution} 
                     onChange={e => setPlotResolution(Number(e.target.value))}
-                    className="w-full accent-trimble-blue" 
+                    className="w-full accent-polyform-blue" 
                   />
                   <span className="text-[10px] font-mono whitespace-nowrap">{plotResolution}x{plotResolution}</span>
                 </div>
@@ -1551,7 +1551,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                     step={0.2} 
                     value={plotRoughness} 
                     onChange={e => setPlotRoughness(Number(e.target.value))}
-                    className="w-full accent-trimble-blue" 
+                    className="w-full accent-polyform-blue" 
                   />
                   <span className="text-[10px] font-mono">{plotRoughness.toFixed(1)}</span>
                 </div>
@@ -1560,7 +1560,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
               <div className="grid grid-cols-2 gap-1.5 pt-1">
                 <button
                   onClick={() => handleCreatePlot(true)}
-                  className="py-1.5 px-2 bg-trimble-blue hover:bg-trimble-blue-dark text-white rounded font-medium text-[11px] shadow transition-colors flex items-center justify-center gap-1"
+                  className="py-1.5 px-2 bg-polyform-blue hover:bg-polyform-blue-dark text-white rounded font-medium text-[11px] shadow transition-colors flex items-center justify-center gap-1"
                 >
                   <Sparkles size={12} /> Procedural Plot
                 </button>
@@ -1584,7 +1584,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                     onClick={() => setLandscapeSculptSettings(prev => ({ ...prev, mode }))}
                     className={`py-1 text-[10px] capitalize rounded font-medium border ${
                       landscapeSculptSettings.mode === mode 
-                        ? 'bg-trimble-blue/15 border-trimble-blue text-trimble-blue dark:text-blue-400 font-bold' 
+                        ? 'bg-polyform-blue/15 border-polyform-blue text-polyform-blue dark:text-blue-400 font-bold' 
                         : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                     }`}
                   >
@@ -1602,7 +1602,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   step={0.5} 
                   value={landscapeSculptSettings.radius} 
                   onChange={e => setLandscapeSculptSettings(prev => ({ ...prev, radius: Number(e.target.value) }))}
-                  className="w-full accent-trimble-blue mt-1" 
+                  className="w-full accent-polyform-blue mt-1" 
                 />
               </div>
 
@@ -1615,7 +1615,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   step={0.05} 
                   value={landscapeSculptSettings.intensity} 
                   onChange={e => setLandscapeSculptSettings(prev => ({ ...prev, intensity: Number(e.target.value) }))}
-                  className="w-full accent-trimble-blue mt-1" 
+                  className="w-full accent-polyform-blue mt-1" 
                 />
               </div>
             </div>
@@ -1632,7 +1632,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   step={0.5} 
                   value={landscapeRoadSettings.width} 
                   onChange={e => setLandscapeRoadSettings(prev => ({ ...prev, width: Number(e.target.value) }))}
-                  className="w-full accent-trimble-blue mt-1" 
+                  className="w-full accent-polyform-blue mt-1" 
                 />
               </div>
 
@@ -1642,7 +1642,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   type="checkbox"
                   checked={landscapeRoadSettings.embankment}
                   onChange={e => setLandscapeRoadSettings(prev => ({ ...prev, embankment: e.target.checked }))}
-                  className="w-4 h-4 rounded accent-trimble-blue"
+                  className="w-4 h-4 rounded accent-polyform-blue"
                 />
               </div>
 
@@ -1659,7 +1659,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                       key={mat.color}
                       onClick={() => setLandscapeRoadSettings(prev => ({ ...prev, roadColor: mat.color }))}
                       className={`h-6 rounded border flex items-center justify-center ${
-                        landscapeRoadSettings.roadColor === mat.color ? 'ring-2 ring-trimble-blue' : 'border-gray-600'
+                        landscapeRoadSettings.roadColor === mat.color ? 'ring-2 ring-polyform-blue' : 'border-gray-600'
                       }`}
                       style={{ backgroundColor: mat.color }}
                       title={mat.name}
@@ -1699,7 +1699,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   className={cn(
                     "flex-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5",
                     styleSubTab === 'realistic'
-                      ? "bg-white dark:bg-gray-700 text-trimble-blue dark:text-blue-400 shadow-sm"
+                      ? "bg-white dark:bg-gray-700 text-polyform-blue dark:text-blue-400 shadow-sm"
                       : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                   )}
                 >
@@ -1712,7 +1712,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   className={cn(
                     "flex-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5",
                     styleSubTab === 'analysis'
-                      ? "bg-white dark:bg-gray-700 text-trimble-blue dark:text-blue-400 shadow-sm"
+                      ? "bg-white dark:bg-gray-700 text-polyform-blue dark:text-blue-400 shadow-sm"
                       : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                   )}
                 >
@@ -1733,7 +1733,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                         className={cn(
                           "text-[9px] uppercase font-bold px-2 py-0.5 rounded-full whitespace-nowrap transition-colors border",
                           textureCategoryFilter === cat
-                            ? "bg-trimble-blue text-white border-trimble-blue"
+                            ? "bg-polyform-blue text-white border-polyform-blue"
                             : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
                         )}
                       >
@@ -1756,7 +1756,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                             className={cn(
                               "p-1.5 rounded-lg border text-left flex flex-col gap-1 transition-all group relative overflow-hidden",
                               isSelected
-                                ? "bg-trimble-blue/10 border-trimble-blue ring-1 ring-trimble-blue shadow-sm"
+                                ? "bg-polyform-blue/10 border-polyform-blue ring-1 ring-polyform-blue shadow-sm"
                                 : "border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/60"
                             )}
                           >
@@ -1767,7 +1767,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                               />
                               {isSelected && (
-                                <div className="absolute top-1 right-1 bg-trimble-blue text-white rounded-full p-0.5 shadow">
+                                <div className="absolute top-1 right-1 bg-polyform-blue text-white rounded-full p-0.5 shadow">
                                   <Check size={10} />
                                 </div>
                               )}
@@ -1793,7 +1793,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   <div className="pt-1 border-t border-gray-200 dark:border-gray-800">
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-bold text-gray-400 uppercase">Texture Tiling Scale</span>
-                      <span className="font-mono text-trimble-blue font-semibold">{textureRepeatScale}× repeat</span>
+                      <span className="font-mono text-polyform-blue font-semibold">{textureRepeatScale}× repeat</span>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <input
@@ -1810,7 +1810,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                             applyLandscapeTexture(activePreset, val);
                           }
                         }}
-                        className="w-full accent-trimble-blue"
+                        className="w-full accent-polyform-blue"
                       />
                     </div>
                     <div className="flex justify-between text-[8px] text-gray-400 mt-0.5">
@@ -1842,7 +1842,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                       }}
                       className={`w-full py-1.5 px-2.5 text-left capitalize rounded-lg flex items-center justify-between border transition-colors ${
                         shadingMode === mode 
-                          ? 'bg-trimble-blue/15 border-trimble-blue text-trimble-blue dark:text-blue-400 font-bold' 
+                          ? 'bg-polyform-blue/15 border-polyform-blue text-polyform-blue dark:text-blue-400 font-bold' 
                           : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                       }`}
                     >
@@ -1855,7 +1855,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                         }`} />
                         <span>{mode} Analysis Map</span>
                       </div>
-                      {shadingMode === mode && <Check size={13} className="text-trimble-blue" />}
+                      {shadingMode === mode && <Check size={13} className="text-polyform-blue" />}
                     </button>
                   ))}
                 </div>
@@ -1868,7 +1868,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
               <VegetationControls />
               <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium">
                 <span>{activeTool === 'tree' ? 'Available Tree Species' : 'Bushes, Grasses & Flora'}</span>
-                <span className="text-[10px] bg-trimble-blue/15 text-trimble-blue px-2 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-polyform-blue/15 text-polyform-blue px-2 py-0.5 rounded-full font-bold">
                   {PLANT_SPECIES_CATALOG.filter(s => activeTool === 'tree' ? s.category === 'tree' : s.category !== 'tree' && s.category !== 'rock').length} Species
                 </span>
               </div>
@@ -1891,7 +1891,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                         }}
                         className={`w-full p-2 rounded-lg border text-left flex items-start gap-2.5 transition-all ${
                           isSelected
-                            ? 'bg-trimble-blue/15 border-trimble-blue text-trimble-blue dark:text-blue-400 font-semibold shadow-sm'
+                            ? 'bg-polyform-blue/15 border-polyform-blue text-polyform-blue dark:text-blue-400 font-semibold shadow-sm'
                             : 'border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800/80 text-gray-700 dark:text-gray-300'
                         }`}
                       >
@@ -1904,7 +1904,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-xs truncate">{species.name}</span>
-                            {isSelected && <Check size={13} className="text-trimble-blue shrink-0 ml-1" />}
+                            {isSelected && <Check size={13} className="text-polyform-blue shrink-0 ml-1" />}
                           </div>
                           <div className="text-[10px] text-gray-500 dark:text-gray-400 italic truncate">
                             {species.scientificName || `${species.defaultHeight}m H × ${species.defaultSpread}m W`}
@@ -1934,7 +1934,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                           onClick={() => setActivePlantVariation(variation)}
                           className={`py-1 px-2 text-[11px] rounded border font-medium transition-all ${
                             activePlantVariation === variation
-                              ? 'bg-trimble-blue text-white border-trimble-blue font-bold shadow-sm'
+                              ? 'bg-polyform-blue text-white border-polyform-blue font-bold shadow-sm'
                               : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
                           }`}
                         >
@@ -1950,7 +1950,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
               <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[10px] uppercase font-bold text-gray-400">Scale / Growth Size</span>
-                  <span className="text-[11px] font-mono font-bold text-trimble-blue">{activePlantScale.toFixed(2)}×</span>
+                  <span className="text-[11px] font-mono font-bold text-polyform-blue">{activePlantScale.toFixed(2)}×</span>
                 </div>
                 <input
                   type="range"
@@ -1959,7 +1959,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   step="0.05"
                   value={activePlantScale}
                   onChange={(e) => setActivePlantScale(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                 />
                 <div className="flex justify-between text-[9px] text-gray-400 mt-1">
                   <span>0.4× (Sapling)</span>
@@ -1983,7 +1983,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
             </div>
             
             <p className="text-xs text-gray-300 leading-relaxed mb-4">
-              A landscape terrain object (<span className="text-trimble-blue font-semibold">{conflictModal.existingName}</span>) already exists in your design. How would you like to proceed?
+              A landscape terrain object (<span className="text-polyform-blue font-semibold">{conflictModal.existingName}</span>) already exists in your design. How would you like to proceed?
             </p>
 
             <div className="flex flex-col gap-2">
@@ -1992,7 +1992,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                   executeCreateTerrain(conflictModal.pendingRandomized, conflictModal.existingId);
                   setConflictModal(null);
                 }}
-                className="w-full py-2 px-3 bg-trimble-blue hover:bg-trimble-blue-dark text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                className="w-full py-2 px-3 bg-polyform-blue hover:bg-polyform-blue-dark text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
               >
                 <RefreshCw size={14} /> Replace Existing Terrain
               </button>
@@ -2073,10 +2073,10 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search tools"
             className={cn(
-              "w-full pl-7 pr-6 py-1.5 text-xs rounded-md border transition-all placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-trimble-blue",
+              "w-full pl-7 pr-6 py-1.5 text-xs rounded-md border transition-all placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-polyform-blue",
               theme === 'dark' 
-                ? "bg-gray-800 border-gray-700 text-gray-200 focus:border-trimble-blue" 
-                : "bg-white border-gray-300 text-gray-800 focus:border-trimble-blue"
+                ? "bg-gray-800 border-gray-700 text-gray-200 focus:border-polyform-blue" 
+                : "bg-white border-gray-300 text-gray-800 focus:border-polyform-blue"
             )}
           />
           {searchQuery && (
@@ -2102,7 +2102,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           title={allCollapsed ? "Expand All Sections" : "Collapse All Sections"}
         >
           {allCollapsed ? (
-            <ChevronsDown size={15} className="text-trimble-blue" />
+            <ChevronsDown size={15} className="text-polyform-blue" />
           ) : (
             <ChevronsUp size={15} className="text-gray-500" />
           )}
@@ -2117,7 +2117,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
             <span>No tools found matching "{searchQuery}"</span>
             <button
               onClick={() => setSearchQuery('')}
-              className="mt-1 text-[11px] text-trimble-blue hover:underline font-semibold"
+              className="mt-1 text-[11px] text-polyform-blue hover:underline font-semibold"
             >
               Clear Search Filter
             </button>
@@ -2148,7 +2148,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                       {category.name}
                     </span>
                     {searchQuery && (
-                      <span className="text-[10px] text-trimble-blue font-mono font-bold">
+                      <span className="text-[10px] text-polyform-blue font-mono font-bold">
                         ({category.tools.length})
                       </span>
                     )}
@@ -2187,7 +2187,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
                             className={cn(
                               "w-full aspect-square min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg relative group transition-all transform active:scale-95",
                               active
-                                ? "bg-trimble-blue text-white shadow-md ring-2 ring-trimble-blue ring-offset-1 dark:ring-offset-gray-850"
+                                ? "bg-polyform-blue text-white shadow-md ring-2 ring-polyform-blue ring-offset-1 dark:ring-offset-gray-850"
                                 : theme === 'dark'
                                   ? "text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/60"
                                   : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-200"
@@ -2250,14 +2250,14 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           } catch (e) {}
         }}
         className={cn(
-          "absolute top-0 -right-1 w-2.5 h-full cursor-ew-resize hover:bg-trimble-blue/30 transition-colors z-50 group flex items-center justify-center select-none",
-          isDragging && "bg-trimble-blue/50"
+          "absolute top-0 -right-1 w-2.5 h-full cursor-ew-resize hover:bg-polyform-blue/30 transition-colors z-50 group flex items-center justify-center select-none",
+          isDragging && "bg-polyform-blue/50"
         )}
         title="Drag left/right to resize panel (Double-click to reset width)"
       >
         <div className={cn(
-          "w-0.5 h-8 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-trimble-blue group-hover:h-12 transition-all",
-          isDragging && "bg-trimble-blue h-12"
+          "w-0.5 h-8 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-polyform-blue group-hover:h-12 transition-all",
+          isDragging && "bg-polyform-blue h-12"
         )} />
       </div>
     </aside>

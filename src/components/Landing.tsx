@@ -23,7 +23,7 @@ export default function Landing() {
   }, [page]);
 
   return (
-    <div id="landing-page" className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-white text-trimble-gray">
+    <div id="landing-page" className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-white text-polyform-gray">
       <Header page={page} go={go} onLogin={() => setLoginOpen(true)} />
 
       <main>

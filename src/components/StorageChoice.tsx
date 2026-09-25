@@ -61,11 +61,11 @@ export default function StorageChoice({ value, onChange, folder, onFolder }: Pro
               onClick={() => onChange(option.id)}
               className={cn(
                 'flex items-start gap-3 p-3 rounded-xl border text-left transition-colors',
-                selected ? 'border-trimble-blue bg-trimble-blue/5' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800',
+                selected ? 'border-polyform-blue bg-polyform-blue/5' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800',
                 needsSetup && 'opacity-50 cursor-not-allowed',
               )}
             >
-              <span className={cn('mt-0.5', selected ? 'text-trimble-blue' : 'text-gray-400')}>{option.icon}</span>
+              <span className={cn('mt-0.5', selected ? 'text-polyform-blue' : 'text-gray-400')}>{option.icon}</span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">
                   {STORAGE_LABELS[option.id]}

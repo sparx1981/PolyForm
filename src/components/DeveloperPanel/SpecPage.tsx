@@ -1,4 +1,4 @@
-// Technical Product Specification — DraftUp Developer Extensibility Suite
+// Technical Product Specification — PolyForm Developer Extensibility Suite
 // Version 2.2.0 | Last Updated: 2026-04-27
 
 import React, { useState } from 'react';
@@ -618,9 +618,9 @@ const PANEL_CARDS: FeatureCard[] = [
   {
     title: 'Scripts / Developer Panel',
     badges: ['JS SANDBOX', 'MONACO EDITOR', 'DRAFTUP API'],
-    functional: 'Script Library: saved scripts from Firestore with Run, Edit, Delete per card. Script Editor: Monaco/CodeMirror editor with JS highlighting, DraftUp API auto-complete, Name/Description fields, Save/Run/Clear Output buttons. Script Output Console: terminal-style scrollable output, console.log() routed here, errors in red with stack traces. Sandbox: no DOM/window access; DraftUp API object injected into scope; async scripts supported; 5-second execution timeout.',
+    functional: 'Script Library: saved scripts from Firestore with Run, Edit, Delete per card. Script Editor: Monaco/CodeMirror editor with JS highlighting, PolyForm API auto-complete, Name/Description fields, Save/Run/Clear Output buttons. Script Output Console: terminal-style scrollable output, console.log() routed here, errors in red with stack traces. Sandbox: no DOM/window access; PolyForm API object injected into scope; async scripts supported; 5-second execution timeout.',
     implementation: 'Scripts are stored in Firestore /scripts/{scriptId}. Execution wraps the script code in an async IIFE inside a new Function() constructor with a restricted scope: new Function("scene", "console", scriptCode)(draftUpAPI, sandboxedConsole). The draftUpAPI object is constructed fresh on each run from the current AppContext state. Timeout is enforced via a Promise.race with a 5 s rejection.',
-    source: 'src/components/Panels/ScriptsPanel.tsx\nsrc/scripting/sandbox.ts\nsrc/scripting/DraftUpAPI.ts',
+    source: 'src/components/Panels/ScriptsPanel.tsx\nsrc/scripting/sandbox.ts\nsrc/scripting/PolyFormAPI.ts',
   },
   {
     title: 'Settings Panel',
@@ -1137,7 +1137,7 @@ const SpecPage: React.FC = () => {
           <div style={S.headerIcon}>📄</div>
           <h1 style={S.h1}>Technical Product Specification</h1>
         </div>
-        <p style={S.subtitle}>Product Management Documentation · DraftUp Professional Edition</p>
+        <p style={S.subtitle}>Product Management Documentation · PolyForm Professional Edition</p>
         <div style={S.metaBadges}>
           <span style={S.metaBadge}>Version 2.2.0</span>
           <span style={S.metaBadge}>Updated 2026-04-27</span>

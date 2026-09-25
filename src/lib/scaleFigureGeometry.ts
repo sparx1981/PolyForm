@@ -378,7 +378,7 @@ export function createScaleFigureGeometry(
     const disto = new THREE.BoxGeometry(0.06 * s, 0.14 * s, 0.04 * s);
     disto.rotateX(-0.4);
     disto.translate(0.23 * s, (1.78 - 0.66) * s, 0.36 * s);
-    parts.push(applyVertexColor(disto, '#dc2626')); // Red Leica/Trimble laser tool
+    parts.push(applyVertexColor(disto, '#dc2626')); // Red laser rangefinder tool
   } else if (character.id === 'executive-elena') {
     // Right arm hanging holding briefcase
     rightArm.rotateZ(-0.06);

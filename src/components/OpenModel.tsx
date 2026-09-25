@@ -535,7 +535,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
           {/* Header */}
           <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 bg-gray-50 dark:bg-gray-800/50">
             <div className="flex items-center gap-3">
-              <FolderOpen className="w-5 h-5 text-trimble-blue" />
+              <FolderOpen className="w-5 h-5 text-polyform-blue" />
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">Open Model</h2>
             </div>
             <div className="flex items-center gap-4">
@@ -545,7 +545,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                   onClick={() => setViewMode('grid')}
                   className={cn(
                     "p-1.5 rounded-md transition-all",
-                    viewMode === 'grid' ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    viewMode === 'grid' ? "bg-white dark:bg-gray-700 shadow-sm text-polyform-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                   )}
                 >
                   <LayoutGrid size={16} />
@@ -554,7 +554,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                   onClick={() => setViewMode('list')}
                   className={cn(
                     "p-1.5 rounded-md transition-all",
-                    viewMode === 'list' ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    viewMode === 'list' ? "bg-white dark:bg-gray-700 shadow-sm text-polyform-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                   )}
                 >
                   <List size={16} />
@@ -594,7 +594,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                   onClick={() => setFilter(f.id as any)}
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                    filter === f.id ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    filter === f.id ? "bg-white dark:bg-gray-700 shadow-sm text-polyform-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                   )}
                 >
                   {f.icon}
@@ -608,7 +608,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900/50">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-64 gap-4">
-                <Loader2 className="w-8 h-8 text-trimble-blue animate-spin" />
+                <Loader2 className="w-8 h-8 text-polyform-blue animate-spin" />
                 <p className="text-gray-500 font-medium">Loading models...</p>
               </div>
             ) : filteredModels.length === 0 ? (
@@ -617,7 +617,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                 <p className="text-gray-500 font-medium">No models found</p>
                 <button 
                   onClick={() => setSearchQuery('')}
-                  className="text-trimble-blue text-sm font-bold hover:underline"
+                  className="text-polyform-blue text-sm font-bold hover:underline"
                 >
                   Clear search
                 </button>
@@ -690,7 +690,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-sm"
               >
-                <div className="flex items-center gap-3 mb-4 text-trimble-blue">
+                <div className="flex items-center gap-3 mb-4 text-polyform-blue">
                   <Lock size={24} />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Protected Model</h3>
                 </div>
@@ -705,7 +705,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                       onChange={(e) => setPasswordToTry(e.target.value)}
                       className={cn(
                         "w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border rounded-xl outline-none transition-all text-gray-900 dark:text-white",
-                        passwordError ? "border-red-500 ring-2 ring-red-500/20" : "border-gray-200 dark:border-gray-700 focus:border-trimble-blue"
+                        passwordError ? "border-red-500 ring-2 ring-red-500/20" : "border-gray-200 dark:border-gray-700 focus:border-polyform-blue"
                       )}
                       autoFocus
                     />
@@ -720,7 +720,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                     </button>
                     <button 
                       onClick={handlePasswordSubmit}
-                      className="flex-1 py-2 bg-trimble-blue text-white text-sm font-bold rounded-xl hover:bg-trimble-blue/90 shadow-lg shadow-trimble-blue/20 transition-all"
+                      className="flex-1 py-2 bg-polyform-blue text-white text-sm font-bold rounded-xl hover:bg-polyform-blue/90 shadow-lg shadow-polyform-blue/20 transition-all"
                     >
                       Open Model
                     </button>
@@ -789,7 +789,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-md"
               >
-                <div className="flex items-center gap-3 mb-4 text-trimble-blue">
+                <div className="flex items-center gap-3 mb-4 text-polyform-blue">
                   <Globe size={24} />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Share Model</h3>
                 </div>
@@ -810,7 +810,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                       onClick={() => setUsePassword(!usePassword)}
                       className={cn(
                         "w-10 h-5 rounded-full relative transition-colors",
-                        usePassword ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-700"
+                        usePassword ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-700"
                       )}
                     >
                       <div className={cn(
@@ -836,7 +836,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                           placeholder="Enter sharing password"
                           value={sharePassword}
                           onChange={(e) => setSharePassword(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:border-trimble-blue text-gray-900 dark:text-white"
+                          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:border-polyform-blue text-gray-900 dark:text-white"
                         />
                       </div>
                     </div>
@@ -851,7 +851,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                     </button>
                     <button 
                       onClick={handleShareSubmit}
-                      className="flex-1 py-2.5 bg-trimble-blue text-white text-sm font-bold rounded-xl hover:bg-trimble-blue/90 shadow-lg shadow-trimble-blue/20 transition-all"
+                      className="flex-1 py-2.5 bg-polyform-blue text-white text-sm font-bold rounded-xl hover:bg-polyform-blue/90 shadow-lg shadow-polyform-blue/20 transition-all"
                     >
                       Make Public
                     </button>
@@ -872,7 +872,7 @@ function ModelCard({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePub
   return (
     <div 
       onClick={onOpen}
-      className="group relative bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-trimble-blue dark:hover:border-trimble-blue shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col"
+      className="group relative bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-polyform-blue dark:hover:border-polyform-blue shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col"
     >
       <div className="relative aspect-video bg-gray-100 dark:bg-gray-900 overflow-hidden">
         <img
@@ -892,7 +892,7 @@ function ModelCard({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePub
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           {model.isPublic && (
-            <div className="px-2 py-1 bg-trimble-blue/90 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-sm">
+            <div className="px-2 py-1 bg-polyform-blue/90 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-sm">
               <Globe size={10} />
               Public
             </div>
@@ -919,7 +919,7 @@ function ModelCard({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePub
                 onClick={onTogglePublic}
                 className={cn(
                   "p-2 rounded-xl shadow-lg backdrop-blur-md transition-all",
-                  model.isPublic ? "bg-trimble-blue text-white" : "bg-white/90 text-gray-600 hover:bg-white"
+                  model.isPublic ? "bg-polyform-blue text-white" : "bg-white/90 text-gray-600 hover:bg-white"
                 )}
                 title={model.isPublic ? "Make Private" : "Make Public"}
               >
@@ -936,7 +936,7 @@ function ModelCard({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePub
           ) : (
             <button 
               onClick={onCopy}
-              className="p-2 bg-white/90 text-trimble-blue hover:bg-trimble-blue hover:text-white rounded-xl shadow-lg backdrop-blur-md transition-all"
+              className="p-2 bg-white/90 text-polyform-blue hover:bg-polyform-blue hover:text-white rounded-xl shadow-lg backdrop-blur-md transition-all"
               title="Copy to My Library"
             >
               <Copy size={16} />
@@ -949,7 +949,7 @@ function ModelCard({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePub
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white truncate">{model.name}</h3>
           {(model as any).storage?.fileId && (
-            <span className="shrink-0 ml-2 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-trimble-blue/10 text-trimble-blue">
+            <span className="shrink-0 ml-2 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-polyform-blue/10 text-polyform-blue">
               {STORAGE_LABELS[(model as any).storage.provider as 'google-drive' | 'trimble-connect']}
             </span>
           )}
@@ -990,7 +990,7 @@ function ModelRow({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePubl
         </div>
       </td>
       <td className="px-6 py-4 text-gray-500 dark:text-gray-400">
-        {isOwner ? <span className="text-trimble-blue font-medium">You</span> : model.userName || 'Unknown'}
+        {isOwner ? <span className="text-polyform-blue font-medium">You</span> : model.userName || 'Unknown'}
       </td>
       <td className="px-6 py-4 text-gray-500 dark:text-gray-400">
         {safelyToDate(model.updatedAt).toLocaleDateString()}
@@ -998,7 +998,7 @@ function ModelRow({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePubl
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
           {model.isPublic ? (
-            <span className="px-2 py-0.5 bg-trimble-blue/10 text-trimble-blue rounded text-[10px] font-bold flex items-center gap-1">
+            <span className="px-2 py-0.5 bg-polyform-blue/10 text-polyform-blue rounded text-[10px] font-bold flex items-center gap-1">
               <Globe size={10} /> Public
             </span>
           ) : (
@@ -1025,7 +1025,7 @@ function ModelRow({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePubl
             <>
               <button 
                 onClick={onTogglePublic}
-                className="p-2 text-gray-400 hover:text-trimble-blue hover:bg-trimble-blue/10 rounded-lg transition-all"
+                className="p-2 text-gray-400 hover:text-polyform-blue hover:bg-polyform-blue/10 rounded-lg transition-all"
                 title={model.isPublic ? "Make Private" : "Make Public"}
               >
                 <Globe size={16} />
@@ -1041,7 +1041,7 @@ function ModelRow({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePubl
           ) : (
             <button 
               onClick={onCopy}
-              className="p-2 text-trimble-blue hover:bg-trimble-blue/10 rounded-lg transition-all"
+              className="p-2 text-polyform-blue hover:bg-polyform-blue/10 rounded-lg transition-all"
               title="Copy to My Library"
             >
               <Copy size={16} />

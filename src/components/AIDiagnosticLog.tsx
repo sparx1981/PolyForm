@@ -19,7 +19,7 @@ export default function AIDiagnosticLog() {
     if (diagnosticLogs.length === 0) return;
     
     let textToCopy = `=== AI DIAGNOSTIC LOG ===\n`;
-    textToCopy += `App: DraftUp | Stack: Three.js, R3F, React 18, TypeScript, Vite, Firebase\n`;
+    textToCopy += `App: PolyForm | Stack: Three.js, R3F, React 18, TypeScript, Vite, Firebase\n`;
     textToCopy += `Build: ${__BUILD_COMMIT__} (${__BUILD_TIME__})\n`;
     textToCopy += `Captured: ${new Date().toISOString()}\n`;
     textToCopy += `========================\n\n`;

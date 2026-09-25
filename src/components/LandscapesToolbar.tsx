@@ -116,7 +116,7 @@ function CivilToolButton({
         {badge && (
           <span className={cn(
             "absolute -top-1.5 -right-1.5 text-[8px] font-bold rounded-full px-1 leading-none py-0.5 shadow-xs",
-            active ? "bg-white text-trimble-blue" : "bg-trimble-blue text-white"
+            active ? "bg-white text-polyform-blue" : "bg-polyform-blue text-white"
           )}>
             {badge}
           </span>
@@ -125,7 +125,7 @@ function CivilToolButton({
 
       <FlyoutPortal anchorRef={buttonRef} open={hovered} side={flyoutSide}>
         {hovered && (
-          <div className="px-2.5 py-1.5 bg-trimble-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none z-50">
+          <div className="px-2.5 py-1.5 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none z-50">
             <div className="font-semibold flex items-center gap-1.5">
               <span>{label}</span>
               {hotkey && <span className="text-[10px] bg-black/30 px-1 py-0.5 rounded font-mono">({hotkey})</span>}
@@ -727,55 +727,55 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
               <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px] text-gray-600 dark:text-gray-300">
                 {activeTier === 'terrain' && (
                   <>
-                    <Mountain size={14} className="text-trimble-blue" />
+                    <Mountain size={14} className="text-polyform-blue" />
                     <span>Terrain</span>
                   </>
                 )}
                 {activeTier === 'sculpt' && (
                   <>
-                    <Paintbrush size={14} className="text-trimble-blue" />
+                    <Paintbrush size={14} className="text-polyform-blue" />
                     <span>Sculpt Terrain</span>
                   </>
                 )}
                 {activeTier === 'corridors' && (
                   <>
-                    <Route size={14} className="text-trimble-blue" />
+                    <Route size={14} className="text-polyform-blue" />
                     <span>Pathways & Roads</span>
                   </>
                 )}
                 {activeTier === 'pads' && (
                   <>
-                    <Layers size={14} className="text-trimble-blue" />
+                    <Layers size={14} className="text-polyform-blue" />
                     <span>Grading Pads</span>
                   </>
                 )}
                 {activeTier === 'water' && (
                   <>
-                    <Waves size={14} className="text-trimble-blue" />
+                    <Waves size={14} className="text-polyform-blue" />
                     <span>Ponds & Lakes</span>
                   </>
                 )}
                 {activeTier === 'fence' && (
                   <>
-                    <Fence size={14} className="text-trimble-blue" />
+                    <Fence size={14} className="text-polyform-blue" />
                     <span>Fences</span>
                   </>
                 )}
                 {activeTier === 'patio' && (
                   <>
-                    <LayoutGrid size={14} className="text-trimble-blue" />
+                    <LayoutGrid size={14} className="text-polyform-blue" />
                     <span>Patios & Decking</span>
                   </>
                 )}
                 {activeTier === 'vegetation' && (
                   <>
-                    {activeTool === 'bush' ? <Sprout size={14} className="text-trimble-blue" /> : <Trees size={14} className="text-trimble-blue" />}
+                    {activeTool === 'bush' ? <Sprout size={14} className="text-polyform-blue" /> : <Trees size={14} className="text-polyform-blue" />}
                     <span>{activeTool === 'bush' ? 'Bushes & Flora' : 'Tree Species'}</span>
                   </>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded font-bold">
+                <span className="text-[9px] font-mono text-polyform-blue px-1.5 py-0.5 bg-polyform-blue/10 rounded font-bold">
                   {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : activeTier === 'pads' ? 'PAD' : activeTier === 'fence' ? 'FENCE' : activeTier === 'water' ? 'WATER' : activeTier === 'patio' ? 'PATIO' : 'PLANT'}
                 </span>
                 {panelMode === 'float' && (
@@ -793,7 +793,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                   onClick={() => setIsToolModifierDocked(!isToolModifierDocked)}
                   className={cn(
                     "p-1.5 hover:bg-black/5 rounded-lg transition-colors cursor-pointer",
-                    isToolModifierDocked ? "text-trimble-blue bg-trimble-blue/10" : "text-gray-400"
+                    isToolModifierDocked ? "text-polyform-blue bg-polyform-blue/10" : "text-gray-400"
                   )}
                   title={isToolModifierDocked ? "Undock Panel" : "Dock Panel"}
                 >
@@ -858,7 +858,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         className={cn(
                           "py-1.5 px-2 rounded-xl border text-left transition-all cursor-pointer",
                           terrainOptions.topography === t.id
-                            ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-xs font-semibold"
+                            ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-xs font-semibold"
                             : "bg-gray-50 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                         )}
                       >
@@ -873,7 +873,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                   <div>
                     <div className="flex justify-between items-center mb-1">
                       <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Site Width (X)</label>
-                      <span className="font-mono text-trimble-blue font-semibold">{terrainOptions.width} m</span>
+                      <span className="font-mono text-polyform-blue font-semibold">{terrainOptions.width} m</span>
                     </div>
                     <input
                       type="range"
@@ -882,14 +882,14 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                       step="5"
                       value={terrainOptions.width}
                       onChange={(e) => setTerrainOptions(o => ({ ...o, width: parseInt(e.target.value, 10) || 50 }))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                     />
                   </div>
 
                   <div>
                     <div className="flex justify-between items-center mb-1">
                       <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Site Depth (Z)</label>
-                      <span className="font-mono text-trimble-blue font-semibold">{terrainOptions.depth} m</span>
+                      <span className="font-mono text-polyform-blue font-semibold">{terrainOptions.depth} m</span>
                     </div>
                     <input
                       type="range"
@@ -898,7 +898,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                       step="5"
                       value={terrainOptions.depth}
                       onChange={(e) => setTerrainOptions(o => ({ ...o, depth: parseInt(e.target.value, 10) || 50 }))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                     />
                   </div>
                 </div>
@@ -907,7 +907,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Terrain Roughness</label>
-                    <span className="font-mono text-trimble-blue font-semibold">{(terrainOptions.roughness * 100).toFixed(0)}%</span>
+                    <span className="font-mono text-polyform-blue font-semibold">{(terrainOptions.roughness * 100).toFixed(0)}%</span>
                   </div>
                   <input
                     type="range"
@@ -916,7 +916,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     step="0.05"
                     value={terrainOptions.roughness}
                     onChange={(e) => handleRoughnessChange(parseFloat(e.target.value))}
-                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                   />
                   <div className="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                     <span>Smooth (0%)</span>
@@ -944,7 +944,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         className={cn(
                           "py-1 rounded-xl border text-[11px] text-center font-medium transition-all cursor-pointer",
                           terrainOptions.resolution === r.res
-                            ? "bg-trimble-blue text-white shadow-xs font-bold"
+                            ? "bg-polyform-blue text-white shadow-xs font-bold"
                             : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                         )}
                       >
@@ -971,7 +971,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         }
                       }
                     }}
-                    className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                    className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
                     <optgroup label="Poly Haven">
                       {groundMaterials.map(asset => (
@@ -1552,7 +1552,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                   <button
                     type="button"
                     onClick={() => handleAddOrUpdateTerrain()}
-                    className="w-full py-2 px-3 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer bg-trimble-blue hover:bg-trimble-blue/90 text-white text-xs"
+                    className="w-full py-2 px-3 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer bg-polyform-blue hover:bg-polyform-blue/90 text-white text-xs"
                   >
                     {existingTerrain ? (
                       <>
@@ -1596,7 +1596,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         onClick={handleGradeFloorSlabs}
                         className="w-full py-1.5 px-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                       >
-                        <Layers size={14} className="text-trimble-blue" />
+                        <Layers size={14} className="text-polyform-blue" />
                         <span>Grade Floor Slabs (1m Apron)</span>
                       </button>
                       <div className="text-[9px] text-gray-500 dark:text-gray-400 text-center mt-1">
@@ -1635,7 +1635,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                           className={cn(
                             "py-2 px-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-0.5",
                             isSelected
-                              ? "bg-trimble-blue text-white shadow-xs font-bold border-trimble-blue"
+                              ? "bg-polyform-blue text-white shadow-xs font-bold border-polyform-blue"
                               : "bg-gray-50 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                           )}
                         >
@@ -1653,7 +1653,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Brush Radius</label>
-                    <span className="font-mono text-trimble-blue font-semibold">{landscapeSculptSettings.radius.toFixed(1)} m</span>
+                    <span className="font-mono text-polyform-blue font-semibold">{landscapeSculptSettings.radius.toFixed(1)} m</span>
                   </div>
                   <input
                     type="range"
@@ -1662,7 +1662,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     step="0.5"
                     value={landscapeSculptSettings.radius}
                     onChange={(e) => setLandscapeSculptSettings(s => ({ ...s, radius: parseFloat(e.target.value) }))}
-                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                   />
                   <div className="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                     <span>1.0m (Fine)</span>
@@ -1675,7 +1675,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Brush Intensity / Strength</label>
-                    <span className="font-mono text-trimble-blue font-semibold">{Math.round(landscapeSculptSettings.intensity * 100)}%</span>
+                    <span className="font-mono text-polyform-blue font-semibold">{Math.round(landscapeSculptSettings.intensity * 100)}%</span>
                   </div>
                   <input
                     type="range"
@@ -1684,7 +1684,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     step="0.05"
                     value={landscapeSculptSettings.intensity}
                     onChange={(e) => setLandscapeSculptSettings(s => ({ ...s, intensity: parseFloat(e.target.value) }))}
-                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                   />
                   <div className="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                     <span>Gentle (5%)</span>
@@ -1701,12 +1701,12 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     className={cn(
                       "w-full py-1.5 px-2.5 rounded-lg border flex items-center justify-between text-xs transition-colors cursor-pointer",
                       landscapeSculptSettings.masked
-                        ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue font-semibold"
+                        ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue font-semibold"
                         : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-750"
                     )}
                   >
                     <div className="flex items-center gap-1.5">
-                      <ShieldCheck size={14} className={landscapeSculptSettings.masked ? "text-trimble-blue" : "text-gray-400"} />
+                      <ShieldCheck size={14} className={landscapeSculptSettings.masked ? "text-polyform-blue" : "text-gray-400"} />
                       <span>Protect Boundary Edges</span>
                     </div>
                     <span className="text-[10px] font-mono">{landscapeSculptSettings.masked ? 'ON' : 'OFF'}</span>
@@ -1721,7 +1721,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                       onClick={handleGlobalSmoothTerrain}
                       className="py-1.5 px-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <Waves size={13} className="text-trimble-blue" />
+                      <Waves size={13} className="text-polyform-blue" />
                       <span>Global Smooth</span>
                     </button>
                     <button
@@ -1729,7 +1729,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                       onClick={() => handleGlobalFlattenTerrain(0)}
                       className="py-1.5 px-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <MinusSquare size={13} className="text-trimble-blue" />
+                      <MinusSquare size={13} className="text-polyform-blue" />
                       <span>Level to 0.0m</span>
                     </button>
                   </div>
@@ -1738,7 +1738,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     onClick={handleGradeFloorSlabs}
                     className="w-full py-1.5 px-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Layers size={13} className="text-trimble-blue" />
+                    <Layers size={13} className="text-polyform-blue" />
                     <span>Grade Slabs & 1m Apron</span>
                   </button>
                 </div>
@@ -1752,7 +1752,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                 {selectedRoad && (
                   <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 font-semibold text-blue-900 dark:text-blue-200 truncate">
-                      <Route size={14} className="shrink-0 text-trimble-blue" />
+                      <Route size={14} className="shrink-0 text-polyform-blue" />
                       <span className="truncate">Active Road: {selectedRoad.name}</span>
                     </div>
                     <button
@@ -1769,7 +1769,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Road Width</label>
-                    <span className="font-mono text-trimble-blue font-semibold">{civilRoadSettings.width.toFixed(1)} m</span>
+                    <span className="font-mono text-polyform-blue font-semibold">{civilRoadSettings.width.toFixed(1)} m</span>
                   </div>
                   <input
                     type="range"
@@ -1778,7 +1778,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     step="0.5"
                     value={civilRoadSettings.width}
                     onChange={(e) => handleUpdateRoadSetting({ width: parseFloat(e.target.value) })}
-                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                   />
                   <div className="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                     <span>3.0m</span>
@@ -1793,7 +1793,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Max Grade Threshold</label>
                     <span className={cn(
                       "font-mono font-semibold",
-                      civilRoadSettings.maxGradePercent > 12 ? "text-amber-600 dark:text-amber-400" : "text-trimble-blue"
+                      civilRoadSettings.maxGradePercent > 12 ? "text-amber-600 dark:text-amber-400" : "text-polyform-blue"
                     )}>
                       {civilRoadSettings.maxGradePercent.toFixed(1)}%
                     </span>
@@ -1805,7 +1805,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     step="1"
                     value={civilRoadSettings.maxGradePercent}
                     onChange={(e) => handleUpdateRoadSetting({ maxGradePercent: parseFloat(e.target.value) })}
-                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                    className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                   />
                   <div className="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                     <span>2%</span>
@@ -1822,14 +1822,14 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     className={cn(
                       "py-2 px-3 rounded-lg border font-semibold flex items-center justify-between transition-all cursor-pointer",
                       civilRoadSettings.hasCurb
-                        ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-xs"
+                        ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-xs"
                         : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                     )}
                   >
                     <span>Curb</span>
                     <span className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded font-bold",
-                      civilRoadSettings.hasCurb ? "bg-trimble-blue text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      civilRoadSettings.hasCurb ? "bg-polyform-blue text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
                     )}>
                       {civilRoadSettings.hasCurb ? 'ON' : 'OFF'}
                     </span>
@@ -1841,14 +1841,14 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     className={cn(
                       "py-2 px-3 rounded-lg border font-semibold flex items-center justify-between transition-all cursor-pointer",
                       civilRoadSettings.hasDitch
-                        ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-xs"
+                        ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-xs"
                         : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                     )}
                   >
                     <span>Ditch</span>
                     <span className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded font-bold",
-                      civilRoadSettings.hasDitch ? "bg-trimble-blue text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      civilRoadSettings.hasDitch ? "bg-polyform-blue text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
                     )}>
                       {civilRoadSettings.hasDitch ? 'ON' : 'OFF'}
                     </span>
@@ -1866,7 +1866,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                       if (asset) registerMaterialBinding(asset);
                       handleUpdateRoadSetting({ material: value });
                     }}
-                    className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                    className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
                     <optgroup label="Roadways · Poly Haven">
                       {roadMaterials.map(asset => (
@@ -1905,7 +1905,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                   <select
                     value={civilRoadSettings.markings}
                     onChange={(e) => handleUpdateRoadSetting({ markings: e.target.value as RoadMarkingPreset })}
-                    className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                    className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
                     <option value="none">None</option>
                     <option value="center-dashed">Center Dashed (Single Stripe)</option>
@@ -1978,7 +1978,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                           className={cn(
                             "py-1.5 px-2 rounded-lg border flex items-center justify-center gap-1.5 font-semibold text-xs transition-all cursor-pointer",
                             civilPadSettings.primitive === 'rectangle'
-                              ? "bg-trimble-blue text-white border-trimble-blue shadow-xs font-bold"
+                              ? "bg-polyform-blue text-white border-polyform-blue shadow-xs font-bold"
                               : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                           )}
                         >
@@ -1998,7 +1998,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                           className={cn(
                             "py-1.5 px-2 rounded-lg border flex items-center justify-center gap-1.5 font-semibold text-xs transition-all cursor-pointer",
                             civilPadSettings.primitive === 'circle'
-                              ? "bg-trimble-blue text-white border-trimble-blue shadow-xs font-bold"
+                              ? "bg-polyform-blue text-white border-polyform-blue shadow-xs font-bold"
                               : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                           )}
                         >
@@ -2014,7 +2014,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">
                           {civilPadSettings.primitive === 'rectangle' ? 'Pad Dimensions (Width × Depth)' : 'Pad Diameter'}
                         </label>
-                        <span className="font-mono text-trimble-blue font-semibold">
+                        <span className="font-mono text-polyform-blue font-semibold">
                           {civilPadSettings.primitive === 'rectangle'
                             ? `${civilPadSettings.dimensions[0].toFixed(1)}m × ${civilPadSettings.dimensions[1].toFixed(1)}m`
                             : `${civilPadSettings.dimensions[0].toFixed(1)}m Ø`}
@@ -2038,7 +2038,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                                   updateTerrainModifier(selectedPad.id, { dimensions: [w, selectedPad.dimensions[1]] });
                                 }
                               }}
-                              className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                              className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                             />
                             <input
                               type="number"
@@ -2072,7 +2072,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                                   updateTerrainModifier(selectedPad.id, { dimensions: [selectedPad.dimensions[0], d] });
                                 }
                               }}
-                              className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                              className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                             />
                             <input
                               type="number"
@@ -2111,7 +2111,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                                 className={cn(
                                   "py-1 px-1 rounded-lg border text-[10px] font-mono text-center transition-colors cursor-pointer",
                                   civilPadSettings.dimensions[0] === pre.w && civilPadSettings.dimensions[1] === pre.d
-                                    ? "bg-trimble-blue text-white font-bold border-trimble-blue"
+                                    ? "bg-polyform-blue text-white font-bold border-polyform-blue"
                                     : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                                 )}
                               >
@@ -2137,7 +2137,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                                   updateTerrainModifier(selectedPad.id, { dimensions: [diam, diam] });
                                 }
                               }}
-                              className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                              className="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                             />
                             <input
                               type="number"
@@ -2176,7 +2176,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                                 className={cn(
                                   "py-1 px-1 rounded-lg border text-[10px] font-mono text-center transition-colors cursor-pointer",
                                   civilPadSettings.dimensions[0] === pre.d
-                                    ? "bg-trimble-blue text-white font-bold border-trimble-blue"
+                                    ? "bg-polyform-blue text-white font-bold border-polyform-blue"
                                     : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                                 )}
                               >
@@ -2192,7 +2192,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     <div>
                       <div className="flex justify-between items-center mb-1">
                         <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Batter Falloff Distance</label>
-                        <span className="font-mono text-trimble-blue font-semibold">{civilPadSettings.batterDistance.toFixed(1)} m</span>
+                        <span className="font-mono text-polyform-blue font-semibold">{civilPadSettings.batterDistance.toFixed(1)} m</span>
                       </div>
                       <input
                         type="range"
@@ -2207,7 +2207,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                             updateTerrainModifier(selectedPad.id, { batterDistance: dist });
                           }
                         }}
-                        className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                        className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                       />
                       <div className="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                         <span>1.0m (Steep)</span>
@@ -2233,7 +2233,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                             className={cn(
                               "py-1.5 px-2 rounded-lg border text-center capitalize text-xs transition-all cursor-pointer",
                               civilPadSettings.batterProfile === prof
-                                ? "bg-trimble-blue text-white font-bold border-trimble-blue shadow-xs"
+                                ? "bg-polyform-blue text-white font-bold border-polyform-blue shadow-xs"
                                 : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                             )}
                           >
@@ -2258,7 +2258,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                               updateTerrainModifier(selectedPad.id, { targetElevation: elev });
                             }
                           }}
-                          className="w-full h-8 px-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs font-mono outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                          className="w-full h-8 px-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs font-mono outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                         />
                         <span className="text-gray-500 text-xs font-mono">meters</span>
                       </div>
@@ -2269,7 +2269,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                       <button
                         type="button"
                         onClick={() => handleCommitPadToTerrain()}
-                        className="w-full py-2.5 px-3 rounded-lg bg-trimble-blue hover:bg-trimble-blue/90 text-white font-bold flex items-center justify-center gap-2 text-xs shadow-xs transition-all cursor-pointer"
+                        className="w-full py-2.5 px-3 rounded-lg bg-polyform-blue hover:bg-polyform-blue/90 text-white font-bold flex items-center justify-center gap-2 text-xs shadow-xs transition-all cursor-pointer"
                       >
                         <CheckCircle2 size={16} />
                         <span>Commit Location & Grade Terrain</span>
@@ -2283,7 +2283,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         onClick={handleGradeFloorSlabs}
                         className="w-full py-1.5 px-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                       >
-                        <Layers size={13} className="text-trimble-blue" />
+                        <Layers size={13} className="text-polyform-blue" />
                         <span>Grade Slabs & 1m Apron</span>
                       </button>
                     </div>
@@ -2309,7 +2309,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                             className={cn(
                               "py-1.5 rounded-lg border text-center font-mono text-xs transition-all cursor-pointer",
                               civilStripingSettings.angle === ang
-                                ? "bg-trimble-blue text-white font-bold border-trimble-blue shadow-xs"
+                                ? "bg-polyform-blue text-white font-bold border-polyform-blue shadow-xs"
                                 : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                             )}
                           >
@@ -2323,7 +2323,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     <div>
                       <div className="flex justify-between items-center mb-1">
                         <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400">Stall Width</label>
-                        <span className="font-mono text-trimble-blue font-semibold">{civilStripingSettings.stallWidth.toFixed(2)} m</span>
+                        <span className="font-mono text-polyform-blue font-semibold">{civilStripingSettings.stallWidth.toFixed(2)} m</span>
                       </div>
                       <input
                         type="range"
@@ -2332,7 +2332,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         step="0.05"
                         value={civilStripingSettings.stallWidth}
                         onChange={(e) => setCivilStripingSettings(s => ({ ...s, stallWidth: parseFloat(e.target.value) }))}
-                        className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                        className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                       />
                       <div className="flex justify-between text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
                         <span>2.2m (Compact)</span>
@@ -2349,14 +2349,14 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         className={cn(
                           "w-full py-2 px-3 rounded-lg border font-semibold flex items-center justify-between transition-all cursor-pointer",
                           civilStripingSettings.doubleRow
-                            ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-xs"
+                            ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-xs"
                             : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                         )}
                       >
                         <span>Double-Row Stall Bay</span>
                         <span className={cn(
                           "text-[10px] px-1.5 py-0.5 rounded font-bold",
-                          civilStripingSettings.doubleRow ? "bg-trimble-blue text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                          civilStripingSettings.doubleRow ? "bg-polyform-blue text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
                         )}>
                           {civilStripingSettings.doubleRow ? 'ENABLED' : 'DISABLED'}
                         </span>
@@ -2368,7 +2368,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                       <button
                         type="button"
                         onClick={handleApplyStripingToPad}
-                        className="w-full py-2 px-3 rounded-lg bg-trimble-blue hover:bg-trimble-blue/90 text-white font-semibold flex items-center justify-center gap-1.5 text-xs shadow-xs cursor-pointer"
+                        className="w-full py-2 px-3 rounded-lg bg-polyform-blue hover:bg-polyform-blue/90 text-white font-semibold flex items-center justify-center gap-1.5 text-xs shadow-xs cursor-pointer"
                       >
                         <Grid3X3 size={14} />
                         <span>Apply Striping to Pad</span>
@@ -2407,7 +2407,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     }}
                     className={cn(
                       "flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
-                      activeTool === 'tree' ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                      activeTool === 'tree' ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     )}
                   >
                     Trees
@@ -2423,7 +2423,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     }}
                     className={cn(
                       "flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer",
-                      activeTool === 'bush' ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                      activeTool === 'bush' ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     )}
                   >
                     Bushes & Shrubs
@@ -2442,7 +2442,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                         className={cn(
                           "p-2 rounded-lg border text-left transition-all cursor-pointer",
                           activePlantSpecies === species.id
-                            ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-xs font-semibold"
+                            ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-xs font-semibold"
                             : "bg-gray-50 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                         )}
                       >
@@ -2742,7 +2742,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
           <button
             type="button"
             onClick={() => setIsBakeModalOpen(true)}
-            className="toolbar-btn relative transition-colors text-trimble-blue hover:bg-trimble-blue/10 dark:hover:bg-trimble-blue/20 cursor-pointer"
+            className="toolbar-btn relative transition-colors text-polyform-blue hover:bg-polyform-blue/10 dark:hover:bg-polyform-blue/20 cursor-pointer"
             title="Bake Civil Terrain to Model (Non-Destructive Mesh Baking)"
           >
             <HardHat size={18} />

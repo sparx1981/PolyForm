@@ -36,7 +36,7 @@ export const CameraClippingSection: React.FC<CameraClippingSectionProps> = ({
           onClick={() => setCameraDepthClippingEnabled(!cameraDepthClippingEnabled)}
           className={cn(
             "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-            cameraDepthClippingEnabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+            cameraDepthClippingEnabled ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
           )}
           title={cameraDepthClippingEnabled ? "Disable Camera Depth Clipping" : "Enable Camera Depth Clipping"}
         >
@@ -87,7 +87,7 @@ export const CameraClippingSection: React.FC<CameraClippingSectionProps> = ({
             setCameraNear(parseFloat(e.target.value));
             if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
           }}
-          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
         />
         <div className="text-[9px] text-gray-400 leading-normal">
           Hides any geometry that falls between the camera lens and this minimum distance. Critical for navigating tight interior spaces, allowing the camera to see through objects (like a wall directly behind the lens) without them blocking the viewport.
@@ -110,8 +110,8 @@ export const CameraClippingSection: React.FC<CameraClippingSectionProps> = ({
               className={cn(
                 "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
                 cameraNear === preset.val
-                  ? "bg-trimble-blue text-white border-trimble-blue"
-                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                  ? "bg-polyform-blue text-white border-polyform-blue"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-polyform-blue"
               )}
             >
               {preset.label}
@@ -158,7 +158,7 @@ export const CameraClippingSection: React.FC<CameraClippingSectionProps> = ({
             setCameraFar(parseFloat(e.target.value));
             if (!cameraDepthClippingEnabled) setCameraDepthClippingEnabled(true);
           }}
-          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
         />
         <div className="text-[9px] text-gray-400 leading-normal">
           Culls and hides any geometry that sits beyond this maximum distance. Primarily used to optimize rendering performance in massive scenes or fade out distant background clutter.
@@ -181,8 +181,8 @@ export const CameraClippingSection: React.FC<CameraClippingSectionProps> = ({
               className={cn(
                 "px-1.5 py-0.5 rounded text-[9px] font-mono border transition-colors cursor-pointer",
                 cameraFar === preset.val
-                  ? "bg-trimble-blue text-white border-trimble-blue"
-                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                  ? "bg-polyform-blue text-white border-polyform-blue"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-polyform-blue"
               )}
             >
               {preset.label}

@@ -325,7 +325,7 @@ export function DeveloperSuite() {
       {/* Resize Handle (only show when not collapsed) */}
       {!isDeveloperSuiteCollapsed && (
         <div 
-          className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-trimble-blue/50 transition-colors z-10"
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-polyform-blue/50 transition-colors z-10"
           onMouseDown={startResizing}
         />
       )}
@@ -337,7 +337,7 @@ export function DeveloperSuite() {
       >
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-trimble-blue" />
+            <Terminal className="w-4 h-4 text-polyform-blue" />
             <span className="font-bold text-sm text-gray-900 dark:text-white whitespace-nowrap">Developer Extensibility Suite</span>
           </div>
           {!isDeveloperSuiteCollapsed && (
@@ -359,7 +359,7 @@ export function DeveloperSuite() {
                   className={cn(
                     "px-3 py-1 text-[10px] font-bold rounded-md transition-all whitespace-nowrap",
                     activeDeveloperTab === tab.id 
-                      ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" 
+                      ? "bg-white dark:bg-gray-700 shadow-sm text-polyform-blue" 
                       : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white"
                   )}
                 >
@@ -865,7 +865,7 @@ console.log("All tool parameters and variables successfully configured!");`
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Output</span>
           <button 
             onClick={() => setConsoleOutput([])}
-            className="text-[10px] font-bold text-trimble-blue hover:underline uppercase"
+            className="text-[10px] font-bold text-polyform-blue hover:underline uppercase"
           >
             Clear History
           </button>
@@ -926,7 +926,7 @@ console.log("All tool parameters and variables successfully configured!");`
             <button
               key={idx}
               onClick={() => setDeveloperCode(tpl.code)}
-              className="px-2 py-0.5 rounded bg-white dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-trimble-blue hover:text-trimble-blue dark:hover:text-trimble-blue whitespace-nowrap transition-colors text-[10px] font-medium"
+              className="px-2 py-0.5 rounded bg-white dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-polyform-blue hover:text-polyform-blue dark:hover:text-polyform-blue whitespace-nowrap transition-colors text-[10px] font-medium"
               title={`Load ${tpl.name}`}
             >
               {tpl.name}
@@ -957,7 +957,7 @@ console.log("All tool parameters and variables successfully configured!");`
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
-              className="h-full bg-trimble-blue"
+              className="h-full bg-polyform-blue"
             />
           </div>
           <button 
@@ -967,7 +967,7 @@ console.log("All tool parameters and variables successfully configured!");`
               "flex items-center gap-2 px-6 py-1.5 rounded-lg text-sm font-bold transition-all",
               isRunning 
                 ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed" 
-                : "bg-trimble-blue text-white hover:bg-trimble-blue/90 shadow-lg shadow-trimble-blue/20"
+                : "bg-polyform-blue text-white hover:bg-polyform-blue/90 shadow-lg shadow-polyform-blue/20"
             )}
           >
             {isRunning ? (
@@ -1006,7 +1006,7 @@ console.log("All tool parameters and variables successfully configured!");`
                     type="text"
                     value={newScriptName}
                     onChange={(e) => setNewScriptName(e.target.value)}
-                    className="mt-1 w-full h-9 px-3 rounded-lg text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                    className="mt-1 w-full h-9 px-3 rounded-lg text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                     autoFocus
                   />
                 </div>
@@ -1014,13 +1014,13 @@ console.log("All tool parameters and variables successfully configured!");`
                 <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/30">
                   <button 
                     onClick={() => setIsSaveModalOpen(false)}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue"
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-polyform-blue"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={confirmSaveToLibrary}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg bg-trimble-blue text-white text-sm font-medium hover:bg-trimble-blue/90 transition-colors shadow-sm shadow-trimble-blue/20 outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg bg-polyform-blue text-white text-sm font-medium hover:bg-polyform-blue/90 transition-colors shadow-sm shadow-polyform-blue/20 outline-none focus-visible:ring-2 focus-visible:ring-polyform-blue focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
                   >
                     Save Script
                   </button>
@@ -1155,7 +1155,7 @@ function DeveloperLibrary() {
                 onClick={() => setFilter(f.id as any)}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
-                  filter === f.id ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  filter === f.id ? "bg-white dark:bg-gray-700 shadow-sm text-polyform-blue" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                 )}
               >
                 {f.icon}
@@ -1188,7 +1188,7 @@ function DeveloperLibrary() {
                               if (e.key === 'Enter') handleRename(script.id);
                               if (e.key === 'Escape') setEditingScriptId(null);
                             }}
-                            className="flex-1 px-2 py-1 text-sm bg-gray-50 dark:bg-gray-900 border border-trimble-blue rounded focus:outline-none text-gray-900 dark:text-white"
+                            className="flex-1 px-2 py-1 text-sm bg-gray-50 dark:bg-gray-900 border border-polyform-blue rounded focus:outline-none text-gray-900 dark:text-white"
                             autoFocus
                             onBlur={() => handleRename(script.id)}
                           />
@@ -1202,7 +1202,7 @@ function DeveloperLibrary() {
                                 setEditingScriptId(script.id);
                                 setEditingScriptName(script.name);
                               }}
-                              className="opacity-0 group-hover/title:opacity-100 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-all text-gray-400 hover:text-trimble-blue"
+                              className="opacity-0 group-hover/title:opacity-100 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-all text-gray-400 hover:text-polyform-blue"
                               title="Rename Script"
                             >
                               <PenLine size={12} />
@@ -1212,7 +1212,7 @@ function DeveloperLibrary() {
                       )}
                       <p className="text-[10px] text-gray-400">Created By: {script.userName || 'Unknown'}</p>
                     </div>
-                    {script.isPublic && <span title="Public Script"><Globe size={12} className="text-trimble-blue shrink-0" /></span>}
+                    {script.isPublic && <span title="Public Script"><Globe size={12} className="text-polyform-blue shrink-0" /></span>}
                   </div>
                   <div className="flex items-center gap-1">
                     <button 
@@ -1232,7 +1232,7 @@ function DeveloperLibrary() {
                         onClick={() => togglePin(script.id)}
                         className={cn(
                           "p-1.5 rounded-lg transition-colors",
-                          script.pinned ? "text-trimble-blue bg-trimble-blue/10" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          script.pinned ? "text-polyform-blue bg-polyform-blue/10" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                         )}
                         title={script.pinned ? "Unpin from Toolbar" : "Pin to Toolbar"}
                       >
@@ -1241,7 +1241,7 @@ function DeveloperLibrary() {
                     ) : (
                       <button 
                         onClick={() => copyScript(script)}
-                        className="p-1.5 text-trimble-blue hover:bg-trimble-blue/10 rounded-lg transition-colors"
+                        className="p-1.5 text-polyform-blue hover:bg-polyform-blue/10 rounded-lg transition-colors"
                         title="Copy to My Library"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -1272,7 +1272,7 @@ function DeveloperLibrary() {
                     onClick={() => {
                       // Shared run logic
                     }}
-                    className="px-3 py-1.5 bg-trimble-blue text-white rounded-lg text-xs font-bold hover:bg-trimble-blue/90 transition-colors"
+                    className="px-3 py-1.5 bg-polyform-blue text-white rounded-lg text-xs font-bold hover:bg-polyform-blue/90 transition-colors"
                   >
                     <Play className="w-3 h-3 fill-current" />
                   </button>
@@ -1497,11 +1497,11 @@ console.log("Custom toolbar ready:", toolbar.id);`
         <div className="space-y-6">
           <section className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
-              <BookOpen className="w-5 h-5 text-trimble-blue" />
+              <BookOpen className="w-5 h-5 text-polyform-blue" />
               SDK Architecture & Subsystems
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-              The Developer SDK exposes modular subsystems accessible via the global <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-trimble-blue font-mono text-xs">sdk</code> instance:
+              The Developer SDK exposes modular subsystems accessible via the global <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-polyform-blue font-mono text-xs">sdk</code> instance:
               <br />
               <span className="font-semibold text-gray-800 dark:text-gray-200">sdk.architecture</span> (roofs with 3D tile profiles, rooms, parametric stairs, timber framing) · 
               <span className="font-semibold text-gray-800 dark:text-gray-200"> sdk.landscape</span> (trees, shrubs, site furniture, terrain) · 
@@ -1515,7 +1515,7 @@ console.log("Custom toolbar ready:", toolbar.id);`
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {examples.map((example, i) => (
-                <div key={i} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-trimble-blue/30 transition-all flex flex-col justify-between">
+                <div key={i} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-polyform-blue/30 transition-all flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-bold text-sm text-gray-900 dark:text-white">{example.title}</h4>
@@ -1524,7 +1524,7 @@ console.log("Custom toolbar ready:", toolbar.id);`
                           setDeveloperCode(example.code);
                           setActiveDeveloperTab('console');
                         }}
-                        className="text-[10px] font-bold text-trimble-blue hover:underline uppercase flex items-center gap-1 shrink-0 ml-2"
+                        className="text-[10px] font-bold text-polyform-blue hover:underline uppercase flex items-center gap-1 shrink-0 ml-2"
                       >
                         Try It Now
                         <ChevronRight className="w-3 h-3" />
@@ -2403,7 +2403,7 @@ sdk.scene.saveScene("Pre-Renovation Baseline");`
         {
           name: "Generate a Single Stud Brick",
           code: `// A reusable "brick" generator built entirely from primitives -
-// the same approach a SketchUp-style stud-block extension uses,
+// the same approach a classic stud-block extension uses,
 // just expressed with the PolyForm SDK instead of Ruby.
 //
 // Brick geometry uses standard interlocking-block proportions, scaled to meters:
@@ -2479,7 +2479,7 @@ console.log("Brick wall assembled: 3 courses.");`
         },
         {
           name: "Brick Picker Toolbar (Pick a Size, Click to Place)",
-          code: `// Mirrors a SketchUp-style "block picker" dialog: a small floating toolbar
+          code: `// Mirrors a familiar "block picker" dialog: a small floating toolbar
 // where each button places a different standard brick size at the origin.
 const STUD_UNIT = 0.08;
 const BRICK_HEIGHT = 0.096;
@@ -2575,7 +2575,7 @@ console.log("Brick Picker toolbar ready:", brickPicker.id);`
 // supports, so this example never needs its own hand-maintained copy of
 // the category/part-id lists (which would only go stale as parts are
 // added). Each category gets its OWN collapsible section (matching the
-// original SketchUp-style layout - a stack of sections, not a single
+// original block-kit layout - a stack of sections, not a single
 // tab-switched list).
 const CATALOG = sdk.blockKit.list();
 const CATEGORY_NAMES = [...new Set(CATALOG.map(p => p.category))];
@@ -2680,7 +2680,7 @@ const panel = sdk.toolbars.create({
     },
     // One collapsible section per category (Basics, Plates & Jumpers, Tiles,
     // ...) instead of a single tab-switched list - matches the original
-    // SketchUp-style layout, and means every category's blocks are always
+    // block-kit layout, and means every category's blocks are always
     // just a click-to-expand away rather than hidden behind a tab switch.
     ...CATEGORY_NAMES.map((category, i) => ({
       id: "bk-section-" + category.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
@@ -2740,7 +2740,7 @@ console.log("Block Picker panel ready:", panel.id);`
                                 setDeveloperCode(item.code);
                                 setActiveDeveloperTab('console');
                               }}
-                              className="text-[9px] font-bold text-trimble-blue hover:underline uppercase shrink-0 ml-2 cursor-pointer"
+                              className="text-[9px] font-bold text-polyform-blue hover:underline uppercase shrink-0 ml-2 cursor-pointer"
                             >
                               Try Now
                             </button>
@@ -2801,7 +2801,7 @@ function DeveloperSettings() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-trimble-blue/10 rounded-xl flex items-center justify-center text-trimble-blue">
+                <div className="w-10 h-10 bg-polyform-blue/10 rounded-xl flex items-center justify-center text-polyform-blue">
                   <Radio className="w-5 h-5" />
                 </div>
                 <div>
@@ -2813,7 +2813,7 @@ function DeveloperSettings() {
                 onClick={() => setCodeRecorderEnabled(!codeRecorderEnabled)}
                 className={cn(
                   "w-10 h-5 rounded-full relative transition-colors",
-                  codeRecorderEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                  codeRecorderEnabled ? "bg-polyform-blue" : "bg-gray-300"
                 )}
               >
                 <div className={cn(

@@ -139,7 +139,7 @@ function DraggableToolbarSlot({
         className={cn(
           "flex items-center justify-center cursor-grab active:cursor-grabbing transition-colors shrink-0",
           horizontal ? "h-full w-3.5 border-r" : "w-full h-3.5 border-b",
-          isDragOver && "bg-trimble-blue/20",
+          isDragOver && "bg-polyform-blue/20",
           theme === 'dark'
             ? "bg-gray-850 border-gray-700 hover:bg-gray-800 text-gray-600"
             : "bg-slate-50 border-gray-200 hover:bg-gray-100 text-gray-400",
@@ -195,7 +195,7 @@ function DockZoneContainer({
         // overflowing past the viewport) while multiple top/bottom-docked
         // ones got crammed into a single row instead of stacking.
         horizontal ? "flex flex-col w-full shrink-0" : "flex flex-row h-full shrink-0",
-        draggedKey && isOver && "bg-trimble-blue/10",
+        draggedKey && isOver && "bg-polyform-blue/10",
         // An empty zone is otherwise invisible (zero size) and impossible
         // to drop onto — give it a thin, visible drop strip only while
         // something is actually being dragged, matching how most docking

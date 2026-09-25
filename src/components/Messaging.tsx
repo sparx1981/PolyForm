@@ -84,7 +84,7 @@ export default function Messaging() {
         !isMessagingDocked ? "cursor-move active:cursor-grabbing" : "cursor-default"
       )} onClick={() => !isMessagingDocked && setIsMessagingCollapsed(!isMessagingCollapsed)}>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-trimble-blue animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-polyform-blue animate-pulse" />
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Project Messaging</span>
         </div>
         <div className="flex items-center gap-1">
@@ -92,7 +92,7 @@ export default function Messaging() {
             onClick={(e) => { e.stopPropagation(); setIsMessagingDocked(!isMessagingDocked); }}
             className={cn(
               "p-1.5 hover:bg-black/5 rounded-lg transition-colors",
-              isMessagingDocked ? "text-trimble-blue bg-trimble-blue/10" : "text-gray-400"
+              isMessagingDocked ? "text-polyform-blue bg-polyform-blue/10" : "text-gray-400"
             )}
             title={isMessagingDocked ? "Undock Messaging" : "Dock Messaging"}
           >
@@ -153,7 +153,7 @@ export default function Messaging() {
                       <div className={cn(
                         "max-w-[85%] px-3 py-2 rounded-2xl text-xs shadow-sm",
                         isMine 
-                          ? "bg-trimble-blue text-white rounded-tr-none" 
+                          ? "bg-polyform-blue text-white rounded-tr-none" 
                           : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-tl-none"
                       )}>
                         {msg.text}
@@ -180,7 +180,7 @@ export default function Messaging() {
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Type a message..."
                   className={cn(
-                    "w-full pl-4 pr-12 py-2.5 rounded-full text-xs transition-all outline-none border focus:ring-2 focus:ring-trimble-blue/20",
+                    "w-full pl-4 pr-12 py-2.5 rounded-full text-xs transition-all outline-none border focus:ring-2 focus:ring-polyform-blue/20",
                     theme === 'dark' ? "bg-gray-950 border-gray-700 text-white" : "bg-gray-50 border-gray-200 text-gray-900"
                   )}
                 />
@@ -190,7 +190,7 @@ export default function Messaging() {
                   className={cn(
                     "absolute right-1 p-2 rounded-full transition-all",
                     inputText.trim() 
-                      ? "bg-trimble-blue text-white shadow-lg hover:scale-105 active:scale-95" 
+                      ? "bg-polyform-blue text-white shadow-lg hover:scale-105 active:scale-95" 
                       : "text-gray-300"
                   )}
                 >

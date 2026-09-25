@@ -482,10 +482,10 @@ export const RoofModifierSection: React.FC = () => {
       <div className="space-y-1.5 rounded-lg bg-gray-50/70 dark:bg-gray-800/40 p-2.5 border border-gray-200/70 dark:border-gray-700/60">
         <div className="flex items-center justify-between">
           <label htmlFor="roof-height-slider" className="font-semibold text-[11px] text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
-            <Sliders size={13} className="text-trimble-blue" />
+            <Sliders size={13} className="text-polyform-blue" />
             <span>Roof Overall Height</span>
           </label>
-          <div className="flex items-center gap-1 font-mono text-[11px] font-bold text-trimble-blue">
+          <div className="flex items-center gap-1 font-mono text-[11px] font-bold text-polyform-blue">
             <span>{roofHeight.toFixed(2)} m</span>
             <span className="text-[9px] text-gray-400 font-normal">
               (~{Math.round(Math.atan(roofHeight / 3.3) * (180 / Math.PI))}°)
@@ -501,7 +501,7 @@ export const RoofModifierSection: React.FC = () => {
           step={0.05}
           value={roofHeight}
           onChange={(e) => handleRoofHeightChange(Number(e.target.value))}
-          className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+          className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
           title="Adjust overall roof ridge height (realistic range: 0.60m to 4.50m)"
         />
 
@@ -520,8 +520,8 @@ export const RoofModifierSection: React.FC = () => {
               className={cn(
                 "py-1 px-1 text-[9px] rounded font-mono text-center transition-all cursor-pointer",
                 Math.abs(roofHeight - p.val) < 0.1
-                  ? "bg-trimble-blue text-white font-bold shadow-xs"
-                  : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200/80 dark:border-gray-600 hover:border-trimble-blue/60"
+                  ? "bg-polyform-blue text-white font-bold shadow-xs"
+                  : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200/80 dark:border-gray-600 hover:border-polyform-blue/60"
               )}
             >
               {p.label}
@@ -542,7 +542,7 @@ export const RoofModifierSection: React.FC = () => {
           <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
             Tile Shape Profile
           </label>
-          <span className="text-[9px] text-trimble-blue font-mono font-medium capitalize">
+          <span className="text-[9px] text-polyform-blue font-mono font-medium capitalize">
             {ROOF_TILE_SHAPES.find(s => s.id === tileShape)?.name}
           </span>
         </div>
@@ -558,7 +558,7 @@ export const RoofModifierSection: React.FC = () => {
                 className={cn(
                   "p-2 rounded-lg border text-left flex flex-col justify-between transition-all cursor-pointer",
                   isSelected
-                    ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue ring-1 ring-trimble-blue/50 shadow-xs"
+                    ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue ring-1 ring-polyform-blue/50 shadow-xs"
                     : "bg-white dark:bg-gray-800/80 border-gray-200/80 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"
                 )}
                 title={shapeOpt.description}
@@ -573,7 +573,7 @@ export const RoofModifierSection: React.FC = () => {
                         FAST
                       </span>
                     )}
-                    {isSelected && <Check size={12} className="text-trimble-blue font-bold" />}
+                    {isSelected && <Check size={12} className="text-polyform-blue font-bold" />}
                   </div>
                 </div>
                 <div className="font-semibold text-[10px] leading-snug line-clamp-1">
@@ -620,7 +620,7 @@ export const RoofModifierSection: React.FC = () => {
             step={0.01}
             value={tileSize}
             onChange={(e) => handleSizeChange(Number(e.target.value))}
-            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
           />
           <div className="flex justify-between text-[9px] text-gray-400 font-mono pt-0.5">
             <span>Small (15cm)</span>
@@ -634,7 +634,7 @@ export const RoofModifierSection: React.FC = () => {
       <div className="space-y-2 rounded-lg bg-gray-50/70 dark:bg-gray-800/40 p-2.5 border border-gray-200/70 dark:border-gray-700/60">
         <div className="flex items-center justify-between">
           <label className="font-semibold text-[11px] text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
-            <Palette size={13} className="text-trimble-blue" />
+            <Palette size={13} className="text-polyform-blue" />
             <span>{tileShape === 'none' ? 'Roof Surface Colour' : 'Primary Tile Colour'}</span>
           </label>
           <div className="flex items-center gap-1.5">
@@ -659,7 +659,7 @@ export const RoofModifierSection: React.FC = () => {
               className={cn(
                 "w-5 h-5 rounded-full border transition-transform cursor-pointer relative",
                 tileColor.toLowerCase() === pc.value.toLowerCase()
-                  ? "ring-2 ring-trimble-blue ring-offset-1 scale-110 border-white shadow-xs"
+                  ? "ring-2 ring-polyform-blue ring-offset-1 scale-110 border-white shadow-xs"
                   : "border-gray-300 dark:border-gray-600 opacity-80 hover:opacity-100"
               )}
               style={{ backgroundColor: pc.value }}
@@ -688,7 +688,7 @@ export const RoofModifierSection: React.FC = () => {
               <button
                 type="button"
                 onClick={handleShuffleSeed}
-                className="p-1 rounded bg-gray-100 dark:bg-gray-700 hover:bg-trimble-blue/10 hover:text-trimble-blue text-gray-600 dark:text-gray-300 transition-colors cursor-pointer"
+                className="p-1 rounded bg-gray-100 dark:bg-gray-700 hover:bg-polyform-blue/10 hover:text-polyform-blue text-gray-600 dark:text-gray-300 transition-colors cursor-pointer"
                 title="Shuffle Random Variation Seed"
               >
                 <Shuffle size={13} />
@@ -703,7 +703,7 @@ export const RoofModifierSection: React.FC = () => {
               onClick={handleToggleRandomize}
               className={cn(
                 "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
-                randomizeColor ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                randomizeColor ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
               )}
             >
               <div
@@ -725,7 +725,7 @@ export const RoofModifierSection: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleAddPaletteItem}
-                  className="flex items-center gap-1 text-[10px] text-trimble-blue font-semibold hover:underline cursor-pointer"
+                  className="flex items-center gap-1 text-[10px] text-polyform-blue font-semibold hover:underline cursor-pointer"
                 >
                   <Plus size={11} />
                   <span>Add Swatch</span>
@@ -812,7 +812,7 @@ export const RoofModifierSection: React.FC = () => {
             <button
               type="button"
               onClick={handleShuffleSeed}
-              className="w-full py-1.5 px-2 bg-trimble-blue/10 hover:bg-trimble-blue/15 text-trimble-blue font-semibold rounded-md flex items-center justify-center gap-1.5 text-[10px] transition-colors cursor-pointer"
+              className="w-full py-1.5 px-2 bg-polyform-blue/10 hover:bg-polyform-blue/15 text-polyform-blue font-semibold rounded-md flex items-center justify-center gap-1.5 text-[10px] transition-colors cursor-pointer"
             >
               <Dices size={13} />
               <span>Randomise / Roll Variation</span>
@@ -831,17 +831,17 @@ export const RoofModifierSection: React.FC = () => {
           <button
             type="button"
             onClick={() => handleGenerateRoofType('gable')}
-            className="py-2 px-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue hover:text-trimble-blue rounded-lg text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
+            className="py-2 px-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-polyform-blue hover:text-polyform-blue rounded-lg text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
             title="Generate Gable Roof with selected tiles and height"
           >
-            <Home size={14} className="text-trimble-blue" />
+            <Home size={14} className="text-polyform-blue" />
             <span className="text-[10px] font-bold">Gable</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleGenerateRoofType('hip')}
-            className="py-2 px-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue hover:text-trimble-blue rounded-lg text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
+            className="py-2 px-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-polyform-blue hover:text-polyform-blue rounded-lg text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
             title="Generate Hip Roof with 4 slopes, selected tiles and height"
           >
             <Home size={14} className="text-sky-500" />
@@ -851,7 +851,7 @@ export const RoofModifierSection: React.FC = () => {
           <button
             type="button"
             onClick={() => handleGenerateRoofType('parapet')}
-            className="py-2 px-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue hover:text-trimble-blue rounded-lg text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
+            className="py-2 px-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-polyform-blue hover:text-polyform-blue rounded-lg text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs"
             title="Generate Parapet Flat Roof with Coping"
           >
             <Layers size={14} className="text-slate-500" />
@@ -865,7 +865,7 @@ export const RoofModifierSection: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full p-2 bg-gray-50/60 dark:bg-gray-800/40 flex items-center justify-between text-gray-600 dark:text-gray-300 font-medium text-[10px] hover:text-trimble-blue transition-colors cursor-pointer"
+          className="w-full p-2 bg-gray-50/60 dark:bg-gray-800/40 flex items-center justify-between text-gray-600 dark:text-gray-300 font-medium text-[10px] hover:text-polyform-blue transition-colors cursor-pointer"
         >
           <span>Advanced Trim & Eaves</span>
           {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -886,7 +886,7 @@ export const RoofModifierSection: React.FC = () => {
                 step={0.05}
                 value={eaveOverhang}
                 onChange={(e) => handleEaveOverhangChange(Number(e.target.value))}
-                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
               />
             </div>
 
@@ -903,7 +903,7 @@ export const RoofModifierSection: React.FC = () => {
                 step={0.02}
                 value={fasciaHeight}
                 onChange={(e) => handleFasciaHeightChange(Number(e.target.value))}
-                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
               />
             </div>
           </div>

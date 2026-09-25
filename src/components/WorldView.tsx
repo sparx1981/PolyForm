@@ -257,7 +257,7 @@ export default function WorldView() {
           {/* Header */}
           <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 bg-gray-50 dark:bg-gray-800/50 cursor-move">
             <div className="flex items-center gap-3">
-              <Globe className="w-5 h-5 text-trimble-blue" />
+              <Globe className="w-5 h-5 text-polyform-blue" />
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">WorldView Geolocation</h2>
             </div>
             <button 
@@ -290,7 +290,7 @@ export default function WorldView() {
                       href="https://console.cloud.google.com/google/maps-apis/credentials" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="mt-2 text-[10px] text-trimble-blue hover:underline flex items-center gap-1"
+                      className="mt-2 text-[10px] text-polyform-blue hover:underline flex items-center gap-1"
                     >
                       Get an API Key <ExternalLink size={10} />
                     </a>
@@ -303,7 +303,7 @@ export default function WorldView() {
                     className={cn(
                       "flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-md transition-colors",
                       worldViewMapType === 'satellite'
-                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm"
+                        ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm"
                         : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                     )}
                   >
@@ -315,7 +315,7 @@ export default function WorldView() {
                     className={cn(
                       "flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-md transition-colors",
                       worldViewMapType === '3d'
-                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm"
+                        ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm"
                         : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                     )}
                   >
@@ -334,20 +334,20 @@ export default function WorldView() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search address or coordinates..."
                     className={cn(
-                      "w-full pl-9 pr-3 py-2 rounded-xl text-sm border focus:ring-2 focus:ring-trimble-blue outline-none transition-all",
+                      "w-full pl-9 pr-3 py-2 rounded-xl text-sm border focus:ring-2 focus:ring-polyform-blue outline-none transition-all",
                       theme === 'dark' ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-200 text-gray-900"
                     )}
                   />
                   <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
                   {isSearching && (
                     <div className="absolute right-3 top-2.5">
-                      <div className="w-4 h-4 border-2 border-trimble-blue border-t-transparent rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-polyform-blue border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                 </form>
                 {worldViewLocation.address && (
-                  <div className="flex items-start gap-2 p-3 rounded-xl bg-trimble-blue/5 border border-trimble-blue/10">
-                    <MapPin size={14} className="text-trimble-blue mt-0.5 shrink-0" />
+                  <div className="flex items-start gap-2 p-3 rounded-xl bg-polyform-blue/5 border border-polyform-blue/10">
+                    <MapPin size={14} className="text-polyform-blue mt-0.5 shrink-0" />
                     <span className="text-xs text-gray-600 dark:text-gray-400 leading-tight">
                       {worldViewLocation.address}
                     </span>
@@ -369,14 +369,14 @@ export default function WorldView() {
                     value={worldViewAltitude}
                     onChange={(e) => setWorldViewAltitude(parseFloat(e.target.value) || 0)}
                     className={cn(
-                      "w-24 px-3 py-1.5 rounded-lg border text-sm font-mono focus:ring-2 focus:ring-trimble-blue outline-none",
+                      "w-24 px-3 py-1.5 rounded-lg border text-sm font-mono focus:ring-2 focus:ring-polyform-blue outline-none",
                       theme === 'dark' ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-200 text-gray-900"
                     )}
                   />
                   <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
                   <button 
                     onClick={() => setWorldViewAltitude(1)}
-                    className="text-[10px] text-trimble-blue hover:underline"
+                    className="text-[10px] text-polyform-blue hover:underline"
                   >
                     Reset to 1m
                   </button>
@@ -390,7 +390,7 @@ export default function WorldView() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Map Coverage</label>
-                  <span className="text-xs font-mono text-trimble-blue bg-trimble-blue/10 px-1.5 py-0.5 rounded">
+                  <span className="text-xs font-mono text-polyform-blue bg-polyform-blue/10 px-1.5 py-0.5 rounded">
                     {worldViewRadius}m
                   </span>
                 </div>
@@ -401,7 +401,7 @@ export default function WorldView() {
                   step="10"
                   value={worldViewRadius}
                   onChange={(e) => setWorldViewRadius(parseInt(e.target.value))}
-                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                 />
                 <div className="flex justify-between text-[10px] text-gray-400 font-mono">
                   <span>50m</span>
@@ -422,7 +422,7 @@ export default function WorldView() {
                     "w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg",
                     isWorldViewActive 
                       ? "bg-red-500 hover:bg-red-600 text-white shadow-red-500/20" 
-                      : "bg-trimble-blue hover:bg-trimble-blue/90 text-white shadow-trimble-blue/20"
+                      : "bg-polyform-blue hover:bg-polyform-blue/90 text-white shadow-polyform-blue/20"
                   )}
                 >
                   <Layers size={18} />
@@ -457,9 +457,9 @@ export default function WorldView() {
                   lng={worldViewLocation.lng}
                   className="relative flex items-center justify-center"
                 >
-                  <div className="absolute w-32 h-32 bg-trimble-blue/20 rounded-full animate-pulse border border-trimble-blue/40" />
-                  <div className="relative bg-white dark:bg-gray-800 p-1.5 rounded-full shadow-lg border-2 border-trimble-blue">
-                    <Navigation2 size={20} className="text-trimble-blue fill-trimble-blue" />
+                  <div className="absolute w-32 h-32 bg-polyform-blue/20 rounded-full animate-pulse border border-polyform-blue/40" />
+                  <div className="relative bg-white dark:bg-gray-800 p-1.5 rounded-full shadow-lg border-2 border-polyform-blue">
+                    <Navigation2 size={20} className="text-polyform-blue fill-polyform-blue" />
                   </div>
                 </MapMarker>
               </GoogleMapReact>

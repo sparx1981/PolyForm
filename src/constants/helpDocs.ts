@@ -365,22 +365,22 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
-    id: 'sketchup-import-export',
-    title: 'SketchUp (.skp) Support',
+    id: 'skp-import-export',
+    title: 'SKP Support',
     category: 'advanced',
-    content: 'DraftUp provides high-fidelity bridge support for SketchUp files, allowing you to move designs between DraftUp and SketchUp with minimal data loss.',
+    content: 'PolyForm provides high-fidelity bridge support for SKP files, allowing you to move designs between PolyForm and other SKP-compatible tools with minimal data loss.',
     steps: [
-      'Export to SKP: Go to the "Burger" menu, hover over "Export", and select "Export SKP". This packages your scene into a SketchUp-optimized format.',
-      'Importing to SketchUp: Open SketchUp and use the Import function to bring your DraftUp design into your workspace.',
-      'Import from SKP: In the same menu, click "Import SKP" to select a file from your computer and bring it into your current DraftUp scene as a custom object group.',
-      'Bridge Format: The system currently uses an industry-standard GLTF/JSON bridge for maximum compatibility across different SketchUp versions.'
+      'Export to SKP: Go to the "Burger" menu, hover over "Export", and select "Export SKP". This packages your scene into an SKP-optimized format.',
+      'Importing elsewhere: Open your SKP-compatible tool and use its Import function to bring your PolyForm design into your workspace.',
+      'Import from SKP: In the same menu, click "Import SKP" to select a file from your computer and bring it into your current PolyForm scene as a custom object group.',
+      'Bridge Format: The system currently uses an industry-standard GLTF/JSON bridge for maximum compatibility across different SKP versions.'
     ]
   },
   {
     id: 'embedded-webpages',
     title: 'Embedded Webpages',
     category: 'features',
-    content: 'The Embedded Webpage feature allows you to open external URLs directly within a floating window in DraftUp, perfect for referencing documentation or importing assets from web hosted sources.',
+    content: 'The Embedded Webpage feature allows you to open external URLs directly within a floating window in PolyForm, perfect for referencing documentation or importing assets from web hosted sources.',
     steps: [
       'SDK Trigger: This feature is primarily used by automation scripts. Running `sdk.openWebpage("https://example.com")` will instantly launch the modal.',
       'Contextual Reference: Use this to display manufacturer specification sheets or live data feeds while designing.',

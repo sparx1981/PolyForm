@@ -8,7 +8,7 @@ export default function Features() {
       <section className="pt-24 pb-[72px] px-6 border-b border-gray-100">
         <div className="max-w-[1200px] mx-auto flex flex-col gap-5">
           <Eyebrow>Features</Eyebrow>
-          <h1 className="text-[clamp(40px,6vw,72px)] font-bold leading-[1.04] tracking-[-0.03em] text-trimble-dark-blue max-w-[900px]">
+          <h1 className="text-[clamp(40px,6vw,72px)] font-bold leading-[1.04] tracking-[-0.03em] text-polyform-dark-blue max-w-[900px]">
             Everything from foundations to flower beds
           </h1>
           <p className="text-lg leading-[1.6] text-gray-600 max-w-[640px]">
@@ -26,7 +26,7 @@ export default function Features() {
                 key={f.id}
                 type="button"
                 onClick={() => scrollToId(f.id)}
-                className="text-sm font-medium text-gray-600 px-3 py-[7px] rounded-md text-left hover:bg-gray-50 hover:text-trimble-blue transition-colors"
+                className="text-sm font-medium text-gray-600 px-3 py-[7px] rounded-md text-left hover:bg-gray-50 hover:text-polyform-blue transition-colors"
               >
                 {f.title}
               </button>
@@ -39,7 +39,7 @@ export default function Features() {
                 <div className="grid gap-10 items-center" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
                   <div className="flex flex-col gap-4">
                     <IconTile icon={<f.icon size={22} />} />
-                    <h2 className="text-[clamp(26px,2.8vw,36px)] font-bold leading-[1.12] tracking-[-0.01em] text-trimble-dark-blue">{f.title}</h2>
+                    <h2 className="text-[clamp(26px,2.8vw,36px)] font-bold leading-[1.12] tracking-[-0.01em] text-polyform-dark-blue">{f.title}</h2>
                     <p className="text-base leading-[1.65] text-gray-600">{f.body}</p>
                   </div>
                   <div
@@ -55,7 +55,7 @@ export default function Features() {
                   {f.items.map(i => (
                     <div key={i.name} className="bg-white px-[18px] py-4 flex flex-col gap-1">
                       <div className="flex justify-between gap-2 items-baseline">
-                        <span className="text-sm font-bold text-trimble-gray">{i.name}</span>
+                        <span className="text-sm font-bold text-polyform-gray">{i.name}</span>
                         {i.key && <span className="font-mono text-[11px] text-gray-500">{i.key}</span>}
                       </div>
                       <span className="text-[13px] leading-[1.5] text-gray-600">{i.text}</span>

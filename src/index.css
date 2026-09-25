@@ -4,14 +4,14 @@
 @theme {
   --font-sans: "Open Sans", ui-sans-serif, system-ui, sans-serif;
   
-  --color-trimble-blue: #0063A3;
-  --color-trimble-dark-blue: #003865;
-  --color-trimble-gray: #252A2E;
+  --color-polyform-blue: #0063A3;
+  --color-polyform-dark-blue: #003865;
+  --color-polyform-gray: #252A2E;
   --color-gray-6: #6A6E79;
   --color-gray-light: #F4F5F6;
-  --color-trimble-yellow: #FBAD26;
-  --color-trimble-red: #DA212C;
-  --color-trimble-green: #006638;
+  --color-polyform-yellow: #FBAD26;
+  --color-polyform-red: #DA212C;
+  --color-polyform-green: #006638;
 
   --shadow-modus-1: 0 2px 4px rgba(0, 0, 0, 0.1);
   --shadow-modus-2: 0 4px 8px rgba(0, 0, 0, 0.15);
@@ -47,7 +47,7 @@
 
 @layer base {
   body {
-    @apply font-sans text-trimble-gray bg-white overflow-hidden;
+    @apply font-sans text-polyform-gray bg-white overflow-hidden;
   }
 }
 
@@ -61,6 +61,6 @@
   }
   
   .toolbar-btn-active {
-    @apply bg-trimble-blue text-white hover:bg-trimble-blue;
+    @apply bg-polyform-blue text-white hover:bg-polyform-blue;
   }
 }

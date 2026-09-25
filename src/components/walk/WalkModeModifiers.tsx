@@ -9,14 +9,14 @@ export function WalkModeModifiers() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-xs font-medium">
-        <PersonStanding size={12} className="text-trimble-blue" />
+        <PersonStanding size={12} className="text-polyform-blue" />
         <span>Walking Settings</span>
       </div>
 
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
           <span>Movement Speed</span>
-          <span className="font-mono text-trimble-blue">{walkMovementSpeed.toFixed(1)} m/s</span>
+          <span className="font-mono text-polyform-blue">{walkMovementSpeed.toFixed(1)} m/s</span>
         </div>
         <input
           type="range"
@@ -25,7 +25,7 @@ export function WalkModeModifiers() {
           step={MOVEMENT_SPEED_RANGE.step}
           value={walkMovementSpeed}
           onChange={(e) => setWalkMovementSpeed(parseFloat(e.target.value))}
-          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
           title="How fast you walk"
         />
       </div>
@@ -33,7 +33,7 @@ export function WalkModeModifiers() {
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
           <span>Mouse Sensitivity</span>
-          <span className="font-mono text-trimble-blue">{walkMouseSensitivity.toFixed(1)}x</span>
+          <span className="font-mono text-polyform-blue">{walkMouseSensitivity.toFixed(1)}x</span>
         </div>
         <input
           type="range"
@@ -42,7 +42,7 @@ export function WalkModeModifiers() {
           step={MOUSE_SENSITIVITY_RANGE.step}
           value={walkMouseSensitivity}
           onChange={(e) => setWalkMouseSensitivity(parseFloat(e.target.value))}
-          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
           title="How fast the camera turns with mouse movement"
         />
       </div>

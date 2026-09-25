@@ -233,11 +233,11 @@ export default function BakeModal() {
               className={cn(
                 "p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer",
                 exportFormat === 'mesh'
-                  ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-sm font-semibold"
+                  ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-sm font-semibold"
                   : "bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
               )}
             >
-              <Mountain size={16} className={exportFormat === 'mesh' ? "text-trimble-blue" : "text-gray-400"} />
+              <Mountain size={16} className={exportFormat === 'mesh' ? "text-polyform-blue" : "text-gray-400"} />
               <span className="text-xs font-semibold">Embed to Site</span>
               <span className="text-[10px] text-gray-400">Update terrain mesh</span>
             </button>
@@ -247,11 +247,11 @@ export default function BakeModal() {
               className={cn(
                 "p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer",
                 exportFormat === 'glb'
-                  ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-sm font-semibold"
+                  ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-sm font-semibold"
                   : "bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
               )}
             >
-              <Download size={16} className={exportFormat === 'glb' ? "text-trimble-blue" : "text-gray-400"} />
+              <Download size={16} className={exportFormat === 'glb' ? "text-polyform-blue" : "text-gray-400"} />
               <span className="text-xs font-semibold">Export GLB</span>
               <span className="text-[10px] text-gray-400">Standard 3D model</span>
             </button>
@@ -261,11 +261,11 @@ export default function BakeModal() {
               className={cn(
                 "p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer",
                 exportFormat === 'obj'
-                  ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue shadow-sm font-semibold"
+                  ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue shadow-sm font-semibold"
                   : "bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
               )}
             >
-              <FileCode2 size={16} className={exportFormat === 'obj' ? "text-trimble-blue" : "text-gray-400"} />
+              <FileCode2 size={16} className={exportFormat === 'obj' ? "text-polyform-blue" : "text-gray-400"} />
               <span className="text-xs font-semibold">Export OBJ</span>
               <span className="text-[10px] text-gray-400">Wavefront geometry</span>
             </button>
@@ -309,7 +309,7 @@ export default function BakeModal() {
               "px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer",
               bakeCompleted
                 ? "bg-emerald-600 text-white"
-                : "bg-trimble-blue hover:bg-trimble-blue/90 text-white"
+                : "bg-polyform-blue hover:bg-polyform-blue/90 text-white"
             )}
           >
             {bakingInProgress ? (

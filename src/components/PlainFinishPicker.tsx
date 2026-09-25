@@ -33,7 +33,7 @@ export function PlainFinishPicker({ onPick, activeColor }: { onPick: (finish: Pl
         {FINISH_FAMILIES.map(f => (
           <button key={f.id} type="button" onClick={() => setFamily(f.id)}
             className={cn('flex-1 rounded-md py-1 text-[10px] font-semibold transition-colors',
-              family === f.id ? 'bg-white text-trimble-blue shadow-sm dark:bg-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400')}>
+              family === f.id ? 'bg-white text-polyform-blue shadow-sm dark:bg-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400')}>
             {f.label}
           </button>
         ))}
@@ -43,7 +43,7 @@ export function PlainFinishPicker({ onPick, activeColor }: { onPick: (finish: Pl
           <button key={finish.id} type="button" title={finish.name}
             onClick={() => { setPicked(finish.id); onPick(finish); }}
             className={cn('rounded-sm border p-0 transition-transform hover:scale-110',
-              picked === finish.id && activeColor === finish.color ? 'border-trimble-blue ring-1 ring-trimble-blue' : 'border-gray-300 dark:border-gray-600')}>
+              picked === finish.id && activeColor === finish.color ? 'border-polyform-blue ring-1 ring-polyform-blue' : 'border-gray-300 dark:border-gray-600')}>
             <Swatch finish={finish} />
           </button>
         ))}

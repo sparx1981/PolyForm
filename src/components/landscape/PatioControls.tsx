@@ -14,7 +14,7 @@ type Look = PatioToolSettings['template'];
 
 const label = 'text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400';
 const chip = (active: boolean) => cn('rounded-md border px-2 py-1.5 text-left text-[11px] font-semibold transition-colors',
-  active ? 'border-trimble-blue bg-trimble-blue/10 text-trimble-blue'
+  active ? 'border-polyform-blue bg-polyform-blue/10 text-polyform-blue'
     : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300');
 
 function Toggle({ text, checked, onChange }: { text: string; checked: boolean; onChange: (value: boolean) => void }) {
@@ -33,7 +33,7 @@ function Slider({ text, value, min, max, step, format, onChange }: {
     <div>
       <div className="flex justify-between">
         <label className={label}>{text}</label>
-        <span className="text-[10px] font-mono text-trimble-blue">{format(value)}</span>
+        <span className="text-[10px] font-mono text-polyform-blue">{format(value)}</span>
       </div>
       <input type="range" className="w-full" min={min} max={max} step={step} value={value}
         onChange={event => onChange(parseFloat(event.target.value))} />
@@ -151,7 +151,7 @@ export function PatioControls() {
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {style.presets.map(preset => (
                 <button key={preset.id} type="button" title={preset.label} onClick={() => update({ color: preset.color, surfaceMaterialId: undefined })}
-                  className={cn('h-7 w-7 rounded-md border-2', data.color === preset.color && !data.surfaceMaterialId ? 'border-trimble-blue' : 'border-transparent')}
+                  className={cn('h-7 w-7 rounded-md border-2', data.color === preset.color && !data.surfaceMaterialId ? 'border-polyform-blue' : 'border-transparent')}
                   style={{ backgroundColor: preset.color }} />
               ))}
               <input type="color" value={data.color} onChange={event => update({ color: event.target.value })}
@@ -261,7 +261,7 @@ export function PatioControls() {
         <label className={label}>Library material</label>
         <div className="mt-1.5 flex items-center gap-2">
           <button type="button" onClick={() => setPickerOpen(open => !open)}
-            className="flex-1 rounded-md border border-gray-200 px-2 py-1.5 text-left text-[11px] font-semibold text-gray-700 hover:border-trimble-blue dark:border-gray-700 dark:text-gray-200">
+            className="flex-1 rounded-md border border-gray-200 px-2 py-1.5 text-left text-[11px] font-semibold text-gray-700 hover:border-polyform-blue dark:border-gray-700 dark:text-gray-200">
             {currentMaterial ? currentMaterial.name : 'Choose from library…'}
           </button>
           {data.surfaceMaterialId && (
@@ -276,7 +276,7 @@ export function PatioControls() {
             <div className="grid max-h-56 grid-cols-3 gap-1.5 overflow-y-auto">
               {library.map(asset => (
                 <button key={asset.id} type="button" onClick={() => chooseMaterial(asset)} title={asset.categoryPath}
-                  className={cn('overflow-hidden rounded-md border text-left', data.surfaceMaterialId === asset.id ? 'border-trimble-blue' : 'border-gray-200 dark:border-gray-700')}>
+                  className={cn('overflow-hidden rounded-md border text-left', data.surfaceMaterialId === asset.id ? 'border-polyform-blue' : 'border-gray-200 dark:border-gray-700')}>
                   <img src={asset.thumbnailUrl} alt="" loading="lazy" className="aspect-square w-full object-cover" />
                   <span className="block truncate px-1 py-0.5 text-[9px] text-gray-600 dark:text-gray-300">{asset.name}</span>
                 </button>

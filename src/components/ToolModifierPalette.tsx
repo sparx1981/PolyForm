@@ -232,28 +232,28 @@ export const ToolModifierPalette: React.FC = () => {
       >
         <div className="flex items-center gap-2">
           {activeTool === 'wall' ? (
-            <Building2 size={14} className="text-trimble-blue" />
+            <Building2 size={14} className="text-polyform-blue" />
           ) : activeTool === 'timber-frame' ? (
             <Hammer size={14} className="text-amber-500" />
           ) : activeTool === 'roof' ? (
             <Home size={14} className="text-sky-500" />
           ) : activeTool === 'scale_figure' ? (
-            <PersonStanding size={14} className="text-trimble-blue" />
+            <PersonStanding size={14} className="text-polyform-blue" />
           ) : activeTool === 'clipping' ? (
             <Crop size={14} className="text-sky-500" />
           ) : activeTool === 'bezier' ? (
-            <Spline size={14} className="text-trimble-blue" />
+            <Spline size={14} className="text-polyform-blue" />
           ) : (activeTool === 'select' || activeTool === 'lasso') ? (
-            <Lasso size={14} className="text-trimble-blue" />
+            <Lasso size={14} className="text-polyform-blue" />
           ) : (
-            <Settings size={14} className="text-trimble-blue" />
+            <Settings size={14} className="text-polyform-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
             {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded">
+          <div className="text-[9px] font-mono text-polyform-blue px-1.5 py-0.5 bg-polyform-blue/10 rounded">
             {activeTool.toUpperCase()}
           </div>
           {!embedded && (
@@ -269,7 +269,7 @@ export const ToolModifierPalette: React.FC = () => {
             onClick={() => setIsToolModifierDocked(!isToolModifierDocked)}
             className={cn(
               "p-1.5 hover:bg-black/5 rounded-lg transition-colors",
-              isToolModifierDocked ? "text-trimble-blue bg-trimble-blue/10" : "text-gray-400"
+              isToolModifierDocked ? "text-polyform-blue bg-polyform-blue/10" : "text-gray-400"
             )}
             title={isToolModifierDocked ? "Undock Palette" : "Dock Palette"}
           >
@@ -303,7 +303,7 @@ export const ToolModifierPalette: React.FC = () => {
                     className={cn(
                       "py-1 px-1.5 rounded flex items-center justify-center gap-1 text-[10px] font-medium transition-all cursor-pointer",
                       (wallJustification === item.id || wallToolSettings.justification === item.id)
-                        ? "bg-trimble-blue text-white shadow-sm font-bold"
+                        ? "bg-polyform-blue text-white shadow-sm font-bold"
                         : "text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-700"
                     )}
                   >
@@ -318,7 +318,7 @@ export const ToolModifierPalette: React.FC = () => {
             <div className="space-y-1.5">
               <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                 <span>Thickness <span className="font-mono text-gray-400 text-[9px]">(T)</span></span>
-                <span className="font-mono text-trimble-blue">{(wallToolSettings.thickness * 1000).toFixed(0)} mm</span>
+                <span className="font-mono text-polyform-blue">{(wallToolSettings.thickness * 1000).toFixed(0)} mm</span>
               </div>
               <div className="grid grid-cols-3 gap-1">
                 {[
@@ -332,8 +332,8 @@ export const ToolModifierPalette: React.FC = () => {
                     className={cn(
                       "py-1.5 px-1 rounded-lg border text-center transition-all cursor-pointer",
                       Math.abs(wallToolSettings.thickness - preset.value) < 0.01
-                        ? "border-trimble-blue bg-trimble-blue/10 text-trimble-blue font-bold"
-                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:border-trimble-blue/40 hover:bg-gray-50 dark:hover:bg-gray-750"
+                        ? "border-polyform-blue bg-polyform-blue/10 text-polyform-blue font-bold"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:border-polyform-blue/40 hover:bg-gray-50 dark:hover:bg-gray-750"
                     )}
                   >
                     <div className="text-[11px] font-mono leading-none">{preset.label}</div>
@@ -345,7 +345,7 @@ export const ToolModifierPalette: React.FC = () => {
                 type="range" min="0.05" max="0.60" step="0.01"
                 value={wallToolSettings.thickness}
                 onChange={(e) => setWallToolSettings(prev => ({ ...prev, thickness: parseFloat(e.target.value) }))}
-                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue mt-1"
+                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue mt-1"
                 title="Adjust custom wall thickness"
               />
             </div>
@@ -354,13 +354,13 @@ export const ToolModifierPalette: React.FC = () => {
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                 <span>Wall Height</span>
-                <span className="font-mono text-trimble-blue">{wallToolSettings.height.toFixed(2)} m</span>
+                <span className="font-mono text-polyform-blue">{wallToolSettings.height.toFixed(2)} m</span>
               </div>
               <input 
                 type="range" min="1.0" max="6.0" step="0.1"
                 value={wallToolSettings.height}
                 onChange={(e) => setWallToolSettings(prev => ({ ...prev, height: parseFloat(e.target.value) }))}
-                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                 title="Adjust wall height"
               />
             </div>
@@ -375,10 +375,10 @@ export const ToolModifierPalette: React.FC = () => {
               <button
                 id="arch-stack-story-btn"
                 onClick={handleStackStory}
-                className="w-full py-1.5 px-2.5 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                className="w-full py-1.5 px-2.5 bg-gray-50 hover:bg-polyform-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-polyform-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-polyform-blue/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 title="Duplicate & stack story walls onto the next vertical floor"
               >
-                <Building2 size={13} className="text-trimble-blue dark:text-sky-400" />
+                <Building2 size={13} className="text-polyform-blue dark:text-sky-400" />
                 <span>Stack Story Level {activeStory + 1}</span>
               </button>
 
@@ -387,28 +387,28 @@ export const ToolModifierPalette: React.FC = () => {
                 <button
                   id="arch-gable-roof-btn"
                   onClick={() => handleGenerateRoof('gable')}
-                  className="py-1.5 px-1 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  className="py-1.5 px-1 bg-gray-50 hover:bg-polyform-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-polyform-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-polyform-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Generate Detailed Parametric Gable Roof with Fascia & Eaves"
                 >
-                  <Home size={12} className="text-trimble-blue dark:text-sky-400" />
+                  <Home size={12} className="text-polyform-blue dark:text-sky-400" />
                   <span>Gable</span>
                 </button>
                 <button
                   id="arch-hip-roof-btn"
                   onClick={() => handleGenerateRoof('hip')}
-                  className="py-1.5 px-1 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  className="py-1.5 px-1 bg-gray-50 hover:bg-polyform-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-polyform-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-polyform-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Generate Detailed Parametric Hip Roof with Fascia & Eaves"
                 >
-                  <Home size={12} className="text-trimble-blue dark:text-sky-400" />
+                  <Home size={12} className="text-polyform-blue dark:text-sky-400" />
                   <span>Hip</span>
                 </button>
                 <button
                   id="arch-parapet-roof-btn"
                   onClick={() => handleGenerateRoof('parapet')}
-                  className="py-1.5 px-1 bg-gray-50 hover:bg-trimble-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-trimble-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-trimble-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  className="py-1.5 px-1 bg-gray-50 hover:bg-polyform-blue/5 dark:bg-gray-800 dark:hover:bg-gray-700/80 text-gray-700 dark:text-gray-200 hover:text-polyform-blue dark:hover:text-sky-300 border border-gray-200 dark:border-gray-700 hover:border-polyform-blue/30 rounded-lg text-[10px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Generate Detailed Parametric Parapet Flat Roof with Coping"
                 >
-                  <Home size={12} className="text-trimble-blue dark:text-sky-400" />
+                  <Home size={12} className="text-polyform-blue dark:text-sky-400" />
                   <span>Parapet</span>
                 </button>
               </div>
@@ -417,10 +417,10 @@ export const ToolModifierPalette: React.FC = () => {
               <div className="bg-gray-50/80 dark:bg-gray-800/60 rounded-lg p-2 border border-gray-200/80 dark:border-gray-700/60 space-y-2 text-[11px]">
                 <button 
                   onClick={() => setShowRoofSettings(!showRoofSettings)}
-                  className="w-full flex items-center justify-between text-gray-600 dark:text-gray-300 font-medium hover:text-trimble-blue transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-between text-gray-600 dark:text-gray-300 font-medium hover:text-polyform-blue transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-trimble-blue" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-polyform-blue" />
                     <span>Roof Design & Fascia Options</span>
                   </span>
                   {showRoofSettings ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -440,7 +440,7 @@ export const ToolModifierPalette: React.FC = () => {
                 className="w-full py-1.5 px-2.5 bg-sky-50/80 hover:bg-sky-100/90 dark:bg-sky-950/30 dark:hover:bg-sky-900/40 text-sky-900 dark:text-sky-200 border border-sky-200/80 dark:border-sky-800/60 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 title="Generate Timber Frame structure (Studs, Bottom/Top Plates, Headers, Floor Joists & Roof Rafters) meeting building guidelines"
               >
-                <Hammer size={13} className="text-trimble-blue dark:text-sky-400" />
+                <Hammer size={13} className="text-polyform-blue dark:text-sky-400" />
                 <span>{shapes.some(s => s.tags?.includes('timber-frame') || s.name?.startsWith('Timber ')) ? 'Update Timber Frame' : 'Add Timber Frame'}</span>
               </button>
 
@@ -448,7 +448,7 @@ export const ToolModifierPalette: React.FC = () => {
               <button
                 id="arch-close-room-btn"
                 onClick={handleCloseRoom}
-                className="w-full py-2 px-3 bg-trimble-blue hover:bg-trimble-dark-blue active:scale-[0.99] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                className="w-full py-2 px-3 bg-polyform-blue hover:bg-polyform-dark-blue active:scale-[0.99] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
                 title="Assemble Monolithic Floor Slab & Close Room Loop directly back to origin (Shortcut: C or Enter)"
               >
                 <CheckCircle2 size={14} className="text-white" />
@@ -495,7 +495,7 @@ export const ToolModifierPalette: React.FC = () => {
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                 <span>Span Resolution</span>
-                <span className="font-mono text-trimble-blue">{bezierSegments} segments</span>
+                <span className="font-mono text-polyform-blue">{bezierSegments} segments</span>
               </div>
               <div className="grid grid-cols-4 gap-1">
                 {[12, 24, 36, 48].map((seg) => (
@@ -509,7 +509,7 @@ export const ToolModifierPalette: React.FC = () => {
                     className={cn(
                       "py-1 text-[10px] font-mono font-bold rounded border transition-colors cursor-pointer",
                       bezierSegments === seg
-                        ? "bg-trimble-blue text-white border-trimble-blue shadow-xs"
+                        ? "bg-polyform-blue text-white border-polyform-blue shadow-xs"
                         : theme === 'dark' ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                     )}
                   >
@@ -524,7 +524,7 @@ export const ToolModifierPalette: React.FC = () => {
               "p-2 rounded-lg border text-[10px] space-y-1.5",
               theme === 'dark' ? "bg-gray-800/60 border-gray-700/80 text-gray-300" : "bg-blue-50/60 border-blue-100 text-blue-950"
             )}>
-              <div className="font-semibold text-[10px] text-trimble-blue flex items-center gap-1.5">
+              <div className="font-semibold text-[10px] text-polyform-blue flex items-center gap-1.5">
                 <Spline size={12} />
                 <span>Vector Mechanics</span>
               </div>
@@ -544,7 +544,7 @@ export const ToolModifierPalette: React.FC = () => {
                   window.dispatchEvent(new CustomEvent('polyform:close-bezier-loop'));
                   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
                 }}
-                className="w-full py-2 px-3 bg-trimble-blue hover:bg-trimble-blue-hover text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                className="w-full py-2 px-3 bg-polyform-blue hover:bg-polyform-blue-hover text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
                 title="Close loop back to origin and generate a solid planar face ready for Push/Pull"
               >
                 <CheckCircle2 size={14} className="text-white" />
@@ -583,7 +583,7 @@ export const ToolModifierPalette: React.FC = () => {
                 onClick={() => setContactFrictionEnabled(!contactFrictionEnabled)}
                 className={cn(
                   "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                  contactFrictionEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                  contactFrictionEnabled ? "bg-polyform-blue" : "bg-gray-300"
                 )}
                 title="Resistance when objects touch"
               >
@@ -598,7 +598,7 @@ export const ToolModifierPalette: React.FC = () => {
               <div className="space-y-1.5 pt-1 border-t border-gray-100 dark:border-gray-800">
                 <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                   <span>Friction Strength</span>
-                  <span className="font-mono text-trimble-blue">{contactFrictionStrength}%</span>
+                  <span className="font-mono text-polyform-blue">{contactFrictionStrength}%</span>
                 </div>
                 <input 
                   type="range" 
@@ -607,7 +607,7 @@ export const ToolModifierPalette: React.FC = () => {
                   step="5"
                   value={contactFrictionStrength}
                   onChange={(e) => setContactFrictionStrength(Number(e.target.value))}
-                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                   title={`Friction Strength: ${contactFrictionStrength}%`}
                 />
                 <div className="flex justify-between text-[8px] text-gray-400 font-mono">
@@ -629,25 +629,25 @@ export const ToolModifierPalette: React.FC = () => {
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase">
                 <span>Brush Radius</span>
-                <span className="font-mono text-trimble-blue">{deformationSettings.radius.toFixed(1)}</span>
+                <span className="font-mono text-polyform-blue">{deformationSettings.radius.toFixed(1)}</span>
               </div>
               <input 
                 type="range" min="0.5" max="10" step="0.1"
                 value={deformationSettings.radius}
                 onChange={(e) => setDeformationSettings({ ...deformationSettings, radius: parseFloat(e.target.value) })}
-                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
               />
             </div>
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase">
                 <span>Brush Strength</span>
-                <span className="font-mono text-trimble-blue">{deformationSettings.strength.toFixed(1)}</span>
+                <span className="font-mono text-polyform-blue">{deformationSettings.strength.toFixed(1)}</span>
               </div>
               <input 
                 type="range" min="0.1" max="10" step="0.1"
                 value={deformationSettings.strength}
                 onChange={(e) => setDeformationSettings({ ...deformationSettings, strength: parseFloat(e.target.value) })}
-                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
               />
             </div>
             <div className="flex items-center gap-2 pt-1">
@@ -658,7 +658,7 @@ export const ToolModifierPalette: React.FC = () => {
                   className={cn(
                     "flex-1 py-1 px-1.5 text-[9px] font-bold uppercase rounded border transition-all cursor-pointer",
                     deformationSettings.direction === dir 
-                      ? "bg-trimble-blue text-white border-trimble-blue shadow-sm" 
+                      ? "bg-polyform-blue text-white border-polyform-blue shadow-sm" 
                       : (theme === 'dark' ? "text-gray-400 border-gray-700 hover:bg-gray-800" : "text-gray-500 border-gray-200 hover:bg-gray-50")
                   )}
                 >
@@ -673,14 +673,14 @@ export const ToolModifierPalette: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <RotateCw size={12} className="text-trimble-blue" />
+                <RotateCw size={12} className="text-polyform-blue" />
                 <span className="text-xs font-medium">Auto Orbit</span>
               </div>
               <button 
                 onClick={() => setAutoOrbitEnabled(!autoOrbitEnabled)}
                 className={cn(
                   "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                  autoOrbitEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                  autoOrbitEnabled ? "bg-polyform-blue" : "bg-gray-300"
                 )}
                 title="Automatically rotate the view"
               >
@@ -695,7 +695,7 @@ export const ToolModifierPalette: React.FC = () => {
               <div className="space-y-1 animate-in fade-in slide-in-from-top-1">
                 <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase">
                   <span>Rotation Speed</span>
-                  <span className="font-mono text-trimble-blue">
+                  <span className="font-mono text-polyform-blue">
                     {orbitRotationSpeed < 0.5 ? 'Slow' : orbitRotationSpeed > 1.5 ? 'Fast' : 'Mid'}
                   </span>
                 </div>
@@ -703,7 +703,7 @@ export const ToolModifierPalette: React.FC = () => {
                   type="range" min="0.1" max="2.0" step="0.1"
                   value={orbitRotationSpeed}
                   onChange={(e) => setOrbitRotationSpeed(parseFloat(e.target.value))}
-                  className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                  className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                   title="Control orbit velocity"
                 />
               </div>
@@ -717,7 +717,7 @@ export const ToolModifierPalette: React.FC = () => {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                 <span>Polygon Presets</span>
-                <span className="font-mono text-trimble-blue">N-Gons</span>
+                <span className="font-mono text-polyform-blue">N-Gons</span>
               </div>
               <div className="grid grid-cols-4 gap-1">
                 {[
@@ -751,7 +751,7 @@ export const ToolModifierPalette: React.FC = () => {
               "p-2 rounded-lg border text-[10px] space-y-1.5",
               theme === 'dark' ? "bg-gray-800/60 border-gray-700/80 text-gray-300" : "bg-blue-50/60 border-blue-100 text-blue-950"
             )}>
-              <div className="font-semibold text-[10px] text-trimble-blue flex items-center gap-1.5">
+              <div className="font-semibold text-[10px] text-polyform-blue flex items-center gap-1.5">
                 <Hexagon size={12} />
                 <span>Polygon Controls</span>
               </div>
@@ -779,7 +779,7 @@ export const ToolModifierPalette: React.FC = () => {
                   className={cn(
                     "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all",
                     selectionShapeMode === 'lasso'
-                      ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm font-semibold"
+                      ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm font-semibold"
                       : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                   )}
                   title="Draw a freehand custom path around objects"
@@ -792,7 +792,7 @@ export const ToolModifierPalette: React.FC = () => {
                   className={cn(
                     "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-medium transition-all",
                     selectionShapeMode === 'marquee'
-                      ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm font-semibold"
+                      ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm font-semibold"
                       : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                   )}
                   title="Drag a rectangular marquee window"
@@ -820,7 +820,7 @@ export const ToolModifierPalette: React.FC = () => {
                     className={cn(
                       "py-1 px-1.5 rounded-md text-[11px] font-medium transition-all text-center",
                       selectionFilter === item.id
-                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm font-semibold"
+                        ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm font-semibold"
                         : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                     )}
                   >
@@ -834,7 +834,7 @@ export const ToolModifierPalette: React.FC = () => {
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
                 <span className="font-semibold">Current Selection</span>
-                <span className="font-mono text-trimble-blue">
+                <span className="font-mono text-polyform-blue">
                   {selectedIds.length} shapes · {selectedFaceIds.length} faces
                 </span>
               </div>
@@ -1139,7 +1139,7 @@ export function TimberFrameModifierSection() {
         className="w-full py-1.5 px-2.5 bg-sky-50/80 hover:bg-sky-100/90 dark:bg-sky-950/30 dark:hover:bg-sky-900/40 text-sky-900 dark:text-sky-200 border border-sky-200/80 dark:border-sky-800/60 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
         title="Generate Timber Frame structure (Studs, Bottom/Top Plates, Headers, Floor Joists & Roof Rafters) meeting building guidelines"
       >
-        <Hammer size={13} className="text-trimble-blue dark:text-sky-400" />
+        <Hammer size={13} className="text-polyform-blue dark:text-sky-400" />
         <span>{hasExistingFraming ? 'Update Timber Frame' : 'Add Timber Frame'}</span>
       </button>
 
@@ -1154,7 +1154,7 @@ export function TimberFrameModifierSection() {
           <button
             id="timber-add-frame-empty-btn"
             onClick={handleAddTimberFrame}
-            className="w-full py-2 px-3 bg-trimble-blue hover:bg-trimble-dark-blue active:scale-[0.99] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            className="w-full py-2 px-3 bg-polyform-blue hover:bg-polyform-dark-blue active:scale-[0.99] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
             title="Generate Timber Frame structure for all walls, floors, and roof in the building"
           >
             <Hammer size={14} className="text-white" />
@@ -1167,8 +1167,8 @@ export function TimberFrameModifierSection() {
       {currentState === 'pending' && (
         <div className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/50 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-semibold text-trimble-blue">
-              <Loader2 size={15} className="animate-spin text-trimble-blue" />
+            <div className="flex items-center gap-2 text-xs font-semibold text-polyform-blue">
+              <Loader2 size={15} className="animate-spin text-polyform-blue" />
               <span>Computing Framing Load Path...</span>
             </div>
             <Chip tone="accent">Calculating</Chip>
@@ -1182,7 +1182,7 @@ export function TimberFrameModifierSection() {
 
           <div className="pt-2 border-t border-gray-200/60 dark:border-gray-800 text-[11px] text-gray-500 flex items-center justify-between font-mono">
             <span>Affected members:</span>
-            <span className="animate-pulse text-trimble-blue font-bold">est. 52 studs / 6 plates</span>
+            <span className="animate-pulse text-polyform-blue font-bold">est. 52 studs / 6 plates</span>
           </div>
         </div>
       )}
@@ -1195,7 +1195,7 @@ export function TimberFrameModifierSection() {
             <button
               type="button"
               onClick={handleResetDefaults}
-              className="text-[10px] text-trimble-blue hover:text-trimble-dark-blue hover:underline cursor-pointer font-medium"
+              className="text-[10px] text-polyform-blue hover:text-polyform-dark-blue hover:underline cursor-pointer font-medium"
               title="Reset all values for this panel to defaults"
             >
               Default
@@ -1296,7 +1296,7 @@ export function TimberFrameModifierSection() {
                   }}
                   className={cn(
                     "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
-                    (params.offsetFloorJoists ?? params.offsetJoists) ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                    (params.offsetFloorJoists ?? params.offsetJoists) ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                   )}
                   title="Enable or disable offset floor joists"
                 >
@@ -1327,7 +1327,7 @@ export function TimberFrameModifierSection() {
                   onClick={() => setParams(p => ({ ...p, offsetWallJoists: !p.offsetWallJoists }))}
                   className={cn(
                     "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
-                    params.offsetWallJoists ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                    params.offsetWallJoists ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                   )}
                   title="Enable or disable offset wall joists"
                 >
@@ -1370,7 +1370,7 @@ export function TimberFrameModifierSection() {
                   onClick={() => setParams(p => ({ ...p, offsetFloorNoggins: !p.offsetFloorNoggins }))}
                   className={cn(
                     "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
-                    params.offsetFloorNoggins ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                    params.offsetFloorNoggins ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                   )}
                   title="Enable or disable offset floor noggins"
                 >
@@ -1401,7 +1401,7 @@ export function TimberFrameModifierSection() {
                   onClick={() => setParams(p => ({ ...p, offsetWallNoggins: !p.offsetWallNoggins }))}
                   className={cn(
                     "w-9 h-5 shrink-0 flex items-center rounded-full p-0.5 transition-colors cursor-pointer",
-                    params.offsetWallNoggins ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                    params.offsetWallNoggins ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                   )}
                   title="Enable or disable offset wall noggins"
                 >
@@ -1423,7 +1423,7 @@ export function TimberFrameModifierSection() {
               className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-black/5 transition-colors"
             >
               <div className="flex items-center gap-1.5">
-                <SlidersHorizontal size={13} className="text-trimble-blue" />
+                <SlidersHorizontal size={13} className="text-polyform-blue" />
                 <span>Advanced Specification</span>
               </div>
               {advancedOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -1439,7 +1439,7 @@ export function TimberFrameModifierSection() {
                   <select
                     value={params.species}
                     onChange={(e) => setParams(p => ({ ...p, species: e.target.value }))}
-                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
                     <option value="Spruce-Pine-Fir">Spruce-Pine-Fir (SPF)</option>
                     <option value="Douglas Fir-Larch">Douglas Fir-Larch</option>
@@ -1457,7 +1457,7 @@ export function TimberFrameModifierSection() {
                   <select
                     value={params.grade}
                     onChange={(e) => setParams(p => ({ ...p, grade: e.target.value }))}
-                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
                     <option value="C24">C24 (High Strength Structural)</option>
                     <option value="C16">C16 (Standard Framing)</option>
@@ -1485,7 +1485,7 @@ export function TimberFrameModifierSection() {
                   <select
                     value={params.headerDepthRule}
                     onChange={(e) => setParams(p => ({ ...p, headerDepthRule: e.target.value as any }))}
-                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30"
+                    className="w-full h-8 px-2 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
                     <option value="code-table">Code Table (Span-Bracketed)</option>
                     <option value="span-ratio-1-10">Span Ratio 1:10</option>
@@ -1524,7 +1524,7 @@ export function TimberFrameModifierSection() {
                 "w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer",
                 isInvalid
                   ? "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-gray-700"
-                  : "bg-trimble-blue hover:bg-trimble-blue/90 text-white shadow-sm"
+                  : "bg-polyform-blue hover:bg-polyform-blue/90 text-white shadow-sm"
               )}
               title={isInvalid ? "Cannot commit: Resolve structural validation errors first" : "Commit timber framing to scene"}
             >

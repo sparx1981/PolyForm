@@ -65,7 +65,7 @@ export function CodeRecorder() {
       {!isExpanded ? (
         <button 
           onClick={() => setIsExpanded(true)}
-          className="w-full h-full flex items-center justify-center text-trimble-blue hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          className="w-full h-full flex items-center justify-center text-polyform-blue hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         >
           <Radio className={cn("w-6 h-6", isRecording && "animate-pulse text-red-500")} />
         </button>
@@ -94,7 +94,7 @@ export function CodeRecorder() {
                   "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all",
                   isRecording 
                     ? "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20" 
-                    : "bg-trimble-blue text-white hover:bg-trimble-blue/90 shadow-lg shadow-trimble-blue/20"
+                    : "bg-polyform-blue text-white hover:bg-polyform-blue/90 shadow-lg shadow-polyform-blue/20"
                 )}
               >
                 {isRecording ? <Square className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
@@ -113,7 +113,7 @@ export function CodeRecorder() {
                 <button 
                   onClick={handleCopy}
                   disabled={!recordedCode}
-                  className="p-2 text-gray-400 hover:text-trimble-blue hover:bg-trimble-blue/10 rounded-xl transition-colors disabled:opacity-30"
+                  className="p-2 text-gray-400 hover:text-polyform-blue hover:bg-polyform-blue/10 rounded-xl transition-colors disabled:opacity-30"
                   title="Copy"
                 >
                   {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}

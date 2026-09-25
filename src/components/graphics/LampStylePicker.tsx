@@ -40,7 +40,7 @@ export function LampStylePicker({ isOpen, targetShape, onClose, onApplyStyle, th
               aria-selected={category === key}
               onClick={() => setCategory(key)}
               className={`px-3 py-1.5 text-xs font-bold -mb-px border-b-2 transition-colors ${
-                category === key ? 'border-trimble-blue text-trimble-blue' : 'border-transparent text-gray-400 hover:text-gray-600'
+                category === key ? 'border-polyform-blue text-polyform-blue' : 'border-transparent text-gray-400 hover:text-gray-600'
               }`}
             >
               {label}
@@ -57,7 +57,7 @@ export function LampStylePicker({ isOpen, targetShape, onClose, onApplyStyle, th
                 onClick={() => { onApplyStyle(style.id); onClose(); }}
                 title={style.description}
                 className={`flex flex-col items-center gap-2 p-2 rounded-lg border text-left transition-colors ${
-                  active ? 'border-trimble-blue ring-1 ring-trimble-blue bg-trimble-blue/5' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                  active ? 'border-polyform-blue ring-1 ring-polyform-blue bg-polyform-blue/5' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                 }`}
               >
                 <LampStyleThumbnail styleId={style.id} size={110} />

@@ -51,7 +51,7 @@ import StorageChoice from './StorageChoice';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
-import { SketchupService, HuggingFaceService } from '../services/sketchupService';
+import { SkpService, HuggingFaceService } from '../services/skpService';
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
 import { readAssetProjectState } from '../lib/assets/projectCodec';
@@ -588,7 +588,7 @@ export default function TopBar() {
 
       // If it's a 3D file or other geometry format
       try {
-        const group = await SketchupService.importSKP(file);
+        const group = await SkpService.importSKP(file);
         group.updateMatrixWorld(true);
         const meshGeometries: THREE.BufferGeometry[] = [];
         group.traverse((child: any) => {
@@ -698,7 +698,7 @@ export default function TopBar() {
       window.dispatchEvent(new CustomEvent('request-scene-raw', {
         detail: {
           callback: (scene: THREE.Scene) => {
-            SketchupService.exportAsSKP(scene, currentModelName || 'Model');
+            SkpService.exportAsSKP(scene, currentModelName || 'Model');
             diagLog('Export', 'Exported as SKP (via bridge)');
           }
         }
@@ -717,9 +717,9 @@ export default function TopBar() {
       const file = e.target.files[0];
       if (!file) return;
       
-      diagLog('Import', 'Importing SketchUp file', { name: file.name });
+      diagLog('Import', 'Importing SKP file', { name: file.name });
       try {
-        const group = await SketchupService.importSKP(file);
+        const group = await SkpService.importSKP(file);
         // Bridge the imported Object3D group into the single BufferGeometry
         // that CustomGeometry expects. CustomGeometry parses shape.geometryData
         // with THREE.BufferGeometryLoader, which only understands a plain
@@ -739,7 +739,7 @@ export default function TopBar() {
           }
         });
         if (meshGeometries.length === 0) {
-          throw new Error('No mesh geometry found in the imported SketchUp file.');
+          throw new Error('No mesh geometry found in the imported SKP file.');
         }
         // mergeGeometries requires every geometry to share the same attribute
         // set, so keep only the attributes common to all meshes.
@@ -766,10 +766,10 @@ export default function TopBar() {
           geometryData: mergedGeo.toJSON()
         };
         setShapes(prev => [...prev, newShape]);
-        alert('Imported SketchUp model successfully!');
+        alert('Imported SKP model successfully!');
       } catch (err) {
         console.error('Import error:', err);
-        alert('Failed to import SketchUp file. Ensure it is a valid bridge format.');
+        alert('Failed to import SKP file. Ensure it is a valid bridge format.');
       }
     };
     input.click();
@@ -988,7 +988,7 @@ export default function TopBar() {
       <Modal isOpen={isSaveAsOpen} onClose={() => setIsSaveAsOpen(false)} title="Save Model">
         <div className="space-y-6">
           <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
-            <Save className="text-trimble-blue shrink-0" size={24} />
+            <Save className="text-polyform-blue shrink-0" size={24} />
             <p className="text-sm text-gray-600 dark:text-gray-300">
               Give your model a name to save the design file (.polyform) and sync to your library.
             </p>
@@ -1006,7 +1006,7 @@ export default function TopBar() {
                 }
               }}
               placeholder="Enter model name..."
-              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none transition-all text-gray-900 dark:text-white"
+              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-polyform-blue focus:border-transparent outline-none transition-all text-gray-900 dark:text-white"
               autoFocus
             />
           </div>
@@ -1021,7 +1021,7 @@ export default function TopBar() {
             <button 
               onClick={saveLocation === 'polyform' ? handleSaveAs : handleSaveExternal}
               disabled={loading || !newModelName.trim() || (saveLocation === 'trimble-connect' && !saveFolder)}
-              className="px-8 py-2.5 bg-trimble-blue text-white text-sm font-bold rounded-xl hover:bg-trimble-blue/90 disabled:opacity-50 transition-all shadow-lg shadow-trimble-blue/20"
+              className="px-8 py-2.5 bg-polyform-blue text-white text-sm font-bold rounded-xl hover:bg-polyform-blue/90 disabled:opacity-50 transition-all shadow-lg shadow-polyform-blue/20"
             >
               {loading ? 'Saving...' : 'Save Model'}
             </button>
@@ -1049,7 +1049,7 @@ export default function TopBar() {
                   className={cn(
                     "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all text-xs font-semibold whitespace-nowrap",
                     isActive
-                      ? "bg-white dark:bg-gray-700 text-trimble-blue dark:text-blue-400 shadow-sm ring-1 ring-gray-200/80 dark:ring-gray-600"
+                      ? "bg-white dark:bg-gray-700 text-polyform-blue dark:text-blue-400 shadow-sm ring-1 ring-gray-200/80 dark:ring-gray-600"
                       : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                   )}
                 >
@@ -1073,7 +1073,7 @@ export default function TopBar() {
                       className={cn(
                         "py-2 text-xs font-bold rounded-md transition-all",
                         unit === u 
-                          ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                          ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
                           : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                       )}
                     >
@@ -1094,7 +1094,7 @@ export default function TopBar() {
                     onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
                     className={cn(
                       "w-10 h-5 rounded-full relative transition-colors",
-                      theme === 'light' ? "bg-gray-300" : "bg-trimble-blue"
+                      theme === 'light' ? "bg-gray-300" : "bg-polyform-blue"
                     )}
                   >
                     <div className={cn(
@@ -1114,7 +1114,7 @@ export default function TopBar() {
                       onClick={() => setBannerColor(color)}
                       className={cn(
                         "w-8 h-8 rounded-full border-2 transition-transform hover:scale-110",
-                        bannerColor === color ? "border-white ring-2 ring-trimble-blue" : "border-transparent"
+                        bannerColor === color ? "border-white ring-2 ring-polyform-blue" : "border-transparent"
                       )}
                       style={{ backgroundColor: color }}
                     />
@@ -1149,7 +1149,7 @@ export default function TopBar() {
                         detail: { position: defaultPos, target: defaultCameraTarget || [0, 0, 0] } 
                       }));
                     }}
-                    className="text-[10px] text-trimble-blue font-bold hover:underline"
+                    className="text-[10px] text-polyform-blue font-bold hover:underline"
                   >
                     Reset to 1.0x (10m × 10m)
                   </button>
@@ -1204,8 +1204,8 @@ export default function TopBar() {
                         className={cn(
                           "text-left p-2.5 rounded-lg border transition-all flex flex-col justify-between",
                           isCurrent
-                            ? "bg-trimble-blue/10 border-trimble-blue text-gray-900 dark:text-white shadow-sm ring-1 ring-trimble-blue/30"
-                            : "bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-trimble-blue/50 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            ? "bg-polyform-blue/10 border-polyform-blue text-gray-900 dark:text-white shadow-sm ring-1 ring-polyform-blue/30"
+                            : "bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-polyform-blue/50 hover:bg-gray-100 dark:hover:bg-gray-800"
                         )}
                       >
                         <div className="flex items-center justify-between w-full mb-1">
@@ -1241,7 +1241,7 @@ export default function TopBar() {
                               detail: { position: newPos, target: defaultCameraTarget || [0, 0, 0] } 
                             }));
                           }}
-                          className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-trimble-blue outline-none"
+                          className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-polyform-blue outline-none"
                         />
                       </div>
                     ))}
@@ -1265,7 +1265,7 @@ export default function TopBar() {
                     className={cn(
                       "py-2 text-xs font-bold rounded-md transition-all",
                       layoutMode === 'classic' 
-                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                        ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
                         : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                     )}
                   >
@@ -1277,7 +1277,7 @@ export default function TopBar() {
                     className={cn(
                       "py-2 text-xs font-bold rounded-md transition-all",
                       layoutMode === 'unified' 
-                        ? "bg-white dark:bg-gray-700 text-trimble-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
+                        ? "bg-white dark:bg-gray-700 text-polyform-blue shadow-sm ring-1 ring-gray-200 dark:ring-gray-600" 
                         : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                     )}
                   >
@@ -1448,7 +1448,7 @@ export default function TopBar() {
                     value={googleMapsApiKey}
                     onChange={(e) => setGoogleMapsApiKey(e.target.value)}
                     placeholder="Paste your Google Maps API key"
-                    className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
+                    className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-polyform-blue"
                   />
                   <button
                     type="button"
@@ -1464,7 +1464,7 @@ export default function TopBar() {
                     href="https://console.cloud.google.com/google/maps-apis/credentials"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
+                    className="inline-flex items-center gap-0.5 text-polyform-blue hover:underline"
                   >
                     Get a key <ExternalLink size={10} />
                   </a>
@@ -1493,7 +1493,7 @@ export default function TopBar() {
                       HuggingFaceService.setToken(e.target.value);
                     }}
                     placeholder="hf_..."
-                    className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-trimble-blue"
+                    className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-polyform-blue"
                   />
                   <button
                     type="button"
@@ -1509,7 +1509,7 @@ export default function TopBar() {
                     href="https://huggingface.co/settings/tokens"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-0.5 text-trimble-blue hover:underline"
+                    className="inline-flex items-center gap-0.5 text-polyform-blue hover:underline"
                   >
                     huggingface.co/settings/tokens <ExternalLink size={10} />
                   </a>
@@ -1546,7 +1546,7 @@ function VisibilityToggle({ label, isVisible, onToggle }: { label: string, isVis
         onClick={onToggle}
         className={cn(
           "w-8 h-4 rounded-full relative transition-colors",
-          isVisible ? "bg-trimble-blue" : "bg-gray-300"
+          isVisible ? "bg-polyform-blue" : "bg-gray-300"
         )}
       >
         <div className={cn(
@@ -1587,7 +1587,7 @@ function Modal({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
           >
             <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 bg-gray-50 dark:bg-gray-800/50">
               <div className="flex items-center gap-3">
-                <FolderOpen className="w-5 h-5 text-trimble-blue" />
+                <FolderOpen className="w-5 h-5 text-polyform-blue" />
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
               </div>
               <button onClick={onClose} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">

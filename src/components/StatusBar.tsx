@@ -62,7 +62,7 @@ return (
 <footer className="h-8 bg-white border-t border-gray-200 flex items-center justify-between px-3 text-[11px] text-gray-600 z-50">
 <div className="flex items-center gap-4">
 <div className="flex items-center gap-1.5">
-<MousePointer2 size={12} className="text-trimble-blue" />
+<MousePointer2 size={12} className="text-polyform-blue" />
 <span className="font-medium uppercase tracking-tight">
 {activeTool.replace(/([A-Z])/g, ' $1')} Tool:
 </span>
@@ -86,7 +86,7 @@ return (
 </div>
 )}
 {syncStatus === 'syncing' && (
-<div className="flex items-center gap-1.5 text-trimble-blue animate-pulse">
+<div className="flex items-center gap-1.5 text-polyform-blue animate-pulse">
 <CloudUpload size={12} />
 <span className="font-bold uppercase tracking-widest text-[9px]">Syncing...</span>
 </div>
@@ -160,7 +160,7 @@ className="w-12 bg-transparent border-none outline-none text-right font-mono tex
 </div>
 <button
 onClick={() => window.dispatchEvent(new CustomEvent('capture-default-camera'))}
-className="ml-2 p-1 hover:bg-gray-100 rounded text-trimble-blue transition-colors group flex items-center gap-1 px-2"
+className="ml-2 p-1 hover:bg-gray-100 rounded text-polyform-blue transition-colors group flex items-center gap-1 px-2"
 title="Set current camera as default"
 >
 <Camera size={12} />

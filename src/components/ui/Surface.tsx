@@ -175,7 +175,7 @@ export function ModalHeader({ title, subtitle, badge, icon, onClose }: ModalHead
     <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-200 dark:border-gray-800">
       <div className="flex items-start gap-3 min-w-0">
         {icon && (
-          <div className="shrink-0 w-10 h-10 rounded-xl bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
+          <div className="shrink-0 w-10 h-10 rounded-xl bg-polyform-blue/10 text-polyform-blue flex items-center justify-center">
             {icon}
           </div>
         )}
@@ -185,7 +185,7 @@ export function ModalHeader({ title, subtitle, badge, icon, onClose }: ModalHead
               {title}
             </h2>
             {badge && (
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-trimble-blue/10 text-trimble-blue">
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-polyform-blue/10 text-polyform-blue">
                 {badge}
               </span>
             )}
@@ -201,7 +201,7 @@ export function ModalHeader({ title, subtitle, badge, icon, onClose }: ModalHead
         <button
           onClick={onClose}
           aria-label="Close"
-          className="shrink-0 p-2 -m-1 rounded-lg text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue"
+          className="shrink-0 p-2 -m-1 rounded-lg text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-polyform-blue"
         >
           <X size={18} />
         </button>
@@ -251,7 +251,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const BUTTON: Record<ButtonVariant, string> = {
   primary:
-    'bg-trimble-blue text-white hover:bg-trimble-blue/90 shadow-sm shadow-trimble-blue/20',
+    'bg-polyform-blue text-white hover:bg-polyform-blue/90 shadow-sm shadow-polyform-blue/20',
   secondary:
     'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700',
   ghost:
@@ -273,7 +273,7 @@ export function Button({
         // surrounding gap is counted, and consistent across every dialog.
         'inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg',
         'text-sm font-medium transition-colors',
-        'outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue focus-visible:ring-offset-2',
+        'outline-none focus-visible:ring-2 focus-visible:ring-polyform-blue focus-visible:ring-offset-2',
         'dark:focus-visible:ring-offset-gray-900',
         'disabled:opacity-50 disabled:pointer-events-none',
         BUTTON[variant],
@@ -316,11 +316,11 @@ export function Card({
       className={cn(
         'group relative flex flex-col rounded-xl border p-4 transition-all duration-200',
         onSelect && 'cursor-pointer',
-        'outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue focus-visible:ring-offset-2',
+        'outline-none focus-visible:ring-2 focus-visible:ring-polyform-blue focus-visible:ring-offset-2',
         'dark:focus-visible:ring-offset-gray-900',
         selected
-          ? 'border-trimble-blue ring-2 ring-trimble-blue/20 bg-trimble-blue/[0.03] shadow-sm'
-          : 'border-gray-200 dark:border-gray-800 hover:border-trimble-blue/50 hover:bg-gray-50/60 dark:hover:bg-gray-800/40',
+          ? 'border-polyform-blue ring-2 ring-polyform-blue/20 bg-polyform-blue/[0.03] shadow-sm'
+          : 'border-gray-200 dark:border-gray-800 hover:border-polyform-blue/50 hover:bg-gray-50/60 dark:hover:bg-gray-800/40',
         className,
       )}
     >
@@ -344,7 +344,7 @@ export function Chip({
 }) {
   const tones = {
     neutral: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300',
-    accent: 'bg-trimble-blue/10 text-trimble-blue',
+    accent: 'bg-polyform-blue/10 text-polyform-blue',
     success: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   } as const;
   return (
@@ -406,7 +406,7 @@ export function NumberField({
             'bg-white dark:bg-gray-800',
             'text-gray-900 dark:text-gray-100',
             'border border-gray-300 dark:border-gray-700',
-            'outline-none focus:border-trimble-blue focus:ring-1 focus:ring-trimble-blue/30',
+            'outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30',
           )}
         />
         {suffix && <span className="text-xs text-gray-500 shrink-0">{suffix}</span>}

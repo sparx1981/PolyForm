@@ -37,7 +37,7 @@ export function WaterControls() {
           {(Object.keys(WATER_CLARITY) as WaterClarity[]).map(id => (
             <button key={id} type="button" onClick={() => update({ clarity: id })}
               className={cn('rounded-md border px-2 py-1.5 text-left text-[11px] font-semibold transition-colors',
-                clarity === id ? 'border-trimble-blue bg-trimble-blue/10 text-trimble-blue'
+                clarity === id ? 'border-polyform-blue bg-polyform-blue/10 text-polyform-blue'
                   : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300')}>
               {WATER_CLARITY[id].label}
             </button>
@@ -47,7 +47,7 @@ export function WaterControls() {
       <div>
         <div className="flex justify-between">
           <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Depth</label>
-          <span className="text-[10px] font-mono text-trimble-blue">{depth.toFixed(1)} m</span>
+          <span className="text-[10px] font-mono text-polyform-blue">{depth.toFixed(1)} m</span>
         </div>
         <input type="range" className="w-full" min={0.3} max={6} step={0.1} value={depth}
           onChange={event => update({ depth: parseFloat(event.target.value) })} />
@@ -57,7 +57,7 @@ export function WaterControls() {
           <div>
             <div className="flex justify-between">
               <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Water level</label>
-              <span className="text-[10px] font-mono text-trimble-blue">{selected.position[1].toFixed(2)} m</span>
+              <span className="text-[10px] font-mono text-polyform-blue">{selected.position[1].toFixed(2)} m</span>
             </div>
             <input type="range" className="w-full" min={selected.position[1] - 2} max={selected.position[1] + 2} step={0.05}
               value={selected.position[1]} onChange={event => update({ level: parseFloat(event.target.value) })} />

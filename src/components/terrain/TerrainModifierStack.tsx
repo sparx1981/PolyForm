@@ -223,7 +223,7 @@ export default function TerrainModifierStack() {
   };
 
   const getModifierIcon = (mod: TerrainModifier) => {
-    if (mod.type === 'road') return <Route size={14} className="text-trimble-blue" />;
+    if (mod.type === 'road') return <Route size={14} className="text-polyform-blue" />;
     if (mod.type === 'pad') {
       return mod.primitive === 'circle' 
         ? <Circle size={14} className="text-amber-500" />
@@ -237,7 +237,7 @@ export default function TerrainModifierStack() {
       {/* Top action header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
-          <Layers size={14} className="text-trimble-blue" />
+          <Layers size={14} className="text-polyform-blue" />
           <span>Active Modifiers ({terrainModifiers.length})</span>
         </div>
         
@@ -280,7 +280,7 @@ export default function TerrainModifierStack() {
               className={cn(
                 "rounded-xl border transition-all text-xs overflow-hidden",
                 isSelected
-                  ? "bg-blue-50/50 dark:bg-blue-950/20 border-trimble-blue ring-1 ring-trimble-blue/30 shadow-xs"
+                  ? "bg-blue-50/50 dark:bg-blue-950/20 border-polyform-blue ring-1 ring-polyform-blue/30 shadow-xs"
                   : "bg-white dark:bg-gray-800/70 border-gray-200 dark:border-gray-700/80 hover:bg-gray-50 dark:hover:bg-gray-800"
               )}
             >
@@ -365,7 +365,7 @@ export default function TerrainModifierStack() {
                         const val = e.target.value;
                         setTerrainModifiers(prev => prev.map(m => m.id === mod.id ? { ...m, name: val } : m));
                       }}
-                      className="w-full px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs focus:border-trimble-blue focus:outline-none"
+                      className="w-full px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs focus:border-polyform-blue focus:outline-none"
                     />
                   </div>
 
@@ -392,7 +392,7 @@ export default function TerrainModifierStack() {
                             step="0.5"
                             value={mod.batterDistance}
                             onChange={(e) => handleUpdatePad(mod.id, { batterDistance: parseFloat(e.target.value) })}
-                            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue mt-2"
+                            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue mt-2"
                           />
                         </div>
                       </div>
@@ -409,7 +409,7 @@ export default function TerrainModifierStack() {
                               className={cn(
                                 "py-1 px-1.5 rounded-lg border text-center capitalize transition-all cursor-pointer",
                                 mod.batterProfile === prof
-                                  ? "bg-trimble-blue text-white border-trimble-blue font-semibold shadow-xs"
+                                  ? "bg-polyform-blue text-white border-polyform-blue font-semibold shadow-xs"
                                   : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                               )}
                             >
@@ -460,7 +460,7 @@ export default function TerrainModifierStack() {
                             step="0.5"
                             value={mod.width}
                             onChange={(e) => handleUpdateRoad(mod.id, { width: parseFloat(e.target.value) })}
-                            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue mt-2"
+                            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue mt-2"
                           />
                         </div>
                         <div>
@@ -472,7 +472,7 @@ export default function TerrainModifierStack() {
                             step="1"
                             value={mod.maxGradePercent}
                             onChange={(e) => handleUpdateRoad(mod.id, { maxGradePercent: parseFloat(e.target.value) })}
-                            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue mt-2"
+                            className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue mt-2"
                           />
                         </div>
                       </div>
@@ -487,7 +487,7 @@ export default function TerrainModifierStack() {
                           className={cn(
                             "py-1 px-2 rounded-lg border text-center transition-all cursor-pointer",
                             mod.profile.hasCurb 
-                              ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue font-semibold"
+                              ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue font-semibold"
                               : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-750"
                           )}
                         >
@@ -501,7 +501,7 @@ export default function TerrainModifierStack() {
                           className={cn(
                             "py-1 px-2 rounded-lg border text-center transition-all cursor-pointer",
                             mod.profile.hasDitch 
-                              ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue font-semibold"
+                              ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue font-semibold"
                               : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-750"
                           )}
                         >
@@ -515,7 +515,7 @@ export default function TerrainModifierStack() {
                         <select
                           value={mod.markings}
                           onChange={(e) => handleUpdateRoad(mod.id, { markings: e.target.value as RoadMarkingPreset })}
-                          className="w-full px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs focus:border-trimble-blue focus:outline-none"
+                          className="w-full px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs focus:border-polyform-blue focus:outline-none"
                         >
                           <option value="none">None</option>
                           <option value="center-dashed">Center Dashed</option>
@@ -543,7 +543,7 @@ export default function TerrainModifierStack() {
                               className={cn(
                                 "py-1 rounded-lg border text-center font-mono text-[10px] cursor-pointer transition-all",
                                 mod.parkingConfig!.angle === ang
-                                  ? "bg-trimble-blue text-white border-trimble-blue font-bold shadow-xs"
+                                  ? "bg-polyform-blue text-white border-polyform-blue font-bold shadow-xs"
                                   : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-750"
                               )}
                             >
@@ -563,7 +563,7 @@ export default function TerrainModifierStack() {
                           className={cn(
                             "px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition-all",
                             mod.parkingConfig.doubleRow
-                              ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue font-semibold"
+                              ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue font-semibold"
                               : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-750"
                           )}
                         >
@@ -583,7 +583,7 @@ export default function TerrainModifierStack() {
       <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
         <button
           onClick={() => setIsBakeModalOpen(true)}
-          className="w-full py-2 px-3 rounded-xl bg-trimble-blue hover:bg-trimble-blue/90 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+          className="w-full py-2 px-3 rounded-xl bg-polyform-blue hover:bg-polyform-blue/90 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <HardHat size={14} />
           <span>Bake to Model</span>

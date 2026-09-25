@@ -11,7 +11,7 @@ export default function Developers({ onLogin }: { onLogin: () => void }) {
         <div className="max-w-[1200px] mx-auto grid gap-14 items-center" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 440px), 1fr))' }}>
           <div className="flex flex-col gap-5">
             <Eyebrow>Developer Extensibility Suite</Eyebrow>
-            <h1 className="text-[clamp(40px,5.5vw,68px)] font-bold leading-[1.04] tracking-[-0.03em] text-trimble-dark-blue">
+            <h1 className="text-[clamp(40px,5.5vw,68px)] font-bold leading-[1.04] tracking-[-0.03em] text-polyform-dark-blue">
               Script anything you can draw
             </h1>
             <p className="text-lg leading-[1.65] text-gray-600">
@@ -22,14 +22,14 @@ export default function Developers({ onLogin }: { onLogin: () => void }) {
               <button
                 type="button"
                 onClick={onLogin}
-                className="flex-none whitespace-nowrap shrink-0 text-base font-semibold px-6 py-[14px] rounded-lg bg-trimble-blue text-white shadow-[0_8px_20px_rgb(0_99_163_/_0.25)] hover:bg-trimble-dark-blue transition-colors"
+                className="flex-none whitespace-nowrap shrink-0 text-base font-semibold px-6 py-[14px] rounded-lg bg-polyform-blue text-white shadow-[0_8px_20px_rgb(0_99_163_/_0.25)] hover:bg-polyform-dark-blue transition-colors"
               >
                 Open the console
               </button>
               <button
                 type="button"
                 onClick={() => scrollToId('sdk')}
-                className="flex-none whitespace-nowrap shrink-0 text-base font-semibold px-[22px] py-[14px] rounded-lg border border-gray-200 text-trimble-dark-blue hover:bg-gray-50 transition-colors"
+                className="flex-none whitespace-nowrap shrink-0 text-base font-semibold px-[22px] py-[14px] rounded-lg border border-gray-200 text-polyform-dark-blue hover:bg-gray-50 transition-colors"
               >
                 SDK reference
               </button>
@@ -43,7 +43,7 @@ export default function Developers({ onLogin }: { onLogin: () => void }) {
                   {label}
                 </span>
               ))}
-              <span className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-md bg-trimble-blue text-white">Run Script</span>
+              <span className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-md bg-polyform-blue text-white">Run Script</span>
             </div>
             <div className="p-5 flex flex-col overflow-auto">
               {CODE_LONG.map((c, i) => (
@@ -58,14 +58,14 @@ export default function Developers({ onLogin }: { onLogin: () => void }) {
 
       <section className="py-[104px] px-6">
         <div className="max-w-[1200px] mx-auto flex flex-col gap-10">
-          <h2 className="text-[clamp(30px,3.6vw,46px)] font-bold leading-[1.1] tracking-[-0.02em] text-trimble-dark-blue">In the suite</h2>
+          <h2 className="text-[clamp(30px,3.6vw,46px)] font-bold leading-[1.1] tracking-[-0.02em] text-polyform-dark-blue">In the suite</h2>
           <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))' }}>
             {DEV_TOOLS.map(d => (
               <div key={d.title} className="border border-gray-200 rounded-xl p-[26px] flex flex-col gap-3 shadow-modus-1">
-                <span className="w-10 h-10 rounded-lg bg-trimble-blue/10 text-trimble-blue flex items-center justify-center">
+                <span className="w-10 h-10 rounded-lg bg-polyform-blue/10 text-polyform-blue flex items-center justify-center">
                   <d.icon size={20} />
                 </span>
-                <span className="text-lg font-bold text-trimble-dark-blue">{d.title}</span>
+                <span className="text-lg font-bold text-polyform-dark-blue">{d.title}</span>
                 <span className="text-[15px] leading-[1.6] text-gray-600">{d.text}</span>
               </div>
             ))}
@@ -77,14 +77,14 @@ export default function Developers({ onLogin }: { onLogin: () => void }) {
         <div className="max-w-[1200px] mx-auto flex flex-col gap-8">
           <div className="flex flex-col gap-3">
             <Eyebrow>SDK reference</Eyebrow>
-            <h2 className="text-[clamp(30px,3.6vw,46px)] font-bold leading-[1.1] tracking-[-0.02em] text-trimble-dark-blue">
+            <h2 className="text-[clamp(30px,3.6vw,46px)] font-bold leading-[1.1] tracking-[-0.02em] text-polyform-dark-blue">
               The <code className="text-[0.9em]">sdk</code> object
             </h2>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             {SDK_METHODS.map(m => (
               <div key={m.sig} className="grid gap-1.5 px-6 py-4 border-b border-gray-100 last:border-b-0" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', columnGap: 32 }}>
-                <code className="text-[13px] font-semibold text-trimble-dark-blue break-words">{m.sig}</code>
+                <code className="text-[13px] font-semibold text-polyform-dark-blue break-words">{m.sig}</code>
                 <span className="text-sm leading-[1.55] text-gray-600">{m.text}</span>
               </div>
             ))}

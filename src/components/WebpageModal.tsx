@@ -28,8 +28,8 @@ export default function WebpageModal() {
           {/* Header */}
           <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 bg-gray-50 dark:bg-black/20">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-trimble-blue/10 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-trimble-blue" />
+              <div className="w-8 h-8 rounded-lg bg-polyform-blue/10 flex items-center justify-center">
+                <Globe className="w-5 h-5 text-polyform-blue" />
               </div>
               <div className="flex flex-col">
                 <span className="font-bold text-gray-900 dark:text-white text-sm leading-tight">Embedded Webpage</span>

@@ -926,13 +926,13 @@ export default function StyleLibraryModal({
           theme === 'dark' ? "border-gray-800 bg-gray-900/50" : "border-gray-100 bg-gray-50/70"
         )}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-trimble-blue/10 text-trimble-blue flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-lg bg-polyform-blue/10 text-polyform-blue flex items-center justify-center font-bold">
               <Layers size={20} />
             </div>
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2">
                 {title}
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-trimble-blue/10 text-trimble-blue">
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-polyform-blue/10 text-polyform-blue">
                   {styles.length} Styles Available
                 </span>
               </h2>
@@ -961,7 +961,7 @@ export default function StyleLibraryModal({
                 className={cn(
                   "px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all",
                   activeCategory === cat
-                    ? "bg-trimble-blue text-white shadow-sm"
+                    ? "bg-polyform-blue text-white shadow-sm"
                     : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                 )}
               >
@@ -995,10 +995,10 @@ export default function StyleLibraryModal({
                     }}
                     className={cn(
                       "group relative flex flex-col rounded-xl border p-4 cursor-pointer transition-all duration-200",
-                      "outline-none focus-visible:ring-2 focus-visible:ring-trimble-blue focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900",
+                      "outline-none focus-visible:ring-2 focus-visible:ring-polyform-blue focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900",
                       isSelected
-                        ? "border-trimble-blue ring-2 ring-trimble-blue/20 bg-trimble-blue/[0.03] shadow-md"
-                        : "border-gray-200 dark:border-gray-800 hover:border-trimble-blue/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/40"
+                        ? "border-polyform-blue ring-2 ring-polyform-blue/20 bg-polyform-blue/[0.03] shadow-md"
+                        : "border-gray-200 dark:border-gray-800 hover:border-polyform-blue/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/40"
                     )}
                   >
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3 flex items-center justify-center">
@@ -1014,7 +1014,7 @@ export default function StyleLibraryModal({
                     </p>
 
                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-trimble-blue/10 text-trimble-blue">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-polyform-blue/10 text-polyform-blue">
                         {style.category}
                       </span>
                       {style.features.slice(0, 2).map((feat, idx) => (
@@ -1025,7 +1025,7 @@ export default function StyleLibraryModal({
                     </div>
 
                     {isSelected && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-trimble-blue text-white flex items-center justify-center shadow-sm shadow-trimble-blue/30">
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-polyform-blue text-white flex items-center justify-center shadow-sm shadow-polyform-blue/30">
                         <Check size={12} strokeWidth={3} />
                       </div>
                     )}
@@ -1049,7 +1049,7 @@ export default function StyleLibraryModal({
                 className={cn(
                   "p-4 rounded-xl border transition-all",
                   isParametric 
-                    ? "border-trimble-blue/40 bg-gradient-to-br from-trimble-blue/[0.03] to-blue-500/[0.02] dark:from-trimble-blue/[0.08] dark:to-transparent"
+                    ? "border-polyform-blue/40 bg-gradient-to-br from-polyform-blue/[0.03] to-blue-500/[0.02] dark:from-polyform-blue/[0.08] dark:to-transparent"
                     : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30"
                 )}
               >
@@ -1058,7 +1058,7 @@ export default function StyleLibraryModal({
                   <div className="flex items-start gap-2.5">
                     <div className={cn(
                       "p-2 rounded-lg mt-0.5",
-                      isParametric ? "bg-trimble-blue text-white shadow-sm shadow-trimble-blue/30" : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                      isParametric ? "bg-polyform-blue text-white shadow-sm shadow-polyform-blue/30" : "bg-gray-200 dark:bg-gray-700 text-gray-500"
                     )}>
                       <Sparkles size={16} />
                     </div>
@@ -1068,7 +1068,7 @@ export default function StyleLibraryModal({
                         <span className={cn(
                           "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
                           isParametric 
-                            ? "bg-trimble-blue/15 text-trimble-blue border border-trimble-blue/30" 
+                            ? "bg-polyform-blue/15 text-polyform-blue border border-polyform-blue/30" 
                             : "bg-gray-200 dark:bg-gray-700 text-gray-500"
                         )}>
                           {isParametric ? "Parametric Active" : "Manual Mode"}
@@ -1092,8 +1092,8 @@ export default function StyleLibraryModal({
                       aria-checked={isParametric}
                       onClick={() => setIsParametric(!isParametric)}
                       className={cn(
-                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-trimble-blue focus:ring-offset-2",
-                        isParametric ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-700"
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-polyform-blue focus:ring-offset-2",
+                        isParametric ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-700"
                       )}
                     >
                       <span
@@ -1112,7 +1112,7 @@ export default function StyleLibraryModal({
                     {/* Scene Scan Diagnostic Bar */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-white/70 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 text-xs">
                       <div className="flex items-center gap-2">
-                        <Activity size={14} className={sceneScan.source === 'upper_floor' ? "text-emerald-500" : sceneScan.source === 'wall' ? "text-trimble-blue" : "text-amber-500"} />
+                        <Activity size={14} className={sceneScan.source === 'upper_floor' ? "text-emerald-500" : sceneScan.source === 'wall' ? "text-polyform-blue" : "text-amber-500"} />
                         <span className="font-semibold text-gray-700 dark:text-gray-300">Environment Scan:</span>
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[11px] font-medium",
@@ -1170,7 +1170,7 @@ export default function StyleLibraryModal({
                       <div className="p-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 flex flex-col justify-between">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Step Count</span>
-                          <Calculator size={12} className="text-trimble-blue" />
+                          <Calculator size={12} className="text-polyform-blue" />
                         </div>
                         <div className="my-1.5">
                           <span className="text-lg font-bold text-gray-900 dark:text-white font-mono">
@@ -1187,7 +1187,7 @@ export default function StyleLibraryModal({
                       <div className="p-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 flex flex-col justify-between">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Tread Depth</span>
-                          <Ruler size={12} className="text-trimble-blue" />
+                          <Ruler size={12} className="text-polyform-blue" />
                         </div>
                         <div className="my-1.5">
                           <span className="text-lg font-bold text-gray-900 dark:text-white font-mono">
@@ -1204,7 +1204,7 @@ export default function StyleLibraryModal({
                       <div className="p-3 rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900/80 flex flex-col justify-between">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total Run</span>
-                          <span className="text-[10px] font-bold text-trimble-blue bg-trimble-blue/10 px-1.5 py-0.2 rounded">
+                          <span className="text-[10px] font-bold text-polyform-blue bg-polyform-blue/10 px-1.5 py-0.2 rounded">
                             {parametricCalc.pitchAngleDeg.toFixed(1)}°
                           </span>
                         </div>
@@ -1232,7 +1232,7 @@ export default function StyleLibraryModal({
                       {getParamDefsForStyle(selectedStyleId).map(def => (
                         <span
                           key={def.key}
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-trimble-blue/10 text-trimble-blue border border-trimble-blue/20"
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-polyform-blue/10 text-polyform-blue border border-polyform-blue/20"
                         >
                           {def.label}
                         </span>
@@ -1253,7 +1253,7 @@ export default function StyleLibraryModal({
                     {/* Ergonomic Formula & Fine-tuning Bar */}
                     <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200/70 dark:border-gray-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
-                        <span className="font-semibold text-trimble-blue">Ergonomic Formula:</span>
+                        <span className="font-semibold text-polyform-blue">Ergonomic Formula:</span>
                         <code className="font-mono bg-white dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700">
                           (2 × {(parametricCalc.actualStepHeight * 100).toFixed(1)}cm) + {(parametricCalc.treadDepth * 100).toFixed(1)}cm = {(parametricCalc.strideFormulaValue * 100).toFixed(1)}cm
                         </code>
@@ -1299,7 +1299,7 @@ export default function StyleLibraryModal({
                 {/* Structural / Architectural Style */}
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
-                    <Box size={14} className="text-trimble-blue" />
+                    <Box size={14} className="text-polyform-blue" />
                     <span>Architectural & Structural Style</span>
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1311,7 +1311,7 @@ export default function StyleLibraryModal({
                         className={cn(
                           "p-3 text-left rounded-lg border transition-all text-xs flex flex-col justify-between",
                           stairStructure === opt.id
-                            ? "border-trimble-blue bg-trimble-blue/5 text-trimble-blue ring-1 ring-trimble-blue"
+                            ? "border-polyform-blue bg-polyform-blue/5 text-polyform-blue ring-1 ring-polyform-blue"
                             : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800/50"
                         )}
                       >
@@ -1330,7 +1330,7 @@ export default function StyleLibraryModal({
                 {/* Railing & Balustrade Options */}
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
-                    <ShieldCheck size={14} className="text-trimble-blue" />
+                    <ShieldCheck size={14} className="text-polyform-blue" />
                     <span>Balustrade & Handrail Placement</span>
                   </h4>
                   <div className="grid grid-cols-2 gap-2.5">
@@ -1342,7 +1342,7 @@ export default function StyleLibraryModal({
                         className={cn(
                           "p-3 text-left rounded-lg border transition-all text-xs flex flex-col justify-between",
                           railingMode === rail.id
-                            ? "border-trimble-blue bg-trimble-blue/5 text-trimble-blue ring-1 ring-trimble-blue"
+                            ? "border-polyform-blue bg-polyform-blue/5 text-polyform-blue ring-1 ring-polyform-blue"
                             : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800/50"
                         )}
                       >
@@ -1379,7 +1379,7 @@ export default function StyleLibraryModal({
                 max="10.0"
                 value={width}
                 onChange={(e) => setWidth(parseFloat(e.target.value) || width)}
-                className="w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:border-trimble-blue"
+                className="w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:border-polyform-blue"
               />
               <span className="text-gray-400">m</span>
 
@@ -1398,7 +1398,7 @@ export default function StyleLibraryModal({
                     setHeight(val);
                   }
                 }}
-                className="w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:border-trimble-blue"
+                className="w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none focus:border-polyform-blue"
               />
               <span className="text-gray-400">m</span>
 
@@ -1413,7 +1413,7 @@ export default function StyleLibraryModal({
                 value={isStair && isParametric ? Number(parametricCalc.totalRun.toFixed(2)) : depth}
                 onChange={(e) => setDepth(parseFloat(e.target.value) || depth)}
                 className={cn(
-                  "w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 outline-none focus:border-trimble-blue",
+                  "w-16 px-2 py-1 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue",
                   isStair && isParametric 
                     ? "bg-gray-100 dark:bg-gray-800/40 text-gray-500 cursor-not-allowed" 
                     : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
@@ -1421,7 +1421,7 @@ export default function StyleLibraryModal({
               />
               <span className="text-gray-400">m</span>
               {isStair && isParametric && (
-                <span className="text-[10px] font-bold text-trimble-blue bg-trimble-blue/10 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-bold text-polyform-blue bg-polyform-blue/10 px-1.5 py-0.5 rounded">
                   {parametricCalc.stepCount} Steps ({(parametricCalc.actualStepHeight * 100).toFixed(1)}cm riser)
                 </span>
               )}
@@ -1438,7 +1438,7 @@ export default function StyleLibraryModal({
             </button>
             <button
               onClick={handleConfirm}
-              className="px-5 py-2 text-xs font-bold rounded-lg bg-trimble-blue hover:bg-trimble-blue/90 text-white shadow-sm flex items-center gap-2 transition-transform active:scale-95"
+              className="px-5 py-2 text-xs font-bold rounded-lg bg-polyform-blue hover:bg-polyform-blue/90 text-white shadow-sm flex items-center gap-2 transition-transform active:scale-95"
             >
               <span>Apply Style</span>
               <ArrowRight size={14} />

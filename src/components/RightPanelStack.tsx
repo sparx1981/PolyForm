@@ -8,7 +8,7 @@ import { HeightMapPicker } from './graphics/HeightMapPicker';
 import * as THREE from 'three';
 import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
-import { HuggingFaceService } from '../services/sketchupService';
+import { HuggingFaceService } from '../services/skpService';
 import { useApp } from '../AppContext';
 import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
@@ -51,7 +51,7 @@ function Panel({ title, icon, isOpen, onToggle, children }: PanelProps) {
         onClick={onToggle}
         className={cn(
           "w-full h-10 flex items-center justify-between px-3 transition-colors",
-          theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-200 text-trimble-gray"
+          theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-200 text-polyform-gray"
         )}
       >
         <div className="flex items-center gap-2">
@@ -856,7 +856,7 @@ export default function RightPanelStack() {
                       setShapes(prev => prev.map(s => s.id === selectedShape.id ? { ...s, name: newName } : s));
                     }}
                     className={cn(
-                      "w-full px-2 py-1.5 rounded bg-transparent border-none outline-none focus:ring-1 focus:ring-trimble-blue transition-all font-medium",
+                      "w-full px-2 py-1.5 rounded bg-transparent border-none outline-none focus:ring-1 focus:ring-polyform-blue transition-all font-medium",
                       theme === 'dark' ? "text-gray-100" : "text-gray-900"
                     )}
                   />
@@ -865,7 +865,7 @@ export default function RightPanelStack() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Type</label>
-                    <div className="font-medium text-trimble-blue uppercase">{selectedShape.type}</div>
+                    <div className="font-medium text-polyform-blue uppercase">{selectedShape.type}</div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Volume</label>
@@ -961,7 +961,7 @@ export default function RightPanelStack() {
                               setEditingDimIndex(null);
                             }}
                             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                            className="w-16 px-1.5 py-1 border rounded text-[10px] outline-none focus:border-trimble-blue"
+                            className="w-16 px-1.5 py-1 border rounded text-[10px] outline-none focus:border-polyform-blue"
                           />
                         ) : (
                           <button 
@@ -1002,7 +1002,7 @@ export default function RightPanelStack() {
                                 setEditingDimIndex(null);
                               }}
                               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                              className="w-16 px-1.5 py-1 border rounded text-[10px] outline-none focus:border-trimble-blue"
+                              className="w-16 px-1.5 py-1 border rounded text-[10px] outline-none focus:border-polyform-blue"
                             />
                           ) : (
                             <button 
@@ -1047,7 +1047,7 @@ export default function RightPanelStack() {
                               setEditingPosIndex(null);
                             }}
                             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                            className="w-full px-1 py-1 border rounded text-[10px] outline-none focus:border-trimble-blue"
+                            className="w-full px-1 py-1 border rounded text-[10px] outline-none focus:border-polyform-blue"
                           />
                         ) : (
                           <button 
@@ -1094,7 +1094,7 @@ export default function RightPanelStack() {
                                 setEditingRotIndex(null);
                               }}
                               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                              className="w-full px-1 py-1 border rounded text-[10px] outline-none focus:border-trimble-blue"
+                              className="w-full px-1 py-1 border rounded text-[10px] outline-none focus:border-polyform-blue"
                             />
                           ) : (
                             <button 
@@ -1156,7 +1156,7 @@ export default function RightPanelStack() {
                 <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
                   <button
                     onClick={() => duplicateObject(selectedShape.id)}
-                    className="flex items-center gap-1 text-[10px] font-bold text-trimble-blue hover:underline" title="Duplicate Entity"
+                    className="flex items-center gap-1 text-[10px] font-bold text-polyform-blue hover:underline" title="Duplicate Entity"
                   >
                     <CopyIcon size={13} />
                   </button>
@@ -1172,7 +1172,7 @@ export default function RightPanelStack() {
 
             {activeTool === 'deform' && (
               <div className="space-y-4 pt-2">
-                <div className="text-[10px] font-bold text-trimble-blue uppercase border-b border-trimble-blue/20 pb-1">Deformation Brush</div>
+                <div className="text-[10px] font-bold text-polyform-blue uppercase border-b border-polyform-blue/20 pb-1">Deformation Brush</div>
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="text-[8px] font-bold text-gray-400 uppercase">Brush Radius</label>
@@ -1180,7 +1180,7 @@ export default function RightPanelStack() {
                       type="range" min="0.1" max="10" step="0.1"
                       value={deformationSettings.radius}
                       onChange={(e) => setDeformationSettings(prev => ({ ...prev, radius: parseFloat(e.target.value) }))}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1189,7 +1189,7 @@ export default function RightPanelStack() {
                       type="range" min="0" max="1" step="0.05"
                       value={deformationSettings.strength}
                       onChange={(e) => setDeformationSettings(prev => ({ ...prev, strength: parseFloat(e.target.value) }))}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1202,7 +1202,7 @@ export default function RightPanelStack() {
                           className={cn(
                             "flex-1 py-1 text-[8px] font-bold uppercase rounded border transition-colors",
                             deformationSettings.direction === dir 
-                              ? "bg-trimble-blue text-white border-trimble-blue" 
+                              ? "bg-polyform-blue text-white border-polyform-blue" 
                               : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
                           )}
                         >
@@ -1262,7 +1262,7 @@ export default function RightPanelStack() {
             onToggle={() => togglePanel('outliner')}
           >
             <div className="space-y-1">
-              <div className="flex items-center gap-2 py-1 px-2 bg-trimble-blue/10 rounded text-trimble-blue">
+              <div className="flex items-center gap-2 py-1 px-2 bg-polyform-blue/10 rounded text-polyform-blue">
                 <BoxSelect size={12} />
                 <span>Model Root</span>
               </div>
@@ -1375,7 +1375,7 @@ export default function RightPanelStack() {
                                 }}
                                 className={cn(
                                   "flex items-center gap-1.5 py-1.5 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group select-none",
-                                  allSelected && "bg-trimble-blue/10 text-trimble-blue font-semibold"
+                                  allSelected && "bg-polyform-blue/10 text-polyform-blue font-semibold"
                                 )}
                                 title={`Level ${levelNum} — ${walls.length} wall(s), ${slabs.length} slab(s)`}
                               >
@@ -1395,7 +1395,7 @@ export default function RightPanelStack() {
                                   <ChevronRight size={13} className={cn("transition-transform duration-200", isLevelExpanded && "rotate-90")} />
                                 </button>
 
-                                <Layers size={13} className="text-trimble-blue shrink-0" />
+                                <Layers size={13} className="text-polyform-blue shrink-0" />
                                 <span className="flex-1 truncate text-xs font-semibold text-gray-700 dark:text-gray-200">
                                   Level {levelNum} {levelNum === 1 ? '(Ground)' : `(Story ${levelNum})`}
                                 </span>
@@ -1410,7 +1410,7 @@ export default function RightPanelStack() {
                                     e.stopPropagation();
                                     setShapes(prev => prev.map(s => levelShapeIds.includes(s.id) ? { ...s, hidden: anyVisible } : s));
                                   }}
-                                  className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0 transition-opacity"
+                                  className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0 transition-opacity"
                                   title={allHidden ? `Show Level ${levelNum}` : `Hide Level ${levelNum}`}
                                 >
                                   {allHidden ? <EyeOff size={13} className="text-gray-400" /> : <Eye size={13} />}
@@ -1470,7 +1470,7 @@ export default function RightPanelStack() {
                                         }}
                                         className={cn(
                                           "flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
-                                          isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                          isSelected && "bg-polyform-blue/10 text-polyform-blue font-medium",
                                           wall.hidden && "opacity-40"
                                         )}
                                         title={`${wallTypeLabel} (${dimLabel})`}
@@ -1495,7 +1495,7 @@ export default function RightPanelStack() {
                                             e.stopPropagation();
                                             setShapes(prev => prev.map(s => s.id === wall.id ? { ...s, hidden: !s.hidden } : s));
                                           }}
-                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                           title={wall.hidden ? "Show Wall" : "Hide Wall"}
                                         >
                                           {wall.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -1507,7 +1507,7 @@ export default function RightPanelStack() {
                                             e.stopPropagation();
                                             duplicateObject(wall.id);
                                           }}
-                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                           title="Duplicate Wall"
                                         >
                                           <CopyIcon size={12} />
@@ -1540,7 +1540,7 @@ export default function RightPanelStack() {
                                         }}
                                         className={cn(
                                           "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
-                                          isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                          isSelected && "bg-polyform-blue/10 text-polyform-blue font-medium",
                                           slab.hidden && "opacity-40"
                                         )}
                                       >
@@ -1552,7 +1552,7 @@ export default function RightPanelStack() {
                                             e.stopPropagation();
                                             setShapes(prev => prev.map(s => s.id === slab.id ? { ...s, hidden: !s.hidden } : s));
                                           }}
-                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                           title={slab.hidden ? "Show" : "Hide"}
                                         >
                                           {slab.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -1562,7 +1562,7 @@ export default function RightPanelStack() {
                                             e.stopPropagation();
                                             duplicateObject(slab.id);
                                           }}
-                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                           title="Duplicate"
                                         >
                                           <CopyIcon size={12} />
@@ -1633,7 +1633,7 @@ export default function RightPanelStack() {
                                 }}
                                 className={cn(
                                   "flex items-center gap-1.5 py-1.5 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group select-none text-xs",
-                                  isSelected && "bg-trimble-blue/10 text-trimble-blue font-semibold",
+                                  isSelected && "bg-polyform-blue/10 text-polyform-blue font-semibold",
                                   roof.hidden && "opacity-40"
                                 )}
                                 title={roof.name}
@@ -1678,7 +1678,7 @@ export default function RightPanelStack() {
                                     e.stopPropagation();
                                     setShapes(prev => prev.map(s => allRoofShapeIds.includes(s.id) ? { ...s, hidden: anyVisible } : s));
                                   }}
-                                  className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                  className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                   title={allHidden ? "Show Roof & Parts" : "Hide Roof & Parts"}
                                 >
                                   {allHidden ? <EyeOff size={13} className="text-gray-400" /> : <Eye size={13} />}
@@ -1712,7 +1712,7 @@ export default function RightPanelStack() {
                                         }}
                                         className={cn(
                                           "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group transition-colors text-xs",
-                                          isChildSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                          isChildSelected && "bg-polyform-blue/10 text-polyform-blue font-medium",
                                           child.hidden && "opacity-40"
                                         )}
                                         title={child.name}
@@ -1731,7 +1731,7 @@ export default function RightPanelStack() {
                                             e.stopPropagation();
                                             setShapes(prev => prev.map(s => s.id === child.id ? { ...s, hidden: !s.hidden } : s));
                                           }}
-                                          className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                          className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                           title={child.hidden ? "Show Component" : "Hide Component"}
                                         >
                                           {child.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -1991,7 +1991,7 @@ export default function RightPanelStack() {
                                                 }}
                                                 className={cn(
                                                   "flex items-center gap-1.5 py-0.5 px-1.5 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-[10px]",
-                                                  isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                                  isSelected && "bg-polyform-blue/10 text-polyform-blue font-medium",
                                                   member.hidden && "opacity-40"
                                                 )}
                                                 title={`${member.name} — ${dimStr}`}
@@ -2020,7 +2020,7 @@ export default function RightPanelStack() {
                                                     e.stopPropagation();
                                                     duplicateObject(member.id);
                                                   }}
-                                                  className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                                  className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                                   title="Duplicate"
                                                 >
                                                   <CopyIcon size={10} />
@@ -2096,7 +2096,7 @@ export default function RightPanelStack() {
                                   }}
                                   className={cn(
                                     "flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-xs",
-                                    isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium"
+                                    isSelected && "bg-polyform-blue/10 text-polyform-blue font-medium"
                                   )}
                                 >
                                   <Mountain size={13} className="text-emerald-600 shrink-0" />
@@ -2109,7 +2109,7 @@ export default function RightPanelStack() {
                                       e.stopPropagation();
                                       setShapes(prev => prev.map(s => s.id === terrain.id ? { ...s, hidden: !s.hidden } : s));
                                     }}
-                                    className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                    className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                     title={terrain.hidden ? "Show Terrain" : "Hide Terrain"}
                                   >
                                     {terrain.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -2239,13 +2239,13 @@ export default function RightPanelStack() {
                               }}
                               className={cn(
                                 "flex items-center gap-2 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-xs",
-                                isSelected && "bg-trimble-blue/10 text-trimble-blue font-medium",
+                                isSelected && "bg-polyform-blue/10 text-polyform-blue font-medium",
                                 shape.hidden && "opacity-40"
                               )}
                             >
                               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: shape.color || '#94a3b8' }} />
                               {shape.type === 'scale_figure' && (
-                                <User size={12} className="text-trimble-blue shrink-0 -ml-0.5" />
+                                <User size={12} className="text-polyform-blue shrink-0 -ml-0.5" />
                               )}
                               <span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span>
 
@@ -2254,7 +2254,7 @@ export default function RightPanelStack() {
                                   e.stopPropagation();
                                   setShapes(prev => prev.map(s => s.id === shape.id ? { ...s, hidden: !s.hidden } : s));
                                 }}
-                                className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                 title={shape.hidden ? "Show" : "Hide"}
                               >
                                 {shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -2265,7 +2265,7 @@ export default function RightPanelStack() {
                                   e.stopPropagation();
                                   duplicateObject(shape.id);
                                 }}
-                                className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                                className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                                 title="Duplicate"
                               >
                                 <CopyIcon size={13} />
@@ -2308,7 +2308,7 @@ export default function RightPanelStack() {
                             onClick={() => { setSelectedId(null); setSelectedIds([]); setSelectedFaceIds(group.faces); }}
                             className={cn(
                               "flex items-center gap-1.5 py-1 px-4 rounded cursor-pointer hover:bg-gray-100 group",
-                              allSelected && "bg-trimble-blue/10 text-trimble-blue"
+                              allSelected && "bg-polyform-blue/10 text-polyform-blue"
                             )}
                             title={`${group.faces.length} surfaces · area ${group.area.toFixed(2)}`}
                           >
@@ -2342,7 +2342,7 @@ export default function RightPanelStack() {
                                 setGroupHidden(kernelHost.graph, group.faces, anyVisible);
                                 bumpKernel();
                               }}
-                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                               title={rows.some(r => !r.hidden) ? "Hide group" : "Show group"}
                             >
                               {rows.every(r => r.hidden) ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -2352,7 +2352,7 @@ export default function RightPanelStack() {
                                 e.stopPropagation();
                                 duplicateKernelFaces(group.faces, group.label);
                               }}
-                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                               title={`Duplicate ${group.label.toLowerCase()}`}
                             >
                               <CopyIcon size={13} />
@@ -2378,7 +2378,7 @@ export default function RightPanelStack() {
                             className={cn(
                               "flex items-center gap-2 py-1 rounded cursor-pointer hover:bg-gray-100 group",
                               single ? "px-4" : "pl-10 pr-4",
-                              selectedFaceIds.includes(row.id) && "bg-trimble-blue/10 text-trimble-blue",
+                              selectedFaceIds.includes(row.id) && "bg-polyform-blue/10 text-polyform-blue",
                               row.hidden && "opacity-40"
                             )}
                             title={`Area ${row.area.toFixed(2)}${row.holes ? ` · ${row.holes} hole(s)` : ''}`}
@@ -2400,7 +2400,7 @@ export default function RightPanelStack() {
                             <span className="flex-1 truncate">{single ? group.label : row.label}</span>
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleFaceHidden(kernelHost.graph, row.id); bumpKernel(); }}
-                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                               title={row.hidden ? "Show" : "Hide"}
                             >{row.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                             <button
@@ -2408,7 +2408,7 @@ export default function RightPanelStack() {
                                 e.stopPropagation();
                                 duplicateKernelFaces([row.id], row.label);
                               }}
-                              className="opacity-0 group-hover:opacity-100 hover:text-trimble-blue p-0.5 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
                               title="Duplicate surface"
                             ><CopyIcon size={13} /></button>
                             <button
@@ -2456,7 +2456,7 @@ export default function RightPanelStack() {
                     }}
                     className={cn(
                       "aspect-square rounded-sm border cursor-pointer transition-transform hover:scale-110",
-                      activeMaterial === color ? "border-trimble-blue ring-1 ring-trimble-blue" : "border-gray-300"
+                      activeMaterial === color ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300"
                     )}
                     style={{ backgroundColor: color }}
                   />
@@ -2473,7 +2473,7 @@ export default function RightPanelStack() {
                     }}
                     className={cn(
                       "group relative aspect-square rounded-sm border cursor-pointer transition-transform hover:scale-105",
-                      activeMaterial === m.value ? "border-trimble-blue ring-1 ring-trimble-blue" : "border-gray-300"
+                      activeMaterial === m.value ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300"
                     )}
                     style={{ backgroundColor: m.value }}
                     title={m.name || m.value}
@@ -2493,7 +2493,7 @@ export default function RightPanelStack() {
                 ))}
                 <button 
                   onClick={() => setIsAddMaterialOpen(true)}
-                  className="aspect-square rounded-sm border border-dashed border-gray-300 flex items-center justify-center hover:border-trimble-blue hover:bg-gray-50 transition-colors"
+                  className="aspect-square rounded-sm border border-dashed border-gray-300 flex items-center justify-center hover:border-polyform-blue hover:bg-gray-50 transition-colors"
                 >
                   <Plus size={16} className="text-gray-400" />
                 </button>
@@ -2526,7 +2526,7 @@ export default function RightPanelStack() {
                         }}
                         className={cn(
                           "group relative aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-105 bg-gray-100 dark:bg-gray-800",
-                          activeMaterial === m.value ? "border-trimble-blue ring-1 ring-trimble-blue" : "border-gray-300 dark:border-gray-700"
+                          activeMaterial === m.value ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300 dark:border-gray-700"
                         )}
                         title={m.name || 'Custom Texture'}
                       >
@@ -2588,7 +2588,7 @@ export default function RightPanelStack() {
             onToggle={() => togglePanel('styles')}
           >
             <div className="grid grid-cols-2 gap-2">
-              <div className="p-2 border border-trimble-blue rounded bg-trimble-blue/5 text-center">
+              <div className="p-2 border border-polyform-blue rounded bg-polyform-blue/5 text-center">
                 <div className="aspect-video bg-white border border-gray-200 mb-1" />
                 <span>Default</span>
               </div>
@@ -2613,7 +2613,7 @@ export default function RightPanelStack() {
                 <span className="text-[10px] font-bold text-gray-400 uppercase">Visibility</span>
                 <button 
                   onClick={toggleAllTags}
-                  className="text-[10px] text-trimble-blue hover:underline"
+                  className="text-[10px] text-polyform-blue hover:underline"
                 >
                   {allTagsVisible ? 'Hide All' : 'Show All'}
                 </button>
@@ -2625,7 +2625,7 @@ export default function RightPanelStack() {
                   placeholder="New tag..." 
                   value={newTagName}
                   onChange={(e) => setNewTagName(e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-200 rounded text-[10px] outline-none focus:border-trimble-blue"
+                  className="flex-1 px-2 py-1 border border-gray-200 rounded text-[10px] outline-none focus:border-polyform-blue"
                 />
                 <input 
                   type="color" 
@@ -2635,7 +2635,7 @@ export default function RightPanelStack() {
                 />
                 <button 
                   onClick={handleAddTag}
-                  className="p-1 bg-trimble-blue text-white rounded hover:bg-trimble-dark-blue"
+                  className="p-1 bg-polyform-blue text-white rounded hover:bg-polyform-dark-blue"
                 >
                   <Plus size={14} />
                 </button>
@@ -2658,7 +2658,7 @@ export default function RightPanelStack() {
                     key={tag.id} 
                     className={cn(
                       "flex items-center justify-between p-1.5 hover:bg-gray-50 rounded group cursor-pointer",
-                      activeTagId === tag.id && "bg-trimble-blue/10 ring-1 ring-trimble-blue"
+                      activeTagId === tag.id && "bg-polyform-blue/10 ring-1 ring-polyform-blue"
                     )}
                     onClick={() => setActiveTagId(activeTagId === tag.id ? null : tag.id)}
                   >
@@ -2704,7 +2704,7 @@ export default function RightPanelStack() {
             <div className="space-y-3">
               <button 
                 onClick={handleSaveScene}
-                className="w-full py-1.5 border border-dashed border-gray-300 rounded text-[10px] font-bold text-gray-500 hover:border-trimble-blue hover:text-trimble-blue transition-all flex items-center justify-center gap-2"
+                className="w-full py-1.5 border border-dashed border-gray-300 rounded text-[10px] font-bold text-gray-500 hover:border-polyform-blue hover:text-polyform-blue transition-all flex items-center justify-center gap-2"
               >
                 <Plus size={14} />
                 Save Scene
@@ -2714,7 +2714,7 @@ export default function RightPanelStack() {
                 {scenes.map(scene => (
                   <div 
                     key={scene.id} 
-                    className="group relative rounded border border-gray-100 overflow-hidden cursor-pointer hover:border-trimble-blue transition-all"
+                    className="group relative rounded border border-gray-100 overflow-hidden cursor-pointer hover:border-polyform-blue transition-all"
                     onClick={() => window.dispatchEvent(new CustomEvent('set-camera', { detail: { position: scene.cameraPosition, target: scene.cameraTarget } }))}
                     onContextMenu={(e) => { e.preventDefault(); handleRenameScene(scene.id); }}
                   >
@@ -2750,7 +2750,7 @@ export default function RightPanelStack() {
                     onClick={() => setShadowsEnabled(!shadowsEnabled)}
                     className={cn(
                       "w-8 h-4 rounded-full relative transition-colors",
-                      shadowsEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                      shadowsEnabled ? "bg-polyform-blue" : "bg-gray-300"
                     )}
                   >
                     <div className={cn(
@@ -2766,7 +2766,7 @@ export default function RightPanelStack() {
                     onClick={() => setAmbientOcclusionEnabled(!ambientOcclusionEnabled)}
                     className={cn(
                       "w-8 h-4 rounded-full transition-colors relative",
-                      ambientOcclusionEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                      ambientOcclusionEnabled ? "bg-polyform-blue" : "bg-gray-300"
                     )}
                   >
                     <div className={cn(
@@ -2795,7 +2795,7 @@ export default function RightPanelStack() {
                       setPlacingAnimationId(id);
                       setActiveTool('select');
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-2 bg-trimble-blue text-white rounded-md text-[10px] font-bold uppercase transition-all hover:bg-trimble-dark-blue shadow-sm"
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-polyform-blue text-white rounded-md text-[10px] font-bold uppercase transition-all hover:bg-polyform-dark-blue shadow-sm"
                   >
                     <Plus size={14} />
                     Add Animation
@@ -2850,7 +2850,7 @@ export default function RightPanelStack() {
                                 className={cn(
                                   "py-1 text-[8px] font-bold rounded border transition-all truncate px-1",
                                   anim.type === type 
-                                    ? "bg-trimble-blue text-white border-trimble-blue" 
+                                    ? "bg-polyform-blue text-white border-polyform-blue" 
                                     : "bg-transparent text-gray-500 border-gray-200 hover:border-gray-300 dark:border-gray-600"
                                 )}
                               >
@@ -2881,7 +2881,7 @@ export default function RightPanelStack() {
                                   className={cn(
                                     "py-1 text-[8px] font-bold rounded border transition-all truncate px-1",
                                     (anim.flockBirdType ?? 'starling') === birdType
-                                      ? "bg-trimble-blue text-white border-trimble-blue"
+                                      ? "bg-polyform-blue text-white border-polyform-blue"
                                       : "bg-transparent text-gray-500 border-gray-200 hover:border-gray-300 dark:border-gray-600"
                                   )}
                                 >
@@ -2901,7 +2901,7 @@ export default function RightPanelStack() {
                                 step={5}
                                 value={anim.flockAltitude ?? FLOCK_DEFAULTS[anim.flockBirdType ?? 'starling'].altitude}
                                 onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, flockAltitude: parseFloat(e.target.value) } : a))}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                             <p className="text-[8px] text-gray-400 italic px-1">The flock crosses the sky over the animation's position. Use Set Position to choose where it passes.</p>
@@ -2945,7 +2945,7 @@ export default function RightPanelStack() {
                             step={anim.type === 'bird' || anim.type === 'bee' || anim.type === 'flock' ? 1 : 100}
                             value={anim.density}
                             onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, density: parseInt(e.target.value) } : a))}
-                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                           />
                         </div>
 
@@ -2961,7 +2961,7 @@ export default function RightPanelStack() {
                             step={0.1}
                             value={anim.scale || 1}
                             onChange={(e) => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, scale: parseFloat(e.target.value) } : a))}
-                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                           />
                         </div>
 
@@ -2972,7 +2972,7 @@ export default function RightPanelStack() {
                               onClick={() => setAnimations(prev => prev.map(a => a.id === anim.id ? { ...a, looping: !a.looping } : a))}
                               className={cn(
                                 "w-6 h-3 rounded-full relative transition-colors",
-                                anim.looping ? "bg-trimble-blue" : "bg-gray-300"
+                                anim.looping ? "bg-polyform-blue" : "bg-gray-300"
                               )}
                             >
                               <div className={cn(
@@ -3009,7 +3009,7 @@ export default function RightPanelStack() {
                             onClick={() => setPlacingAnimationId(placingAnimationId === anim.id ? null : anim.id)}
                             className={cn(
                               "px-2 py-0.5 rounded text-[8px] font-bold transition-colors",
-                              placingAnimationId === anim.id ? "bg-trimble-blue text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                              placingAnimationId === anim.id ? "bg-polyform-blue text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
                             )}
                           >
                             {placingAnimationId === anim.id ? 'Click in Scene' : 'Set Position'}
@@ -3025,7 +3025,7 @@ export default function RightPanelStack() {
                 <div className="space-y-3 px-1 py-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Building2 size={13} className="text-trimble-blue" />
+                      <Building2 size={13} className="text-polyform-blue" />
                       <span className="text-[10px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Transparency</span>
                     </div>
                     {(wallTransparency > 0 || exteriorWallTransparency > 0 || interiorWallTransparency > 0 || roofTransparency > 0 || floorTransparency > 0 || fixturesTransparency > 0) && (
@@ -3038,7 +3038,7 @@ export default function RightPanelStack() {
                           setFloorTransparency(0);
                           setFixturesTransparency(0);
                         }}
-                        className="text-[9px] text-trimble-blue hover:underline cursor-pointer flex items-center gap-1 font-medium"
+                        className="text-[9px] text-polyform-blue hover:underline cursor-pointer flex items-center gap-1 font-medium"
                         title="Reset all elements to fully opaque"
                       >
                         <RotateCcw size={9} />
@@ -3074,7 +3074,7 @@ export default function RightPanelStack() {
                       step="0.02"
                       value={wallTransparency}
                       onChange={(e) => setWallTransparency(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                     <div className="flex items-center gap-1 pt-0.5 flex-wrap">
                       <span className="text-[8px] uppercase font-bold text-gray-400 mr-0.5">Presets:</span>
@@ -3091,8 +3091,8 @@ export default function RightPanelStack() {
                           className={cn(
                             "px-1.5 py-0.5 rounded text-[9px] font-medium border transition-colors cursor-pointer",
                             Math.abs(wallTransparency - preset.val) < 0.01
-                              ? "bg-trimble-blue text-white border-trimble-blue"
-                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-trimble-blue"
+                              ? "bg-polyform-blue text-white border-polyform-blue"
+                              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-polyform-blue"
                           )}
                         >
                           {preset.label}
@@ -3131,7 +3131,7 @@ export default function RightPanelStack() {
                       step="0.02"
                       value={exteriorWallTransparency}
                       onChange={(e) => setExteriorWallTransparency(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
 
@@ -3165,7 +3165,7 @@ export default function RightPanelStack() {
                       step="0.02"
                       value={interiorWallTransparency}
                       onChange={(e) => setInteriorWallTransparency(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
 
@@ -3199,7 +3199,7 @@ export default function RightPanelStack() {
                       step="0.02"
                       value={roofTransparency}
                       onChange={(e) => setRoofTransparency(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
 
@@ -3233,7 +3233,7 @@ export default function RightPanelStack() {
                       step="0.02"
                       value={floorTransparency}
                       onChange={(e) => setFloorTransparency(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
 
@@ -3267,7 +3267,7 @@ export default function RightPanelStack() {
                       step="0.02"
                       value={fixturesTransparency}
                       onChange={(e) => setFixturesTransparency(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
                   {(() => {
@@ -3288,7 +3288,7 @@ export default function RightPanelStack() {
                     return (
                       <div className="p-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 space-y-1.5 mt-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-trimble-blue uppercase tracking-wider truncate max-w-[140px]" title={wallName}>
+                          <span className="text-[10px] font-bold text-polyform-blue uppercase tracking-wider truncate max-w-[140px]" title={wallName}>
                             {wallName}
                           </span>
                           <span className="text-[10px] font-mono font-bold text-gray-700 dark:text-gray-200">
@@ -3308,7 +3308,7 @@ export default function RightPanelStack() {
                           }}
                           onMouseUp={() => commitHistory()}
                           onTouchEnd={() => commitHistory()}
-                          className="w-full h-1 bg-blue-200 dark:bg-blue-900 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                          className="w-full h-1 bg-blue-200 dark:bg-blue-900 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                         />
                         <div className="flex items-center justify-between text-[9px] text-gray-500">
                           <span>Selected wall opacity: {Math.round(currentOpacity * 100)}%</span>
@@ -3317,7 +3317,7 @@ export default function RightPanelStack() {
                               setShapes(prev => prev.map(s => s.id === selectedShape.id ? { ...s, opacity: 1 } : s));
                               commitHistory();
                             }}
-                            className="text-trimble-blue hover:underline cursor-pointer"
+                            className="text-polyform-blue hover:underline cursor-pointer"
                           >
                             Reset Solid
                           </button>
@@ -3351,7 +3351,7 @@ export default function RightPanelStack() {
                       }
                     }}
                     className={cn(
-                      "w-full px-2 py-1.5 border rounded text-xs outline-none focus:border-trimble-blue",
+                      "w-full px-2 py-1.5 border rounded text-xs outline-none focus:border-polyform-blue",
                       theme === 'dark' ? "bg-gray-700 border-gray-600 text-gray-200" : "bg-white border-gray-200 text-gray-700"
                     )}
                   >
@@ -3384,7 +3384,7 @@ export default function RightPanelStack() {
                     type="range" min="0" max="2" step="0.01"
                     value={environmentIntensity}
                     onChange={(e) => setEnvironmentIntensity(parseFloat(e.target.value))}
-                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                   />
                 </div>
                 <div className="space-y-1">
@@ -3396,7 +3396,7 @@ export default function RightPanelStack() {
                     type="range" min="0" max="360" step="1"
                     value={skyboxRotation}
                     onChange={(e) => setSkyboxRotation(parseFloat(e.target.value))}
-                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                   />
                 </div>
                 <div className="space-y-1">
@@ -3408,7 +3408,7 @@ export default function RightPanelStack() {
                     type="range" min="0" max="1" step="0.01"
                     value={skyboxBlur}
                     onChange={(e) => setSkyboxBlur(parseFloat(e.target.value))}
-                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                   />
                 </div>
 
@@ -3420,7 +3420,7 @@ export default function RightPanelStack() {
                       onClick={() => setFogSettings({ ...fogSettings, enabled: !fogSettings.enabled })}
                       className={cn(
                         "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                        fogSettings.enabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                        fogSettings.enabled ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                       )}
                     >
                       <div className={cn(
@@ -3437,7 +3437,7 @@ export default function RightPanelStack() {
                         onClick={() => setFogSettings({ ...fogSettings, animate: !fogSettings.animate })}
                         className={cn(
                           "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                          fogSettings.animate ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                          fogSettings.animate ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                         )}
                       >
                         <div className={cn(
@@ -3458,7 +3458,7 @@ export default function RightPanelStack() {
                         type="range" min="0" max="100" step="1"
                         value={fogSettings.speed}
                         onChange={(e) => setFogSettings({ ...fogSettings, speed: parseInt(e.target.value) })}
-                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                       />
                     </div>
                   )}
@@ -3474,7 +3474,7 @@ export default function RightPanelStack() {
                               onClick={() => setFogSettings({ ...fogSettings, type: type as 'standard' | 'super-mega' })}
                               className={cn(
                                 "flex-1 py-1 text-[10px] font-bold rounded transition-all cursor-pointer",
-                                fogSettings.type === type ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                fogSettings.type === type ? "bg-white dark:bg-gray-700 shadow-sm text-polyform-blue" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                               )}
                             >
                               {type === 'standard' ? 'Standard' : 'Super Mega'}
@@ -3494,7 +3494,7 @@ export default function RightPanelStack() {
                               type="range" min="0.001" max="0.1" step="0.001"
                               value={fogSettings.superMegaDensity}
                               onChange={(e) => setFogSettings({ ...fogSettings, superMegaDensity: parseFloat(e.target.value) })}
-                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                             />
                           </div>
                           <div className="space-y-2">
@@ -3525,7 +3525,7 @@ export default function RightPanelStack() {
                                   onClick={() => setFogSettings({ ...fogSettings, colorCount: count as 1 | 2 | 3 })}
                                   className={cn(
                                     "flex-1 py-1 text-[10px] font-bold rounded transition-all cursor-pointer",
-                                    fogSettings.colorCount === count ? "bg-white dark:bg-gray-700 shadow-sm text-trimble-blue" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                    fogSettings.colorCount === count ? "bg-white dark:bg-gray-700 shadow-sm text-polyform-blue" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                                   )}
                                 >
                                   {count} Color{count > 1 ? 's' : ''}
@@ -3565,7 +3565,7 @@ export default function RightPanelStack() {
                                 type="range" min="0.001" max="0.1" step="0.001"
                                 value={fogSettings.density}
                                 onChange={(e) => setFogSettings({ ...fogSettings, density: parseFloat(e.target.value) })}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                               />
                             </div>
                             <div className="space-y-1">
@@ -3577,7 +3577,7 @@ export default function RightPanelStack() {
                                 type="range" min="-10" max="10" step="0.5"
                                 value={fogSettings.height}
                                 onChange={(e) => setFogSettings({ ...fogSettings, height: parseFloat(e.target.value) })}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                               />
                             </div>
                             <div className="space-y-1">
@@ -3589,7 +3589,7 @@ export default function RightPanelStack() {
                                 type="range" min="-10" max="50" step="0.5"
                                 value={fogSettings.heightEnd}
                                 onChange={(e) => setFogSettings({ ...fogSettings, heightEnd: parseFloat(e.target.value) })}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                               />
                             </div>
                           </div>
@@ -3608,7 +3608,7 @@ export default function RightPanelStack() {
                       onClick={() => setShowLightsource(!showLightsource)}
                       className={cn(
                         "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                        showLightsource ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                        showLightsource ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                       )}
                     >
                       <div className={cn(
@@ -3624,7 +3624,7 @@ export default function RightPanelStack() {
                       onClick={() => setAnimateSun(!animateSun)}
                       className={cn(
                         "w-8 h-4 rounded-full relative transition-colors",
-                        animateSun ? "bg-trimble-blue" : "bg-gray-300"
+                        animateSun ? "bg-polyform-blue" : "bg-gray-300"
                       )}
                     >
                       <div className={cn(
@@ -3644,7 +3644,7 @@ export default function RightPanelStack() {
                         type="range" min="0.1" max="5" step="0.1"
                         value={sunSpeed}
                         onChange={(e) => setSunSpeed(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                       />
                     </div>
                   )}
@@ -3658,7 +3658,7 @@ export default function RightPanelStack() {
                       type="range" min="-100" max="100" step="0.5"
                       value={lightPosition[0]}
                       onChange={(e) => setLightPosition([parseFloat(e.target.value), lightPosition[1], lightPosition[2]])}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
                   <div className="space-y-1">
@@ -3670,7 +3670,7 @@ export default function RightPanelStack() {
                       type="range" min="0" max="100" step="0.5"
                       value={lightPosition[1]}
                       onChange={(e) => setLightPosition([lightPosition[0], parseFloat(e.target.value), lightPosition[2]])}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
                   <div className="space-y-1">
@@ -3682,7 +3682,7 @@ export default function RightPanelStack() {
                       type="range" min="-100" max="100" step="0.5"
                       value={lightPosition[2]}
                       onChange={(e) => setLightPosition([lightPosition[0], lightPosition[1], parseFloat(e.target.value)])}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
                   <button
@@ -3690,7 +3690,7 @@ export default function RightPanelStack() {
                     className={cn(
                       "w-full text-[10px] font-bold uppercase tracking-wider py-1.5 rounded border transition-colors flex items-center justify-center gap-1.5",
                       pickingSunCenter
-                        ? "bg-trimble-blue text-white border-trimble-blue"
+                        ? "bg-polyform-blue text-white border-polyform-blue"
                         : (theme === 'dark' ? "border-gray-700 hover:bg-gray-700 text-gray-300" : "border-gray-200 hover:bg-gray-50 text-gray-600")
                     )}
                   >
@@ -3708,7 +3708,7 @@ export default function RightPanelStack() {
                       type="range" min="0" max="50" step="0.1"
                       value={sunIntensity}
                       onChange={(e) => setSunIntensity(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
                   <div className="space-y-1">
@@ -3720,7 +3720,7 @@ export default function RightPanelStack() {
                       type="range" min="0" max="1" step="0.05"
                       value={shadowOpacity}
                       onChange={(e) => setShadowOpacity(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
 
@@ -3731,7 +3731,7 @@ export default function RightPanelStack() {
                         onClick={() => setGodRaysEnabled(!godRaysEnabled)}
                         className={cn(
                           "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                          godRaysEnabled ? "bg-trimble-blue" : "bg-gray-300 dark:bg-gray-600"
+                          godRaysEnabled ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
                         )}
                       >
                         <div className={cn(
@@ -3751,7 +3751,7 @@ export default function RightPanelStack() {
                           type="range" min="0.05" max="2" step="0.05"
                           value={godRaysIntensity}
                           onChange={(e) => setGodRaysIntensity(parseFloat(e.target.value))}
-                          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                         />
                       </div>
                     )}
@@ -3771,7 +3771,7 @@ export default function RightPanelStack() {
                       };
                       setCustomLights((prev: any[]) => [...prev, newLight]);
                     }}
-                    className="text-trimble-blue hover:text-trimble-dark-blue flex items-center gap-1"
+                    className="text-polyform-blue hover:text-polyform-dark-blue flex items-center gap-1"
                   >
                     <Plus size={12} />
                     <span className="text-[10px]">Add</span>
@@ -3825,7 +3825,7 @@ export default function RightPanelStack() {
                             type="range" min="0" max="100" step="0.5"
                             value={light.intensity}
                             onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, intensity: parseFloat(e.target.value) } : l))}
-                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                           />
                         </div>
                         {(light.type === 'point' || light.type === 'directional' || light.type === 'spot' || light.type === 'projector') && (
@@ -3838,7 +3838,7 @@ export default function RightPanelStack() {
                               type="range" min="0.1" max="50" step="0.1"
                               value={light.scale || 1}
                               onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, scale: parseFloat(e.target.value) } : l))}
-                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                             />
                           </div>
                         )}
@@ -3851,7 +3851,7 @@ export default function RightPanelStack() {
                             onClick={() => setPlacingLightId(placingLightId === light.id ? null : light.id)}
                             className={cn(
                               "px-2 py-0.5 rounded text-[8px] font-bold transition-colors",
-                              placingLightId === light.id ? "bg-trimble-blue text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                              placingLightId === light.id ? "bg-polyform-blue text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
                             )}
                           >
                             {placingLightId === light.id ? 'Click in Scene' : 'Set Position'}
@@ -3871,7 +3871,7 @@ export default function RightPanelStack() {
                                 newPos[i] = parseFloat(e.target.value);
                                 setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, position: newPos } : l));
                               }}
-                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                             />
                           </div>
                         ))}
@@ -3894,7 +3894,7 @@ export default function RightPanelStack() {
                                   newTarget[i] = parseFloat(e.target.value);
                                   setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, target: newTarget } : l));
                                 }}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                           ))}
@@ -3913,7 +3913,7 @@ export default function RightPanelStack() {
                                 type="range" min="0" max={Math.PI / 2} step="0.01"
                                 value={light.angle || Math.PI / 3}
                                 onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, angle: parseFloat(e.target.value) } : l))}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                             <div className="space-y-1">
@@ -3925,7 +3925,7 @@ export default function RightPanelStack() {
                                 type="range" min="0" max="1" step="0.1"
                                 value={light.penumbra || 0}
                                 onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, penumbra: parseFloat(e.target.value) } : l))}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                           </div>
@@ -3939,7 +3939,7 @@ export default function RightPanelStack() {
                                 type="range" min="0" max="100" step="1"
                                 value={light.distance || 0}
                                 onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, distance: parseFloat(e.target.value) } : l))}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                             <div className="space-y-1">
@@ -3951,7 +3951,7 @@ export default function RightPanelStack() {
                                 type="range" min="0" max="10" step="0.1"
                                 value={light.decay || 2}
                                 onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, decay: parseFloat(e.target.value) } : l))}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                           </div>
@@ -3988,7 +3988,7 @@ export default function RightPanelStack() {
                                       />
                                       <div className={cn(
                                         "w-4 h-4 rounded-full border-2 transition-all",
-                                        !light.rotateTexture ? "border-trimble-blue bg-trimble-blue shadow-[0_0_10px_rgba(0,126,255,0.4)]" : "border-gray-500 group-hover:border-gray-400"
+                                        !light.rotateTexture ? "border-polyform-blue bg-polyform-blue shadow-[0_0_10px_rgba(0,126,255,0.4)]" : "border-gray-500 group-hover:border-gray-400"
                                       )} />
                                       {!light.rotateTexture && <div className="absolute w-1.5 h-1.5 bg-white rounded-full" />}
                                     </div>
@@ -4005,7 +4005,7 @@ export default function RightPanelStack() {
                                       />
                                       <div className={cn(
                                         "w-4 h-4 rounded-full border-2 transition-all",
-                                        light.rotateTexture ? "border-trimble-blue bg-trimble-blue shadow-[0_0_10px_rgba(0,126,255,0.4)]" : "border-gray-500 group-hover:border-gray-400"
+                                        light.rotateTexture ? "border-polyform-blue bg-polyform-blue shadow-[0_0_10px_rgba(0,126,255,0.4)]" : "border-gray-500 group-hover:border-gray-400"
                                       )} />
                                       {light.rotateTexture && <div className="absolute w-1.5 h-1.5 bg-white rounded-full" />}
                                     </div>
@@ -4023,7 +4023,7 @@ export default function RightPanelStack() {
                                     type="range" min="0.1" max="10" step="0.1"
                                     value={light.textureRotationSpeed || 1}
                                     onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, textureRotationSpeed: parseFloat(e.target.value) } : l))}
-                                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                    className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                                   />
                                 </div>
                               )}
@@ -4044,7 +4044,7 @@ export default function RightPanelStack() {
                                 type="range" min="0.1" max="20" step="0.1"
                                 value={light.width || 1}
                                 onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, width: parseFloat(e.target.value) } : l))}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                             <div className="space-y-1">
@@ -4056,7 +4056,7 @@ export default function RightPanelStack() {
                                 type="range" min="0.1" max="20" step="0.1"
                                 value={light.height || 1}
                                 onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, height: parseFloat(e.target.value) } : l))}
-                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                               />
                             </div>
                           </div>
@@ -4069,7 +4069,7 @@ export default function RightPanelStack() {
                               type="range" min="0" max="360" step="1"
                               value={light.rotationY || light.rectRotation || 0}
                               onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, rotationY: parseFloat(e.target.value), rectRotation: parseFloat(e.target.value) } : l))}
-                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                             />
                           </div>
 
@@ -4080,7 +4080,7 @@ export default function RightPanelStack() {
                                 onClick={() => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, animateRotationY: !l.animateRotationY } : l))}
                                 className={cn(
                                   "w-6 h-3 rounded-full relative transition-colors",
-                                  light.animateRotationY ? "bg-trimble-blue" : "bg-gray-300"
+                                  light.animateRotationY ? "bg-polyform-blue" : "bg-gray-300"
                                 )}
                               >
                                 <div className={cn(
@@ -4099,7 +4099,7 @@ export default function RightPanelStack() {
                                   type="range" min="0.1" max="10" step="0.1"
                                   value={light.rotationYSpeed || 1}
                                   onChange={(e) => setCustomLights(prev => prev.map(l => l.id === light.id ? { ...l, rotationYSpeed: parseFloat(e.target.value) } : l))}
-                                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                                 />
                               </div>
                             )}
@@ -4121,7 +4121,7 @@ export default function RightPanelStack() {
                       onClick={() => setEdgeLinesEnabled(!edgeLinesEnabled)}
                       className={cn(
                         "w-8 h-4 rounded-full relative transition-colors",
-                        edgeLinesEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                        edgeLinesEnabled ? "bg-polyform-blue" : "bg-gray-300"
                       )}
                     >
                       <div className={cn(
@@ -4150,7 +4150,7 @@ export default function RightPanelStack() {
                           type="range" min="0.1" max="1" step="0.05"
                           value={edgeLinesOpacity}
                           onChange={(e) => setEdgeLinesOpacity(parseFloat(e.target.value))}
-                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                         />
                       </div>
                       <div className="space-y-1">
@@ -4162,7 +4162,7 @@ export default function RightPanelStack() {
                           type="range" min="1" max="5" step="0.5"
                           value={edgeLinesThickness}
                           onChange={(e) => setEdgeLinesThickness(parseFloat(e.target.value))}
-                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-trimble-blue"
+                          className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
                         />
                       </div>
                     </>
@@ -4177,7 +4177,7 @@ export default function RightPanelStack() {
                     onClick={() => setGridEnabled(!gridEnabled)}
                     className={cn(
                       "w-8 h-4 rounded-full relative transition-colors",
-                      gridEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                      gridEnabled ? "bg-polyform-blue" : "bg-gray-300"
                     )}
                   >
                     <div className={cn(
@@ -4193,7 +4193,7 @@ export default function RightPanelStack() {
                     onClick={() => setAxisIndicatorEnabled(!axisIndicatorEnabled)}
                     className={cn(
                       "w-8 h-4 rounded-full relative transition-colors",
-                      axisIndicatorEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                      axisIndicatorEnabled ? "bg-polyform-blue" : "bg-gray-300"
                     )}
                   >
                     <div className={cn(
@@ -4209,7 +4209,7 @@ export default function RightPanelStack() {
                     onClick={() => setMiniAxisIndicatorEnabled(!miniAxisIndicatorEnabled)}
                     className={cn(
                       "w-8 h-4 rounded-full relative transition-colors",
-                      miniAxisIndicatorEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                      miniAxisIndicatorEnabled ? "bg-polyform-blue" : "bg-gray-300"
                     )}
                   >
                     <div className={cn(
@@ -4232,7 +4232,7 @@ export default function RightPanelStack() {
                       }}
                       className={cn(
                         "w-8 h-4 rounded-full relative transition-colors",
-                        floorEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                        floorEnabled ? "bg-polyform-blue" : "bg-gray-300"
                       )}
                     >
                       <div className={cn(
@@ -4260,7 +4260,7 @@ export default function RightPanelStack() {
                     onClick={() => setFpsCounterEnabled(!fpsCounterEnabled)}
                     className={cn(
                       "w-8 h-4 rounded-full relative transition-colors",
-                      fpsCounterEnabled ? "bg-trimble-blue" : "bg-gray-300"
+                      fpsCounterEnabled ? "bg-polyform-blue" : "bg-gray-300"
                     )}
                   >
                     <div className={cn(
@@ -4288,7 +4288,7 @@ export default function RightPanelStack() {
                 placeholder="Search 3D Warehouse..." 
                 value={warehouseSearch}
                 onChange={(e) => setWarehouseSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-trimble-blue focus:border-trimble-blue outline-none"
+                className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-polyform-blue focus:border-polyform-blue outline-none"
               />
               <Search size={14} className="absolute left-2.5 top-2 text-gray-400" />
             </div>
@@ -4321,7 +4321,7 @@ export default function RightPanelStack() {
                   className={cn(
                     "w-full py-2 border rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all",
                     isMessagingOpen 
-                      ? "bg-trimble-blue text-white border-trimble-blue shadow-md" 
+                      ? "bg-polyform-blue text-white border-polyform-blue shadow-md" 
                       : (theme === 'dark' ? "bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50")
                   )}
                 >
@@ -4339,7 +4339,7 @@ export default function RightPanelStack() {
                   onClick={() => setShowCollaboratorCursors(!showCollaboratorCursors)}
                   className={cn(
                     "w-8 h-4 rounded-full relative transition-colors",
-                    showCollaboratorCursors ? "bg-trimble-blue" : "bg-gray-300"
+                    showCollaboratorCursors ? "bg-polyform-blue" : "bg-gray-300"
                   )}
                 >
                   <div className={cn(
@@ -4359,7 +4359,7 @@ export default function RightPanelStack() {
                   navigator.clipboard.writeText(url);
                   alert('Invite link copied to clipboard!');
                 }}
-                className="w-full py-1.5 bg-trimble-blue text-white rounded text-[10px] font-bold uppercase tracking-wider hover:bg-trimble-blue-dark transition-colors flex items-center justify-center gap-2"
+                className="w-full py-1.5 bg-polyform-blue text-white rounded text-[10px] font-bold uppercase tracking-wider hover:bg-polyform-blue-dark transition-colors flex items-center justify-center gap-2"
               >
                 <Plus size={14} />
                 Generate Invite Link
@@ -4372,7 +4372,7 @@ export default function RightPanelStack() {
                   placeholder="Invite by email..."
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="flex-1 px-2 py-1.5 bg-white border border-gray-200 rounded text-[10px] outline-none focus:border-trimble-blue shadow-inner"
+                  className="flex-1 px-2 py-1.5 bg-white border border-gray-200 rounded text-[10px] outline-none focus:border-polyform-blue shadow-inner"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleInvite(inviteEmail);
@@ -4387,7 +4387,7 @@ export default function RightPanelStack() {
                       setInviteEmail('');
                     }
                   }}
-                  className="px-2 py-1 bg-trimble-blue text-white rounded text-[9px] font-bold uppercase hover:bg-trimble-blue-dark transition-colors"
+                  className="px-2 py-1 bg-polyform-blue text-white rounded text-[9px] font-bold uppercase hover:bg-polyform-blue-dark transition-colors"
                 >
                   Invite
                 </button>
@@ -4398,7 +4398,7 @@ export default function RightPanelStack() {
                 <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
                   <div className="flex items-center justify-between p-1.5 hover:bg-gray-50 rounded transition-all">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-trimble-blue/10 flex items-center justify-center text-[10px] font-bold text-trimble-blue border border-trimble-blue/20">
+                      <div className="w-6 h-6 rounded-full bg-polyform-blue/10 flex items-center justify-center text-[10px] font-bold text-polyform-blue border border-polyform-blue/20">
                         {user?.displayName?.[0] || user?.email?.[0] || 'U'}
                       </div>
                       <div className="flex flex-col">
@@ -4489,8 +4489,8 @@ export default function RightPanelStack() {
                   className={cn(
                     "flex-1 mr-2 py-1.5 border border-dashed rounded text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2",
                     activeTool === 'note' 
-                      ? "bg-trimble-blue text-white border-trimble-blue shadow-md" 
-                      : "border-gray-300 text-gray-500 hover:border-trimble-blue hover:text-trimble-blue hover:bg-gray-50"
+                      ? "bg-polyform-blue text-white border-polyform-blue shadow-md" 
+                      : "border-gray-300 text-gray-500 hover:border-polyform-blue hover:text-polyform-blue hover:bg-gray-50"
                   )}
                 >
                   <Plus size={14} />
@@ -4501,7 +4501,7 @@ export default function RightPanelStack() {
                   className={cn(
                     "p-1.5 rounded border transition-all flex items-center justify-center",
                     allNotesVisible 
-                      ? "bg-trimble-blue/10 border-trimble-blue text-trimble-blue" 
+                      ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue" 
                       : "bg-gray-50 border-gray-200 text-gray-400"
                   )}
                   title={allNotesVisible ? "Hide All Notes in 3D" : "Show All Notes in 3D"}
@@ -4523,7 +4523,7 @@ export default function RightPanelStack() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-[8px] font-bold text-trimble-blue uppercase truncate">{note.authorName}</span>
+                        <span className="text-[8px] font-bold text-polyform-blue uppercase truncate">{note.authorName}</span>
                         <p className={cn(
                           "text-[10px] leading-relaxed",
                           note.completed && "line-through text-gray-400"
@@ -4534,7 +4534,7 @@ export default function RightPanelStack() {
                           onClick={() => setNotes(prev => prev.map(n => n.id === note.id ? { ...n, visible: n.visible === false ? true : false } : n))}
                           className={cn(
                             "p-1 rounded transition-colors",
-                            note.visible !== false ? "text-trimble-blue hover:bg-trimble-blue/5" : "text-gray-300 hover:text-trimble-blue hover:bg-gray-50"
+                            note.visible !== false ? "text-polyform-blue hover:bg-polyform-blue/5" : "text-gray-300 hover:text-polyform-blue hover:bg-gray-50"
                           )}
                           title={note.visible !== false ? "Hide in 3D" : "Show in 3D"}
                         >
@@ -4566,7 +4566,7 @@ export default function RightPanelStack() {
                        </span>
                        <button 
                         onClick={() => window.dispatchEvent(new CustomEvent('set-camera', { detail: { position: [note.position.x + 10, note.position.y + 8, note.position.z + 10], target: [note.position.x, note.position.y, note.position.z] } }))}
-                        className="text-[8px] font-bold text-trimble-blue hover:underline uppercase"
+                        className="text-[8px] font-bold text-polyform-blue hover:underline uppercase"
                        >
                         Go to Entity
                        </button>
@@ -4619,7 +4619,7 @@ export default function RightPanelStack() {
                   onClick={() => setActiveTab('color')}
                   className={cn(
                     "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'color' ? "text-trimble-blue border-b-2 border-trimble-blue" : "text-gray-500 hover:text-gray-700"
+                    activeTab === 'color' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
                   Color Picker
@@ -4628,7 +4628,7 @@ export default function RightPanelStack() {
                   onClick={() => setActiveTab('texture')}
                   className={cn(
                     "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'texture' ? "text-trimble-blue border-b-2 border-trimble-blue" : "text-gray-500 hover:text-gray-700"
+                    activeTab === 'texture' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
                   Upload Texture
@@ -4637,7 +4637,7 @@ export default function RightPanelStack() {
                   onClick={() => setActiveTab('premade')}
                   className={cn(
                     "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'premade' ? "text-trimble-blue border-b-2 border-trimble-blue" : "text-gray-500 hover:text-gray-700"
+                    activeTab === 'premade' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
                   Pre-Made PBRs
@@ -4646,7 +4646,7 @@ export default function RightPanelStack() {
                   onClick={() => setActiveTab('ai')}
                   className={cn(
                     "flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-1",
-                    activeTab === 'ai' ? "text-trimble-blue border-b-2 border-trimble-blue" : "text-gray-500 hover:text-gray-700"
+                    activeTab === 'ai' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
                   <Wand2 size={14} />
@@ -4688,7 +4688,7 @@ export default function RightPanelStack() {
 
                     <button 
                       onClick={handleAddColor}
-                      className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all"
+                      className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all"
                     >
                       Add to Palette
                     </button>
@@ -4716,7 +4716,7 @@ export default function RightPanelStack() {
                         <span>Remove background with AI (Hugging Face)</span>
                       </label>
                       {removingBg && (
-                        <div className="flex items-center gap-2 text-trimble-blue text-xs">
+                        <div className="flex items-center gap-2 text-polyform-blue text-xs">
                           <Loader2 className="animate-spin" size={14} />
                           <span>Removing background&hellip;</span>
                         </div>
@@ -4744,7 +4744,7 @@ export default function RightPanelStack() {
                     </div>
 
                     {uploading && (
-                      <div className="flex items-center justify-center gap-2 text-trimble-blue">
+                      <div className="flex items-center justify-center gap-2 text-polyform-blue">
                         <Loader2 className="animate-spin" size={18} />
                         <span className="text-sm font-medium">Uploading...</span>
                       </div>
@@ -4759,7 +4759,7 @@ export default function RightPanelStack() {
                           onClick={() => setPremadeCategoryFilter('all')}
                           className={cn(
                             "px-2.5 py-1 text-[10px] font-medium rounded-full border transition-colors",
-                            premadeCategoryFilter === 'all' ? "bg-trimble-blue text-white border-trimble-blue" : "border-gray-200 text-gray-500 hover:border-trimble-blue"
+                            premadeCategoryFilter === 'all' ? "bg-polyform-blue text-white border-polyform-blue" : "border-gray-200 text-gray-500 hover:border-polyform-blue"
                           )}
                         >
                           All
@@ -4771,7 +4771,7 @@ export default function RightPanelStack() {
                             onClick={() => setPremadeCategoryFilter(cat)}
                             className={cn(
                               "px-2.5 py-1 text-[10px] font-medium rounded-full border transition-colors",
-                              premadeCategoryFilter === cat ? "bg-trimble-blue text-white border-trimble-blue" : "border-gray-200 text-gray-500 hover:border-trimble-blue"
+                              premadeCategoryFilter === cat ? "bg-polyform-blue text-white border-polyform-blue" : "border-gray-200 text-gray-500 hover:border-polyform-blue"
                             )}
                           >
                             {cat}
@@ -4799,7 +4799,7 @@ export default function RightPanelStack() {
                           if (asset) { setEditorAsset(asset); setIsAddMaterialOpen(false); }
                         }}
                         title={`${mat.name} — click to apply, double-click to edit`}
-                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-trimble-blue transition-all text-left"
+                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left"
                       >
                         <div className="aspect-square bg-gray-100 relative">
                           <img
@@ -4850,7 +4850,7 @@ export default function RightPanelStack() {
                         value={hfToken}
                         onChange={(e) => setHfToken(e.target.value)}
                         placeholder="hf_..."
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-trimble-blue/30"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-polyform-blue/30"
                       />
                       <p className="text-[11px] text-gray-400">
                         Free at huggingface.co/settings/tokens. Used for AI material generation, background removal, and Photo to 3D. Stored only in your browser.
@@ -4864,14 +4864,14 @@ export default function RightPanelStack() {
                         onChange={(e) => setAiPrompt(e.target.value)}
                         placeholder="e.g. weathered oak planks, brushed titanium, cracked red brick"
                         rows={3}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-trimble-blue/30"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-polyform-blue/30"
                       />
                     </div>
 
                     <button
                       onClick={handleGenerateAIMaterial}
                       disabled={aiGenerating || !aiPrompt.trim()}
-                      className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {aiGenerating ? (
                         <>
@@ -4915,7 +4915,7 @@ export default function RightPanelStack() {
                         </div>
                         <button
                           onClick={handleAddAIMaterial}
-                          className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all"
+                          className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all"
                         >
                           Add to Palette
                         </button>
@@ -5030,7 +5030,7 @@ function PBRControls({ settings, onChange }: { settings: any, onChange: (s: any)
           type="range" min="0" max="1" step="0.01" 
           value={settings.roughness}
           onChange={(e) => onChange({...settings, roughness: parseFloat(e.target.value)})}
-          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
         />
       </div>
       <div className="space-y-1">
@@ -5042,7 +5042,7 @@ function PBRControls({ settings, onChange }: { settings: any, onChange: (s: any)
           type="range" min="0" max="1" step="0.01" 
           value={settings.metalness}
           onChange={(e) => onChange({...settings, metalness: parseFloat(e.target.value)})}
-          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
         />
       </div>
       <div className="space-y-1">
@@ -5054,7 +5054,7 @@ function PBRControls({ settings, onChange }: { settings: any, onChange: (s: any)
           type="range" min="0" max="1" step="0.01" 
           value={settings.opacity}
           onChange={(e) => onChange({...settings, opacity: parseFloat(e.target.value)})}
-          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-trimble-blue" 
+          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
         />
       </div>
     </div>

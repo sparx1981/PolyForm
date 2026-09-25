@@ -1,9 +1,9 @@
-# DraftUp Product Specification
+# PolyForm Product Specification
 
 > **Last Updated:** 2026-04-27 | **Changed:** Quota Optimization v5.6: Added "Quota Locked" reactive banner in App.tsx and StatusBar, 10-minute reactive lockdown state.
 
 ## 1. Architecture Overview
-DraftUp is a browser-based architectural 3D modeling workspace built with React 18+, Three.js (via React Three Fiber), and Firebase.
+PolyForm is a browser-based architectural 3D modeling workspace built with React 18+, Three.js (via React Three Fiber), and Firebase.
 - **Frontend:** React 18+, TypeScript, Tailwind CSS, motion/react.
 - **3D Engine:** Three.js, R3F, Drei, Three-BVH-CSG for boolean operations.
 - **Backend:** Firebase Authentication, Firestore (Real-time DB), Firebase Storage (Asset Hosting).
@@ -99,7 +99,7 @@ DraftUp is a browser-based architectural 3D modeling workspace built with React 
 ### TopBar / Menus
 - **Project Sub-Menu:**
   - **Export:** Grouped sub-menu containing **Export GLTF**, **Export STL**, and **Export SKP**.
-  - **Import SKP:** Direct entry point for importing SketchUp-optimized bridge files.
+  - **Import SKP:** Direct entry point for importing SKP-optimized bridge files.
 - **Embedded Webpage Browser:** Floating window for hosting external URLs (support for manufacturer docs, web-hosted assets, and live previews).
 - **Developer Sub-Menu:** Centralized hub for developer tools.
   - **Console / Library / Documentation:** Accessible directly from the sub-menu.

@@ -215,8 +215,8 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
       it('PolyForm cloud', '', 'Live collaboration: invite people and design together.'),
       it('Google Drive', '', 'Keep large projects as files in your own Drive.'),
       it('Trimble Connect', '', 'Store designs alongside the rest of your project.'),
-      it('Import', '.skp · 3D', 'Bring SketchUp and other 3D files in.'),
-      it('Export', 'glTF · STL · SKP', 'For viewers, 3D printing and SketchUp.'),
+      it('Import', '.skp · 3D', 'Bring SKP and other 3D files in.'),
+      it('Export', 'glTF · STL · SKP', 'For viewers, 3D printing and SKP.'),
       it('Sharing', '', 'Public models, with an optional password.'),
     ],
   },
@@ -227,7 +227,7 @@ export const WORKS_WITH: { icon: LucideIcon; label: string }[] = [
   { icon: HardDrive, label: 'Google Drive' },
   { icon: Building2, label: 'Trimble Connect' },
   { icon: Sparkles, label: 'Claude' },
-  { icon: FileBox, label: 'SketchUp .skp' },
+  { icon: FileBox, label: 'SKP files' },
   { icon: Share2, label: 'glTF and STL' },
 ];
 

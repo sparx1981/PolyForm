@@ -60,7 +60,7 @@ export default function Login({ onClose, note }: LoginProps = {}) {
 
   return (
     <div
-      className={`fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto p-4 ${onClose ? 'bg-trimble-dark-blue/40 backdrop-blur-sm' : 'bg-gray-50'}`}
+      className={`fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto p-4 ${onClose ? 'bg-polyform-dark-blue/40 backdrop-blur-sm' : 'bg-gray-50'}`}
       onClick={onClose ? e => { if (e.target === e.currentTarget) onClose(); } : undefined}
     >
       <motion.div 
@@ -82,7 +82,7 @@ export default function Login({ onClose, note }: LoginProps = {}) {
           </button>
         )}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-trimble-blue rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-trimble-blue/20">
+          <div className="w-16 h-16 bg-polyform-blue rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-polyform-blue/20">
             <LogIn className="text-white" size={32} />
           </div>
           <h1 id="login-title" className="text-2xl font-bold text-gray-900">Welcome to PolyForm</h1>
@@ -117,7 +117,7 @@ export default function Login({ onClose, note }: LoginProps = {}) {
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={!!error}
                   aria-describedby={error ? 'login-error' : undefined}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-polyform-blue focus:border-transparent outline-none transition-all"
                   placeholder="name@example.com"
                 />
               </div>
@@ -134,7 +134,7 @@ export default function Login({ onClose, note }: LoginProps = {}) {
                   onChange={(e) => setPassword(e.target.value)}
                   aria-invalid={!!error}
                   aria-describedby={error ? 'login-error' : undefined}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-trimble-blue focus:border-transparent outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-polyform-blue focus:border-transparent outline-none transition-all"
                   placeholder="••••••••"
                 />
               </div>
@@ -149,7 +149,7 @@ export default function Login({ onClose, note }: LoginProps = {}) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-trimble-blue text-white rounded-lg font-semibold hover:bg-trimble-dark-blue transition-all shadow-md shadow-trimble-blue/20 disabled:opacity-50"
+              className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all shadow-md shadow-polyform-blue/20 disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 className="animate-spin mx-auto" size={20} />
@@ -163,7 +163,7 @@ export default function Login({ onClose, note }: LoginProps = {}) {
             {isRegistering ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
               onClick={() => setIsRegistering(!isRegistering)}
-              className="text-trimble-blue font-semibold hover:underline"
+              className="text-polyform-blue font-semibold hover:underline"
             >
               {isRegistering ? 'Sign In' : 'Create one'}
             </button>

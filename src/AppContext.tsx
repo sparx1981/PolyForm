@@ -229,7 +229,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [shadowsEnabled, setShadowsEnabled] = useState(false);
   const [showLightsource, setShowLightsource] = useState(false);
   const [showAllDimensions, setShowAllDimensions] = useState(false);
-  // Task #155: SketchUp-style edge line rendering settings -- user-configurable on/off, colour, opacity.
+  // Task #155: familiar edge line rendering settings -- user-configurable on/off, colour, opacity.
   const [edgeLinesEnabled, setEdgeLinesEnabled] = useState<boolean>(true);
   const [edgeLinesColor, setEdgeLinesColor] = useState<string>('#1a1a1a');
   const [edgeLinesOpacity, setEdgeLinesOpacity] = useState<number>(0.3);
@@ -365,7 +365,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isMessagingCollapsed, setIsMessagingCollapsed] = useState(false);
   const [isMessagingDocked, setIsMessagingDocked] = useState(false);
   const [activeBevelAmount, setActiveBevelAmount] = useState(0.5);
-  // Default true: this restores SketchUp-style movement friction (dragging pauses
+  // Default true: this restores the familiar movement friction (dragging pauses
   // briefly the instant two objects' surfaces touch, then lets you continue past it).
   // It's fully wired (Viewport.tsx's handleTransformObjectChange + checkCollision, and
   // the "Contact Friction" toggle in ToolModifierPalette/RightPanelStack), but was

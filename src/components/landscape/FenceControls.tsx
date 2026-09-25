@@ -46,7 +46,7 @@ export function FenceControls() {
               onClick={() => update({ style: style.id as FenceStyle })}
               className={cn('rounded-md border px-2 py-1.5 text-left text-[11px] font-semibold transition-colors',
                 current.style === style.id
-                  ? 'border-trimble-blue bg-trimble-blue/10 text-trimble-blue'
+                  ? 'border-polyform-blue bg-polyform-blue/10 text-polyform-blue'
                   : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300')}>
               {style.label}
               <span className="block text-[9px] font-normal text-gray-400">{style.description}</span>
@@ -57,7 +57,7 @@ export function FenceControls() {
       <div>
         <div className="flex justify-between">
           <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Height</label>
-          <span className="text-[10px] font-mono text-trimble-blue">{current.height.toFixed(2)} m</span>
+          <span className="text-[10px] font-mono text-polyform-blue">{current.height.toFixed(2)} m</span>
         </div>
         <input type="range" className="w-full" min={info.minHeight} max={info.maxHeight} step={0.05}
           value={current.height} onChange={event => update({ height: parseFloat(event.target.value) })} />
