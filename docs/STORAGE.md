@@ -31,8 +31,9 @@ see anything else in your Drive.
 In the Google Cloud console for project `gen-lang-client-0540185995`:
 
 1. **APIs & Services → Library → Google Drive API → Enable.**
-2. **APIs & Services → OAuth consent screen → Data access → Add or remove scopes** → add
-   `.../auth/drive.file` → Save.
+2. **APIs & Services → OAuth consent screen → Data access → Add or remove scopes** → under
+   *Manually add scopes* paste the full scope `https://www.googleapis.com/auth/drive.file` →
+   **Add to table** → **Update** → Save.
 
 ## Setting up Trimble Connect
 
