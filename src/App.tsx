@@ -31,6 +31,7 @@ import AIQuery from './components/AIQuery';
 import WorldView from './components/WorldView';
 import AIGenerate from './components/AIGenerate';
 import Login from './components/Login';
+import Landing from './components/Landing';
 import Help from './components/Help';
 import Messaging from './components/Messaging';
 import WebpageModal from './components/WebpageModal';
@@ -263,6 +264,7 @@ function AppContent() {
 
     const phone = usePhoneLayout();
     const setPhoneSlotRef = phone.setSlot;
+    const [authChecked, setAuthChecked] = useState(false);
     const [phoneSheetCollapsed, setPhoneSheetCollapsed] = useState(false);
     const [phoneSheetHasContent, setPhoneSheetHasContent] = useState(false);
     // The settings sheet shows only while something has rendered into it.
@@ -434,6 +436,7 @@ function AppContent() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      setAuthChecked(true);
     });
     return () => unsubscribe();
   }, [setUser]);
@@ -451,7 +454,11 @@ function AppContent() {
   }, [setIsDiagnosticLogOpen]);
 
   if (!user) {
-    return <Login />;
+    // Until Firebase says whether someone is signed in, show nothing rather than flash the landing page.
+    if (!authChecked) return <div className="fixed inset-0 bg-white" aria-busy="true" />;
+    // A shared design link goes straight to sign-in; everyone else starts on the landing page.
+    if (new URLSearchParams(window.location.search).has('join')) return <Login note="Sign in to open the design shared with you" />;
+    return <Landing />;
   }
 
   const banners = (

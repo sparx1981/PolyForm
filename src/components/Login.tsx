@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   signInWithPopup, 
   signInWithEmailAndPassword, 
@@ -6,14 +6,28 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { motion } from 'motion/react';
-import { LogIn, Mail, Lock, Chrome, Loader2 } from 'lucide-react';
+import { LogIn, Mail, Lock, Chrome, Loader2, X } from 'lucide-react';
 
-export default function Login() {
+interface LoginProps {
+  /** Shown over the landing page: a close button and Escape take you back to it. */
+  onClose?: () => void;
+  /** A line under the heading, e.g. why sign-in is needed. */
+  note?: string;
+}
+
+export default function Login({ onClose, note }: LoginProps = {}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!onClose) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -45,18 +59,34 @@ export default function Login() {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-gray-50">
+    <div
+      className={`fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto p-4 ${onClose ? 'bg-trimble-dark-blue/40 backdrop-blur-sm' : 'bg-gray-50'}`}
+      onClick={onClose ? e => { if (e.target === e.currentTarget) onClose(); } : undefined}
+    >
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md p-8 bg-white rounded-2xl shadow-modus-4 border border-gray-100"
+        role={onClose ? 'dialog' : undefined}
+        aria-modal={onClose ? true : undefined}
+        aria-labelledby="login-title"
+        className="relative w-full max-w-md p-8 bg-white rounded-2xl shadow-modus-4 border border-gray-100"
       >
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+          >
+            <X size={18} />
+          </button>
+        )}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-trimble-blue rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-trimble-blue/20">
             <LogIn className="text-white" size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome to PolyForm</h1>
-          <p className="text-gray-500 mt-2">Sign in to start modeling</p>
+          <h1 id="login-title" className="text-2xl font-bold text-gray-900">Welcome to PolyForm</h1>
+          <p className="text-gray-500 mt-2">{note ?? 'Sign in to start modeling'}</p>
         </div>
 
         <div className="space-y-4">
