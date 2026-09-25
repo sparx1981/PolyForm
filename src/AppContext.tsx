@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { RENDER_MODE } from './lib/renderMode';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
@@ -881,7 +882,7 @@ console.log("Created rectangle:", myRect.id);`);
 
   // Persistence for user settings
   useEffect(() => {
-    if (user?.uid) {
+    if (user?.uid && !RENDER_MODE) {
       const saveSettings = async () => {
         if (checkQuota()) return;
         try {
@@ -1128,7 +1129,8 @@ console.log("Created rectangle:", myRect.id);`);
 
   // Push local changes to Firestore (Debounced)
   useEffect(() => {
-    if (!currentModelId || !user) {
+    // Render mode only looks: it must never write the model back.
+    if (!currentModelId || !user || RENDER_MODE) {
       setSyncStatus('unsaved');
       return;
     }

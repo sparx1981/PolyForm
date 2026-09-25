@@ -18,6 +18,8 @@ import LeftToolbar from './components/LeftToolbar';
 import ArchitectureToolbar from './components/ArchitectureToolbar';
 import LandscapesToolbar from './components/LandscapesToolbar';
 import { PhoneLayoutProvider, PhoneSheetPortal, usePhoneLayout } from './lib/phoneLayout';
+import { RENDER_MODE } from './lib/renderMode';
+import RenderView from './components/RenderView';
 import CameraToolbar from './components/CameraToolbar';
 import UnifiedToolRail from './components/UnifiedToolRail';
 import RightPanelStack from './components/RightPanelStack';
@@ -793,6 +795,13 @@ function AppContent() {
 }
 
 export default function App() {
+  if (RENDER_MODE) {
+    return (
+      <AppProvider>
+        <RenderView />
+      </AppProvider>
+    );
+  }
   return (
     <AppProvider>
       <PhoneLayoutProvider>

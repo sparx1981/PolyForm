@@ -7,6 +7,9 @@ import { useApp } from '../../AppContext';
 import { groundUnderRay } from '../../lib/terrain/groundRay';
 import { arcPoint, bulgeThrough, stepAnchor, type Vec2 } from '../../lib/patio/patioGeometry';
 import type { PatioData } from '../../lib/patio/patioTypes';
+import { wallFaces, type WallFace } from '../../lib/patio/patioPlacement';
+
+export { wallFaces, patioGroundHelpers } from '../../lib/patio/patioPlacement';
 
 /** How close (m) the cursor must be to a wall face, corner or the first point to snap to it. */
 const SNAP = 0.35;
@@ -16,33 +19,6 @@ const SNAP = 0.35;
  * listener sees the same press first) ignores it when the press ends.
  */
 const handleBusy = { current: false };
-
-interface WallFace { a: Vec2; b: Vec2; floor: number; wallId: string; face: number }
-
-/** The two long faces of every straight wall, as lines on the ground plus the wall's floor level. */
-export function wallFaces(shapes: Shape[]): WallFace[] {
-  const faces: WallFace[] = [];
-  for (const s of shapes) {
-    if (s.type !== 'wall' || s.hidden || !Array.isArray(s.args)) continue;
-    const [length = 0, height = 0, thickness = 0.2] = s.args as number[];
-    if (length < 0.2) continue;
-    const q = new THREE.Quaternion(...(s.quaternion ?? [0, 0, 0, 1]));
-    if (!s.quaternion && s.rotation) q.setFromEuler(new THREE.Euler(...s.rotation));
-    const dir = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
-    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-    const [cx, cy, cz] = s.position;
-    const floor = cy - height / 2;
-    for (const side of [1, -1]) {
-      const ox = cx + normal.x * side * thickness / 2, oz = cz + normal.z * side * thickness / 2;
-      faces.push({
-        a: [ox - dir.x * length / 2, oz - dir.z * length / 2],
-        b: [ox + dir.x * length / 2, oz + dir.z * length / 2],
-        floor, wallId: s.id, face: side,
-      });
-    }
-  }
-  return faces;
-}
 
 export interface SnappedPoint { p: Vec2; wall?: WallFace }
 
@@ -67,11 +43,6 @@ export function snapToWalls(p: Vec2, faces: WallFace[]): SnappedPoint {
 }
 
 /** Terrain (as drawn) under a world point, or undefined when there is none. */
-function terrainAt(shapes: Shape[], x: number, z: number): Shape | undefined {
-  return shapes.find(s => s.type === 'terrain' && !s.hidden && s.terrainData
-    && Math.abs(x - s.position[0]) <= s.terrainData.width / 2 && Math.abs(z - s.position[2]) <= s.terrainData.depth / 2);
-}
-
 interface Draft {
   points: SnappedPoint[];
   bulges: number[];
@@ -463,16 +434,3 @@ function StepGhost({ data, hover, width, y, origin }: { data: PatioData; hover: 
   return <Line points={[corner(-h, 0), corner(-h, 0.9), corner(h, 0.9), corner(h, 0), corner(-h, 0)]} color="#22c55e" lineWidth={3} depthTest={false} renderOrder={22} />;
 }
 
-/** Terrain helpers for the Viewport: ground (as drawn) and ground before patio levelling. */
-export function patioGroundHelpers(shapes: Shape[], drawn: Map<string, Shape>, sample: (x: number, z: number, terrain: Shape) => number) {
-  return {
-    drawnGround: (x: number, z: number) => {
-      const t = terrainAt(shapes, x, z);
-      return t ? sample(x, z, drawn.get(t.id) ?? t) : 0;
-    },
-    originalGround: (x: number, z: number) => {
-      const t = terrainAt(shapes, x, z);
-      return t ? sample(x, z, t) : 0;
-    },
-  };
-}

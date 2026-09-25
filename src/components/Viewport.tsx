@@ -10,7 +10,7 @@ import { WaterEditHandles } from './WaterEditHandles';
 import { PatioMesh } from './landscape/PatioMesh';
 import { ProtractorTool, ProtractorMeasurement, type ProtractorArgs } from './ProtractorTool';
 import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint } from './landscape/PatioTool';
-import { denseOutline } from '../lib/patio/patioGeometry';
+import { makePatioShape, patioLevel, patioWallEdges } from '../lib/patio/patioPlacement';
 import { WaterDrawPreview } from './WaterDrawPreview';
 import { terrainsWithWaterBasins, defaultWaterLevel } from '../lib/water/waterBody';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
@@ -1318,6 +1318,27 @@ function mainSceneBounds(fallback: { center: THREE.Vector3; radius: number }) {
   if (box.isEmpty()) return fallback;
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   return { center: sphere.center, radius: Math.max(1, sphere.radius) };
+}
+
+/**
+ * World bounds of the modelled objects in the main scene whose shape id passes `include`
+ * (kernel-drawn surfaces count as the id 'kernel'). Null when nothing matches.
+ */
+export function modelledBounds(include: (id: string) => boolean): THREE.Box3 | null {
+  const main = mainSceneRef.current;
+  if (!main) return null;
+  const box = new THREE.Box3();
+  main.updateMatrixWorld();
+  main.traverseVisible(object => {
+    if (!(object as THREE.Mesh).isMesh) return;
+    let id: string | null = null;
+    for (let o: THREE.Object3D | null = object; o && id === null; o = o.parent) {
+      if (o.userData?.isKernelGeometry) id = 'kernel';
+      else if (o.userData?.isShape) id = String(o.userData.id);
+    }
+    if (id !== null && include(id)) box.expandByObject(object);
+  });
+  return box.isEmpty() ? null : box;
 }
 
 function MiniScene({ view }: { view: 'top' | 'front' | 'right' }) {
@@ -4471,44 +4492,21 @@ function Scene() {
     if (points.length < 3) return;
     const settings = patioToolSettings;
     const world = points.map(p => p.p);
-    const cx = world.reduce((sum, p) => sum + p[0], 0) / world.length;
-    const cz = world.reduce((sum, p) => sum + p[1], 0) / world.length;
-    const samples = denseOutline(world, bulges, 0.5).points.map(([x, z]) => patioOriginalGround(x, z)).sort((a, b) => a - b);
     const walls = points.filter(p => p.wall).map(p => p.wall!.floor);
-    const level = walls.length ? Math.max(...walls)
-      : settings.kind === 'patio' ? samples[Math.floor(samples.length / 2)] + 0.02
-        : samples[samples.length - 1] + settings.deckHeight;
-    // An edge lies along a wall when its middle is on a wall face.
-    const faces = wallFaces(shapes);
-    const wallEdges = world.map((a, i) => {
-      const b = world[(i + 1) % world.length];
-      const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-      return Math.abs(bulges[i] ?? 0) < 1e-4 && faces.some(face => {
-        const dx = face.b[0] - face.a[0], dz = face.b[1] - face.a[1], len2 = dx * dx + dz * dz;
-        const t = ((mid[0] - face.a[0]) * dx + (mid[1] - face.a[1]) * dz) / len2;
-        return t >= 0 && t <= 1 && Math.hypot(mid[0] - face.a[0] - dx * t, mid[1] - face.a[1] - dz * t) < 0.05;
-      });
-    });
     const kind = settings.kind;
+    const level = patioLevel(world, bulges, kind, settings.deckHeight, walls, patioOriginalGround);
     const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === kind).length + 1;
-    const newShape: Shape = {
+    const newShape = makePatioShape({
       id: Math.random().toString(36).substr(2, 9),
       name: `${kind === 'deck' ? 'Deck' : 'Patio'} ${count}`,
-      type: 'patio',
-      position: [cx, level, cz],
-      rotation: [0, 0, 0],
-      scale: [1, 1, 1],
-      args: [],
-      color: settings.template.color,
-      patioData: {
-        ...settings.template,
-        kind,
-        points: world.map(([x, z]) => [x - cx, z - cz] as [number, number]),
-        bulges,
-        wallEdges,
-        steps: [],
-      },
-    };
+      world,
+      bulges,
+      level,
+      // An edge lies along a wall when its middle is on a wall face.
+      wallEdges: patioWallEdges(world, bulges, wallFaces(shapes)),
+      kind,
+      template: settings.template,
+    });
     addShape(newShape);
     commitHistory();
     setSelectedId(newShape.id);
@@ -13074,7 +13072,7 @@ export default function Viewport() {
   // instead of two copies that had already drifted apart.
 
   return (
-    <div className={cn(
+    <div id="polyform-viewport" className={cn(
       "flex-1 relative overflow-hidden transition-colors duration-300",
       theme === 'dark' ? "bg-gray-900" : "bg-[#f8f9fa]"
     )}>
