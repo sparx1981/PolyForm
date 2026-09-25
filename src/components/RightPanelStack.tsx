@@ -1352,7 +1352,14 @@ export default function RightPanelStack() {
                         {sortedLevels.map(({ levelNum, walls, slabs }) => {
                           const levelKey = `level-${levelNum}`;
                           const isLevelExpanded = expandedOutlinerLevels.has(levelKey);
-                          const levelAllShapes = [...walls, ...slabs];
+                          // A level is its walls and slabs plus what belongs to them: doors and windows
+                          // set in those walls, and stairs that start on this level.
+                          const levelWallIds = new Set(walls.map(w => w.id));
+                          const levelFixtures = shapes.filter(s =>
+                            ((s.type === 'door' || s.type === 'window') && !!s.hostWallId && levelWallIds.has(s.hostWallId)) ||
+                            ((s.type === 'staircase' || s.type === 'step') && Math.max(1, Math.floor(((s.position[1] - (Array.isArray(s.args) ? (s.args[1] || 0) : 0) / 2) + 0.4) / 2.8) + 1) === levelNum)
+                          );
+                          const levelAllShapes = [...walls, ...slabs, ...levelFixtures];
                           const levelShapeIds = levelAllShapes.map(s => s.id);
                           const allSelected = levelShapeIds.length > 0 && levelShapeIds.every(id => selectedIds.includes(id));
                           const allHidden = levelAllShapes.every(s => s.hidden);

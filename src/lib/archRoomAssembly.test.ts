@@ -110,6 +110,19 @@ describe('ArchRoomAssembly & Site Terracing', () => {
     expect(Array.from(withBoth!.heights)).toEqual(Array.from(withGroundOnly!.heights));
   });
 
+  it('ignores untagged upper-floor slabs, even when the ground floor is hidden', () => {
+    const terrainShape = createTerrainShape({ width: 30, depth: 30, resolution: 16, topography: 'flat' });
+    const ground: Shape = { id: 'g', type: 'box', name: 'Ground Floor Slab', position: [3, 0.1, 2], rotation: [0, 0, 0], args: [6, 0.2, 4] } as Shape;
+    // Named like a floor slab but with no story tag, three metres up (as the Claude connector wrote them).
+    const upper: Shape = { ...ground, id: 'u', name: 'First Floor Slab (bedrooms)', position: [3, 2.9, 2] };
+    const withGround = flattenTerrainForFloorSlabs(terrainShape, [ground], 1.0);
+    const withBoth = flattenTerrainForFloorSlabs(terrainShape, [ground, upper], 1.0);
+    expect(Array.from(withBoth!.heights)).toEqual(Array.from(withGround!.heights));
+    expect(Math.max(...Array.from(withBoth!.heights))).toBeLessThan(1);
+    // Hiding the ground floor in the outliner must not make the upper slab reshape the ground.
+    expect(flattenTerrainForFloorSlabs(terrainShape, [{ ...ground, hidden: true }, upper], 1.0)).toBeNull();
+  });
+
   it('miters a 90-degree exterior-justified corner to the exact offset-line intersection', () => {
     // Two walls of thickness 0.2 meeting at a right angle at the raw vertex (10, 0), each
     // pushed outward by half its thickness (0.1) - the true corner is where their offset

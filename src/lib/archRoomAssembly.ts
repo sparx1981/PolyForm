@@ -356,19 +356,31 @@ export function flattenTerrainForFloorSlabs(
     const match = /^story-(\d+)$/.exec(t);
     return match && Number(match[1]) > 1;
   });
-  const slabs = allShapes.filter(s =>
-    s.id !== terrain.id && !s.hidden && !isUpperStory(s) && (
+  const candidates = allShapes.filter(s =>
+    s.id !== terrain.id && !isUpperStory(s) && (
       s.tags?.includes('floor-slab') ||
       (s.name?.toLowerCase().includes('floor slab') && !s.tags?.includes('foundation-skirt') && !s.name?.toLowerCase().includes('foundation'))
     ) && !s.tags?.includes('foundation-skirt') && !s.name?.toLowerCase().includes('foundation')
   );
+  const slabs = candidates.filter(s => !s.hidden);
 
   if (slabs.length === 0) return null;
+
+  // Upper floors' slabs are not always tagged with their story (e.g. a slab just named "First
+  // Floor Slab"), and treating one as a ground slab raises the ground up to that floor. Only the
+  // lowest slabs touch the ground: keep those within a metre of the lowest slab top. Hidden slabs
+  // count when finding the lowest, so hiding the ground floor can't promote an upper one.
+  const slabTop = (slab: Shape) => {
+    const h = slab.type === 'poly' ? ((slab.args as any)?.height || 0.2) : (Array.isArray(slab.args) ? slab.args[1] || 0.2 : 0.2);
+    return slab.position[1] + h / 2;
+  };
+  const lowestTop = Math.min(...candidates.map(slabTop));
+  const groundSlabs = slabs.filter(slab => slabTop(slab) <= lowestTop + 1.0);
 
   let currentTerrainData: TerrainData = { ...terrain.terrainData, heights: [...terrain.terrainData.heights] };
   let modified = false;
 
-  for (const slab of slabs) {
+  for (const slab of groundSlabs) {
     let poly2D: Array<[number, number]> = [];
     if (slab.type === 'poly' && slab.args?.vertices && Array.isArray(slab.args.vertices)) {
       poly2D = slab.args.vertices.map((v: any) => {
