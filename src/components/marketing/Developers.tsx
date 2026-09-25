@@ -106,7 +106,7 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
           <div className="relative">
             <MarketingVisual
               label="Code Recorder"
-              title="Replace this panel with a recorder capture when final imagery is ready"
+              title="Drawing actions become reusable JavaScript"
               dark
               aspectRatio="4 / 3"
               className="shadow-[0_30px_70px_-35px_rgba(15,23,42,.6)]"
