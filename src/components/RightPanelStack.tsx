@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WeatherControls } from './graphics/WeatherControls';
+import { PlainFinishPicker } from './PlainFinishPicker';
 import { FLOCK_DEFAULTS } from './animations/FlockSystem';
 import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
@@ -2488,6 +2489,14 @@ export default function RightPanelStack() {
                   <Plus size={16} className="text-gray-400" />
                 </button>
               </div>
+
+              <PlainFinishPicker onPick={finish => {
+                setActiveMaterial(finish.color);
+                setActiveMaterialBindingId(null);
+                setActivePBR({ roughness: finish.roughness, metalness: finish.metalness, opacity: finish.opacity });
+                setActiveSurfaceDepth(null);
+                setActiveTool('paint');
+              }} activeColor={activeMaterial} />
 
               {customMaterials.filter(m => m.type === 'texture').length > 0 && (
                 <div className="space-y-2">

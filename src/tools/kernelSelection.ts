@@ -66,17 +66,37 @@ export function faceSummaries(g: Graph): FaceSummary[] {
     });
 }
 
-/** Applies a colour to a face's front. Returns false when the face is gone. */
-export function paintFace(g: Graph, id: FaceId, color: string): boolean {
+/** How shiny/metallic/see-through a painted face is, and which library material it uses. */
+export interface FaceFinish {
+  /** Poly Haven library material id, or null for a plain colour. */
+  bindingId?: string | null;
+  roughness?: number;
+  metalness?: number;
+  opacity?: number;
+}
+
+/** The finish a face was painted with (stored alongside its colour). */
+export function getFaceFinish(g: Graph, id: FaceId): FaceFinish | undefined {
+  const finish = g.faces.get(id)?.attributes.custom.finish as FaceFinish | undefined;
+  return finish && (finish.bindingId || finish.roughness !== undefined || finish.metalness !== undefined || finish.opacity !== undefined) ? finish : undefined;
+}
+
+/**
+ * Applies a colour to a face's front. Returns false when the face is gone. A `finish` sets the
+ * face's library material and roughness/metalness/opacity; painting without one clears them.
+ */
+export function paintFace(g: Graph, id: FaceId, color: string, finish?: FaceFinish | null): boolean {
   const f = g.faces.get(id);
   if (!f) return false;
   f.attributes.materialFront = color;
+  if (finish) f.attributes.custom.finish = { ...finish };
+  else delete f.attributes.custom.finish;
   return true;
 }
 
-export function paintFaces(g: Graph, ids: Iterable<FaceId>, color: string): number {
+export function paintFaces(g: Graph, ids: Iterable<FaceId>, color: string, finish?: FaceFinish | null): number {
   let n = 0;
-  for (const id of ids) if (paintFace(g, id, color)) n++;
+  for (const id of ids) if (paintFace(g, id, color, finish)) n++;
   return n;
 }
 
@@ -242,6 +262,7 @@ export interface KernelRenderGroup {
   readonly color: string;
   readonly faceIds: FaceId[];
   readonly surfaceDepth: HeightMapValue | undefined;
+  readonly finish: FaceFinish | undefined;
 }
 
 /**
@@ -261,10 +282,11 @@ export function facesByRenderGroup(g: Graph): KernelRenderGroup[] {
     if (f.attributes.hidden) continue;
     const color = f.attributes.materialFront ?? DEFAULT_LABEL_COLOR;
     const depth = getFaceSurfaceDepth(g, id);
-    const key = `${color} ${surfaceDepthSignature(depth)}`;
+    const finish = getFaceFinish(g, id);
+    const key = `${color} ${surfaceDepthSignature(depth)} ${finish ? JSON.stringify(finish) : ''}`;
     let group = groups.get(key);
     if (!group) {
-      group = { color, faceIds: [], surfaceDepth: depth };
+      group = { color, faceIds: [], surfaceDepth: depth, finish };
       groups.set(key, group);
       order.push(key);
     }
@@ -571,6 +593,7 @@ export function duplicateGroup(
     const f = g.faces.get(fid);
     if (!f) continue;
     const material = f.attributes.materialFront;
+    const finish = f.attributes.custom.finish;
 
     const order = loopPoints(g, f.outerLoop).map((p) => add(p, offset));
     const holes = f.innerLoops.map((loopId) => loopPoints(g, loopId).map((p) => add(p, offset)));
@@ -594,6 +617,7 @@ export function duplicateGroup(
       if (faceIdsBefore.has(newFid)) continue;
       newFace.attributes.custom.isolatedShape = true;
       if (material) newFace.attributes.materialFront = material;
+      if (finish) newFace.attributes.custom.finish = { ...(finish as object) };
       newFaceIds.push(newFid);
     }
   }

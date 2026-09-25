@@ -30,7 +30,7 @@ export type ToolType =
   | 'bevel' | 'subtract' | 'note' | 'deform'
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
-  | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'water' | 'patio'
+  | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'water' | 'patio' | 'protractor'
   | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping'
   | 'block_picker'
   | CivilToolMode;

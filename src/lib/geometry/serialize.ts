@@ -68,6 +68,8 @@ export interface SerializedFace {
   name: string | null;
   hidden: boolean;
   orientationLocked: boolean;
+  /** Library material and roughness/metalness/opacity the face was painted with. */
+  finish?: { bindingId?: string | null; roughness?: number; metalness?: number; opacity?: number } | null;
   uv: { ox: number; oy: number; oz: number; ux: number; uy: number; uz: number; vx: number; vy: number; vz: number } | null;
 }
 
@@ -160,6 +162,7 @@ export function serializeGraph(g: Graph): SerializedGraph {
         name: a.name,
         hidden: a.hidden,
         orientationLocked: a.orientationLocked,
+        finish: (a.custom.finish as SerializedFace['finish']) ?? null,
         uv: a.uv
           ? {
               ox: a.uv.origin.x, oy: a.uv.origin.y, oz: a.uv.origin.z,
@@ -273,7 +276,7 @@ export function deserializeGraph(data: SerializedGraph | null | undefined): Grap
               v: { x: f.uv.vx, y: f.uv.vy, z: f.uv.vz },
             }
           : null,
-        custom: {},
+        custom: f.finish ? { finish: { ...f.finish } } : {},
       },
     });
   }

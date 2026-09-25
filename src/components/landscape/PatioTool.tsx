@@ -113,11 +113,20 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
 
   useEffect(() => {
     setMeasurements('Patio / Decking: click the corners (hold Shift to curve the next edge through a point) or drag a rectangle. Click the first point or press Enter to finish.');
-  }, [setMeasurements]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The listeners below are attached once. They read everything that changes between renders
+  // through this ref: the app's callbacks are recreated on every app render, and re-attaching
+  // the listeners between a press and its release used to lose the click entirely.
+  const latest = useRef({ groundPoint, onCommit, faces, paused });
+  latest.current = { groundPoint, onCommit, faces, paused };
 
   useEffect(() => {
     const canvas = gl.domElement;
     let downAt: { x: number; y: number; point: SnappedPoint } | null = null;
+    const groundPoint = (event: PointerEvent | MouseEvent) => latest.current.groundPoint(event);
+    const onCommit = (points: SnappedPoint[], bulges: number[]) => latest.current.onCommit(points, bulges);
     const finish = () => {
       const d = draftRef.current;
       if (d.points.length >= 3) {
@@ -128,7 +137,7 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
     };
     const down = (event: PointerEvent) => {
       handleBusy.current = false;
-      if (event.button !== 0 || paused) return;
+      if (event.button !== 0 || latest.current.paused) return;
       const point = groundPoint(event);
       if (!point) return;
       downAt = { x: event.clientX, y: event.clientY, point };
@@ -150,7 +159,7 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
       if (currentDrag) {
         setDrag(null);
         const corners = dragRectangle(currentDrag.from, currentDrag.to);
-        if (corners) onCommit(corners.map(p => snapToWalls(p, faces)), [0, 0, 0, 0]);
+        if (corners) onCommit(corners.map(p => snapToWalls(p, latest.current.faces)), [0, 0, 0, 0]);
         return;
       }
       const point = groundPoint(event) ?? start.point;
@@ -168,6 +177,9 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
         setDraft({ ...d, through: point.p });
         return;
       }
+      // The second click of a double-click lands on the point just placed: don't add it twice.
+      const last = d.points[d.points.length - 1];
+      if (last && Math.hypot(point.p[0] - last.p[0], point.p[1] - last.p[1]) < 0.05) return;
       const bulges = d.bulges.slice();
       if (d.through && d.points.length) bulges[d.points.length - 1] = bulgeThrough(d.points[d.points.length - 1].p, point.p, d.through);
       setDraft({ points: [...d.points, point], bulges, through: null });
@@ -195,8 +207,7 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
       canvas.removeEventListener('dblclick', dblclick);
       window.removeEventListener('keydown', key);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gl, camera, faces, groundAt, onCommit, paused]);
+  }, [gl]);
 
   // Preview: the outline so far, the edge to the cursor (curved through a Shift-clicked point).
   const preview = useMemo(() => {

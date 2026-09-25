@@ -8,6 +8,7 @@ import { GlassWeatherDriver, WetGlassMaterial, useGlassWeather } from './graphic
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
 import { PatioMesh } from './landscape/PatioMesh';
+import { ProtractorTool, ProtractorMeasurement, type ProtractorArgs } from './ProtractorTool';
 import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint } from './landscape/PatioTool';
 import { denseOutline } from '../lib/patio/patioGeometry';
 import { WaterDrawPreview } from './WaterDrawPreview';
@@ -96,7 +97,8 @@ import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers
 import StyleLibraryModal from './StyleLibraryModal';
 import { LampStylePicker } from './graphics/LampStylePicker';
 import { findLampStyle } from '../lib/lampStyles';
-import { KernelGeometry } from './KernelGeometry';
+import { KernelGeometry, type KernelFaceBinding } from './KernelGeometry';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { useLineBinding } from '../tools/lineToolBinding';
 import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
@@ -108,7 +110,7 @@ import { chooseTier } from '../lib/assets/materialResolver';
 import { EnvironmentManager } from '../lib/assets/environmentManager';
 import { useManagedBindingTextures } from '../lib/assets/useManagedBindingTextures';
 import { rankSnap } from '../tools/tuning';
-import { paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
+import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
@@ -457,6 +459,18 @@ function getCachedTexture(url: string): THREE.Texture {
 // getCachedTexture() above this must never set SRGBColorSpace - doing so
 // would visibly distort normals and mis-scale roughness/metalness/AO values.
 const _polyformPBRMapCache = new Map<string, THREE.Texture>();
+/**
+ * The finish the paint tool applies to kernel faces: a library material, or the active
+ * roughness/metalness/opacity (null for a plain default colour).
+ */
+function faceFinishFor(bindingId: string | null | undefined, pbr: { roughness?: number; metalness?: number; opacity?: number } | undefined): FaceFinish | null {
+  const p = pbr ?? { roughness: 0.5, metalness: 0, opacity: 1 };
+  const plainDefault = (p.roughness ?? 0.5) === 0.5 && (p.metalness ?? 0) === 0 && (p.opacity ?? 1) === 1;
+  if (!bindingId && plainDefault) return null;
+  return { bindingId: bindingId ?? null, roughness: bindingId ? undefined : p.roughness,
+    metalness: bindingId ? undefined : p.metalness, opacity: p.opacity ?? 1 };
+}
+
 function getCachedPBRMapTexture(url?: string): THREE.Texture | undefined {
   if (!url) return undefined;
   let tex = _polyformPBRMapCache.get(url);
@@ -1157,7 +1171,7 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
       case 'fence':
         return createFenceGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.4, Array.isArray(shape.args) ? shape.args[1] : 1.1);
       case 'railing':
-        return createRailingGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.0, Array.isArray(shape.args) ? shape.args[1] : 1.0);
+        return createRailingGeometry(Array.isArray(shape.args) ? shape.args[0] : 2.0, Array.isArray(shape.args) ? shape.args[1] : 1.0, Array.isArray(shape.args) ? shape.args[2] ?? 0 : 0);
       case 'lamp':
         return createLampGeometry(Array.isArray(shape.args) ? shape.args[1] : 3.2, shape.archStyle || 'classic');
       case 'bench':
@@ -1176,114 +1190,6 @@ function LandscapeFeatureGeometry({ shape }: { shape: Shape }) {
   }, [geometry]);
 
   return <primitive object={geometry} attach="geometry" />;
-}
-
-function MiniShapeMesh({ shape }: { shape: Shape }) {
-  if (shape.hidden) return null;
-  const args = Array.isArray(shape.args) ? (shape.args as number[]) : [];
-  const materialProps: any = {
-    color: (shape as any).color || '#cccccc',
-    roughness: (shape as any).roughness ?? 0.6,
-    metalness: (shape as any).metalness ?? 0,
-    transparent: ((shape as any).opacity ?? 1) < 1,
-    opacity: (shape as any).opacity ?? 1,
-    side: THREE.DoubleSide
-  };
-  const pos = shape.position as [number, number, number];
-  const quat = (shape.quaternion as [number, number, number, number]) || [0, 0, 0, 1];
-  switch (shape.type) {
-    case 'box':
-    case 'rect':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <boxGeometry args={[args[0] || 1, args[1] || 1, args[2] || 1]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'wall':
-    case 'door':
-    case 'window':
-    case 'step':
-    case 'staircase':
-    case 'scale_figure':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <ArchGeometry shape={shape} />
-          <meshStandardMaterial {...materialProps} vertexColors={shape.type === 'scale_figure'} />
-        </mesh>
-      );
-    case 'circle':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <cylinderGeometry args={[args[0] || 1, args[0] || 1, args[2] || 0.01, args[3] || 32]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'triangle':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <cylinderGeometry args={[args[0] || 1, args[0] || 1, args[2] || 0.01, 3]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'sphere':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <sphereGeometry args={[args[0] || 1, args[1] || 16, args[2] || 16]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'cone':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <coneGeometry args={[args[0] || 1, args[1] || 1, args[2] || 32]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'pyramid':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <coneGeometry args={[args[0] || 1, args[1] || 1, args[2] || 4]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'donut':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <torusGeometry args={[args[0] || 1, args[1] || 0.3, args[2] || 16, args[3] || 100]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'dome':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <sphereGeometry args={[args[0] || 1, args[1] || 32, args[2] || 32, args[3] || 0, args[4] || Math.PI * 2, args[5] || 0, args[6] || Math.PI / 2]} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'custom':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <CustomGeometry shape={shape} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    case 'tree':
-    case 'bush':
-    case 'fence':
-    case 'railing':
-    case 'lamp':
-    case 'bench':
-    case 'rock':
-      return (
-        <mesh position={pos} quaternion={quat}>
-          <LandscapeFeatureGeometry shape={shape} />
-          <meshStandardMaterial {...materialProps} />
-        </mesh>
-      );
-    default:
-      return null;
-  }
 }
 
 function computeMiniViewBounds(shapes: Shape[]) {
@@ -1344,19 +1250,95 @@ function computeMiniViewBounds(shapes: Shape[]) {
   return { center, radius };
 }
 
+/**
+ * The main perspective view's scene, for the split-view panels. They draw this same live scene
+ * (terrain, kernel-drawn geometry, water, plants, materials, lights, weather — everything) from
+ * their own cameras, instead of a simplified copy of the basic shapes, so every change in the
+ * main view shows up in them too. Three.js scenes can be drawn by several renderers: each
+ * uploads its own copies of the geometry and textures.
+ */
+export const mainSceneRef: { current: THREE.Scene | null } = { current: null };
+
+/** Registers the main view's scene for the split-view panels. */
+function ShareMainScene() {
+  const scene = useThree(state => state.scene);
+  useEffect(() => {
+    mainSceneRef.current = scene;
+    return () => { if (mainSceneRef.current === scene) mainSceneRef.current = null; };
+  }, [scene]);
+  return null;
+}
+
+/**
+ * Draws the main scene with this panel's camera, every other frame. The main view's
+ * environment map and sky belong to the main renderer (render targets it generated), so this
+ * panel uses its own neutral environment over a plain background. Other main-renderer-only
+ * textures (water and portal reflections) show blank here.
+ */
+function MirrorMainScene({ background }: { background: string }) {
+  const frame = useRef(0);
+  const color = useMemo(() => new THREE.Color(background), [background]);
+  const gl = useThree(state => state.gl);
+  // A neutral studio environment of this panel's own, so materials read much as they do in the
+  // main view (the main view's environment map lives in the main renderer only).
+  const environment = useMemo(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+    return texture;
+  }, [gl]);
+  useEffect(() => () => environment.dispose(), [environment]);
+  useFrame(({ gl, camera, scene: own }) => {
+    const main = mainSceneRef.current;
+    if (!main) { gl.render(own, camera); return; }
+    if (frame.current++ % 2) return;
+    const savedBackground = main.background, savedEnvironment = main.environment;
+    main.background = color;
+    main.environment = environment;
+    try {
+      gl.render(main, camera);
+    } finally {
+      main.background = savedBackground;
+      main.environment = savedEnvironment;
+    }
+  }, 1);
+  return null;
+}
+
+/** World bounds of everything modelled in the main scene (shapes, kernel geometry, terrain). */
+function mainSceneBounds(fallback: { center: THREE.Vector3; radius: number }) {
+  const main = mainSceneRef.current;
+  if (!main) return fallback;
+  const box = new THREE.Box3();
+  main.updateMatrixWorld();
+  main.traverseVisible(object => {
+    if (!(object as THREE.Mesh).isMesh) return;
+    if (object.userData?.isShape || object.userData?.isKernelGeometry) box.expandByObject(object);
+  });
+  if (box.isEmpty()) return fallback;
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  return { center: sphere.center, radius: Math.max(1, sphere.radius) };
+}
+
 function MiniScene({ view }: { view: 'top' | 'front' | 'right' }) {
-  const { shapes, theme, activeTool } = useApp();
-  const { center, radius } = React.useMemo(() => computeMiniViewBounds(shapes), [shapes]);
+  const { shapes, theme, activeTool, kernelRevision } = useApp();
+  const fallback = React.useMemo(() => computeMiniViewBounds(shapes), [shapes]);
+  // Re-frame when the model changes (a moment later, once the main view has drawn it).
+  const [bounds, setBounds] = useState(fallback);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setBounds(mainSceneBounds(fallback)), 150);
+    return () => window.clearTimeout(timer);
+  }, [fallback, kernelRevision]);
+  const { center, radius } = bounds;
   const dist = radius * 2.2 + 4;
   const camPos: [number, number, number] =
     view === 'top' ? [center.x, center.y + dist, center.z + 0.01] :
     view === 'front' ? [center.x, center.y, center.z + dist] :
     [center.x + dist, center.y, center.z];
   const target: [number, number, number] = [center.x, center.y, center.z];
-  const gridSize = Math.max(radius * 5, 60);
   return (
     <>
-      <PerspectiveCamera makeDefault position={camPos} fov={35} />
+      <PerspectiveCamera makeDefault position={camPos} fov={35} far={Math.max(2000, dist * 4)} />
       <OrbitControls
         target={target}
         enableRotate={false}
@@ -1369,10 +1351,7 @@ function MiniScene({ view }: { view: 'top' | 'front' | 'right' }) {
           RIGHT: THREE.MOUSE.PAN
         }}
       />
-      <ambientLight intensity={0.8} />
-      <directionalLight position={[10, 20, 10]} intensity={0.7} />
-      <gridHelper args={[gridSize, 60, theme === 'dark' ? '#444444' : '#cccccc', theme === 'dark' ? '#2a2a2a' : '#e5e5e5']} />
-      {shapes.filter(s => !s.hidden).map(shape => <MiniShapeMesh key={shape.id} shape={shape} />)}
+      <MirrorMainScene background={theme === 'dark' ? '#1f2937' : '#eef2f6'} />
     </>
   );
 }
@@ -1669,12 +1648,33 @@ function Scene() {
       if (shape.patioData?.surfaceMaterialId) ids.add(shape.patioData.surfaceMaterialId);
       for (const id of Object.values(shape.surfaceMaterialBindings ?? {})) if (id) ids.add(id);
     }
+    // Library materials painted onto kernel-drawn faces.
+    for (const face of kernelHost.graph.faces.values()) {
+      const bindingId = (face.attributes.custom.finish as { bindingId?: string | null } | undefined)?.bindingId;
+      if (bindingId) ids.add(bindingId);
+    }
     return Object.fromEntries([...ids].filter(id => materialBindings[id]).map(id => [id, materialBindings[id]]));
-  }, [shapes, materialBindings]);
+  }, [shapes, materialBindings, kernelHost, kernelRevision]);
   const { resolved: resolvedMaterialBindings } = useMaterialBindings(usedMaterialBindings, '2k');
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
   const managedBindingTextures = useManagedBindingTextures(gl, resolvedMaterialBindings);
+  /** Library material textures for kernel faces (same pipeline as shapes' bindingMaterial). */
+  const kernelBindingFor = useCallback((bindingId: string): KernelFaceBinding | undefined => {
+    const binding = resolvedMaterialBindings[bindingId];
+    if (!binding) return undefined;
+    const textures = managedBindingTextures[bindingId];
+    const ormUrl = runtimeImageUrl(binding.maps.orm);
+    const orm = textures?.orm ?? getCachedPBRMapTexture(ormUrl) ?? null;
+    return {
+      map: textures?.basecolor ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps.basecolor)),
+      normalMap: textures?.['normal-gl'] ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps['normal-gl'])) ?? null,
+      normalScale: new THREE.Vector2(binding.normalStrength ?? 1, binding.normalStrength ?? 1),
+      roughnessMap: orm, metalnessMap: orm, aoMap: orm,
+      roughness: binding.roughness, metalness: binding.metalness, color: binding.color,
+    };
+  }, [resolvedMaterialBindings, managedBindingTextures]);
+  const activeFaceFinish = () => faceFinishFor(activeMaterialBindingId, activePBR);
   const batchedPlants = useMemo(() => {
     const selected = new Set([...selectedIds, ...(selectedId ? [selectedId] : [])]);
     return shapes.filter(shape => batchablePlant(shape, selected, tags, graphicsSettings.vegetation.instancing, activeTool));
@@ -1811,18 +1811,18 @@ function Scene() {
       // many separate primitives they came from — the height map carried by
       // the active material included, same as its color.
       if (event.shiftKey) {
-        if (paintFace(kernelHost.graph, faceId, activeMaterial)) {
+        if (paintFace(kernelHost.graph, faceId, activeMaterial, activeFaceFinish())) {
           setFaceSurfaceDepth(kernelHost.graph, faceId, activeSurfaceDepth ?? null);
           bumpKernel();
         }
       } else if (kernelSelectedSet.size > 1) {
-        if (paintFaces(kernelHost.graph, kernelSelectedSet, activeMaterial) > 0) {
+        if (paintFaces(kernelHost.graph, kernelSelectedSet, activeMaterial, activeFaceFinish()) > 0) {
           setFacesSurfaceDepth(kernelHost.graph, kernelSelectedSet, activeSurfaceDepth ?? null);
           bumpKernel();
         }
       } else {
         const group = groupContaining(kernelHost.graph, faceId);
-        if (paintFaces(kernelHost.graph, group, activeMaterial) > 0) {
+        if (paintFaces(kernelHost.graph, group, activeMaterial, activeFaceFinish()) > 0) {
           setFacesSurfaceDepth(kernelHost.graph, group, activeSurfaceDepth ?? null);
           bumpKernel();
         }
@@ -4528,9 +4528,26 @@ function Scene() {
     setMeasurements('');
   }, [setMeasurements, activeTool, commitFenceRun, commitWaterBody, fenceVertices]);
 
+  /** The first modelled surface under the cursor for the railing tool (not other railings), else the ground. */
+  const railingSurfaceUnderCursor = (): THREE.Vector3 | null => {
+    const hit = raycaster.intersectObjects(scene.children, true).find(i => {
+      if (!i.object.visible || !(i.object as THREE.Mesh).isMesh) return false;
+      for (let o: THREE.Object3D | null = i.object; o; o = o.parent) {
+        if (o.userData?.isShape || o.userData?.isKernelGeometry) {
+          return shapes.find(s => s.id === o!.userData.id)?.type !== 'railing';
+        }
+      }
+      return false;
+    });
+    return hit ? hit.point.clone() : pointerGround(raycaster.ray);
+  };
+
   const createFenceRailingSegment = useCallback((pA: THREE.Vector3, pB: THREE.Vector3, tool: 'fence' | 'railing') => {
-    const dist = pA.distanceTo(pB);
+    // Length along the ground plan; a railing section also records how much it rises end to
+    // end, so it follows a slope instead of hanging level from its midpoint.
+    const dist = Math.hypot(pB.x - pA.x, pB.z - pA.z);
     if (dist < 0.1) return null;
+    const rise = pB.y - pA.y;
 
     const center = pA.clone().lerp(pB, 0.5);
     const height = tool === 'fence' ? 1.1 : 1.0;
@@ -4551,7 +4568,7 @@ function Scene() {
       type: tool,
       position: [center.x, center.y, center.z],
       quaternion: [quat.x, quat.y, quat.z, quat.w],
-      args: [dist, height],
+      args: tool === 'railing' ? [dist, height, rise] : [dist, height],
       color,
       roughness: activePBR.roughness ?? 0.7,
       metalness: activePBR.metalness ?? 0.1,
@@ -4571,6 +4588,8 @@ function Scene() {
       // Scale, undo/redo, delete, etc.) must be suppressed so they don't fire
       // while the player is just trying to walk. See WalkModeController.
       if (activeTool === 'walk') return;
+      // The patio and protractor tools take their own keys (Enter, Esc, Backspace, typed angles).
+      if (activeTool === 'patio' || activeTool === 'protractor') return;
       if (isDeveloperConsoleOpen) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) { if (e.key === 'Enter' && rectangleInputState.active) { e.preventDefault(); finalizeRectangleInput(); } else if (e.key === 'Escape' && rectangleInputState.active) { e.preventDefault(); setRectangleInputState({ active: false, startPoint: null, width: '', depth: '' }); } return; }
       
@@ -5178,7 +5197,7 @@ function Scene() {
     // (selection, drawing, deselect-on-background, etc.) must not run
     // while it's active.
     // The patio tool draws through its own canvas listeners too (see PatioDrawTool).
-    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio') return;
+    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio' || activeTool === 'protractor') return;
     pointerUpHandledRef.current = false;
     setPointerDownInfo({ time: Date.now(), pos: e.point.clone() });
 
@@ -5414,7 +5433,7 @@ function Scene() {
         let normal = new THREE.Vector3(0, 1, 0);
         let p = new THREE.Vector3();
 
-        const groundHit = activeTool === 'railing' ? null : pointerGround(raycaster.ray);
+        const groundHit = activeTool === 'railing' ? railingSurfaceUnderCursor() : pointerGround(raycaster.ray);
         if (groundHit) {
           // Fences and ponds sit on the ground; a level plane keeps later points from drifting.
           p = groundHit;
@@ -6212,7 +6231,7 @@ function Scene() {
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     // See handlePointerDown's identical guard - Walk Mode's own placement
     // hover lives entirely in WalkModeController.
-    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio') return;
+    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio' || activeTool === 'protractor') return;
     if (activeTool === 'teleport') {
       // Portal Navigation's own hover tracking no longer happens here at
       // all - see TeleportPortalPreview's useFrame. Raycasting against the
@@ -6723,7 +6742,9 @@ function Scene() {
     if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
       const plane = fencePlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
       const target = new THREE.Vector3();
-      const groundHit = activeTool === 'railing' ? null : pointerGround(raycaster.ray);
+      // Fences and ponds follow the ground. Railings stand on whatever is under the cursor
+      // (a slab edge, a wall top, a deck, or the ground), never on a plane in mid air.
+      const groundHit = activeTool === 'railing' ? railingSurfaceUnderCursor() : pointerGround(raycaster.ray);
       if (groundHit) target.copy(groundHit);
       if (groundHit || raycaster.ray.intersectPlane(plane, target)) {
         let finalPos = target.clone();
@@ -7174,8 +7195,19 @@ function Scene() {
         const bitangent = new THREE.Vector3().crossVectors(drawingNormal, tangent).normalize();
 
         // Collect geometric candidate points
-        const candidates: Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; screenDist: number }> = [];
+        const candidates: Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; screenDist: number; label?: string }> = [];
         shapes.forEach(sh => {
+          if (sh.type === 'measurement' && sh.args?.kind === 'protractor') {
+            // Guide lines: snap onto the nearest point along the guide, and to its centre.
+            const gStart = new THREE.Vector3(...(sh.args.start as [number, number, number]));
+            const gEnd = new THREE.Vector3(...(sh.args.end as [number, number, number]));
+            const onGuide = new THREE.Line3(gStart, gEnd).closestPointToPoint(target, true, new THREE.Vector3());
+            for (const [p, label] of [[onGuide, 'On guide'], [new THREE.Vector3(...(sh.args.centre as [number, number, number])), 'Guide centre']] as const) {
+              const pr = projectToScreen(p);
+              if (pr.inFront) candidates.push({ point: p.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) + (label === 'On guide' ? 4 : 0), label });
+            }
+            return;
+          }
           if (sh.type === 'measurement') {
             if (sh.args && Array.isArray(sh.args.start) && Array.isArray(sh.args.end)) {
               const mStart = new THREE.Vector3(sh.args.start[0], sh.args.start[1], sh.args.start[2]);
@@ -7283,7 +7315,7 @@ function Scene() {
           snapHit = {
             point: bestCandidate.point.clone(),
             type: bestCandidate.type,
-            tooltip: bestCandidate.type === 'endpoint' ? 'Endpoint' : bestCandidate.type === 'midpoint' ? 'Midpoint' : 'Center'
+            tooltip: bestCandidate.label ?? (bestCandidate.type === 'endpoint' ? 'Endpoint' : bestCandidate.type === 'midpoint' ? 'Midpoint' : 'Center')
           };
         } else if (!axisLock && awakenedRefPointsRef.current.length > 0) {
           // Cardinal alignment inference tracking rays from awakened reference points
@@ -7928,7 +7960,7 @@ function Scene() {
   };
 
   const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
-    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio') return;
+    if (activeTool === 'walk' || activeTool === 'look' || activeTool === 'patio' || activeTool === 'protractor') return;
 
     if (e?.stopPropagation) e.stopPropagation();
     if (pointerUpHandledRef.current) return;
@@ -9526,6 +9558,7 @@ function Scene() {
         intensity={sunIntensity} 
         castShadow={shadowsEnabled} 
       />
+      <ShareMainScene />
       <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />
       
       {godRaysEnabled && (
@@ -9920,6 +9953,7 @@ function Scene() {
         edgeColor={edgeLinesColor}
         edgeOpacity={edgeLinesOpacity}
         edgeLineWidth={edgeLinesThickness}
+        bindingFor={kernelBindingFor}
       />
 
       <LassoOverlay getSceneObjectById={getSceneObjectById} />
@@ -9982,6 +10016,12 @@ function Scene() {
 
         if (!isVisible) return null;
 
+        if (shape.type === 'measurement' && (shape.args as any)?.kind === 'protractor') {
+          return (
+            <ProtractorMeasurement key={shape.id} args={shape.args as ProtractorArgs} selected={selectedId === shape.id}
+              onSelect={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }} />
+          );
+        }
         if (shape.type === 'measurement') {
           const mArgs: any = shape.args || {};
           const mStart: [number, number, number] = mArgs.start || [0, 0, 0];
@@ -11617,6 +11657,15 @@ function Scene() {
         </group>
       )}
 
+      {activeTool === 'protractor' && (
+        <ProtractorTool onCommit={args => {
+          addShape({ id: Math.random().toString(36).substr(2, 9), name: `Protractor ${Math.abs(args.angle).toFixed(1)}°`, type: 'measurement',
+            position: args.centre, args, color: '#0ea5e9' } as Shape);
+          commitHistory();
+          setMeasurements(`Angle: ${Math.abs(args.angle).toFixed(1)}° · guide line placed`);
+        }} />
+      )}
+
       {activeTool === 'patio' && (
         <PatioDrawTool groundAt={patioDrawnGround} onCommit={commitPatio} paused={patioToolSettings.placingSteps} />
       )}
@@ -12841,6 +12890,7 @@ export default function Viewport() {
     selectedSurface, 
     activeMaterial, 
     activePBR, 
+    activeMaterialBindingId,
     activeSurfaceDepth,
     setShapes, 
     addShape,
@@ -13733,7 +13783,7 @@ export default function Viewport() {
               */}
               <button
                 onClick={() => {
-                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial) > 0) {
+                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial, faceFinishFor(activeMaterialBindingId, activePBR)) > 0) {
                     setFacesSurfaceDepth(kernelHost.graph, contextMenu.data, activeSurfaceDepth ?? null);
                     bumpKernel();
                   }

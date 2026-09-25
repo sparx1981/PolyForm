@@ -46,6 +46,7 @@ uniform sampler2D occlusionMap;
 uniform mat4 occlusionMatrix;
 uniform float occlusionEnabled;
 uniform float occlusionBias;
+uniform float occlusionTexel;
 varying float particleAlpha;
 varying float angle;
 varying float cloudSeed;
@@ -74,7 +75,14 @@ void main() {
     // The occlusion map is a depth image of the scene seen straight down from above.
     vec4 fromAbove = occlusionMatrix * modelMatrix * vec4(p, 1.0);
     if (all(greaterThan(fromAbove.xy, vec2(0.0))) && all(lessThan(fromAbove.xy, vec2(1.0)))) {
+      // Conservative: the highest surface over a small neighbourhood, so drops can't slip
+      // through hairline gaps between texels (roof edges, thin members, mitred corners).
+      vec2 o = vec2(occlusionTexel);
       float surface = texture2D(occlusionMap, fromAbove.xy).r;
+      surface = min(surface, texture2D(occlusionMap, fromAbove.xy + vec2(o.x, o.y)).r);
+      surface = min(surface, texture2D(occlusionMap, fromAbove.xy + vec2(-o.x, o.y)).r);
+      surface = min(surface, texture2D(occlusionMap, fromAbove.xy + vec2(o.x, -o.y)).r);
+      surface = min(surface, texture2D(occlusionMap, fromAbove.xy + vec2(-o.x, -o.y)).r);
       if (fromAbove.z > surface + occlusionBias) particleAlpha = 0.0;
     }
   }
@@ -147,7 +155,7 @@ void main() {
 
 /** Scene layer used only by the weather's top-down occlusion render. */
 export const WEATHER_OCCLUDER_LAYER = 30;
-const OCCLUSION_RESOLUTION = 1024;
+const OCCLUSION_RESOLUTION = 2048;
 /** The occlusion camera sits this far above the top of the weather volume. */
 const OCCLUSION_HEADROOM = 150;
 const OCCLUSION_DEPTH = 700;
@@ -172,7 +180,7 @@ export class WeatherSystem {
   private shared = { time: { value: 0 }, bounds: { value: new THREE.Vector3(80, 40, 80) },
     wind: { value: new THREE.Vector2(1.2, 0.3) }, pixelScale: { value: 540 }, maxPointSize: { value: 64 }, volumetric: { value: 0 },
     occlusionMap: { value: null as THREE.Texture | null }, occlusionMatrix: { value: new THREE.Matrix4() },
-    occlusionEnabled: { value: 0 }, occlusionBias: { value: 0.08 / OCCLUSION_DEPTH } };
+    occlusionEnabled: { value: 0 }, occlusionBias: { value: 0.05 / OCCLUSION_DEPTH }, occlusionTexel: { value: 1.5 / OCCLUSION_RESOLUTION } };
   private occlusionTarget?: THREE.WebGLRenderTarget;
   private readonly occlusionCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, OCCLUSION_DEPTH);
   private readonly occlusionMaterial = new THREE.MeshDepthMaterial({ side: THREE.DoubleSide });

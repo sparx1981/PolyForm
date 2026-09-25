@@ -20,7 +20,7 @@ import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { EdgeId, FaceId, Graph } from '../lib/geometry/types';
 import { tessellateFace, tessellateGraph, mergeBuffers, edgeBuffer } from '../lib/geometry/tessellate';
-import { facesByRenderGroup } from '../tools/kernelSelection';
+import { facesByRenderGroup, type KernelRenderGroup } from '../tools/kernelSelection';
 import { ThickLineSegments } from './ThickLineSegments';
 import { KernelSurfaceDepthBinding } from './graphics/KernelSurfaceDepthBinding';
 import type { HeightMapValue } from '../types';
@@ -65,6 +65,21 @@ export interface KernelGeometryProps {
   defaultColor?: string;
   selectedColor?: string;
   opacity?: number;
+  /** Resolves a library (Poly Haven) material painted onto faces to its loaded textures. */
+  bindingFor?: (bindingId: string) => KernelFaceBinding | undefined;
+}
+
+/** A library material's textures and values, as resolved by the Viewport. */
+export interface KernelFaceBinding {
+  map?: THREE.Texture;
+  normalMap?: THREE.Texture | null;
+  normalScale?: THREE.Vector2;
+  roughnessMap?: THREE.Texture | null;
+  metalnessMap?: THREE.Texture | null;
+  aoMap?: THREE.Texture | null;
+  roughness?: number;
+  metalness?: number;
+  color?: string;
 }
 
 const DEFAULT_FACE = '#d8d4cc';
@@ -111,6 +126,7 @@ export function KernelGeometry({
   defaultColor = DEFAULT_FACE,
   selectedColor = DEFAULT_SELECTED,
   opacity = 1,
+  bindingFor,
 }: KernelGeometryProps) {
 
   /**
@@ -121,9 +137,9 @@ export function KernelGeometry({
    * tool work on kernel geometry at all. Hidden faces are excluded here.
    */
   const groups = useMemo(() => {
-    const out: { key: string; color: string; geometry: THREE.BufferGeometry; faceOfTriangle: FaceId[]; surfaceDepth: HeightMapValue | undefined }[] = [];
+    const out: { key: string; color: string; geometry: THREE.BufferGeometry; faceOfTriangle: FaceId[]; surfaceDepth: HeightMapValue | undefined; finish: KernelRenderGroup['finish'] }[] = [];
     let index = 0;
-    for (const { color, faceIds, surfaceDepth } of facesByRenderGroup(graph)) {
+    for (const { color, faceIds, surfaceDepth, finish } of facesByRenderGroup(graph)) {
       const meshes = faceIds
         .map((id) => tessellateFace(graph, id))
         .filter((m): m is NonNullable<typeof m> => m !== null);
@@ -139,7 +155,7 @@ export function KernelGeometry({
       geo.computeBoundingSphere();
       // Two groups can share a colour but differ by height map, so the
       // colour alone is no longer a unique React key.
-      out.push({ key: `${color}#${index++}`, color, geometry: geo, faceOfTriangle: merged.faceOfTriangle, surfaceDepth });
+      out.push({ key: `${color}#${index++}`, color, geometry: geo, faceOfTriangle: merged.faceOfTriangle, surfaceDepth, finish });
     }
     return out;
   }, [graph, revision]);
@@ -215,14 +231,22 @@ export function KernelGeometry({
           }}
         >
           <meshStandardMaterial
-            color={g.color === DEFAULT_FACE ? defaultColor : g.color}
+            // A library material brings its own colour map: the face colour only tints it.
+            color={g.finish?.bindingId && bindingFor?.(g.finish.bindingId)?.map ? '#ffffff' : g.color === DEFAULT_FACE ? defaultColor : g.color}
+            map={g.finish?.bindingId ? bindingFor?.(g.finish.bindingId)?.map ?? null : null}
+            roughnessMap={g.finish?.bindingId ? bindingFor?.(g.finish.bindingId)?.roughnessMap ?? null : null}
+            metalnessMap={g.finish?.bindingId ? bindingFor?.(g.finish.bindingId)?.metalnessMap ?? null : null}
+            aoMap={g.finish?.bindingId ? bindingFor?.(g.finish.bindingId)?.aoMap ?? null : null}
             side={THREE.DoubleSide}
-            transparent={opacity < 1}
-            opacity={opacity}
-            roughness={0.85}
-            metalness={0}
-            normalMap={getKernelNormalMapTexture(g.surfaceDepth?.normalMapUrl)}
-            normalScale={g.surfaceDepth?.normalMapUrl ? new THREE.Vector2(1, 1) : undefined}
+            transparent={opacity < 1 || (g.finish?.opacity ?? 1) < 1}
+            opacity={opacity * (g.finish?.opacity ?? 1)}
+            depthWrite={(g.finish?.opacity ?? 1) >= 1}
+            roughness={g.finish?.roughness ?? (g.finish?.bindingId ? bindingFor?.(g.finish.bindingId)?.roughness : undefined) ?? 0.85}
+            metalness={g.finish?.metalness ?? (g.finish?.bindingId ? bindingFor?.(g.finish.bindingId)?.metalness : undefined) ?? 0}
+            normalMap={(g.finish?.bindingId ? bindingFor?.(g.finish.bindingId)?.normalMap : undefined) ?? getKernelNormalMapTexture(g.surfaceDepth?.normalMapUrl)}
+            normalScale={g.finish?.bindingId && bindingFor?.(g.finish.bindingId)?.normalMap
+              ? bindingFor(g.finish.bindingId)?.normalScale ?? new THREE.Vector2(1, 1)
+              : g.surfaceDepth?.normalMapUrl ? new THREE.Vector2(1, 1) : undefined}
             // Pushes this face's DEPTH VALUES back slightly (not its actual
             // position) so any line geometry sitting exactly on the same
             // plane — the boundary between two coplanar faces, most

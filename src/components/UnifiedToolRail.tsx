@@ -4,6 +4,7 @@ import {
   MousePointer2,
   Waves,
   LayoutGrid,
+  DraftingCompass,
   Lasso,
   Footprints,
   Eraser,
@@ -819,6 +820,16 @@ export default function UnifiedToolRail() {
           isActive: (s) => s.activeTool === 'tape',
           onClick: (s) => s.setActiveTool('tape'),
           keywords: ['tape', 'measure', 'ruler', 'dimension', 'distance']
+        },
+        {
+          id: 'protractor',
+          tool: 'protractor',
+          label: 'Protractor',
+          subtitle: 'Measure angles and place angled guide lines (click centre, base line, then angle)',
+          icon: <DraftingCompass size={19} />,
+          isActive: (s) => s.activeTool === 'protractor',
+          onClick: (s) => s.setActiveTool('protractor'),
+          keywords: ['protractor', 'angle', 'degrees', 'guide', 'measure']
         },
         {
           id: 'dimensions_toggle',

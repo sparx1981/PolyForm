@@ -192,11 +192,15 @@ describe('ArchRoomAssembly & Site Terracing', () => {
     const outside = sampleTerrainElevation(4, 0, graded);
     expect(outside).toBeLessThanOrEqual(assembly.datumZ);
     expect(outside).toBeGreaterThan(assembly.datumZ - 0.05);
-    // Inside, the ground stays hidden inside the slab, below its top face.
-    const inside = sampleTerrainElevation(0, 0, graded);
-    expect(inside).toBeLessThan(assembly.datumZ);
+    // Deep inside the room the ground is cut well below the slab, so a ground material with
+    // surface relief (up to 20 cm of displacement) can't push up through the floor.
     const slabBottom = assembly.slabShape.position[1] - (assembly.slabShape.args as { height: number }).height / 2;
-    expect(inside).toBeGreaterThan(slabBottom);
+    expect(sampleTerrainElevation(0, 0, graded)).toBeLessThan(assembly.datumZ - 0.2);
+    // Right next to the walls it stays just under the slab top, so outside the walls the ground
+    // still meets the wall base.
+    const nearWall = sampleTerrainElevation(2.9, 0, graded);
+    expect(nearWall).toBeLessThan(assembly.datumZ);
+    expect(nearWall).toBeGreaterThan(slabBottom - 0.35);
     // The foundation skirt sits entirely below ground.
     const skirt = assembly.foundationShape!;
     expect(skirt.position[1] + (skirt.args as { height: number }).height / 2).toBeLessThanOrEqual(slabBottom + 1e-9);

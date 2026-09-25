@@ -272,11 +272,16 @@ export function excavateTerrainMesh(
   const newHeights = [...heights];
   // datumZ is the top of the floor slab, which is also where the walls start. Like a real
   // building, finished ground level meets the base of the walls: the slab and the foundation
-  // skirt below it sit inside the ground. Inside the footprint the terrain is cut to just under
-  // the slab's top face (so it stays hidden inside the slab and never pokes through the floor);
-  // the apron is graded a hair below the wall base so the two never z-fight.
-  const targetUndersideWorld = datumZ - Math.min(0.03, Math.max(0.01, slabThickness / 2));
-  const targetUndersideLocal = targetUndersideWorld - posY;
+  // skirt below it sit inside the ground. The apron is graded a hair below the wall base so the
+  // two never z-fight. Inside the footprint:
+  //  - within one grid cell of the edge, the terrain is cut to just under the slab's top face, so
+  //    terrain triangles straddling the edge stay at ground level outside the walls;
+  //  - further in, it is cut well below the slab and foundation, because a ground material with
+  //    surface relief (displacement, up to 20 cm) would otherwise push up through the floor.
+  const nearEdgeWorld = datumZ - Math.min(0.03, Math.max(0.01, slabThickness / 2));
+  const nearEdgeLocal = nearEdgeWorld - posY;
+  const deepLocal = datumZ - Math.max(0.05, slabThickness) - 0.3 - posY;
+  const cell = Math.max(width / Math.max(1, gridX - 1), depth / Math.max(1, gridY - 1));
 
   // Perimeter apron around the floor slab is graded to finished ground level (the wall base).
   const apronElevWorld = datumZ - 0.02;
@@ -293,9 +298,9 @@ export function excavateTerrainMesh(
       const isInside = isPointInPolygon2D(worldX, worldZ, roomPolygon2D);
 
       if (isInside) {
-        // Flat excavation below floor slab underside so terrain cannot protrude through slab
-        if (currentH > targetUndersideLocal) {
-          newHeights[idx] = targetUndersideLocal;
+        const target = distanceToPolygonBoundary2D(worldX, worldZ, roomPolygon2D) <= cell * 1.05 ? nearEdgeLocal : deepLocal;
+        if (currentH > target) {
+          newHeights[idx] = target;
           modified = true;
         }
       } else {

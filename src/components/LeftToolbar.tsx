@@ -31,7 +31,8 @@ import {
   Wand2,
   Ruler,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  DraftingCompass,
 } from 'lucide-react';
 import { useRef, useState, createContext, useContext } from 'react';
 import { FlyoutPortal } from './ui/FlyoutPortal';
@@ -754,10 +755,10 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
           onClick={() => setActiveTool('tape')}
           className={cn(
             "toolbar-btn transition-colors relative",
-            activeTool === 'tape' && "toolbar-btn-active"
+            (activeTool === 'tape' || activeTool === 'protractor') && "toolbar-btn-active"
           )}
         >
-          <Ruler size={20} />
+          {activeTool === 'protractor' ? <DraftingCompass size={20} /> : <Ruler size={20} />}
         </button>
 
         <FlyoutPortal anchorRef={measureGroupRef} open={measureGroupHovered && !isMeasurePopoutOpen} side={flyoutSide}>
@@ -790,6 +791,16 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   >
                     <Ruler size={16} />
                     <span>Measuring Tape</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTool('protractor')}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      activeTool === 'protractor' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
+                    )}
+                  >
+                    <DraftingCompass size={16} />
+                    <span>Protractor</span>
                   </button>
                   <button 
                     onClick={() => setShowAllDimensions(!showAllDimensions)}

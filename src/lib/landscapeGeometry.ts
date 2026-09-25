@@ -750,31 +750,34 @@ export function createFenceGeometry(length: number = 2.4, height: number = 1.1):
   return safeMergeGeometries(geometries, '#8b5a2b');
 }
 
-export function createRailingGeometry(length: number = 2.4, height: number = 1.0): THREE.BufferGeometry {
+/**
+ * A guardrail section `length` long (along x). `rise` is how much higher its +x end stands than
+ * its -x end: the posts stay vertical, each standing on the slope, and the rails run parallel to it.
+ */
+export function createRailingGeometry(length: number = 2.4, height: number = 1.0, rise: number = 0): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = [];
   const postRadius = 0.03;
   const numPosts = Math.max(2, Math.round(length / 1.5) + 1);
   const actualSpacing = length / (numPosts - 1);
+  const baseAt = (x: number) => (x / length) * rise;
 
   for (let i = 0; i < numPosts; i++) {
     const px = -length / 2 + i * actualSpacing;
     const post = new THREE.CylinderGeometry(postRadius, postRadius, height, 10);
-    post.translate(px, height / 2, 0);
+    post.translate(px, baseAt(px) + height / 2, 0);
     geometries.push(post);
   }
 
-  const topHandrail = new THREE.CylinderGeometry(0.04, 0.04, length, 12);
-  topHandrail.rotateZ(Math.PI / 2);
-  topHandrail.translate(0, height, 0);
-  geometries.push(topHandrail);
-
-  const midRailLevels = [0.25, 0.5, 0.75];
-  for (const rL of midRailLevels) {
-    const rod = new THREE.CylinderGeometry(0.01, 0.01, length, 8);
-    rod.rotateZ(Math.PI / 2);
-    rod.translate(0, height * rL, 0);
-    geometries.push(rod);
-  }
+  const run = Math.hypot(length, rise);
+  const tilt = Math.atan2(rise, length);
+  const rail = (radius: number, y: number, segments: number) => {
+    const rod = new THREE.CylinderGeometry(radius, radius, run, segments);
+    rod.rotateZ(Math.PI / 2 + tilt);
+    rod.translate(0, y, 0);
+    return rod;
+  };
+  geometries.push(rail(0.04, height, 12));
+  for (const level of [0.25, 0.5, 0.75]) geometries.push(rail(0.01, height * level, 8));
 
   return safeMergeGeometries(geometries, '#475569');
 }

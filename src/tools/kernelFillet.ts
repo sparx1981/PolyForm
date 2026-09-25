@@ -26,6 +26,7 @@
 
 import type { EdgeId, FaceId, Vec3 } from '../lib/geometry/types';
 import { filletSolid, validateBox } from '../lib/geometry/fillet';
+import { filletPrism, validatePrism } from '../lib/geometry/filletPrism';
 import { computeSafeMaxAmount } from '../lib/geometry/chamfer';
 import { deleteGroupFacesAndEdges } from './kernelSelection';
 import { insertEdge } from '../lib/geometry/insert';
@@ -83,10 +84,12 @@ export function createFilletBinding(
       if (alreadyDone) {
         const reapplyFrom: Vec3[][] = [];
         for (const fid of faces) {
-          const ob = host.graph.faces.get(fid)?.attributes.custom.originalBoundary as
-            | Vec3[]
-            | undefined;
+          const custom = host.graph.faces.get(fid)?.attributes.custom;
+          const ob = custom?.originalBoundary as Vec3[] | undefined;
           if (ob) reapplyFrom.push(ob);
+          // A rounded prism keeps all of its original faces on its top cap.
+          const all = custom?.originalBoundaries as Vec3[][] | undefined;
+          if (all) reapplyFrom.push(...all);
         }
         if (reapplyFrom.length === 0) {
           return { ok: false, reason: 'cannot find the original shape to re-round from' };
@@ -96,7 +99,11 @@ export function createFilletBinding(
       }
 
       const validated = validateBox(host.graph, faces);
-      if (!validated.ok) return { ok: false, reason: (validated as { ok: false; reason: string }).reason };
+      if (!validated.ok) {
+        // Not a box: straight extruded solids (cylinders, prisms, extruded outlines) round too.
+        const prism = validatePrism(host.graph, faces);
+        if (!prism.ok) return { ok: false, reason: (prism as { ok: false; reason: string }).reason };
+      }
       session = { faces: [...faces], radius: 0 };
       return { ok: true };
     },
@@ -141,7 +148,7 @@ export function createFilletBinding(
           targetFaces = [...host.graph.faces.keys()].filter((fid) => !facesBefore.has(fid));
 
           const revalidated = validateBox(host.graph, targetFaces);
-          if (!revalidated.ok) {
+          if (!revalidated.ok && !validatePrism(host.graph, targetFaces).ok) {
             restore(host.graph, before);
             host.reindex();
             return { ok: false, reason: 'could not reconstruct the original shape' };
@@ -161,9 +168,13 @@ export function createFilletBinding(
         // identical fix — see computeSafeMaxAmount's own doc comment
         // for the full mechanism (and why fillet shares chamfer's own
         // face-shrink math, and therefore its identical failure mode).
-        const safeMax = computeSafeMaxAmount(host.graph, targetFaces) * 0.95;
+        const isBox = validateBox(host.graph, targetFaces).ok;
+        const safeMax = isBox ? computeSafeMaxAmount(host.graph, targetFaces) * 0.95 : Infinity;
         const clampedRadius = Math.min(radius, safeMax);
-        const result = filletSolid(ctx, targetFaces, clampedRadius, DEFAULT_SEGMENTS);
+        // filletPrism clamps its own radius to what the solid can take.
+        const result = isBox
+          ? filletSolid(ctx, targetFaces, clampedRadius, DEFAULT_SEGMENTS)
+          : filletPrism(ctx, targetFaces, clampedRadius, DEFAULT_SEGMENTS);
         if (!result.ok) {
           restore(host.graph, before);
           host.reindex();
