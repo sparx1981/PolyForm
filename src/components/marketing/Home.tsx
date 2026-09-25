@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Check, Cloud, Menu, Redo2, Sparkles, Undo2 } from 'lucide-react';
 import {
@@ -7,7 +7,6 @@ import {
 import { ChatCard, Eyebrow, MarketingVisual, RouterLink, scrollToId, type Page } from './shared';
 import { highlightJsLine } from './codeHighlight';
 
-const LandingHero3D = lazy(() => import('../LandingHero3D'));
 
 function ProductFrame() {
   return (
@@ -32,10 +31,36 @@ function ProductFrame() {
             </span>
           ))}
         </div>
-        <div className="flex-1 relative bg-gradient-to-b from-[#dcecf5] via-[#e9f1f4] to-[#e4ede5]">
-          <Suspense fallback={null}>
-            <LandingHero3D />
-          </Suspense>
+        <div className="flex-1 relative overflow-hidden bg-[#eef4f7]">
+          <div
+            className="absolute inset-0 opacity-70"
+            style={{
+              backgroundImage: 'linear-gradient(rgba(0,56,101,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,56,101,.07) 1px, transparent 1px)',
+              backgroundSize: '32px 32px',
+            }}
+            aria-hidden="true"
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_24%,rgba(0,99,163,.13),transparent_35%)]" aria-hidden="true" />
+          <svg viewBox="0 0 920 560" className="absolute inset-[5%] w-[90%] h-[90%]" role="img" aria-label="Architectural site model placeholder">
+            <path d="M80 430 C190 355 260 420 350 370 S520 435 630 355 S785 330 850 365" fill="none" stroke="rgba(0,99,163,.34)" strokeWidth="2.5" strokeDasharray="10 9" />
+            <path d="M120 456 C245 400 292 470 415 408 S625 454 822 398" fill="none" stroke="rgba(0,56,101,.16)" strokeWidth="2" />
+            <path d="M268 355 L268 198 L485 260 L485 414 L268 355 Z" fill="rgba(255,255,255,.78)" stroke="#285b7c" strokeWidth="3" />
+            <path d="M268 198 L412 125 L618 194 L485 260 Z" fill="rgba(0,99,163,.09)" stroke="#0063A3" strokeWidth="3" />
+            <path d="M485 260 L618 194 L618 338 L485 414 Z" fill="rgba(255,255,255,.48)" stroke="#285b7c" strokeWidth="3" />
+            <path d="M320 370 V280 L380 297 V386 M523 395 V293 L572 270 V370" fill="none" stroke="rgba(0,56,101,.58)" strokeWidth="3" />
+            <path d="M170 407 L240 375 M650 350 L750 309 M662 386 L786 346" fill="none" stroke="rgba(0,99,163,.35)" strokeWidth="2" />
+            <circle cx="177" cy="348" r="38" fill="rgba(0,102,56,.08)" stroke="rgba(0,102,56,.38)" strokeWidth="2" />
+            <path d="M177 386 V430" stroke="rgba(0,102,56,.45)" strokeWidth="4" />
+            <circle cx="742" cy="277" r="48" fill="rgba(0,102,56,.08)" stroke="rgba(0,102,56,.38)" strokeWidth="2" />
+            <path d="M742 325 V374" stroke="rgba(0,102,56,.45)" strokeWidth="4" />
+            <path d="M600 420 C654 390 715 400 790 420" fill="none" stroke="rgba(0,99,163,.45)" strokeWidth="3" />
+            <circle cx="716" cy="123" r="32" fill="none" stroke="rgba(0,99,163,.28)" strokeWidth="2" />
+            <path d="M716 73 V48 M716 198 V173 M666 123 H641 M791 123 H766" stroke="rgba(0,99,163,.2)" strokeWidth="2" />
+          </svg>
+          <div className="absolute left-5 bottom-5 rounded-lg bg-white/85 backdrop-blur-md border border-white/70 px-3.5 py-2 shadow-sm">
+            <span className="block text-[10px] font-bold tracking-[0.12em] uppercase text-polyform-blue">Model view</span>
+            <span className="block mt-0.5 text-[12px] font-semibold text-polyform-dark-blue">Building + terrain + landscape</span>
+          </div>
         </div>
         <div className="hidden md:flex w-[230px] flex-none border-l border-gray-200 bg-[#f8fafb] flex-col">
           {HERO_PANEL_TITLES.map((title, i) => {
@@ -263,7 +288,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
                     ))}
                   </div>
                 </div>
-                <MarketingVisual label={active.label} title={active.shot} aspectRatio="4 / 3" />
+                <MarketingVisual label={active.label} title={active.title} aspectRatio="4 / 3" />
               </motion.div>
             </AnimatePresence>
           </div>
