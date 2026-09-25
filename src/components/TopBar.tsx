@@ -42,6 +42,7 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { usePhoneLayout } from '../lib/phoneLayout';
 // @ts-ignore
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
@@ -85,6 +86,11 @@ function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.B
 const cleanFirestoreData = cleanFirestoreDataForSave;
 
 export default function TopBar() {
+  const { isPhone } = usePhoneLayout();
+  const [openSubmenu, setOpenSubmenu] = useState<'export' | 'dev' | null>(null);
+  const submenuClass = (id: 'export' | 'dev', desktop: string) => isPhone
+    ? (openSubmenu === id ? "block pl-4 bg-gray-50 border-y border-gray-100 py-1" : "hidden")
+    : desktop;
     const { 
       user, 
       shapes, 
@@ -773,14 +779,15 @@ export default function TopBar() {
 
   return (
     <header 
-      className="h-12 text-white flex items-center justify-between px-4 z-50 transition-colors duration-300"
+      className={cn("text-white flex items-center justify-between z-50 transition-colors duration-300 shrink-0", isPhone ? "h-10 px-2" : "h-12 px-4")}
       style={{ backgroundColor: bannerColor }}
     >
-      <div className="flex items-center gap-4">
+      <div className={cn("flex items-center", isPhone ? "gap-1" : "gap-4")}>
         <div className="relative" ref={menuRef}>
           <button 
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
+            onClick={() => { setIsMenuOpen(!isMenuOpen); setOpenSubmenu(null); }}
+            className={cn("hover:bg-white/10 rounded transition-colors", isPhone ? "p-2" : "p-1")}
+            aria-label="Menu"
           >
             <Menu size={20} />
           </button>
@@ -791,7 +798,9 @@ export default function TopBar() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                className="absolute left-0 top-full mt-2 w-56 bg-white rounded-lg shadow-modus-4 border border-gray-200 py-2 text-gray-700"
+                className={isPhone
+                  ? "fixed left-0 right-0 top-10 bottom-0 overflow-y-auto bg-white shadow-modus-4 border-t border-gray-200 py-2 text-gray-700 z-[200]"
+                  : "absolute left-0 top-full mt-2 w-56 bg-white rounded-lg shadow-modus-4 border border-gray-200 py-2 text-gray-700"}
               >
                 <MenuButton icon={<FilePlus size={16} />} label="New" onClick={handleNew} />
                 <MenuButton icon={<FolderOpen size={16} />} label="Open File..." onClick={handleOpenLocalFile} />
@@ -804,15 +813,18 @@ export default function TopBar() {
                 <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Project</div>
                 
                 <div className="relative group/export">
-                  <div className="flex items-center justify-between px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer transition-colors">
+                  <div
+                    onClick={() => setOpenSubmenu(prev => prev === 'export' ? null : 'export')}
+                    className={cn("flex items-center justify-between px-4 text-sm hover:bg-gray-50 cursor-pointer transition-colors", isPhone ? "py-3" : "py-2")}
+                  >
                     <div className="flex items-center gap-3">
                       <Download size={16} className="text-gray-500" />
                       <span>Import / Export</span>
                     </div>
-                    <ChevronRight size={14} className="text-gray-400" />
+                    <ChevronRight size={14} className={cn("text-gray-400 transition-transform", isPhone && openSubmenu === 'export' && "rotate-90")} />
                   </div>
                   
-                  <div className="absolute left-full top-0 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/export:block z-[150]">
+                  <div className={submenuClass('export', "absolute left-full top-0 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/export:block z-[150]")}>
                     <div className="absolute -left-2 top-0 w-2 h-full" />
                     <MenuButton icon={<Download size={14} />} label="Save File (.polyform)" onClick={() => { downloadProjectFile(); setIsMenuOpen(false); }} />
                     <MenuButton icon={<FolderOpen size={14} />} label="Open File (.polyform)" onClick={handleOpenLocalFile} />
@@ -834,15 +846,18 @@ export default function TopBar() {
                 <div className="h-px bg-gray-100 my-1" />
                 
                 <div className="relative group/dev">
-                  <div className="flex items-center justify-between px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer transition-colors">
+                  <div
+                    onClick={() => setOpenSubmenu(prev => prev === 'dev' ? null : 'dev')}
+                    className={cn("flex items-center justify-between px-4 text-sm hover:bg-gray-50 cursor-pointer transition-colors", isPhone ? "py-3" : "py-2")}
+                  >
                     <div className="flex items-center gap-3">
                       <Terminal size={16} className="text-gray-500" />
                       <span>Developer</span>
                     </div>
-                    <ChevronRight size={14} className="text-gray-400" />
+                    <ChevronRight size={14} className={cn("text-gray-400 transition-transform", isPhone && openSubmenu === 'dev' && "rotate-90")} />
                   </div>
                   
-                  <div className="absolute left-full top-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/dev:block z-[150]">
+                  <div className={submenuClass('dev', "absolute left-full top-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/dev:block z-[150]")}>
                     <div className="absolute -left-2 top-0 w-2 h-full" /> {/* Bridge the gap for hover */}
                     <MenuButton icon={<Terminal size={14} />} label="Console" onClick={() => { setIsDeveloperConsoleOpen(true); setActiveDeveloperTab('console'); setIsMenuOpen(false); }} />
                     <MenuButton icon={<BookOpen size={14} />} label="Library" onClick={() => { setIsDeveloperConsoleOpen(true); setActiveDeveloperTab('library'); setIsMenuOpen(false); }} />
@@ -858,24 +873,28 @@ export default function TopBar() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-2 py-1 rounded">
-            <span className="font-bold text-lg tracking-tight">PolyForm</span>
-          </div>
-          <div className="h-4 w-px bg-white/20 mx-1" />
+          {!isPhone && (
+            <>
+              <div className="flex items-center gap-2 px-2 py-1 rounded">
+                <span className="font-bold text-lg tracking-tight">PolyForm</span>
+              </div>
+              <div className="h-4 w-px bg-white/20 mx-1" />
+            </>
+          )}
           <div className="flex items-center gap-0.5">
             <button 
               onClick={undo}
-              className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/80 hover:text-white"
+              className={cn("hover:bg-white/10 rounded transition-colors text-white/80 hover:text-white", isPhone ? "p-2" : "p-1.5")}
               title="Undo (Ctrl+Z)"
             >
-              <Undo2 size={16} />
+              <Undo2 size={isPhone ? 20 : 16} />
             </button>
             <button 
               onClick={redo}
-              className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/80 hover:text-white"
+              className={cn("hover:bg-white/10 rounded transition-colors text-white/80 hover:text-white", isPhone ? "p-2" : "p-1.5")}
               title="Redo (Ctrl+Y)"
             >
-              <Redo2 size={16} />
+              <Redo2 size={isPhone ? 20 : 16} />
             </button>
           </div>
         </div>
@@ -887,7 +906,7 @@ export default function TopBar() {
             onClick={() => setIsProfileOpen(!isProfileOpen)}
             className="flex items-center gap-2 p-1 hover:bg-white/10 rounded-full transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/20">
+            <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/20">
               {user?.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (

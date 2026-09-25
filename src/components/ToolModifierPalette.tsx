@@ -14,8 +14,10 @@ import { RoofModifierSection } from './RoofModifierSection';
 import { ScaleFigureModifierSection } from './ScaleFigureModifierSection';
 import { CameraClippingSection } from './CameraClippingSection';
 import { WalkModeModifiers } from './walk/WalkModeModifiers';
+import { usePhoneLayout } from '../lib/phoneLayout';
 
 export const ToolModifierPalette: React.FC = () => {
+  const { isPhone } = usePhoneLayout();
   const { 
     activeTool, 
     theme,
@@ -198,16 +200,19 @@ export const ToolModifierPalette: React.FC = () => {
     setMeasurements(`Added Timber Frame construction (${result.members.length} members: walls, floors & roof).`);
   };
 
+  // On a phone the palette lives in the settings sheet: full width, no dragging, no dock buttons.
+  const embedded = isToolModifierDocked || isPhone;
+
   return (
     <motion.div
-      drag={!isToolModifierDocked}
+      drag={!embedded}
       dragMomentum={false}
-      initial={{ x: 300, opacity: 0 }}
+      initial={isPhone ? false : { x: 300, opacity: 0 }}
       animate={{ 
         x: 0,
         opacity: 1,
       }}
-      style={!isToolModifierDocked ? {
+      style={!embedded ? {
         right: rightPanelVisible ? 320 : 16,
         top: 80,
       } : {}}
@@ -215,14 +220,14 @@ export const ToolModifierPalette: React.FC = () => {
       className={cn(
         "z-30 rounded-xl border shadow-xl overflow-hidden transition-all duration-300 flex flex-col",
         theme === 'dark' ? "bg-gray-900 border-gray-700 shadow-black/50" : "bg-white border-gray-200 shadow-xl",
-        isToolModifierDocked ? "relative w-full shadow-none border-none rounded-none max-h-full" : "fixed w-64 max-h-[calc(100vh-100px)]"
+        embedded ? "relative w-full shadow-none border-none rounded-none max-h-full" : "fixed w-64 max-h-[calc(100vh-100px)]"
       )}
     >
       <div 
         className={cn(
           "px-3 h-10 border-b flex items-center justify-between select-none shrink-0",
           theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100",
-          !isToolModifierDocked ? "cursor-move active:cursor-grabbing" : "cursor-default"
+          !embedded ? "cursor-move active:cursor-grabbing" : "cursor-default"
         )}
       >
         <div className="flex items-center gap-2">
@@ -251,7 +256,7 @@ export const ToolModifierPalette: React.FC = () => {
           <div className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded">
             {activeTool.toUpperCase()}
           </div>
-          {!isToolModifierDocked && (
+          {!embedded && (
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -260,7 +265,7 @@ export const ToolModifierPalette: React.FC = () => {
               {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
             </button>
           )}
-          <button 
+          {!isPhone && <button 
             onClick={() => setIsToolModifierDocked(!isToolModifierDocked)}
             className={cn(
               "p-1.5 hover:bg-black/5 rounded-lg transition-colors",
@@ -269,13 +274,13 @@ export const ToolModifierPalette: React.FC = () => {
             title={isToolModifierDocked ? "Undock Palette" : "Dock Palette"}
           >
             <PanelRightClose size={14} />
-          </button>
+          </button>}
         </div>
       </div>
 
-      {(!isCollapsed || isToolModifierDocked) && (
+      {(!isCollapsed || embedded) && (
         <>
-          <div className="p-3 space-y-4 overflow-y-auto flex-1 max-h-[calc(100vh-140px)] select-text">
+          <div className={cn("p-3 space-y-4 overflow-y-auto flex-1 select-text", !isPhone && "max-h-[calc(100vh-140px)]")}>
         {activeTool === 'wall' && (
           <div className="space-y-3">
             {/* Justification Selector */}

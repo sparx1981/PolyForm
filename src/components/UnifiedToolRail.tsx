@@ -84,6 +84,8 @@ import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeText
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { DeveloperSDK } from '../services/developerService';
 import { buildNextFloorLevel } from '../lib/archRoofGenerator';
+import PhoneDock from './PhoneDock';
+import { PhoneSheetPortal } from '../lib/phoneLayout';
 
 interface ToolItem {
   id: string;
@@ -103,7 +105,15 @@ interface ToolCategory {
   tools: ToolItem[];
 }
 
-export default function UnifiedToolRail() {
+interface UnifiedToolRailProps {
+  /** 'dock' renders the phone dock with the same tool groups instead of the side rail. */
+  variant?: 'rail' | 'dock';
+  landscape?: boolean;
+  morePanelOpen?: boolean;
+  onMore?: () => void;
+}
+
+export default function UnifiedToolRail({ variant = 'rail', landscape = false, morePanelOpen = false, onMore }: UnifiedToolRailProps = {}) {
   const app = useApp();
   const {
     theme,
@@ -1427,204 +1437,9 @@ export default function UnifiedToolRail() {
     }).filter(category => category.tools.length > 0);
   }, [visibleCategories, searchQuery]);
 
-  if (!isBasicToolbarEnabled && !isArchitectureToolbarEnabled && !isLandscapesToolbarEnabled && !isCameraToolbarEnabled) {
-    return null;
-  }
-
-  return (
-    <aside 
-      id="unified-tool-rail"
-      aria-label="Unified Tool Rail"
-      style={{ width: `${railWidth}px`, minWidth: `${railWidth}px`, maxWidth: `${railWidth}px` }}
-      className={cn(
-        "h-full flex flex-col z-40 select-none border-r transition-colors duration-300 relative shrink-0",
-        theme === 'dark' 
-          ? "bg-gray-850 border-gray-700 text-gray-200" 
-          : "bg-white border-gray-200 text-gray-800"
-      )}
-    >
-      {/* Top Row: Search input + Collapse/Expand All Button */}
-      <div className={cn(
-        "p-2 border-b flex items-center gap-1.5 shrink-0",
-        theme === 'dark' ? "border-gray-700 bg-gray-900/40" : "border-gray-200 bg-gray-50/70"
-      )}>
-        {/* Search input with icon */}
-        <div className="relative flex-1 flex items-center min-w-0">
-          <Search 
-            size={14} 
-            className="absolute left-2.5 text-gray-400 pointer-events-none shrink-0" 
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search tools"
-            className={cn(
-              "w-full pl-7 pr-6 py-1.5 text-xs rounded-md border transition-all placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-trimble-blue",
-              theme === 'dark' 
-                ? "bg-gray-800 border-gray-700 text-gray-200 focus:border-trimble-blue" 
-                : "bg-white border-gray-300 text-gray-800 focus:border-trimble-blue"
-            )}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-1.5 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded"
-              title="Clear search"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-
-        {/* Collapse-All / Expand-All Control */}
-        <button
-          onClick={toggleAllSections}
-          className={cn(
-            "p-1.5 rounded-md border transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center shrink-0 shadow-xs",
-            theme === 'dark' 
-              ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700" 
-              : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
-          )}
-          title={allCollapsed ? "Expand All Sections" : "Collapse All Sections"}
-        >
-          {allCollapsed ? (
-            <ChevronsDown size={15} className="text-trimble-blue" />
-          ) : (
-            <ChevronsUp size={15} className="text-gray-500" />
-          )}
-        </button>
-      </div>
-
-      {/* Main Tool Categories List (Scrollable) */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2">
-        {filteredCategories.length === 0 ? (
-          <div className="p-4 text-center text-xs text-gray-400 flex flex-col items-center gap-2">
-            <Search size={24} className="text-gray-500 opacity-50" />
-            <span>No tools found matching "{searchQuery}"</span>
-            <button
-              onClick={() => setSearchQuery('')}
-              className="mt-1 text-[11px] text-trimble-blue hover:underline font-semibold"
-            >
-              Clear Search Filter
-            </button>
-          </div>
-        ) : (
-          filteredCategories.map((category) => {
-            const isExpanded = searchQuery ? true : (expandedSections[category.id] ?? true);
-
-            return (
-              <div 
-                key={category.id} 
-                className={cn(
-                  "border rounded-lg overflow-hidden transition-all",
-                  theme === 'dark' ? "border-gray-700/80 bg-gray-900/20" : "border-gray-200 bg-gray-50/40"
-                )}
-              >
-                {/* Collapsible Section Header */}
-                <button
-                  type="button"
-                  onClick={() => toggleSection(category.id)}
-                  className={cn(
-                    "w-full h-8 px-2.5 flex items-center justify-between transition-colors",
-                    theme === 'dark' ? "hover:bg-gray-800/80 text-gray-300" : "hover:bg-gray-100 text-gray-700"
-                  )}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[11px] font-bold uppercase tracking-wider truncate">
-                      {category.name}
-                    </span>
-                    {searchQuery && (
-                      <span className="text-[10px] text-trimble-blue font-mono font-bold">
-                        ({category.tools.length})
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-gray-400 shrink-0">
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </div>
-                </button>
-
-                {/* Flexible Icon Grid */}
-                {isExpanded && (
-                  <div className={cn(
-                    "p-1.5 border-t",
-                    theme === 'dark' ? "border-gray-800 bg-gray-850/50" : "border-gray-100 bg-white"
-                  )}>
-                    <div 
-                      className="grid gap-1.5"
-                      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(40px, 1fr))' }}
-                    >
-                      {category.tools.map((tool) => {
-                        // Check if toolbar item visibility is hidden in settings
-                        if (tool.tool && toolbarVisibility && toolbarVisibility[tool.tool] === false) {
-                          return null;
-                        }
-                        if (tool.id && toolbarVisibility && toolbarVisibility[tool.id] === false) {
-                          return null;
-                        }
-
-                        const active = tool.isActive ? tool.isActive(app) : false;
-
-                        return (
-                          <button
-                            key={tool.id}
-                            id={`unified-tool-${tool.id}`}
-                            onClick={() => tool.onClick(app)}
-                            className={cn(
-                              "w-full aspect-square min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg relative group transition-all transform active:scale-95",
-                              active
-                                ? "bg-trimble-blue text-white shadow-md ring-2 ring-trimble-blue ring-offset-1 dark:ring-offset-gray-850"
-                                : theme === 'dark'
-                                  ? "text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/60"
-                                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-200"
-                            )}
-                            style={active && bannerColor ? { backgroundColor: bannerColor } : undefined}
-                          >
-                            {tool.icon}
-
-                            {/*
-                              No native title attribute: it renders at the
-                              OS/browser-chrome level, outside any CSS
-                              stacking context, so it cannot be reordered or
-                              suppressed relative to this custom tooltip —
-                              they simply compete for the same space with no
-                              way to referee it. That mismatch is also why
-                              the native one showed with the BROWSER'S own
-                              default styling (pale background, dark text)
-                              rather than this app's intended dark tooltip.
-                            */}
-                            {/* Floating Rich Tooltip */}
-                            <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-gray-700 transition-opacity">
-                              <div className="font-semibold flex items-center gap-1.5">
-                                <span>{tool.label}</span>
-                                {tool.hotkey && (
-                                  <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">
-                                    ({tool.hotkey})
-                                  </span>
-                                )}
-                              </div>
-                              {tool.subtitle && (
-                                <div className="text-[10px] text-gray-400 font-normal mt-0.5 max-w-[220px] whitespace-normal">
-                                  {tool.subtitle}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Popout Context Configuration Panel for Landscape Tools */}
-      {activeLandscapeCategory && (
-        <div className={`absolute left-full ml-2 top-2 ${activeLandscapeCategory === 'style' || activeLandscapeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl z-[150] text-xs ${
+  // The landscape settings popout. On a phone it renders full width inside the settings sheet.
+  const renderLandscapePopout = (phone: boolean) => activeLandscapeCategory ? (
+        <div className={phone ? `w-full p-3 text-xs ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}` : `absolute left-full ml-2 top-2 ${activeLandscapeCategory === 'style' || activeLandscapeCategory === 'plant' ? 'w-88' : 'w-72'} p-3.5 rounded-xl border backdrop-blur-md shadow-2xl z-[150] text-xs ${
           theme === 'dark' ? 'bg-gray-900/95 border-gray-700 text-gray-200' : 'bg-white/95 border-gray-200 text-gray-800'
         }`}>
           <div className="flex items-center justify-between font-bold pb-2 mb-2 border-b border-gray-200 dark:border-gray-800">
@@ -2155,9 +1970,10 @@ export default function UnifiedToolRail() {
             </div>
           )}
         </div>
-      )}
+  ) : null;
 
-      {/* Conflict Resolution Modal for Terrain Creation */}
+  const conflictEl = (
+    <>
       {conflictModal?.isOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 max-w-sm w-full shadow-2xl text-white">
@@ -2201,6 +2017,227 @@ export default function UnifiedToolRail() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (!isBasicToolbarEnabled && !isArchitectureToolbarEnabled && !isLandscapesToolbarEnabled && !isCameraToolbarEnabled) {
+    return null;
+  }
+
+  if (variant === 'dock') {
+    return (
+      <>
+        <PhoneDock
+          groups={visibleCategories}
+          app={app}
+          theme={theme}
+          accent={bannerColor}
+          landscape={landscape}
+          morePanelOpen={morePanelOpen}
+          onMore={() => onMore?.()}
+        />
+        {activeLandscapeCategory && (
+          <PhoneSheetPortal>{renderLandscapePopout(true)}</PhoneSheetPortal>
+        )}
+        {conflictEl}
+      </>
+    );
+  }
+
+  return (
+    <aside 
+      id="unified-tool-rail"
+      aria-label="Unified Tool Rail"
+      style={{ width: `${railWidth}px`, minWidth: `${railWidth}px`, maxWidth: `${railWidth}px` }}
+      className={cn(
+        "h-full flex flex-col z-40 select-none border-r transition-colors duration-300 relative shrink-0",
+        theme === 'dark' 
+          ? "bg-gray-850 border-gray-700 text-gray-200" 
+          : "bg-white border-gray-200 text-gray-800"
+      )}
+    >
+      {/* Top Row: Search input + Collapse/Expand All Button */}
+      <div className={cn(
+        "p-2 border-b flex items-center gap-1.5 shrink-0",
+        theme === 'dark' ? "border-gray-700 bg-gray-900/40" : "border-gray-200 bg-gray-50/70"
+      )}>
+        {/* Search input with icon */}
+        <div className="relative flex-1 flex items-center min-w-0">
+          <Search 
+            size={14} 
+            className="absolute left-2.5 text-gray-400 pointer-events-none shrink-0" 
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tools"
+            className={cn(
+              "w-full pl-7 pr-6 py-1.5 text-xs rounded-md border transition-all placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-trimble-blue",
+              theme === 'dark' 
+                ? "bg-gray-800 border-gray-700 text-gray-200 focus:border-trimble-blue" 
+                : "bg-white border-gray-300 text-gray-800 focus:border-trimble-blue"
+            )}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-1.5 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded"
+              title="Clear search"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+
+        {/* Collapse-All / Expand-All Control */}
+        <button
+          onClick={toggleAllSections}
+          className={cn(
+            "p-1.5 rounded-md border transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center shrink-0 shadow-xs",
+            theme === 'dark' 
+              ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700" 
+              : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+          )}
+          title={allCollapsed ? "Expand All Sections" : "Collapse All Sections"}
+        >
+          {allCollapsed ? (
+            <ChevronsDown size={15} className="text-trimble-blue" />
+          ) : (
+            <ChevronsUp size={15} className="text-gray-500" />
+          )}
+        </button>
+      </div>
+
+      {/* Main Tool Categories List (Scrollable) */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2">
+        {filteredCategories.length === 0 ? (
+          <div className="p-4 text-center text-xs text-gray-400 flex flex-col items-center gap-2">
+            <Search size={24} className="text-gray-500 opacity-50" />
+            <span>No tools found matching "{searchQuery}"</span>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-1 text-[11px] text-trimble-blue hover:underline font-semibold"
+            >
+              Clear Search Filter
+            </button>
+          </div>
+        ) : (
+          filteredCategories.map((category) => {
+            const isExpanded = searchQuery ? true : (expandedSections[category.id] ?? true);
+
+            return (
+              <div 
+                key={category.id} 
+                className={cn(
+                  "border rounded-lg overflow-hidden transition-all",
+                  theme === 'dark' ? "border-gray-700/80 bg-gray-900/20" : "border-gray-200 bg-gray-50/40"
+                )}
+              >
+                {/* Collapsible Section Header */}
+                <button
+                  type="button"
+                  onClick={() => toggleSection(category.id)}
+                  className={cn(
+                    "w-full h-8 px-2.5 flex items-center justify-between transition-colors",
+                    theme === 'dark' ? "hover:bg-gray-800/80 text-gray-300" : "hover:bg-gray-100 text-gray-700"
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[11px] font-bold uppercase tracking-wider truncate">
+                      {category.name}
+                    </span>
+                    {searchQuery && (
+                      <span className="text-[10px] text-trimble-blue font-mono font-bold">
+                        ({category.tools.length})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-gray-400 shrink-0">
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </div>
+                </button>
+
+                {/* Flexible Icon Grid */}
+                {isExpanded && (
+                  <div className={cn(
+                    "p-1.5 border-t",
+                    theme === 'dark' ? "border-gray-800 bg-gray-850/50" : "border-gray-100 bg-white"
+                  )}>
+                    <div 
+                      className="grid gap-1.5"
+                      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(40px, 1fr))' }}
+                    >
+                      {category.tools.map((tool) => {
+                        // Check if toolbar item visibility is hidden in settings
+                        if (tool.tool && toolbarVisibility && toolbarVisibility[tool.tool] === false) {
+                          return null;
+                        }
+                        if (tool.id && toolbarVisibility && toolbarVisibility[tool.id] === false) {
+                          return null;
+                        }
+
+                        const active = tool.isActive ? tool.isActive(app) : false;
+
+                        return (
+                          <button
+                            key={tool.id}
+                            id={`unified-tool-${tool.id}`}
+                            onClick={() => tool.onClick(app)}
+                            className={cn(
+                              "w-full aspect-square min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg relative group transition-all transform active:scale-95",
+                              active
+                                ? "bg-trimble-blue text-white shadow-md ring-2 ring-trimble-blue ring-offset-1 dark:ring-offset-gray-850"
+                                : theme === 'dark'
+                                  ? "text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/60"
+                                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-200"
+                            )}
+                            style={active && bannerColor ? { backgroundColor: bannerColor } : undefined}
+                          >
+                            {tool.icon}
+
+                            {/*
+                              No native title attribute: it renders at the
+                              OS/browser-chrome level, outside any CSS
+                              stacking context, so it cannot be reordered or
+                              suppressed relative to this custom tooltip —
+                              they simply compete for the same space with no
+                              way to referee it. That mismatch is also why
+                              the native one showed with the BROWSER'S own
+                              default styling (pale background, dark text)
+                              rather than this app's intended dark tooltip.
+                            */}
+                            {/* Floating Rich Tooltip */}
+                            <div className="absolute left-full ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-gray-700 transition-opacity">
+                              <div className="font-semibold flex items-center gap-1.5">
+                                <span>{tool.label}</span>
+                                {tool.hotkey && (
+                                  <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-300 font-mono">
+                                    ({tool.hotkey})
+                                  </span>
+                                )}
+                              </div>
+                              {tool.subtitle && (
+                                <div className="text-[10px] text-gray-400 font-normal mt-0.5 max-w-[220px] whitespace-normal">
+                                  {tool.subtitle}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {renderLandscapePopout(false)}
+
+      {conflictEl}
 
       {/* Right Edge Resizer Drag Handle */}
       <div

@@ -17,6 +17,7 @@ import TopBar from './components/TopBar';
 import LeftToolbar from './components/LeftToolbar';
 import ArchitectureToolbar from './components/ArchitectureToolbar';
 import LandscapesToolbar from './components/LandscapesToolbar';
+import { PhoneLayoutProvider, PhoneSheetPortal, usePhoneLayout } from './lib/phoneLayout';
 import CameraToolbar from './components/CameraToolbar';
 import UnifiedToolRail from './components/UnifiedToolRail';
 import RightPanelStack from './components/RightPanelStack';
@@ -250,8 +251,30 @@ function AppContent() {
       isBasicToolbarEnabled,
       isArchitectureToolbarEnabled,
       isLandscapesToolbarEnabled,
-      isCameraToolbarEnabled
+      isCameraToolbarEnabled,
+      walkModePhase
     } = useApp();
+
+    const phone = usePhoneLayout();
+    const setPhoneSlotRef = phone.setSlot;
+    const [phoneSheetCollapsed, setPhoneSheetCollapsed] = useState(false);
+    const [phoneSheetHasContent, setPhoneSheetHasContent] = useState(false);
+    // The settings sheet shows only while something has rendered into it.
+    useEffect(() => {
+      const slot = phone.slot;
+      if (!slot) { setPhoneSheetHasContent(false); return; }
+      const update = () => setPhoneSheetHasContent(slot.childElementCount > 0);
+      update();
+      const observer = new MutationObserver(update);
+      observer.observe(slot, { childList: true });
+      return () => observer.disconnect();
+    }, [phone.slot]);
+
+    // The right-hand panels cover the whole phone screen, so start with them closed.
+    useEffect(() => {
+      if (phone.isPhone) setRightPanelVisible(false);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [phone.isPhone]);
   
     const quotaLocked = isQuotaLocked();
 
@@ -425,10 +448,8 @@ function AppContent() {
     return <Login />;
   }
 
-  return (
-    <div className={`h-screen flex flex-col overflow-hidden transition-colors duration-300 ${theme === 'dark' ? 'dark bg-gray-900 text-white' : 'bg-white'}`}>
-      <TopBar />
-      
+  const banners = (
+    <>
       <AnimatePresence>
         {showRedBanner && (
           <motion.div 
@@ -481,6 +502,116 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
+    </>
+  );
+
+  const modals = (
+    <>
+      <AIRenderer />
+      <AIGenerate />
+      <AIQuery />
+      <WorldView />
+      <Help />
+      <AnimatePresence>
+        {isMessagingOpen && !isMessagingDocked && <Messaging />}
+      </AnimatePresence>
+      <AIDiagnosticLog />
+      <WebpageModal />
+      <DeveloperSuite />
+      <CodeRecorder />
+      <CustomToolbarOverlay />
+      <BakeModal />
+    </>
+  );
+
+  if (phone.isPhone) {
+    // Phone: slim top bar, the viewport, one dock of tool groups (bottom in portrait, left in
+    // landscape) and one settings sheet that the active tool's panel renders into. Walking
+    // hides the dock and sheet; walk mode has its own on-screen controls and Exit button.
+    const walking = walkModePhase === 'walking' || walkModePhase === 'paused';
+    const landscape = phone.landscape;
+    return (
+      <div className={`h-[100dvh] flex flex-col overflow-hidden ${theme === 'dark' ? 'dark bg-gray-900 text-white' : 'bg-white'}`}>
+        <TopBar />
+        {banners}
+        <main className={`flex-1 flex overflow-hidden relative ${landscape ? 'flex-row' : 'flex-col-reverse'}`}>
+          {!walking && (
+            <UnifiedToolRail
+              variant="dock"
+              landscape={landscape}
+              morePanelOpen={rightPanelVisible}
+              onMore={() => setRightPanelVisible(!rightPanelVisible)}
+            />
+          )}
+          <div className="flex-1 flex overflow-hidden relative min-w-0 min-h-0">
+            <Viewport />
+            <CivilGradeHUD />
+
+            <div
+              id="phone-settings-sheet"
+              className={`absolute z-[65] flex flex-col shadow-2xl border overflow-hidden ${
+                walking || !phoneSheetHasContent ? 'hidden' : ''
+              } ${
+                landscape
+                  ? 'right-0 top-0 bottom-0 w-72 border-y-0 border-r-0'
+                  : `left-0 right-0 bottom-0 rounded-t-2xl border-b-0 ${phoneSheetCollapsed ? 'max-h-11' : 'max-h-[45%]'}`
+              } ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}
+            >
+              {!landscape && (
+                <button
+                  onClick={() => setPhoneSheetCollapsed(c => !c)}
+                  className="w-full h-5 shrink-0 flex items-center justify-center"
+                  aria-label={phoneSheetCollapsed ? 'Show settings' : 'Hide settings'}
+                >
+                  <span className={`w-10 h-1 rounded-full ${theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'}`} />
+                </button>
+              )}
+              <div ref={setPhoneSlotRef} id="phone-settings-slot" className="flex-1 overflow-y-auto min-h-0" />
+            </div>
+
+            <AnimatePresence>
+              {rightPanelVisible && !walking && (
+                <motion.div
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                  className={`absolute top-0 bottom-0 right-0 z-[80] flex flex-col shadow-2xl ${landscape ? 'w-80' : 'left-0'} ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}
+                >
+                  <div className={`h-10 shrink-0 flex items-center justify-between px-3 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+                    <span className="text-xs font-bold uppercase tracking-wider">Panels</span>
+                    <button onClick={() => setRightPanelVisible(false)} className="p-2 -mr-2" aria-label="Close panels">
+                      <PanelRightClose size={18} />
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0 flex [&>aside]:w-full">
+                    <ErrorBoundary>
+                      <RightPanelStack />
+                    </ErrorBoundary>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </main>
+
+        <ErrorBoundary name="Tool Modifiers">
+          <PhoneSheetPortal>
+            <ToolModifierPalette />
+          </PhoneSheetPortal>
+        </ErrorBoundary>
+        {isLandscapesToolbarEnabled && <LandscapesToolbar panelOnly />}
+
+        {modals}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`h-screen flex flex-col overflow-hidden transition-colors duration-300 ${theme === 'dark' ? 'dark bg-gray-900 text-white' : 'bg-white'}`}>
+      <TopBar />
+      
+      {banners}
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {layoutMode === 'classic' && (
@@ -531,7 +662,11 @@ function AppContent() {
         */}
         <div className="flex-1 flex overflow-hidden">
           {layoutMode === 'unified' ? (
-            <UnifiedToolRail />
+            <>
+              <UnifiedToolRail />
+              {/* The rail has no settings of its own for fences, water or patios. */}
+              {isLandscapesToolbarEnabled && <LandscapesToolbar panelOnly />}
+            </>
           ) : (
             <DockZoneContainer
               zone="left"
@@ -652,20 +787,7 @@ function AppContent() {
 
       <StatusBar />
       
-      <AIRenderer />
-      <AIGenerate />
-      <AIQuery />
-      <WorldView />
-      <Help />
-      <AnimatePresence>
-        {isMessagingOpen && !isMessagingDocked && <Messaging />}
-      </AnimatePresence>
-      <AIDiagnosticLog />
-      <WebpageModal />
-      <DeveloperSuite />
-      <CodeRecorder />
-      <CustomToolbarOverlay />
-      <BakeModal />
+      {modals}
     </div>
   );
 }
@@ -673,7 +795,9 @@ function AppContent() {
 export default function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <PhoneLayoutProvider>
+        <AppContent />
+      </PhoneLayoutProvider>
     </AppProvider>
   );
 }

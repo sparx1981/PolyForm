@@ -2,6 +2,7 @@ import React, { useState, useRef, createContext, useContext, useEffect } from 'r
 import { VegetationControls } from './graphics/VegetationControls';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
+import { usePhoneLayout, PhoneSheetPortal } from '../lib/phoneLayout';
 import { motion } from 'motion/react';
 import { FlyoutPortal } from './ui/FlyoutPortal';
 import {
@@ -139,9 +140,12 @@ function CivilToolButton({
 
 interface LandscapesToolbarProps {
   dock?: 'left' | 'top' | 'bottom';
+  /** Render only the settings panel for the fence, water and patio tiers (unified rail and phone). */
+  panelOnly?: boolean;
 }
 
-export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarProps = {}) {
+export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: LandscapesToolbarProps = {}) {
+  const { isPhone } = usePhoneLayout();
   const horizontal = dock !== 'left';
   const flyoutSide: 'right' | 'bottom' = horizontal ? 'bottom' : 'right';
 
@@ -684,294 +688,30 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
   const isPadToolActive = activeTool === 'pad-rect' || activeTool === 'pad-circle' || activeTool === 'striping';
   const hasActiveHighlights = selectedModifierId !== null || activeSplineDraft.length > 0 || activePadDraft !== null || showCutFillOverlay;
 
-  return (
-    <FlyoutSideContext.Provider value={flyoutSide}>
-      <aside 
-        id="landscapes-toolbar-root"
-        aria-label="PolyForm Landscapes & Civil Studio"
-        className={cn(
-          horizontal
-            ? cn("h-12 flex flex-row items-center px-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
-                 dock === 'top' ? "border-b" : "border-t")
-            : "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
-          theme === 'dark' ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-800"
-        )}
-      >
-        {/* Tier 0: Base Site Terrain Canvas */}
-        <div className="relative group">
-          <CivilToolButton
-            tool="terrain"
-            label="Terrain"
-            subtitle="Base Site Canvas: Add or configure civil ground surface for roads, pads & grading"
-            icon={<Mountain size={20} />}
-            active={activeTool === 'terrain'}
-            badge={existingTerrain ? "Active" : undefined}
-            hotkey="T"
-            onClick={() => {
-              setActiveTool('terrain');
-              setActiveTier(prev => prev === 'terrain' && activeTool === 'terrain' ? null : 'terrain');
-              setConsoleOutput(c => [...c, '[Terrain Studio] Terrain tool active: add or configure site terrain surface.']);
-            }}
-          />
-        </div>
+  // 'float' drags freely, 'docked' hangs off the toolbar, 'sheet' fills the phone settings sheet.
+  const panelMode: 'float' | 'docked' | 'sheet' = panelOnly
+    ? (isPhone ? 'sheet' : 'float')
+    : (isToolModifierDocked ? 'docked' : 'float');
 
-        {/* Divider between Tier 0 and Tier 0.5 */}
-        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
-
-        {/* Tier 0.5: Terrain Sculpting (Push, Pull, Smooth, Flatten) */}
-        <div className="relative group flex flex-col sm:flex-row items-center gap-1">
-          <CivilToolButton
-            tool="landscape_sculpt"
-            label="Sculpt Terrain"
-            subtitle={`Sculpting Brushes: Push, pull, smooth & flatten terrain (${landscapeSculptSettings.mode.toUpperCase()})`}
-            icon={<Paintbrush size={20} />}
-            active={activeTool === 'landscape_sculpt'}
-            badge={landscapeSculptSettings.mode.toUpperCase()}
-            hotkey="S"
-            onClick={() => {
-              setActiveTool('landscape_sculpt');
-              setActiveTier(prev => prev === 'sculpt' && activeTool === 'landscape_sculpt' ? null : 'sculpt');
-              setConsoleOutput(c => [...c, `[Terrain Studio] Sculpt Terrain active (${landscapeSculptSettings.mode.toUpperCase()} mode). Drag on terrain to sculpt.`]);
-            }}
-          />
-        </div>
-
-        {/* Divider between Tier 0.5 and Tier 1 */}
-        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
-
-        {/* Tier 1: Corridors & Pathways */}
-        <div className="relative group">
-          <CivilToolButton
-            tool="road"
-            label="Pathways & Roads"
-            subtitle="Pathways & Roads: Catmull-Rom spline alignment with curb, ditch & markings"
-            icon={<Route size={20} />}
-            active={activeTool === 'road'}
-            onClick={() => {
-              setActiveTool('road');
-              setActiveTier(prev => prev === 'corridors' && activeTool === 'road' ? null : 'corridors');
-              setConsoleOutput(c => [...c, '[Terrain Studio] Pathways & Roads active: click to add road alignment control points.']);
-            }}
-          />
-        </div>
-
-        {/* Divider between Tier 1 and Tier 2 */}
-        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
-
-        {/* Tier 2: Building & Grading Pads (Single unified icon combining Rect, Circle, and Surface Detailing) */}
-        <div className="relative group">
-          <CivilToolButton
-            tool="pad-rect"
-            label="Grading Pads"
-            subtitle="Grading Pads: Platforms, batter daylight slopes, elevations & surface detailing"
-            icon={<Layers size={20} />}
-            active={isPadToolActive}
-            badge={civilPadSettings.primitive === 'circle' ? 'Circle' : 'Rect'}
-            onClick={() => {
-              const nextTool = civilPadSettings.primitive === 'circle' ? 'pad-circle' : 'pad-rect';
-              setActiveTool(nextTool);
-              setActiveTier(prev => prev === 'pads' && isPadToolActive ? null : 'pads');
-              setConsoleOutput(c => [...c, `[Terrain Studio] Grading Pads active (${civilPadSettings.primitive}). Click terrain to position pad.`]);
-            }}
-          />
-        </div>
-
-        {/* Divider between Tier 2 and Vegetation & Site Furniture */}
-        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
-
-        {/* Vegetation & Site Furniture: Trees, Bushes/Shrubs, Fence, Railing, Lamp, Bench, Boulder */}
-        <div className="relative group">
-          <CivilToolButton
-            tool="tree"
-            label="Plant Tree"
-            subtitle="Place 3D architectural trees with natural canopy & species selection"
-            icon={<Trees size={20} />}
-            active={activeTool === 'tree'}
-            onClick={() => {
-              setActiveTool('tree');
-              setActiveTier(prev => prev === 'vegetation' && activeTool === 'tree' ? null : 'vegetation');
-              const defaultTree = PLANT_SPECIES_CATALOG.find(species => species.category === 'tree');
-              if (defaultTree && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'tree')) {
-                setActivePlantSpecies(defaultTree.id);
-              }
-              setConsoleOutput(c => [...c, '[Landscapes] Tree Placement active: select species and click terrain or ground to place.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="bush"
-            label="Plant Bush / Shrub"
-            subtitle="Place garden bushes, grasses, and foliage clusters"
-            icon={<Sprout size={20} />}
-            active={activeTool === 'bush'}
-            onClick={() => {
-              setActiveTool('bush');
-              setActiveTier(prev => prev === 'vegetation' && activeTool === 'bush' ? null : 'vegetation');
-              const defaultBush = PLANT_SPECIES_CATALOG.find(species => species.id === 'ribbon_grass') || PLANT_SPECIES_CATALOG.find(species => species.category === 'bush');
-              if (defaultBush && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'bush')) {
-                setActivePlantSpecies(defaultBush.id);
-              }
-              setConsoleOutput(c => [...c, '[Landscapes] Bush Placement active: select plant species and click terrain to place.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="fence"
-            label="Fence"
-            subtitle="Draw a fence that follows the ground: split-rail, zigzag, Skigard, close board, picket or panel (click points, Enter to finish)"
-            icon={<Fence size={20} />}
-            active={activeTool === 'fence'}
-            onClick={() => {
-              setActiveTool('fence');
-              setConsoleOutput(c => [...c, '[Landscapes] Fence Tool active: click points along the path, click the start point to close or press Enter to finish.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="water"
-            label="Pond / Lake"
-            subtitle="Draw a pond or lake outline; the ground is dug into a basin and filled with realistic water"
-            icon={<Waves size={20} />}
-            active={activeTool === 'water'}
-            onClick={() => {
-              setActiveTool('water');
-              setConsoleOutput(c => [...c, '[Landscapes] Water Tool active: click around the edge, then click the first point or press Enter to fill.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="patio"
-            label="Patio / Decking"
-            subtitle="Draw a paved patio set into the ground or a raised timber deck: slabs, bricks, stone, porcelain, gravel or boards, with steps, railings and lights"
-            icon={<LayoutGrid size={20} />}
-            active={activeTool === 'patio'}
-            onClick={() => {
-              setActiveTool('patio');
-              setConsoleOutput(c => [...c, '[Landscapes] Patio / Decking Tool active: click the corners (Shift+click to curve an edge) or drag a rectangle; click the first point or press Enter to finish.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="railing"
-            label="Safety Railing"
-            subtitle="Draw path-following guardrails (click points, Enter to finish)"
-            icon={<SlidersHorizontal size={20} />}
-            active={activeTool === 'railing'}
-            onClick={() => {
-              setActiveTool('railing');
-              setConsoleOutput(c => [...c, '[Landscapes] Railing Tool active: click along path to place guardrails, click start point or press Enter to finish.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="lamp"
-            label="Light Fixture"
-            subtitle="Place a light - street lamp, ceiling fixture or any other style (right-click to change style)"
-            icon={<Lamp size={20} />}
-            active={activeTool === 'lamp'}
-            onClick={() => {
-              setActiveTool('lamp');
-              setConsoleOutput(c => [...c, '[Landscapes] Light Fixture Tool active: click to place, right-click to change style.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="bench"
-            label="Park / Garden Bench"
-            subtitle="Place outdoor wooden slat seating bench (1.8m)"
-            icon={<Armchair size={20} />}
-            active={activeTool === 'bench'}
-            onClick={() => {
-              setActiveTool('bench');
-              setConsoleOutput(c => [...c, '[Landscapes] Bench Tool active: click to place park bench.']);
-            }}
-          />
-        </div>
-
-        <div className="relative group">
-          <CivilToolButton
-            tool="rock"
-            label="Landscape Boulder"
-            subtitle="Place natural faceted garden rock & boulder feature"
-            icon={<Disc size={20} />}
-            active={activeTool === 'rock'}
-            onClick={() => {
-              setActiveTool('rock');
-              setConsoleOutput(c => [...c, '[Landscapes] Boulder Tool active: click to place rock.']);
-            }}
-          />
-        </div>
-
-        {/* Additional Civil Actions & Inspection Tools */}
-        <div className={horizontal ? "ml-auto flex items-center gap-1" : "mt-auto flex flex-col items-center gap-1"}>
-          {/* Earthwork Cut/Fill Volume Overlay Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowCutFillOverlay(prev => !prev)}
-            className={cn(
-              "toolbar-btn relative transition-colors cursor-pointer",
-              showCutFillOverlay && "toolbar-btn-active",
-              theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-200 text-gray-700"
-            )}
-            title={showCutFillOverlay ? "Hide Earthwork Cut/Fill Overlay (Orange/Cyan)" : "Show Earthwork Cut/Fill Overlay (Orange/Cyan)"}
-          >
-            {showCutFillOverlay ? <Eye size={18} /> : <EyeOff size={18} />}
-          </button>
-
-          {/* Clear Highlights & Selection button (turns off persistent highlights) */}
-          {hasActiveHighlights && (
-            <button
-              type="button"
-              onClick={handleClearHighlightsAndSelection}
-              className="toolbar-btn relative transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 cursor-pointer"
-              title="Clear Highlights & Deselect Modifier"
-            >
-              <MousePointer2 size={18} />
-            </button>
-          )}
-
-          {/* Bake to Model Modal */}
-          <button
-            type="button"
-            onClick={() => setIsBakeModalOpen(true)}
-            className="toolbar-btn relative transition-colors text-trimble-blue hover:bg-trimble-blue/10 dark:hover:bg-trimble-blue/20 cursor-pointer"
-            title="Bake Civil Terrain to Model (Non-Destructive Mesh Baking)"
-          >
-            <HardHat size={18} />
-          </button>
-        </div>
-
-        {/* Floating / Dockable Tool Modifier Panel for Active Tier (Terrain, Sculpt, Pathways & Roads, Grading Pads) */}
-        {activeTier && (
+  const tierPanel = activeTier ? (
           <motion.div
             id="civil-tier-settings-panel"
-            drag={!isToolModifierDocked}
+            drag={panelMode === 'float'}
             dragMomentum={false}
-            initial={{ x: 300, opacity: 0 }}
+            initial={panelMode === 'sheet' ? false : { x: 300, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
-            style={!isToolModifierDocked ? {
+            style={panelMode === 'float' ? {
               right: rightPanelVisible ? 320 : 16,
               top: 80,
             } : {}}
             className={cn(
-              "z-50 w-80 rounded-xl border shadow-xl overflow-hidden text-xs select-none transition-all duration-200 flex flex-col",
+              "z-50 rounded-xl border shadow-xl overflow-hidden text-xs select-none transition-all duration-200 flex flex-col",
               theme === 'dark' ? "bg-gray-900 border-gray-700 text-gray-200 shadow-black/50" : "bg-white border-gray-200 text-gray-800 shadow-xl",
-              isToolModifierDocked
+              panelMode !== 'sheet' && "w-80",
+              panelMode === 'sheet'
+                ? "relative w-full rounded-none border-none shadow-none"
+                : panelMode === 'docked'
                 ? (horizontal
                     ? (dock === 'top' ? "absolute top-full left-2 mt-2 max-h-full" : "absolute bottom-full left-2 mb-2 max-h-full")
                     : "absolute left-full top-2 ml-2 max-h-full")
@@ -982,7 +722,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             <div className={cn(
               "px-3 h-10 border-b flex items-center justify-between select-none shrink-0",
               theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100",
-              !isToolModifierDocked ? "cursor-move active:cursor-grabbing" : "cursor-default"
+              panelMode === 'float' ? "cursor-move active:cursor-grabbing" : "cursor-default"
             )}>
               <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px] text-gray-600 dark:text-gray-300">
                 {activeTier === 'terrain' && (
@@ -1038,7 +778,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                 <span className="text-[9px] font-mono text-trimble-blue px-1.5 py-0.5 bg-trimble-blue/10 rounded font-bold">
                   {activeTier === 'terrain' ? 'TERRAIN' : activeTier === 'sculpt' ? 'SCULPT' : activeTier === 'corridors' ? 'ROAD' : activeTier === 'pads' ? 'PAD' : activeTier === 'fence' ? 'FENCE' : activeTier === 'water' ? 'WATER' : activeTier === 'patio' ? 'PATIO' : 'PLANT'}
                 </span>
-                {!isToolModifierDocked && (
+                {panelMode === 'float' && (
                   <button
                     type="button"
                     onClick={() => setIsCivilPanelCollapsed(!isCivilPanelCollapsed)}
@@ -1048,7 +788,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                     {isCivilPanelCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                   </button>
                 )}
-                <button
+                {!panelOnly && <button
                   type="button"
                   onClick={() => setIsToolModifierDocked(!isToolModifierDocked)}
                   className={cn(
@@ -1058,7 +798,7 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
                   title={isToolModifierDocked ? "Undock Panel" : "Dock Panel"}
                 >
                   <PanelRightClose size={14} />
-                </button>
+                </button>}
                 <button
                   type="button"
                   onClick={() => setActiveTier(null)}
@@ -1070,8 +810,8 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
               </div>
             </div>
 
-            {(!isCivilPanelCollapsed || isToolModifierDocked) && (
-            <div className="p-3 space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto select-text flex-1">
+            {(!isCivilPanelCollapsed || panelMode !== 'float') && (
+            <div className={cn("p-3 space-y-4 overflow-y-auto select-text flex-1", panelMode !== 'sheet' && "max-h-[calc(100vh-140px)]")}>
             {/* 1. Base Site Terrain Controls */}
             {activeTier === 'terrain' && (
               <div className="space-y-3.5">
@@ -2726,7 +2466,291 @@ export default function LandscapesToolbar({ dock = 'left' }: LandscapesToolbarPr
             </div>
             )}
           </motion.div>
+  ) : null;
+
+  if (panelOnly) {
+    // Only the tiers the unified rail and phone dock have no settings of their own for.
+    const ownPanel = activeTier === 'fence' || activeTier === 'water' || activeTier === 'patio';
+    return (
+      <FlyoutSideContext.Provider value={flyoutSide}>
+        {ownPanel && <PhoneSheetPortal>{tierPanel}</PhoneSheetPortal>}
+      </FlyoutSideContext.Provider>
+    );
+  }
+
+  return (
+    <FlyoutSideContext.Provider value={flyoutSide}>
+      <aside 
+        id="landscapes-toolbar-root"
+        aria-label="PolyForm Landscapes & Civil Studio"
+        className={cn(
+          horizontal
+            ? cn("h-12 flex flex-row items-center px-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
+                 dock === 'top' ? "border-b" : "border-t")
+            : "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300 select-none shadow-sm relative",
+          theme === 'dark' ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-800"
         )}
+      >
+        {/* Tier 0: Base Site Terrain Canvas */}
+        <div className="relative group">
+          <CivilToolButton
+            tool="terrain"
+            label="Terrain"
+            subtitle="Base Site Canvas: Add or configure civil ground surface for roads, pads & grading"
+            icon={<Mountain size={20} />}
+            active={activeTool === 'terrain'}
+            badge={existingTerrain ? "Active" : undefined}
+            hotkey="T"
+            onClick={() => {
+              setActiveTool('terrain');
+              setActiveTier(prev => prev === 'terrain' && activeTool === 'terrain' ? null : 'terrain');
+              setConsoleOutput(c => [...c, '[Terrain Studio] Terrain tool active: add or configure site terrain surface.']);
+            }}
+          />
+        </div>
+
+        {/* Divider between Tier 0 and Tier 0.5 */}
+        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
+
+        {/* Tier 0.5: Terrain Sculpting (Push, Pull, Smooth, Flatten) */}
+        <div className="relative group flex flex-col sm:flex-row items-center gap-1">
+          <CivilToolButton
+            tool="landscape_sculpt"
+            label="Sculpt Terrain"
+            subtitle={`Sculpting Brushes: Push, pull, smooth & flatten terrain (${landscapeSculptSettings.mode.toUpperCase()})`}
+            icon={<Paintbrush size={20} />}
+            active={activeTool === 'landscape_sculpt'}
+            badge={landscapeSculptSettings.mode.toUpperCase()}
+            hotkey="S"
+            onClick={() => {
+              setActiveTool('landscape_sculpt');
+              setActiveTier(prev => prev === 'sculpt' && activeTool === 'landscape_sculpt' ? null : 'sculpt');
+              setConsoleOutput(c => [...c, `[Terrain Studio] Sculpt Terrain active (${landscapeSculptSettings.mode.toUpperCase()} mode). Drag on terrain to sculpt.`]);
+            }}
+          />
+        </div>
+
+        {/* Divider between Tier 0.5 and Tier 1 */}
+        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
+
+        {/* Tier 1: Corridors & Pathways */}
+        <div className="relative group">
+          <CivilToolButton
+            tool="road"
+            label="Pathways & Roads"
+            subtitle="Pathways & Roads: Catmull-Rom spline alignment with curb, ditch & markings"
+            icon={<Route size={20} />}
+            active={activeTool === 'road'}
+            onClick={() => {
+              setActiveTool('road');
+              setActiveTier(prev => prev === 'corridors' && activeTool === 'road' ? null : 'corridors');
+              setConsoleOutput(c => [...c, '[Terrain Studio] Pathways & Roads active: click to add road alignment control points.']);
+            }}
+          />
+        </div>
+
+        {/* Divider between Tier 1 and Tier 2 */}
+        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
+
+        {/* Tier 2: Building & Grading Pads (Single unified icon combining Rect, Circle, and Surface Detailing) */}
+        <div className="relative group">
+          <CivilToolButton
+            tool="pad-rect"
+            label="Grading Pads"
+            subtitle="Grading Pads: Platforms, batter daylight slopes, elevations & surface detailing"
+            icon={<Layers size={20} />}
+            active={isPadToolActive}
+            badge={civilPadSettings.primitive === 'circle' ? 'Circle' : 'Rect'}
+            onClick={() => {
+              const nextTool = civilPadSettings.primitive === 'circle' ? 'pad-circle' : 'pad-rect';
+              setActiveTool(nextTool);
+              setActiveTier(prev => prev === 'pads' && isPadToolActive ? null : 'pads');
+              setConsoleOutput(c => [...c, `[Terrain Studio] Grading Pads active (${civilPadSettings.primitive}). Click terrain to position pad.`]);
+            }}
+          />
+        </div>
+
+        {/* Divider between Tier 2 and Vegetation & Site Furniture */}
+        <div className={horizontal ? "h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1" : "w-8 h-px bg-gray-200 dark:bg-gray-700 my-1"} />
+
+        {/* Vegetation & Site Furniture: Trees, Bushes/Shrubs, Fence, Railing, Lamp, Bench, Boulder */}
+        <div className="relative group">
+          <CivilToolButton
+            tool="tree"
+            label="Plant Tree"
+            subtitle="Place 3D architectural trees with natural canopy & species selection"
+            icon={<Trees size={20} />}
+            active={activeTool === 'tree'}
+            onClick={() => {
+              setActiveTool('tree');
+              setActiveTier(prev => prev === 'vegetation' && activeTool === 'tree' ? null : 'vegetation');
+              const defaultTree = PLANT_SPECIES_CATALOG.find(species => species.category === 'tree');
+              if (defaultTree && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'tree')) {
+                setActivePlantSpecies(defaultTree.id);
+              }
+              setConsoleOutput(c => [...c, '[Landscapes] Tree Placement active: select species and click terrain or ground to place.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="bush"
+            label="Plant Bush / Shrub"
+            subtitle="Place garden bushes, grasses, and foliage clusters"
+            icon={<Sprout size={20} />}
+            active={activeTool === 'bush'}
+            onClick={() => {
+              setActiveTool('bush');
+              setActiveTier(prev => prev === 'vegetation' && activeTool === 'bush' ? null : 'vegetation');
+              const defaultBush = PLANT_SPECIES_CATALOG.find(species => species.id === 'ribbon_grass') || PLANT_SPECIES_CATALOG.find(species => species.category === 'bush');
+              if (defaultBush && !PLANT_SPECIES_CATALOG.find(species => species.id === activePlantSpecies && species.category === 'bush')) {
+                setActivePlantSpecies(defaultBush.id);
+              }
+              setConsoleOutput(c => [...c, '[Landscapes] Bush Placement active: select plant species and click terrain to place.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="fence"
+            label="Fence"
+            subtitle="Draw a fence that follows the ground: split-rail, zigzag, Skigard, close board, picket or panel (click points, Enter to finish)"
+            icon={<Fence size={20} />}
+            active={activeTool === 'fence'}
+            onClick={() => {
+              setActiveTool('fence');
+              setConsoleOutput(c => [...c, '[Landscapes] Fence Tool active: click points along the path, click the start point to close or press Enter to finish.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="water"
+            label="Pond / Lake"
+            subtitle="Draw a pond or lake outline; the ground is dug into a basin and filled with realistic water"
+            icon={<Waves size={20} />}
+            active={activeTool === 'water'}
+            onClick={() => {
+              setActiveTool('water');
+              setConsoleOutput(c => [...c, '[Landscapes] Water Tool active: click around the edge, then click the first point or press Enter to fill.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="patio"
+            label="Patio / Decking"
+            subtitle="Draw a paved patio set into the ground or a raised timber deck: slabs, bricks, stone, porcelain, gravel or boards, with steps, railings and lights"
+            icon={<LayoutGrid size={20} />}
+            active={activeTool === 'patio'}
+            onClick={() => {
+              setActiveTool('patio');
+              setConsoleOutput(c => [...c, '[Landscapes] Patio / Decking Tool active: click the corners (Shift+click to curve an edge) or drag a rectangle; click the first point or press Enter to finish.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="railing"
+            label="Safety Railing"
+            subtitle="Draw path-following guardrails (click points, Enter to finish)"
+            icon={<SlidersHorizontal size={20} />}
+            active={activeTool === 'railing'}
+            onClick={() => {
+              setActiveTool('railing');
+              setConsoleOutput(c => [...c, '[Landscapes] Railing Tool active: click along path to place guardrails, click start point or press Enter to finish.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="lamp"
+            label="Light Fixture"
+            subtitle="Place a light - street lamp, ceiling fixture or any other style (right-click to change style)"
+            icon={<Lamp size={20} />}
+            active={activeTool === 'lamp'}
+            onClick={() => {
+              setActiveTool('lamp');
+              setConsoleOutput(c => [...c, '[Landscapes] Light Fixture Tool active: click to place, right-click to change style.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="bench"
+            label="Park / Garden Bench"
+            subtitle="Place outdoor wooden slat seating bench (1.8m)"
+            icon={<Armchair size={20} />}
+            active={activeTool === 'bench'}
+            onClick={() => {
+              setActiveTool('bench');
+              setConsoleOutput(c => [...c, '[Landscapes] Bench Tool active: click to place park bench.']);
+            }}
+          />
+        </div>
+
+        <div className="relative group">
+          <CivilToolButton
+            tool="rock"
+            label="Landscape Boulder"
+            subtitle="Place natural faceted garden rock & boulder feature"
+            icon={<Disc size={20} />}
+            active={activeTool === 'rock'}
+            onClick={() => {
+              setActiveTool('rock');
+              setConsoleOutput(c => [...c, '[Landscapes] Boulder Tool active: click to place rock.']);
+            }}
+          />
+        </div>
+
+        {/* Additional Civil Actions & Inspection Tools */}
+        <div className={horizontal ? "ml-auto flex items-center gap-1" : "mt-auto flex flex-col items-center gap-1"}>
+          {/* Earthwork Cut/Fill Volume Overlay Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowCutFillOverlay(prev => !prev)}
+            className={cn(
+              "toolbar-btn relative transition-colors cursor-pointer",
+              showCutFillOverlay && "toolbar-btn-active",
+              theme === 'dark' ? "hover:bg-gray-700 text-gray-200" : "hover:bg-gray-200 text-gray-700"
+            )}
+            title={showCutFillOverlay ? "Hide Earthwork Cut/Fill Overlay (Orange/Cyan)" : "Show Earthwork Cut/Fill Overlay (Orange/Cyan)"}
+          >
+            {showCutFillOverlay ? <Eye size={18} /> : <EyeOff size={18} />}
+          </button>
+
+          {/* Clear Highlights & Selection button (turns off persistent highlights) */}
+          {hasActiveHighlights && (
+            <button
+              type="button"
+              onClick={handleClearHighlightsAndSelection}
+              className="toolbar-btn relative transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 cursor-pointer"
+              title="Clear Highlights & Deselect Modifier"
+            >
+              <MousePointer2 size={18} />
+            </button>
+          )}
+
+          {/* Bake to Model Modal */}
+          <button
+            type="button"
+            onClick={() => setIsBakeModalOpen(true)}
+            className="toolbar-btn relative transition-colors text-trimble-blue hover:bg-trimble-blue/10 dark:hover:bg-trimble-blue/20 cursor-pointer"
+            title="Bake Civil Terrain to Model (Non-Destructive Mesh Baking)"
+          >
+            <HardHat size={18} />
+          </button>
+        </div>
+
+        {/* Floating / Dockable Tool Modifier Panel for Active Tier (Terrain, Sculpt, Pathways & Roads, Grading Pads) */}
+        {tierPanel}
       </aside>
     </FlyoutSideContext.Provider>
   );

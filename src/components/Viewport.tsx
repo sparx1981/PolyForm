@@ -14134,7 +14134,7 @@ export default function Viewport() {
         </div>
       )}
 
-      <div className="absolute top-4 left-4 flex flex-row items-start gap-2 pointer-events-auto">
+      <div className="absolute top-4 left-4 max-w-[calc(100%-2rem)] flex flex-row flex-wrap items-start gap-2 pointer-events-auto">
         <div 
           className="relative"
           onMouseEnter={handlePerspectiveEnter}

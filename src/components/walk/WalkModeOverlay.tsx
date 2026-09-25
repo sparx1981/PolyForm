@@ -215,7 +215,7 @@ function TouchControls({ bridge }: { bridge: ReturnType<typeof useApp>['walkBrid
       </button>
 
       <button
-        className="absolute top-6 right-6 px-3 py-1.5 rounded-lg bg-white/15 border border-white/40 text-white text-xs font-semibold"
+        className="absolute top-6 right-6 px-3 py-1.5 rounded-lg bg-black/45 border border-white/40 text-white text-xs font-semibold"
         style={{ pointerEvents: 'auto' }}
         onTouchStart={(e) => {
           e.stopPropagation();

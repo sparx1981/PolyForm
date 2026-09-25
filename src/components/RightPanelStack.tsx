@@ -13,6 +13,7 @@ import { useApp } from '../AppContext';
 import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGroupHidden, deleteGroupFacesAndEdges } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import type { FaceId } from '../lib/geometry/types';
+import { usePhoneLayout } from '../lib/phoneLayout';
 import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
@@ -96,6 +97,7 @@ function SubSection({ title, children, defaultOpen = false }: { title: string, c
 }
 
 export default function RightPanelStack() {
+  const { isPhone } = usePhoneLayout();
   const { 
     activeMaterial, 
     setActiveMaterial,
@@ -4437,7 +4439,7 @@ export default function RightPanelStack() {
           </Panel>
         )}
 
-        {isToolModifierDocked && hasSettings && (
+        {isToolModifierDocked && hasSettings && !isPhone && (
           <Panel 
             id="toolModifiers" 
             title="Tool Modifiers" 
