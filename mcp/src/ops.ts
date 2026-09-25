@@ -8,6 +8,7 @@ import type { FenceStyle } from '../../src/lib/fence/fenceTypes';
 import { DEFAULT_PATIO_TEMPLATE, type PatioKind, type PatioToolSettings } from '../../src/lib/patio/patioTypes';
 import { makePatioShape, patioGroundHelpers, patioLevel, patioWallEdges, terrainAt, wallFaces } from '../../src/lib/patio/patioPlacement';
 import { polygonArea, denseOutline, type Vec2 } from '../../src/lib/patio/patioGeometry';
+import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { ToolError } from './store';
 
 export type Vec3 = [number, number, number];
@@ -319,4 +320,33 @@ export function carryHosted(before: Shape, after: Shape, shapes: Shape[]): Shape
     const q = orientation(s).premultiply(turn);
     return { ...s, position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w], rotation: undefined };
   });
+}
+
+/**
+ * The app reads most objects' orientation from `quaternion` (its own tools always set it), but
+ * the scripting library only sets `rotation`. Give every rotated object a matching quaternion,
+ * or the app cuts wall openings in the wrong places.
+ */
+export function withQuaternions(shapes: Shape[]): Shape[] {
+  return shapes.map(s => {
+    if (s.quaternion || !s.rotation || s.rotation.every(r => r === 0)) return s;
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...s.rotation));
+    return { ...s, quaternion: [q.x, q.y, q.z, q.w] };
+  });
+}
+
+/** Paints terrain with one of the app's built-in ground textures (no material library needed). */
+export function withTerrainTexture(s: Shape, textureId: string): Shape {
+  const preset = LANDSCAPE_TEXTURES.find(t => t.id === textureId);
+  if (!preset) throw new ToolError(`Unknown terrain texture "${textureId}". See list_catalog terrain_textures.`);
+  if (s.type !== 'terrain' || !s.terrainData) return s;
+  return {
+    ...s,
+    color: preset.id,
+    textureUrl: preset.id,
+    materialBindingId: undefined,
+    roughness: preset.roughness ?? 0.8,
+    metalness: preset.metalness ?? 0.05,
+    terrainData: { ...s.terrainData, textureUrl: preset.id, textureScale: preset.defaultRepeat ?? s.terrainData.textureScale },
+  };
 }

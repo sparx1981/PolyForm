@@ -1006,7 +1006,10 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
         const wallHeight = args[1] || 2.8;
         const wallThick = args[2] || 0.2;
         const wallPos = new THREE.Vector3(...shape.position);
-        const wallQuat = new THREE.Quaternion(...(shape.quaternion || [0, 0, 0, 1]));
+        // Walls from scripts may carry only `rotation`; without it every opening lands in the wrong place.
+        const wallQuat = shape.quaternion
+          ? new THREE.Quaternion(...shape.quaternion)
+          : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(shape.rotation || [0, 0, 0])));
         const invWallQuat = wallQuat.clone().invert();
 
         const openings: WallOpening[] = [];

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Shape } from '../../src/types';
-import { carryHosted, fenceRun, openingInWall, patioOrDeck, summarize, transformShape, waterBody, withSdk } from '../src/ops';
+import * as THREE from 'three';
+import { carryHosted, fenceRun, openingInWall, patioOrDeck, summarize, transformShape, waterBody, withQuaternions, withSdk, withTerrainTexture } from '../src/ops';
 
 const wallAlongX = (): Shape => withSdk([], sdk => sdk.architecture.createWall({ start: [0, 0, 0], end: [4, 0, 0], height: 2.8 })).created[0];
 
@@ -88,5 +89,26 @@ describe('summaries', () => {
     expect(summary.byType.wall).toBe(4);
     expect(summary.totals.patioAreaM2).toBeCloseTo(6);
     expect(summary.totals.wallLengthM).toBeGreaterThan(15);
+  });
+});
+
+describe('app compatibility', () => {
+  it('gives scripted walls a quaternion so the app cuts openings where the doors are', () => {
+    const [wall] = withQuaternions(withSdk([], sdk => sdk.architecture.createWall({ start: [1, 0, -4], end: [1, 0, 4] })).created);
+    expect(wall.quaternion).toBeDefined();
+    const door = openingInWall(wall, 'door', { along: 2 });
+    // The app measures an opening along the wall with the wall's quaternion only.
+    const local = new THREE.Vector3(...door.position).sub(new THREE.Vector3(...wall.position))
+      .applyQuaternion(new THREE.Quaternion(...wall.quaternion!).invert());
+    expect(local.x).toBeCloseTo(2 - 4);
+    expect(local.z).toBeCloseTo(0);
+  });
+
+  it('paints terrain with a built-in texture instead of an unregistered library material', () => {
+    const [terrain] = withSdk([], sdk => sdk.landscape.createTerrain({ width: 10, depth: 10, resolution: 16, topography: 'flat' })).created;
+    const painted = withTerrainTexture(terrain, 'lush_grass');
+    expect(painted.materialBindingId).toBeUndefined();
+    expect(painted.terrainData!.textureUrl).toBe('lush_grass');
+    expect(() => withTerrainTexture(terrain, 'nope')).toThrow(/Unknown terrain texture/);
   });
 });

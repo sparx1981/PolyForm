@@ -9,7 +9,7 @@ import { FENCE_STYLES, WOOD_FINISHES } from '../../src/lib/fence/fenceTypes';
 import { buildRoofAssemblyForRoom } from '../../src/lib/archRoofGenerator';
 import { ToolError, type Caller, type ModelStore } from './store';
 import {
-  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
+  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
 } from './ops';
 
 export interface ScreenshotOptions {
@@ -67,7 +67,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
   async function change(ref: string, note: string, fn: (shapes: Shape[]) => { shapes: Shape[]; made?: Shape[]; message?: string }) {
     const model = await store.loadModel(caller, ref);
     let out: ReturnType<typeof fn> = { shapes: [] };
-    await store.changeShapes(caller, model.id, note, shapes => (out = fn(shapes)).shapes);
+    await store.changeShapes(caller, model.id, note, shapes => withQuaternions((out = fn(shapes)).shapes));
     return text({
       model: `${model.name} (${model.id})`,
       done: out.message ?? note,
@@ -331,14 +331,15 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       width: z.number().min(2).max(1000).default(40),
       depth: z.number().min(2).max(1000).default(40),
       topography: z.enum(['flat', 'rolling', 'ridge', 'terraced']).default('flat'),
-      texture: z.string().optional().describe('Terrain texture id (list_catalog terrain_textures)'),
+      texture: z.string().default('lush_grass').describe('Terrain texture id (list_catalog terrain_textures)'),
       position: vec3.default([0, 0, 0]),
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, 'Added terrain', shapes => {
     const resolution = Math.min(128, Math.max(16, Math.round(Math.max(a.width, a.depth))));
-    const run = withSdk(shapes, sdk => sdk.landscape.createTerrain({ width: a.width, depth: a.depth, resolution, topography: a.topography, textureId: a.texture, position: a.position }));
-    return { shapes: run.shapes, made: run.created };
+    const run = withSdk(shapes, sdk => sdk.landscape.createTerrain({ width: a.width, depth: a.depth, resolution, topography: a.topography, position: a.position }));
+    const made = run.created.map(s => withTerrainTexture(s, a.texture));
+    return { shapes: [...shapes, ...made], made };
   })));
 
   server.registerTool('add_plant', {
@@ -467,6 +468,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       color: colour.optional(),
       material: z.string().optional().describe('Material preset id or plain finish id'),
       opacity: z.number().min(0.05).max(1).optional(),
+      terrain_texture: z.string().optional().describe('For terrain: a texture id from list_catalog terrain_textures'),
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, 'Changed appearance', shapes => {
@@ -484,6 +486,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       }
       if (a.color) out.color = a.color;
       if (a.opacity !== undefined) out.opacity = a.opacity;
+      if (a.terrain_texture && out.type === 'terrain') out = withTerrainTexture(out, a.terrain_texture);
       return out;
     });
     return { shapes: next, made: next.filter(s => ids.has(s.id)) };
