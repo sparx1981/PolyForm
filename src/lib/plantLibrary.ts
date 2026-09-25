@@ -1,9 +1,9 @@
 import polyhavenModelCatalogData from './graphics/polyhavenModelCatalog.json';
 
-// Poly Haven's own CDN URL for each model, keyed by slug - built by
+// The material library's own CDN URL for each model, keyed by slug - built by
 // `scripts/polyhaven/cli.ts remote-model-catalog` (fetches only the small /info + /files
 // metadata, never the actual model files) and committed as this small JSON file. Referencing
-// Poly Haven's CDN directly, rather than self-hosting these downloads, avoids both git's
+// the material library's CDN directly, rather than self-hosting these downloads, avoids both git's
 // 100MB-per-file limit (several of these models' mesh files run into the hundreds of MB) and
 // adding to an already over-quota Vercel deployment storage/blob budget.
 const REMOTE_MODEL_URL: Record<string, string> = Object.fromEntries(
@@ -12,7 +12,7 @@ const REMOTE_MODEL_URL: Record<string, string> = Object.fromEntries(
 );
 
 // Every file each model's .gltf references (its .bin, its textures), keyed by the exact
-// relative path Poly Haven's own /files response uses, mapped to that file's real CDN URL - a
+// relative path the material library's own /files response uses, mapped to that file's real CDN URL - a
 // GLTF's internal relative URIs don't reliably resolve by simply appending them to the .gltf's
 // own URL (confirmed: several multi-part models' textures 404 that way), so loadPlantPrimitives
 // resolves each referenced file through this map instead of GLTFLoader's default behavior.
@@ -34,7 +34,7 @@ export interface PlantSpecies {
   modelType: 'procedural' | 'fbx' | 'usd' | 'gltf';
   modelPath?: string;
   // A direct, complete URL to a single GLTF/GLB file, for a species with exactly one asset and
-  // no variation naming convention (e.g. a downloaded Poly Haven model) - used instead of
+  // no variation naming convention (e.g. a downloaded material library model) - used instead of
   // `modelPath` + a `${variation}.glb`-suffix substitution when set.
   modelUrl?: string;
   // Relative path -> real URL for every file `modelUrl`'s GLTF references (see
@@ -70,26 +70,26 @@ const ADDITIONAL_PROCEDURAL_SPECIES: PlantSpecies[] = [
   },
 ];
 
-// Real-world scanned models from Poly Haven (CC0-1.0), loaded directly from Poly Haven's own
+// Real-world scanned models from the material library (CC0-1.0), loaded directly from its own
 // CDN (see REMOTE_MODEL_URL above) rather than self-hosted - one GLTF per species, no variation
 // naming convention, so `modelUrl` is used directly instead of `modelPath` + a variation suffix.
 const POLYHAVEN_SPECIES: PlantSpecies[] = [
   {
-    id: 'ph_tree_small_02', name: 'Small Tree (Poly Haven)', category: 'tree',
+    id: 'ph_tree_small_02', name: 'Small Tree', category: 'tree',
     description: 'Scanned small deciduous tree, suited to gardens and streetscapes.',
     defaultHeight: 4.0, defaultSpread: 3.0, foliageColor: '#3f6b35', trunkColor: '#5c4a3a',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['tree_small_02'], modelIncludes: REMOTE_MODEL_INCLUDES['tree_small_02'],
     thumbnailColor: '#3f6b35', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_island_tree_01', name: 'Island Tree (Poly Haven)', category: 'tree',
+    id: 'ph_island_tree_01', name: 'Island Tree', category: 'tree',
     description: 'Scanned tropical/coastal tree with a broad, wind-shaped canopy.',
     defaultHeight: 7.0, defaultSpread: 5.0, foliageColor: '#4a7c3c', trunkColor: '#6b5744',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['island_tree_01'], modelIncludes: REMOTE_MODEL_INCLUDES['island_tree_01'],
     thumbnailColor: '#4a7c3c', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_jacaranda_tree', name: 'Jacaranda Tree (Poly Haven)', category: 'tree',
+    id: 'ph_jacaranda_tree', name: 'Jacaranda Tree', category: 'tree',
     scientificName: 'Jacaranda mimosifolia',
     description: 'Scanned flowering shade tree with a large, layered violet-blossom canopy.',
     defaultHeight: 9.0, defaultSpread: 7.0, foliageColor: '#8a7bbf', trunkColor: '#544433',
@@ -97,35 +97,35 @@ const POLYHAVEN_SPECIES: PlantSpecies[] = [
     thumbnailColor: '#8a7bbf', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_fir_sapling_medium', name: 'Fir Sapling (Poly Haven)', category: 'tree',
+    id: 'ph_fir_sapling_medium', name: 'Fir Sapling', category: 'tree',
     description: 'Scanned young evergreen conifer, suited to plantings and forest edges.',
     defaultHeight: 2.0, defaultSpread: 1.0, foliageColor: '#2f4a35', trunkColor: '#4a3a2c',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['fir_sapling_medium'], modelIncludes: REMOTE_MODEL_INCLUDES['fir_sapling_medium'],
     thumbnailColor: '#2f4a35', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_fir_tree_01', name: 'Fir Tree (Poly Haven)', category: 'tree',
+    id: 'ph_fir_tree_01', name: 'Fir Tree', category: 'tree',
     description: 'Scanned mature evergreen conifer with a dense, tiered crown.',
     defaultHeight: 7.5, defaultSpread: 3.5, foliageColor: '#28422f', trunkColor: '#4a3a2c',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['fir_tree_01'], modelIncludes: REMOTE_MODEL_INCLUDES['fir_tree_01'],
     thumbnailColor: '#28422f', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_pine_tree_01', name: 'Pine Tree (Poly Haven)', category: 'tree',
+    id: 'ph_pine_tree_01', name: 'Pine Tree', category: 'tree',
     description: 'Scanned tall pine with an irregular, wind-swept crown.',
     defaultHeight: 8.5, defaultSpread: 4.5, foliageColor: '#2c4a34', trunkColor: '#5c4530',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['pine_tree_01'], modelIncludes: REMOTE_MODEL_INCLUDES['pine_tree_01'],
     thumbnailColor: '#2c4a34', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_grass_medium_01', name: 'Meadow Grass (Poly Haven)', category: 'grass',
+    id: 'ph_grass_medium_01', name: 'Meadow Grass', category: 'grass',
     description: 'Scanned clump of medium-length meadow grass.',
     defaultHeight: 0.4, defaultSpread: 0.5, foliageColor: '#7a9a4a',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['grass_medium_01'], modelIncludes: REMOTE_MODEL_INCLUDES['grass_medium_01'],
     thumbnailColor: '#7a9a4a', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_flower_heliophila', name: 'Heliophila (Poly Haven)', category: 'flower',
+    id: 'ph_flower_heliophila', name: 'Heliophila', category: 'flower',
     scientificName: 'Heliophila coronopifolia',
     description: 'Scanned cluster of small blue wildflowers on slender stems.',
     defaultHeight: 0.3, defaultSpread: 0.35, foliageColor: '#5a7ec7',
@@ -133,7 +133,7 @@ const POLYHAVEN_SPECIES: PlantSpecies[] = [
     thumbnailColor: '#5a7ec7', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_flower_gazania', name: 'Gazania (Poly Haven)', category: 'flower',
+    id: 'ph_flower_gazania', name: 'Gazania', category: 'flower',
     scientificName: 'Gazania rigens',
     description: 'Scanned clump of bright orange daisy-like Gazania blooms.',
     defaultHeight: 0.25, defaultSpread: 0.3, foliageColor: '#e08a2b',
@@ -141,21 +141,21 @@ const POLYHAVEN_SPECIES: PlantSpecies[] = [
     thumbnailColor: '#e08a2b', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_fern_02', name: 'Fern (Poly Haven)', category: 'bush',
+    id: 'ph_fern_02', name: 'Fern', category: 'bush',
     description: 'Scanned woodland fern with arching fronds.',
     defaultHeight: 0.5, defaultSpread: 0.6, foliageColor: '#2f6b3a',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['fern_02'], modelIncludes: REMOTE_MODEL_INCLUDES['fern_02'],
     thumbnailColor: '#2f6b3a', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_shrub_03', name: 'Garden Shrub (Poly Haven)', category: 'bush',
+    id: 'ph_shrub_03', name: 'Garden Shrub', category: 'bush',
     description: 'Scanned rounded evergreen garden shrub.',
     defaultHeight: 1.3, defaultSpread: 1.1, foliageColor: '#3a6b3f',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['shrub_03'], modelIncludes: REMOTE_MODEL_INCLUDES['shrub_03'],
     thumbnailColor: '#3a6b3f', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_leipoldtia_schultzei', name: 'Leipoldtia (Poly Haven)', category: 'flower',
+    id: 'ph_leipoldtia_schultzei', name: 'Leipoldtia', category: 'flower',
     scientificName: 'Leipoldtia schultzei',
     description: 'Scanned low succulent groundcover with small pink flowers.',
     defaultHeight: 0.15, defaultSpread: 0.4, foliageColor: '#c76b96',
@@ -163,7 +163,7 @@ const POLYHAVEN_SPECIES: PlantSpecies[] = [
     thumbnailColor: '#c76b96', source: 'polyhaven', license: 'CC0-1.0'
   },
   {
-    id: 'ph_boulder_01', name: 'Boulder (Poly Haven)', category: 'rock',
+    id: 'ph_boulder_01', name: 'Boulder', category: 'rock',
     description: 'Scanned natural rock boulder for landscaping accents.',
     defaultHeight: 1.0, defaultSpread: 1.2, foliageColor: '#8a8579',
     modelType: 'gltf', modelUrl: REMOTE_MODEL_URL['boulder_01'], modelIncludes: REMOTE_MODEL_INCLUDES['boulder_01'],

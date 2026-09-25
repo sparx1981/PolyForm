@@ -1826,7 +1826,7 @@ if (obj) {
         {
           name: "Apply a Full Multi-Map PBR Material (Normal / Roughness / AO)",
           code: `// Supply real texture map URLs (e.g. files placed under public/textures/...,
-// such as a downloaded Poly Haven texture set) for a physically-based look
+// such as a downloaded material library texture set) for a physically-based look
 // beyond flat color + scalar roughness/metalness. Only "textureUrl" (the
 // diffuse/albedo map) should ever be a color image - normal/roughness/
 // metalness/AO maps store linear data and are handled correctly as such.

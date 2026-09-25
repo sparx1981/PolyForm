@@ -6,7 +6,9 @@ import {
   MousePointer2, Eraser, PaintBucket, Square, ArrowUpFromLine, Move, RotateCw,
 } from 'lucide-react';
 
-export type SpecItem = { name: string; key: string; text: string };
+export type SpecItem = { name: string; key: string; text: string; href?: string };
+
+export const TRIMBLE_CONNECT_URL = 'https://www.trimble.com/en/products/trimble-connect';
 
 export type ShowcaseTab = {
   icon: LucideIcon;
@@ -39,7 +41,7 @@ export const SHOWCASE_TABS: ShowcaseTab[] = [
   {
     icon: SunMedium, label: 'Light and weather', title: 'Light, weather and materials',
     body: 'Real sunlight and shadows, rain and snow, and realistic materials for brick, timber, stone and glass.',
-    points: ['Skyboxes, fog and custom lights, including projectors', 'Clouds, mist and wind', 'Poly Haven material library'],
+    points: ['Skyboxes, fog and custom lights, including projectors', 'Clouds, mist and wind', 'A CC0 material library'],
     shot: 'Screenshot: the house at golden hour, or in the rain',
   },
   {
@@ -64,7 +66,7 @@ export type FeatureSection = {
   items: SpecItem[];
 };
 
-const it = (name: string, key: string, text: string): SpecItem => ({ name, key, text });
+const it = (name: string, key: string, text: string, href?: string): SpecItem => ({ name, key, text, href });
 
 export const FEATURE_SECTIONS: FeatureSection[] = [
   {
@@ -145,7 +147,7 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
       it('Custom lights', '', 'Spot, point, directional and projector.'),
       it('Projector', '', 'Casts an image or looping video; static or spinning.'),
       it('Fog', '', 'Standard or Super Mega, with density and height.'),
-      it('Materials', '', 'Poly Haven library, plain finishes and PBR controls.'),
+      it('Materials', '', 'A CC0 material library, plain finishes and PBR controls.'),
     ],
   },
   {
@@ -217,7 +219,7 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
     items: [
       it('PolyForm cloud', '', 'Live collaboration: invite people and design together.'),
       it('Google Drive', '', 'Keep large projects as files in your own Drive.'),
-      it('Trimble Connect', '', 'Store designs alongside the rest of your project.'),
+      it('Trimble Connect', '', 'Store designs alongside the rest of your project.', TRIMBLE_CONNECT_URL),
       it('Import', '.skp · 3D', 'Bring SKP and other 3D files in.'),
       it('Export', 'glTF · STL · SKP', 'For viewers, 3D printing and SKP.'),
       it('Sharing', '', 'Public models, with an optional password.'),
@@ -225,10 +227,10 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
   },
 ];
 
-export const WORKS_WITH: { icon: LucideIcon; label: string }[] = [
+export const WORKS_WITH: { icon: LucideIcon; label: string; href?: string }[] = [
   { icon: Map, label: 'Google Maps' },
   { icon: HardDrive, label: 'Google Drive' },
-  { icon: Building2, label: 'Trimble Connect' },
+  { icon: Building2, label: 'Trimble Connect', href: TRIMBLE_CONNECT_URL },
   { icon: Sparkles, label: 'Claude' },
   { icon: FileBox, label: 'SKP files' },
   { icon: Share2, label: 'glTF and STL' },
@@ -241,10 +243,10 @@ export const WORKFLOW_STEPS: { n: string; icon: LucideIcon; title: string; body:
   { n: '04', icon: Footprints, title: 'See it and walk in', body: 'Set the sun and the weather, save scenes, then walk through at eye level.' },
 ];
 
-export const STORAGE_OPTIONS: { icon: LucideIcon; title: string; text: string }[] = [
+export const STORAGE_OPTIONS: { icon: LucideIcon; title: string; text: string; href?: string }[] = [
   { icon: Cloud, title: 'PolyForm cloud', text: 'Live collaboration: invite people and design together.' },
   { icon: HardDrive, title: 'Google Drive', text: 'Keep large projects as files in your own Drive.' },
-  { icon: Building2, title: 'Trimble Connect', text: 'Store designs alongside the rest of your project.' },
+  { icon: Building2, title: 'Trimble Connect', text: 'Store designs alongside the rest of your project.', href: TRIMBLE_CONNECT_URL },
 ];
 
 export type CodeLine = { t: string; comment: boolean };
@@ -279,6 +281,7 @@ export const HOW_IT_WORKS: { n: string; title: string; body: string }[] = [
   { n: '01', title: 'Connect PolyForm to Claude', body: 'Add PolyForm as a custom connector in Claude and sign in with your Google account.' },
   { n: '02', title: 'Ask in plain words', body: 'Describe the building, the garden or the change you want. Claude builds it in your account.' },
   { n: '03', title: 'Check, then open it', body: 'Claude shows a 3D view and a floor plan of every level. Open the model in PolyForm to keep going.' },
+  { n: '04', title: 'Keep going with any change', body: 'Everything PolyForm can do, Claude can ask for: restyle a door or window, reshape the terrain, turn on procedural grass or a wildflower meadow, or change the weather.' },
 ];
 
 export const CAPABILITY_GROUPS: { icon: LucideIcon; kind: string; text: string; tools: string[] }[] = [
@@ -286,7 +289,7 @@ export const CAPABILITY_GROUPS: { icon: LucideIcon; kind: string; text: string; 
   { icon: Camera, kind: 'See', text: 'Take pictures from perspective, plan, front, back, left or right.', tools: ['screenshot'] },
   { icon: LayoutDashboard, kind: 'Preview', text: 'A 3D picture plus a floor plan of each level, with rooms, doors, windows and stairs.', tools: ['preview_model'] },
   { icon: Hammer, kind: 'Build', text: 'Rooms, walls, openings, roofs, stairs, terrain, planting, fences, ponds and patios.', tools: ['create_model', 'add_room', 'add_wall', 'add_opening', 'add_roof', 'add_stairs', 'add_terrain', 'add_plant', 'add_fence', 'add_pond', 'add_patio'] },
-  { icon: PencilRuler, kind: 'Edit', text: 'Move, restyle, rename and delete objects, or step back a change.', tools: ['transform_objects', 'set_appearance', 'rename_object', 'delete_objects', 'undo_last_change'] },
+  { icon: PencilRuler, kind: 'Edit', text: 'Move, restyle, rename and delete objects, change the weather, or step back a change.', tools: ['transform_objects', 'set_appearance', 'set_weather', 'rename_object', 'delete_objects', 'undo_last_change'] },
 ];
 
 export const SETUP_STEPS: { n: string; title: string; body: string }[] = [

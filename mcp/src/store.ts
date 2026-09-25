@@ -1,6 +1,7 @@
 import type { Shape } from '../../src/types';
 import { cleanFirestoreDataForSave, restoreFirestoreArraysAfterLoad } from '../../src/lib/firestoreArrayCodec';
 import { offloadLargeGeometryForSave, type GeometryOffloadIO } from '../../src/lib/firestoreGeometryOffload';
+import { defaultGraphicsSettings, normalizeGraphicsSettings, type GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 
 /** The signed-in person a request acts for. */
 export interface Caller {
@@ -34,6 +35,7 @@ export interface LoadedModel {
   name: string;
   userId: string;
   shapes: Shape[];
+  graphicsSettings: GraphicsSettings;
   updatedAt?: string;
 }
 
@@ -53,7 +55,9 @@ export interface ModelStore {
   loadModel(caller: Caller, ref: string): Promise<LoadedModel>;
   /** Applies `mutate` to the model's objects in one transaction and records the old list for undo. */
   changeShapes(caller: Caller, modelId: string, note: string, mutate: (shapes: Shape[]) => Shape[]): Promise<Shape[]>;
-  /** Restores the objects from before the most recent connector change; returns its note. */
+  /** Applies `mutate` to the model's graphics settings (weather, vegetation wind) and records the old value for undo. */
+  changeGraphicsSettings(caller: Caller, modelId: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings): Promise<GraphicsSettings>;
+  /** Restores whichever of the objects or graphics settings changed most recently; returns its note. */
   undo(caller: Caller, modelId: string): Promise<string | null>;
   createModel(caller: Caller, name: string): Promise<string>;
 }
@@ -87,8 +91,8 @@ function checkSize(shapes: Shape[]) {
 
 /** In-memory store for tests and local trials. */
 export class MemoryStore implements ModelStore {
-  models = new Map<string, { name: string; userId: string; shapes: unknown[]; updatedAt: string; collaborators: string[] }>();
-  history = new Map<string, { shapes: unknown[]; note: string }[]>();
+  models = new Map<string, { name: string; userId: string; shapes: unknown[]; graphicsSettings: unknown; updatedAt: string; collaborators: string[] }>();
+  history = new Map<string, { shapes: unknown[]; graphicsSettings: unknown; note: string }[]>();
   private next = 1;
 
   async listModels(caller: Caller): Promise<ModelRow[]> {
@@ -108,7 +112,7 @@ export class MemoryStore implements ModelStore {
     const direct = this.access(caller, ref);
     const id = direct ? ref : matchModel(await this.listModels(caller), ref).id;
     const m = this.access(caller, id)!;
-    return { id, name: m.name, userId: m.userId, shapes: decodeShapes(m.shapes), updatedAt: m.updatedAt };
+    return { id, name: m.name, userId: m.userId, shapes: decodeShapes(m.shapes), graphicsSettings: normalizeGraphicsSettings(m.graphicsSettings), updatedAt: m.updatedAt };
   }
 
   async changeShapes(caller: Caller, modelId: string, note: string, mutate: (shapes: Shape[]) => Shape[]) {
@@ -117,9 +121,21 @@ export class MemoryStore implements ModelStore {
     const next = mutate(decodeShapes(m.shapes));
     checkSize(next);
     const list = this.history.get(modelId) ?? [];
-    list.push({ shapes: m.shapes, note });
+    list.push({ shapes: m.shapes, graphicsSettings: m.graphicsSettings, note });
     this.history.set(modelId, list.slice(-HISTORY_LIMIT));
     m.shapes = encodeShapes(next);
+    m.updatedAt = new Date().toISOString();
+    return next;
+  }
+
+  async changeGraphicsSettings(caller: Caller, modelId: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings) {
+    const m = this.access(caller, modelId);
+    if (!m) throw new ToolError('Model not found.');
+    const next = mutate(normalizeGraphicsSettings(m.graphicsSettings));
+    const list = this.history.get(modelId) ?? [];
+    list.push({ shapes: m.shapes, graphicsSettings: m.graphicsSettings, note });
+    this.history.set(modelId, list.slice(-HISTORY_LIMIT));
+    m.graphicsSettings = next;
     m.updatedAt = new Date().toISOString();
     return next;
   }
@@ -130,12 +146,13 @@ export class MemoryStore implements ModelStore {
     const entry = this.history.get(modelId)?.pop();
     if (!entry) return null;
     m.shapes = entry.shapes;
+    m.graphicsSettings = entry.graphicsSettings;
     return entry.note;
   }
 
   async createModel(caller: Caller, name: string) {
     const id = `m${this.next++}`;
-    this.models.set(id, { name, userId: caller.uid, shapes: [], updatedAt: new Date().toISOString(), collaborators: [] });
+    this.models.set(id, { name, userId: caller.uid, shapes: [], graphicsSettings: null, updatedAt: new Date().toISOString(), collaborators: [] });
     return id;
   }
 }
@@ -190,7 +207,10 @@ export class FirestoreStore implements ModelStore {
     if (!data || !(await this.canAccess(caller, snap.id, data))) throw new ToolError('Model not found.');
     const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
     if (external) throw external;
-    return { id: snap.id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: decodeShapes(data.shapes), updatedAt: toIso(data.updatedAt) };
+    return {
+      id: snap.id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: decodeShapes(data.shapes),
+      graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings), updatedAt: toIso(data.updatedAt),
+    };
   }
 
   async changeShapes(caller: Caller, modelId: string, note: string, mutate: (shapes: Shape[]) => Shape[]) {
@@ -209,7 +229,30 @@ export class FirestoreStore implements ModelStore {
       // Same as the app's save: oversized geometry goes to its own document first.
       const stored = encodeShapes(await offloadLargeGeometryForSave(result, caller.uid, io));
       tx.update(ref, { shapes: stored, updatedAt: this.serverTimestamp() });
-      tx.set(ref.collection('mcpHistory').doc(), { shapes: data.shapes ?? [], note, uid: caller.uid, createdAt: Date.now() });
+      tx.set(ref.collection('mcpHistory').doc(), {
+        shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null, note, uid: caller.uid, createdAt: Date.now(),
+      });
+      return result;
+    });
+    await this.pruneHistory(modelId);
+    return next;
+  }
+
+  async changeGraphicsSettings(caller: Caller, modelId: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings) {
+    const ref = this.db.collection('models').doc(modelId);
+    const first = await ref.get();
+    if (!(await this.canAccess(caller, modelId, first.data()))) throw new ToolError('Model not found.');
+    const next = await this.db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const data = snap.data();
+      if (!data) throw new ToolError('Model not found.');
+      const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
+      if (external) throw external;
+      const result = mutate(normalizeGraphicsSettings(data.graphicsSettings));
+      tx.update(ref, { graphicsSettings: result, updatedAt: this.serverTimestamp() });
+      tx.set(ref.collection('mcpHistory').doc(), {
+        shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null, note, uid: caller.uid, createdAt: Date.now(),
+      });
       return result;
     });
     await this.pruneHistory(modelId);
@@ -230,7 +273,7 @@ export class FirestoreStore implements ModelStore {
     if (last.empty) return null;
     const entry = last.docs[0];
     await this.db.runTransaction(async tx => {
-      tx.update(ref, { shapes: entry.get('shapes') ?? [], updatedAt: this.serverTimestamp() });
+      tx.update(ref, { shapes: entry.get('shapes') ?? [], graphicsSettings: entry.get('graphicsSettings') ?? null, updatedAt: this.serverTimestamp() });
       tx.delete(entry.ref);
     });
     return String(entry.get('note') ?? 'last change');
@@ -251,6 +294,7 @@ export class FirestoreStore implements ModelStore {
       animations: [],
       notes: [],
       customLights: [],
+      graphicsSettings: defaultGraphicsSettings(),
       assetSchemaVersion: 1,
       updatedAt: this.serverTimestamp(),
       createdAt: this.serverTimestamp(),

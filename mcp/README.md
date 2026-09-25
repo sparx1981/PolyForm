@@ -11,13 +11,13 @@ when the app isn't open. It runs on Vercel and talks to PolyForm's Firebase proj
 | See | `screenshot` (perspective, plan, front, back, left, right; whole model or one object) |
 | Preview | `preview_model`: called when a design is finished. A 3D picture, plus a floor plan of each level for buildings (rooms and areas, doors, windows, stairs). The plans are drawn by the connector itself, so they work even without screenshots |
 | Build | `create_model`, `add_shape`, `add_room`, `add_wall`, `add_opening` (door/window in a wall), `add_roof`, `add_stairs`, `add_terrain`, `add_plant`, `add_fence`, `add_pond`, `add_patio` |
-| Edit | `transform_objects`, `set_appearance` (colour, material presets, plain finishes), `rename_object`, `delete_objects`, `undo_last_change` |
+| Edit | `transform_objects`, `set_appearance` (colour, material presets, plain finishes, and for terrain: ground texture, procedural grass and wildflower meadows), `set_weather` (rain, snow, clouds, mist and wind), `rename_object`, `delete_objects`, `undo_last_change` |
 
 Building uses the app's own code (the scripting library, the roof tool's roof assembly, the
 patio, fence and pond tools), so objects come out exactly as if drawn in the app. Changes save
-to the model in Firestore and appear live in the app if it's open. The connector only changes a
-model's objects (`shapes`), and keeps the last 20 versions per model so `undo_last_change` can
-step back.
+to the model in Firestore and appear live in the app if it's open. The connector changes a
+model's objects (`shapes`) and its graphics settings (`graphicsSettings`, for weather), and keeps
+the last 20 versions of each per model so `undo_last_change` can step back either.
 
 Screenshots come from the real app: a headless browser opens the app's `?render=1` page, which
 signs in as you with a one-off token, opens the model read-only and frames it.

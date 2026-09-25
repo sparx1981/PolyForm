@@ -10,13 +10,13 @@ export function plantTint(speciesId: string, color: string): THREE.Color {
   return new THREE.Color(color !== species?.foliageColor && /^(?:#[\da-f]{3}|#[\da-f]{6})$/i.test(color) ? color : '#ffffff');
 }
 /**
- * KHR_mesh_quantization-compressed geometry (used by the decimated Poly Haven catalog's
+ * KHR_mesh_quantization-compressed geometry (used by the decimated material library catalog's
  * EXT_meshopt_compression) stores POSITION/NORMAL as normalized integers - BufferAttribute.setXYZ
  * on a `normalized` attribute re-quantizes the value it's given back into that integer's range.
  * applyMatrix4 below bakes each node's own real-world scale/translation (its dequantization
  * transform) directly into the geometry, producing values far outside [-1,1] - writing those back
  * through the normalized setter clamps them straight back onto the unit cube, collapsing the mesh
- * onto its own bounding-box faces (confirmed: every Poly Haven tree rendered as a flat black
+ * onto its own bounding-box faces (confirmed: every material library tree rendered as a flat black
  * "spiky building" - literally the clamped geometry - until this ran first). Converting to plain
  * float attributes first makes applyMatrix4 write real coordinates instead of re-quantizing them.
  */
@@ -71,7 +71,7 @@ export function loadPlantPrimitives(speciesId: string, variation?: string, detai
     if (species.modelType === 'gltf' && species.modelUrl) {
       // GLTFLoader resolves the .gltf's own internal relative URIs (its .bin, its textures) by
       // appending them to the .gltf's own URL - which doesn't reliably match a remote host's
-      // actual file layout (confirmed against Poly Haven). `modelIncludes` gives the real URL
+      // actual file layout (confirmed against the material library). `modelIncludes` gives the real URL
       // for each relative path directly from the source API, so remap by the URL GLTFLoader
       // will actually request (that relative path resolved against modelUrl) to the real one.
       const urlRemap = species.modelIncludes && Object.fromEntries(

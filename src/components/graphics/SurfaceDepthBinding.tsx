@@ -20,7 +20,7 @@ const clamp = (value: number | undefined, min: number, max: number, fallback: nu
  * Two mutually exclusive height sources feed the same relief: a shape's own legacy
  * `displacementMapUrl` (loaded here via TextureLoader), or a catalog-bound material's
  * `materialDepth`/`heightTexture` pair - already resolved and loaded (through
- * ManagedTextureManager, which can decode the half-float EXR height maps Poly Haven
+ * ManagedTextureManager, which can decode the half-float EXR height maps the material library
  * ships; TextureLoader cannot) by useManagedBindingTextures/useMaterialBindings. That
  * managed texture is owned and disposed by its own hook via refcounting, so it must
  * never be disposed here. */

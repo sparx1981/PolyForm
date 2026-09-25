@@ -3373,7 +3373,7 @@ export default function RightPanelStack() {
                       <option value="studio">Studio</option>
                     </optgroup>
                   </select>
-                  <div className="text-[9px] text-gray-400">Poly Haven · CC0 · restricted pilot categories</div>
+                  <div className="text-[9px] text-gray-400">Material library · CC0 · restricted pilot categories</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
@@ -4816,14 +4816,14 @@ export default function RightPanelStack() {
                         <div className="p-2">
                           <div className="text-[10px] font-bold truncate">{mat.name}</div>
                           <div className="text-[8px] text-gray-400 truncate">{mat.category}</div>
-                          <div className="text-[8px] text-gray-400">Poly Haven · CC0{mat.hasHeight ? ' · Height' : ''}</div>
+                          <div className="text-[8px] text-gray-400">Material library · CC0{mat.hasHeight ? ' · Height' : ''}</div>
                         </div>
                       </button>
                     ))}
                     {catalogLoading && premadeMaterials.length === 0 && (
                       <div className="col-span-2 py-12 text-center text-gray-400">
                         <Loader2 size={24} className="animate-spin mx-auto mb-2" />
-                        <span>Loading Poly Haven library...</span>
+                        <span>Loading material library...</span>
                       </div>
                     )}
                     {!catalogLoading && catalogFallback && premadeMaterials.length === 0 && (

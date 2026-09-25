@@ -76,7 +76,7 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
           3D design in your browser
         </span>
         <h1 className="mt-7 text-[clamp(44px,7vw,84px)] font-bold leading-[1.02] tracking-[-0.03em] text-polyform-dark-blue max-w-[1000px]">
-          Design the house.<br />Plant the garden.<br />Walk right in.
+          Design the House.<br />Plant the Garden.<br />Walk Right In.
         </h1>
         <p className="mt-7 text-[clamp(17px,1.6vw,20px)] leading-[1.6] text-gray-600 max-w-[680px]">
           PolyForm is a 3D modelling app for buildings and the ground around them. Draw rooms, raise the roof, shape the plot and furnish the garden, then see it in real light and walk through it.
@@ -107,9 +107,21 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
           <span className="text-[15px] text-gray-600 max-w-[360px]">Runs in the browser on a desktop, tablet or phone. Nothing to install.</span>
           <div className="flex flex-wrap gap-x-7 gap-y-2.5 items-center">
             {WORKS_WITH.map(w => (
-              <span key={w.label} className="flex items-center gap-2 text-[15px] font-semibold text-gray-700">
-                <w.icon size={18} /> {w.label}
-              </span>
+              w.href ? (
+                <a
+                  key={w.label}
+                  href={w.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-[15px] font-semibold text-gray-700 hover:text-polyform-blue transition-colors"
+                >
+                  <w.icon size={18} /> {w.label}
+                </a>
+              ) : (
+                <span key={w.label} className="flex items-center gap-2 text-[15px] font-semibold text-gray-700">
+                  <w.icon size={18} /> {w.label}
+                </span>
+              )
             ))}
           </div>
         </div>
@@ -266,7 +278,13 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
                 <div key={s.title} className="flex gap-3.5 items-start bg-white border border-gray-100 rounded-xl p-4 shadow-modus-1">
                   <s.icon size={18} className="text-polyform-blue mt-0.5 shrink-0" />
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[15px] font-semibold text-polyform-dark-blue">{s.title}</span>
+                    {s.href ? (
+                      <a href={s.href} target="_blank" rel="noopener noreferrer" className="text-[15px] font-semibold text-polyform-dark-blue hover:text-polyform-blue transition-colors hover:underline">
+                        {s.title}
+                      </a>
+                    ) : (
+                      <span className="text-[15px] font-semibold text-polyform-dark-blue">{s.title}</span>
+                    )}
                     <span className="text-sm text-gray-600">{s.text}</span>
                   </div>
                 </div>

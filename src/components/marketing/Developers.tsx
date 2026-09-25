@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { CODE_LONG, DEV_TOOLS, SDK_METHODS } from './data';
-import { Eyebrow, scrollToId, type Page } from './shared';
+import { Eyebrow, type Page } from './shared';
 
 const DEV_TABS = ['Console', 'Library', 'Documentation', 'Spec'];
 
@@ -29,7 +29,7 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
               </button>
               <button
                 type="button"
-                onClick={() => scrollToId('sdk')}
+                onClick={() => go('sdk-docs')}
                 className="flex-none whitespace-nowrap shrink-0 text-base font-semibold px-[22px] py-[14px] rounded-lg border border-gray-200 text-polyform-dark-blue hover:bg-gray-50 transition-colors"
               >
                 SDK reference

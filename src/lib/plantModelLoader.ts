@@ -29,7 +29,7 @@ export function getCachedPlantTexture(url: string, isColorData: boolean = true):
  * @param urlRemap Absolute URL -> the actual URL to fetch instead, for a GLTF whose internal
  * relative URIs (its .bin, its textures) don't reliably resolve by appending them to the
  * .gltf's own URL - a remote host's real file layout can differ from that assumption (confirmed
- * against Poly Haven: several multi-part models' textures 404 that way, even though the exact
+ * against the material library: several multi-part models' textures 404 that way, even though the exact
  * same files download fine via their own dedicated CDN URL from the /files API). Keyed by the
  * absolute URL GLTFLoader will actually request (i.e. the relative URI already resolved against
  * `url`), not the bare relative path, since that's what a LoadingManager's urlModifier receives.
@@ -53,7 +53,7 @@ export function loadPlantGLTF(url: string, onLoad: (model: THREE.Group) => void,
     const manager = new THREE.LoadingManager();
     if (urlRemap) manager.setURLModifier(requested => urlRemap[requested] ?? requested);
     const loader = new GLTFLoader(manager);
-    // The decimated Poly Haven catalog compresses geometry with EXT_meshopt_compression
+    // The decimated material library catalog compresses geometry with EXT_meshopt_compression
     // (see scripts/polyhaven/decimateModels.ts) rather than mesh simplification, which was
     // destroying alpha-cutout foliage geometry (leaf/needle cards collapsed into long spikes).
     // Meshopt shrinks the encoded buffers losslessly instead, so it needs this decoder wired up.

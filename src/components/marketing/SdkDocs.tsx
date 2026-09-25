@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { SDK_METHOD_COUNT, SDK_REFERENCE, type SdkMethod, type SdkTag } from './sdkFullReference';
-import { Eyebrow, type Page } from './shared';
+import { Eyebrow, scrollToId, type Page } from './shared';
 
 const TAG_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   core: { bg: 'bg-slate-100', text: 'text-slate-700', dot: 'bg-slate-500' },
@@ -117,15 +117,16 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
             {SDK_REFERENCE.map(tag => {
               const color = TAG_COLORS[tag.id] ?? TAG_COLORS.core;
               return (
-                <a
+                <button
                   key={tag.id}
-                  href={`#sdk-${tag.id}`}
-                  className="flex items-center gap-2 text-sm font-medium text-gray-600 px-3 py-[7px] rounded-md hover:bg-gray-50 hover:text-polyform-blue transition-colors"
+                  type="button"
+                  onClick={() => scrollToId(`sdk-${tag.id}`)}
+                  className="flex items-center gap-2 text-sm font-medium text-gray-600 px-3 py-[7px] rounded-md text-left hover:bg-gray-50 hover:text-polyform-blue transition-colors"
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
                   {tag.id === 'core' ? 'sdk' : tag.id}
                   <span className="ml-auto text-xs text-gray-400">{tag.methods.length}</span>
-                </a>
+                </button>
               );
             })}
           </aside>

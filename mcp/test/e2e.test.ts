@@ -152,4 +152,33 @@ describe('connector over HTTP', () => {
     expect(z).toBeGreaterThan(1);
     await client.close();
   });
+
+  it('sets weather and turns procedural grass/wildflowers on for a terrain, and undoes each in turn', async () => {
+    const { token } = await signIn();
+    const client = await connect(token!);
+    const { id } = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Weather test' } }));
+    const terrain = parse(await client.callTool({ name: 'add_terrain', arguments: { model: id, width: 20, depth: 20 } }));
+    const terrainId = terrain.created[0].id;
+
+    await client.callTool({
+      name: 'set_appearance',
+      arguments: { model: id, objects: [terrainId], grass: { enabled: true, density: 20 }, flowers: { enabled: true, flower_type: 'poppy' } },
+    });
+    let obj = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: terrainId } }));
+    expect(obj.terrainData.grass).toMatchObject({ enabled: true, density: 20 });
+    expect(obj.terrainData.flowers).toMatchObject({ enabled: true, flowerType: 'poppy' });
+
+    await client.callTool({ name: 'set_weather', arguments: { model: id, enabled: true, wind: [3, -1], rain: { enabled: true, density: 0.6 } } });
+
+    // undo_last_change reverses the weather change without touching the terrain's grass/flowers.
+    await client.callTool({ name: 'undo_last_change', arguments: { model: id } });
+    obj = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: terrainId } }));
+    expect(obj.terrainData.grass).toMatchObject({ enabled: true, density: 20 });
+
+    // A second undo reverses the grass/flowers change.
+    await client.callTool({ name: 'undo_last_change', arguments: { model: id } });
+    obj = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: terrainId } }));
+    expect(obj.terrainData.grass?.enabled ?? false).toBe(false);
+    await client.close();
+  });
 });

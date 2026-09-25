@@ -194,7 +194,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
   const [isCivilPanelCollapsed, setIsCivilPanelCollapsed] = useState(false);
 
   const { assets: catalogMaterials } = useAssetCatalog('material');
-  // Registers a Poly Haven catalog asset in the shared materialBindings map (idempotent - a
+  // Registers a material library catalog asset in the shared materialBindings map (idempotent - a
   // no-op if this exact revision is already bound), so terrain/road meshes can resolve it
   // through the same KTX2-managed texture pipeline used for painted walls and floors.
   const registerMaterialBinding = (asset: AssetSummary) => {
@@ -973,7 +973,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     }}
                     className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
-                    <optgroup label="Poly Haven">
+                    <optgroup label="Material library">
                       {groundMaterials.map(asset => (
                         <option key={asset.id} value={asset.id}>
                           {asset.name}
@@ -1868,14 +1868,14 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                     }}
                     className="w-full h-8 px-2.5 rounded-lg text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 outline-none focus:border-polyform-blue focus:ring-1 focus:ring-polyform-blue/30"
                   >
-                    <optgroup label="Roadways · Poly Haven">
+                    <optgroup label="Roadways">
                       {roadMaterials.map(asset => (
                         <option key={asset.id} value={asset.id}>
                           {asset.name}
                         </option>
                       ))}
                     </optgroup>
-                    <optgroup label="Pathways & Trails · Poly Haven">
+                    <optgroup label="Pathways & Trails">
                       {pathwayMaterials.map(asset => (
                         <option key={asset.id} value={asset.id}>
                           {asset.name}

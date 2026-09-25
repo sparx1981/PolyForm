@@ -55,7 +55,13 @@ export default function Features() {
                   {f.items.map(i => (
                     <div key={i.name} className="bg-white px-[18px] py-4 flex flex-col gap-1">
                       <div className="flex justify-between gap-2 items-baseline">
-                        <span className="text-sm font-bold text-polyform-gray">{i.name}</span>
+                        {i.href ? (
+                          <a href={i.href} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-polyform-gray hover:text-polyform-blue transition-colors hover:underline">
+                            {i.name}
+                          </a>
+                        ) : (
+                          <span className="text-sm font-bold text-polyform-gray">{i.name}</span>
+                        )}
                         {i.key && <span className="font-mono text-[11px] text-gray-500">{i.key}</span>}
                       </div>
                       <span className="text-[13px] leading-[1.5] text-gray-600">{i.text}</span>

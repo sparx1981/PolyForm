@@ -7,7 +7,7 @@ export interface MaterialPreset {
   opacity?: number;
   /**
    * Real PBR texture maps, once real image files are available (e.g. a
-   * downloaded Poly Haven texture set placed under public/textures/materials/<id>/).
+   * downloaded material library texture set placed under public/textures/materials/<id>/).
    * Left undefined until then - the preset still renders correctly via the
    * flat color/roughness/metalness above.
    */

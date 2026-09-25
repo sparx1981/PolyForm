@@ -17,7 +17,7 @@ import { useMaterialBindings } from '../../lib/assets/useMaterialBindings';
 import { useManagedBindingTextures } from '../../lib/assets/useManagedBindingTextures';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
-// Poly Haven materials don't carry a road-specific "tile size" the way the procedural
+// Material library materials don't carry a road-specific "tile size" the way the procedural
 // ROAD_MATERIALS presets do - this is a reasonable real-world tile size (in meters) for a
 // typical ground/paving photo texture, used the same way to derive a physically-scaled repeat.
 const POLYHAVEN_ROAD_TILE_METERS = 2;

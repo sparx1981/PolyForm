@@ -7,6 +7,7 @@ import { PLANT_SPECIES_CATALOG } from '../../src/lib/plantLibrary';
 import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { FENCE_STYLES, WOOD_FINISHES } from '../../src/lib/fence/fenceTypes';
 import { buildRoofAssemblyForRoom } from '../../src/lib/archRoofGenerator';
+import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans, withStoryTags } from './plans';
 import { svgToPng } from './raster';
@@ -84,6 +85,17 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     const list = Array.isArray(made) ? made : [made];
     return { shapes: [...shapes, ...list], made: list };
   };
+
+  /** Loads a model, changes its graphics settings (weather, vegetation wind), and reports what changed. */
+  async function changeSettings(ref: string, note: string, fn: (settings: GraphicsSettings) => GraphicsSettings) {
+    const model = await store.loadModel(caller, ref);
+    await store.changeGraphicsSettings(caller, model.id, note, fn);
+    return text({
+      model: `${model.name} (${model.id})`,
+      done: note,
+      tip: 'undo_last_change reverses this. When the design is finished, call preview_model to show the result.',
+    });
+  }
 
   // ── Reading ───────────────────────────────────────────────────────────
 
@@ -389,6 +401,44 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     return { shapes: [...shapes, ...made], made };
   })));
 
+  const WEATHER_KINDS = ['rain', 'snow', 'clouds', 'mist'] as const;
+  const weatherLayer = () => z.object({
+    enabled: z.boolean(),
+    density: z.number().min(0).max(1).optional(),
+    speed: z.number().min(0).max(40).optional(),
+    color: colour.optional(),
+  }).optional();
+
+  server.registerTool('set_weather', {
+    title: 'Set weather',
+    description: 'Turns weather layers (rain, snow, clouds, mist) on or off around the model, and sets the wind. Applies to the whole model, not one object.',
+    inputSchema: {
+      model: modelRef,
+      enabled: z.boolean().optional().describe('Master switch for weather; layers only show while this is on'),
+      wind: z.tuple([z.number().min(-20).max(20), z.number().min(-20).max(20)]).optional().describe('[east-west, north-south] in m/s'),
+      rain: weatherLayer(),
+      snow: weatherLayer(),
+      clouds: weatherLayer(),
+      mist: weatherLayer(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => changeSettings(a.model, 'Changed weather', settings => {
+    const next: GraphicsSettings = { ...settings, weather: { ...settings.weather, layers: { ...settings.weather.layers } } };
+    if (a.enabled !== undefined) next.weather.enabled = a.enabled;
+    if (a.wind) { next.weather.windX = a.wind[0]; next.weather.windZ = a.wind[1]; }
+    for (const kind of WEATHER_KINDS) {
+      const layer = a[kind];
+      if (!layer) continue;
+      next.weather.layers[kind] = {
+        ...next.weather.layers[kind], enabled: layer.enabled,
+        ...(layer.density !== undefined && { density: layer.density }),
+        ...(layer.speed !== undefined && { speed: layer.speed }),
+        ...(layer.color && { color: layer.color }),
+      };
+    }
+    return next;
+  })));
+
   server.registerTool('add_plant', {
     title: 'Add trees or plants',
     description: 'Places plants (list_catalog plants for species ids) at ground points; y is taken from the terrain.',
@@ -508,7 +558,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('set_appearance', {
     title: 'Change colour or material',
-    description: 'Sets colour, a textured material preset, or a plain finish (plastic, metal, glass, paint) on objects. See list_catalog materials / finishes.',
+    description: 'Sets colour, a textured material preset, or a plain finish (plastic, metal, glass, paint) on objects, including doors and windows. For terrain, also sets the ground texture, and turns procedural grass and wildflower meadows on or off. See list_catalog materials / finishes.',
     inputSchema: {
       model: modelRef,
       objects: z.array(z.string()).min(1),
@@ -516,6 +566,19 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       material: z.string().optional().describe('Material preset id or plain finish id'),
       opacity: z.number().min(0.05).max(1).optional(),
       terrain_texture: z.string().optional().describe('For terrain: a texture id from list_catalog terrain_textures'),
+      grass: z.object({
+        enabled: z.boolean(),
+        density: z.number().min(1).max(60).optional().describe('Instances per m²'),
+        root_color: colour.optional(),
+        tip_color: colour.optional(),
+      }).optional().describe('For terrain: procedural grass'),
+      flowers: z.object({
+        enabled: z.boolean(),
+        density: z.number().min(0.05).max(15).optional().describe('Instances per m²'),
+        flower_type: z.enum(['mixed', 'poppy', 'alpine', 'buttercup', 'lavender', 'daisy']).optional(),
+        primary_color: colour.optional(),
+        secondary_color: colour.optional(),
+      }).optional().describe('For terrain: a procedural wildflower meadow'),
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, 'Changed appearance', shapes => {
@@ -533,7 +596,29 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       }
       if (a.color) out.color = a.color;
       if (a.opacity !== undefined) out.opacity = a.opacity;
-      if (a.terrain_texture && out.type === 'terrain') out = withTerrainTexture(out, a.terrain_texture);
+      if (out.type === 'terrain') {
+        if (a.terrain_texture) out = withTerrainTexture(out, a.terrain_texture);
+        if (a.grass || a.flowers) {
+          out = { ...out, terrainData: { ...out.terrainData } as typeof out.terrainData };
+          if (a.grass && out.terrainData) {
+            out.terrainData.grass = {
+              ...out.terrainData.grass, enabled: a.grass.enabled,
+              ...(a.grass.density !== undefined && { density: a.grass.density }),
+              ...(a.grass.root_color && { rootColor: a.grass.root_color }),
+              ...(a.grass.tip_color && { tipColor: a.grass.tip_color }),
+            } as typeof out.terrainData.grass;
+          }
+          if (a.flowers && out.terrainData) {
+            out.terrainData.flowers = {
+              ...out.terrainData.flowers, enabled: a.flowers.enabled,
+              ...(a.flowers.density !== undefined && { density: a.flowers.density }),
+              ...(a.flowers.flower_type && { flowerType: a.flowers.flower_type }),
+              ...(a.flowers.primary_color && { primaryColor: a.flowers.primary_color }),
+              ...(a.flowers.secondary_color && { secondaryColor: a.flowers.secondary_color }),
+            } as typeof out.terrainData.flowers;
+          }
+        }
+      }
       return out;
     });
     return { shapes: next, made: next.filter(s => ids.has(s.id)) };

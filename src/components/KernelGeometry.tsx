@@ -65,7 +65,7 @@ export interface KernelGeometryProps {
   defaultColor?: string;
   selectedColor?: string;
   opacity?: number;
-  /** Resolves a library (Poly Haven) material painted onto faces to its loaded textures. */
+  /** Resolves a library material painted onto faces to its loaded textures. */
   bindingFor?: (bindingId: string) => KernelFaceBinding | undefined;
 }
 

@@ -72,7 +72,7 @@ export interface PatioData {
   lights: DeckLights;
 
   steps: PatioStep[];
-  /** A Poly Haven library material for the paving slabs or deck boards (overrides the preset look). */
+  /** A material library entry for the paving slabs or deck boards (overrides the preset look). */
   surfaceMaterialId?: string;
 }
 

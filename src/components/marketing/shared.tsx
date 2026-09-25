@@ -95,13 +95,6 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
           <button
             type="button"
             onClick={onLogin}
-            className="text-sm font-semibold px-3.5 py-2 rounded-lg text-polyform-gray hover:bg-gray-50 transition-colors"
-          >
-            Log in
-          </button>
-          <button
-            type="button"
-            onClick={onLogin}
             className="text-sm font-semibold px-4 py-[9px] rounded-lg bg-polyform-blue text-white shadow-[0_4px_12px_rgb(0_99_163_/_0.2)] hover:bg-polyform-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
           >
             Start designing
@@ -135,9 +128,6 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
             </button>
           ))}
           <div className="h-px bg-gray-100 my-2" />
-          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold px-3.5 py-2.5 rounded-lg text-left text-polyform-gray hover:bg-gray-50">
-            Log in
-          </button>
           <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold px-4 py-2.5 rounded-lg bg-polyform-blue text-white text-center">
             Start designing
           </button>
