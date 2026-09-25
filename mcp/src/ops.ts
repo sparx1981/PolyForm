@@ -260,7 +260,13 @@ export function patioOrDeck(shapes: Shape[], points: Vec2[], opts: {
     const t = Math.max(0, Math.min(1, ((p[0] - f.a[0]) * dx + (p[1] - f.a[1]) * dz) / len2));
     return Math.hypot(p[0] - f.a[0] - dx * t, p[1] - f.a[1] - dz * t) < 0.05;
   }).map(f => f.floor));
-  const level = opts.level ?? patioLevel(points, bulges, opts.kind, opts.deckHeight ?? 0.45, wallFloors, groundAt(shapes));
+  // Walls stack on upper floors; the patio belongs to the floor nearest the ground there.
+  const ground = groundAt(shapes);
+  const groundHere = points.reduce((sum, [x, z]) => sum + ground(x, z), 0) / points.length;
+  const nearest = wallFloors.length
+    ? [wallFloors.reduce((best, f) => (Math.abs(f - groundHere) < Math.abs(best - groundHere) ? f : best))]
+    : [];
+  const level = opts.level ?? patioLevel(points, bulges, opts.kind, opts.deckHeight ?? 0.45, nearest, ground);
   const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === opts.kind).length + 1;
   return makePatioShape({
     id: newId(),

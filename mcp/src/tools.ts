@@ -9,7 +9,7 @@ import { FENCE_STYLES, WOOD_FINISHES } from '../../src/lib/fence/fenceTypes';
 import { buildRoofAssemblyForRoom } from '../../src/lib/archRoofGenerator';
 import { ToolError, type Caller, type ModelStore } from './store';
 import {
-  carryHosted, describe, detail, fenceRun, findShape, groundAt, openingInWall, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
+  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
 } from './ops';
 
 export interface ScreenshotOptions {
@@ -17,7 +17,6 @@ export interface ScreenshotOptions {
   width: number;
   height: number;
   focus?: string;
-  time?: 'day' | 'evening' | 'night';
 }
 
 export interface Renderer {
@@ -151,15 +150,14 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       model: modelRef,
       view: z.enum(['perspective', 'plan', 'front', 'back', 'left', 'right']).default('perspective'),
       focus: z.string().optional().describe('Object id to frame instead of the whole model'),
-      time: z.enum(['day', 'evening', 'night']).default('day'),
       width: z.number().int().min(320).max(1600).default(1024),
       height: z.number().int().min(240).max(1200).default(640),
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
-  }, safe(async ({ model, view, focus, time, width, height }) => {
+  }, safe(async ({ model, view, focus, width, height }) => {
     if (!ctx.renderer) throw new ToolError('Screenshots are not set up on this server (POLYFORM_APP_URL is missing).');
     const m = await store.loadModel(caller, model);
-    const png = await ctx.renderer.screenshot(caller, m.id, { view, focus, time, width, height });
+    const png = await ctx.renderer.screenshot(caller, m.id, { view, focus, width, height });
     return { content: [
       { type: 'image', data: png.toString('base64'), mimeType: 'image/png' },
       { type: 'text', text: `${m.name}, ${view} view.` },
@@ -304,7 +302,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('add_stairs', {
     title: 'Add stairs',
-    description: 'A flight of stairs; position is the bottom centre.',
+    description: 'A flight of stairs. position = [x, floor level, z] of the bottom: for a straight flight, the centre of the first step\'s front edge; the flight climbs towards +z (use transform_objects rotate_deg to turn it). Other styles are centred on position.',
     inputSchema: {
       model: modelRef,
       style: z.enum(['straight', 'l-shape', 'u-shape', 'c-shape', 'winder', 'spiral', 'curved', 'bifurcated']).default('straight'),
@@ -315,8 +313,14 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, 'Added stairs', shapes => {
-    const run = withSdk(shapes, sdk => sdk.architecture.createStairs({ style: a.style, height: a.rise, width: a.width, position: a.position, railing: a.railing }));
-    return { shapes: run.shapes, made: run.created };
+    // The stair mesh is centred on its position, halfway up; convert from the bottom.
+    const run = withSdk(shapes, sdk => sdk.architecture.createStairs({ style: a.style, height: a.rise, width: a.width, position: [0, 0, 0], railing: a.railing }));
+    const [x, y, z] = a.position;
+    const made = run.created.map(s => {
+      const length = Array.isArray(s.args) ? Number(s.args[2]) || 0 : 0;
+      return { ...s, position: [x, y + a.rise / 2, a.style === 'straight' ? z + length / 2 : z] as Vec3 };
+    });
+    return { shapes: [...shapes, ...made], made };
   })));
 
   server.registerTool('add_terrain', {
@@ -349,9 +353,25 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     annotations: WRITE,
   }, safe(async (a) => change(a.model, `Added ${a.points.length} × ${a.species}`, shapes => {
     if (!PLANT_SPECIES_CATALOG.some(p => p.id === a.species)) throw new ToolError(`Unknown plant "${a.species}". See list_catalog plants.`);
+    const species = PLANT_SPECIES_CATALOG.find(p => p.id === a.species)!;
     const ground = groundAt(shapes);
-    const run = withSdk(shapes, sdk => a.points.map(([x, zz]) => sdk.landscape.addPlant(a.species, { position: [x, ground(x, zz), zz], scale: a.scale })));
-    return { shapes: run.shapes, made: run.created };
+    // As the app's planting tool does: species only, no baked mesh (the app draws it), which
+    // keeps each plant a few hundred bytes instead of about a megabyte.
+    const kind = species.category === 'tree' ? 'tree' : species.category === 'rock' ? 'rock' : 'bush';
+    const made: Shape[] = a.points.map(([x, zz]) => ({
+      id: newId(),
+      name: species.name,
+      type: kind,
+      position: [x, ground(x, zz), zz] as Vec3,
+      quaternion: [0, 0, 0, 1],
+      scale: [a.scale, a.scale, a.scale] as Vec3,
+      args: [1, 1, 1],
+      color: species.foliageColor || '#2d6a4f',
+      roughness: 0.7,
+      metalness: 0.1,
+      plantSpeciesId: species.id,
+    }));
+    return add(made)(shapes);
   })));
 
   server.registerTool('add_fence', {

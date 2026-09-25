@@ -122,4 +122,27 @@ describe('connector over HTTP', () => {
     expect(roofs.every((o: any) => !/gable/i.test(o.name))).toBe(true);
     await client.close();
   });
+
+  it('levels patios with the ground floor of a two-storey house, keeps plants light, and places stairs from the bottom', async () => {
+    const { token } = await signIn();
+    const client = await connect(token!);
+    const { id } = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Two storey' } }));
+    await client.callTool({ name: 'add_wall', arguments: { model: id, start: [0, 0.15, 0], end: [6, 0.15, 0], height: 2.85 } });
+    await client.callTool({ name: 'add_wall', arguments: { model: id, start: [0, 3, 0], end: [6, 3, 0], height: 2.8 } });
+    const patio = parse(await client.callTool({ name: 'add_patio', arguments: { model: id, kind: 'patio', points: [[0, -0.1], [6, -0.1], [6, -4], [0, -4]] } }));
+    expect(patio.created[0].position[1]).toBeCloseTo(0.15);
+
+    await client.callTool({ name: 'add_plant', arguments: { model: id, species: 'lavender_shrub', points: [[1, -6], [2, -6]] } });
+    const plants = parse(await client.callTool({ name: 'list_objects', arguments: { model: id, type: 'bush' } }));
+    expect(plants.total).toBe(2);
+    const plant = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: plants.objects[0].id } }));
+    expect(plant.plantSpeciesId).toBe('lavender_shrub');
+    expect(plant.geometryData).toBeUndefined();
+
+    const stairs = parse(await client.callTool({ name: 'add_stairs', arguments: { model: id, rise: 2.85, position: [1, 0.15, 1] } }));
+    const [, y, z] = stairs.created[0].position;
+    expect(y).toBeCloseTo(0.15 + 2.85 / 2, 1);
+    expect(z).toBeGreaterThan(1);
+    await client.close();
+  });
 });
