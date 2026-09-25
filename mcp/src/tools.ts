@@ -8,6 +8,8 @@ import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { FENCE_STYLES, WOOD_FINISHES } from '../../src/lib/fence/fenceTypes';
 import { buildRoofAssemblyForRoom } from '../../src/lib/archRoofGenerator';
 import { ToolError, type Caller, type ModelStore } from './store';
+import { floorPlans, withStoryTags } from './plans';
+import { svgToPng } from './raster';
 import {
   carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
 } from './ops';
@@ -27,6 +29,8 @@ export interface ToolContext {
   caller: Caller;
   store: ModelStore;
   renderer?: Renderer;
+  /** SVG to PNG (plans); swapped out in tests. */
+  rasterize?: (svg: string) => Promise<Buffer>;
 }
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
@@ -67,12 +71,12 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
   async function change(ref: string, note: string, fn: (shapes: Shape[]) => { shapes: Shape[]; made?: Shape[]; message?: string }) {
     const model = await store.loadModel(caller, ref);
     let out: ReturnType<typeof fn> = { shapes: [] };
-    await store.changeShapes(caller, model.id, note, shapes => withQuaternions((out = fn(shapes)).shapes));
+    await store.changeShapes(caller, model.id, note, shapes => withStoryTags(withQuaternions((out = fn(shapes)).shapes)));
     return text({
       model: `${model.name} (${model.id})`,
       done: out.message ?? note,
       created: out.made?.map(describe),
-      tip: 'Take a screenshot to check the result; undo_last_change reverses this.',
+      tip: 'undo_last_change reverses this. When the design is finished, call preview_model to show the result.',
     });
   }
 
@@ -162,6 +166,49 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       { type: 'image', data: png.toString('base64'), mimeType: 'image/png' },
       { type: 'text', text: `${m.name}, ${view} view.` },
     ] };
+  }));
+
+  server.registerTool('preview_model', {
+    title: 'Preview a finished design',
+    description: 'Call this once when you finish creating or changing a design, so the user can see it without opening PolyForm. Returns a 3D perspective picture and, for buildings (models with walls), a floor plan of each level with rooms, their areas, doors, windows and stairs. Name the rooms you built with room_labels.',
+    inputSchema: {
+      model: modelRef,
+      room_labels: z.array(z.object({
+        level: z.number().int().min(1).describe('1 = ground floor'),
+        at: point2.describe('[x, z] of any point inside the room'),
+        name: z.string(),
+      })).default([]),
+      include_3d: z.boolean().default(true),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  }, safe(async ({ model, room_labels, include_3d }) => {
+    const m = await store.loadModel(caller, model);
+    const plans = floorPlans(m.shapes, room_labels as any);
+    const rasterize = ctx.rasterize ?? svgToPng;
+    const content: Content[] = [];
+    const notes: string[] = [];
+    const planImages = await Promise.all(plans.map(p => rasterize(p.svg)));
+    let perspective: Buffer | null = null;
+    if (include_3d) {
+      if (!ctx.renderer) notes.push('3D picture: screenshots are not set up on this server.');
+      else {
+        try {
+          perspective = await ctx.renderer.screenshot(caller, m.id, { view: 'perspective', width: 1024, height: 640 });
+        } catch (e) {
+          notes.push(`3D picture unavailable: ${(e as Error).message}`);
+        }
+      }
+    }
+    if (!plans.length && !perspective) throw new ToolError(notes.join(' ') || 'Nothing to preview: the model has no walls and 3D pictures are off.');
+    content.push({ type: 'text', text: JSON.stringify({
+      model: `${m.name} (${m.id})`,
+      levels: plans.map(p => ({ level: p.level, floorAt: p.elevation, rooms: p.rooms })),
+      notes: notes.length ? notes : undefined,
+      tip: 'Show these pictures to the user. Unnamed rooms can be named with room_labels.',
+    }, null, 2) });
+    if (perspective) content.push({ type: 'image', data: perspective.toString('base64'), mimeType: 'image/png' });
+    planImages.forEach(png => content.push({ type: 'image', data: png.toString('base64'), mimeType: 'image/png' }));
+    return { content };
   }));
 
   // ── Models ────────────────────────────────────────────────────────────

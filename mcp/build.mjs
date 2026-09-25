@@ -11,7 +11,7 @@ const OUT = join(MCP, '.vercel/output');
 const FUNC = join(OUT, 'functions/index.func');
 
 /** Packages loaded at run time from node_modules rather than bundled (native binaries, dynamic requires). */
-export const EXTERNAL = ['@sparticuz/chromium', 'playwright-core', 'firebase-admin'];
+export const EXTERNAL = ['@sparticuz/chromium', 'playwright-core', 'firebase-admin', '@resvg/resvg-wasm'];
 
 /**
  * Packages imported by the app's own files resolve from this package's node_modules (the only
@@ -84,6 +84,9 @@ async function main() {
   }
   // Chromium's compressed browser is read from its bin folder by path, which tracing can miss.
   await cp(join(MCP, 'node_modules/@sparticuz/chromium'), join(FUNC, 'node_modules/@sparticuz/chromium'), { recursive: true });
+  // The plan renderer's WebAssembly and font are read by path too.
+  await cp(join(MCP, 'node_modules/@resvg/resvg-wasm'), join(FUNC, 'node_modules/@resvg/resvg-wasm'), { recursive: true });
+  await cp(join(MCP, 'assets'), join(FUNC, 'assets'), { recursive: true });
 
   await writeFile(join(FUNC, 'package.json'), JSON.stringify({ type: 'module' }));
   await writeFile(join(FUNC, '.vc-config.json'), JSON.stringify({

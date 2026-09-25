@@ -91,6 +91,13 @@ describe('connector over HTTP', () => {
     expect(shot.content[0].type).toBe('image');
     expect(shots).toContain(`${created.id}:plan`);
 
+    const preview = await client.callTool({ name: 'preview_model', arguments: { model: created.id, room_labels: [{ level: 1, at: [0, 0], name: 'Studio' }] } }) as any;
+    const info = JSON.parse(preview.content[0].text);
+    expect(info.levels[0].rooms[0]).toMatchObject({ name: 'Studio' });
+    expect(preview.content.slice(1).map((c: any) => c.type)).toEqual(['image', 'image']); // the 3D view, then the plan
+    expect(Buffer.from(preview.content[2].data, 'base64').subarray(1, 4).toString()).toBe('PNG');
+    expect(shots).toContain(`${created.id}:perspective`);
+
     const bad = await client.callTool({ name: 'add_opening', arguments: { model: created.id, wall: 'nope', kind: 'door' } }) as any;
     expect(bad.isError).toBe(true);
     expect(bad.content[0].text).toMatch(/No object "nope"/);
