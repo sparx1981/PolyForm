@@ -12,6 +12,7 @@ export class AppRenderer implements Renderer {
     private appUrl: string,
     private mintToken: (uid: string) => Promise<string>,
     private launch: () => Promise<Browser> = launchChromium,
+    private bypassSecret?: string,
   ) {}
 
   async screenshot(caller: Caller, modelId: string, opts: ScreenshotOptions): Promise<Buffer> {
@@ -21,6 +22,12 @@ export class AppRenderer implements Renderer {
       const page = await browser.newPage({ viewport: { width: opts.width, height: opts.height }, deviceScaleFactor: 1 });
       const url = new URL(this.appUrl);
       url.searchParams.set('render', '1');
+      // A Vercel-hosted app behind Vercel Authentication: the automation bypass lets this browser
+      // in, and the cookie it sets covers the app's own scripts and assets that follow.
+      if (this.bypassSecret) {
+        url.searchParams.set('x-vercel-protection-bypass', this.bypassSecret);
+        url.searchParams.set('x-vercel-set-bypass-cookie', 'true');
+      }
       await page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: 60_000 });
       await page.waitForFunction(() => typeof (window as any).__polyformRender === 'function', null, { timeout: 60_000 })
         .catch(() => { throw new Error(`The PolyForm app at ${this.appUrl} has no render mode (deploy the latest app).`); });

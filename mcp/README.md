@@ -32,6 +32,8 @@ signs in as you with a one-off token, opens the model read-only and frames it.
    - `TOKEN_SECRET`: a random string of at least 32 characters (changing it signs everyone out)
    - `ALLOWED_EMAILS`: your Google sign-in email (comma-separate several)
    - `POLYFORM_APP_URL` (optional): where the app is hosted; default `https://gen-lang-client-0540185995.web.app`
+   - `APP_BYPASS_SECRET` (optional): if the app is hosted on Vercel behind Vercel Authentication, its
+     *Protection Bypass for Automation* secret, so the screenshot browser can open it
    - `PUBLIC_URL` (optional): the connector's own address, if Vercel's isn't right
 4. **Allow sign-in from Vercel.** Firebase console → Authentication → Settings → Authorized
    domains → add the Vercel domain (e.g. `polyform-mcp.vercel.app`).

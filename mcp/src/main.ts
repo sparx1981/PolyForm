@@ -35,7 +35,7 @@ export function getHandler() {
       allowedEmails: env('ALLOWED_EMAILS').split(',').map(e => e.trim().toLowerCase()).filter(Boolean),
     },
     store: new FirestoreStore(db, () => FieldValue.serverTimestamp()),
-    renderer: new AppRenderer(appUrl, uid => auth.createCustomToken(uid)),
+    renderer: new AppRenderer(appUrl, uid => auth.createCustomToken(uid), undefined, process.env.APP_BYPASS_SECRET || undefined),
     verifyIdToken: async idToken => {
       const t = await auth.verifyIdToken(idToken);
       return { uid: t.uid, email: t.email, email_verified: t.email_verified, name: t.name };
