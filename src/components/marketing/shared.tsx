@@ -1,55 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Box, LogIn } from 'lucide-react';
+import React, { useState } from 'react';
+import { Box } from 'lucide-react';
+import { RouterLink, type Page } from './router';
 
-export type Page = 'home' | 'features' | 'claude' | 'developers' | 'sdk-docs';
+export type { Page };
+export { RouterLink, useMarketingRouter, scrollToId, hrefFor, isMarketingPath } from './router';
 
-const PATHS: Record<Page, string> = { home: '/', features: '/features', claude: '/claude', developers: '/developers', 'sdk-docs': '/developers/sdk' };
-
-function pageFromHash(): Page {
-  const hash = window.location.hash.replace(/^#/, '');
-  if (hash === '/features') return 'features';
-  if (hash === '/claude') return 'claude';
-  if (hash === '/developers/sdk') return 'sdk-docs';
-  if (hash === '/developers') return 'developers';
-  return 'home';
-}
-
-/** Small hash-based router for the signed-out marketing site (no server-side SPA fallback configured). */
-export function useMarketingRouter() {
-  const [page, setPage] = useState<Page>(pageFromHash);
-
-  useEffect(() => {
-    const onHashChange = () => setPage(pageFromHash());
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
-
-  const go = (next: Page, anchor?: string) => {
-    window.location.hash = PATHS[next] + (anchor ? `#${anchor}` : '');
-    // window.location.hash above already changes the hash once; ensure state updates even if the hash string is identical.
-    setPage(next);
-    window.scrollTo(0, 0);
-    if (anchor) {
-      requestAnimationFrame(() => scrollToId(anchor));
-    }
-  };
-
-  return { page, go };
-}
-
-export function scrollToId(id: string) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const top = el.getBoundingClientRect().top + window.scrollY - 84;
-  window.scrollTo({ top, behavior: 'smooth' });
-}
-
-export function Logo({ onClick, size = 32, textSize = 'text-[19px]' }: { onClick?: () => void; size?: number; textSize?: string }) {
-  return (
-    <span
-      onClick={onClick}
-      className={`flex items-center gap-2.5 font-bold ${textSize} tracking-[-0.01em] text-polyform-dark-blue ${onClick ? 'cursor-pointer' : ''}`}
-    >
+export function Logo({ go, size = 32, textSize = 'text-[19px]' }: { go?: (p: Page) => void; size?: number; textSize?: string }) {
+  const content = (
+    <>
       <span
         className="rounded-lg bg-polyform-blue text-white flex items-center justify-center shadow-sm shrink-0"
         style={{ width: size, height: size }}
@@ -57,41 +15,53 @@ export function Logo({ onClick, size = 32, textSize = 'text-[19px]' }: { onClick
         <Box size={Math.round(size * 0.56)} />
       </span>
       PolyForm
-    </span>
+    </>
   );
+  const className = `flex items-center gap-2.5 font-bold ${textSize} tracking-[-0.01em] text-polyform-dark-blue`;
+  if (!go) return <span className={className}>{content}</span>;
+  return <RouterLink to="home" go={go} className={className} aria-label="PolyForm home">{content}</RouterLink>;
 }
 
 const NAV: { page: Page; label: string }[] = [
-  { page: 'features', label: 'Features' },
-  { page: 'claude', label: 'Build with Claude' },
+  { page: 'features', label: 'Product' },
+  { page: 'claude', label: 'AI' },
   { page: 'developers', label: 'Developers' },
 ];
 
 export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor?: string) => void; onLogin: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isActive = (n: Page) => page === n || (n === 'developers' && page === 'sdk-docs');
 
   return (
-    <header className="sticky top-0 z-[100] bg-white/85 backdrop-blur-md border-b border-gray-100" style={{ height: 68 }}>
+    <header className="sticky top-0 z-[100] bg-white/85 backdrop-blur-md border-b border-gray-100" style={{ height: 64 }}>
       <nav className="max-w-[1200px] mx-auto px-6 h-full flex items-center justify-between gap-6" aria-label="Main">
-        <Logo onClick={() => go('home')} />
+        <Logo go={go} />
 
         <div className="hidden md:flex items-center gap-1">
           {NAV.map(n => (
-            <button
+            <RouterLink
               key={n.page}
-              type="button"
-              onClick={() => go(n.page)}
+              to={n.page}
+              go={go}
               className={
                 'text-sm font-semibold px-3.5 py-2 rounded-lg transition-colors '
-                + ((page === n.page || (n.page === 'developers' && page === 'sdk-docs')) ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
+                + (isActive(n.page) ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
               }
+              aria-current={isActive(n.page) ? 'page' : undefined}
             >
               {n.label}
-            </button>
+            </RouterLink>
           ))}
         </div>
 
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onLogin}
+            className="text-sm font-semibold px-3.5 py-2 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Sign in
+          </button>
           <button
             type="button"
             onClick={onLogin}
@@ -104,8 +74,9 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
         <button
           type="button"
           onClick={() => setMobileOpen(v => !v)}
-          className="md:hidden text-sm font-semibold px-3 py-2 rounded-lg text-polyform-gray hover:bg-gray-50"
+          className="md:hidden min-h-11 min-w-11 text-sm font-semibold px-3 rounded-lg text-polyform-gray hover:bg-gray-50"
           aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
           aria-label="Menu"
         >
           Menu
@@ -113,22 +84,26 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
       </nav>
 
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-6 py-3 flex flex-col gap-1">
+        <div id="mobile-nav" className="md:hidden border-t border-gray-100 bg-white px-6 py-3 flex flex-col gap-1">
           {NAV.map(n => (
-            <button
+            <RouterLink
               key={n.page}
-              type="button"
-              onClick={() => { go(n.page); setMobileOpen(false); }}
+              to={n.page}
+              go={(p, a) => { go(p, a); setMobileOpen(false); }}
               className={
-                'text-sm font-semibold px-3.5 py-2.5 rounded-lg text-left '
-                + ((page === n.page || (n.page === 'developers' && page === 'sdk-docs')) ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
+                'text-sm font-semibold min-h-11 flex items-center px-3.5 rounded-lg '
+                + (isActive(n.page) ? 'text-polyform-blue bg-[rgb(0_99_163_/_0.08)]' : 'text-gray-600 hover:bg-gray-50')
               }
+              aria-current={isActive(n.page) ? 'page' : undefined}
             >
               {n.label}
-            </button>
+            </RouterLink>
           ))}
           <div className="h-px bg-gray-100 my-2" />
-          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold px-4 py-2.5 rounded-lg bg-polyform-blue text-white text-center">
+          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
+            Sign in
+          </button>
+          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg bg-polyform-blue text-white text-center">
             Start designing
           </button>
         </div>
@@ -148,9 +123,9 @@ export function ClosingCTA({ onLogin }: { onLogin: () => void }) {
         <button
           type="button"
           onClick={onLogin}
-          className="inline-flex items-center gap-2 rounded-lg bg-white text-polyform-dark-blue font-semibold text-base px-[26px] py-[14px] hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-polyform-dark-blue"
+          className="inline-flex items-center justify-center rounded-lg bg-white text-polyform-dark-blue font-semibold text-base px-[26px] py-[14px] hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-polyform-dark-blue"
         >
-          <LogIn size={18} /> Login Now
+          Start designing
         </button>
       </div>
     </section>
@@ -161,18 +136,19 @@ type FooterCol = { title: string; links: { label: string; page?: Page; anchor?: 
 
 export function Footer({ go, onLogin }: { go: (p: Page, anchor?: string) => void; onLogin: () => void }) {
   const columns: FooterCol[] = [
-    { title: 'PRODUCT', links: [{ label: 'Features', page: 'features' }, { label: 'Build with Claude', page: 'claude' }, { label: 'Developers', page: 'developers' }] },
+    { title: 'PRODUCT', links: [{ label: 'Features', page: 'features' }, { label: 'AI (Build with Claude)', page: 'claude' }, { label: 'Developers', page: 'developers' }, { label: 'SDK reference', page: 'sdk-docs' }] },
     {
-      title: 'FEATURES',
+      title: 'CAPABILITIES',
       links: [
         { label: 'Architecture', page: 'features', anchor: 'architecture' },
         { label: 'Terrain', page: 'features', anchor: 'terrain' },
         { label: 'Site location', page: 'features', anchor: 'location' },
         { label: 'Weather', page: 'features', anchor: 'weather' },
         { label: 'Collaboration', page: 'features', anchor: 'collaboration' },
+        { label: 'Storage & files', page: 'features', anchor: 'files' },
       ],
     },
-    { title: 'ACCOUNT', links: [{ label: 'Log in', onClick: onLogin }] },
+    { title: 'ACCOUNT', links: [{ label: 'Sign in', onClick: onLogin }] },
   ];
 
   return (
@@ -180,26 +156,27 @@ export function Footer({ go, onLogin }: { go: (p: Page, anchor?: string) => void
       <div className="max-w-[1200px] mx-auto px-6 flex flex-col gap-12">
         <div className="flex flex-wrap justify-between gap-10">
           <div className="flex flex-col gap-3 max-w-[300px]">
-            <Logo size={28} textSize="text-lg" onClick={() => go('home')} />
-            <p className="text-sm text-gray-500 leading-relaxed">3D design for buildings and gardens.</p>
+            <Logo go={go} size={28} textSize="text-lg" />
+            <p className="text-sm text-gray-500 leading-relaxed">Browser-based 3D design for buildings, terrain and landscape.</p>
           </div>
-          <div className="flex flex-wrap gap-14">
+          <nav className="flex flex-wrap gap-14" aria-label="Footer">
             {columns.map(col => (
               <div key={col.title} className="flex flex-col gap-2.5">
                 <span className="text-[11px] font-bold tracking-[0.12em] text-gray-400">{col.title}</span>
                 {col.links.map(link => (
-                  <button
-                    key={link.label}
-                    type="button"
-                    onClick={link.onClick ?? (() => go(link.page!, link.anchor))}
-                    className="text-sm text-gray-600 hover:text-polyform-blue text-left transition-colors"
-                  >
-                    {link.label}
-                  </button>
+                  link.page ? (
+                    <RouterLink key={link.label} to={link.page} anchor={link.anchor} go={go} className="text-sm text-gray-600 hover:text-polyform-blue transition-colors">
+                      {link.label}
+                    </RouterLink>
+                  ) : (
+                    <button key={link.label} type="button" onClick={link.onClick} className="text-sm text-gray-600 hover:text-polyform-blue text-left transition-colors">
+                      {link.label}
+                    </button>
+                  )
                 ))}
               </div>
             ))}
-          </div>
+          </nav>
         </div>
         <div className="text-[13px] text-gray-500 border-t border-gray-100 pt-6">© {new Date().getFullYear()} PolyForm</div>
       </div>
@@ -216,7 +193,7 @@ export function Eyebrow({ children, dark = false, icon }: { children: React.Reac
   );
 }
 
-export function IconTile({ icon, size = 44, iconSize = 22 }: { icon: React.ReactNode; size?: number; iconSize?: number }) {
+export function IconTile({ icon, size = 44 }: { icon: React.ReactNode; size?: number }) {
   return (
     <span
       className="rounded-[10px] bg-polyform-blue/10 text-polyform-blue flex items-center justify-center shrink-0"
@@ -230,7 +207,7 @@ export function IconTile({ icon, size = 44, iconSize = 22 }: { icon: React.React
 export function FloorPlanTile({ label, variant = 1 }: { label: string; variant?: 1 | 2 }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-[#fbfaf7] p-3 flex flex-col gap-1.5">
-      <svg viewBox="0 0 100 80" className="w-full">
+      <svg viewBox="0 0 100 80" className="w-full" role="img" aria-label={`Floor plan, ${label}`}>
         <path d="M8 8 H92 V44 H52 V72 H8 Z" fill="#f5f1e8" stroke="#1f2937" strokeWidth="3" />
         <path
           d={variant === 1 ? 'M50 8 V44 M8 44 H52' : 'M36 8 V44 M64 8 V44 M8 44 H52 M30 44 V72'}

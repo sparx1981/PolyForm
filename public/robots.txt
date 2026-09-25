@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /$
+Allow: /features$
+Allow: /build-with-claude$
+Allow: /developers$
+Allow: /developers/sdk$
+Disallow: /
+
+Sitemap: https://polyform-alpha.vercel.app/sitemap.xml

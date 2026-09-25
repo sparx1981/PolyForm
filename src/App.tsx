@@ -32,6 +32,7 @@ import WorldView from './components/WorldView';
 import AIGenerate from './components/AIGenerate';
 import Login from './components/Login';
 import Landing from './components/Landing';
+import { isMarketingPath } from './components/marketing/router';
 import Help from './components/Help';
 import Messaging from './components/Messaging';
 import WebpageModal from './components/WebpageModal';
@@ -455,10 +456,14 @@ function AppContent() {
   }, [setIsDiagnosticLogOpen]);
 
   if (!user) {
+    const isJoinLink = new URLSearchParams(window.location.search).has('join');
+    // A marketing URL (/, /features, ...) renders straight away rather than waiting on the auth
+    // check, so real content (and its LCP) isn't gated behind a Firebase round trip.
+    if (!isJoinLink && isMarketingPath(window.location.pathname)) return <Landing />;
     // Until Firebase says whether someone is signed in, show nothing rather than flash the landing page.
     if (!authChecked) return <div className="fixed inset-0 bg-white" aria-busy="true" />;
     // A shared design link goes straight to sign-in; everyone else starts on the landing page.
-    if (new URLSearchParams(window.location.search).has('join')) return <Login note="Sign in to open the design shared with you" />;
+    if (isJoinLink) return <Login note="Sign in to open the design shared with you" />;
     return <Landing />;
   }
 

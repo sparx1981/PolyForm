@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/((?!polyhaven|polyhaven-models-decimated|models|basis|_service-worker.js|trimble-callback.html|connect-callback.html|assets|.*\\..*).*)", "destination": "/index.html" }
+  ]
+}

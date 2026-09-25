@@ -227,6 +227,48 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
   },
 ];
 
+export type FeatureChapter = {
+  id: string;
+  kicker: string;
+  title: string;
+  body: string;
+  sectionIds: string[];
+};
+
+/** Groups the 13 detailed FEATURE_SECTIONS into the chapters the Features page leads with. */
+export const FEATURE_CHAPTERS: FeatureChapter[] = [
+  {
+    id: 'model', kicker: 'MODEL', title: 'Draw it, then shape it',
+    body: 'Sketch on the ground or on any face, then push, pull, carve and bevel. Every tool has a hotkey, and the status bar takes exact dimensions as you draw.',
+    sectionIds: ['modelling'],
+  },
+  {
+    id: 'build', kicker: 'BUILD', title: 'Walls, rooms and roofs that fit together',
+    body: 'Walls, floors, doors and windows that cut their own openings, staircases, and a parametric roof generator that fits any footprint — with a timber frame engine underneath when you need it.',
+    sectionIds: ['architecture'],
+  },
+  {
+    id: 'shape-the-site', kicker: 'SHAPE THE SITE', title: 'The real site, and everything on it',
+    body: 'Lay the real map under your model with WorldView, sculpt the terrain to match it, then plant, fence and pave the ground around what you’ve built — in the same model as the building itself.',
+    sectionIds: ['location', 'terrain', 'landscape'],
+  },
+  {
+    id: 'visualise', kicker: 'VISUALISE', title: 'See it in real light, then walk in',
+    body: 'Real sunlight and shadows, weather, materials and saved camera scenes, then Walk Mode to step inside at eye level — the same model, seen the way it will actually look and feel.',
+    sectionIds: ['light', 'weather', 'animation', 'walk', 'measure'],
+  },
+  {
+    id: 'work-together', kicker: 'WORK TOGETHER', title: 'Design it together, live',
+    body: 'Invite people to a model and edit it together in real time, with live cursors, move previews and notes pinned to the geometry itself.',
+    sectionIds: ['collaboration'],
+  },
+  {
+    id: 'automate', kicker: 'AUTOMATE', title: 'Generate, render and script it',
+    body: 'Describe an object and PolyForm places it, render the viewport at high fidelity, or turn a photo into a 3D model — and script anything you can draw with the JavaScript SDK.',
+    sectionIds: ['ai'],
+  },
+];
+
 export const WORKS_WITH: { icon: LucideIcon; label: string; href?: string }[] = [
   { icon: Map, label: 'Google Maps' },
   { icon: HardDrive, label: 'Google Drive' },
@@ -237,10 +279,10 @@ export const WORKS_WITH: { icon: LucideIcon; label: string; href?: string }[] = 
 ];
 
 export const WORKFLOW_STEPS: { n: string; icon: LucideIcon; title: string; body: string }[] = [
-  { n: '01', icon: Globe, title: 'Find the site', body: 'Search an address and lay the real map under your model with WorldView.' },
-  { n: '02', icon: House, title: 'Build the house', body: 'Draw walls, drop in doors and windows, add stairs, stack storeys and raise the roof.' },
-  { n: '03', icon: Leaf, title: 'Shape the garden', body: 'Sculpt the terrain, cut the paths, dig the pond and lay the patio against the back door.' },
-  { n: '04', icon: Footprints, title: 'See it and walk in', body: 'Set the sun and the weather, save scenes, then walk through at eye level.' },
+  { n: '01', icon: Globe, title: 'Find the site', body: 'Search a location and lay the real map under your model with WorldView, establishing the real project context from the first click.' },
+  { n: '02', icon: House, title: 'Design the building', body: 'Draw walls, drop in doors and windows, add stairs, stack storeys and raise the roof.' },
+  { n: '03', icon: Leaf, title: 'Shape the landscape', body: 'Sculpt the terrain, cut the paths, dig the pond, lay the patio against the back door and plant the garden.' },
+  { n: '04', icon: Footprints, title: 'Experience the result', body: 'Set the sun and the weather, save scenes, then walk through at eye level, before it is built.' },
 ];
 
 export const STORAGE_OPTIONS: { icon: LucideIcon; title: string; text: string; href?: string }[] = [
@@ -307,6 +349,33 @@ export const DEV_TOOLS: { icon: LucideIcon; title: string; text: string }[] = [
   { icon: LayoutGrid, title: 'Custom toolbars', text: 'Build your own toolbars with your own icons.' },
   { icon: AppWindow, title: 'Embedded webpages', text: 'Open a URL in a floating window with sdk.openWebpage().' },
   { icon: Activity, title: 'AI Diagnostic Log', text: 'Live scene telemetry with category filters. Ctrl+Shift+L.' },
+];
+
+export type DevToolGroup = { kicker: string; title: string; items: { icon: LucideIcon; title: string; text: string }[] };
+
+/** DEV_TOOLS regrouped into the suite's three surrounding categories; Code Recorder gets its own feature section instead. */
+export const DEV_TOOL_GROUPS: DevToolGroup[] = [
+  {
+    kicker: 'AUTOMATE', title: 'Console, SDK and library',
+    items: [
+      { icon: Terminal, title: 'Console', text: 'Write and run scripts against the open model. The window drags, docks and collapses.' },
+      { icon: BookOpen, title: 'Library', text: 'Save scripts, make them public, and copy other people’s into your own library.' },
+    ],
+  },
+  {
+    kicker: 'EXTEND', title: 'Your own toolbars and pages',
+    items: [
+      { icon: LayoutGrid, title: 'Custom toolbars', text: 'Build your own toolbars with your own icons.' },
+      { icon: AppWindow, title: 'Embedded webpages', text: 'Open a URL in a floating window with sdk.openWebpage().' },
+    ],
+  },
+  {
+    kicker: 'UNDERSTAND', title: 'Documentation and diagnostics',
+    items: [
+      { icon: FileText, title: 'Documentation and Spec', text: 'Every SDK method and property, next to the editor.' },
+      { icon: Activity, title: 'AI Diagnostic Log', text: 'Live scene telemetry with category filters. Ctrl+Shift+L.' },
+    ],
+  },
 ];
 
 export const SDK_METHODS: { sig: string; text: string }[] = [

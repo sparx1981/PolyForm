@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { SDK_METHOD_COUNT, SDK_REFERENCE, type SdkMethod, type SdkTag } from './sdkFullReference';
-import { Eyebrow, scrollToId, type Page } from './shared';
+import { Eyebrow, RouterLink, scrollToId, type Page } from './shared';
+import { highlightJsLine } from './codeHighlight';
 
 const TAG_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   core: { bg: 'bg-slate-100', text: 'text-slate-700', dot: 'bg-slate-500' },
@@ -54,7 +55,7 @@ function MethodRow({ tag, method }: { tag: SdkTag; method: SdkMethod }) {
           <p className="text-gray-600 sm:hidden">{method.description}</p>
           <div className="flex flex-col gap-1">
             <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Signature</span>
-            <code className="block bg-slate-950 text-[#E2E8F0] text-[13px] font-mono px-3 py-2 rounded-md overflow-x-auto">{method.signature}</code>
+            <div className="bg-slate-950 px-3 py-2 rounded-md overflow-x-auto">{highlightJsLine(method.signature, method.name)}</div>
           </div>
           <div className="flex gap-6">
             <div className="flex flex-col gap-1">
@@ -82,13 +83,13 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
     <>
       <section className="pt-24 pb-16 px-6 border-b border-gray-100">
         <div className="max-w-[1200px] mx-auto flex flex-col gap-5">
-          <button
-            type="button"
-            onClick={() => go('developers')}
+          <RouterLink
+            to="developers"
+            go={go}
             className="self-start inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-polyform-blue transition-colors"
           >
             <ArrowLeft size={15} /> Back to Developers
-          </button>
+          </RouterLink>
           <Eyebrow>Full SDK reference</Eyebrow>
           <h1 className="text-[clamp(36px,5vw,56px)] font-bold leading-[1.05] tracking-[-0.03em] text-polyform-dark-blue max-w-[900px]">
             The complete <code className="text-[0.85em] font-mono">sdk</code> object
