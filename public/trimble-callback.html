@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Signing in to Trimble…</title></head>
+<body style="font-family: system-ui, sans-serif; padding: 24px">
+<p>Finishing Trimble sign-in…</p>
+<script>
+  // Hands the sign-in result back to the PolyForm window that opened this popup.
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var message = { type: 'trimble-auth', code: params.get('code'), state: params.get('state'), error: params.get('error_description') || params.get('error') };
+    if (window.opener) {
+      window.opener.postMessage(message, window.location.origin);
+      window.close();
+    } else {
+      document.body.textContent = 'Trimble sign-in finished. You can close this window.';
+    }
+  })();
+</script>
+</body>
+</html>

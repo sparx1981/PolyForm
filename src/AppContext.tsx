@@ -1,4 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { buildProjectFile, parseProjectFile } from './lib/storage/projectFile';
+import { storageProviders, STORAGE_LABELS } from './lib/storage/registry';
+import { StorageAuthError, type ExternalFileRef } from './lib/storage/providers';
+import type { ProjectState } from './lib/storage/projectFile';
 import { RENDER_MODE } from './lib/renderMode';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
@@ -209,6 +213,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [graphicsSettings, setGraphicsSettings] = useState(defaultGraphicsSettings);
   const [currentModelId, setCurrentModelId] = useState<string | null>(null);
   const [currentModelName, setCurrentModelName] = useState<string | null>(null);
+  // Models kept in Google Drive / Trimble Connect: Firestore holds only an index entry whose
+  // `storage` points at the file; the content is downloaded on open and saved back on edit.
+  const [externalStorage, setExternalStorage] = useState<ExternalFileRef | null>(null);
+  const [externalStorageProblem, setExternalStorageProblem] = useState<string | null>(null);
+  const externalRef = useRef<ExternalFileRef | null>(null);
+  const externalLoadedFor = useRef<string | null>(null);
+  // Which model's document has actually arrived: autosave must not write the previous model's
+  // canvas into a model that is still opening.
+  const modelLoadedFor = useRef<string | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [allTagsVisible, setAllTagsVisible] = useState(true);
@@ -1002,6 +1015,11 @@ console.log("Created rectangle:", myRect.id);`);
     });
 
     // 3. Sync Model Data (Shapes, Tags, etc.)
+    if (externalLoadedFor.current !== currentModelId) {
+      externalRef.current = null;
+      setExternalStorage(null);
+      setExternalStorageProblem(null);
+    }
     const modelRef = doc(db, 'models', currentModelId);
     const unsubModel = onSnapshot(modelRef, { includeMetadataChanges: true }, async (snapshot) => {
       incrementReads(1);
@@ -1010,6 +1028,23 @@ console.log("Created rectangle:", myRect.id);`);
         setSyncStatus('syncing');
         return;
       }
+
+      if (snapshot.exists() && isExternalRef(snapshot.data()?.storage)) {
+        const ref = snapshot.data()!.storage as ExternalFileRef;
+        modelLoadedFor.current = currentModelId;
+        externalRef.current = ref;
+        setExternalStorage(ref);
+        if (snapshot.data()!.name) setCurrentModelName(snapshot.data()!.name);
+        if (externalLoadedFor.current !== currentModelId) {
+          externalLoadedFor.current = currentModelId;
+          loadExternalModel(currentModelId, ref);
+        } else {
+          setSyncStatus('synced');
+        }
+        return;
+      }
+      externalRef.current = null;
+      setExternalStorage(null);
 
       if (snapshot.exists()) {
         const data = restoreFirestoreArraysAfterLoad(snapshot.data());
@@ -1057,6 +1092,7 @@ console.log("Created rectangle:", myRect.id);`);
         setEnvironment(assetState.environment);
         setMaterialBindings(assetState.materialBindings);
         if (data.name) setCurrentModelName(data.name);
+        modelLoadedFor.current = currentModelId;
 
         setSyncStatus('synced');
         setSyncErrorMessage(null);
@@ -1135,6 +1171,8 @@ console.log("Created rectangle:", myRect.id);`);
       return;
     }
     if (checkQuota()) return;
+    // Still opening (its document hasn't arrived): nothing on screen belongs to it yet.
+    if (modelLoadedFor.current !== currentModelId) return;
     
     // If this update was triggered by a remote sync, don't push it back
     if (isRemoteUpdate.current) {
@@ -1157,6 +1195,40 @@ console.log("Created rectangle:", myRect.id);`);
       return;
     }
 
+    // Drive / Trimble Connect models save the whole project file back to where it lives.
+    const external = externalRef.current;
+    if (external) {
+      const modelId = currentModelId;
+      const saveExternal = async () => {
+        if (externalRef.current?.fileId !== external.fileId) return;
+        setSyncStatus('syncing');
+        try {
+          const text = buildProjectFile({
+            name: currentModelName ?? undefined, shapes, tags, scenes, customMaterials, graphicsSettings, animations,
+            notes, customLights, timberFrameParams, terrainModifiers, environment, materialBindings,
+            kernel: serializeGraph(kernelHost.graph), assetSchemaVersion: 1, assetCatalogRelease: '2026-09-18-pilot-r1',
+          });
+          const next = await storageProviders[external.provider].update(external, text);
+          externalRef.current = next;
+          syncState.lastStateHash = currentStateHash;
+          await updateDoc(doc(db, 'models', modelId), { storage: cleanData(next), updatedAt: serverTimestamp() });
+          setSyncStatus('synced');
+          setSyncErrorMessage(null);
+          setExternalStorageProblem(null);
+        } catch (error: any) {
+          setSyncStatus('error');
+          const message = error instanceof StorageAuthError
+            ? `Connect ${STORAGE_LABELS[external.provider]} to keep saving this model.`
+            : `Saving to ${STORAGE_LABELS[external.provider]} failed: ${error?.message ?? error}`;
+          setSyncErrorMessage(message);
+          setExternalStorageProblem(message);
+        }
+      };
+      retrySyncRef.current = () => { saveExternal(); };
+      const saveTimer = setTimeout(saveExternal, 5000);
+      return () => clearTimeout(saveTimer);
+    }
+
     // A genuinely new local edit - drop any backoff retry left over from a
     // previous failure and start counting fresh for this attempt.
     if (syncState.retryTimeoutId) {
@@ -1167,6 +1239,8 @@ console.log("Created rectangle:", myRect.id);`);
 
     const sync = async () => {
       if (checkQuota()) return;
+      // Drive / Connect models never have their content written to Firestore.
+      if (externalRef.current || modelLoadedFor.current !== currentModelId) return;
       if (syncState.pushInProgress) {
         syncState.needsSync = true;
         return;
@@ -2047,8 +2121,116 @@ console.log("Created rectangle:", myRect.id);`);
     recordAction(`sdk.setSunSettings({ position: [${pos[0]}, ${pos[1]}, ${pos[2]}] });`);
   };
 
+  const getProjectState = (): ProjectState => ({
+    name: currentModelName ?? undefined,
+    shapes,
+    tags,
+    scenes,
+    customMaterials,
+    graphicsSettings,
+    animations,
+    notes,
+    customLights,
+    timberFrameParams,
+    terrainModifiers,
+    environment,
+    materialBindings,
+    kernel: serializeGraph(kernelHost.graph),
+    assetSchemaVersion: 1,
+    assetCatalogRelease: '2026-09-18-pilot-r1',
+  });
+
+  // Same as loading a cloud model's document (see the model snapshot listener above).
+  const applyProjectState = (data: ProjectState) => {
+    const assetState = readAssetProjectState(data as any);
+    replaceKernelGraph(data.kernel ?? null);
+    setShapes((data.shapes ?? []) as Shape[]);
+    setTags((data.tags ?? []) as Tag[]);
+    setScenes((data.scenes ?? []) as SceneState[]);
+    setCustomMaterials(data.customMaterials ?? []);
+    setGraphicsSettings(normalizeGraphicsSettings(data.graphicsSettings as any));
+    setAnimations((data.animations ?? []) as SceneAnimation[]);
+    setNotes((data.notes ?? []) as SceneNote[]);
+    setCustomLights((data.customLights ?? []) as CustomLight[]);
+    setTimberFrameParams((data.timberFrameParams as TimberFrameParams) ?? DEFAULT_TIMBER_FRAME_PARAMS);
+    setTerrainModifiers(((data.terrainModifiers ?? []) as TerrainModifier[]).filter(m => m.type !== 'pad'));
+    setEnvironment(assetState.environment);
+    setMaterialBindings(assetState.materialBindings);
+    if (data.name) setCurrentModelName(data.name);
+  };
+
+  /** Downloads a Drive / Connect model's file and opens it. */
+  async function loadExternalModel(modelId: string, ref: ExternalFileRef) {
+    setSyncStatus('syncing');
+    try {
+      const project = parseProjectFile(await storageProviders[ref.provider].download(ref));
+      if (currentModelIdRef.current !== modelId) return;
+      isRemoteUpdate.current = true;
+      applyProjectState(project);
+      setExternalStorageProblem(null);
+      setSyncStatus('synced');
+    } catch (error: any) {
+      // Allow a retry once the account is connected.
+      externalLoadedFor.current = null;
+      setSyncStatus('error');
+      setExternalStorageProblem(error instanceof StorageAuthError
+        ? `This model is stored in ${STORAGE_LABELS[ref.provider]}. Connect it to open the model.`
+        : `Opening from ${STORAGE_LABELS[ref.provider]} failed: ${error?.message ?? error}`);
+    }
+  }
+
+  /** Signs in to the open model's storage (from a click) and opens or saves it again. */
+  const connectExternalStorage = async () => {
+    const ref = externalRef.current;
+    if (!ref || !currentModelId) return;
+    await storageProviders[ref.provider].connect();
+    if (externalLoadedFor.current !== currentModelId) {
+      externalLoadedFor.current = currentModelId;
+      await loadExternalModel(currentModelId, ref);
+    } else {
+      await saveExternalNow();
+    }
+  };
+
+  /** Saves the open Drive / Connect model's file now (the Save command). */
+  const saveExternalNow = async () => {
+    const ref = externalRef.current;
+    const modelId = currentModelId;
+    if (!ref || !modelId) return;
+    setSyncStatus('syncing');
+    try {
+      const next = await storageProviders[ref.provider].update(ref, buildProjectFile(getProjectState()));
+      externalRef.current = next;
+      await updateDoc(doc(db, 'models', modelId), { storage: cleanData(next), updatedAt: serverTimestamp() });
+      setSyncStatus('synced');
+      setExternalStorageProblem(null);
+    } catch (error: any) {
+      setSyncStatus('error');
+      setExternalStorageProblem(error instanceof StorageAuthError
+        ? `Connect ${STORAGE_LABELS[ref.provider]} to keep saving this model.`
+        : `Saving to ${STORAGE_LABELS[ref.provider]} failed: ${error?.message ?? error}`);
+    }
+  };
+
+  /** A model just saved to Drive / Connect: switch to it without downloading what we already have. */
+  const adoptExternalModel = (modelId: string, ref: ExternalFileRef) => {
+    externalLoadedFor.current = modelId;
+    modelLoadedFor.current = modelId;
+    externalRef.current = ref;
+    setExternalStorage(ref);
+    getSyncState(modelId).lastStateHash = '';
+    setCurrentModelId(modelId);
+  };
+
   return (
     <AppContext.Provider value={{ 
+      externalStorage,
+      externalStorageProblem,
+      connectExternalStorage,
+      adoptExternalModel,
+      saveExternalNow,
+      getProjectState,
+      applyProjectState,
       activeTool, 
       setActiveTool, 
       measurements, 
@@ -2462,4 +2644,9 @@ export function useApp() {
   const context = useContext(AppContext);
   if (!context) throw new Error('useApp must be used within AppProvider');
   return context;
+}
+
+function isExternalRef(value: unknown): value is ExternalFileRef {
+  const v = value as ExternalFileRef | undefined;
+  return !!v && (v.provider === 'google-drive' || v.provider === 'trimble-connect') && typeof v.fileId === 'string';
 }

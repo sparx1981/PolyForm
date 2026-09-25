@@ -16,6 +16,17 @@ export interface ModelRow {
   id: string;
   name: string;
   updatedAt?: string;
+  /** Set when the model's content lives in the user's Google Drive or Trimble Connect. */
+  storedIn?: string;
+}
+
+const EXTERNAL_LABELS: Record<string, string> = { 'google-drive': 'Google Drive', 'trimble-connect': 'Trimble Connect' };
+
+/** Models kept in Drive / Connect hold only an index entry here; the connector can't reach the file. */
+export function externalStorageError(name: string, storage: any): ToolError | null {
+  if (!storage?.fileId) return null;
+  const where = EXTERNAL_LABELS[storage.provider] ?? 'external storage';
+  return new ToolError(`"${name}" is stored in ${where}, which this connector can't open yet. It works on models saved to PolyForm cloud.`);
 }
 
 export interface LoadedModel {
@@ -158,9 +169,14 @@ export class FirestoreStore implements ModelStore {
   }
 
   async listModels(caller: Caller): Promise<ModelRow[]> {
-    const snap = await this.db.collection('models').where('userId', '==', caller.uid).select('name', 'updatedAt').get();
+    const snap = await this.db.collection('models').where('userId', '==', caller.uid).select('name', 'updatedAt', 'storage').get();
     return snap.docs
-      .map(d => ({ id: d.id, name: String(d.get('name') ?? 'Untitled'), updatedAt: toIso(d.get('updatedAt')) }))
+      .map(d => ({
+        id: d.id,
+        name: String(d.get('name') ?? 'Untitled'),
+        updatedAt: toIso(d.get('updatedAt')),
+        storedIn: d.get('storage')?.fileId ? EXTERNAL_LABELS[d.get('storage').provider] ?? 'external storage' : undefined,
+      }))
       .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
   }
 
@@ -172,6 +188,8 @@ export class FirestoreStore implements ModelStore {
     }
     const data = snap.data();
     if (!data || !(await this.canAccess(caller, snap.id, data))) throw new ToolError('Model not found.');
+    const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
+    if (external) throw external;
     return { id: snap.id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: decodeShapes(data.shapes), updatedAt: toIso(data.updatedAt) };
   }
 
@@ -184,6 +202,8 @@ export class FirestoreStore implements ModelStore {
       const snap = await tx.get(ref);
       const data = snap.data();
       if (!data) throw new ToolError('Model not found.');
+      const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
+      if (external) throw external;
       const result = mutate(decodeShapes(data.shapes));
       checkSize(result);
       // Same as the app's save: oversized geometry goes to its own document first.

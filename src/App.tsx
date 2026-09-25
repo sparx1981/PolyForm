@@ -20,6 +20,7 @@ import LandscapesToolbar from './components/LandscapesToolbar';
 import { PhoneLayoutProvider, PhoneSheetPortal, usePhoneLayout } from './lib/phoneLayout';
 import { RENDER_MODE } from './lib/renderMode';
 import RenderView from './components/RenderView';
+import { STORAGE_LABELS } from './lib/storage/registry';
 import CameraToolbar from './components/CameraToolbar';
 import UnifiedToolRail from './components/UnifiedToolRail';
 import RightPanelStack from './components/RightPanelStack';
@@ -254,7 +255,10 @@ function AppContent() {
       isArchitectureToolbarEnabled,
       isLandscapesToolbarEnabled,
       isCameraToolbarEnabled,
-      walkModePhase
+      walkModePhase,
+      externalStorage,
+      externalStorageProblem,
+      connectExternalStorage
     } = useApp();
 
     const phone = usePhoneLayout();
@@ -452,6 +456,17 @@ function AppContent() {
 
   const banners = (
     <>
+      {externalStorageProblem && (
+        <div id="external-storage-banner" className="bg-amber-100 text-amber-900 px-4 py-2 flex items-center justify-between gap-3 text-sm font-medium z-[85]">
+          <span>{externalStorageProblem}</span>
+          <button
+            onClick={() => connectExternalStorage().catch(err => alert(err?.message ?? err))}
+            className="shrink-0 bg-amber-900 text-white px-3 py-1 rounded"
+          >
+            {externalStorage ? `Connect ${STORAGE_LABELS[externalStorage.provider]}` : 'Connect'}
+          </button>
+        </div>
+      )}
       <AnimatePresence>
         {showRedBanner && (
           <motion.div 

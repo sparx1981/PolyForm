@@ -43,6 +43,10 @@ import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { usePhoneLayout } from '../lib/phoneLayout';
+import { buildProjectFile, parseProjectFile, projectFileName } from '../lib/storage/projectFile';
+import { storageProviders, STORAGE_LABELS } from '../lib/storage/registry';
+import type { StorageFolder, StorageLocation } from '../lib/storage/providers';
+import StorageChoice from './StorageChoice';
 // @ts-ignore
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
@@ -122,6 +126,11 @@ export default function TopBar() {
       setNotes,
       customLights,
       setCustomLights,
+      getProjectState,
+      applyProjectState,
+      adoptExternalModel,
+      externalStorage,
+      saveExternalNow,
       undo,
       redo,
       setIsDeveloperConsoleOpen,
@@ -175,6 +184,8 @@ export default function TopBar() {
   const [showMapsKey, setShowMapsKey] = useState(false);
   useEffect(() => { if (isSettingsOpen) setHfTokenInput(HuggingFaceService.getToken()); }, [isSettingsOpen]);
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
+  const [saveLocation, setSaveLocation] = useState<StorageLocation>('polyform');
+  const [saveFolder, setSaveFolder] = useState<StorageFolder | null>(null);
   const [newModelName, setNewModelName] = useState('Untitled Model');
   const [savedModels, setSavedModels] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,27 +223,8 @@ export default function TopBar() {
 
   const downloadProjectFile = (name?: string) => {
     const modelName = (name || currentModelName || newModelName || 'PolyForm-Design').trim();
-    const safeFilename = modelName.replace(/[^a-zA-Z0-9_\- ]/g, '_').trim() || 'PolyForm-Design';
-    const projectData = {
-      format: 'polyform',
-      version: 3,
-      appName: 'PolyForm 3D',
-      assetSchemaVersion: 1,
-      assetCatalogRelease: '2026-09-18-pilot-r1',
-      environment,
-      materialBindings,
-      name: modelName,
-      shapes: shapes || [],
-      tags: tags || [],
-      scenes: scenes || [],
-      customMaterials: customMaterials || [],
-      graphicsSettings,
-      animations: animations || [],
-      notes: notes || [],
-      customLights: customLights || [],
-      savedAt: new Date().toISOString()
-    };
-    const jsonString = JSON.stringify(projectData, null, 2);
+    const safeFilename = projectFileName(modelName).replace(/\.polyform$/, '');
+    const jsonString = buildProjectFile({ ...getProjectState(), name: modelName });
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -246,6 +238,13 @@ export default function TopBar() {
   };
 
   const handleSave = async () => {
+    // Drive / Trimble Connect models save their file there (autosave does the same after edits).
+    if (externalStorage && currentModelId) {
+      saveExternalNow();
+      setIsMenuOpen(false);
+      diagLog('Save', 'Saving external model now', { provider: externalStorage.provider });
+      return;
+    }
     if (!currentModelName && !currentModelId) {
       setIsSaveAsOpen(true);
       setIsMenuOpen(false);
@@ -376,6 +375,46 @@ export default function TopBar() {
         alert(`Model "${modelName}" saved successfully!`);
       }
     }, 100);
+  };
+
+  /** Save As to Google Drive / Trimble Connect: the file goes there, Cloud Models gets an index entry. */
+  const handleSaveExternal = async () => {
+    const modelName = (newModelName || currentModelName || 'PolyForm-Design').trim();
+    if (!modelName || saveLocation === 'polyform' || !user) return;
+    const provider = storageProviders[saveLocation];
+    setLoading(true);
+    try {
+      // Sign-in first, while this is still the click (so the popup is allowed).
+      if (!provider.connected()) await provider.connect();
+      const text = buildProjectFile({ ...getProjectState(), name: modelName });
+      const fileRef = await provider.create(projectFileName(modelName), text, saveFolder ?? undefined);
+      const docRef = await addDoc(collection(db, 'models'), {
+        id: '',
+        name: modelName,
+        userId: user.uid,
+        userName: user.displayName || 'Anonymous User',
+        shapes: [],
+        tags: [],
+        scenes: [],
+        storage: cleanFirestoreData(fileRef),
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        previewUrl: '',
+        isPublic: false,
+        hasPassword: false,
+      });
+      await updateDoc(doc(db, 'models', docRef.id), { id: docRef.id });
+      setCurrentModelName(modelName);
+      adoptExternalModel(docRef.id, fileRef);
+      setIsSaveAsOpen(false);
+      diagLog('SaveAs', 'Saved to external storage', { provider: saveLocation, fileId: fileRef.fileId });
+      alert(`Saved "${modelName}" to ${STORAGE_LABELS[saveLocation]}${fileRef.locationLabel ? ` (${fileRef.locationLabel})` : ''}. Changes now save there automatically.`);
+    } catch (err: any) {
+      diagLog('SaveAs', 'External save FAILED', { provider: saveLocation, message: err?.message });
+      alert(`Could not save to ${STORAGE_LABELS[saveLocation]}: ${err?.message ?? err}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveAs = async () => {
@@ -533,17 +572,15 @@ export default function TopBar() {
       if (lowerName.endsWith('.polyform') || lowerName.endsWith('.json')) {
         try {
           const text = await file.text();
-          const parsed = JSON.parse(text);
-          if (parsed && (parsed.format === 'polyform' || Array.isArray(parsed.shapes))) {
-            loadModel({
-              ...parsed,
-              id: null,
-              name: parsed.name || file.name.replace(/\.[^/.]+$/, "")
-            });
-            alert(`Loaded "${parsed.name || file.name}" successfully!`);
-            setIsMenuOpen(false);
-            return;
-          }
+          const project = parseProjectFile(text);
+          const name = project.name || file.name.replace(/\.[^/.]+$/, "");
+          // An opened file starts as a new, unsaved model (drawn geometry included).
+          setCurrentModelId(null);
+          applyProjectState({ ...project, name });
+          setCurrentModelName(name);
+          alert(`Loaded "${name}" successfully!`);
+          setIsMenuOpen(false);
+          return;
         } catch (jsonErr) {
           console.warn('[Open] JSON parse failed, trying 3D importer fallback', jsonErr);
         }
@@ -965,7 +1002,7 @@ export default function TopBar() {
               onChange={(e) => setNewModelName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && newModelName.trim() && !loading) {
-                  handleSaveAs();
+                  if (saveLocation === 'polyform') handleSaveAs(); else handleSaveExternal();
                 }
               }}
               placeholder="Enter model name..."
@@ -973,6 +1010,7 @@ export default function TopBar() {
               autoFocus
             />
           </div>
+          <StorageChoice value={saveLocation} onChange={setSaveLocation} folder={saveFolder} onFolder={setSaveFolder} />
           <div className="flex justify-end gap-3 pt-2">
             <button 
               onClick={() => setIsSaveAsOpen(false)}
@@ -981,8 +1019,8 @@ export default function TopBar() {
               Cancel
             </button>
             <button 
-              onClick={handleSaveAs}
-              disabled={loading || !newModelName.trim()}
+              onClick={saveLocation === 'polyform' ? handleSaveAs : handleSaveExternal}
+              disabled={loading || !newModelName.trim() || (saveLocation === 'trimble-connect' && !saveFolder)}
               className="px-8 py-2.5 bg-trimble-blue text-white text-sm font-bold rounded-xl hover:bg-trimble-blue/90 disabled:opacity-50 transition-all shadow-lg shadow-trimble-blue/20"
             >
               {loading ? 'Saving...' : 'Save Model'}

@@ -444,6 +444,17 @@ export interface AppState {
   setCurrentModelId: (id: string | null) => void;
   currentModelName: string | null;
   setCurrentModelName: (name: string | null) => void;
+  /** Where the open model's content lives when it is kept in Google Drive or Trimble Connect. */
+  externalStorage: import('./lib/storage/providers').ExternalFileRef | null;
+  /** A plain-words problem opening or saving an external model (e.g. the account needs connecting). */
+  externalStorageProblem: string | null;
+  connectExternalStorage: () => Promise<void>;
+  adoptExternalModel: (modelId: string, ref: import('./lib/storage/providers').ExternalFileRef) => void;
+  saveExternalNow: () => Promise<void>;
+  /** Everything the open model is made of, for saving as a project file. */
+  getProjectState: () => import('./lib/storage/projectFile').ProjectState;
+  /** Replaces the open model's contents with a project (drawn geometry included). */
+  applyProjectState: (state: import('./lib/storage/projectFile').ProjectState) => void;
   tags: Tag[];
   setTags: (tags: Tag[] | ((prev: Tag[]) => Tag[])) => void;
   activeTagId: string | null;

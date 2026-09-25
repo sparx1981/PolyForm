@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { STORAGE_LABELS } from '../lib/storage/registry';
 import { normalizeGraphicsSettings, defaultGraphicsSettings } from '../lib/graphics/graphicsSettings';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -363,6 +364,13 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
   };
 
   const loadModel = async (model: SavedModel) => {
+    // Drive / Trimble Connect models: the entry only points at the file, which the app downloads.
+    if ((model as any).storage?.fileId) {
+      setCurrentModelId(model.id);
+      setCurrentModelName(model.name);
+      onClose();
+      return;
+    }
     // Reverses offloadLargeGeometryForSave: a shape whose geometryData was
     // too large to store inline in the document comes back from the list
     // fetch as a small URL marker - fetch the real geometry before it
@@ -389,6 +397,10 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
   const handleCopy = async (e: React.MouseEvent, model: SavedModel) => {
     e.stopPropagation();
     if (!user) return;
+    if ((model as any).storage?.fileId) {
+      alert(`"${model.name}" is stored in ${STORAGE_LABELS[(model as any).storage.provider as 'google-drive' | 'trimble-connect']}. Open it and use Save As to make a copy.`);
+      return;
+    }
 
     // Check password if needed
     if (model.userId !== user.uid && model.hasPassword) {
@@ -936,6 +948,11 @@ function ModelCard({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePub
       <div className="p-4">
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white truncate">{model.name}</h3>
+          {(model as any).storage?.fileId && (
+            <span className="shrink-0 ml-2 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-trimble-blue/10 text-trimble-blue">
+              {STORAGE_LABELS[(model as any).storage.provider as 'google-drive' | 'trimble-connect']}
+            </span>
+          )}
         </div>
         <div className="flex items-center justify-between">
           <div className="text-[10px] text-gray-400">
