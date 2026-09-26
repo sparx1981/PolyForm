@@ -3,7 +3,7 @@ import { ArrowDown, ArrowRight, Check, Copy, History, LayoutDashboard, PencilRul
 import { CAPABILITY_GROUPS, HOW_IT_WORKS, SETUP_STEPS } from './data';
 import { Eyebrow, FloorPlanTile, MarketingVisual, RouterLink, scrollToId, type Page } from './shared';
 
-const CONNECTOR_URL = 'https://polyform.app/mcp';
+const CONNECTOR_URL = 'https://polyform-mcp.vercel.app/mcp';
 
 const REASSURANCE = [
   { icon: PencilRuler, text: 'Editable PolyForm output — not a locked image' },
