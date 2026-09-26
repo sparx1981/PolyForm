@@ -62,8 +62,17 @@ export function useMarketingRouter() {
 export function scrollToId(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  const top = el.getBoundingClientRect().top + window.scrollY - 84;
-  window.scrollTo({ top, behavior: 'smooth' });
+
+  const landingScroller = document.getElementById('landing-page');
+  if (landingScroller) {
+    const scrollerRect = landingScroller.getBoundingClientRect();
+    const targetTop = el.getBoundingClientRect().top - scrollerRect.top + landingScroller.scrollTop - 88;
+    landingScroller.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+    return;
+  }
+
+  const top = el.getBoundingClientRect().top + window.scrollY - 88;
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 }
 
 /** Builds a real href for a marketing destination, for use in <a> tags (go() still does the client-side navigation on click). */
