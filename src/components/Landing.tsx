@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Login from './Login';
 import Home from './marketing/Home';
 import Features from './marketing/Features';
@@ -7,12 +7,17 @@ import Developers from './marketing/Developers';
 import SdkDocs from './marketing/SdkDocs';
 import { ClosingCTA, Footer, Header, useMarketingRouter } from './marketing/shared';
 import { usePageSeo } from './marketing/seo';
+import { recordWebsiteActivity } from '../lib/websiteActivity';
 
 /** The first page for visitors who aren't signed in. Everything else sits behind sign-in. */
 export default function Landing() {
   const [loginOpen, setLoginOpen] = useState(false);
   const { page, go } = useMarketingRouter();
   usePageSeo(page);
+
+  useEffect(() => {
+    void recordWebsiteActivity(page);
+  }, [page]);
 
   return (
     <div id="landing-page" className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-white text-polyform-gray">
