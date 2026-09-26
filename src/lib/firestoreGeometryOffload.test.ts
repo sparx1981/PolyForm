@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { offloadLargeGeometryForSave, hydrateOffloadedGeometry, withGeometryCache, type GeometryOffloadIO } from './firestoreGeometryOffload';
+import { offloadLargeGeometryForSave, hydrateOffloadedGeometry, withGeometryCache, offloadModelForSave, hydrateOffloadedModel, type GeometryOffloadIO } from './firestoreGeometryOffload';
 import type { Shape } from '../types';
 
 function makeGeometryData(vertexCount: number) {
@@ -32,7 +32,6 @@ describe('firestoreGeometryOffload', () => {
     expect(upload).toHaveBeenCalledTimes(1);
     const [docId, jsonText] = upload.mock.calls[0];
     expect(docId).toContain('uid1');
-    expect(docId).toContain('roof-tiles-1');
     expect(JSON.parse(jsonText)).toEqual(shapes[0].geometryData);
 
     // The document-bound copy must be small regardless of how large the
@@ -115,5 +114,84 @@ describe('firestoreGeometryOffload', () => {
     const [again] = await hydrateOffloadedGeometry(shapes, io);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(again.geometryData).toEqual({ positions: [1, 2, 3] });
+  });
+
+  function memoryIO() {
+    const store = new Map<string, string>();
+    const io: GeometryOffloadIO = {
+      upload: vi.fn(async (docId: string, text: string) => { store.set(docId, text); }),
+      fetch: vi.fn(async (docId: string) => {
+        const text = store.get(docId);
+        if (text === undefined) throw new Error('not found');
+        return text;
+      }),
+    };
+    return { store, io };
+  }
+  const bigImage = 'data:image/png;base64,' + 'A'.repeat(30000);
+
+  it('stores an image used by several objects once, and puts it back on load', async () => {
+    const { store, io } = memoryIO();
+    const shapes = [
+      { id: 'a', type: 'box', position: [0, 0, 0], color: bigImage, textureUrl: bigImage },
+      { id: 'b', type: 'box', position: [0, 0, 0], color: '#ffffff', textureUrl: bigImage },
+    ] as any as Shape[];
+    const saved = await offloadLargeGeometryForSave(shapes, 'uid1', io);
+    expect(store.size).toBe(1);
+    expect(saved[0].color).toMatch(/^pf-blob:/);
+    expect(saved[1].color).toBe('#ffffff');
+    expect(JSON.stringify(saved).length).toBeLessThan(1000);
+    expect(await hydrateOffloadedGeometry(saved, io)).toEqual(shapes);
+  });
+
+  it('keeps an image marker when the image cannot be fetched, so the next save still points at it', async () => {
+    const { io } = memoryIO();
+    const saved = await offloadLargeGeometryForSave([{ id: 'a', type: 'box', position: [0, 0, 0], textureUrl: bigImage }] as any, 'uid1', io);
+    const broken = await hydrateOffloadedGeometry(saved, { fetch: async () => { throw new Error('offline'); } });
+    expect(broken[0].textureUrl).toBe(saved[0].textureUrl);
+    const resaved = await offloadLargeGeometryForSave(broken, 'uid1', io);
+    expect(resaved[0].textureUrl).toBe(saved[0].textureUrl);
+  });
+
+  it('moves large terrain grids out and back, and never saves the stand-in if they fail to load', async () => {
+    const { io } = memoryIO();
+    const n = 120 * 120;
+    const heights = Array.from({ length: n }, (_, i) => Math.sin(i) * 3.14159265358979);
+    const terrain = { id: 't', type: 'terrain', position: [0, 0, 0], terrainData: { gridX: 120, gridY: 120, width: 60, depth: 60, heights, baseHeights: heights.slice(), textureUrl: 'lush_grass' } } as any as Shape;
+    const [saved] = await offloadLargeGeometryForSave([terrain], 'uid1', io);
+    expect((saved.terrainData as any).heights).toBeUndefined();
+    expect(JSON.stringify(saved).length).toBeLessThan(1000);
+    expect((await hydrateOffloadedGeometry([saved], io))[0]).toEqual(terrain);
+
+    const [broken] = await hydrateOffloadedGeometry([saved], { fetch: async () => { throw new Error('offline'); } });
+    expect(broken.terrainData!.heights).toHaveLength(n);
+    const [resaved] = await offloadLargeGeometryForSave([broken], 'uid1', io);
+    expect(resaved.terrainData).toEqual(saved.terrainData);
+  });
+
+  it('leaves ordinary terrain inline', async () => {
+    const { io } = memoryIO();
+    const terrain = { id: 't', type: 'terrain', position: [0, 0, 0], terrainData: { gridX: 32, gridY: 32, width: 40, depth: 40, heights: new Array(1024).fill(0.5) } } as any as Shape;
+    const [saved] = await offloadLargeGeometryForSave([terrain], 'uid1', io);
+    expect(saved).toBe(terrain);
+  });
+
+  it('offloads images in scenes and materials but not the list thumbnail or Firestore sentinels', async () => {
+    const { store, io } = memoryIO();
+    const sentinel = new (class FieldValue {})();
+    const state = {
+      shapes: [],
+      scenes: [{ id: 's1', name: 'Front', previewUrl: bigImage }],
+      customMaterials: [{ id: 'm1', type: 'texture', value: bigImage }],
+      previewUrl: bigImage,
+      updatedAt: sentinel,
+    };
+    const saved = await offloadModelForSave(state, 'uid1', io);
+    expect(store.size).toBe(1);
+    expect(saved.scenes[0].previewUrl).toMatch(/^pf-blob:/);
+    expect(saved.customMaterials[0].value).toBe(saved.scenes[0].previewUrl);
+    expect(saved.previewUrl).toBe(bigImage);
+    expect(saved.updatedAt).toBe(sentinel);
+    expect(await hydrateOffloadedModel(saved, io)).toEqual(state);
   });
 });

@@ -103,3 +103,46 @@ describe('FirestoreStore reads and undo history', () => {
     await expect(store.changeShapes({ uid: 'u2', email: 'x@example.com' }, id, 'add', s => s)).rejects.toThrow(/No model called/);
   });
 });
+
+describe('FirestoreStore large values', () => {
+  const caller = { uid: 'u1', email: 'me@example.com' };
+  const docSize = (fields: Record<string, any>) => JSON.stringify(fields, (_k, v) => (v instanceof Uint8Array ? `${v.length}b` : v)).length;
+
+  it('saves a mesh far over 1 MB compressed, and a big terrain grid that the tools can still read', async () => {
+    const fake = fakeFirestore();
+    const store = new FirestoreStore(fake.db, () => Date.now());
+    const id = await store.createModel(caller, 'House');
+    // Roof-tile-like mesh: ~6 MB of JSON.
+    const positions = Array.from({ length: 400000 }, (_, i) => ((i * 7) % 1000) * 0.0123456789);
+    const n = 150 * 150;
+    const heights = Array.from({ length: n }, (_, i) => Math.sin(i / 50) * 2);
+    await store.changeShapes(caller, id, 'add', s => [
+      ...s,
+      { id: 'tiles', type: 'custom', position: [0, 0, 0], geometryData: { positions } } as any,
+      { id: 'ground', type: 'terrain', position: [0, 0, 0], terrainData: { gridX: 150, gridY: 150, width: 60, depth: 60, heights } } as any,
+    ]);
+
+    const model = fake.docs.get(`models/${id}`)!;
+    expect(docSize(model)).toBeLessThan(5000);
+    const overflow = [...fake.docs.entries()].filter(([k]) => k.startsWith('geometryOverflow/'));
+    expect(overflow.length).toBeGreaterThan(0);
+    for (const [, fields] of overflow) expect(fields.data.length).toBeLessThanOrEqual(900_000);
+
+    const loaded = await store.loadModel(caller, id);
+    expect(loaded.shapes.find(s => s.id === 'ground')!.terrainData!.heights).toEqual(heights);
+
+    // A later change keeps both stored as they were, without writing them again.
+    const before = overflow.length;
+    await store.changeShapes(caller, id, 'add box', s => [...s, { id: 'b', type: 'box', position: [0, 0, 0] } as any]);
+    expect([...fake.docs.keys()].filter(k => k.startsWith('geometryOverflow/')).length).toBe(before);
+    expect(fake.docs.get(`models/${id}`)!.shapes.find((s: any) => s.id === 'tiles').geometryData).toEqual(model.shapes.find((s: any) => s.id === 'tiles').geometryData);
+  });
+
+  it('refuses a change that would make the model too large, saying why', async () => {
+    const fake = fakeFirestore();
+    const store = new FirestoreStore(fake.db, () => Date.now());
+    const id = await store.createModel(caller, 'House');
+    const walls = Array.from({ length: 4000 }, (_, i) => ({ id: `w${i}`, type: 'wall', name: `Wall ${i}`, position: [i, 0, 0], args: [1, 2, 3], customData: { note: 'x'.repeat(250) } }));
+    await expect(store.changeShapes(caller, id, 'add', s => [...s, ...walls as any])).rejects.toThrow(/too large to save.*not saved/);
+  });
+});

@@ -7,7 +7,7 @@ import { RENDER_MODE } from './lib/renderMode';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
-import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadLargeGeometryForSave, hydrateOffloadedGeometry, firebaseGeometryIO } from './firebase';
+import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
@@ -1048,15 +1048,11 @@ console.log("Created rectangle:", myRect.id);`);
       setExternalStorage(null);
 
       if (snapshot.exists()) {
-        const data = restoreFirestoreArraysAfterLoad(snapshot.data());
+        // Reverses offloadModelForSave: large meshes, images and terrain
+        // grids stored in their own documents (see the sync push below) come
+        // back here as small markers - fetch them before they reach the scene.
+        const data = await hydrateOffloadedModel(restoreFirestoreArraysAfterLoad(snapshot.data()), firebaseGeometryIO);
         const assetState = readAssetProjectState(data);
-        // Reverses offloadLargeGeometryForSave: any shape whose
-        // geometryData was too large to store inline in the document (see
-        // the sync push above) comes back here as a small URL marker -
-        // fetch the real geometry back before it reaches the scene.
-        if (Array.isArray(data.shapes)) {
-          data.shapes = await hydrateOffloadedGeometry(data.shapes, firebaseGeometryIO);
-        }
         isRemoteUpdate.current = true;
 
         // Update local hash to prevent redundant pushes
@@ -1251,19 +1247,14 @@ console.log("Created rectangle:", myRect.id);`);
       setSyncStatus('syncing');
 
       try {
-        // Offload any single shape's geometryData that's too large to
-        // comfortably fit in a Firestore document (e.g. a detailed
-        // roof-tile mesh) to Storage before writing - otherwise a
-        // sufficiently detailed design fails outright on every auto-save
-        // attempt with "document ... exceeds the maximum allowed size",
-        // and this is the path that fires on every edit, not just an
-        // explicit Save.
-        const offloadedShapes = user?.uid
-          ? await offloadLargeGeometryForSave(shapes, user.uid, firebaseGeometryIO)
-          : shapes;
-
-        const stateToPush = cleanData({
-          shapes: offloadedShapes,
+        // Move large meshes (e.g. a detailed roof-tile mesh), embedded
+        // images and big terrain grids into their own compressed documents
+        // before writing - otherwise a sufficiently detailed design fails
+        // outright on every auto-save attempt with "document ... exceeds the
+        // maximum allowed size", and this is the path that fires on every
+        // edit, not just an explicit Save.
+        const content = {
+          shapes,
           tags,
           scenes,
           customMaterials,
@@ -1282,8 +1273,12 @@ console.log("Created rectangle:", myRect.id);`);
           // unmount when you switch documents it also leaks between them:
           // the previous model's surfaces appear in the next one.
           kernel: serializeGraph(kernelHost.graph),
+        };
+        const stateToPush = cleanData({
+          ...(user?.uid ? await offloadModelForSave(content, user.uid, firebaseGeometryIO) : content),
           updatedAt: serverTimestamp()
         });
+        assertModelFits(stateToPush);
 
         await updateDoc(doc(db, 'models', currentModelId), stateToPush);
         syncState.lastStateHash = currentStateHash;
@@ -1293,6 +1288,12 @@ console.log("Created rectangle:", myRect.id);`);
       } catch (error: any) {
         console.error('[Sync] Error pushing to Firestore:', error);
         setSyncStatus('error');
+        if (error instanceof ModelTooLargeError) {
+          // Retrying would send the same too-large model again: say what to trim instead.
+          setSyncErrorMessage(error.message);
+          diagLog('Sync', 'Auto-save skipped: model too large', { modelId: currentModelId, bytes: error.bytes, message: error.message });
+          return;
+        }
         const result = handleFirestoreError(error, OperationType.UPDATE, `models/${currentModelId}`);
         setSyncErrorMessage(result.message);
         // This auto-save path only otherwise surfaces as a small hover

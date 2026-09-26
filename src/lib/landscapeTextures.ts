@@ -569,3 +569,15 @@ export function getLandscapeTextureUrl(id: string): string {
   return preset.generate();
 }
 
+
+/**
+ * The preset whose generated texture is exactly this data URL, if any. Saves
+ * store the preset's id instead of its ~0.5-0.8 MB image; the viewport draws
+ * an id the same way (getLandscapeCanvas regenerates the identical canvas).
+ */
+export function landscapePresetIdForDataUrl(dataUrl: string): string | undefined {
+  for (const preset of LANDSCAPE_TEXTURES) {
+    if (textureCache.get(preset.id) === dataUrl) return preset.id;
+  }
+  return undefined;
+}

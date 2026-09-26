@@ -36,7 +36,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave, offloadLargeGeometryForSave, firebaseGeometryIO } from '../firebase';
+import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave, offloadModelForSave, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -281,25 +281,30 @@ export default function TopBar() {
             // a small URL marker - otherwise a sufficiently detailed
             // design fails outright with "document ... exceeds the
             // maximum allowed size", with nothing done about it.
-            const offloadedShapes = await offloadLargeGeometryForSave(shapes || [], user.uid, firebaseGeometryIO);
-            await updateDoc(doc(db, 'models', currentModelId), {
+            const content = await offloadModelForSave({
+              shapes: shapes || [], tags: tags || [], scenes: scenes || [], customMaterials: customMaterials || [],
+              graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [],
+              environment, materialBindings,
+            }, user.uid, firebaseGeometryIO);
+            const update = {
               id: currentModelId,
               name: modelName,
-              shapes: cleanFirestoreData(offloadedShapes),
-              tags: cleanFirestoreData(tags || []),
-              scenes: cleanFirestoreData(scenes || []),
-              customMaterials: cleanFirestoreData(customMaterials || []),
-              graphicsSettings: cleanFirestoreData(graphicsSettings),
-              animations: cleanFirestoreData(animations || []),
-              notes: cleanFirestoreData(notes || []),
-              customLights: cleanFirestoreData(customLights || []),
+              shapes: cleanFirestoreData(content.shapes),
+              tags: cleanFirestoreData(content.tags),
+              scenes: cleanFirestoreData(content.scenes),
+              customMaterials: cleanFirestoreData(content.customMaterials),
+              graphicsSettings: cleanFirestoreData(content.graphicsSettings),
+              animations: cleanFirestoreData(content.animations),
+              notes: cleanFirestoreData(content.notes),
+              customLights: cleanFirestoreData(content.customLights),
               assetSchemaVersion: 1,
               assetCatalogRelease: '2026-09-18-pilot-r1',
-              environment: cleanFirestoreData(environment),
-              materialBindings: cleanFirestoreData(materialBindings),
+              environment: cleanFirestoreData(content.environment),
+              materialBindings: cleanFirestoreData(content.materialBindings),
               ...(previewUrl ? { previewUrl } : {}),
-              updatedAt: serverTimestamp()
-            });
+            };
+            assertModelFits(update);
+            await updateDoc(doc(db, 'models', currentModelId), { ...update, updatedAt: serverTimestamp() });
             diagLog('Save', 'Cloud document updated', { modelId: currentModelId });
             setSavedModels(prev => prev.map(m => m.id === currentModelId ? {
               ...m,
@@ -315,9 +320,13 @@ export default function TopBar() {
               updatedAt: new Date()
             } : m));
           } catch (fsErr: any) {
-            const result = handleFirestoreError(fsErr, OperationType.UPDATE, `models/${currentModelId}`);
-            const code = fsErr?.code ? ` [${fsErr.code}]` : '';
-            cloudSaveErrorDetail = `${result.message}${code}`;
+            if (fsErr instanceof ModelTooLargeError) {
+              cloudSaveErrorDetail = fsErr.message;
+            } else {
+              const result = handleFirestoreError(fsErr, OperationType.UPDATE, `models/${currentModelId}`);
+              const code = fsErr?.code ? ` [${fsErr.code}]` : '';
+              cloudSaveErrorDetail = `${result.message}${code}`;
+            }
             diagLog('Save', 'Cloud save FAILED', { modelId: currentModelId, code: fsErr?.code, message: fsErr?.message });
           }
         };
@@ -467,27 +476,35 @@ export default function TopBar() {
             // offload any oversized shape geometry to Storage first so a
             // detailed design doesn't fail outright on Firestore's 1MiB
             // document limit.
-            const offloadedShapes = await offloadLargeGeometryForSave(shapes || [], user.uid, firebaseGeometryIO);
-            const docRef = await addDoc(collection(db, 'models'), {
+            const content = await offloadModelForSave({
+              shapes: shapes || [], tags: tags || [], scenes: scenes || [], customMaterials: customMaterials || [],
+              graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [],
+              environment, materialBindings,
+            }, user.uid, firebaseGeometryIO);
+            const fields = {
               id: '',
               name: modelName,
               userId: user.uid,
               userName: user.displayName || 'Anonymous User',
-              shapes: cleanFirestoreData(offloadedShapes),
-              tags: cleanFirestoreData(tags || []),
-              scenes: cleanFirestoreData(scenes || []),
-              customMaterials: cleanFirestoreData(customMaterials || []),
-              animations: cleanFirestoreData(animations || []),
-              graphicsSettings: cleanFirestoreData(graphicsSettings),
-              notes: cleanFirestoreData(notes || []),
-              customLights: cleanFirestoreData(customLights || []),
+              shapes: cleanFirestoreData(content.shapes),
+              tags: cleanFirestoreData(content.tags),
+              scenes: cleanFirestoreData(content.scenes),
+              customMaterials: cleanFirestoreData(content.customMaterials),
+              animations: cleanFirestoreData(content.animations),
+              graphicsSettings: cleanFirestoreData(content.graphicsSettings),
+              notes: cleanFirestoreData(content.notes),
+              customLights: cleanFirestoreData(content.customLights),
               assetSchemaVersion: 1,
               assetCatalogRelease: '2026-09-18-pilot-r1',
-              environment: cleanFirestoreData(environment),
-              materialBindings: cleanFirestoreData(materialBindings),
+              environment: cleanFirestoreData(content.environment),
+              materialBindings: cleanFirestoreData(content.materialBindings),
+              previewUrl: previewUrl || '',
+            };
+            assertModelFits(fields);
+            const docRef = await addDoc(collection(db, 'models'), {
+              ...fields,
               updatedAt: serverTimestamp(),
               createdAt: serverTimestamp(),
-              previewUrl: previewUrl || '',
               isPublic: false,
               hasPassword: false,
               password: ''
@@ -497,9 +514,13 @@ export default function TopBar() {
             setCurrentModelId(docRef.id);
             fetchModels();
           } catch (fsErr: any) {
-            const result = handleFirestoreError(fsErr, OperationType.WRITE, 'models');
-            const code = fsErr?.code ? ` [${fsErr.code}]` : '';
-            cloudSaveErrorDetail = `${result.message}${code}`;
+            if (fsErr instanceof ModelTooLargeError) {
+              cloudSaveErrorDetail = fsErr.message;
+            } else {
+              const result = handleFirestoreError(fsErr, OperationType.WRITE, 'models');
+              const code = fsErr?.code ? ` [${fsErr.code}]` : '';
+              cloudSaveErrorDetail = `${result.message}${code}`;
+            }
             diagLog('SaveAs', 'Cloud save FAILED (doc create)', { code: fsErr?.code, message: fsErr?.message });
           }
         };

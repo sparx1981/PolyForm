@@ -1,6 +1,8 @@
 import type { Shape } from '../../src/types';
 import { cleanFirestoreDataForSave, restoreFirestoreArraysAfterLoad } from '../../src/lib/firestoreArrayCodec';
-import { offloadLargeGeometryForSave, type GeometryOffloadIO } from '../../src/lib/firestoreGeometryOffload';
+import { hydrateOffloadedGeometry, offloadLargeGeometryForSave, withGeometryCache, type GeometryOffloadIO } from '../../src/lib/firestoreGeometryOffload';
+import { chunkedBlobIO } from '../../src/lib/blobCodec';
+import { assertModelFits, ModelTooLargeError } from '../../src/lib/firestoreDocSize';
 import { defaultGraphicsSettings, normalizeGraphicsSettings, type GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 
 /** The signed-in person a request acts for. */
@@ -182,17 +184,23 @@ type Firestore = import('firebase-admin/firestore').Firestore;
 export class FirestoreStore implements ModelStore {
   constructor(private db: Firestore, private serverTimestamp: () => unknown) {}
 
+  /** The app's store for large values (compressed, split into parts), remembering what it has read or written. */
   private geometryIO(uid: string): GeometryOffloadIO {
-    return {
-      upload: async (docId, jsonText) => {
-        await this.db.collection('geometryOverflow').doc(docId).set({ userId: uid, data: jsonText, createdAt: Date.now() });
+    const col = this.db.collection('geometryOverflow');
+    return withGeometryCache(chunkedBlobIO({
+      write: async (docId, fields) => { await col.doc(docId).set(fields); },
+      read: async docId => {
+        const snap = await col.doc(docId).get();
+        return snap.exists ? snap.data()! : null;
       },
-      fetch: async docId => {
-        const snap = await this.db.collection('geometryOverflow').doc(docId).get();
-        if (!snap.exists) throw new Error(`Offloaded geometry not found: ${docId}`);
-        return snap.data()!.data as string;
-      },
-    };
+      toBytes: bytes => Buffer.from(bytes),
+      fromBytes: value => new Uint8Array(value),
+    }, () => uid));
+  }
+
+  /** Objects as the tools need them: large terrain grids fetched back (meshes and images can stay stored). */
+  private readShapes(raw: unknown, io: GeometryOffloadIO) {
+    return hydrateOffloadedGeometry(decodeShapes(raw), io, { geometry: false, images: false });
   }
 
   private async canAccess(caller: Caller, modelId: string, data: FirebaseFirestore.DocumentData | undefined) {
@@ -227,7 +235,7 @@ export class FirestoreStore implements ModelStore {
     const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
     if (external) throw external;
     return {
-      id: snap.id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: decodeShapes(data.shapes),
+      id: snap.id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: await this.readShapes(data.shapes, this.geometryIO(caller.uid)),
       graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings), updatedAt: toIso(data.updatedAt),
     };
   }
@@ -274,10 +282,16 @@ export class FirestoreStore implements ModelStore {
     return this.byRef(caller, ref, id => this.db.runTransaction(async tx => {
       const doc = this.db.collection('models').doc(id);
       const data = await this.openForChange(caller, tx, doc);
-      const result = mutate(decodeShapes(data.shapes));
+      const result = mutate(await this.readShapes(data.shapes, io));
       checkSize(result);
-      // Same as the app's save: oversized geometry goes to its own document first.
+      // Same as the app's save: large values go to their own documents first.
       const stored = encodeShapes(await offloadLargeGeometryForSave(result, caller.uid, io));
+      try {
+        assertModelFits({ ...data, shapes: stored });
+      } catch (e) {
+        if (e instanceof ModelTooLargeError) throw new ToolError(`${e.message} This change was not saved.`);
+        throw e;
+      }
       const seq = this.recordHistory(caller, tx, doc, data, note);
       tx.update(doc, { shapes: stored, mcpHistorySeq: seq, updatedAt: this.serverTimestamp() });
       return { id, name: String(data.name ?? 'Untitled') };

@@ -1,12 +1,14 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDoc, setDoc, getDocFromServer, Bytes } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
 import { withGeometryCache, type GeometryOffloadIO } from './lib/firestoreGeometryOffload';
+import { chunkedBlobIO } from './lib/blobCodec';
 export { cleanFirestoreDataForSave, restoreFirestoreArraysAfterLoad } from './lib/firestoreArrayCodec';
-export { offloadLargeGeometryForSave, hydrateOffloadedGeometry } from './lib/firestoreGeometryOffload';
+export { offloadLargeGeometryForSave, hydrateOffloadedGeometry, offloadModelForSave, hydrateOffloadedModel } from './lib/firestoreGeometryOffload';
+export { assertModelFits, ModelTooLargeError } from './lib/firestoreDocSize';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -17,28 +19,23 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1'); // Default region, change if you deployed elsewhere
 export const googleProvider = new GoogleAuthProvider();
 
-// Firestore-backed IO for offloadLargeGeometryForSave/
-// hydrateOffloadedGeometry (see firestoreGeometryOffload.ts) - deliberately
+// Firestore-backed IO for offloadModelForSave/hydrateOffloadedModel
+// (see firestoreGeometryOffload.ts and blobCodec.ts) - deliberately
 // NOT Storage, since a raw browser fetch() of a Storage download URL needs
 // the bucket's CORS config to allow this app's origin, which isn't
 // something client code can arrange and fails hard (with no fallback) in
 // any hosting context where it hasn't been set up. Going through the
 // Firestore SDK like every other read/write in this app has no such
 // requirement.
-export const firebaseGeometryIO: GeometryOffloadIO = withGeometryCache({
-  upload: async (docId, jsonText) => {
-    await setDoc(doc(db, 'geometryOverflow', docId), {
-      userId: auth.currentUser?.uid || '',
-      data: jsonText,
-      createdAt: Date.now(),
-    });
-  },
-  fetch: async (docId) => {
+export const firebaseGeometryIO: GeometryOffloadIO = withGeometryCache(chunkedBlobIO({
+  write: (docId, fields) => setDoc(doc(db, 'geometryOverflow', docId), fields),
+  read: async (docId) => {
     const snap = await getDoc(doc(db, 'geometryOverflow', docId));
-    if (!snap.exists()) throw new Error(`Offloaded geometry document not found: ${docId}`);
-    return snap.data().data as string;
+    return snap.exists() ? snap.data() : null;
   },
-});
+  toBytes: bytes => Bytes.fromUint8Array(bytes),
+  fromBytes: value => (value as Bytes).toUint8Array(),
+}, () => auth.currentUser?.uid || ''));
 
 // Validate connection to Firestore on initialization
 export async function testConnection() {
