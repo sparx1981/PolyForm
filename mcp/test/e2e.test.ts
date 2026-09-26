@@ -98,6 +98,13 @@ describe('connector over HTTP', () => {
     expect(Buffer.from(preview.content[2].data, 'base64').subarray(1, 4).toString()).toBe('PNG');
     expect(shots).toContain(`${created.id}:perspective`);
 
+    await client.callTool({ name: 'add_terrain', arguments: { model: created.id, width: 10, depth: 10, topography: 'rolling' } });
+    const flattened = parse(await client.callTool({ name: 'flatten_terrain', arguments: { model: created.id, height: 0.1 } }));
+    const terrain = parse(await client.callTool({ name: 'get_object', arguments: { model: created.id, object: flattened.created[0].id } }));
+    expect(terrain.terrainData.heightRange).toEqual({ lowest: 0.1, highest: 0.1 });
+    expect(terrain.terrainData.topography).toBe('flat');
+    await client.callTool({ name: 'delete_objects', arguments: { model: created.id, objects: [terrain.id] } });
+
     const bad = await client.callTool({ name: 'add_opening', arguments: { model: created.id, wall: 'nope', kind: 'door' } }) as any;
     expect(bad.isError).toBe(true);
     expect(bad.content[0].text).toMatch(/No object "nope"/);

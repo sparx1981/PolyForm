@@ -411,6 +411,26 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     return { shapes: [...shapes, ...made], made };
   })));
 
+  server.registerTool('flatten_terrain', {
+    title: 'Flatten terrain',
+    description: 'Levels a terrain to one height, undoing any raised or dug ground, and keeps its material, grass and flowers. The app then sets the ground under building floors as usual.',
+    inputSchema: {
+      model: modelRef,
+      terrain: z.string().optional().describe('Terrain object id (default: the model\'s only terrain)'),
+      height: z.number().min(-50).max(50).default(0).describe('Ground height, metres'),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, `Flattened the terrain to ${a.height} m`, shapes => {
+    const terrains = shapes.filter(s => s.type === 'terrain');
+    const target = a.terrain ? findShape(shapes, a.terrain) : terrains.length === 1 ? terrains[0] : null;
+    if (!target) throw new ToolError(terrains.length ? `This model has ${terrains.length} terrains; say which with terrain.` : 'This model has no terrain.');
+    if (target.type !== 'terrain' || !target.terrainData) throw new ToolError(`"${target.name ?? target.id}" is not a terrain.`);
+    const { heightMap: _unused, ...data } = target.terrainData as any;
+    const flat = new Array(data.heights.length).fill(a.height);
+    const next = { ...target, terrainData: { ...data, heights: flat, baseHeights: [...flat], topography: 'flat' } } as Shape;
+    return { shapes: shapes.map(s => (s.id === target.id ? next : s)), made: [next] };
+  })));
+
   const WEATHER_KINDS = ['rain', 'snow', 'clouds', 'mist'] as const;
   const weatherLayer = () => z.object({
     enabled: z.boolean(),
