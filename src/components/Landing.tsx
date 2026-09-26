@@ -24,7 +24,7 @@ export default function Landing() {
         {page === 'claude' && <BuildWithClaude go={go} onLogin={() => setLoginOpen(true)} />}
         {page === 'developers' && <Developers onLogin={() => setLoginOpen(true)} go={go} />}
         {page === 'sdk-docs' && <SdkDocs go={go} />}
-        <ClosingCTA onLogin={() => setLoginOpen(true)} />
+        <ClosingCTA page={page} onLogin={() => setLoginOpen(true)} />
       </main>
 
       <Footer go={go} onLogin={() => setLoginOpen(true)} />
