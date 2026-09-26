@@ -114,7 +114,28 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
   );
 }
 
-export function ClosingCTA({ onLogin }: { onLogin: () => void }) {
+export function ClosingCTA({ onLogin, page }: { onLogin: () => void; page: Page }) {
+  const copy = page === 'developers' || page === 'sdk-docs'
+    ? {
+        eyebrow: 'Build on PolyForm',
+        title: 'Turn repeated modelling work into your own workflow.',
+        body: 'Open the modeller, run JavaScript against the active model and keep the scripts that earn a place in your toolkit.',
+        cta: 'Open the developer console',
+      }
+    : page === 'claude'
+      ? {
+          eyebrow: 'Build with Claude',
+          title: 'Describe the change. Keep designing the model.',
+          body: 'Connect Claude to PolyForm, make model changes in plain language, then continue with the same editable project in the browser.',
+          cta: 'Start designing',
+        }
+      : {
+          eyebrow: 'Start in the browser',
+          title: 'Design the whole project in one place.',
+          body: 'Start with the site, shape the building and landscape, then walk through the result before it is built.',
+          cta: 'Start designing',
+        };
+
   return (
     <section className="relative overflow-hidden bg-polyform-dark-blue text-white py-24 px-6">
       <div
@@ -126,19 +147,19 @@ export function ClosingCTA({ onLogin }: { onLogin: () => void }) {
         aria-hidden="true"
       />
       <div className="relative max-w-[1040px] mx-auto text-center flex flex-col items-center">
-        <Eyebrow dark>Start in the browser</Eyebrow>
+        <Eyebrow dark>{copy.eyebrow}</Eyebrow>
         <h2 className="mt-5 text-[clamp(34px,4.7vw,58px)] font-bold leading-[1.05] tracking-[-0.035em] max-w-[800px]">
-          Design the whole project in one place.
+          {copy.title}
         </h2>
         <p className="mt-5 text-[17px] sm:text-lg leading-[1.65] text-white/75 max-w-[620px]">
-          Start with the site, shape the building and landscape, then walk through the result before it is built.
+          {copy.body}
         </p>
         <button
           type="button"
           onClick={onLogin}
           className="mt-8 inline-flex items-center justify-center gap-2 rounded-lg bg-white text-polyform-dark-blue font-semibold text-base px-6 py-[14px] hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-polyform-dark-blue"
         >
-          Start designing <ArrowRight size={16} />
+          {copy.cta} <ArrowRight size={16} />
         </button>
       </div>
     </section>
