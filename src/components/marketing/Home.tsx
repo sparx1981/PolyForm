@@ -122,7 +122,7 @@ function WorkflowStory() {
     <section id="workflow" className="bg-[#f7f9fb] py-28 px-6">
       <div className="max-w-[1240px] mx-auto">
         <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-14 lg:gap-20 items-start">
-          <div className="lg:sticky lg:top-[112px] flex flex-col gap-5">
+          <div className="lg:sticky lg:top-[84px] flex flex-col gap-5">
             <Eyebrow>One continuous workflow</Eyebrow>
             <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
               From real site to walk-through.
