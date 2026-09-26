@@ -115,6 +115,18 @@ service cloud.firestore {
              data.timestamp == request.time;
     }
 
+    function isValidWebsiteActivity(data) {
+      return data.keys().hasOnly(['visitorId', 'sessionId', 'page', 'path', 'referrer', 'device', 'timestamp']) &&
+             data.keys().hasAll(['visitorId', 'sessionId', 'page', 'path', 'device', 'timestamp']) &&
+             data.visitorId is string && data.visitorId.size() > 0 && data.visitorId.size() <= 100 &&
+             data.sessionId is string && data.sessionId.size() > 0 && data.sessionId.size() <= 100 &&
+             data.page in ['home', 'features', 'claude', 'developers', 'sdk-docs'] &&
+             data.path is string && data.path.size() > 0 && data.path.size() <= 120 &&
+             (!('referrer' in data) || data.referrer == null || (data.referrer is string && data.referrer.size() <= 200)) &&
+             data.device in ['desktop', 'tablet', 'mobile'] &&
+             data.timestamp == request.time;
+    }
+
     function isValidCollaboration(data) {
       return data.keys().hasAll(['modelId', 'email', 'role', 'status']) &&
              data.modelId is string && data.modelId.size() > 0 && data.modelId.size() <= 256 &&
@@ -204,6 +216,14 @@ service cloud.firestore {
     // the admin account can read it back, in the burger menu's Login Activity panel.
     match /loginActivity/{entryId} {
       allow create: if isValidLoginActivity(request.resource.data);
+      allow get, list: if isLoginActivityAdmin();
+      allow update, delete: if false;
+    }
+
+    // Anonymous marketing page-view analytics. Public clients can only append tightly validated
+    // page views; the same admin-only account used for login activity can read the collection.
+    match /websiteActivity/{entryId} {
+      allow create: if isValidWebsiteActivity(request.resource.data);
       allow get, list: if isLoginActivityAdmin();
       allow update, delete: if false;
     }
