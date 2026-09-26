@@ -883,7 +883,7 @@ export default function TopBar() {
                 <MenuButton icon={<Settings size={16} />} label="Settings" onClick={() => { setIsSettingsOpen(true); setIsMenuOpen(false); }} />
                 <MenuButton icon={<HelpCircle size={16} />} label="Help" onClick={() => { setIsChangelogOpen(true); setIsMenuOpen(false); }} />
                 {user?.email?.toLowerCase() === LOGIN_ACTIVITY_ADMIN_EMAIL && (
-                  <MenuButton icon={<ShieldAlert size={16} />} label="Login Activity" onClick={() => { setIsLoginActivityOpen(true); setIsMenuOpen(false); }} />
+                  <MenuButton icon={<ShieldAlert size={16} />} label="Activity" onClick={() => { setIsLoginActivityOpen(true); setIsMenuOpen(false); }} />
                 )}
                 
                 <div className="h-px bg-gray-100 my-1" />
