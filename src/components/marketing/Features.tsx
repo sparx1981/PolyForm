@@ -28,7 +28,7 @@ export default function Features({ go }: { go: (p: Page, anchor?: string) => voi
 
       <section className="px-6 py-24 bg-[#f8fafc]">
         <div className="max-w-[1240px] mx-auto flex gap-14 xl:gap-20 items-start">
-          <aside className="hidden lg:flex sticky top-[100px] w-[190px] flex-none flex-col">
+          <aside className="hidden lg:flex sticky top-[76px] w-[190px] flex-none flex-col">
             <span className="text-[11px] font-bold tracking-[0.14em] text-gray-400 px-3 pb-3">EXPLORE</span>
             {FEATURE_CHAPTERS.map(c => (
               <button
