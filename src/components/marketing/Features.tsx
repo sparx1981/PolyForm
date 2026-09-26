@@ -63,39 +63,46 @@ export default function Features({ go }: { go: (p: Page, anchor?: string) => voi
                     </div>
                     <MarketingVisual
                       label={chapter.kicker + ' media'}
-                      title={chapter.title + ' — replace with PolyForm product imagery'}
+                      title={chapter.title}
                       aspectRatio="16 / 10"
                       className="shadow-[0_24px_55px_-38px_rgba(15,23,42,.42)]"
                     />
                   </div>
 
-                  <div className={'mt-10 grid gap-x-10 gap-y-8 ' + (sections.length > 1 ? 'md:grid-cols-2' : '')}>
-                    {sections.map(s => (
-                      <div key={s.id} id={s.id} className="scroll-mt-24">
-                        {sections.length > 1 && (
-                          <h3 className="text-[15px] font-bold text-polyform-dark-blue mb-1">{s.title}</h3>
-                        )}
-                        {sections.length > 1 && <p className="text-[13px] leading-[1.55] text-gray-500 mb-3">{s.body}</p>}
-                        <div className="grid sm:grid-cols-2 gap-x-7">
-                          {s.items.map(i => (
-                            <div key={i.name} className="flex justify-between gap-3 py-3 border-t border-slate-200">
-                              <div className="flex flex-col gap-1 min-w-0">
-                                {i.href ? (
-                                  <a href={i.href} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-polyform-dark-blue hover:text-polyform-blue transition-colors">
-                                    {i.name}
-                                  </a>
-                                ) : (
-                                  <span className="text-sm font-bold text-polyform-dark-blue">{i.name}</span>
-                                )}
-                                <span className="text-[13px] leading-[1.55] text-gray-600">{i.text}</span>
+                  <details className="mt-9 group border-t border-slate-200">
+                    <summary className="cursor-pointer list-none py-4 flex items-center justify-between gap-4 text-sm font-bold text-polyform-dark-blue hover:text-polyform-blue transition-colors">
+                      <span>Explore detailed tools</span>
+                      <span className="text-gray-400 font-normal group-open:hidden">+</span>
+                      <span className="text-gray-400 font-normal hidden group-open:inline">−</span>
+                    </summary>
+                    <div className={'pb-4 grid gap-x-10 gap-y-8 ' + (sections.length > 1 ? 'md:grid-cols-2' : '')}>
+                      {sections.map(s => (
+                        <div key={s.id} id={s.id} className="scroll-mt-24">
+                          {sections.length > 1 && (
+                            <h3 className="text-[15px] font-bold text-polyform-dark-blue mb-1">{s.title}</h3>
+                          )}
+                          {sections.length > 1 && <p className="text-[13px] leading-[1.55] text-gray-500 mb-3">{s.body}</p>}
+                          <div className="grid sm:grid-cols-2 gap-x-7">
+                            {s.items.map(i => (
+                              <div key={i.name} className="flex justify-between gap-3 py-3 border-t border-slate-200">
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  {i.href ? (
+                                    <a href={i.href} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-polyform-dark-blue hover:text-polyform-blue transition-colors">
+                                      {i.name}
+                                    </a>
+                                  ) : (
+                                    <span className="text-sm font-bold text-polyform-dark-blue">{i.name}</span>
+                                  )}
+                                  <span className="text-[13px] leading-[1.55] text-gray-600">{i.text}</span>
+                                </div>
+                                {i.key && <span className="font-mono text-[10px] text-gray-400 shrink-0 pt-0.5">{i.key}</span>}
                               </div>
-                              {i.key && <span className="font-mono text-[10px] text-gray-400 shrink-0 pt-0.5">{i.key}</span>}
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </details>
                 </article>
               );
             })}
