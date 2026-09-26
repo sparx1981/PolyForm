@@ -22,6 +22,9 @@ vi.mock('./firebase', () => ({
     WRITE: 'write',
   },
   isQuotaLocked: () => false,
+  getLastQuotaError: () => '',
+  getQuotaLockdownUntil: () => 0,
+  QUOTA_PAUSE_MS: 60000,
   cleanFirestoreDataForSave: (obj: any) => obj,
   restoreFirestoreArraysAfterLoad: (obj: any) => obj,
 }));

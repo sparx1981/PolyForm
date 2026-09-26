@@ -7,7 +7,7 @@ import { RENDER_MODE } from './lib/renderMode';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
-import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
+import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAUSE_MS, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
@@ -395,10 +395,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       values
     };
     logBuffer.current.push(entry);
-    
-    if (message.includes('Quota exceeded')) {
-      setQuotaLockdownTime(Date.now() + 600000);
-    }
   };
 
   const clearDiagnosticLogs = () => {
@@ -999,7 +995,7 @@ console.log("Created rectangle:", myRect.id);`);
       setCollaborators(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Collaborator[]);
     }, (error) => {
        const result = handleFirestoreError(error, OperationType.GET, 'collaborations');
-       if (result.isQuotaError) setQuotaLockdownTime(Date.now() + 600000);
+       if (result.isQuotaError) setQuotaLockdownTime(Date.now() + QUOTA_PAUSE_MS);
     });
 
     // 2. Sync Chat Messages
@@ -1099,7 +1095,7 @@ console.log("Created rectangle:", myRect.id);`);
       setSyncStatus('error');
       const result = handleFirestoreError(error, OperationType.GET, `models/${currentModelId}`);
       setSyncErrorMessage(result.message);
-      if (result.isQuotaError) setQuotaLockdownTime(Date.now() + 600000);
+      if (result.isQuotaError) setQuotaLockdownTime(Date.now() + QUOTA_PAUSE_MS);
     });
 
     // Ensure we have a collaboration document for presence
@@ -1312,11 +1308,13 @@ console.log("Created rectangle:", myRect.id);`);
           retryCount: syncState.retryCount,
         });
 
-        // Auto-retry with exponential backoff. Quota lockdowns are skipped
-        // here since checkQuota() already blocks pushes until it clears -
-        // retrying immediately would just fail the same way.
-        if (!result.isQuotaError && syncState.retryCount < 5) {
-          const delay = Math.min(60000, 10000 * Math.pow(2, syncState.retryCount));
+        // Auto-retry with exponential backoff. After a quota refusal, retry
+        // just after the pause ends (checkQuota() blocks pushes until then),
+        // so the change still saves even if nothing else is edited.
+        if (syncState.retryCount < 5) {
+          const delay = result.isQuotaError
+            ? QUOTA_PAUSE_MS + 1000
+            : Math.min(60000, 10000 * Math.pow(2, syncState.retryCount));
           syncState.retryCount += 1;
           syncState.retryTimeoutId = setTimeout(() => {
             syncState.retryTimeoutId = null;

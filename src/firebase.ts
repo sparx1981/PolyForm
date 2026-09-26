@@ -78,8 +78,14 @@ export interface FirestoreErrorInfo {
 }
 
 let quotaLockdownUntil = 0;
+let lastQuotaError = '';
+
+/** How long cloud saving pauses after Firestore refuses a request for quota or rate reasons. */
+export const QUOTA_PAUSE_MS = 60_000;
 
 export const isQuotaLocked = () => Date.now() < quotaLockdownUntil;
+/** Firestore's own words for the refusal behind the current pause. */
+export const getLastQuotaError = () => lastQuotaError;
 export const getQuotaLockdownUntil = () => quotaLockdownUntil;
 
 export interface FirestoreErrorResult {
@@ -117,7 +123,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
   console.error('Firestore Error: ', JSON.stringify(errInfo));
 
-  const isQuotaError = errorCode === 'resource-exhausted' || errorMessage.includes('Quota exceeded');
+  // Only Firestore's own refusal code: other services' "quota exceeded"
+  // messages must not pause cloud saving. On the Blaze plan this is a rate
+  // limit (e.g. one document written too often), not a daily allowance.
+  const isQuotaError = errorCode === 'resource-exhausted';
   const isOfflineError = !isQuotaError && (
     errorCode === 'unavailable' ||
     errorMessage.includes('unavailable') ||
@@ -127,7 +136,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
   // If quota exceeded, initiate global lockdown
   if (isQuotaError) {
-     quotaLockdownUntil = Date.now() + 600000; // 10 minute lockdown
+     quotaLockdownUntil = Date.now() + QUOTA_PAUSE_MS;
+     lastQuotaError = errorMessage;
      console.warn(`[QUOTA] Global lockdown initiated until ${new Date(quotaLockdownUntil).toLocaleTimeString()}`);
   } else if (isOfflineError) {
     console.warn(`[FIRESTORE] Backend currently unreachable (${errorMessage}). Operating in offline mode.`);
@@ -137,7 +147,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     isQuotaError,
     isOfflineError,
     message: isQuotaError
-      ? 'Cloud save quota exceeded - saving is paused for 10 minutes.'
+      ? `Firestore refused the request (${errorMessage}) - cloud saving will retry in a minute.`
       : isOfflineError
         ? 'No connection to the cloud - your changes will save once you are back online.'
         : errorMessage
