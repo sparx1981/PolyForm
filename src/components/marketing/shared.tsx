@@ -5,7 +5,7 @@ import { RouterLink, type Page } from './router';
 export type { Page };
 export { RouterLink, useMarketingRouter, scrollToId, hrefFor, isMarketingPath } from './router';
 
-export function Logo({ go, size = 32, textSize = 'text-[19px]' }: { go?: (p: Page) => void; size?: number; textSize?: string }) {
+export function Logo({ go, size = 27, textSize = 'text-[17px]' }: { go?: (p: Page) => void; size?: number; textSize?: string }) {
   const content = (
     <>
       <span
@@ -33,11 +33,11 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
   const isActive = (n: Page) => page === n || (n === 'developers' && page === 'sdk-docs');
 
   return (
-    <header className="sticky top-0 z-[100] bg-white/90 backdrop-blur-xl border-b border-slate-200/70" style={{ height: 72 }}>
-      <nav className="max-w-[1280px] mx-auto px-6 lg:px-8 h-full flex items-center justify-between gap-6" aria-label="Main">
+    <header className="sticky top-0 z-[100] bg-white/92 backdrop-blur-xl border-b border-slate-200/70" style={{ height: 60 }}>
+      <nav className="max-w-[1240px] mx-auto px-5 sm:px-6 h-full flex items-center justify-between gap-6" aria-label="Main">
         <Logo go={go} />
 
-        <div className="hidden md:flex items-center h-full gap-7">
+        <div className="hidden md:flex items-center h-full gap-6">
           {NAV.map(n => (
             <RouterLink
               key={n.page}
@@ -60,14 +60,14 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
           <button
             type="button"
             onClick={onLogin}
-            className="text-sm font-semibold px-3.5 py-2.5 rounded-lg text-gray-600 hover:text-polyform-dark-blue hover:bg-gray-50 transition-colors"
+            className="text-[13px] font-semibold px-3 py-2 rounded-lg text-gray-600 hover:text-polyform-dark-blue hover:bg-gray-50 transition-colors"
           >
             Sign in
           </button>
           <button
             type="button"
             onClick={onLogin}
-            className="text-sm font-semibold px-4.5 py-2.5 rounded-lg bg-polyform-blue text-white shadow-[0_5px_16px_rgb(0_99_163_/_0.2)] hover:bg-polyform-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
+            className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-polyform-blue text-white shadow-[0_5px_16px_rgb(0_99_163_/_0.2)] hover:bg-polyform-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
           >
             Start designing
           </button>
@@ -76,7 +76,7 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
         <button
           type="button"
           onClick={() => setMobileOpen(v => !v)}
-          className="md:hidden min-h-11 min-w-11 text-sm font-semibold px-3 rounded-lg text-polyform-gray hover:bg-gray-50"
+          className="md:hidden min-h-10 min-w-10 text-sm font-semibold px-3 rounded-lg text-polyform-gray hover:bg-gray-50"
           aria-expanded={mobileOpen}
           aria-controls="mobile-nav"
           aria-label="Menu"
@@ -114,7 +114,28 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
   );
 }
 
-export function ClosingCTA({ onLogin }: { onLogin: () => void }) {
+export function ClosingCTA({ onLogin, page }: { onLogin: () => void; page: Page }) {
+  const copy = page === 'developers' || page === 'sdk-docs'
+    ? {
+        eyebrow: 'Build on PolyForm',
+        title: 'Turn repeated modelling work into your own workflow.',
+        body: 'Open the modeller, run JavaScript against the active model and keep the scripts that earn a place in your toolkit.',
+        cta: 'Open the developer console',
+      }
+    : page === 'claude'
+      ? {
+          eyebrow: 'Build with Claude',
+          title: 'Describe the change. Keep designing the model.',
+          body: 'Connect Claude to PolyForm, make model changes in plain language, then continue with the same editable project in the browser.',
+          cta: 'Start designing',
+        }
+      : {
+          eyebrow: 'Start in the browser',
+          title: 'Design the whole project in one place.',
+          body: 'Start with the site, shape the building and landscape, then walk through the result before it is built.',
+          cta: 'Start designing',
+        };
+
   return (
     <section className="relative overflow-hidden bg-polyform-dark-blue text-white py-24 px-6">
       <div
@@ -126,19 +147,19 @@ export function ClosingCTA({ onLogin }: { onLogin: () => void }) {
         aria-hidden="true"
       />
       <div className="relative max-w-[1040px] mx-auto text-center flex flex-col items-center">
-        <Eyebrow dark>Start in the browser</Eyebrow>
+        <Eyebrow dark>{copy.eyebrow}</Eyebrow>
         <h2 className="mt-5 text-[clamp(34px,4.7vw,58px)] font-bold leading-[1.05] tracking-[-0.035em] max-w-[800px]">
-          Design the whole project in one place.
+          {copy.title}
         </h2>
         <p className="mt-5 text-[17px] sm:text-lg leading-[1.65] text-white/75 max-w-[620px]">
-          Start with the site, shape the building and landscape, then walk through the result before it is built.
+          {copy.body}
         </p>
         <button
           type="button"
           onClick={onLogin}
           className="mt-8 inline-flex items-center justify-center gap-2 rounded-lg bg-white text-polyform-dark-blue font-semibold text-base px-6 py-[14px] hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-polyform-dark-blue"
         >
-          Start designing <ArrowRight size={16} />
+          {copy.cta} <ArrowRight size={16} />
         </button>
       </div>
     </section>
@@ -169,7 +190,7 @@ export function Footer({ go, onLogin }: { go: (p: Page, anchor?: string) => void
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 flex flex-col gap-12">
         <div className="grid gap-12 md:grid-cols-[1.3fr_2fr]">
           <div className="flex flex-col gap-4 max-w-[360px]">
-            <Logo go={go} size={30} textSize="text-lg" />
+            <Logo go={go} size={27} textSize="text-[17px]" />
             <p className="text-sm text-gray-500 leading-relaxed">
               Browser-based 3D design for buildings, terrain and landscape — from real site context to eye-level walkthrough.
             </p>
@@ -250,6 +271,7 @@ export function MarketingVisual({
         backgroundSize: '32px 32px',
       }}
       role="img"
+      data-media-slot={label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
       aria-label={title}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(0,99,163,0.16),transparent_35%)]" />

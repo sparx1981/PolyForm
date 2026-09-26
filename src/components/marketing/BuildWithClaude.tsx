@@ -3,7 +3,7 @@ import { ArrowDown, ArrowRight, Check, Copy, History, LayoutDashboard, PencilRul
 import { CAPABILITY_GROUPS, HOW_IT_WORKS, SETUP_STEPS } from './data';
 import { Eyebrow, FloorPlanTile, MarketingVisual, RouterLink, scrollToId, type Page } from './shared';
 
-const CONNECTOR_URL = 'https://polyform.app/mcp';
+const CONNECTOR_URL = 'https://polyform-mcp.vercel.app/mcp';
 
 const REASSURANCE = [
   { icon: PencilRuler, text: 'Editable PolyForm output — not a locked image' },
@@ -110,7 +110,7 @@ export default function BuildWithClaude({ go, onLogin }: { go: (p: Page, anchor?
 
       <section className="py-28 px-6 bg-white">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.75fr_1.25fr] gap-12 lg:gap-20 items-start">
-          <div className="flex flex-col gap-5 lg:sticky lg:top-[112px]">
+          <div className="flex flex-col gap-5 lg:sticky lg:top-[84px]">
             <Eyebrow>How it works</Eyebrow>
             <h2 className="text-[clamp(34px,4.4vw,56px)] font-bold leading-[1.05] tracking-[-0.035em] text-polyform-dark-blue">
               From a sentence to a model you can keep editing.
@@ -147,30 +147,43 @@ export default function BuildWithClaude({ go, onLogin }: { go: (p: Page, anchor?
             </p>
           </div>
 
-          <div className="mt-14 grid md:grid-cols-3 gap-6">
-            {EXAMPLES.map((ex, i) => (
-              <div key={ex.label} className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-5 shadow-[0_18px_35px_-32px_rgba(15,23,42,.45)]">
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-polyform-blue">{ex.label}</span>
-                  <span className="font-mono text-[11px] text-gray-400">0{i + 1}</span>
+          <div className="mt-14 grid lg:grid-cols-[0.78fr_1.22fr] gap-10 lg:gap-14 items-start">
+            <div className="flex flex-col border-y border-slate-200">
+              {EXAMPLES.map((ex, i) => (
+                <div key={ex.label} className="py-6 border-b border-slate-200 last:border-b-0">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-polyform-blue">{ex.label}</span>
+                    <span className="font-mono text-[10px] text-gray-400">0{i + 1}</span>
+                  </div>
+                  <p className="mt-3 text-[15px] leading-[1.65] text-polyform-dark-blue font-semibold">&ldquo;{ex.prompt}&rdquo;</p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {ex.calls.map(c => (
+                      <span key={c} className="inline-flex items-center gap-1.5 font-mono text-[10px] px-2 py-1 rounded-md bg-[#f4f6f8] text-gray-600">
+                        <span className="w-1.5 h-1.5 rounded-full bg-polyform-green" /> {c}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <p className="text-[15px] leading-[1.65] text-polyform-dark-blue font-semibold">&ldquo;{ex.prompt}&rdquo;</p>
-                <div className="flex flex-wrap gap-1.5 mt-auto">
-                  {ex.calls.map(c => (
-                    <span key={c} className="inline-flex items-center gap-1.5 font-mono text-[10px] px-2 py-1 rounded-md bg-[#f4f6f8] text-gray-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-polyform-green" /> {c}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="lg:sticky lg:top-[84px]">
+              <MarketingVisual
+                label="Claude result"
+                title="The same editable PolyForm model continues through every prompt"
+                aspectRatio="4 / 3"
+                className="shadow-[0_24px_55px_-38px_rgba(15,23,42,.42)]"
+              />
+              <p className="mt-4 text-sm leading-[1.65] text-gray-500">
+                Final imagery can show the initial model and a second prompt changing that same project, making the continuing-model workflow immediately visible.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="py-28 px-6 bg-white">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.75fr_1.25fr] gap-12 lg:gap-20 items-start">
-          <div className="flex flex-col gap-5 lg:sticky lg:top-[112px]">
+          <div className="flex flex-col gap-5 lg:sticky lg:top-[84px]">
             <Eyebrow>What Claude can do</Eyebrow>
             <h2 className="text-[clamp(34px,4.2vw,54px)] font-bold leading-[1.05] tracking-[-0.035em] text-polyform-dark-blue">
               Built on PolyForm’s own toolset.

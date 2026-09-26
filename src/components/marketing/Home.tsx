@@ -122,7 +122,7 @@ function WorkflowStory() {
     <section id="workflow" className="bg-[#f7f9fb] py-28 px-6">
       <div className="max-w-[1240px] mx-auto">
         <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-14 lg:gap-20 items-start">
-          <div className="lg:sticky lg:top-[112px] flex flex-col gap-5">
+          <div className="lg:sticky lg:top-[84px] flex flex-col gap-5">
             <Eyebrow>One continuous workflow</Eyebrow>
             <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
               From real site to walk-through.
@@ -132,7 +132,7 @@ function WorkflowStory() {
             </p>
             <div className="pt-3">
               <MarketingVisual
-                label={step.n + ' / 04'}
+                label={'Workflow ' + step.n}
                 title={step.title}
                 aspectRatio="4 / 3"
                 className="shadow-[0_20px_50px_-30px_rgba(15,23,42,.35)]"
@@ -160,6 +160,174 @@ function WorkflowStory() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+
+function TransformationSection() {
+  const stages = [
+    { n: '01', label: 'Site', title: 'Start with the place', text: 'Bring in real-world context and establish the ground before the building takes shape.' },
+    { n: '02', label: 'Building', title: 'Shape the architecture', text: 'Develop walls, openings, storeys, roofs and circulation directly in the same model.' },
+    { n: '03', label: 'Landscape', title: 'Design beyond the walls', text: 'Sculpt terrain, connect paths and patios, then add planting, water and external spaces.' },
+    { n: '04', label: 'Experience', title: 'Step into the result', text: 'Set light and weather, save views and walk through the project at eye level.' },
+  ];
+
+  return (
+    <section className="py-24 sm:py-28 px-6 bg-[#071a2b] text-white overflow-hidden">
+      <div className="max-w-[1240px] mx-auto">
+        <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-20 items-end">
+          <div className="flex flex-col gap-5">
+            <Eyebrow dark>From first context to finished place</Eyebrow>
+            <h2 className="text-[clamp(36px,4.8vw,62px)] font-bold leading-[1.02] tracking-[-0.04em]">
+              From an empty site to somewhere you can stand.
+            </h2>
+          </div>
+          <p className="text-[17px] leading-[1.7] text-white/70 max-w-[620px]">
+            Keep the same project moving from real-world context through architecture and landscape to a first-person experience.
+          </p>
+        </div>
+
+        <div className="mt-14 grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {stages.map(stage => (
+            <div key={stage.n} className="group">
+              <MarketingVisual
+                label={stage.label}
+                title={stage.title}
+                dark
+                aspectRatio="4 / 3"
+                className="rounded-2xl"
+              />
+              <div className="mt-4 grid grid-cols-[38px_1fr] gap-3">
+                <span className="font-mono text-[10px] text-white/35 pt-1">{stage.n}</span>
+                <div>
+                  <h3 className="text-[15px] font-bold text-white">{stage.title}</h3>
+                  <p className="mt-1.5 text-[13px] leading-[1.6] text-white/55">{stage.text}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MadeInPolyForm() {
+  const projects = [
+    { label: 'Residential concept', title: 'Architecture, terrain and landscape in one project', ratio: '16 / 11' },
+    { label: 'Garden + site', title: 'Ground shaping, planting, paths and external spaces', ratio: '4 / 3' },
+    { label: 'Site study', title: 'Real-world context through to walk-through', ratio: '4 / 3' },
+  ];
+
+  return (
+    <section className="py-24 sm:py-28 px-6 bg-[#f7f9fb] border-y border-slate-200">
+      <div className="max-w-[1240px] mx-auto">
+        <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-20 items-end">
+          <div className="flex flex-col gap-5">
+            <Eyebrow>Made in PolyForm</Eyebrow>
+            <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
+              Let the projects do the explaining.
+            </h2>
+          </div>
+          <p className="text-[17px] leading-[1.7] text-gray-600 max-w-[620px]">
+            This gallery is structured for real PolyForm work: complete projects, not decorative illustrations. Final project imagery can drop into these slots without changing the page.
+          </p>
+        </div>
+
+        <div className="mt-14 grid lg:grid-cols-[1.35fr_0.65fr] gap-5">
+          <MarketingVisual label={projects[0].label} title={projects[0].title} aspectRatio={projects[0].ratio} className="min-h-[320px]" />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-1 gap-5">
+            {projects.slice(1).map(project => (
+              <MarketingVisual key={project.label} label={project.label} title={project.title} aspectRatio={project.ratio} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WhyPolyForm() {
+  const traditional = ['Site context', 'Building model', 'Landscape work', 'Exports', 'Visualisation', 'Review', 'Rework'];
+  const polyform = ['Site', 'Building', 'Landscape', 'Visualise', 'Collaborate', 'Automate'];
+
+  return (
+    <section className="py-24 sm:py-28 px-6 bg-white border-b border-slate-200">
+      <div className="max-w-[1240px] mx-auto">
+        <div className="grid lg:grid-cols-[0.78fr_1.22fr] gap-12 lg:gap-20 items-end">
+          <div className="flex flex-col gap-5">
+            <Eyebrow>Why PolyForm</Eyebrow>
+            <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
+              One model instead of a chain of hand-offs.
+            </h2>
+          </div>
+          <p className="text-[17px] leading-[1.7] text-gray-600 max-w-[610px]">
+            Keep site context, architecture, landscape, visualisation and review connected instead of moving the project through separate disconnected stages.
+          </p>
+        </div>
+
+        <div className="mt-14 grid lg:grid-cols-2 gap-6">
+          <div className="rounded-2xl border border-slate-200 bg-[#fbfcfd] p-6 sm:p-7">
+            <span className="text-[11px] font-bold uppercase tracking-[0.13em] text-gray-400">Traditional workflow</span>
+            <div className="mt-6 flex flex-wrap items-center gap-2.5">
+              {traditional.map((item, i) => (
+                <React.Fragment key={item}>
+                  <span className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-gray-600">{item}</span>
+                  {i < traditional.length - 1 && <ArrowRight size={14} className="text-gray-300" />}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-polyform-blue/20 bg-[#eef6fb] p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[11px] font-bold uppercase tracking-[0.13em] text-polyform-blue">PolyForm workflow</span>
+              <span className="text-[11px] font-bold text-polyform-dark-blue">One model throughout</span>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-2.5">
+              {polyform.map((item, i) => (
+                <React.Fragment key={item}>
+                  <span className="px-3 py-2 rounded-lg bg-white text-[13px] font-bold text-polyform-dark-blue shadow-sm">{item}</span>
+                  {i < polyform.length - 1 && <ArrowRight size={14} className="text-polyform-blue/45" />}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AudienceSection() {
+  const audiences = [
+    { title: 'Architects & designers', text: 'Develop the building with its real site and surroundings visible from the start.' },
+    { title: 'Landscape teams', text: 'Shape terrain, planting, paths, water and external spaces in the same model as the architecture.' },
+    { title: 'Builders & collaborators', text: 'Review the complete design, leave notes and walk through decisions before work starts.' },
+    { title: 'Design technologists', text: 'Automate repeated work with Claude, JavaScript and the PolyForm SDK.' },
+  ];
+
+  return (
+    <section className="py-24 sm:py-28 px-6 bg-white border-b border-slate-200">
+      <div className="max-w-[1240px] mx-auto">
+        <div className="max-w-[760px]">
+          <Eyebrow>Built around the project</Eyebrow>
+          <h2 className="mt-5 text-[clamp(34px,4.4vw,56px)] font-bold leading-[1.05] tracking-[-0.035em] text-polyform-dark-blue">
+            For the people shaping the built environment.
+          </h2>
+        </div>
+        <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 border-y border-slate-200">
+          {audiences.map((a, i) => (
+            <div key={a.title} className={'py-7 sm:px-6 first:pl-0 last:pr-0 ' + (i > 0 ? 'sm:border-l sm:border-slate-200' : '')}>
+              <span className="text-[11px] font-mono text-gray-400">0{i + 1}</span>
+              <h3 className="mt-3 text-[17px] font-bold text-polyform-dark-blue">{a.title}</h3>
+              <p className="mt-2 text-sm leading-[1.65] text-gray-600">{a.text}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -233,6 +401,10 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
         </div>
       </section>
 
+      <TransformationSection />
+
+      <WhyPolyForm />
+
       <section className="py-28 px-6 bg-white">
         <div className="max-w-[1240px] mx-auto">
           <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-12 lg:gap-20 items-end">
@@ -297,13 +469,17 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
 
       <WorkflowStory />
 
+      <AudienceSection />
+
+      <MadeInPolyForm />
+
       <section className="relative overflow-hidden bg-polyform-dark-blue text-white py-28 px-6">
         <div className="absolute inset-0 opacity-[0.1] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
         <div className="relative max-w-[1240px] mx-auto grid lg:grid-cols-[0.85fr_1.15fr] gap-14 lg:gap-20 items-center">
           <div className="flex flex-col gap-5">
             <Eyebrow dark icon={<Sparkles size={16} />}>Build with Claude</Eyebrow>
             <h2 className="text-[clamp(34px,4.5vw,58px)] font-bold leading-[1.04] tracking-[-0.035em]">
-              Describe the design.<br />Get an editable model.
+              Describe the change.<br />Keep the model.
             </h2>
             <p className="text-[17px] leading-[1.7] text-white/75">
               Connect PolyForm to Claude and ask for a building, a site change or a landscape edit in plain words. The result stays editable in PolyForm.
@@ -340,6 +516,21 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
             <Eyebrow>Interoperability</Eyebrow>
             <h2 className="text-[clamp(30px,3.7vw,46px)] font-bold leading-[1.08] tracking-[-0.025em] text-polyform-dark-blue">Keep projects where your team already works.</h2>
             <p className="text-[16px] leading-[1.7] text-gray-600">Choose where each model lives and keep every project visible from one place.</p>
+            <div className="rounded-2xl border border-slate-200 bg-[#f8fafc] p-5 sm:p-6">
+              <div className="flex flex-wrap items-center justify-center gap-2.5 text-[12px] font-semibold">
+                <span className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-gray-600">Google Drive</span>
+                <ArrowRight size={14} className="text-gray-300" />
+                <span className="px-4 py-2.5 rounded-lg bg-polyform-blue text-white shadow-sm">PolyForm</span>
+                <ArrowRight size={14} className="text-gray-300" />
+                <span className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-gray-600">Trimble Connect</span>
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-200 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] text-gray-500">
+                <span>Import SKP + supported 3D</span>
+                <span>Export glTF</span>
+                <span>Export STL</span>
+                <span>Export SKP</span>
+              </div>
+            </div>
             <div className="flex flex-col">
               {STORAGE_OPTIONS.map(s => (
                 <div key={s.title} className="grid grid-cols-[44px_1fr] gap-4 items-start py-4 border-t border-slate-200 last:border-b">

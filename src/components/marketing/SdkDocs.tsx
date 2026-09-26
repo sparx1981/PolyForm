@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { SDK_METHOD_COUNT, SDK_REFERENCE, type SdkMethod, type SdkTag } from './sdkFullReference';
 import { Eyebrow, RouterLink, scrollToId, type Page } from './shared';
@@ -44,8 +44,8 @@ function MethodRow({ tag, method }: { tag: SdkTag; method: SdkMethod }) {
         aria-expanded={open}
       >
         {open ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
-        <span className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded ${color.bg} ${color.text}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} /> {tag.id === 'core' ? 'sdk' : tag.id}
+        <span className={'shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded ' + color.bg + ' ' + color.text}>
+          <span className={'w-1.5 h-1.5 rounded-full ' + color.dot} /> {tag.id === 'core' ? 'sdk' : tag.id}
         </span>
         <code className="text-[13px] font-semibold text-polyform-dark-blue break-all">{method.signature}</code>
         <span className="ml-auto hidden sm:block text-sm text-gray-500 text-right shrink-0 max-w-[40%] truncate">{method.description}</span>
@@ -69,8 +69,14 @@ function MethodRow({ tag, method }: { tag: SdkTag; method: SdkMethod }) {
   );
 }
 
+function hashTag(): string {
+  const hash = window.location.hash.replace(/^#sdk-/, '');
+  return SDK_REFERENCE.some(tag => tag.id === hash) ? hash : SDK_REFERENCE[0]?.id ?? 'core';
+}
+
 export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void }) {
   const [query, setQuery] = useState('');
+  const [activeTag, setActiveTag] = useState(hashTag);
 
   const filtered = useMemo(
     () => SDK_REFERENCE
@@ -79,9 +85,51 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
     [query],
   );
 
+  const jumpTo = (tagId: string, pushHistory = true) => {
+    const id = 'sdk-' + tagId;
+    if (pushHistory) {
+      window.history.pushState({}, '', window.location.pathname + '#' + id);
+    }
+    setActiveTag(tagId);
+    scrollToId(id);
+  };
+
+  useEffect(() => {
+    if (filtered.length > 0 && !filtered.some(tag => tag.id === activeTag)) {
+      setActiveTag(filtered[0].id);
+    }
+  }, [filtered, activeTag]);
+
+  useEffect(() => {
+    const root = document.getElementById('landing-page');
+    const sections = filtered
+      .map(tag => document.getElementById('sdk-' + tag.id))
+      .filter((el): el is HTMLElement => Boolean(el));
+    if (!root || sections.length === 0 || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        const visible = entries
+          .filter(entry => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        const tagId = visible.target.id.replace(/^sdk-/, '');
+        setActiveTag(tagId);
+        const nextHash = '#sdk-' + tagId;
+        if (window.location.hash !== nextHash) {
+          window.history.replaceState({}, '', window.location.pathname + nextHash);
+        }
+      },
+      { root, rootMargin: '-12% 0px -72% 0px', threshold: [0, 0.1, 0.5, 1] },
+    );
+
+    sections.forEach(section => observer.observe(section));
+    return () => observer.disconnect();
+  }, [filtered]);
+
   return (
     <>
-      <section className="pt-24 pb-16 px-6 border-b border-gray-100">
+      <section className="pt-20 pb-14 px-6 border-b border-gray-100">
         <div className="max-w-[1200px] mx-auto flex flex-col gap-5">
           <RouterLink
             to="developers"
@@ -111,20 +159,41 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
         </div>
       </section>
 
-      <section className="px-6 py-16">
+      <div className="lg:hidden sticky top-[60px] z-40 px-4 py-3 bg-white/95 backdrop-blur-xl border-b border-slate-200">
+        <label htmlFor="sdk-group-jump" className="sr-only">Jump to SDK group</label>
+        <select
+          id="sdk-group-jump"
+          value={activeTag}
+          onChange={e => jumpTo(e.target.value)}
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-polyform-dark-blue focus:outline-none focus:ring-2 focus:ring-polyform-blue"
+        >
+          {SDK_REFERENCE.map(tag => (
+            <option key={tag.id} value={tag.id}>
+              {tag.id === 'core' ? 'sdk' : tag.id} ({tag.methods.length})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <section className="px-6 py-14">
         <div className="max-w-[1200px] mx-auto flex gap-12 items-start">
-          <aside className="hidden lg:flex sticky top-[88px] w-[200px] flex-none flex-col gap-0.5">
+          <aside className="hidden lg:flex sticky top-[76px] w-[210px] flex-none flex-col gap-0.5">
             <span className="text-[11px] font-bold tracking-[0.12em] text-gray-400 px-3 pb-2.5">GROUPS</span>
             {SDK_REFERENCE.map(tag => {
               const color = TAG_COLORS[tag.id] ?? TAG_COLORS.core;
+              const active = tag.id === activeTag;
               return (
                 <button
                   key={tag.id}
                   type="button"
-                  onClick={() => scrollToId(`sdk-${tag.id}`)}
-                  className="flex items-center gap-2 text-sm font-medium text-gray-600 px-3 py-[7px] rounded-md text-left hover:bg-gray-50 hover:text-polyform-blue transition-colors"
+                  onClick={() => jumpTo(tag.id)}
+                  className={
+                    'flex items-center gap-2 text-sm font-medium px-3 py-[7px] rounded-md text-left transition-colors '
+                    + (active ? 'bg-[#eef6fb] text-polyform-dark-blue' : 'text-gray-600 hover:bg-gray-50 hover:text-polyform-blue')
+                  }
+                  aria-current={active ? 'location' : undefined}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
+                  <span className={'w-1.5 h-1.5 rounded-full ' + color.dot} />
                   {tag.id === 'core' ? 'sdk' : tag.id}
                   <span className="ml-auto text-xs text-gray-400">{tag.methods.length}</span>
                 </button>
@@ -137,9 +206,9 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
               <p className="text-gray-500">No methods match &ldquo;{query}&rdquo;.</p>
             )}
             {filtered.map(tag => (
-              <div key={tag.id} id={`sdk-${tag.id}`} className="flex flex-col gap-3 scroll-mt-[88px]">
+              <div key={tag.id} id={'sdk-' + tag.id} className="flex flex-col gap-3 scroll-mt-[76px]">
                 <div className="flex items-baseline gap-3 flex-wrap">
-                  <h2 className="text-xl font-bold text-polyform-dark-blue font-mono">{tag.id === 'core' ? 'sdk' : `sdk.${tag.id}`}</h2>
+                  <h2 className="text-xl font-bold text-polyform-dark-blue font-mono">{tag.id === 'core' ? 'sdk' : 'sdk.' + tag.id}</h2>
                   <span className="text-sm text-gray-500">{tag.description}</span>
                 </div>
                 <div className="flex flex-col gap-2">

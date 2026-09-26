@@ -75,6 +75,38 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
         </div>
       </section>
 
+      <section className="py-24 px-6 bg-[#f7f9fb] border-b border-slate-200">
+        <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.72fr_1.28fr] gap-12 lg:gap-20 items-center">
+          <div className="flex flex-col gap-5">
+            <Eyebrow>5-minute start</Eyebrow>
+            <h2 className="text-[clamp(32px,4vw,50px)] font-bold leading-[1.05] tracking-[-0.03em] text-polyform-dark-blue">
+              Open the console. Run real geometry.
+            </h2>
+            <p className="text-[16px] leading-[1.7] text-gray-600">
+              The fastest way to understand the SDK is to use it against the model in front of you.
+            </p>
+            <div className="flex flex-col border-y border-slate-200">
+              {['Open the Developer Console', 'Paste a small SDK script', 'Run it against the active model', 'Save the script when it becomes useful'].map((step, i) => (
+                <div key={step} className="grid grid-cols-[38px_1fr] gap-3 py-3.5 border-b border-slate-200 last:border-b-0">
+                  <span className="font-mono text-[10px] text-polyform-blue pt-0.5">0{i + 1}</span>
+                  <span className="text-sm font-semibold text-polyform-dark-blue">{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-[#020817] rounded-2xl border border-slate-800 overflow-hidden shadow-[0_26px_65px_-40px_rgba(15,23,42,.8)]">
+            <div className="px-4 py-3 border-b border-white/10 text-[11px] font-semibold text-slate-400">Developer Console</div>
+            <div className="p-5 sm:p-6 flex flex-col overflow-x-auto">
+              {CODE_LONG.slice(2, 7).map((c, i) => highlightJsLine(c.t, i))}
+            </div>
+            <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <span>active model</span>
+              <span className="text-emerald-500">ready to run</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="py-28 px-6 bg-white">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.82fr_1.18fr] gap-14 lg:gap-20 items-center">
           <div className="flex flex-col gap-5">
