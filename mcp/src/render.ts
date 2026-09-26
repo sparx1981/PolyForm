@@ -16,6 +16,8 @@ export class AppRenderer implements Renderer {
   ) {}
 
   async screenshot(caller: Caller, modelId: string, opts: ScreenshotOptions): Promise<Buffer> {
+    const deadline = Date.now() + (opts.timeoutMs ?? 100_000);
+    const left = () => Math.max(1_000, deadline - Date.now());
     const token = await this.mintToken(caller.uid);
     const browser = await this.launch();
     try {
@@ -28,10 +30,13 @@ export class AppRenderer implements Renderer {
         url.searchParams.set('x-vercel-protection-bypass', this.bypassSecret);
         url.searchParams.set('x-vercel-set-bypass-cookie', 'true');
       }
-      await page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: 60_000 });
-      await page.waitForFunction(() => typeof (window as any).__polyformRender === 'function', null, { timeout: 60_000 })
+      await page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: left() });
+      await page.waitForFunction(() => typeof (window as any).__polyformRender === 'function', null, { timeout: left() })
         .catch(() => { throw new Error(`The PolyForm app at ${this.appUrl} has no render mode (deploy the latest app).`); });
-      await page.evaluate(job => (window as any).__polyformRender(job), { token, modelId, view: opts.view, focus: opts.focus });
+      await Promise.race([
+        page.evaluate(job => (window as any).__polyformRender(job), { token, modelId, view: opts.view, focus: opts.focus }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('The app did not finish drawing the model in time.')), left())),
+      ]);
       return await page.screenshot({ type: 'png' });
     } finally {
       await browser.close().catch(() => {});

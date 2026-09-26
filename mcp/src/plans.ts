@@ -181,6 +181,17 @@ function findRooms(level: Level, grid: Grid, labels: RoomLabel[]) {
   // Distance from the walls (two-pass chamfer), so each label sits in the roomiest spot.
   const dist = new Float32Array(nx * nz);
   for (let k = 0; k < dist.length; k++) dist[k] = label[k] >= 3 ? 1e9 : 0;
+  // Keep room labels off the stairs too.
+  for (const st of level.stairs) {
+    const [sw = 1, , sl = 3.6] = nums(st);
+    const [dx, dz] = planDir(st, [0, 0, 1]);
+    for (let k = 0; k < dist.length; k++) {
+      if (!dist[k]) continue;
+      const i = k % nx, j = (k - i) / nx;
+      const ox = x0 + (i + 0.5) * CELL - st.position[0], oz = z0 + (j + 0.5) * CELL - st.position[2];
+      if (Math.abs(ox * dx + oz * dz) <= sl / 2 + 0.2 && Math.abs(-ox * dz + oz * dx) <= sw / 2 + 0.2) dist[k] = 0;
+    }
+  }
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const k = j * nx + i;
     if (i > 0) dist[k] = Math.min(dist[k], dist[k - 1] + 1);
@@ -219,7 +230,9 @@ function joinedWall(w: Shape, walls: Shape[]): Rect {
     const q = wallRect(o);
     const dx = p[0] - q.centre[0], dz = p[1] - q.centre[1];
     const u = dx * q.dir[0] + dz * q.dir[1], v = -dx * q.dir[1] + dz * q.dir[0];
-    return Math.abs(u) <= q.length / 2 + q.width / 2 + 0.02 && Math.abs(v) <= q.width / 2 + 0.02;
+    // Only an end that stops inside the other wall (at its centreline, say) needs drawing on; an end
+    // already out at the other wall's outer face is flush, and extending it would leave a stub.
+    return Math.abs(u) <= q.length / 2 + q.width / 2 + 0.02 && Math.abs(v) < q.width / 2 - 0.01;
   });
   const half = r.length / 2;
   const startEnd: V2 = [r.centre[0] - r.dir[0] * half, r.centre[1] - r.dir[1] * half];

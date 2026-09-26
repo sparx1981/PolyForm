@@ -20,6 +20,8 @@ export interface ScreenshotOptions {
   width: number;
   height: number;
   focus?: string;
+  /** Give up after this long (the whole render). */
+  timeoutMs?: number;
 }
 
 export interface Renderer {
@@ -54,6 +56,12 @@ function safe<A>(fn: (args: A) => Promise<{ content: Content[] }>) {
       return { content: [{ type: 'text' as const, text: message }], isError: true };
     }
   };
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number, why: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(why)), ms); });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
 }
 
 /** Same test the app's roof button uses to find the roof it replaces. */
@@ -205,7 +213,9 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       if (!ctx.renderer) notes.push('3D picture: screenshots are not set up on this server.');
       else {
         try {
-          perspective = await ctx.renderer.screenshot(caller, m.id, { view: 'perspective', width: 1024, height: 640 });
+          // Claude waits about a minute for a tool; leave the plans time to arrive if the picture can't.
+          perspective = await withTimeout(ctx.renderer.screenshot(caller, m.id, { view: 'perspective', width: 1024, height: 640, timeoutMs: 35_000 }), 40_000,
+            'the app did not finish drawing in time (check POLYFORM_APP_URL and APP_BYPASS_SECRET)');
         } catch (e) {
           notes.push(`3D picture unavailable: ${(e as Error).message}`);
         }

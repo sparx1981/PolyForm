@@ -68,7 +68,13 @@ export function detail(s: Shape) {
   if (geometryData) out.geometryData = '(mesh data omitted)';
   if (terrainData) {
     const { heights, heightMap, ...t } = terrainData;
-    out.terrainData = { ...t, heights: heights ? `(${heights.length} heights omitted)` : undefined };
+    let lowest = Infinity, highest = -Infinity;
+    for (const h of heights ?? []) { if (h < lowest) lowest = h; if (h > highest) highest = h; }
+    out.terrainData = {
+      ...t,
+      heights: heights ? `(${heights.length} heights omitted)` : undefined,
+      heightRange: heights?.length ? { lowest: round(lowest), highest: round(highest) } : undefined,
+    };
   }
   return out;
 }
