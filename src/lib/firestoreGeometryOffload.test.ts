@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { offloadLargeGeometryForSave, hydrateOffloadedGeometry, type GeometryOffloadIO } from './firestoreGeometryOffload';
+import { offloadLargeGeometryForSave, hydrateOffloadedGeometry, withGeometryCache, type GeometryOffloadIO } from './firestoreGeometryOffload';
 import type { Shape } from '../types';
 
 function makeGeometryData(vertexCount: number) {
@@ -81,5 +81,39 @@ describe('firestoreGeometryOffload', () => {
     const result = await hydrateOffloadedGeometry(shapes, { fetch });
     expect(fetch).not.toHaveBeenCalled();
     expect(result[0].geometryData).toEqual(shapes[0].geometryData);
+  });
+
+  it('saves unchanged geometry to the same document, and a cached IO neither rewrites nor rereads it', async () => {
+    const shapes: Shape[] = [
+      { id: 'roof-tiles-1', type: 'custom', position: [0, 0, 0], args: [], color: '#fff', geometryData: makeGeometryData(5000) },
+    ];
+    const store = new Map<string, string>();
+    const upload = vi.fn(async (docId: string, text: string) => { store.set(docId, text); });
+    const fetch = vi.fn(async (docId: string) => store.get(docId)!);
+    const io = withGeometryCache({ upload, fetch });
+
+    const first = await offloadLargeGeometryForSave(shapes, 'uid1', io);
+    const second = await offloadLargeGeometryForSave(shapes, 'uid1', io);
+    expect(second[0].geometryData).toEqual(first[0].geometryData);
+    expect(upload).toHaveBeenCalledTimes(1);
+
+    await hydrateOffloadedGeometry(second, io);
+    await hydrateOffloadedGeometry(second, io);
+    expect(fetch).not.toHaveBeenCalled();
+
+    const changed = [{ ...shapes[0], geometryData: makeGeometryData(5000) }];
+    const third = await offloadLargeGeometryForSave(changed, 'uid1', io);
+    expect(third[0].geometryData).not.toEqual(first[0].geometryData);
+    expect(upload).toHaveBeenCalledTimes(2);
+  });
+
+  it('a cached IO reads a document it has not seen only once', async () => {
+    const fetch = vi.fn(async () => '{"positions":[1,2,3]}');
+    const io = withGeometryCache({ upload: vi.fn(), fetch });
+    const shapes = [{ id: 'a', type: 'custom', geometryData: { __offloadedGeometryDocId: 'old_1' } }] as any as Shape[];
+    await hydrateOffloadedGeometry(shapes, io);
+    const [again] = await hydrateOffloadedGeometry(shapes, io);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(again.geometryData).toEqual({ positions: [1, 2, 3] });
   });
 });

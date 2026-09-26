@@ -4,7 +4,7 @@ import { initializeFirestore, doc, getDoc, setDoc, getDocFromServer } from 'fire
 import { getStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
-import type { GeometryOffloadIO } from './lib/firestoreGeometryOffload';
+import { withGeometryCache, type GeometryOffloadIO } from './lib/firestoreGeometryOffload';
 export { cleanFirestoreDataForSave, restoreFirestoreArraysAfterLoad } from './lib/firestoreArrayCodec';
 export { offloadLargeGeometryForSave, hydrateOffloadedGeometry } from './lib/firestoreGeometryOffload';
 
@@ -25,7 +25,7 @@ export const googleProvider = new GoogleAuthProvider();
 // any hosting context where it hasn't been set up. Going through the
 // Firestore SDK like every other read/write in this app has no such
 // requirement.
-export const firebaseGeometryIO: GeometryOffloadIO = {
+export const firebaseGeometryIO: GeometryOffloadIO = withGeometryCache({
   upload: async (docId, jsonText) => {
     await setDoc(doc(db, 'geometryOverflow', docId), {
       userId: auth.currentUser?.uid || '',
@@ -38,7 +38,7 @@ export const firebaseGeometryIO: GeometryOffloadIO = {
     if (!snap.exists()) throw new Error(`Offloaded geometry document not found: ${docId}`);
     return snap.data().data as string;
   },
-};
+});
 
 // Validate connection to Firestore on initialization
 export async function testConnection() {

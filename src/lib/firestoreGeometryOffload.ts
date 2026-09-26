@@ -33,6 +33,58 @@ function toSafeDocId(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
+// 53-bit string hash (cyrb53) plus the length: plenty to tell two meshes of one shape apart.
+function contentHash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)}${text.length.toString(36)}`;
+}
+
+// Offloaded geometry documents never change once written (their ids are
+// content hashes, or timestamps for older ones), so a client can remember
+// them: every auto-save would otherwise rewrite each large mesh, and every
+// model snapshot (including the echo of this client's own save) would read
+// each one back from Firestore again.
+const CACHE_CHAR_BUDGET = 32_000_000;
+
+export function withGeometryCache(io: GeometryOffloadIO): GeometryOffloadIO {
+  const known = new Set<string>();
+  const texts = new Map<string, string>();
+  let chars = 0;
+  const remember = (docId: string, text: string) => {
+    known.add(docId);
+    if (texts.has(docId)) texts.delete(docId);
+    texts.set(docId, text);
+    chars += text.length;
+    for (const [oldest, oldText] of texts) {
+      if (chars <= CACHE_CHAR_BUDGET || oldest === docId) break;
+      texts.delete(oldest);
+      chars -= oldText.length;
+    }
+  };
+  return {
+    upload: async (docId, jsonText) => {
+      if (known.has(docId)) return;
+      await io.upload(docId, jsonText);
+      remember(docId, jsonText);
+    },
+    fetch: async (docId) => {
+      const cached = texts.get(docId);
+      if (cached !== undefined) return cached;
+      const text = await io.fetch(docId);
+      remember(docId, text);
+      return text;
+    },
+  };
+}
+
 export async function offloadLargeGeometryForSave(
   shapes: Shape[],
   uid: string,
@@ -44,7 +96,9 @@ export async function offloadLargeGeometryForSave(
       const serialized = JSON.stringify(shape.geometryData);
       if (serialized.length <= OFFLOAD_SIZE_THRESHOLD) return shape;
       try {
-        const docId = `${toSafeDocId(uid)}_${toSafeDocId(shape.id)}_${Date.now()}`;
+        // Named after the content, so saving unchanged geometry again maps to the
+        // same document (which a cached IO then skips) instead of a new one per save.
+        const docId = `${toSafeDocId(uid)}_${toSafeDocId(shape.id)}_g${contentHash(serialized)}`;
         await io.upload(docId, serialized);
         return { ...shape, geometryData: { [OFFLOAD_MARKER]: docId } as any };
       } catch {

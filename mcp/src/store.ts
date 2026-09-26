@@ -13,6 +13,14 @@ export interface Caller {
 /** A problem to report back to Claude as a tool error, in plain words. */
 export class ToolError extends Error {}
 
+/** No model with this id that the caller can open (it may still match a model name). */
+class ModelNotFound extends ToolError {
+  constructor() { super('Model not found.'); }
+}
+
+/** Refs shaped like a Firestore document id are tried as an id before being matched as a name. */
+const looksLikeId = (ref: string) => /^[A-Za-z0-9_-]{8,}$/.test(ref);
+
 export interface ModelRow {
   id: string;
   name: string;
@@ -44,6 +52,12 @@ export const MAX_SHAPES = 5000;
 /** How many connector changes can be undone per model. */
 export const HISTORY_LIMIT = 20;
 
+/** The model a change was made to. */
+export interface ChangedModel {
+  id: string;
+  name: string;
+}
+
 /**
  * Where models live. The connector only ever changes a model's `shapes` (and `updatedAt`),
  * leaving the drawn-surface kernel, scenes, materials and settings exactly as the app saved
@@ -53,12 +67,15 @@ export interface ModelStore {
   listModels(caller: Caller): Promise<ModelRow[]>;
   /** A model by id or by name (exact, then unique partial match, ignoring case). */
   loadModel(caller: Caller, ref: string): Promise<LoadedModel>;
-  /** Applies `mutate` to the model's objects in one transaction and records the old list for undo. */
-  changeShapes(caller: Caller, modelId: string, note: string, mutate: (shapes: Shape[]) => Shape[]): Promise<Shape[]>;
+  /**
+   * Applies `mutate` to the model's objects (by id or name) in one transaction and records the
+   * old list for undo. Reads the model once; there is no need to load it first.
+   */
+  changeShapes(caller: Caller, ref: string, note: string, mutate: (shapes: Shape[]) => Shape[]): Promise<ChangedModel>;
   /** Applies `mutate` to the model's graphics settings (weather, vegetation wind) and records the old value for undo. */
-  changeGraphicsSettings(caller: Caller, modelId: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings): Promise<GraphicsSettings>;
+  changeGraphicsSettings(caller: Caller, ref: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings): Promise<ChangedModel>;
   /** Restores whichever of the objects or graphics settings changed most recently; returns its note. */
-  undo(caller: Caller, modelId: string): Promise<string | null>;
+  undo(caller: Caller, ref: string): Promise<ChangedModel & { note: string | null }>;
   createModel(caller: Caller, name: string): Promise<string>;
 }
 
@@ -115,39 +132,41 @@ export class MemoryStore implements ModelStore {
     return { id, name: m.name, userId: m.userId, shapes: decodeShapes(m.shapes), graphicsSettings: normalizeGraphicsSettings(m.graphicsSettings), updatedAt: m.updatedAt };
   }
 
-  async changeShapes(caller: Caller, modelId: string, note: string, mutate: (shapes: Shape[]) => Shape[]) {
-    const m = this.access(caller, modelId);
-    if (!m) throw new ToolError('Model not found.');
+  private async resolve(caller: Caller, ref: string) {
+    const id = this.access(caller, ref) ? ref : matchModel(await this.listModels(caller), ref).id;
+    return { id, m: this.access(caller, id)! };
+  }
+
+  async changeShapes(caller: Caller, ref: string, note: string, mutate: (shapes: Shape[]) => Shape[]) {
+    const { id, m } = await this.resolve(caller, ref);
     const next = mutate(decodeShapes(m.shapes));
     checkSize(next);
-    const list = this.history.get(modelId) ?? [];
+    const list = this.history.get(id) ?? [];
     list.push({ shapes: m.shapes, graphicsSettings: m.graphicsSettings, note });
-    this.history.set(modelId, list.slice(-HISTORY_LIMIT));
+    this.history.set(id, list.slice(-HISTORY_LIMIT));
     m.shapes = encodeShapes(next);
     m.updatedAt = new Date().toISOString();
-    return next;
+    return { id, name: m.name };
   }
 
-  async changeGraphicsSettings(caller: Caller, modelId: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings) {
-    const m = this.access(caller, modelId);
-    if (!m) throw new ToolError('Model not found.');
+  async changeGraphicsSettings(caller: Caller, ref: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings) {
+    const { id, m } = await this.resolve(caller, ref);
     const next = mutate(normalizeGraphicsSettings(m.graphicsSettings));
-    const list = this.history.get(modelId) ?? [];
+    const list = this.history.get(id) ?? [];
     list.push({ shapes: m.shapes, graphicsSettings: m.graphicsSettings, note });
-    this.history.set(modelId, list.slice(-HISTORY_LIMIT));
+    this.history.set(id, list.slice(-HISTORY_LIMIT));
     m.graphicsSettings = next;
     m.updatedAt = new Date().toISOString();
-    return next;
+    return { id, name: m.name };
   }
 
-  async undo(caller: Caller, modelId: string) {
-    const m = this.access(caller, modelId);
-    if (!m) throw new ToolError('Model not found.');
-    const entry = this.history.get(modelId)?.pop();
-    if (!entry) return null;
+  async undo(caller: Caller, ref: string) {
+    const { id, m } = await this.resolve(caller, ref);
+    const entry = this.history.get(id)?.pop();
+    if (!entry) return { id, name: m.name, note: null };
     m.shapes = entry.shapes;
     m.graphicsSettings = entry.graphicsSettings;
-    return entry.note;
+    return { id, name: m.name, note: entry.note };
   }
 
   async createModel(caller: Caller, name: string) {
@@ -198,7 +217,7 @@ export class FirestoreStore implements ModelStore {
   }
 
   async loadModel(caller: Caller, ref: string): Promise<LoadedModel> {
-    let snap = /^[A-Za-z0-9_-]{8,}$/.test(ref) ? await this.db.collection('models').doc(ref).get() : null;
+    let snap = looksLikeId(ref) ? await this.db.collection('models').doc(ref).get() : null;
     if (!snap?.exists || !(await this.canAccess(caller, snap.id, snap.data()))) {
       const row = matchModel(await this.listModels(caller), ref);
       snap = await this.db.collection('models').doc(row.id).get();
@@ -213,70 +232,82 @@ export class FirestoreStore implements ModelStore {
     };
   }
 
-  async changeShapes(caller: Caller, modelId: string, note: string, mutate: (shapes: Shape[]) => Shape[]) {
-    const ref = this.db.collection('models').doc(modelId);
-    const first = await ref.get();
-    if (!(await this.canAccess(caller, modelId, first.data()))) throw new ToolError('Model not found.');
+  /**
+   * Runs `fn` against the model `ref` names: first as an id (no extra read; `fn`'s own
+   * transaction checks it exists and the caller may open it), then as a name, which costs a
+   * read of every model the caller owns. That's why Claude is asked to pass ids.
+   */
+  private async byRef<T>(caller: Caller, ref: string, fn: (id: string) => Promise<T>): Promise<T> {
+    if (looksLikeId(ref)) {
+      try {
+        return await fn(ref);
+      } catch (e) {
+        if (!(e instanceof ModelNotFound)) throw e;
+      }
+    }
+    return fn(matchModel(await this.listModels(caller), ref).id);
+  }
+
+  /** Reads the model inside a transaction and checks the caller may change it. */
+  private async openForChange(caller: Caller, tx: FirebaseFirestore.Transaction, ref: FirebaseFirestore.DocumentReference) {
+    const data = (await tx.get(ref)).data();
+    if (!data || !(await this.canAccess(caller, ref.id, data))) throw new ModelNotFound();
+    const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
+    if (external) throw external;
+    return data;
+  }
+
+  /**
+   * Undo history is a ring of HISTORY_LIMIT fixed slots, numbered by a counter on the model,
+   * so recording a change overwrites the oldest entry instead of querying for ones to prune.
+   */
+  private recordHistory(caller: Caller, tx: FirebaseFirestore.Transaction, ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData, note: string) {
+    const seq = Number.isInteger(data.mcpHistorySeq) ? data.mcpHistorySeq as number : 0;
+    tx.set(ref.collection('mcpHistory').doc(`slot${seq % HISTORY_LIMIT}`), {
+      shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null, note, uid: caller.uid, createdAt: Date.now(),
+    });
+    return seq + 1;
+  }
+
+  async changeShapes(caller: Caller, ref: string, note: string, mutate: (shapes: Shape[]) => Shape[]) {
     const io = this.geometryIO(caller.uid);
-    const next = await this.db.runTransaction(async tx => {
-      const snap = await tx.get(ref);
-      const data = snap.data();
-      if (!data) throw new ToolError('Model not found.');
-      const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
-      if (external) throw external;
+    return this.byRef(caller, ref, id => this.db.runTransaction(async tx => {
+      const doc = this.db.collection('models').doc(id);
+      const data = await this.openForChange(caller, tx, doc);
       const result = mutate(decodeShapes(data.shapes));
       checkSize(result);
       // Same as the app's save: oversized geometry goes to its own document first.
       const stored = encodeShapes(await offloadLargeGeometryForSave(result, caller.uid, io));
-      tx.update(ref, { shapes: stored, updatedAt: this.serverTimestamp() });
-      tx.set(ref.collection('mcpHistory').doc(), {
-        shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null, note, uid: caller.uid, createdAt: Date.now(),
-      });
-      return result;
-    });
-    await this.pruneHistory(modelId);
-    return next;
+      const seq = this.recordHistory(caller, tx, doc, data, note);
+      tx.update(doc, { shapes: stored, mcpHistorySeq: seq, updatedAt: this.serverTimestamp() });
+      return { id, name: String(data.name ?? 'Untitled') };
+    }));
   }
 
-  async changeGraphicsSettings(caller: Caller, modelId: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings) {
-    const ref = this.db.collection('models').doc(modelId);
-    const first = await ref.get();
-    if (!(await this.canAccess(caller, modelId, first.data()))) throw new ToolError('Model not found.');
-    const next = await this.db.runTransaction(async tx => {
-      const snap = await tx.get(ref);
-      const data = snap.data();
-      if (!data) throw new ToolError('Model not found.');
-      const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
-      if (external) throw external;
+  async changeGraphicsSettings(caller: Caller, ref: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings) {
+    return this.byRef(caller, ref, id => this.db.runTransaction(async tx => {
+      const doc = this.db.collection('models').doc(id);
+      const data = await this.openForChange(caller, tx, doc);
       const result = mutate(normalizeGraphicsSettings(data.graphicsSettings));
-      tx.update(ref, { graphicsSettings: result, updatedAt: this.serverTimestamp() });
-      tx.set(ref.collection('mcpHistory').doc(), {
-        shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null, note, uid: caller.uid, createdAt: Date.now(),
-      });
-      return result;
-    });
-    await this.pruneHistory(modelId);
-    return next;
+      const seq = this.recordHistory(caller, tx, doc, data, note);
+      tx.update(doc, { graphicsSettings: result, mcpHistorySeq: seq, updatedAt: this.serverTimestamp() });
+      return { id, name: String(data.name ?? 'Untitled') };
+    }));
   }
 
-  private async pruneHistory(modelId: string) {
-    const old = await this.db.collection('models').doc(modelId).collection('mcpHistory')
-      .orderBy('createdAt', 'desc').offset(HISTORY_LIMIT).select().get();
-    await Promise.all(old.docs.map(d => d.ref.delete()));
-  }
-
-  async undo(caller: Caller, modelId: string) {
-    const ref = this.db.collection('models').doc(modelId);
-    const snap = await ref.get();
-    if (!(await this.canAccess(caller, modelId, snap.data()))) throw new ToolError('Model not found.');
-    const last = await ref.collection('mcpHistory').orderBy('createdAt', 'desc').limit(1).get();
-    if (last.empty) return null;
-    const entry = last.docs[0];
-    await this.db.runTransaction(async tx => {
-      tx.update(ref, { shapes: entry.get('shapes') ?? [], graphicsSettings: entry.get('graphicsSettings') ?? null, updatedAt: this.serverTimestamp() });
+  async undo(caller: Caller, ref: string) {
+    return this.byRef(caller, ref, id => this.db.runTransaction(async tx => {
+      const doc = this.db.collection('models').doc(id);
+      const data = await this.openForChange(caller, tx, doc);
+      const name = String(data.name ?? 'Untitled');
+      // Ordered by time, so entries from before the ring slots existed still undo in turn.
+      const last = await tx.get(doc.collection('mcpHistory').orderBy('createdAt', 'desc').limit(1));
+      if (last.empty) return { id, name, note: null };
+      const entry = last.docs[0];
+      tx.update(doc, { shapes: entry.get('shapes') ?? [], graphicsSettings: entry.get('graphicsSettings') ?? null, updatedAt: this.serverTimestamp() });
       tx.delete(entry.ref);
-    });
-    return String(entry.get('note') ?? 'last change');
+      return { id, name, note: String(entry.get('note') ?? 'last change') };
+    }));
   }
 
   async createModel(caller: Caller, name: string) {

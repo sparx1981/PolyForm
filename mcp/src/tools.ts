@@ -36,7 +36,7 @@ export interface ToolContext {
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 const point2 = z.tuple([z.number(), z.number()]).describe('[x, z] on the ground, metres');
-const modelRef = z.string().describe('Model id, or its name');
+const modelRef = z.string().describe('Model id (from list_models or create_model). A name also works but is slower, so pass the id.');
 const colour = z.string().regex(/^#[0-9a-fA-F]{6}$/).describe('Hex colour, e.g. #a3a7aa');
 
 type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
@@ -70,9 +70,8 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   /** Loads a model, changes its objects, and reports what was made. */
   async function change(ref: string, note: string, fn: (shapes: Shape[]) => { shapes: Shape[]; made?: Shape[]; message?: string }) {
-    const model = await store.loadModel(caller, ref);
     let out: ReturnType<typeof fn> = { shapes: [] };
-    await store.changeShapes(caller, model.id, note, shapes => withStoryTags(withQuaternions((out = fn(shapes)).shapes)));
+    const model = await store.changeShapes(caller, ref, note, shapes => withStoryTags(withQuaternions((out = fn(shapes)).shapes)));
     return text({
       model: `${model.name} (${model.id})`,
       done: out.message ?? note,
@@ -88,8 +87,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   /** Loads a model, changes its graphics settings (weather, vegetation wind), and reports what changed. */
   async function changeSettings(ref: string, note: string, fn: (settings: GraphicsSettings) => GraphicsSettings) {
-    const model = await store.loadModel(caller, ref);
-    await store.changeGraphicsSettings(caller, model.id, note, fn);
+    const model = await store.changeGraphicsSettings(caller, ref, note, fn);
     return text({
       model: `${model.name} (${model.id})`,
       done: note,
@@ -651,8 +649,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     inputSchema: { model: modelRef },
     annotations: DESTROY,
   }, safe(async ({ model }) => {
-    const m = await store.loadModel(caller, model);
-    const note = await store.undo(caller, m.id);
+    const { note } = await store.undo(caller, model);
     return text(note ? `Undid: ${note}` : 'Nothing to undo for this model.');
   }));
 }
