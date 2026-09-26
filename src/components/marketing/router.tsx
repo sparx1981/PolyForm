@@ -66,12 +66,12 @@ export function scrollToId(id: string) {
   const landingScroller = document.getElementById('landing-page');
   if (landingScroller) {
     const scrollerRect = landingScroller.getBoundingClientRect();
-    const targetTop = el.getBoundingClientRect().top - scrollerRect.top + landingScroller.scrollTop - 88;
+    const targetTop = el.getBoundingClientRect().top - scrollerRect.top + landingScroller.scrollTop - 72;
     landingScroller.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
     return;
   }
 
-  const top = el.getBoundingClientRect().top + window.scrollY - 88;
+  const top = el.getBoundingClientRect().top + window.scrollY - 72;
   window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 }
 
