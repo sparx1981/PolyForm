@@ -93,7 +93,7 @@ export default function DesignPreviewDialog({ model, onOpen, onClose }: {
           {!external ? (
             <p className="flex items-center gap-2 text-xs text-gray-500">
               <Move3d size={14} className="shrink-0" />
-              Drag to orbit · right-drag or two fingers to pan · scroll or pinch to zoom
+              Drag to orbit · right-drag or two-finger swipe to pan · mouse wheel or pinch to zoom
             </p>
           ) : <span />}
           <button

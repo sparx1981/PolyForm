@@ -5,6 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useApp } from '../AppContext';
 import Viewport, { modelledBounds } from './Viewport';
+import { isTouchpadScroll } from '../lib/touchpad';
 
 /** What the connector asks the render page to show. */
 export interface RenderJob {
@@ -152,6 +153,36 @@ export default function RenderView() {
       unsubscribe();
       window.removeEventListener('keydown', onKey);
     };
+  }, []);
+
+  // Preview mode: a touchpad's two-finger swipe pans (it arrives as wheel events, which the
+  // editor's controls would treat as zoom). Pinch (ctrl+wheel) and a mouse wheel still zoom.
+  useEffect(() => {
+    if (!PREVIEW_MODEL_ID) return;
+    let scene: THREE.Scene | null = null;
+    window.dispatchEvent(new CustomEvent('request-scene-raw', { detail: { callback: (s: THREE.Scene) => { scene = s; } } }));
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || !(e.target instanceof HTMLCanvasElement)) return;
+      if (!isTouchpadScroll(e)) return;
+      if (!scene) window.dispatchEvent(new CustomEvent('request-scene-raw', { detail: { callback: (s: THREE.Scene) => { scene = s; } } }));
+      const controls = (scene as THREE.Scene | null)?.userData?.controls as { object: THREE.Camera; target: THREE.Vector3; update: () => void } | undefined;
+      if (!controls) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const camera = controls.object as THREE.PerspectiveCamera;
+      const height = (e.target as HTMLCanvasElement).clientHeight || 1;
+      const distance = camera.position.distanceTo(controls.target);
+      const metresPerPixel = camera.isPerspectiveCamera ? (2 * distance * Math.tan((camera.fov * Math.PI) / 360)) / height : 0.01;
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+      // The model moves with the fingers.
+      const offset = right.multiplyScalar(e.deltaX * metresPerPixel).add(up.multiplyScalar(-e.deltaY * metresPerPixel));
+      camera.position.add(offset);
+      controls.target.add(offset);
+      controls.update();
+    };
+    window.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    return () => window.removeEventListener('wheel', onWheel, { capture: true });
   }, []);
 
   useEffect(() => {

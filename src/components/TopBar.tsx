@@ -1006,7 +1006,13 @@ export default function TopBar() {
                   <MenuButton 
                     icon={<LogOut size={16} className="text-red-500" />} 
                     label="Logout" 
-                    onClick={() => signOut(auth)} 
+                    onClick={async () => {
+                      setIsProfileOpen(false);
+                      await signOut(auth);
+                      // Back to the marketing homepage (App follows the URL without a reload).
+                      window.history.pushState({}, '', '/');
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }} 
                     className="text-red-600 hover:bg-red-50"
                   />
                 </div>

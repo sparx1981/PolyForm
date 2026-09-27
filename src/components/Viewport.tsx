@@ -1035,12 +1035,28 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
           const isHosted = s.hostWallId === shape.id;
           const localPos = sPos.clone().sub(wallPos).applyQuaternion(invWallQuat);
 
-          // Spatial check: is the opening hosted on or overlapping this wall?
-          const inX = Math.abs(localPos.x) <= wallLength / 2 + 0.2;
+          // The opening's width runs along its own direction, which on a curved wall (many
+          // short straight pieces) is not this piece's: take the stretch of it that crosses
+          // this piece, so a window spanning several pieces is cut through all of them.
+          const openingQuat = s.quaternion
+            ? new THREE.Quaternion(...s.quaternion)
+            : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(s.rotation || [0, 0, 0])));
+          const along = new THREE.Vector3(1, 0, 0).applyQuaternion(openingQuat).multiplyScalar(sWidth / 2);
+          const endA = sPos.clone().sub(along).sub(wallPos).applyQuaternion(invWallQuat);
+          const endB = sPos.clone().add(along).sub(wallPos).applyQuaternion(invWallQuat);
+          const [lo, hi] = endA.x <= endB.x ? [endA, endB] : [endB, endA];
+          const fp = shape.wallMiterFootprint;
+          const wallMin = fp ? Math.min(-wallLength / 2, ...fp.map(p => p[0])) : -wallLength / 2;
+          const wallMax = fp ? Math.max(wallLength / 2, ...fp.map(p => p[0])) : wallLength / 2;
+          const overlapMin = Math.max(lo.x, wallMin), overlapMax = Math.min(hi.x, wallMax);
+          // How far the opening is from this piece's centre plane where they overlap.
+          const t = hi.x - lo.x > 1e-6 ? ((overlapMin + overlapMax) / 2 - lo.x) / (hi.x - lo.x) : 0.5;
+          const zAt = lo.z + (hi.z - lo.z) * Math.min(1, Math.max(0, t));
+          const inX = overlapMax - overlapMin > 0.01;
           const inY = Math.abs(localPos.y) <= wallHeight / 2 + 0.5;
-          const inZ = Math.abs(localPos.z) <= wallThick / 2 + 0.35;
+          const inZ = Math.abs(zAt) <= wallThick / 2 + 0.35;
 
-          if (isHosted || (inX && inY && inZ)) {
+          if ((isHosted && inX) || (inX && inY && inZ)) {
             // A porthole's round frame doesn't match the rectangular hole
             // every other style uses - cut a round hole via CSG below
             // instead, so the reveal around the ring is the wall's own
@@ -1053,9 +1069,9 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
             openings.push({
               id: s.id,
               type: s.type,
-              localX: localPos.x,
+              localX: (lo.x + hi.x) / 2,
               localY: localPos.y,
-              width: sWidth,
+              width: hi.x - lo.x,
               height: sHeight,
               depth: sDepth
             });

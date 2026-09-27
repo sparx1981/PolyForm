@@ -7,6 +7,10 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'September 27, 2026',
     items: [
+      'Windows and doors on curved walls (walls made of many short pieces, e.g. from a Bézier shape) are now cut cleanly through every piece they cross, instead of only the piece or two nearest their centre.',
+      'Walls with doors and windows no longer show stray edge lines: each wall face is now built as one piece with the openings cut out, so lines appear only round the openings, not across the wall above, below or beside them, and no diagonal seams on curved walls.',
+      'Logging out of the app now takes you back to the PolyForm homepage.',
+      'In the 3D preview on My Designs, a two-finger swipe on a touchpad now pans the view (pinch or a mouse wheel zooms).',
       'Balconies are now shaped with sliders instead of corner handles: Width left and Width right (from the door\'s centre, as seen from outside), Depth and Floor level. On a curved wall the widths are measured along the curve.',
       'Add a level to a balcony: a new piece joined to its front, left or right, at the same level or any height up or down. Each level has its own width, depth, position, support, floor and guarding. Where levels meet at the same height there is no guarding between them; where the height changes, steps are built automatically and the upper level is guarded along the drop except across the steps. A level added to the front of a cantilever or bracket balcony stands on posts. Deleting a balcony removes its levels.',
       'Show All Dimensions now also shows each balcony\'s floor height above the ground below it.',

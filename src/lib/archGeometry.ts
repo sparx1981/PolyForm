@@ -2,6 +2,7 @@ import * as THREE from 'three';
 // @ts-ignore
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
+import { boxFootprint, buildWallWithCuts } from './wallCutGeometry';
 
 // Real-world size (in meters) one texture tile represents when painted onto a wall - matches
 // the scale used elsewhere (e.g. road/pathway materials) so a material looks consistent in
@@ -101,13 +102,17 @@ export function createWallWithOpeningsGeometry(
     yMax: number;
   }
 
+  // A mitred wall reaches past its centreline length at the outside corners: an opening
+  // crossing onto the next piece of a curved wall is cut through that part too.
+  const reachMin = miterFootprint ? Math.min(-halfL, ...miterFootprint.map(p => p[0])) : -halfL;
+  const reachMax = miterFootprint ? Math.max(halfL, ...miterFootprint.map(p => p[0])) : halfL;
   const intervals: ValidInterval[] = [];
   if (openings && openings.length > 0) {
     for (const op of openings) {
       const w = Math.max(0.1, op.width);
       const h = Math.max(0.1, op.height);
-      const xMin = Math.max(-halfL, op.localX - w / 2);
-      const xMax = Math.min(halfL, op.localX + w / 2);
+      const xMin = Math.max(reachMin, op.localX - w / 2);
+      const xMax = Math.min(reachMax, op.localX + w / 2);
       const yMin = Math.max(-halfH, op.localY - h / 2);
       const yMax = Math.min(halfH, op.localY + h / 2);
 
@@ -117,10 +122,18 @@ export function createWallWithOpeningsGeometry(
     }
   }
 
+  // Openings: built face by face, so each face is one piece with holes in it and no stray
+  // edge lines (see wallCutGeometry). Falls back to the older methods below if it can't.
+  const faceBuilt = intervals.length
+    ? buildWallWithCuts(miterFootprint ? miterFootprint.map(p => [p[0], p[1]] as [number, number]) : boxFootprint(length, thickness), height, intervals)
+    : null;
+
   if (intervals.length === 0) {
     baseGeom = miterFootprint
       ? createWallMiterFootprintGeometry(miterFootprint, height)
       : new THREE.BoxGeometry(length, height, thickness);
+  } else if (faceBuilt) {
+    baseGeom = faceBuilt;
   } else if (miterFootprint) {
     // A mitered wall's opening cutout used to fall through to the plain-box reconstruction
     // below, discarding the true mitered footprint entirely - a wall with a door or window
