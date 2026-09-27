@@ -11,7 +11,8 @@ import { PatioMesh } from './landscape/PatioMesh';
 import { ProtractorTool, ProtractorMeasurement, type ProtractorArgs } from './ProtractorTool';
 import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint, type PatioClosure } from './landscape/PatioTool';
 import { buildCloseTargets, joinedEdges, patioWorldPath, snapPatioToBuilding, trimAgainstPatios } from '../lib/patio/patioClosure';
-import { makePatioShape, patioLevel, patioWallEdges } from '../lib/patio/patioPlacement';
+import { makePatioShape, patioLevel, patioWallEdges, terrainMeshHeight } from '../lib/patio/patioPlacement';
+import { patioCutOutlines } from '../lib/patio/patioGeometry';
 import { balconyFrame, balconyWarnings, type BalconyPlacement } from '../lib/patio/balcony';
 import { DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK } from '../lib/patio/patioTypes';
 import { BalconyPlaceTool } from './landscape/BalconyTool';
@@ -1749,8 +1750,9 @@ function Scene() {
   const { raycaster, mouse, camera, scene, gl } = useThree();
   // Walls joined into runs (a curved wall of many pieces, or pieces in line) act as one wall.
   const wallRunInfo = useMemo(() => wallRuns(shapes), [shapes]);
-  // Ground-floor slab outlines: the terrain mesh is cut away under them.
-  const slabFootprintsKey = useMemo(() => JSON.stringify(groundSlabFootprints(shapes).map(f => f.poly.map(p => [+p[0].toFixed(3), +p[1].toFixed(3)]))), [shapes]);
+  // Ground-floor slab and patio outlines: the terrain mesh is cut away under them.
+  const slabFootprintsKey = useMemo(() => JSON.stringify([...groundSlabFootprints(shapes).map(f => f.poly), ...patioCutOutlines(shapes)]
+    .map(poly => poly.map(p => [+p[0].toFixed(3), +p[1].toFixed(3)]))), [shapes]);
   const slabFootprints = useMemo(() => JSON.parse(slabFootprintsKey) as [number, number][][], [slabFootprintsKey]);
   const managedBindingTextures = useManagedBindingTextures(gl, resolvedMaterialBindings);
   /** Library material textures for kernel faces (same pipeline as shapes' bindingMaterial). */
@@ -4698,6 +4700,17 @@ function Scene() {
     originalGroundRef.current = { terrains: terrainShapes, groundAt: patioGroundHelpers(terrainShapes, new Map(), sampleTerrainElevation).originalGround };
   }
   const patioOriginalGround = originalGroundRef.current.groundAt;
+  // The ground as drawn (patios set into it), exactly as the terrain mesh shows it: retaining
+  // walls meet it. Kept while the drawn terrains are unchanged, so patios don't rebuild for
+  // edits elsewhere.
+  const shownGroundRef = useRef<{ data: unknown[]; groundAt: (x: number, z: number) => number } | null>(null);
+  const shownTerrains = terrainShapes.map(t => dugTerrains.get(t.id) ?? t);
+  const shownData = shownTerrains.flatMap(t => [t.terrainData, t.hidden, ...t.position]);
+  if (!shownGroundRef.current || shownGroundRef.current.data.length !== shownData.length
+    || shownGroundRef.current.data.some((d, i) => d !== shownData[i])) {
+    shownGroundRef.current = { data: shownData, groundAt: patioGroundHelpers(shownTerrains, new Map(), terrainMeshHeight).originalGround };
+  }
+  const patioShownGround = shownGroundRef.current.groundAt;
 
   /**
    * A drawn outline becomes a patio or deck: level with the house floor when drawn against it
@@ -10873,7 +10886,7 @@ function Scene() {
         if (shape.type === 'patio' && shape.patioData) {
           return (
             <React.Fragment key={shape.id}>
-              <PatioMesh shape={shape} groundAt={patioOriginalGround} meshProps={meshProps} selectionHighlight={selectionHighlight}
+              <PatioMesh shape={shape} groundAt={patioOriginalGround} shownGroundAt={patioShownGround} meshProps={meshProps} selectionHighlight={selectionHighlight}
                 surfaceBinding={bindingMaterial(shape.patioData.surfaceMaterialId)} />
               {/* Balconies are shaped with the panel's sliders, so they get no corner handles. */}
               {selectedId === shape.id && shape.patioData.kind !== 'balcony' && (activeTool === 'select' || activeTool === 'lasso' || activeTool === 'patio') && (

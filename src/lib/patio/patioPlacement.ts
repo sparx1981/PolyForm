@@ -52,6 +52,27 @@ export function terrainAt(shapes: Shape[], x: number, z: number): Shape | undefi
 }
 
 
+/**
+ * The terrain's height at (x, z) exactly as its mesh draws it: on the grid square's two
+ * triangles (split corner (x, z+1) to (x+1, z), as three.js's PlaneGeometry does), not blended
+ * across the square, so something built to meet the ground meets what is on screen.
+ */
+export function terrainMeshHeight(x: number, z: number, terrain: Shape): number {
+  const data = terrain.terrainData;
+  if (!data?.heights) return terrain.position[1];
+  const { gridX, gridY, width, depth, heights } = data;
+  const u = (x - terrain.position[0] + width / 2) / width, v = (z - terrain.position[2] + depth / 2) / depth;
+  if (u < 0 || u > 1 || v < 0 || v > 1 || gridX < 2 || gridY < 2) return terrain.position[1];
+  const gx = u * (gridX - 1), gy = v * (gridY - 1);
+  const ix = Math.min(Math.floor(gx), gridX - 2), iy = Math.min(Math.floor(gy), gridY - 2);
+  const fx = gx - ix, fy = gy - iy;
+  const h = (i: number, j: number) => heights[(iy + j) * gridX + ix + i] || 0;
+  const y = fx + fy <= 1
+    ? h(0, 0) + (h(1, 0) - h(0, 0)) * fx + (h(0, 1) - h(0, 0)) * fy
+    : h(1, 1) + (h(0, 1) - h(1, 1)) * (1 - fx) + (h(1, 0) - h(1, 1)) * (1 - fy);
+  return terrain.position[1] + y;
+}
+
 /** Terrain helpers for the Viewport: ground (as drawn) and ground before patio levelling. */
 export function patioGroundHelpers(shapes: Shape[], drawn: Map<string, Shape>, sample: (x: number, z: number, terrain: Shape) => number) {
   return {

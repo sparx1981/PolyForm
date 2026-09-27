@@ -194,7 +194,8 @@ export function terrainsWithWaterBasins(shapes: Shape[]): Map<string, Shape> {
   const waters = shapes.filter(s => s.type === 'water' && s.waterData);
   const patios = shapes.filter(s => s.type === 'patio' && s.patioData);
   const key = JSON.stringify([waters.map(w => [w.position, w.hidden, w.waterData]),
-    patios.map(p => [p.position, p.hidden, p.patioData!.kind, p.patioData!.points, p.patioData!.bulges, p.patioData!.paving])]);
+    patios.map(p => [p.position, p.hidden, p.patioData!.kind, p.patioData!.points, p.patioData!.bulges, p.patioData!.paving,
+      p.patioData!.retainingWall, p.patioData!.wallEdges])]);
   const result = new Map<string, Shape>();
   for (const terrain of shapes) {
     if (terrain.type !== 'terrain' || !terrain.terrainData) continue;

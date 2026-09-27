@@ -41,11 +41,19 @@ export function cutTerrainUnderFootprints(geometry: THREE.BufferGeometry, footpr
   for (let t = 0; t + 2 < pos.count; t += 3) {
     const ax = pos.getX(t), az = pos.getZ(t), bx = pos.getX(t + 1), bz = pos.getZ(t + 1), cx = pos.getX(t + 2), cz = pos.getZ(t + 2);
     const minX = Math.min(ax, bx, cx), maxX = Math.max(ax, bx, cx), minZ = Math.min(az, bz, cz), maxZ = Math.max(az, bz, cz);
-    const near = rings.filter((_, k) => {
+    const nearIdx = polys.map((_, k) => k).filter(k => {
       const b = boxes[k]!;
       return maxX >= b.minX && minX <= b.maxX && maxZ >= b.minZ && minZ <= b.maxZ;
     });
-    if (!near.length) { copyVertex(t); copyVertex(t + 1); copyVertex(t + 2); continue; }
+    if (!nearIdx.length) { copyVertex(t); copyVertex(t + 1); copyVertex(t + 2); continue; }
+    // Quick cases: an outline with no edge near the triangle has it wholly inside or wholly
+    // outside, so only outlines crossing it need clipping (fine outlines of curved patios or
+    // walls would otherwise clip every grid triangle under them).
+    const crossing = nearIdx.filter(k => crossesBox(polys[k]!, minX, maxX, minZ, maxZ));
+    const mx = (ax + bx + cx) / 3, mz = (az + bz + cz) / 3;
+    if (nearIdx.some(k => !crossing.includes(k) && insideRing(mx, mz, polys[k]!))) { changed = true; continue; }
+    if (!crossing.length) { copyVertex(t); copyVertex(t + 1); copyVertex(t + 2); continue; }
+    const near = crossing.map(k => rings[k]!);
 
     let left: ReturnType<typeof clip.difference>;
     try {
@@ -102,4 +110,22 @@ export function cutTerrainUnderFootprints(geometry: THREE.BufferGeometry, footpr
   g.computeBoundingSphere();
   g.computeBoundingBox();
   return g;
+}
+
+/** Whether any edge of a closed outline comes within the box (by bounding boxes: may say yes when near). */
+function crossesBox(poly: [number, number][], minX: number, maxX: number, minZ: number, maxZ: number): boolean {
+  for (let i = 0; i < poly.length; i++) {
+    const [px, pz] = poly[i]!, [qx, qz] = poly[(i + 1) % poly.length]!;
+    if (Math.max(px, qx) >= minX && Math.min(px, qx) <= maxX && Math.max(pz, qz) >= minZ && Math.min(pz, qz) <= maxZ) return true;
+  }
+  return false;
+}
+
+function insideRing(x: number, z: number, poly: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i]!, [xj, zj] = poly[j]!;
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
 }

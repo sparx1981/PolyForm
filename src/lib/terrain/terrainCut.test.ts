@@ -51,4 +51,11 @@ describe('cutTerrainUnderFootprints', () => {
     expect(cutTerrainUnderFootprints(g, [])).toBe(g);
     expect(cutTerrainUnderFootprints(g, [[[20, 20], [21, 20], [21, 21]]])).toBe(g);
   });
+
+  it('drops grid squares wholly inside a fine outline without leaving holes round it', () => {
+    // A 300-point circle of radius 3.1: most squares under it are dropped without clipping.
+    const circle: [number, number][] = Array.from({ length: 300 }, (_, i) => [Math.cos(i / 300 * Math.PI * 2) * 3.1, Math.sin(i / 300 * Math.PI * 2) * 3.1]);
+    const cut = cutTerrainUnderFootprints(terrain(), [circle]);
+    expect(upArea(cut)).toBeCloseTo(100 - Math.PI * 3.1 * 3.1, 1);
+  });
 });

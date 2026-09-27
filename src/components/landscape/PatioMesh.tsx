@@ -18,6 +18,8 @@ interface Props {
   shape: Shape;
   /** Ground height (world y) at world x/z, before any patio levelling. */
   groundAt: (x: number, z: number) => number;
+  /** The ground as drawn round the patio (retaining walls meet it); defaults to `groundAt`. */
+  shownGroundAt?: (x: number, z: number) => number;
   meshProps: any;
   selectionHighlight?: React.ReactNode;
   surfaceBinding?: PatioSurfaceBinding;
@@ -86,7 +88,7 @@ function surfaceMaterial(finish: Finish, roughness: number, binding?: PatioSurfa
   return material;
 }
 
-export function PatioMesh({ shape, groundAt, meshProps, selectionHighlight, surfaceBinding }: Props) {
+export function PatioMesh({ shape, groundAt, shownGroundAt, meshProps, selectionHighlight, surfaceBinding }: Props) {
   const data = shape.patioData!;
   const { lightPosition, sunIntensity } = useApp();
   const [px, py, pz] = shape.position;
@@ -95,8 +97,9 @@ export function PatioMesh({ shape, groundAt, meshProps, selectionHighlight, surf
     const localGround: GroundAt = (x, z) => groundAt(px + x, pz + z) - py;
     // A library material brings its own colour: shade the pieces around white instead.
     const colored = surfaceBinding?.baseColorTexture ? { ...data, color: '#ffffff' } : data;
-    return buildPatio(colored, localGround);
-  }, [data, px, py, pz, groundAt, surfaceBinding?.baseColorTexture]);
+    const localShown: GroundAt | undefined = shownGroundAt && ((x, z) => shownGroundAt(px + x, pz + z) - py);
+    return buildPatio(colored, localGround, localShown);
+  }, [data, px, py, pz, groundAt, shownGroundAt, surfaceBinding?.baseColorTexture]);
   useEffect(() => () => Object.values(build.parts).forEach(g => g?.dispose()), [build]);
 
   const isDeck = data.kind === 'deck' || (data.kind === 'balcony' && data.balcony?.floor === 'boards');

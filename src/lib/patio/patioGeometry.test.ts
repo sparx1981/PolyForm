@@ -143,6 +143,36 @@ describe('patio paving', () => {
     // Decks leave the ground alone.
     expect(gradePatioGround(terrain, [{ ...shape, patioData: { ...shape.patioData, kind: 'deck' } }])).toBe(heights);
   });
+
+  it('leaves the ground behind a retaining wall at its own height', () => {
+    // Ground rises 0.2 m per metre to the north (+z); the patio's surface is at 0.1.
+    const size = 21;
+    const heights = Array.from({ length: size * size }, (_, i) => (Math.floor(i / size) - 10) * 0.1);
+    const terrain = { position: [0, 0, 0] as [number, number, number], terrainData: { gridX: size, gridY: size, width: 10, depth: 10, heights } };
+    const vertex = (x: number, z: number) => (z * 2 + 10) * size + (x * 2 + 10);
+    const withWall = { type: 'patio', position: [0, 0.1, 0] as [number, number, number], patioData: patio({ retainingWall: true }) };
+    const graded = gradePatioGround(terrain, [withWall])!;
+    // Just north of the patio (z = 2, ground 0.4 m up): kept, so the slope meets the wall.
+    expect(graded[vertex(0, 2)]).toBeCloseTo(heights[vertex(0, 2)]);
+    // Inside: still lowered below the paving.
+    expect(graded[vertex(0, 1)]).toBeLessThan(0.1);
+    // Without a wall the ground there is still levelled to the paving.
+    const noWall = gradePatioGround(terrain, [{ ...withWall, patioData: patio({ retainingWall: false }) }])!;
+    expect(noWall[vertex(0, 2)]).toBeLessThan(0.1);
+  });
+
+  it('tops a retaining wall just above the ground shown behind it', () => {
+    const slope = (_x: number, z: number) => z * 0.4;
+    // The ground as drawn: natural beyond the north edge (z = 1.5).
+    const build = buildPatio(patio({ retainingWall: true }), slope, slope);
+    const top = maxY(build.parts.wall);
+    // Behind the wall's outer face (z = 1.66) the ground is ~0.66 m up: the coping sits just above it.
+    expect(top).toBeGreaterThan(0.66);
+    expect(top).toBeLessThan(0.75);
+    // A lower drawn ground brings the wall down with it.
+    const lower = buildPatio(patio({ retainingWall: true }), slope, (x, z) => slope(x, z) - 0.3);
+    expect(maxY(lower.parts.wall)).toBeCloseTo(top - 0.3, 2);
+  });
 });
 
 describe('decks', () => {

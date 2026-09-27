@@ -562,7 +562,28 @@ export function stepAnchor(data: Pick<PatioData, 'points' | 'bulges'>, step: Pat
 
 export const STEP_RISE = 0.17;
 
-export function buildPatio(data: PatioData, groundAt: GroundAt): PatioBuild {
+/** How far a retaining wall's coping stands above the ground behind it, and its tallest (m). */
+const WALL_COPING_ABOVE_GROUND = 0.03;
+const WALL_MAX_HEIGHT = 3;
+
+/**
+ * For each segment of a patio's dense outline (point i to i + 1): whether a retaining wall
+ * holds the ground back there, i.e. the natural ground just behind the edge stands 6 cm or more
+ * above the paving at either end. `groundAt` is local to the patio (0 = paving level). Edges
+ * along a building or at steps are the caller's to leave out.
+ */
+export function retainingWallSegments(poly: Vec2[], groundAt: GroundAt): boolean[] {
+  const probe = offsetPolygon(poly, 0.3);
+  const high = probe.map(p => groundAt(p[0], p[1]) >= 0.06);
+  return poly.map((_, i) => high[i] || high[(i + 1) % poly.length]);
+}
+
+/**
+ * `groundAt` is the ground before patios were set into it (it decides where retaining walls
+ * go); `shownGroundAt`, when given, is the ground as drawn round the patio, which a retaining
+ * wall's top follows so it meets the slope behind it.
+ */
+export function buildPatio(data: PatioData, groundAt: GroundAt, shownGroundAt: GroundAt = groundAt): PatioBuild {
   const outline = denseOutline(data.points, data.bulges);
   const poly = outline.points;
   const parts: Partial<Record<PatioPart, PartBuilder>> = {};
@@ -672,24 +693,26 @@ export function buildPatio(data: PatioData, groundAt: GroundAt): PatioBuild {
     }
 
     if (data.retainingWall) {
-      // Where the ground outside is higher than the patio, hold it back with a low wall with a coping.
+      // Where the ground outside is higher than the patio, hold it back with a low wall with a
+      // coping, its top just above the ground behind it (the terrain is left at its own height
+      // there and cut away inside the patio, so the slope runs down to the coping).
       const outer = offsetPolygon(poly, 0.16);
-      const probe = offsetPolygon(poly, 0.9);
-      const heights = probe.map(p => THREE.MathUtils.clamp(groundAt(p[0], p[1]) + 0.06, 0, 1.2));
+      const walled = retainingWallSegments(poly, groundAt);
+      const heights = poly.map((p, i) => THREE.MathUtils.clamp(
+        Math.max(shownGroundAt(p[0], p[1]), shownGroundAt(outer[i][0], outer[i][1])) + WALL_COPING_ABOVE_GROUND, 0.12, WALL_MAX_HEIGHT));
       const wall = part('wall');
       wall.setColor(new THREE.Color(data.kerbColor).multiplyScalar(0.95));
+      const hasWall = (i: number) => walled[i] && !onWall(i) && !inStepOpening(poly[i], poly[(i + 1) % poly.length]);
       for (let i = 0; i < poly.length; i++) {
         const j = (i + 1) % poly.length;
-        let ha = heights[i], hb = heights[j];
-        if (ha < 0.12 && hb < 0.12) continue;
-        if (onWall(i) || inStepOpening(poly[i], poly[j])) continue;
-        ha = Math.max(ha, 0.12); hb = Math.max(hb, 0.12);
+        if (!hasWall(i)) continue;
+        const ha = heights[i], hb = heights[j];
         const a = poly[i], b = poly[j], oa = outer[i], ob = outer[j];
         // Inner face, top, outer face (mostly buried), with a slight coping overhang.
         wall.quad(v3(b[0], -0.05, b[1]), v3(a[0], -0.05, a[1]), v3(a[0], ha, a[1]), v3(b[0], hb, b[1]));
         wall.quad(v3(a[0], ha, a[1]), v3(oa[0], ha, oa[1]), v3(ob[0], hb, ob[1]), v3(b[0], hb, b[1]));
         wall.quad(v3(oa[0], ha, oa[1]), v3(oa[0], -0.3, oa[1]), v3(ob[0], -0.3, ob[1]), v3(ob[0], hb, ob[1]));
-        const ga = heights[(i + poly.length - 1) % poly.length] < 0.12, gb = heights[(j + 1) % poly.length] < 0.12;
+        const ga = !hasWall((i + poly.length - 1) % poly.length), gb = !hasWall(j);
         if (ga) wall.quad(v3(a[0], -0.05, a[1]), v3(oa[0], -0.05, oa[1]), v3(oa[0], ha, oa[1]), v3(a[0], ha, a[1]));
         if (gb) wall.quad(v3(ob[0], -0.05, ob[1]), v3(b[0], -0.05, b[1]), v3(b[0], hb, b[1]), v3(ob[0], hb, ob[1]));
       }
@@ -1388,16 +1411,37 @@ function alongRun(run: Vec2[], distance: number): { point: Vec2; tangent: Vec2 }
  * The terrain as it should be under patios: flattened just below the paving inside the
  * outline, and never above the paving for a short margin round it (so terrain triangles that
  * straddle the edge can't poke up through the slabs). Only ever lowers the ground.
+ *
+ * With `naturalGround` (the ground's height above the paving, in the patio's frame) a patio with
+ * a retaining wall leaves the ground behind its wall alone: the wall holds it back and the
+ * terrain is cut away inside the outline, so the slope runs down to the wall's coping instead of
+ * being levelled into a ledge the wall then stands up out of.
  */
-export function patioGroundLimit(data: PatioData, surfaceY: number, margin: number): (x: number, z: number, localX: number, localZ: number) => number | undefined {
-  const poly = denseOutline(data.points, data.bulges, 0.25).points;
+export function patioGroundLimit(data: PatioData, surfaceY: number, margin: number, naturalGround?: GroundAt): (x: number, z: number, localX: number, localZ: number) => number | undefined {
+  const outline = denseOutline(data.points, data.bulges);
+  const poly = outline.points;
   const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
   const [x0, x1, z0, z1] = [Math.min(...xs) - margin, Math.max(...xs) + margin, Math.min(...zs) - margin, Math.max(...zs) + margin];
   const depth = data.paving === 'block' ? 0.07 : 0.05;
+  const walled = data.kind === 'patio' && data.retainingWall && naturalGround
+    ? retainingWallSegments(poly, naturalGround).map((w, i) => w && data.wallEdges[outline.edgeOf[i]] !== true)
+    : undefined;
+  const behindWall = (x: number, z: number) => {
+    if (!walled?.some(Boolean)) return false;
+    let best = Infinity, nearest = -1;
+    for (let i = 0; i < poly.length; i++) {
+      const [ax, az] = poly[i], [bx, bz] = poly[(i + 1) % poly.length];
+      const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz;
+      const t = len2 > 0 ? THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / len2, 0, 1) : 0;
+      const d = Math.hypot(x - ax - dx * t, z - az - dz * t);
+      if (d < best) { best = d; nearest = i; }
+    }
+    return walled[nearest];
+  };
   return (_x, _z, lx, lz) => {
     if (lx < x0 || lx > x1 || lz < z0 || lz > z1) return undefined;
     if (pointInPolygon(lx, lz, poly)) return surfaceY - depth;
-    if (distanceToPolygon(lx, lz, poly) <= margin) return surfaceY - 0.015;
+    if (distanceToPolygon(lx, lz, poly) <= margin && !behindWall(lx, lz)) return surfaceY - 0.015;
     return undefined;
   };
 }
@@ -1418,7 +1462,8 @@ interface TerrainLike {
 /**
  * Terrain heights with every patio set into the ground: flattened just below the paving inside
  * the outline, and kept below the paving for one grid cell round it (so terrain triangles that
- * straddle the edge can't poke up through the slabs). Only ever lowers the ground; decks leave
+ * straddle the edge can't poke up through the slabs), except behind a retaining wall, where the
+ * ground keeps its height. Only ever lowers the ground; decks leave
  * the ground alone. Returns the input heights unchanged (same array) when nothing applies.
  */
 export function gradePatioGround(terrain: TerrainLike, shapes: PatioShapeLike[]): number[] | undefined {
@@ -1430,7 +1475,21 @@ export function gradePatioGround(terrain: TerrainLike, shapes: PatioShapeLike[])
   const [px, py, pz] = terrain.position;
   const cell = Math.max(width / Math.max(1, gridX - 1), depth / Math.max(1, gridY - 1));
   const margin = cell * 1.5 + 0.1;
-  const limits = patios.map(s => ({ s, limit: patioGroundLimit(s.patioData!, s.position[1], margin) }));
+  // The ground as it is before any patio is set into it (bilinear, like the rest of the app).
+  const natural = (x: number, z: number) => {
+    const gx = THREE.MathUtils.clamp((x - px + width / 2) / width, 0, 1) * (gridX - 1);
+    const gy = THREE.MathUtils.clamp((z - pz + depth / 2) / depth, 0, 1) * (gridY - 1);
+    const ix = Math.min(Math.floor(gx), gridX - 2), iy = Math.min(Math.floor(gy), gridY - 2);
+    const fx = gx - ix, fy = gy - iy, h = data.heights;
+    const at = (i: number, j: number) => h[Math.max(0, j) * gridX + Math.max(0, i)] ?? 0;
+    const top = at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx, bottom = at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx;
+    return py + top * (1 - fy) + bottom * fy;
+  };
+  const limits = patios.map(s => ({
+    s,
+    limit: patioGroundLimit(s.patioData!, s.position[1], margin,
+      (lx, lz) => natural(s.position[0] + lx, s.position[2] + lz) - s.position[1]),
+  }));
   let heights: number[] | null = null;
   for (let iy = 0; iy < gridY; iy++) for (let ix = 0; ix < gridX; ix++) {
     const x = px - width / 2 + (ix / Math.max(1, gridX - 1)) * width;
@@ -1448,4 +1507,16 @@ export function gradePatioGround(terrain: TerrainLike, shapes: PatioShapeLike[])
     }
   }
   return heights ?? data.heights;
+}
+
+/**
+ * World outlines (x/z) of the patios the terrain mesh is cut away under, so neither the ground's
+ * surface relief nor grid squares straddling a curved edge can show through the paving. Decks
+ * and balconies stand clear of the ground and leave it whole.
+ */
+export function patioCutOutlines(shapes: PatioShapeLike[]): Vec2[][] {
+  return shapes
+    .filter(s => s.type === 'patio' && !s.hidden && s.patioData?.kind === 'patio' && s.patioData.points.length >= 3)
+    .map(s => denseOutline(s.patioData!.points, s.patioData!.bulges).points
+      .map(([x, z]) => [s.position[0] + x, s.position[2] + z] as Vec2));
 }
