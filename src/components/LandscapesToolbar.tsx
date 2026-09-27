@@ -764,7 +764,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
                 {activeTier === 'patio' && (
                   <>
                     <LayoutGrid size={14} className="text-polyform-blue" />
-                    <span>Patios & Decking</span>
+                    <span>Patios, Decks & Balconies</span>
                   </>
                 )}
                 {activeTier === 'vegetation' && (
@@ -2643,7 +2643,7 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
         <div className="relative group">
           <CivilToolButton
             tool="patio"
-            label="Patio / Decking"
+            label="Patio / Decking / Balcony"
             subtitle="Draw a paved patio set into the ground or a raised timber deck: slabs, bricks, stone, porcelain, gravel or boards, with steps, railings and lights"
             icon={<LayoutGrid size={20} />}
             active={activeTool === 'patio'}

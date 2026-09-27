@@ -4,10 +4,11 @@ import { cn } from '../../lib/utils';
 import { useAssetCatalog } from '../../lib/assets/useAssetCatalog';
 import { isMaterialAssetId, type AssetSummary } from '../../lib/assets/types';
 import {
-  DECK_BOARDS, PAVING_STYLES, SLAB_SIZES,
-  type BlockPattern, type BoardDirection, type DeckBoard, type PatioData, type PatioKind, type PatioToolSettings,
+  BALCONY_SUPPORTS, DECK_BOARDS, DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK, PAVING_STYLES, SLAB_SIZES,
+  type BalconyData, type BalconyFloor, type BlockPattern, type BoardDirection, type DeckBoard, type PatioData, type PatioKind, type PatioToolSettings,
   type PavingStyle, type RailingStyle,
 } from '../../lib/patio/patioTypes';
+import { balconySettings, balconyWarnings, JULIET_DEPTH } from '../../lib/patio/balcony';
 import { buildPatio } from '../../lib/patio/patioGeometry';
 import { snapPatioToBuilding } from '../../lib/patio/patioClosure';
 import { patioGroundHelpers } from '../../lib/patio/patioPlacement';
@@ -53,10 +54,37 @@ function ColorField({ text, value, onChange }: { text: string; value: string; on
   );
 }
 
+/**
+ * A balcony placed at a door is a rectangle whose first edge runs along the wall: set how far
+ * it stands out by moving the far edge. Other outlines are left alone.
+ */
+export function withBalconyDepth(data: Pick<PatioData, 'points' | 'wallEdges'>, depth: number): PatioData['points'] | null {
+  const [a, b, , d] = data.points;
+  if (data.points.length !== 4 || !data.wallEdges[0]) return null;
+  const ex = b[0] - a[0], ez = b[1] - a[1], len = Math.hypot(ex, ez) || 1;
+  let ox = -ez / len, oz = ex / len;
+  if ((d[0] - a[0]) * ox + (d[1] - a[1]) * oz < 0) { ox = -ox; oz = -oz; }
+  return [a, b, [b[0] + ox * depth, b[1] + oz * depth], [a[0] + ox * depth, a[1] + oz * depth]];
+}
+
+/** How far a door-placed balcony stands out from its wall (null for other outlines). */
+export function balconyDepth(data: Pick<PatioData, 'points' | 'wallEdges'>): number | null {
+  const [a, b, , d] = data.points;
+  if (data.points.length !== 4 || !data.wallEdges[0]) return null;
+  const ex = b[0] - a[0], ez = b[1] - a[1], len = Math.hypot(ex, ez) || 1;
+  return Math.abs((d[0] - a[0]) * -ez / len + (d[1] - a[1]) * ex / len);
+}
+
+const GUARDING: [RailingStyle, string][] = [
+  ['glass', 'Glass panels'], ['metal', 'Metal balusters'], ['timber', 'Timber spindles'],
+  ['cable', 'Metal & cable'], ['solid', 'Solid wall'], ['none', 'None'],
+];
+
 /** Library materials that suit paving or decking are offered first. */
 function suits(asset: AssetSummary, kind: PatioKind, paving: PavingStyle): boolean {
   const path = asset.categoryPath;
   if (kind === 'deck') return path.startsWith('Wood');
+  if (kind === 'balcony') return path.startsWith('Wood') || path.startsWith('Ceramic') || path.startsWith('Concrete') || path.startsWith('Stone/Slabs');
   if (paving === 'gravel') return path.includes('Gravel') || path.includes('Pebbles');
   return path.startsWith('Brick & Block') || path.startsWith('Stone/Cobblestone') || path.startsWith('Stone/Slabs')
     || path.startsWith('Ceramic') || path.startsWith('Concrete') || path.startsWith('Stone/Walls');
@@ -88,11 +116,37 @@ export function PatioControls() {
 
   const setKind = (next: PatioKind) => {
     if (next === kind) return;
+    if (next === 'balcony') {
+      update({ kind: next, ...DEFAULT_BALCONY_LOOK, balcony: data.balcony ?? DEFAULT_BALCONY, surfaceMaterialId: undefined });
+      return;
+    }
     // Each kind starts from its own natural colour.
     const color = next === 'deck' ? (DECK_BOARDS.find(b => b.id === data.board)?.color ?? DECK_BOARDS[0].color)
       : (PAVING_STYLES.find(p => p.id === data.paving)?.presets[0].color ?? '#a3a7aa');
-    update({ kind: next, color, surfaceMaterialId: undefined });
+    // Coming back from a balcony: its glass guarding and bare edges don't carry over.
+    const reset = kind === 'balcony' ? { railing: 'none' as RailingStyle, kerb: true, retainingWall: true } : {};
+    update({ kind: next, color, surfaceMaterialId: undefined, ...reset });
   };
+  const balcony = balconySettings(data);
+  const updateBalcony = (patch: Partial<BalconyData>) => update({ balcony: { ...balcony, ...patch } });
+  const selectedDepth = selected ? balconyDepth(selected.patioData!) : null;
+  const setBalconyDepth = (depth: number) => {
+    if (!selected) { setPatioToolSettings(prev => ({ ...prev, balconyDepth: depth })); return; }
+    const points = withBalconyDepth(selected.patioData!, depth);
+    if (points) update({ points });
+  };
+  const setSupport = (support: BalconyData['support']) => {
+    // Switching to or from a Juliet changes how far it stands out.
+    const wasJuliet = balcony.support === 'juliet', isJuliet = support === 'juliet';
+    const points = selected && wasJuliet !== isJuliet ? withBalconyDepth(selected.patioData!, isJuliet ? JULIET_DEPTH : tool.balconyDepth) : null;
+    update({ balcony: { ...balcony, support }, ...(points ? { points } : {}) });
+  };
+  const setFloor = (floor: BalconyFloor) => {
+    const color = floor === 'boards' ? (DECK_BOARDS.find(b => b.id === data.board)?.color ?? DECK_BOARDS[0].color)
+      : floor === 'tiles' ? '#c9cbcc' : '#bdb9b1';
+    update({ balcony: { ...balcony, floor }, color, surfaceMaterialId: undefined });
+  };
+  const warnings = kind === 'balcony' ? balconyWarnings({ ...(data as PatioData), kind }) : [];
 
   const chooseMaterial = (asset: AssetSummary | null) => {
     if (asset && isMaterialAssetId(asset.id)) {
@@ -123,20 +177,101 @@ export function PatioControls() {
   return (
     <div className="space-y-3.5">
       <p className="text-[10px] text-gray-500 dark:text-gray-400">
-        {selected
+        {kind === 'balcony'
+          ? (selected
+            ? `Editing ${selected.name}. Drag the yellow corners to resize it. It stays on its wall: moving or turning the wall takes the balcony with it, and deleting the wall removes it.`
+            : 'Hover a door (or a window) and click: a balcony goes on the outside of the wall, centred on the opening, with its floor just below the door sill.')
+          : selected
           ? `Editing ${selected.name}. Drag yellow corners to reshape; click a white dot to add a corner; Shift-drag a dot to curve that edge (drag a violet dot to change a curve); right-click a corner to remove it.`
           : 'Click the corners (hold Shift and click to curve the next edge through that point), or drag out a rectangle. Only the garden side needs drawing: near a building, fence or another patio a dashed outline shows how it will close along it. Click the wall (or press Enter) to accept, Tab for another way round. Points snap to walls, fences and patios; a patio or deck drawn against a building is set level with its floor.'}
       </p>
 
-      <div className="grid grid-cols-2 gap-1.5">
-        {(['patio', 'deck'] as const).map(k => (
-          <button key={k} type="button" className={chip(kind === k)} onClick={() => setKind(k)}>
-            {k === 'patio' ? 'Patio (paving)' : 'Decking (timber)'}
-          </button>
-        ))}
-      </div>
+      {!(selected && kind === 'balcony') && (
+        <div className="grid grid-cols-2 gap-1.5">
+          {(selected ? ['patio', 'deck'] as const : ['patio', 'deck', 'balcony'] as const).map(k => (
+            <button key={k} type="button" className={chip(kind === k)} onClick={() => setKind(k)}>
+              {k === 'patio' ? 'Patio (paving)' : k === 'deck' ? 'Decking (timber)' : 'Balcony'}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {kind === 'patio' ? (
+      {kind === 'balcony' ? (
+        <>
+          <div>
+            <label className={label}>Support</label>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              {BALCONY_SUPPORTS.map(option => (
+                <button key={option.id} type="button" title={option.description} className={chip(balcony.support === option.id)}
+                  onClick={() => setSupport(option.id)}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {balcony.support !== 'juliet' && (
+            <>
+              <div>
+                <label className={label}>Floor</label>
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                  {([['tiles', 'Tiles'], ['boards', 'Boards'], ['concrete', 'Concrete']] as [BalconyFloor, string][]).map(([id, text]) => (
+                    <button key={id} type="button" className={chip(balcony.floor === id)} onClick={() => setFloor(id)}>{text}</button>
+                  ))}
+                </div>
+              </div>
+              {balcony.floor === 'boards' && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {DECK_BOARDS.map(b => (
+                    <button key={b.id} type="button" title={b.description} className={chip(data.board === b.id)}
+                      onClick={() => update({ board: b.id as DeckBoard, color: b.color, surfaceMaterialId: undefined })}>
+                      <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ backgroundColor: b.color }} />{b.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {balcony.floor === 'tiles' && (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {SLAB_SIZES.filter(o => o.size[0] > 0).map(option => (
+                    <button key={option.label} type="button" className={chip(data.slabSize[0] === option.size[0] && data.slabSize[1] === option.size[1])}
+                      onClick={() => update({ slabSize: option.size })}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {balcony.floor !== 'concrete' && (
+                <ColorField text={balcony.floor === 'boards' ? 'Board colour' : 'Tile colour'} value={data.color} onChange={v => update({ color: v })} />
+              )}
+              {selected ? (selectedDepth !== null && (
+                <Slider text="Depth (out from the wall)" value={selectedDepth} min={0.6} max={3} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={setBalconyDepth} />
+              )) : (
+                <>
+                  <Slider text="Depth (out from the wall)" value={tool.balconyDepth} min={0.6} max={3} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={setBalconyDepth} />
+                  <Slider text="Wider than the door, each side" value={tool.balconyMargin} min={0} max={1.5} step={0.05} format={v => `${v.toFixed(2)} m`}
+                    onChange={v => setPatioToolSettings(prev => ({ ...prev, balconyMargin: v }))} />
+                </>
+              )}
+            </>
+          )}
+          <div>
+            <label className={label}>Guarding</label>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              {GUARDING.map(([id, text]) => (
+                <button key={id} type="button" className={chip(data.railing === id)} onClick={() => update({ railing: id })}>{text}</button>
+              ))}
+            </div>
+          </div>
+          {data.railing !== 'none' && (
+            <Slider text="Guarding height" value={balcony.railingHeight * 1000} min={900} max={1300} step={10} format={v => `${Math.round(v)} mm`}
+              onChange={v => updateBalcony({ railingHeight: v / 1000 })} />
+          )}
+          {warnings.length > 0 && (
+            <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+              {warnings.map(w => <p key={w}>{w}</p>)}
+            </div>
+          )}
+        </>
+      ) : kind === 'patio' ? (
         <>
           <div>
             <label className={label}>Paving</label>
@@ -291,7 +426,7 @@ export function PatioControls() {
       </div>
 
       {/* Steps */}
-      <div className="space-y-2">
+      {kind !== 'balcony' && <div className="space-y-2">
         <label className={label}>Steps</label>
         <Slider text="Step width" value={tool.stepWidth} min={0.6} max={4} step={0.1} format={v => `${v.toFixed(1)} m`}
           onChange={v => setPatioToolSettings(prev => ({ ...prev, stepWidth: v }))} />
@@ -317,15 +452,15 @@ export function PatioControls() {
               onChange={v => update({ steps: selected.patioData!.steps.map((s, i) => i === index ? { ...s, width: v } : s) })} />
           </div>
         ))}
-      </div>
+      </div>}
 
-      {selected && kind === 'patio' && (
-        <Slider text="Surface level" value={selected.position[1]} min={selected.position[1] - 1} max={selected.position[1] + 1} step={0.01}
+      {selected && (kind === 'patio' || kind === 'balcony') && (
+        <Slider text={kind === 'balcony' ? 'Floor level' : 'Surface level'} value={selected.position[1]} min={selected.position[1] - 1} max={selected.position[1] + 1} step={0.01}
           format={v => `${v.toFixed(2)} m`}
           onChange={v => setShapes(prev => prev.map(s => s.id === selected.id ? { ...s, position: [s.position[0], v, s.position[2]] } : s))} />
       )}
 
-      {selected && (() => {
+      {selected && kind !== 'balcony' && (() => {
         // Pull edges drawn a little short of (or past) a wall, fence or patio onto it.
         const ground = patioGroundHelpers(shapes, new Map(), sampleTerrainElevation).originalGround;
         const snap = snapPatioToBuilding(selected, shapes, ground);
@@ -352,7 +487,13 @@ export function PatioControls() {
           <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
             <span>Area</span><span className="text-right font-mono">{stats.area.toFixed(2)} m²</span>
             <span>Perimeter</span><span className="text-right font-mono">{stats.perimeter.toFixed(2)} m</span>
-            {kind === 'patio' ? (
+            {kind === 'balcony' ? (
+              balcony.floor === 'boards' ? (
+                <><span>Board length</span><span className="text-right font-mono">{stats.boardLength.toFixed(1)} m</span></>
+              ) : balcony.floor === 'tiles' ? (
+                <><span>Tiles (incl. cuts)</span><span className="text-right font-mono">{stats.pieces}</span></>
+              ) : null
+            ) : kind === 'patio' ? (
               data.paving === 'gravel' ? (
                 <><span>Gravel (50 mm deep)</span><span className="text-right font-mono">{(stats.area * 0.05).toFixed(2)} m³</span></>
               ) : (
@@ -364,7 +505,7 @@ export function PatioControls() {
                 <span>3.6 m boards (+10%)</span><span className="text-right font-mono">{Math.ceil(stats.boardLength * 1.1 / 3.6)}</span>
               </>
             )}
-            <span>Step flights</span><span className="text-right font-mono">{selected.patioData!.steps.length}</span>
+            {kind !== 'balcony' && <><span>Step flights</span><span className="text-right font-mono">{selected.patioData!.steps.length}</span></>}
           </div>
         </div>
       )}

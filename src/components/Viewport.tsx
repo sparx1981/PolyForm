@@ -12,6 +12,9 @@ import { ProtractorTool, ProtractorMeasurement, type ProtractorArgs } from './Pr
 import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint, type PatioClosure } from './landscape/PatioTool';
 import { buildCloseTargets, joinedEdges, patioWorldPath, snapPatioToBuilding, trimAgainstPatios } from '../lib/patio/patioClosure';
 import { makePatioShape, patioLevel, patioWallEdges } from '../lib/patio/patioPlacement';
+import { balconyWarnings, type BalconyPlacement } from '../lib/patio/balcony';
+import { DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK } from '../lib/patio/patioTypes';
+import { BalconyPlaceTool } from './landscape/BalconyTool';
 import { WaterDrawPreview } from './WaterDrawPreview';
 import { terrainsWithWaterBasins, defaultWaterLevel } from '../lib/water/waterBody';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
@@ -4536,7 +4539,7 @@ function Scene() {
     const kind = settings.kind;
     const targets = buildCloseTargets(shapes, patioOriginalGround);
     // Never overlap an existing patio or deck: share its edge instead.
-    const others = shapes.filter(s => s.type === 'patio' && !s.hidden).map(patioWorldPath).filter((p): p is NonNullable<typeof p> => !!p);
+    const others = shapes.filter(s => s.type === 'patio' && !s.hidden && s.patioData?.kind !== 'balcony').map(patioWorldPath).filter((p): p is NonNullable<typeof p> => !!p);
     const trimmed = trimAgainstPatios(world, bulges, others);
     if (trimmed && trimmed.points.length < 3) {
       setMeasurements('That outline is entirely covered by an existing patio or deck, so nothing was added.');
@@ -4575,6 +4578,33 @@ function Scene() {
     recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
     diagLog('TOOL', `${newShape.name} placed`, { points: world.length, level, againstWall: joinLevels.length > 0, closedAlong: !!closure, trimmed: !!trimmed });
   }, [patioToolSettings, patioOriginalGround, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog, setMeasurements]);
+
+  /** A balcony placed at a door: on the outside of its wall, which it then moves with. */
+  const commitBalcony = useCallback((placement: BalconyPlacement) => {
+    const template = { ...DEFAULT_BALCONY_LOOK, ...patioToolSettings.template };
+    const balcony = { ...DEFAULT_BALCONY, ...template.balcony, hostOpeningId: placement.openingId };
+    const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === 'balcony').length + 1;
+    const newShape: Shape = {
+      ...makePatioShape({
+        id: Math.random().toString(36).substr(2, 9),
+        name: `${balcony.support === 'juliet' ? 'Juliet balcony' : 'Balcony'} ${count}`,
+        world: placement.world,
+        bulges: placement.world.map(() => 0),
+        level: placement.level,
+        wallEdges: placement.wallEdges,
+        kind: 'balcony',
+        template: { ...template, balcony },
+      }),
+      hostWallId: placement.wallId,
+    };
+    addShape(newShape);
+    commitHistory();
+    setSelectedId(newShape.id);
+    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    const warnings = balconyWarnings(newShape.patioData!);
+    setMeasurements(warnings.length ? `${newShape.name} placed. ${warnings.join(' ')}` : `${newShape.name} placed. Drag its corners to resize it; it moves with its wall.`);
+    diagLog('TOOL', `${newShape.name} placed`, { level: placement.level, wall: placement.wallId, opening: placement.openingId });
+  }, [patioToolSettings, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog, setMeasurements]);
 
   const finalizeFenceChain = useCallback((closed = false) => {
     // The fence already exists (built live); closing is the only change finishing can make.
@@ -11737,8 +11767,12 @@ function Scene() {
         }} />
       )}
 
-      {activeTool === 'patio' && (
+      {activeTool === 'patio' && patioToolSettings.kind !== 'balcony' && (
         <PatioDrawTool groundAt={patioDrawnGround} onCommit={commitPatio} paused={patioToolSettings.placingSteps} />
+      )}
+      {activeTool === 'patio' && patioToolSettings.kind === 'balcony' && (
+        <BalconyPlaceTool onCommit={commitBalcony} juliet={(patioToolSettings.template.balcony ?? DEFAULT_BALCONY).support === 'juliet'}
+          depth={patioToolSettings.balconyDepth} margin={patioToolSettings.balconyMargin} />
       )}
 
       {/* Fence / Railing Path Drawing Preview */}
@@ -13090,7 +13124,7 @@ export default function Viewport() {
    */
   const patioSnapMenuItem = (shapeId: string) => {
     const patio = shapes.find(s => s.id === shapeId);
-    if (!patio || patio.type !== 'patio' || !patio.patioData) return null;
+    if (!patio || patio.type !== 'patio' || !patio.patioData || patio.patioData.kind === 'balcony') return null;
     const ground = patioGroundHelpers(shapes, new Map(), sampleTerrainElevation).originalGround;
     const result = snapPatioToBuilding(patio, shapes, ground);
     if (!result.shape) {

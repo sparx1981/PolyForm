@@ -92,7 +92,8 @@ export function summarize(shapes: Shape[]) {
     if (s.type === 'fence') fenceLength += a[0] ?? 0;
     if (s.type === 'patio' && s.patioData) {
       const area = polygonArea(denseOutline(s.patioData.points, s.patioData.bulges ?? [], 0.25).points);
-      if (s.patioData.kind === 'deck') deckArea += area; else patioArea += area;
+      // Balconies (patioData.kind 'balcony') are part of the building, not garden area.
+      if (s.patioData.kind === 'deck') deckArea += area; else if (s.patioData.kind === 'patio') patioArea += area;
     }
     if (s.type === 'terrain' && s.terrainData) {
       box.expandByPoint(new THREE.Vector3(s.position[0] - s.terrainData.width / 2, s.position[1], s.position[2] - s.terrainData.depth / 2));

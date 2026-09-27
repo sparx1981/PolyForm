@@ -70,7 +70,8 @@ export function extractExclusionFootprints(
     }
 
     // Patios and decks: nothing grows on the paving, and it's too dark under a deck.
-    if (s.type === 'patio' && s.patioData && s.patioData.points.length >= 3) {
+    // (Grass still grows under a balcony.)
+    if (s.type === 'patio' && s.patioData && s.patioData.kind !== 'balcony' && s.patioData.points.length >= 3) {
       const outline = denseOutline(s.patioData.points, s.patioData.bulges, 0.3).points;
       const polygon = outline.map(([x, z]) => [s.position[0] + x, s.position[2] + z] as [number, number]);
       const xs = polygon.map(p => p[0]), zs = polygon.map(p => p[1]);

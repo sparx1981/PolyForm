@@ -99,7 +99,7 @@ export function PatioMesh({ shape, groundAt, meshProps, selectionHighlight, surf
   }, [data, px, py, pz, groundAt, surfaceBinding?.baseColorTexture]);
   useEffect(() => () => Object.values(build.parts).forEach(g => g?.dispose()), [build]);
 
-  const isDeck = data.kind === 'deck';
+  const isDeck = data.kind === 'deck' || (data.kind === 'balcony' && data.balcony?.floor === 'boards');
   const materials = useMemo(() => {
     const boardFinish: Finish = data.grooved ? 'grooved' : 'wood';
     const m: Partial<Record<PatioPart, THREE.Material>> = {
@@ -116,6 +116,8 @@ export function PatioMesh({ shape, groundAt, meshProps, selectionHighlight, surf
       railMetal: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.7, side: THREE.DoubleSide }),
       glass: new THREE.MeshPhysicalMaterial({ color: '#dff3f0', roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }),
       lights: new THREE.MeshBasicMaterial({ color: data.lights.color, toneMapped: false }),
+      slab: surfaceMaterial('stone', 0.9),
+      steel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide }),
     };
     return m;
     // The binding object is rebuilt every render; depend on what it actually carries.
@@ -145,7 +147,7 @@ export function PatioMesh({ shape, groundAt, meshProps, selectionHighlight, surf
     for (const light of lightRefs.current) if (light) light.intensity = 1.6 * night;
   });
 
-  // Patios and decks are placed and levelled, never rotated or scaled.
+  // Patios, decks and balconies are placed and levelled, never rotated or scaled.
   const { rotation: _rotation, quaternion: _quaternion, scale: _scale, ...placement } = meshProps;
   return (
     <group {...placement}>

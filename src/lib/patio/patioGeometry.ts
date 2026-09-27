@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { PatioData, PatioStep } from './patioTypes';
+import { DEFAULT_BALCONY, type PatioData, type PatioStep } from './patioTypes';
 
 /**
  * Geometry for patios and decks, built in the shape's local frame: x/z relative to the shape's
@@ -14,7 +14,8 @@ export type GroundAt = (x: number, z: number) => number;
 /** One mesh's worth of triangles for one material. */
 export type PatioPart =
   | 'surface' | 'joints' | 'edge' | 'kerb' | 'wall' | 'steps'
-  | 'frame' | 'fascia' | 'skirting' | 'railTimber' | 'railMetal' | 'glass' | 'lights';
+  | 'frame' | 'fascia' | 'skirting' | 'railTimber' | 'railMetal' | 'glass' | 'lights'
+  | 'slab' | 'steel';
 
 export interface PatioBuild {
   parts: Partial<Record<PatioPart, THREE.BufferGeometry>>;
@@ -693,6 +694,8 @@ export function buildPatio(data: PatioData, groundAt: GroundAt): PatioBuild {
         if (gb) wall.quad(v3(ob[0], -0.05, ob[1]), v3(b[0], -0.05, b[1]), v3(b[0], hb, b[1]), v3(ob[0], hb, ob[1]));
       }
     }
+  } else if (data.kind === 'balcony') {
+    buildBalcony(data, poly, outline, groundAt, part, stats, onWall);
   } else {
     buildDeck(data, poly, outline, groundAt, part, stats, lights, inStepOpening, onWall);
   }
@@ -765,20 +768,22 @@ export function deckColor(data: Pick<PatioData, 'board' | 'color'>): THREE.Color
   return new THREE.Color(data.color);
 }
 
-function buildDeck(
-  data: PatioData, poly: Vec2[], outline: DenseOutline, groundAt: GroundAt,
-  part: (name: PatioPart) => PartBuilder, stats: PatioStats, lights: THREE.Vector3[],
-  inStepOpening: (a: Vec2, b: Vec2) => boolean, onWall: (k: number) => boolean,
-) {
-  const boardThickness = 0.028;
-  const color = deckColor(data);
-  const tone = data.board === 'composite' ? 0.05 : data.board === 'painted' ? 0.03 : 0.14;
-  const width = THREE.MathUtils.clamp(data.boardWidth, 0.08, 0.3);
-  const gap = THREE.MathUtils.clamp(data.boardGap, 0.002, 0.02);
-
+/** Board sizes, colour and pattern frame for a deck (or a balcony's boarded floor). */
+function boardSetup(data: PatioData) {
   const turn = data.direction === 'across' ? Math.PI / 2 : data.direction === 'diagonal' ? Math.PI / 4 : 0;
-  const angle = mainDirection(data.points) + turn;
-  const { toPattern, toLocal } = frame(angle);
+  return {
+    boardThickness: 0.028,
+    color: deckColor(data),
+    tone: data.board === 'composite' ? 0.05 : data.board === 'painted' ? 0.03 : 0.14,
+    width: THREE.MathUtils.clamp(data.boardWidth, 0.08, 0.3),
+    gap: THREE.MathUtils.clamp(data.boardGap, 0.002, 0.02),
+    ...frame(mainDirection(data.points) + turn),
+  };
+}
+
+/** Deck boards over the outline, top at y = 0: field boards in staggered rows, and picture-frame boards. */
+function layBoards(data: PatioData, poly: Vec2[], outline: DenseOutline, part: (name: PatioPart) => PartBuilder, stats: PatioStats) {
+  const { boardThickness, color, tone, width, gap, toPattern, toLocal } = boardSetup(data);
 
   const frameWidth = data.pictureFrame ? width + gap : 0;
   const field = frameWidth ? offsetPolygon(poly, -frameWidth) : poly;
@@ -827,6 +832,15 @@ function buildDeck(
     }
     stats.pieces += data.points.length;
   }
+}
+
+function buildDeck(
+  data: PatioData, poly: Vec2[], outline: DenseOutline, groundAt: GroundAt,
+  part: (name: PatioPart) => PartBuilder, stats: PatioStats, lights: THREE.Vector3[],
+  inStepOpening: (a: Vec2, b: Vec2) => boolean, onWall: (k: number) => boolean,
+) {
+  const { boardThickness, color, tone, width, toPattern, toLocal } = boardSetup(data);
+  layBoards(data, poly, outline, part, stats);
 
   // Frame: joists across the boards every 400 mm, beams under them, posts down to the ground.
   const frameColor = new THREE.Color(data.board === 'composite' ? '#5b5a57' : '#7e6a4c');
@@ -928,40 +942,79 @@ function buildDeck(
   }
 }
 
+/** Runs of the dense outline that get a railing: open edges, not along a wall or across steps. */
+function railingRuns(poly: Vec2[], inStepOpening: (a: Vec2, b: Vec2) => boolean, onWall: (k: number) => boolean, inset: number): Vec2[][] {
+  const inner = offsetPolygon(poly, -inset);
+  const n = poly.length;
+  const open = poly.map((_, i) => !onWall(i) && !inStepOpening(poly[i], poly[(i + 1) % n]));
+  const runs: Vec2[][] = [];
+  if (open.every(Boolean)) return [[...inner, inner[0]]];
+  if (!open.some(Boolean)) return runs;
+  const start = open.findIndex(o => !o);
+  let current: Vec2[] | null = null;
+  for (let k = 1; k <= n; k++) {
+    const i = (start + k) % n;
+    if (open[i]) {
+      current ??= [inner[i]];
+      current.push(inner[(i + 1) % n]);
+    } else if (current) {
+      runs.push(current);
+      current = null;
+    }
+  }
+  if (current) runs.push(current);
+  return runs;
+}
+
+/** Railing (or guarding) height above the floor. Balconies use their own; decks 1.0 m. */
+export function railingHeight(data: Pick<PatioData, 'kind' | 'balcony'>): number {
+  return data.kind === 'balcony' ? (data.balcony?.railingHeight ?? DEFAULT_BALCONY.railingHeight) : 1.0;
+}
+
+/** Most spindles, bars or panels between two posts, so the gap between them stays under `maxGap`. */
+export function infillCount(length: number, barWidth: number, maxGap: number): number {
+  return Math.max(1, Math.ceil((length + barWidth) / (maxGap + barWidth) - 1e-9));
+}
+
+/** Centre spacing of timber spindles and of metal balusters: gaps stay under 100 mm. */
+export const SPINDLE = { timber: { width: 0.035, gap: 0.09 }, metal: { width: 0.02, gap: 0.09 } } as const;
+
 function buildRailing(
   data: PatioData, poly: Vec2[], part: (name: PatioPart) => PartBuilder,
   inStepOpening: (a: Vec2, b: Vec2) => boolean, onWall: (k: number) => boolean, deck: THREE.Color,
 ) {
-  const height = 1.0;
-  const metal = data.railing === 'cable';
-  const posts = metal ? part('railMetal') : part('railTimber');
-  const rails = data.railing === 'timber' ? part('railTimber') : part('railMetal');
-  posts.setColor(metal ? new THREE.Color('#2b2d30') : deck);
-  rails.setColor(data.railing === 'timber' ? deck : new THREE.Color('#2b2d30'));
-  const postSize = metal ? 0.05 : 0.09;
-  const inset = offsetPolygon(poly, -postSize / 2 - 0.01);
+  const postSize = data.railing === 'cable' || data.railing === 'metal' || (data.railing === 'glass' && data.kind === 'balcony') ? 0.05
+    : data.railing === 'solid' ? 0.1 : 0.09;
+  drawRailingRuns(data, railingRuns(poly, inStepOpening, onWall, postSize / 2 + 0.01), part, deck, data.kind === 'balcony' ? -0.05 : -0.18);
+}
 
-  // Runs of consecutive dense segments that get a railing.
-  const n = poly.length;
-  const open = poly.map((_, i) => !onWall(i) && !inStepOpening(poly[i], poly[(i + 1) % n]));
-  const runs: Vec2[][] = [];
-  if (open.every(Boolean)) {
-    runs.push([...inset, inset[0]]);
-  } else {
-    const start = open.findIndex(o => !o);
-    let current: Vec2[] | null = null;
-    for (let k = 1; k <= n; k++) {
-      const i = (start + k) % n;
-      if (open[i]) {
-        current ??= [inset[i]];
-        current.push(inset[(i + 1) % n]);
-      } else if (current) {
-        runs.push(current);
-        current = null;
+/** Railings along the given runs (post positions are resampled along them). */
+function drawRailingRuns(data: PatioData, runs: Vec2[][], part: (name: PatioPart) => PartBuilder, deck: THREE.Color, postBase: number) {
+  const height = railingHeight(data);
+  const style = data.railing;
+  if (style === 'none') return;
+  const steelColor = new THREE.Color('#2b2d30');
+
+  if (style === 'solid') {
+    // A rendered upstand wall with a coping on top.
+    const wall = part('wall');
+    wall.setColor(new THREE.Color('#e7e3da'));
+    for (const run of runs) {
+      for (let k = 1; k < run.length; k++) {
+        addBeam(wall, run[k - 1], run[k], postBase, height - 0.05, 0.1);
+        addBeam(wall, run[k - 1], run[k], height - 0.05, height, 0.14);
       }
     }
-    if (current) runs.push(current);
+    return;
   }
+
+  // Balcony glass stands on steel posts; a deck's on posts matching the boards.
+  const metal = style === 'cable' || style === 'metal' || (style === 'glass' && data.kind === 'balcony');
+  const posts = metal ? part('railMetal') : part('railTimber');
+  const rails = style === 'timber' ? part('railTimber') : part('railMetal');
+  posts.setColor(metal ? steelColor : deck);
+  rails.setColor(style === 'timber' ? deck : steelColor);
+  const postSize = metal ? 0.05 : 0.09;
 
   for (const run of runs) {
     // Resample the run at post positions: every corner sharper than ~20 degrees and at most 1.5 m apart.
@@ -982,15 +1035,16 @@ function buildRailing(
       const corner = c ? Math.abs(Math.atan2(c[1] - b[1], c[0] - b[0]) - Math.atan2(b[1] - a[1], b[0] - a[0])) : Math.PI;
       if (!c || Math.min(corner, Math.PI * 2 - corner) > 0.35) { postsAt.push(b); since = 0; }
     }
-    for (const p of postsAt) addPost(posts, p, -0.18, height + 0.03, postSize, !metal);
+    for (const p of postsAt) addPost(posts, p, postBase, height + 0.03, postSize, !metal);
     // Rails follow the run itself (so curved edges get curved rails).
     for (let k = 1; k < run.length; k++) {
       const a = run[k - 1], b = run[k];
-      if (data.railing === 'timber') {
+      if (style === 'timber') {
         addBeam(rails, a, b, height - 0.045, height, 0.09);
         addBeam(rails, a, b, 0.07, 0.115, 0.07);
       } else {
-        addBeam(rails, a, b, height - 0.04, height, data.railing === 'glass' ? 0.05 : 0.06);
+        addBeam(rails, a, b, height - 0.04, height, style === 'glass' ? 0.05 : 0.06);
+        if (style === 'metal') addBeam(rails, a, b, 0.06, 0.09, 0.04);
       }
     }
     // Infill between consecutive posts.
@@ -1001,13 +1055,17 @@ function buildRailing(
       const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len;
       const from: Vec2 = [a[0] + ux * (postSize / 2 + 0.02), a[1] + uz * (postSize / 2 + 0.02)];
       const to: Vec2 = [b[0] - ux * (postSize / 2 + 0.02), b[1] - uz * (postSize / 2 + 0.02)];
-      if (data.railing === 'timber') {
-        const count = Math.max(1, Math.floor(len / 0.12));
-        for (let s = 1; s < count; s++) {
-          const t = s / count;
-          addPost(rails, [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], 0.115, height - 0.045, 0.035);
+      if (style === 'timber' || style === 'metal') {
+        // Evenly spaced spindles or balusters, never more than 90 mm apart.
+        const spec = SPINDLE[style];
+        const clear = len - postSize;
+        const count = infillCount(clear, spec.width, spec.gap);
+        const bottom = style === 'timber' ? 0.115 : 0.09, top = height - (style === 'timber' ? 0.045 : 0.04);
+        for (let s = 1; s <= count; s++) {
+          const t = (postSize / 2 + (clear * s) / (count + 1)) / len;
+          addPost(rails, [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], bottom, top, spec.width);
         }
-      } else if (data.railing === 'glass') {
+      } else if (style === 'glass') {
         const glass = part('glass');
         glass.setColor(new THREE.Color(1, 1, 1));
         addBeam(glass, from, to, 0.06, height - 0.05, 0.012);
@@ -1015,6 +1073,220 @@ function buildRailing(
         for (let y = 0.1; y < height - 0.05; y += 0.08) addBeam(rails, from, to, y, y + 0.005, 0.005);
       }
     }
+  }
+}
+
+/** A square bar from p to q (any direction), `size` across. */
+function addStrut(builder: PartBuilder, p: THREE.Vector3, q: THREE.Vector3, size: number) {
+  const axis = new THREE.Vector3().subVectors(q, p);
+  if (axis.lengthSq() < 1e-10) return;
+  axis.normalize();
+  const helper = Math.abs(axis.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const u = new THREE.Vector3().crossVectors(axis, helper).normalize().multiplyScalar(size / 2);
+  const w = new THREE.Vector3().crossVectors(axis, u).normalize().multiplyScalar(size / 2);
+  const ring = (c: THREE.Vector3) => [
+    c.clone().add(u).add(w), c.clone().sub(u).add(w), c.clone().sub(u).sub(w), c.clone().add(u).sub(w),
+  ];
+  const a = ring(p), b = ring(q);
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    builder.quad(a[i], a[j], b[j], b[i]);
+  }
+  builder.quad(a[3], a[2], a[1], a[0]);
+  builder.quad(b[0], b[1], b[2], b[3]);
+}
+
+/** Porcelain / stone tiles over the outline, top at y = 0, on a mortar bed down to y = -thickness. */
+function layTiles(data: PatioData, poly: Vec2[], part: (name: PatioPart) => PartBuilder, stats: PatioStats) {
+  const { toPattern, toLocal } = frame(mainDirection(data.points) + deg(data.rotation));
+  const fieldPattern = ensureCCW(poly.map(toPattern));
+  const us = fieldPattern.map(p => p[0]), vs = fieldPattern.map(p => p[1]);
+  const bounds: [number, number, number, number] = [Math.min(...us), Math.min(...vs), Math.max(...us), Math.max(...vs)];
+  const size: [number, number] = data.slabSize[0] > 0 ? data.slabSize : [0.6, 0.6];
+  const joint = Math.max(0.001, data.jointWidth);
+  const base = new THREE.Color(data.color);
+  const builder = part('surface');
+  for (const cell of slabCells(bounds, size, size[0] !== size[1])) {
+    const cu = cell.reduce((t, p) => t + p[0], 0) / cell.length, cv = cell.reduce((t, p) => t + p[1], 0) / cell.length;
+    for (const piece of clipToConvexPieces(fieldPattern, ensureCCW(offsetPolygon(ensureCCW(cell), -joint / 2)))) {
+      if (Math.abs(polygonArea(piece)) < 0.0004) continue;
+      builder.setColor(shade(base, cu * 12.9898 + cv * 78.233, 0.05, 0.01));
+      addPiece(builder, ensureCCW(piece.map(toLocal)), 0, 0.012, 0.0015);
+      stats.pieces++;
+    }
+  }
+  part('joints').setColor(new THREE.Color(1, 1, 1));
+  topFace(part('joints'), poly, -0.004);
+}
+
+/** How far from p (inside the outline) along direction d before leaving it. */
+function reachInside(p: Vec2, d: Vec2, poly: Vec2[]): number {
+  let t = 0.02;
+  while (t < 6 && pointInPolygon(p[0] + d[0] * (t + 0.02), p[1] + d[1] * (t + 0.02), poly)) t += 0.02;
+  return t;
+}
+
+/** Thickness of a cantilevered balcony slab, and of the thin deck on a steel frame. */
+export const BALCONY_SLAB = 0.2;
+const STEEL_DEPTH = 0.15;
+
+/**
+ * A balcony: a floor (boards, tiles or plain concrete) held up by a cantilevered slab, steel
+ * brackets fixed to the wall, or steel posts to the ground, with guarding on the open edges. A
+ * Juliet balcony is guarding alone, across the outer edge.
+ */
+function buildBalcony(
+  data: PatioData, poly: Vec2[], outline: DenseOutline, groundAt: GroundAt,
+  part: (name: PatioPart) => PartBuilder, stats: PatioStats, onWall: (k: number) => boolean,
+) {
+  const b = data.balcony ?? DEFAULT_BALCONY;
+  const deckTone = deckColor(data);
+  const n = poly.length;
+
+  if (b.support === 'juliet') {
+    // The guarding runs along the drawn edge furthest from the wall, fixed back to the wall at each end.
+    let best = -1, bestLen = 0;
+    for (let e = 0; e < data.points.length; e++) {
+      if (data.wallEdges[e]) continue;
+      const p = data.points[e], q = data.points[(e + 1) % data.points.length];
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (len > bestLen) { bestLen = len; best = e; }
+    }
+    if (best < 0) return;
+    const run: Vec2[] = [];
+    for (let k = 0; k < n; k++) if (outline.edgeOf[k] === best) run.push(poly[k]);
+    const last = poly[(poly.findIndex((_, k) => outline.edgeOf[k] === best) + run.length) % n];
+    run.push(last);
+    const inset = railingRuns(poly, () => false, k => outline.edgeOf[k] !== best, 0.03)[0] ?? run;
+    drawRailingRuns(data, [inset], part, deckTone, 0);
+    // Fixing arms back to the wall at each end, at the top rail and near the bottom.
+    const steel = part('railMetal');
+    steel.setColor(new THREE.Color('#2b2d30'));
+    const height = railingHeight(data);
+    for (const [end, prev] of [[inset[0], inset[1]], [inset[inset.length - 1], inset[inset.length - 2]]] as [Vec2, Vec2][]) {
+      // Towards the wall: the nearest wall edge point.
+      let wallPoint: Vec2 | null = null, bestD = Infinity;
+      for (let k = 0; k < n; k++) {
+        if (!onWall(k)) continue;
+        const a = poly[k], c = poly[(k + 1) % n];
+        const dx = c[0] - a[0], dz = c[1] - a[1], l2 = dx * dx + dz * dz || 1;
+        const t = THREE.MathUtils.clamp(((end[0] - a[0]) * dx + (end[1] - a[1]) * dz) / l2, 0, 1);
+        const q: Vec2 = [a[0] + dx * t, a[1] + dz * t];
+        const d = Math.hypot(q[0] - end[0], q[1] - end[1]);
+        if (d < bestD) { bestD = d; wallPoint = q; }
+      }
+      if (!wallPoint || prev === end) continue;
+      for (const y of [0.08, height - 0.02]) addBeam(steel, end, wallPoint, y - 0.02, y, 0.04);
+    }
+    stats.area = 0;
+    return;
+  }
+
+  // Guarding along the open edges (not along the wall).
+  buildRailing(data, poly, part, () => false, onWall, deckTone);
+
+  // Floor finish (top at y = 0) and what it sits on.
+  const finish = b.floor === 'boards' ? 0.028 : b.floor === 'tiles' ? 0.03 : 0;
+  if (b.floor === 'boards') layBoards(data, poly, outline, part, stats);
+  else if (b.floor === 'tiles') layTiles(data, poly, part, stats);
+
+  const slab = part('slab');
+  slab.setColor(new THREE.Color('#c9c6bf'));
+  const steel = part('steel');
+  steel.setColor(new THREE.Color('#2f3337'));
+  const underFloor = -finish;
+
+  if (b.support === 'cantilever') {
+    // A reinforced concrete slab out from the floor, its edge standing just proud of the finish.
+    const outer = ensureCCW(offsetPolygon(poly, 0.02));
+    addPiece(slab, outer, b.floor === 'concrete' ? 0 : underFloor, BALCONY_SLAB, 0.004);
+    topFace(slab, outer.slice().reverse(), underFloor - BALCONY_SLAB);
+    // A drip groove under the edge, so rain doesn't run back to the wall.
+    const drip = offsetPolygon(poly, -0.04);
+    const dripBuilder = part('steel');
+    for (let k = 0; k < n; k++) {
+      if (onWall(k)) continue;
+      addBeam(dripBuilder, drip[k], drip[(k + 1) % n], underFloor - BALCONY_SLAB - 0.002, underFloor - BALCONY_SLAB + 0.001, 0.012);
+    }
+    return;
+  }
+
+  // Steel frame: a channel round the edge, joists across (under boards) or a thin concrete deck.
+  const frameTop = underFloor - (b.floor === 'boards' ? 0 : 0.06);
+  if (b.floor !== 'boards') {
+    const deckOutline = ensureCCW(offsetPolygon(poly, -0.01));
+    addPiece(slab, deckOutline, b.floor === 'concrete' ? 0 : underFloor, b.floor === 'concrete' ? 0.06 + finish : 0.06, 0.003);
+    topFace(slab, deckOutline.slice().reverse(), frameTop);
+  }
+  const frameBottom = frameTop - STEEL_DEPTH;
+  const rim = offsetPolygon(poly, -0.03);
+  for (let k = 0; k < n; k++) addBeam(steel, rim[k], rim[(k + 1) % n], frameBottom, frameTop, 0.06);
+  if (b.floor === 'boards') {
+    const { toPattern, toLocal } = boardSetup(data);
+    const inner = ensureCCW(offsetPolygon(poly, -0.05).map(toPattern));
+    const us = inner.map(p => p[0]), vs = inner.map(p => p[1]);
+    for (let u = Math.min(...us) + 0.3; u < Math.max(...us); u += 0.45) {
+      for (const piece of clipToConvexPieces(inner, rect(u - 0.025, Math.min(...vs) - 1, u + 0.025, Math.max(...vs) + 1))) {
+        addPiece(steel, ensureCCW(piece.map(toLocal)), frameTop, STEEL_DEPTH, 0);
+      }
+    }
+  }
+
+  if (b.support === 'brackets') {
+    // Angled brackets fixed to the wall: a level arm under the frame and a strut up to it.
+    for (let k = 0; k < n; k++) {
+      if (!onWall(k)) continue;
+      const a = poly[k], c = poly[(k + 1) % n];
+      const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
+      if (len < 0.3) continue;
+      const tx = (c[0] - a[0]) / len, tz = (c[1] - a[1]) / len;
+      // Inward normal (the outline is CCW).
+      const inward: Vec2 = [-tz, tx];
+      const count = Math.max(2, Math.ceil((len - 0.3) / 1.2) + 1);
+      for (let i = 0; i < count; i++) {
+        const along = 0.15 + ((len - 0.3) * i) / (count - 1);
+        const w: Vec2 = [a[0] + tx * along + inward[0] * 0.01, a[1] + tz * along + inward[1] * 0.01];
+        const depth = reachInside(w, inward, poly);
+        if (depth < 0.3) continue;
+        const reach = depth - 0.08;
+        const drop = Math.min(1.2, depth * 0.75);
+        const at = (d: number, y: number) => v3(w[0] + inward[0] * d, y, w[1] + inward[1] * d);
+        addStrut(steel, at(0.03, frameBottom - 0.04), at(reach, frameBottom - 0.04), 0.07);
+        addStrut(steel, at(0.04, frameBottom - drop), at(reach * 0.75, frameBottom - 0.07), 0.06);
+        // Wall plate.
+        addStrut(steel, at(0.008, frameBottom - drop - 0.08), at(0.008, frameBottom), 0.12);
+      }
+    }
+    return;
+  }
+
+  // Posts to the ground at the open corners and along open edges.
+  const postsAt: Vec2[] = [];
+  const inset = offsetPolygon(poly, -0.08);
+  for (let k = 0; k < n; k++) {
+    const prevWall = onWall((k - 1 + n) % n), thisWall = onWall(k);
+    if (thisWall && prevWall) continue;
+    const corner = poly[k];
+    const prev = poly[(k - 1 + n) % n], next = poly[(k + 1) % n];
+    const turn = Math.abs(Math.atan2(next[1] - corner[1], next[0] - corner[0]) - Math.atan2(corner[1] - prev[1], corner[0] - prev[0]));
+    const sharp = Math.min(turn, Math.PI * 2 - turn) > 0.35;
+    if (sharp && !thisWall && !prevWall) postsAt.push(inset[k]);
+  }
+  for (let k = 0; k < n; k++) {
+    if (onWall(k)) continue;
+    const a = inset[k], c = inset[(k + 1) % n];
+    const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    const between = Math.floor(len / 2.4);
+    for (let i = 1; i <= between; i++) {
+      const t = i / (between + 1);
+      postsAt.push([a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t]);
+    }
+  }
+  for (const p of postsAt) {
+    const ground = groundAt(p[0], p[1]);
+    if (ground > frameBottom - 0.1) continue;
+    addPost(steel, p, ground - 0.2, frameBottom, 0.1);
+    addPost(steel, p, ground, ground + 0.012, 0.22);
   }
 }
 

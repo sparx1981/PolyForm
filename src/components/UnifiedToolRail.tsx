@@ -1324,7 +1324,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         {
           id: 'patio',
           tool: 'patio',
-          label: 'Patio / Decking',
+          label: 'Patio / Decking / Balcony',
           subtitle: 'Draw a paved patio or a raised timber deck, with steps, railings and lights',
           icon: <LayoutGrid size={19} />,
           isActive: (s) => s.activeTool === 'patio',
@@ -1333,7 +1333,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
             setActiveLandscapeCategory(null);
             setConsoleOutput(prev => [...prev, '[Landscapes] Patio / Decking Tool active: click the corners (Shift+click to curve an edge) or drag a rectangle; click the first point or press Enter to finish.']);
           },
-          keywords: ['patio', 'deck', 'decking', 'paving', 'slabs', 'terrace', 'porch', 'boards']
+          keywords: ['patio', 'deck', 'decking', 'paving', 'slabs', 'terrace', 'porch', 'boards', 'balcony', 'juliet']
         },
         {
           id: 'railing',

@@ -1,14 +1,33 @@
 /**
- * Patios (paving set level into the ground) and decks (timber boards on a raised frame), drawn
- * with the Landscapes toolbar's Patio / Decking tool and saved on a shape of type 'patio'.
+ * Patios (paving set level into the ground), decks (timber boards on a raised frame) and
+ * balconies (a platform on the outside of a building, at an upper floor), made with the
+ * Landscapes toolbar's Patio / Decking tool and saved on a shape of type 'patio'.
  */
-export type PatioKind = 'patio' | 'deck';
+export type PatioKind = 'patio' | 'deck' | 'balcony';
 
 export type PavingStyle = 'slabs' | 'block' | 'natural' | 'porcelain' | 'gravel';
 export type BlockPattern = 'herringbone' | 'stretcher' | 'basketweave';
 export type DeckBoard = 'softwood' | 'hardwood' | 'composite' | 'weathered' | 'painted';
 export type BoardDirection = 'length' | 'across' | 'diagonal';
-export type RailingStyle = 'none' | 'timber' | 'glass' | 'cable';
+export type RailingStyle = 'none' | 'timber' | 'glass' | 'cable' | 'metal' | 'solid';
+
+/** How a balcony is held up. */
+export type BalconySupport = 'cantilever' | 'brackets' | 'posts' | 'juliet';
+/** What a balcony's floor is finished with. */
+export type BalconyFloor = 'boards' | 'tiles' | 'concrete';
+
+/**
+ * A balcony's own settings. Its shape's `hostWallId` names the wall it hangs on (it moves and
+ * is deleted with that wall); edges along the wall are marked in `wallEdges` as usual.
+ */
+export interface BalconyData {
+  support: BalconySupport;
+  floor: BalconyFloor;
+  /** Top of the guarding above the balcony floor, metres (UK homes: at least 1.1 m). */
+  railingHeight: number;
+  /** The door or window it was placed at, if any. */
+  hostOpeningId?: string;
+}
 export type DeckUnderside = 'frame' | 'skirting';
 
 /** Steps down from one edge: centred `t` (0..1) of the way along drawn edge `edge`. */
@@ -74,6 +93,8 @@ export interface PatioData {
   steps: PatioStep[];
   /** A material library entry for the paving slabs or deck boards (overrides the preset look). */
   surfaceMaterialId?: string;
+  /** Balconies only. */
+  balcony?: BalconyData;
 }
 
 export interface PatioToolSettings {
@@ -85,6 +106,9 @@ export interface PatioToolSettings {
   /** While true, clicking an edge of the selected patio/deck adds steps there. */
   placingSteps: boolean;
   stepWidth: number;
+  /** New balconies: how far they stand out from the wall, and how far past the door each side. */
+  balconyDepth: number;
+  balconyMargin: number;
 }
 
 export interface SurfacePreset { id: string; label: string; color: string }
@@ -142,10 +166,33 @@ export const DEFAULT_PATIO_TEMPLATE: PatioToolSettings['template'] = {
   lights: { enabled: false, spacing: 1.5, color: '#ffd9a0', nightOnly: true, castLight: true },
 };
 
+export const DEFAULT_BALCONY: BalconyData = { support: 'cantilever', floor: 'tiles', railingHeight: 1.1 };
+
+/** The look a new balcony starts from (glass guarding on a tiled slab). */
+export const DEFAULT_BALCONY_LOOK: Partial<PatioToolSettings['template']> = {
+  paving: 'porcelain',
+  slabSize: [0.6, 0.6],
+  jointWidth: 0.003,
+  color: '#c9cbcc',
+  railing: 'glass',
+  kerb: false,
+  retainingWall: false,
+  balcony: DEFAULT_BALCONY,
+};
+
+export const BALCONY_SUPPORTS: { id: BalconySupport; label: string; description: string }[] = [
+  { id: 'cantilever', label: 'Cantilever slab', description: 'A concrete slab standing out from the building' },
+  { id: 'brackets', label: 'Brackets', description: 'A steel frame on angled brackets fixed to the wall' },
+  { id: 'posts', label: 'Posts', description: 'A steel frame on posts down to the ground' },
+  { id: 'juliet', label: 'Juliet', description: 'Just guarding across the door, no floor' },
+];
+
 export const DEFAULT_PATIO_TOOL_SETTINGS: PatioToolSettings = {
   kind: 'patio',
   deckHeight: 0.45,
   template: DEFAULT_PATIO_TEMPLATE,
   placingSteps: false,
   stepWidth: 1.2,
+  balconyDepth: 1.5,
+  balconyMargin: 0.6,
 };

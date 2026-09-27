@@ -449,7 +449,7 @@ export function buildCloseTargets(
           path: { points: offsetPolyline(centre, side * (FENCE_HALF - TUCK)), bulges: centre.map(() => 0).slice(1), closed: false },
         });
       }
-    } else if (s.type === 'patio') {
+    } else if (s.type === 'patio' && s.patioData?.kind !== 'balcony') {
       const path = patioWorldPath(s);
       if (!path) continue;
       const outline = denseOutline(path.points, path.bulges, 0.2).points;
