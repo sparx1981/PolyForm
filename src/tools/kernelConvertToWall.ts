@@ -536,13 +536,6 @@ export function analyzeWallConversion(
     warnings.push({ level: 'info', message });
   }
 
-  if (!isSimpleRectangle(outer)) {
-    warnings.push({
-      level: 'info',
-      message: 'The Roof tool currently fits a rectangle around the walls. For this outline a flat roof usually looks best.',
-    });
-  }
-
   return {
     ok: true,
     sourceFaces: [...solid],
@@ -562,16 +555,6 @@ function isFloorFace(g: Graph, id: FaceId, inner: readonly P2[], baseY: number):
   const pts = loopPoints(g, f.outerLoop);
   if (pts.some((p) => Math.abs(p.y - baseY) > POINT_TOL)) return false;
   return pts.every((p) => pointInPolygon2(p2(p), inner) || onBoundary(p2(p), inner));
-}
-
-function isSimpleRectangle(poly: readonly P2[]): boolean {
-  if (poly.length !== 4) return false;
-  for (let i = 0; i < 4; i++) {
-    const a = unit2(sub2(poly[(i + 1) % 4]!, poly[i]!));
-    const b = unit2(sub2(poly[(i + 2) % 4]!, poly[(i + 1) % 4]!));
-    if (Math.abs(dot2(a, b)) > 0.01) return false;
-  }
-  return true;
 }
 
 function sourceColor(g: Graph, faces: Iterable<FaceId>): string | null {

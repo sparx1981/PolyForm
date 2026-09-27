@@ -235,13 +235,13 @@ describe('warnings', () => {
     expect(plan.warnings.some(w => /thinner than any real wall/.test(w.message))).toBe(true);
   });
 
-  it('flags non-rectangular outlines for the roof tool', () => {
+  it('converts an L-shaped outline to six walls', () => {
     const h = host();
     outline(h, [vec3(0, 0, 0), vec3(6, 0, 0), vec3(6, 0, 3), vec3(3, 0, 3), vec3(3, 0, 6), vec3(0, 0, 6)]);
     offsetInward(h, only(h), 0.2);
     const plan = expectPlan(analyse(h, ringFace(h)));
     expect(plan.pieces).toHaveLength(6);
-    expect(plan.warnings.some(w => /Roof tool/.test(w.message))).toBe(true);
+    expect(plan.thickness).toBeCloseTo(0.2, 4);
   });
 
   it('height warnings', () => {
