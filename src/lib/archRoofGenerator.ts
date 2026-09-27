@@ -20,6 +20,8 @@ export interface RoofParams {
   fasciaHeight?: number;     // e.g. 0.18 m
   parapetHeight?: number;    // e.g. 0.60 m (for parapet flat roofs)
   parapetThickness?: number; // e.g. 0.20 m
+  copingOverhang?: number;   // coping drip past the parapet faces, e.g. 0.04 m
+  slabProjection?: number;   // roof slab projecting past the outer wall face, 0-1.5 m
   copingColor?: string;      // e.g. '#334155'
   color?: string;
   ridgeCapColor?: string;
@@ -1522,18 +1524,21 @@ export const createHipRoofGeometry = createDetailedHipRoofGeometry;
 export function createParapetWallsGeometry(
   outerPoly: [number, number][],
   innerPoly: [number, number][],
-  parapetHeight: number = 0.60
+  parapetHeight: number = 0.60,
+  baseY: number = 0,
+  slab?: { outerPoly: [number, number][]; thickness: number }
 ): THREE.BufferGeometry {
   return createGeometryFromBuilder((addTriangle, addQuad) => {
     const n = Math.min(outerPoly.length, innerPoly.length);
-    const h = parapetHeight;
+    const b = baseY;
+    const h = baseY + parapetHeight;
 
     // 1. Outer vertical perimeter faces
     for (let i = 0; i < n; i++) {
       const o1 = outerPoly[i];
       const o2 = outerPoly[(i + 1) % n];
-      const o1_bot: [number, number, number] = [o1[0], 0, o1[1]];
-      const o2_bot: [number, number, number] = [o2[0], 0, o2[1]];
+      const o1_bot: [number, number, number] = [o1[0], b, o1[1]];
+      const o2_bot: [number, number, number] = [o2[0], b, o2[1]];
       const o2_top: [number, number, number] = [o2[0], h, o2[1]];
       const o1_top: [number, number, number] = [o1[0], h, o1[1]];
       addQuad(o1_bot, o2_bot, o2_top, o1_top);
@@ -1543,8 +1548,8 @@ export function createParapetWallsGeometry(
     for (let i = 0; i < n; i++) {
       const i1 = innerPoly[i];
       const i2 = innerPoly[(i + 1) % n];
-      const i1_bot: [number, number, number] = [i1[0], 0.05, i1[1]];
-      const i2_bot: [number, number, number] = [i2[0], 0.05, i2[1]];
+      const i1_bot: [number, number, number] = [i1[0], b + 0.05, i1[1]];
+      const i2_bot: [number, number, number] = [i2[0], b + 0.05, i2[1]];
       const i2_top: [number, number, number] = [i2[0], h, i2[1]];
       const i1_top: [number, number, number] = [i1[0], h, i1[1]];
       // Faces inward into the roof deck
@@ -1559,17 +1564,75 @@ export function createParapetWallsGeometry(
     }
     cx /= (innerPoly.length || 1);
     cz /= (innerPoly.length || 1);
-    const center3D: [number, number, number] = [cx, 0.05, cz];
+    const center3D: [number, number, number] = [cx, b + 0.05, cz];
 
     for (let i = 0; i < n; i++) {
       const p1 = innerPoly[i];
       const p2 = innerPoly[(i + 1) % n];
-      const p1_3d: [number, number, number] = [p1[0], 0.05, p1[1]];
-      const p2_3d: [number, number, number] = [p2[0], 0.05, p2[1]];
+      const p1_3d: [number, number, number] = [p1[0], b + 0.05, p1[1]];
+      const p2_3d: [number, number, number] = [p2[0], b + 0.05, p2[1]];
       // Facing up (+Y)
       addTriangle(p1_3d, p2_3d, center3D, [0, 1, 0]);
     }
+
+    // 4. A projecting roof slab under the parapet: its edge faces and its underside (soffit).
+    if (slab && slab.outerPoly.length >= 3) {
+      const sp = slab.outerPoly;
+      const m = sp.length;
+      const t = slab.thickness;
+      for (let i = 0; i < m; i++) {
+        const a = sp[i], c = sp[(i + 1) % m];
+        addQuad([a[0], 0, a[1]], [c[0], 0, c[1]], [c[0], t, c[1]], [a[0], t, a[1]]);
+      }
+      let sx = 0, sz = 0;
+      for (const p of sp) { sx += p[0]; sz += p[1]; }
+      const sc: [number, number, number] = [sx / m, 0, sz / m];
+      for (let i = 0; i < m; i++) {
+        const a = sp[i], c = sp[(i + 1) % m];
+        // Facing down (-Y): the soffit seen from below.
+        addTriangle([c[0], 0, c[1]], [a[0], 0, a[1]], sc, [0, -1, 0]);
+      }
+    }
   });
+}
+
+export interface ParapetOptions {
+  /** Thickness of the walls the parapet stands on. */
+  wallThickness: number;
+  /** Height of the parapet above the roof. */
+  parapetHeight: number;
+  /** Parapet wall thickness; defaults to the wall thickness. */
+  parapetThickness?: number;
+  /** How far the coping cap projects past the parapet faces (drip), metres. */
+  copingOverhang?: number;
+  /** How far the roof slab projects past the outer wall face, metres (0 = no projecting slab). */
+  slabProjection?: number;
+  /** Thickness of a projecting roof slab. */
+  slabThickness?: number;
+}
+
+export const PARAPET_SLAB_THICKNESS = 0.25;
+
+/**
+ * A parapet roof over walls whose centre line is `centreline` (CCW): the
+ * parapet's outer face continues the outer wall face straight up, or,
+ * with a projecting slab, stands on the slab's outer edge.
+ */
+export function buildParapetGeometry(centreline: [number, number][], opts: ParapetOptions): {
+  walls: THREE.BufferGeometry;
+  coping: THREE.BufferGeometry;
+} {
+  const t = opts.wallThickness || 0.20;
+  const parapetThick = opts.parapetThickness ?? t;
+  const projection = Math.max(0, opts.slabProjection ?? 0);
+  const slabT = opts.slabThickness ?? PARAPET_SLAB_THICKNESS;
+  const hasSlab = projection > 0.005;
+  const outer = offsetPolygon2D(centreline, t / 2 + (hasSlab ? projection : 0));
+  const inner = insetPolygon2D(outer, parapetThick);
+  const base = hasSlab ? slabT : 0;
+  const walls = createParapetWallsGeometry(outer, inner, opts.parapetHeight, base, hasSlab ? { outerPoly: outer, thickness: slabT } : undefined);
+  const coping = createParapetCopingGeometry(outer, inner, base + opts.parapetHeight, 0.06, opts.copingOverhang ?? 0.04);
+  return { walls, coping };
 }
 
 /**
@@ -1685,11 +1748,15 @@ export function buildRoofAssemblyForRoom(
 
   if (isParapet) {
     const parapetH = params.parapetHeight ?? 0.60;
-    const parapetThick = params.parapetThickness ?? (bounds.wallThickness || 0.20);
-    const localInnerPoly = insetPolygon2D(localWallPoly, parapetThick);
-
-    const parapetWallGeom = createParapetWallsGeometry(localWallPoly, localInnerPoly, parapetH);
-    const copingGeom = createParapetCopingGeometry(localWallPoly, localInnerPoly, parapetH);
+    const copingOverhang = params.copingOverhang ?? 0.04;
+    const slabProjection = params.slabProjection ?? 0;
+    const { walls: parapetWallGeom, coping: copingGeom } = buildParapetGeometry(localWallPoly, {
+      wallThickness: bounds.wallThickness || 0.20,
+      parapetHeight: parapetH,
+      ...(params.parapetThickness !== undefined ? { parapetThickness: params.parapetThickness } : {}),
+      copingOverhang,
+      slabProjection,
+    });
 
     const roofShape: Shape = {
       id: roofId,
@@ -1704,6 +1771,8 @@ export function buildRoofAssemblyForRoom(
       geometryData: safeExtractGeometryData(parapetWallGeom),
       roofData: {
         roofType: 'parapet',
+        copingOverhang,
+        slabProjection,
         isLShape,
         isRectangular,
         reflexIndex,
@@ -1717,6 +1786,8 @@ export function buildRoofAssemblyForRoom(
       },
       customData: {
         roofType: 'parapet',
+        copingOverhang,
+        slabProjection,
         isLShape,
         isRectangular,
         reflexIndex,
@@ -3125,6 +3196,10 @@ export function create3DRoofTilesGeometry(options: {
 
 export interface RoofAssemblyUpdateParams {
   height?: number;
+  /** Parapet roofs: coping drip past the parapet faces. */
+  copingOverhang?: number;
+  /** Parapet roofs: roof slab projection past the outer wall face. */
+  slabProjection?: number;
   eaveOverhang?: number;
   fasciaHeight?: number;
   tileShape?: RoofTileShape;
@@ -3229,10 +3304,14 @@ export function updateRoofAssembly(
       [width / 2, depth / 2],
       [-width / 2, depth / 2]
     ];
-    const parapetThick = 0.20;
-    const localInnerPoly = insetPolygon2D(localWallPoly, parapetThick);
-    const parapetWallGeom = createParapetWallsGeometry(localWallPoly, localInnerPoly, clampedHeight);
-    const copingGeom = createParapetCopingGeometry(localWallPoly, localInnerPoly, clampedHeight);
+    const copingOverhang = Math.max(0, Math.min(0.10, params.copingOverhang ?? roofData.copingOverhang ?? 0.04));
+    const slabProjection = Math.max(0, Math.min(1.5, params.slabProjection ?? roofData.slabProjection ?? 0));
+    const { walls: parapetWallGeom, coping: copingGeom } = buildParapetGeometry(localWallPoly, {
+      wallThickness: roofData.bounds?.wallThickness || 0.20,
+      parapetHeight: clampedHeight,
+      copingOverhang,
+      slabProjection,
+    });
 
     const updatedRoofShape: Shape = {
       ...targetRoof,
@@ -3244,6 +3323,8 @@ export function updateRoofAssembly(
         eaveOverhang: 0,
         fasciaHeight,
         pitchAngleDeg: 0,
+        copingOverhang,
+        slabProjection,
       }
     };
 

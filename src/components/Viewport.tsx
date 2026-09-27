@@ -1467,6 +1467,18 @@ function FaceGrid({ shape, faceIndex, gridSize, isSelected, showGrid }: { shape:
   );
 }
 
+/** Whether a pointer event on the ground also hit a drawn surface or an object. */
+function pressHitsGeometry(e: { intersections?: { object: THREE.Object3D }[] }): boolean {
+  return !!e.intersections?.some(i => {
+    let o: THREE.Object3D | null = i.object;
+    while (o) {
+      if (o.userData?.isKernelGeometry || o.userData?.isShape) return true;
+      o = o.parent;
+    }
+    return false;
+  });
+}
+
 function Scene() {
   const { graphicsSettings } = useApp();
   const { assets: groundMaterialAssets } = useAssetCatalog('material');
@@ -3791,7 +3803,13 @@ function Scene() {
 
     // A drawn surface in the geometry kernel, like Rectangle / Circle / Polygon, so Offset,
     // Push/Pull, Convert To Wall and Merge all work on it. One undo step.
-    const committed = kernelHost.commitIsolatedRing(polyVertices.map(v => ({ x: v.x, y: v.y, z: v.z })));
+    // Flattened onto the drawing plane: clicks can land a hair above or below it (grid lines,
+    // axes), and a surface only forms when every corner lies on one plane.
+    const drawingPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal.clone().normalize(), origin);
+    const committed = kernelHost.commitIsolatedRing(polyVertices.map(v => {
+      const q = drawingPlane.projectPoint(v, new THREE.Vector3());
+      return { x: q.x, y: q.y, z: q.z };
+    }));
     if (!committed.ok) {
       setConsoleOutput(prev => [...prev, `[ERROR] Could not create the shape: ${committed.reason ?? 'unknown error'}.`]);
       diagLog('ERROR', 'Poly failed: kernel commit', { reason: committed.reason });
@@ -9690,6 +9708,9 @@ function Scene() {
               if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
                 return;
               }
+              // Flat shapes lie exactly on the ground, so one press hits both: the shape's own
+              // handler decides the selection (Shift-click, Combine Shapes add to it).
+              if (pressHitsGeometry(e)) return;
               setSelectedId(null);
               setSelectedIds([]);
               setSelectedFaceIds([]);
@@ -9730,6 +9751,7 @@ function Scene() {
             if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
               return;
             }
+            if (pressHitsGeometry(e)) return;
             setSelectedId(null);
             setSelectedIds([]);
             setSelectedFaceIds([]);

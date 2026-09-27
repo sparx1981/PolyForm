@@ -112,6 +112,16 @@ export const RoofModifierSection: React.FC = () => {
     (activeRoof.roofData ?? activeRoof.customData)?.roofType === 'parapet'
     || activeRoof.tags?.includes('roof-parapet')
     || !!activeRoof.name?.toLowerCase().includes('parapet'));
+  // Parapet roofs: how far the coping cap drips past the parapet, and how far the roof slab
+  // projects past the walls (0 = the parapet continues the wall face).
+  const parapetData = (activeRoof?.roofData ?? activeRoof?.customData ?? {}) as { copingOverhang?: number; slabProjection?: number };
+  const [copingOverhang, setCopingOverhang] = useState<number>(parapetData.copingOverhang ?? 0.04);
+  const [slabProjection, setSlabProjection] = useState<number>(parapetData.slabProjection ?? 0);
+  useEffect(() => {
+    setCopingOverhang(parapetData.copingOverhang ?? 0.04);
+    setSlabProjection(parapetData.slabProjection ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRoof?.id]);
   const [eaveOverhang, setEaveOverhang] = useState<number>(activeRoof?.roofData?.eaveOverhang ?? 0.30);
   const [fasciaHeight, setFasciaHeight] = useState<number>(0.18);
 
@@ -168,6 +178,8 @@ export const RoofModifierSection: React.FC = () => {
     randomize?: boolean;
     palette?: RoofTilePaletteItem[];
     seedVal?: number;
+    copingOverhang?: number;
+    slabProjection?: number;
   }) => {
     if (!activeRoof) return;
 
@@ -202,6 +214,8 @@ export const RoofModifierSection: React.FC = () => {
       randomizeColor: targetRandomize,
       colorPalette: targetPalette,
       seed: targetSeed,
+      ...(params.copingOverhang !== undefined ? { copingOverhang: params.copingOverhang } : {}),
+      ...(params.slabProjection !== undefined ? { slabProjection: params.slabProjection } : {}),
     });
 
     // Also update textureUrl on roof slopes for crisp underlayment (or remove texture for 'none')
@@ -541,6 +555,41 @@ export const RoofModifierSection: React.FC = () => {
           </p>
         )}
       </div>
+
+      {isParapetRoof && (
+        <div className="space-y-2.5 rounded-lg bg-gray-50/70 dark:bg-gray-800/40 p-2.5 border border-gray-200/70 dark:border-gray-700/60">
+          <div>
+            <div className="flex justify-between text-[11px] mb-1">
+              <span className="font-semibold text-gray-700 dark:text-gray-200">Coping Overhang</span>
+              <span className="font-mono font-bold text-polyform-blue">{Math.round(copingOverhang * 1000)} mm</span>
+            </div>
+            <input type="range" min={0} max={0.10} step={0.005} value={copingOverhang}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setCopingOverhang(v);
+                debouncedApplyRoofAssemblyModifications({ copingOverhang: v });
+                setMeasurements(`Coping overhang ${Math.round(v * 1000)} mm past the parapet.`);
+              }}
+              className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
+              title="How far the coping cap projects past the parapet faces (a drip edge, typically 25 to 75 mm)" />
+          </div>
+          <div>
+            <div className="flex justify-between text-[11px] mb-1">
+              <span className="font-semibold text-gray-700 dark:text-gray-200">Roof Slab Projection</span>
+              <span className="font-mono font-bold text-polyform-blue">{slabProjection < 0.005 ? 'None' : `${slabProjection.toFixed(2)} m`}</span>
+            </div>
+            <input type="range" min={0} max={1.5} step={0.05} value={slabProjection}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setSlabProjection(v);
+                debouncedApplyRoofAssemblyModifications({ slabProjection: v });
+                setMeasurements(v < 0.005 ? 'The parapet continues the outer wall face.' : `Roof slab projects ${v.toFixed(2)} m past the walls, with the parapet on its edge.`);
+              }}
+              className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
+              title="How far a 250 mm roof slab cantilevers past the outer walls; the parapet stands on its edge" />
+          </div>
+        </div>
+      )}
 
       {/* 2. TILE SHAPE SELECTION */}
       <div className="space-y-1.5">

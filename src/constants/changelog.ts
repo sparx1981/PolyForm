@@ -23,6 +23,13 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Patio / Decking: when the two ends are near two things that do not meet (a fence stopping short of the house, two separate buildings), the outline now closes with a straight edge across between them.',
       'Snap To Building is now also a button in the Patio panel when a patio or deck is selected.',
       'Parapet roofs no longer show the Advanced Trim & Eaves settings: a parapet roof has no eaves or fascia, so they had no effect.',
+      'Undo now covers everything: Ctrl+Z and redo step back through drawn shapes (Rectangle, Circle, Polygon, Poly Line, Bézier), Offset, Push/Pull, delete, paint, hide, duplicate and Divide Surface, in the order you did them, alongside everything else. A drawn shape is one undo step, not one per side.',
+      'Offset never folds a shape over itself: edges that vanish on tight curves are collapsed, corners that would spike out more than twice the offset are cut flat, and a narrow neck that pinches closed keeps the larger piece. The preview turns red when the offset is larger than the shape allows.',
+      'Poly Line and closed Bézier shapes are now drawn surfaces like Rectangle and Circle, so Offset, Push/Pull, Convert To Wall and Combine Shapes all work on them.',
+      'Convert To Wall also accepts offsets the Offset tool had to clean (collapsed edges on tight curves, cut corners): those spots become small wedge-shaped wall pieces.',
+      'Combine Shapes: merge overlapping or touching flat shapes into one, subtract later shapes from the first, or keep only their overlap. Use the new Combine Shapes tool (pick a mode, click the shapes in order, press Enter), or Shift-click shapes and right-click. The first shape leads: Subtract keeps it and the result takes its material. One undo step.',
+      'Fixed Shift-click (and similar multi-select) on flat shapes lying on the ground: the click also reached the ground, which cleared the selection.',
+      'Parapet roofs: the parapet now lines up with the outer wall face instead of sitting half a wall inside it. New Coping Overhang (0 to 100 mm drip) and Roof Slab Projection (0 to 1.5 m) sliders; with a projection, a 250 mm roof slab cantilevers past the walls with the parapet on its edge and a soffit underneath.',
     ]
   },
   {
