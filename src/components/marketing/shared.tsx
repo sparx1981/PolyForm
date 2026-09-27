@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ArrowRight, Box } from 'lucide-react';
+import { ArrowRight, Box, User } from 'lucide-react';
+import type { User as FirebaseUser } from 'firebase/auth';
 import { RouterLink, type Page } from './router';
 
 export type { Page };
-export { RouterLink, useMarketingRouter, scrollToId, hrefFor, isMarketingPath } from './router';
+export { RouterLink, useMarketingRouter, scrollToId, hrefFor, isMarketingPath, isAppEditorPath, APP_PATH } from './router';
 
 export function Logo({ go, size = 27, textSize = 'text-[17px]' }: { go?: (p: Page) => void; size?: number; textSize?: string }) {
   const content = (
@@ -28,7 +29,66 @@ const NAV: { page: Page; label: string }[] = [
   { page: 'developers', label: 'Developers' },
 ];
 
-export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor?: string) => void; onLogin: () => void }) {
+/** Hover/click menu shown in place of the "Sign in" button once someone is signed in. */
+function ProfileMenu({ user, onOpenDesigns, onSignOut }: { user: FirebaseUser; onOpenDesigns: () => void; onSignOut: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
+        className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-polyform-blue text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
+      >
+        {user.photoURL ? (
+          <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+        ) : (
+          <User size={18} />
+        )}
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full pt-2 w-48 z-10">
+          <div className="rounded-lg border border-slate-200 bg-white shadow-lg py-1.5">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={onOpenDesigns}
+              className="w-full text-left px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              My Designs
+            </button>
+            <div className="h-px bg-gray-100 my-1" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={onSignOut}
+              className="w-full text-left px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Header({
+  page, go, onLogin, user, onOpenDesigns, onSignOut,
+}: {
+  page: Page;
+  go: (p: Page, anchor?: string) => void;
+  onLogin: () => void;
+  user: FirebaseUser | null;
+  onOpenDesigns: () => void;
+  onSignOut: () => void;
+}) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isActive = (n: Page) => page === n || (n === 'developers' && page === 'sdk-docs');
 
@@ -56,14 +116,18 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
           ))}
         </div>
 
-        <div className="hidden md:flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onLogin}
-            className="text-[13px] font-semibold px-3 py-2 rounded-lg text-gray-600 hover:text-polyform-dark-blue hover:bg-gray-50 transition-colors"
-          >
-            Sign in
-          </button>
+        <div className="hidden md:flex items-center gap-3">
+          {user ? (
+            <ProfileMenu user={user} onOpenDesigns={onOpenDesigns} onSignOut={onSignOut} />
+          ) : (
+            <button
+              type="button"
+              onClick={onLogin}
+              className="text-[13px] font-semibold px-3 py-2 rounded-lg text-gray-600 hover:text-polyform-dark-blue hover:bg-gray-50 transition-colors"
+            >
+              Sign in
+            </button>
+          )}
           <button
             type="button"
             onClick={onLogin}
@@ -102,9 +166,20 @@ export function Header({ page, go, onLogin }: { page: Page; go: (p: Page, anchor
             </RouterLink>
           ))}
           <div className="h-px bg-gray-100 my-2" />
-          <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
-            Sign in
-          </button>
+          {user ? (
+            <>
+              <button type="button" onClick={() => { onOpenDesigns(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
+                My Designs
+              </button>
+              <button type="button" onClick={() => { onSignOut(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
+              Sign in
+            </button>
+          )}
           <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg bg-polyform-blue text-white text-center">
             Start designing
           </button>
@@ -168,7 +243,15 @@ export function ClosingCTA({ onLogin, page }: { onLogin: () => void; page: Page 
 
 type FooterCol = { title: string; links: { label: string; page?: Page; anchor?: string; onClick?: () => void }[] };
 
-export function Footer({ go, onLogin }: { go: (p: Page, anchor?: string) => void; onLogin: () => void }) {
+export function Footer({
+  go, onLogin, user, onOpenDesigns, onSignOut,
+}: {
+  go: (p: Page, anchor?: string) => void;
+  onLogin: () => void;
+  user: FirebaseUser | null;
+  onOpenDesigns: () => void;
+  onSignOut: () => void;
+}) {
   const columns: FooterCol[] = [
     { title: 'PRODUCT', links: [{ label: 'Product overview', page: 'features' }, { label: 'AI — Build with Claude', page: 'claude' }, { label: 'Developers', page: 'developers' }, { label: 'SDK reference', page: 'sdk-docs' }] },
     {
@@ -182,7 +265,12 @@ export function Footer({ go, onLogin }: { go: (p: Page, anchor?: string) => void
         { label: 'Files & storage', page: 'features', anchor: 'files' },
       ],
     },
-    { title: 'ACCOUNT', links: [{ label: 'Sign in', onClick: onLogin }] },
+    {
+      title: 'ACCOUNT',
+      links: user
+        ? [{ label: 'My Designs', onClick: onOpenDesigns }, { label: 'Sign out', onClick: onSignOut }]
+        : [{ label: 'Sign in', onClick: onLogin }],
+    },
   ];
 
   return (

@@ -32,7 +32,7 @@ import WorldView from './components/WorldView';
 import AIGenerate from './components/AIGenerate';
 import Login from './components/Login';
 import Landing from './components/Landing';
-import { isMarketingPath } from './components/marketing/router';
+import { APP_PATH, isAppEditorPath } from './components/marketing/router';
 import Help from './components/Help';
 import Messaging from './components/Messaging';
 import WebpageModal from './components/WebpageModal';
@@ -267,6 +267,18 @@ function AppContent() {
     const phone = usePhoneLayout();
     const setPhoneSlotRef = phone.setSlot;
     const [authChecked, setAuthChecked] = useState(false);
+    // Tracks the URL path so the app can switch between the marketing site and the editor
+    // (the editor lives at /app) without a full page reload, and follows browser back/forward.
+    const [locationPath, setLocationPath] = useState(() => window.location.pathname);
+    useEffect(() => {
+      const onPopState = () => setLocationPath(window.location.pathname);
+      window.addEventListener('popstate', onPopState);
+      return () => window.removeEventListener('popstate', onPopState);
+    }, []);
+    const enterApp = () => {
+      window.history.pushState({}, '', APP_PATH);
+      setLocationPath(APP_PATH);
+    };
     const [phoneSheetCollapsed, setPhoneSheetCollapsed] = useState(false);
     const [phoneSheetHasContent, setPhoneSheetHasContent] = useState(false);
     // The settings sheet shows only while something has rendered into it.
@@ -455,16 +467,19 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setIsDiagnosticLogOpen]);
 
+  const isJoinLink = new URLSearchParams(window.location.search).has('join');
+  const isAppPath = isAppEditorPath(locationPath);
+  if (!isAppPath && !isJoinLink) {
+    // Everywhere except the editor's own URL (/app) is the marketing site - shown straight away,
+    // signed in or not, so a sign-in doesn't yank someone off the page they were reading. The
+    // header there swaps "Sign in" for a profile menu once `user` resolves.
+    return <Landing onEnterApp={enterApp} />;
+  }
+  // Until Firebase says whether someone is signed in, show nothing rather than flash sign-in.
+  if (!authChecked) return <div className="fixed inset-0 bg-white" aria-busy="true" />;
   if (!user) {
-    const isJoinLink = new URLSearchParams(window.location.search).has('join');
-    // A marketing URL (/, /features, ...) renders straight away rather than waiting on the auth
-    // check, so real content (and its LCP) isn't gated behind a Firebase round trip.
-    if (!isJoinLink && isMarketingPath(window.location.pathname)) return <Landing />;
-    // Until Firebase says whether someone is signed in, show nothing rather than flash the landing page.
-    if (!authChecked) return <div className="fixed inset-0 bg-white" aria-busy="true" />;
-    // A shared design link goes straight to sign-in; everyone else starts on the landing page.
-    if (isJoinLink) return <Login note="Sign in to open the design shared with you" />;
-    return <Landing />;
+    // A shared design link or a direct /app visit both need sign-in first.
+    return <Login note={isJoinLink ? "Sign in to open the design shared with you" : "Sign in to open PolyForm"} />;
   }
 
   const banners = (

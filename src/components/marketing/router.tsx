@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-export type Page = 'home' | 'features' | 'claude' | 'developers' | 'sdk-docs';
+export type Page = 'home' | 'features' | 'claude' | 'developers' | 'sdk-docs' | 'designs';
 
 export const PATHS: Record<Page, string> = {
   home: '/',
@@ -8,6 +8,7 @@ export const PATHS: Record<Page, string> = {
   claude: '/build-with-claude',
   developers: '/developers',
   'sdk-docs': '/developers/sdk',
+  designs: '/designs',
 };
 
 function pageFromPath(pathname: string): Page {
@@ -16,15 +17,23 @@ function pageFromPath(pathname: string): Page {
   if (path === '/build-with-claude') return 'claude';
   if (path === '/developers/sdk') return 'sdk-docs';
   if (path === '/developers') return 'developers';
+  if (path === '/designs') return 'designs';
   return 'home';
 }
 
 const MARKETING_PATHS = new Set(Object.values(PATHS));
 
-/** True for any path this signed-out marketing site owns (used by App.tsx to render Landing before auth resolves). */
+/** True for any path this marketing site owns (used by App.tsx to render Landing before auth resolves, and to keep signed-in users on the same page). */
 export function isMarketingPath(pathname: string): boolean {
   const path = pathname.replace(/\/+$/, '') || '/';
   return MARKETING_PATHS.has(path);
+}
+
+/** The editor's own URL - the only path that renders the PolyForm app instead of the marketing site. */
+export const APP_PATH = '/app';
+
+export function isAppEditorPath(pathname: string): boolean {
+  return (pathname.replace(/\/+$/, '') || '/') === APP_PATH;
 }
 
 /** Real History API router for the signed-out marketing site: normal URLs, back/forward, and a shared hash-anchor scroll. */
