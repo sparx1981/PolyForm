@@ -7,6 +7,7 @@ import { PLANT_SPECIES_CATALOG } from '../../src/lib/plantLibrary';
 import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { FENCE_STYLES, WOOD_FINISHES } from '../../src/lib/fence/fenceTypes';
 import { buildRoofAssemblyForRoom } from '../../src/lib/archRoofGenerator';
+import { initRoofSkeleton } from '../../src/lib/roofSkeleton';
 import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans, withStoryTags } from './plans';
@@ -349,7 +350,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       replace_existing: z.boolean().default(true),
     },
     annotations: WRITE,
-  }, safe(async (a) => change(a.model, `Added a ${a.roof_type} roof`, shapes => {
+  }, safe(async (a) => (await initRoofSkeleton(), change(a.model, `Added a ${a.roof_type} roof`, shapes => {
     const walls = a.walls ? a.walls.map(ref => findShape(shapes, ref)) : shapes.filter(s => s.type === 'wall');
     if (!walls.length || walls.some(w => w.type !== 'wall')) throw new ToolError('A roof needs walls to sit on; add a room or walls first.');
     const parapet = a.roof_type === 'parapet';
@@ -365,7 +366,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     if (!assembly) throw new ToolError('Those walls do not enclose a footprint a roof can cover.');
     const kept = a.replace_existing ? shapes.filter(s => !isRoofShape(s)) : shapes;
     return { shapes: [...kept, ...assembly.allShapes], made: assembly.allShapes };
-  })));
+  }))));
 
   server.registerTool('add_stairs', {
     title: 'Add stairs',

@@ -50,6 +50,7 @@ import FpsCounter from './components/FpsCounter';
 import BakeModal from './components/terrain/BakeModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
+import { upgradeRoofsWhenReady } from './lib/roofUpgrade';
 
 /**
  * Lets a classic-layout toolbar be dragged to reposition — either among
@@ -418,7 +419,7 @@ function AppContent() {
           }
           if (modelDoc.exists()) {
             const data = await hydrateOffloadedModel(restoreFirestoreArraysAfterLoad(modelDoc.data()), firebaseGeometryIO);
-            setShapesSilent(data.shapes || []);
+            setShapesSilent(await upgradeRoofsWhenReady(data.shapes || []));
             setTagsSilent(data.tags || []);
             setScenesSilent(data.scenes || []);
             setCustomMaterialsSilent(data.customMaterials || []);

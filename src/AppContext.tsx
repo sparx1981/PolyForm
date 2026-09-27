@@ -17,6 +17,7 @@ import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
 import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimberFrameForRoof, generateTimberFrameForBuilding } from './lib/timberFrameGenerator';
+import { upgradeRoofsWhenReady } from './lib/roofUpgrade';
 import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
 import { TimberFrameParams, TimberFrameRecomputeState, WalkModePhase, FenceToolSettings, WaterToolSettings } from './types';
 import { DEFAULT_PATIO_TOOL_SETTINGS, type PatioToolSettings } from './lib/patio/patioTypes';
@@ -1088,6 +1089,11 @@ console.log("Created rectangle:", myRect.id);`);
         // so the graph) survives a document switch.
         replaceKernelGraph(data.kernel ?? null);
 
+        // Pitched roofs made before the current roof builder are rebuilt the first time the
+        // model is opened (then saved with the next change).
+        if (modelLoadedFor.current !== currentModelId && Array.isArray(data.shapes)) {
+          data.shapes = await upgradeRoofsWhenReady(data.shapes);
+        }
         if (data.shapes) setShapes(data.shapes);
         if (data.tags) setTags(data.tags);
         if (data.scenes) setScenes(data.scenes);
@@ -2277,6 +2283,7 @@ console.log("Created rectangle:", myRect.id);`);
     setSyncStatus('syncing');
     try {
       const project = parseProjectFile(await storageProviders[ref.provider].download(ref));
+      if (Array.isArray(project.shapes)) project.shapes = await upgradeRoofsWhenReady(project.shapes as Shape[]);
       if (currentModelIdRef.current !== modelId) return;
       isRemoteUpdate.current = true;
       applyProjectState(project);

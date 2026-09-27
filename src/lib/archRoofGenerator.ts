@@ -1528,6 +1528,9 @@ export function createGeneralPolygonalRoofSlopesGeometry(
 // SKELETON ROOFS (any outline: L, T, U, bays, curves, rectangles)
 // -------------------------------------------------------------
 
+/** Roofs built the current way (from the straight skeleton) carry this in `roofData.buildVersion`. */
+export const ROOF_BUILD_VERSION = 2;
+
 /** The skeleton roof over an outline, or null (not loaded, or the outline defeats it). */
 export function skeletonRoofModel(
   localWallPoly: [number, number][], localEavePoly: [number, number][],
@@ -2124,7 +2127,7 @@ export function buildRoofAssemblyForRoom(
       localEavePoly,
       worldWallPoly: worldPoly,
       bounds,
-      ...(model ? { skeleton: roofModelData(model) } : {}),
+      ...(model ? { skeleton: roofModelData(model), buildVersion: ROOF_BUILD_VERSION } : {}),
     },
     customData: {
       roofType: params.roofType,
@@ -3602,14 +3605,17 @@ export function updateRoofAssembly(
     ? Math.max(0.06, Math.min(0.50, Number(params.fasciaHeight.toFixed(2))))
     : (roofData.fasciaHeight ?? 0.18);
 
-  const tileShape = params.tileShape || targetRoof.roofTileData?.shape || 'none';
-  const tileSize = params.tileSize ?? targetRoof.roofTileData?.size ?? 0.35;
-  const tileColor = params.tileColor || targetRoof.roofTileData?.color || targetRoof.color || '#991b1b';
+  // Tile settings live on the roof once it has been edited, and on its tiles part before that.
+  const tileData = targetRoof.roofTileData
+    ?? allShapes.find(s => s.parentShapeId === roofId && s.tags?.includes('roof-tiles'))?.roofTileData;
+  const tileShape = params.tileShape || tileData?.shape || 'none';
+  const tileSize = params.tileSize ?? tileData?.size ?? 0.35;
+  const tileColor = params.tileColor || tileData?.color || targetRoof.color || '#991b1b';
   const randomizeColor = params.randomizeColor !== undefined 
     ? params.randomizeColor 
-    : Boolean(targetRoof.roofTileData?.randomizeColor);
-  const colorPalette = params.colorPalette || targetRoof.roofTileData?.colorPalette || DEFAULT_ROOF_TILE_SETTINGS.colorPalette;
-  const seed = params.seed ?? targetRoof.roofTileData?.seed ?? 42;
+    : Boolean(tileData?.randomizeColor);
+  const colorPalette = params.colorPalette || tileData?.colorPalette || DEFAULT_ROOF_TILE_SETTINGS.colorPalette;
+  const seed = params.seed ?? tileData?.seed ?? 42;
 
   const span = Math.min(width, depth);
   const pitchRad = Math.atan(clampedHeight / (span / 2 + eaveOverhang));
@@ -3788,6 +3794,7 @@ export function updateRoofAssembly(
       pitchAngleDeg: model ? Math.round(THREE.MathUtils.radToDeg(model.pitch) * 10) / 10 : pitchAngleDeg,
       localEavePoly,
       skeleton: model ? roofModelData(model) : undefined,
+      buildVersion: model ? ROOF_BUILD_VERSION : roofData.buildVersion,
     },
     customData: {
       ...(targetRoof.customData || {}),
