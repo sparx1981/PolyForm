@@ -2339,7 +2339,7 @@ export default function RightPanelStack() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const anyVisible = rows.some(r => !r.hidden);
-                                setGroupHidden(kernelHost.graph, group.faces, anyVisible);
+                                kernelHost.transact(() => setGroupHidden(kernelHost.graph, group.faces, anyVisible) > 0);
                                 bumpKernel();
                               }}
                               className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
@@ -2360,7 +2360,7 @@ export default function RightPanelStack() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteGroupFacesAndEdges(kernelHost.graph, group.faces);
+                                kernelHost.transact(() => { deleteGroupFacesAndEdges(kernelHost.graph, group.faces); return true; });
                                 setSelectedFaceIds(prev => prev.filter(f => !group.faces.includes(f as FaceId)));
                                 bumpKernel();
                               }}
@@ -2414,7 +2414,7 @@ export default function RightPanelStack() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteFaceAndEdges(kernelHost.graph, row.id);
+                                kernelHost.transact(() => { deleteFaceAndEdges(kernelHost.graph, row.id); return true; });
                                 setSelectedFaceIds(prev => prev.filter(f => f !== row.id));
                                 bumpKernel();
                               }}

@@ -150,6 +150,41 @@ describe('AppContext / useApp', () => {
       expect(result.current.shapes.map(s => s.id)).toEqual(['a', 'b']);
     });
 
+    it('one Ctrl+Z history covers drawn geometry and shapes, in the order they happened', () => {
+      const { result } = renderApp();
+      const v = (x: number, z: number) => ({ x, y: 0, z });
+      act(() => { result.current.addShape(makeShape({ id: 'a' })); });
+      act(() => { result.current.addShape(makeShape({ id: 'b' })); });
+      act(() => {
+        // A drawn rectangle: one undo step even though it is four edges.
+        const host = result.current.kernelHost;
+        host.beginBatch();
+        const pts = [v(0, 0), v(2, 0), v(2, 2), v(0, 2)];
+        for (let i = 0; i < 4; i++) host.commitIsolatedSegment(pts[i]!, pts[(i + 1) % 4]!);
+        host.endBatch();
+      });
+      act(() => { result.current.addShape(makeShape({ id: 'c' })); });
+      expect(result.current.kernelHost.graph.faces.size).toBe(1);
+
+      act(() => { result.current.undo(); }); // c
+      expect(result.current.shapes.map(s => s.id)).toEqual(['a', 'b']);
+      expect(result.current.kernelHost.graph.faces.size).toBe(1);
+
+      act(() => { result.current.undo(); }); // the rectangle, in one step
+      expect(result.current.kernelHost.graph.faces.size).toBe(0);
+      expect(result.current.shapes.map(s => s.id)).toEqual(['a', 'b']);
+
+      act(() => { result.current.undo(); }); // b
+      expect(result.current.shapes.map(s => s.id)).toEqual(['a']);
+
+      act(() => { result.current.redo(); }); // b
+      act(() => { result.current.redo(); }); // the rectangle
+      expect(result.current.kernelHost.graph.faces.size).toBe(1);
+      expect(result.current.shapes.map(s => s.id)).toEqual(['a', 'b']);
+      act(() => { result.current.redo(); }); // c
+      expect(result.current.shapes.map(s => s.id)).toEqual(['a', 'b', 'c']);
+    });
+
     it('undo is a no-op once the oldest history entry is reached', () => {
       const { result } = renderApp();
       act(() => {

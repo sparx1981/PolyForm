@@ -65,9 +65,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // rectangles, polygons), Shape[] keeps primitives, plants and terrain.
   const [kernelRevision, setKernelRevision] = useState(0);
   const bumpKernel = useCallback(() => setKernelRevision((r) => r + 1), []);
+  // One undo history across drawn (kernel) geometry and everything else, in the order things
+  // were done: Ctrl+Z / redo walk this journal. A kernel entry holds the id of its entry on the
+  // kernel's own stack; a shape entry holds the Shape-history entry it recorded. An entry whose
+  // step no longer exists (history trimmed, a model loaded) is skipped.
+  type JournalEntry = { kind: 'kernel'; id: number } | { kind: 'shapes'; entry: Shape[] };
+  const undoJournalRef = useRef<JournalEntry[]>([]);
+  const redoJournalRef = useRef<JournalEntry[]>([]);
   const kernelHostRef = useRef<KernelArcHost | null>(null);
   if (!kernelHostRef.current) {
     kernelHostRef.current = new KernelArcHost({
+      onUndoRecorded: (id) => {
+        undoJournalRef.current.push({ kind: 'kernel', id });
+        if (undoJournalRef.current.length > 400) undoJournalRef.current.shift();
+        redoJournalRef.current = [];
+      },
       // PolyForm is Y-up (three.js default), so tell the kernel. Without it,
       // §6.4's "horizontal faces point up" rule never fires for a ground-plane
       // face and orientation falls through to the camera heuristic.
@@ -1441,6 +1453,11 @@ console.log("Created rectangle:", myRect.id);`);
       if (newHistory.length === 0 && prevShapes) newHistory.push([...prevShapes]);
     }
     newHistory.push(entry);
+    // StrictMode runs the updater that calls this twice; the first call's entry never reaches
+    // state, so its journal record is simply skipped later (it matches no history entry).
+    undoJournalRef.current.push({ kind: 'shapes', entry });
+    if (undoJournalRef.current.length > 400) undoJournalRef.current.shift();
+    redoJournalRef.current = [];
     if (newHistory.length > 100) newHistory.shift();
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
@@ -1797,7 +1814,7 @@ console.log("Created rectangle:", myRect.id);`);
     }
   }, [terrainModifiers, shapes]);
 
-  const undo = () => {
+  const undoShapes = () => {
     if (historyIndex > 0) {
       const targetShapes = history[historyIndex - 1];
       const link = wallConversionLinks.get(history[historyIndex]);
@@ -1815,10 +1832,12 @@ console.log("Created rectangle:", myRect.id);`);
       // existing history stack, they don't extend it.
       setShapes(prev => deriveShapesState(targetShapes, prev));
       setHistoryIndex(historyIndex - 1);
+      return true;
     }
+    return false;
   };
 
-  const redo = () => {
+  const redoShapes = () => {
     if (historyIndex < history.length - 1) {
       const targetShapes = history[historyIndex + 1];
       const link = wallConversionLinks.get(targetShapes);
@@ -1829,7 +1848,49 @@ console.log("Created rectangle:", myRect.id);`);
       }
       setShapes(prev => deriveShapesState(targetShapes, prev));
       setHistoryIndex(historyIndex + 1);
+      return true;
     }
+    return false;
+  };
+
+  /** Steps back through the most recent change, whether to drawn geometry or anything else. */
+  const undo = () => {
+    const journal = undoJournalRef.current;
+    while (journal.length) {
+      const step = journal.pop()!;
+      if (step.kind === 'kernel') {
+        if (kernelHost.topUndoId === step.id && kernelHost.undo()) {
+          setSelectedFaceIds([]);
+          bumpKernel();
+          redoJournalRef.current.push(step);
+          return;
+        }
+      } else if (history[historyIndex] === step.entry && undoShapes()) {
+        redoJournalRef.current.push(step);
+        return;
+      }
+      // A stale step (its entry no longer exists): skip to the one before.
+    }
+    undoShapes();
+  };
+
+  const redo = () => {
+    const journal = redoJournalRef.current;
+    while (journal.length) {
+      const step = journal.pop()!;
+      if (step.kind === 'kernel') {
+        if (kernelHost.topRedoId === step.id && kernelHost.redo()) {
+          setSelectedFaceIds([]);
+          bumpKernel();
+          undoJournalRef.current.push(step);
+          return;
+        }
+      } else if (history[historyIndex + 1] === step.entry && redoShapes()) {
+        undoJournalRef.current.push(step);
+        return;
+      }
+    }
+    redoShapes();
   };
 
   const addShape = (shape: Shape) => {

@@ -15,6 +15,7 @@ import { snapshot, restore, type Snapshot } from '../lib/geometry/heal';
 import { SpatialIndex } from '../lib/geometry/spatialIndex';
 import { distance } from '../lib/geometry/math';
 import type { CommitOutcome, LineToolHost } from './lineTool';
+import { ISOLATED_SHAPE_KEY } from './kernelPushPull';
 
 export interface KernelHostOptions {
   readonly tolerances?: Tolerances;
@@ -24,6 +25,11 @@ export interface KernelHostOptions {
   readonly cellSize?: number;
   /** Called after every successful commit, so the renderer can invalidate. */
   readonly onChange?: (result: DeriveResult) => void;
+  /**
+   * Called with the new entry's id each time an undo entry is recorded, so
+   * the app can interleave kernel steps with its own history (one Ctrl+Z).
+   */
+  readonly onUndoRecorded?: (id: number) => void;
 }
 
 export class KernelLineHost implements LineToolHost {
@@ -33,6 +39,13 @@ export class KernelLineHost implements LineToolHost {
   protected index: SpatialIndex<EdgeId>;
   protected undoStack: Snapshot[] = [];
   protected redoStack: Snapshot[] = [];
+  /** An id per undo/redo entry (parallel to the stacks), so a shared history can tell which entry is on top. */
+  protected undoIds: number[] = [];
+  protected redoIds: number[] = [];
+  private nextUndoId = 1;
+  private readonly onUndoRecorded: ((id: number) => void) | undefined;
+  private batchDepth = 0;
+  private batchBefore: Snapshot | null = null;
   private readonly cameraDirection: Vec3 | undefined;
   private readonly upAxis: Vec3 | undefined;
   protected readonly onChange: ((r: DeriveResult) => void) | undefined;
@@ -44,6 +57,7 @@ export class KernelLineHost implements LineToolHost {
     this.cameraDirection = opts.cameraDirection;
     this.upAxis = opts.upAxis;
     this.onChange = opts.onChange;
+    this.onUndoRecorded = opts.onUndoRecorded;
   }
 
   protected get ctx(): InsertContext {
@@ -58,10 +72,65 @@ export class KernelLineHost implements LineToolHost {
     };
   }
 
-  /** Records an undo entry and clears redo. Shared with subclasses. */
+  /**
+   * Records an undo entry and clears redo. Shared with subclasses. Inside a
+   * batch, only the state before the batch's first change is kept, and the
+   * whole batch becomes one entry when it ends.
+   */
   protected pushUndo(before: Snapshot): void {
+    if (this.batchDepth > 0) {
+      if (!this.batchBefore) this.batchBefore = before;
+      return;
+    }
+    const id = this.nextUndoId++;
     this.undoStack.push(before);
+    this.undoIds.push(id);
     this.redoStack = [];
+    this.redoIds = [];
+    this.onUndoRecorded?.(id);
+  }
+
+  /** Groups several commits (e.g. the sides of one rectangle) into one undo entry. */
+  beginBatch(): void {
+    this.batchDepth++;
+  }
+
+  endBatch(): void {
+    if (this.batchDepth === 0) return;
+    this.batchDepth--;
+    if (this.batchDepth === 0 && this.batchBefore) {
+      const before = this.batchBefore;
+      this.batchBefore = null;
+      this.pushUndo(before);
+    }
+  }
+
+  /**
+   * Runs an edit made directly on the graph (delete, paint, hide...) as one
+   * undo entry. `edit` returns whether it changed anything.
+   */
+  transact(edit: () => boolean): boolean {
+    const before = snapshot(this.graph);
+    let changed = false;
+    try {
+      changed = edit();
+    } catch (err) {
+      restore(this.graph, before);
+      this.rebuildIndex();
+      throw err;
+    }
+    if (changed) this.pushUndo(before);
+    return changed;
+  }
+
+  /** Id of the entry Ctrl+Z would undo next, or null. */
+  get topUndoId(): number | null {
+    return this.undoIds.length ? this.undoIds[this.undoIds.length - 1]! : null;
+  }
+
+  /** Id of the entry redo would restore next, or null. */
+  get topRedoId(): number | null {
+    return this.redoIds.length ? this.redoIds[this.redoIds.length - 1]! : null;
   }
 
   protected notify(result: DeriveResult): void {
@@ -109,6 +178,8 @@ export class KernelLineHost implements LineToolHost {
     this.rebuildIndex();
     this.undoStack = [];
     this.redoStack = [];
+    this.undoIds = [];
+    this.redoIds = [];
   }
 
   /**
@@ -145,6 +216,41 @@ export class KernelLineHost implements LineToolHost {
     this.pushUndo(before);
     this.notify(result);
     return { ok: true, edges, wasOverdraw };
+  }
+
+  /**
+   * A whole closed outline (a Polyline or closed Bézier shape) as one
+   * transaction and one undo entry, drawn with isolated edges like
+   * Rectangle/Circle/Triangle so it neither splits nor is split by other
+   * shapes it happens to cross. Faces it creates are marked as isolated
+   * shapes, so extruding them stays isolated too (see kernelPushPull.ts).
+   */
+  commitIsolatedRing(points: readonly Vec3[]): { ok: boolean; faces: number[]; reason?: string } {
+    const ring = points.filter((p, i) => distance(p, points[(i + 1) % points.length]!) >= this.tolerances.MIN_EDGE_LENGTH);
+    if (ring.length < 3) return { ok: false, faces: [], reason: 'too few points' };
+    const before = snapshot(this.graph);
+    const facesBefore = new Set(this.graph.faces.keys());
+    let result: DeriveResult;
+    try {
+      const touched = new Set<EdgeId>();
+      for (let i = 0; i < ring.length; i++) {
+        for (const t of insertIsolatedEdge(this.ctx, ring[i]!, ring[(i + 1) % ring.length]!).touched) touched.add(t);
+      }
+      result = derive(this.graph, touched, this.deriveOpts);
+    } catch (err) {
+      restore(this.graph, before);
+      this.rebuildIndex();
+      return { ok: false, faces: [], reason: err instanceof Error ? err.message : String(err) };
+    }
+    const faces: number[] = [];
+    for (const [id, face] of this.graph.faces) {
+      if (facesBefore.has(id)) continue;
+      face.attributes.custom[ISOLATED_SHAPE_KEY] = true;
+      faces.push(id);
+    }
+    this.pushUndo(before);
+    this.notify(result);
+    return { ok: true, faces };
   }
 
   /**
@@ -192,6 +298,7 @@ export class KernelLineHost implements LineToolHost {
    */
   rollbackLast(): void {
     const snap = this.undoStack.pop();
+    this.undoIds.pop();
     if (!snap) return;
     restore(this.graph, snap);
     this.rebuildIndex();
@@ -207,12 +314,15 @@ export class KernelLineHost implements LineToolHost {
       const latest = this.undoStack.pop()!;
       this.undoStack.pop();
       this.undoStack.push(latest);
+      // The surviving entry keeps the older id: that is the one a shared history recorded first.
+      this.undoIds.pop();
     }
   }
 
   undo(): boolean {
     const snap = this.undoStack.pop();
     if (!snap) return false;
+    this.redoIds.push(this.undoIds.pop() ?? 0);
     this.redoStack.push(snapshot(this.graph));
     restore(this.graph, snap);
     this.rebuildIndex();
@@ -222,6 +332,7 @@ export class KernelLineHost implements LineToolHost {
   redo(): boolean {
     const snap = this.redoStack.pop();
     if (!snap) return false;
+    this.undoIds.push(this.redoIds.pop() ?? 0);
     this.undoStack.push(snapshot(this.graph));
     restore(this.graph, snap);
     this.rebuildIndex();
@@ -234,6 +345,7 @@ export class KernelLineHost implements LineToolHost {
   trimHistory(maxEntries = 200): void {
     if (this.undoStack.length > maxEntries) {
       this.undoStack = this.undoStack.slice(-maxEntries);
+      this.undoIds = this.undoIds.slice(-maxEntries);
     }
   }
 }

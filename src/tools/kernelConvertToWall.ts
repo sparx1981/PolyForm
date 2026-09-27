@@ -319,6 +319,81 @@ function pairEdges(outer: readonly P2[], inner: readonly P2[]): Pairing | null {
   return null;
 }
 
+/**
+ * Pairs outer corners with inner ones when the two outlines do not match
+ * one-to-one: the Offset tool collapses edges that vanish on tight curves
+ * and cuts very sharp corners flat, so one outline can have more corners
+ * than the other. Each outer corner's partner is the inner corner nearest
+ * where a plain mitred offset would have put it; several outer corners may
+ * share one (their pieces become wedges). Accepted only when the wall is
+ * the same thickness wherever its two faces run parallel, and the pieces
+ * exactly fill the ring.
+ */
+function flexiblePairing(outer: readonly P2[], inner: readonly P2[]):
+  { ok: true; partners: P2[]; thickness: number } | { ok: false; reason: string } {
+  const n = outer.length;
+  const dirs = outer.map((p, i) => unit2(sub2(outer[(i + 1) % n]!, p)));
+  // Thickness: the distance between parallel, overlapping outer and inner edges.
+  const gaps: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = outer[i]!, d = dirs[i]!;
+    const l = len2(sub2(outer[(i + 1) % n]!, a));
+    for (let j = 0; j < inner.length; j++) {
+      const p = inner[j]!, q = inner[(j + 1) % inner.length]!;
+      const e = unit2(sub2(q, p));
+      if (dot2(d, e) < 0.9995) continue;
+      const gap = cross2(d, sub2(p, a));
+      if (gap <= POINT_TOL) continue;
+      const s0 = dot2(sub2(p, a), d), s1 = dot2(sub2(q, a), d);
+      if (Math.max(s0, s1) < POINT_TOL || Math.min(s0, s1) > l - POINT_TOL) continue;
+      gaps.push(gap);
+    }
+  }
+  if (!gaps.length) {
+    return { ok: false, reason: 'The inside and outside outlines do not line up. Use the Offset tool so the wall is the same thickness all the way round.' };
+  }
+  // The most common gap is the wall thickness; every parallel pair must agree.
+  gaps.sort((a, b) => a - b);
+  const thickness = gaps[Math.floor(gaps.length / 2)]!;
+  const tol = Math.max(POINT_TOL, thickness * 0.01);
+  const off = gaps.filter((g) => Math.abs(g - thickness) > tol);
+  // Parallel edges further apart than the wall (e.g. across a wide recess) are not partners;
+  // closer ones mean the wall really is thinner somewhere.
+  if (off.some((g) => g < thickness - tol)) {
+    return { ok: false, reason: `The wall is not the same thickness all the way round (${fmtMm(gaps[0]!)} to ${fmtMm(thickness)}). Use the Offset tool to make it even.` };
+  }
+  const shifted = (i: number): { p: P2; d: P2 } => {
+    const d = dirs[i]!;
+    const a = outer[i]!;
+    return { p: { x: a.x - d.z * thickness, z: a.z + d.x * thickness }, d }; // left of travel = inside
+  };
+  const meet = (l1: { p: P2; d: P2 }, l2: { p: P2; d: P2 }): P2 => {
+    const den = cross2(l1.d, l2.d);
+    if (Math.abs(den) < 1e-12) return l2.p;
+    const t = cross2(sub2(l2.p, l1.p), l2.d) / den;
+    return { x: l1.p.x + l1.d.x * t, z: l1.p.z + l1.d.z * t };
+  };
+  const partners = outer.map((_, i) => {
+    const ideal = meet(shifted((i - 1 + n) % n), shifted(i));
+    let best = inner[0]!, bestD = Infinity;
+    for (const q of inner) {
+      const d = len2(sub2(q, ideal));
+      if (d < bestD) { bestD = d; best = q; }
+    }
+    return best;
+  });
+  // The pieces must exactly fill the ring.
+  const ringArea = signedArea2(outer) - signedArea2(inner);
+  let piecesArea = 0;
+  for (let i = 0; i < n; i++) {
+    piecesArea += Math.abs(signedArea2([outer[i]!, partners[i]!, partners[(i + 1) % n]!, outer[(i + 1) % n]!]));
+  }
+  if (Math.abs(piecesArea - ringArea) > Math.max(1e-4, ringArea * 0.01)) {
+    return { ok: false, reason: 'This outline could not be split cleanly into walls. Try a smaller offset, or fewer tight curves.' };
+  }
+  return { ok: true, partners, thickness };
+}
+
 // ---------------------------------------------------------------------------
 // Analysis
 // ---------------------------------------------------------------------------
@@ -473,29 +548,40 @@ export function analyzeWallConversion(
     }
   }
 
-  // 5. Pair every outer edge with its inner partner.
-  const pairing = pairEdges(outer, inner);
-  if (!pairing) {
-    return reject('The inside and outside outlines do not line up. Use the Offset tool so the wall is the same thickness all the way round.');
-  }
-  const tMin = Math.min(...pairing.thicknesses);
-  const tMax = Math.max(...pairing.thicknesses);
-  if (tMax - tMin > Math.max(POINT_TOL, tMax * 0.01)) {
-    return reject(
-      `The wall is not the same thickness all the way round (${fmtMm(tMin)} to ${fmtMm(tMax)}). Use the Offset tool to make it even.`,
-    );
-  }
-  const thickness = (tMin + tMax) / 2;
-
-  // 6. Build one piece per edge.
+  // 5. Pair every outer corner with its inner partner: one-to-one for a
+  //    plain offset, or flexibly when the Offset tool cleaned the result
+  //    (edges collapsed on tight curves, corners cut flat).
   const n = outer.length;
+  let partners: P2[];
+  let thickness: number;
+  const pairing = pairEdges(outer, inner);
+  if (pairing) {
+    const tMin = Math.min(...pairing.thicknesses);
+    const tMax = Math.max(...pairing.thicknesses);
+    if (tMax - tMin > Math.max(POINT_TOL, tMax * 0.01)) {
+      return reject(
+        `The wall is not the same thickness all the way round (${fmtMm(tMin)} to ${fmtMm(tMax)}). Use the Offset tool to make it even.`,
+      );
+    }
+    thickness = (tMin + tMax) / 2;
+    partners = outer.map((_, i) => inner[(i + pairing.shift) % n]!);
+  } else {
+    const flexible = flexiblePairing(outer, inner);
+    if (!flexible.ok) return reject((flexible as { reason: string }).reason);
+    const pairs = flexible as { partners: P2[]; thickness: number };
+    thickness = pairs.thickness;
+    partners = pairs.partners;
+  }
+
+  // 6. Build one piece per outer edge. A piece whose two inner corners are the
+  //    same point (a collapsed edge, or a cut corner) is a wedge.
   const pieces: WallPiece[] = [];
   const turnDeg: number[] = [];
   for (let i = 0; i < n; i++) {
     const o0 = outer[i]!;
     const o1 = outer[(i + 1) % n]!;
-    const n0 = inner[(i + pairing.shift) % n]!;
-    const n1 = inner[(i + 1 + pairing.shift) % n]!;
+    const n0 = partners[i]!;
+    const n1 = partners[(i + 1) % n]!;
     const dir = unit2(sub2(o1, o0));
     // CCW outline: the inside is to the left, so outward is to the right.
     const outward = { x: dir.z, z: -dir.x };

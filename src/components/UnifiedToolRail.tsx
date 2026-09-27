@@ -37,6 +37,7 @@ import {
   Code,
   Globe,
   Scissors,
+  Combine,
   Ruler,
   ToggleLeft,
   ToggleRight,
@@ -784,6 +785,16 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'offset',
           onClick: (s) => s.setActiveTool('offset'),
           keywords: ['offset', 'inset', 'border', 'expand']
+        },
+        {
+          id: 'combine',
+          tool: 'combine',
+          label: 'Combine Shapes',
+          subtitle: 'Merge, subtract or intersect flat shapes on one surface',
+          icon: <Combine size={19} />,
+          isActive: (s) => s.activeTool === 'combine',
+          onClick: (s) => s.setActiveTool('combine'),
+          keywords: ['merge', 'union', 'combine', 'join', 'subtract', 'intersect', 'boolean', 'shapes']
         },
         {
           id: 'subtract',

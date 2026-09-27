@@ -37,6 +37,7 @@ import type { EdgeId, FaceId, Vec2 } from './types';
 import { getVertex, loopEdgeIds, loopVertexIds } from './topology';
 import { planeBasis, projectToBasis, unprojectFromBasis, distance } from './math';
 import { insertEdge, type InsertContext } from './insert';
+import { safeOffsetPolygon2D, type SafeOffsetResult } from './safeOffset';
 
 /**
  * Mitred offset of a closed 2D polygon.
@@ -141,8 +142,11 @@ export function insertFaceOffset(
   const basis = planeBasis(f.plane);
   const order = loopVertexIds(g, f.outerLoop);
   const points2D = order.map((vid) => projectToBasis(getVertex(g, vid).position, basis));
-  const offset2D = offsetPolygon2D(points2D, dist);
-  const offset3D = offset2D.map((p) => unprojectFromBasis(p, basis));
+  const outline = faceOffsetOutline(points2D, dist);
+  if (!outline.ok) {
+    return { ok: false, reason: outline.reason ?? 'offset not possible', touched: new Set() };
+  }
+  const offset3D = outline.points.map((p) => unprojectFromBasis(p, basis));
 
   const touched = new Set<EdgeId>();
   const n = offset3D.length;
@@ -170,6 +174,17 @@ export function insertFaceOffset(
 // ---------------------------------------------------------------------------
 
 /** True when a 2D point lies inside a polygon (even-odd ray casting). */
+/**
+ * The ring the Offset tool inserts for a face outline offset by `dist`:
+ * the mitred offset with vanishing edges collapsed, over-long corners cut
+ * at twice the offset, and pinches resolved, so it never folds over
+ * itself (see safeOffset.ts). Shared by the live preview and the commit so
+ * the two can never disagree.
+ */
+export function faceOffsetOutline(points2D: readonly Vec2[], dist: number): SafeOffsetResult {
+  return safeOffsetPolygon2D(points2D, dist, { miterLimit: 2 });
+}
+
 export function pointInPolygon2D(p: Vec2, poly: readonly Vec2[]): boolean {
   let inside = false;
   const n = poly.length;

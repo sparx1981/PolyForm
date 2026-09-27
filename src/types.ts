@@ -24,7 +24,7 @@ export type CivilToolMode = 'terrain' | 'road' | 'pad-rect' | 'pad-circle' | 'st
 export type ToolType = 
   | 'select' | 'lasso' | 'eraser' | 'paint' | 'component'
   | 'line' | 'poly' | 'bezier' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
-  | 'move' | 'rotate' | 'scale' | 'pushpull' | 'followme' | 'offset' | 'flip'
+  | 'move' | 'rotate' | 'scale' | 'pushpull' | 'followme' | 'offset' | 'combine' | 'flip'
   | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section'
   | 'orbit' | 'pan' | 'zoom' | 'zoomextents' | 'teleport' | 'walk' | 'look'
   | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome'

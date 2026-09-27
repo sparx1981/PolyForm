@@ -257,6 +257,37 @@ describe('curves', () => {
   });
 });
 
+describe('cleaned offsets', () => {
+  it('converts a sharp triangle grown outward, where the offset cut its sharp corner flat', () => {
+    const h = host();
+    outline(h, [vec3(0, 0, 0), vec3(8, 0, 0), vec3(0, 0, 1.4)]);
+    const b = createFaceOffsetBinding(h, () => {});
+    b.begin(only(h));
+    // 0.3 outside the long edge's middle (z = 0 side).
+    b.update(b.projectToSessionPlane(vec3(4, 0, -0.3))!);
+    expect(b.commit()).toBe(true);
+    pullUp(h, ringFace(h), 2.4);
+    const plan = expectPlan(analyse(h, sideFace(h)));
+    expect(plan.thickness).toBeCloseTo(0.3, 3);
+    // Three walls plus a wedge at the cut corner.
+    expect(plan.pieces).toHaveLength(4);
+  });
+
+  it('converts a ring whose tight notch collapsed when offset inward', () => {
+    const h = host();
+    // A 6 x 4 block with a 0.2-wide notch cut into its top edge; shrinking by 0.25 closes the notch.
+    outline(h, [vec3(0, 0, 0), vec3(6, 0, 0), vec3(6, 0, 4), vec3(3.1, 0, 4), vec3(3.1, 0, 3.5), vec3(2.9, 0, 3.5), vec3(2.9, 0, 4), vec3(0, 0, 4)]);
+    const b = createFaceOffsetBinding(h, () => {});
+    b.begin(only(h));
+    b.update(b.projectToSessionPlane(vec3(3, 0, 0.25))!);
+    expect(b.commit()).toBe(true);
+    pullUp(h, ringFace(h), 2.4);
+    const plan = expectPlan(analyse(h, sideFace(h)));
+    expect(plan.thickness).toBeCloseTo(0.25, 3);
+    expect(plan.pieces).toHaveLength(8);
+  });
+});
+
 describe('warnings', () => {
   it('flags walls thinner than any real wall', () => {
     const h = host();

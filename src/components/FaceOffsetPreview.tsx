@@ -3,8 +3,9 @@
  *
  * Shows the NEW ring that release will insert — a separate boundary drawn
  * inside or around the original, not a reshape of it. Computed via the
- * SAME `offsetPolygon2D` construction `insertFaceOffset` uses, so the
- * preview can never disagree with what commit actually produces.
+ * SAME `faceOffsetOutline` construction `insertFaceOffset` uses, so the
+ * preview can never disagree with what commit actually produces. Shown in
+ * red (the original outline) when the offset is too large for the shape.
  *
  * The original boundary is untouched by the real operation and needs no
  * preview of its own; only the new ring is shown.
@@ -13,7 +14,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { FaceId, Graph } from '../lib/geometry/types';
-import { offsetPolygon2D } from '../lib/geometry/faceOffset';
+import { faceOffsetOutline } from '../lib/geometry/faceOffset';
 import { getVertex, loopVertexIds } from '../lib/geometry/topology';
 import { planeBasis, projectToBasis, unprojectFromBasis } from '../lib/geometry/math';
 
@@ -27,7 +28,7 @@ export interface FaceOffsetPreviewProps {
 const PREVIEW_COLOR = '#0063A3';
 
 export function FaceOffsetPreview({ graph, faceId, distance, color = PREVIEW_COLOR }: FaceOffsetPreviewProps) {
-  const lineGeometry = useMemo(() => {
+  const preview = useMemo(() => {
     if (Math.abs(distance) < 1e-6) return null;
     const f = graph.faces.get(faceId);
     if (!f) return null;
@@ -35,8 +36,9 @@ export function FaceOffsetPreview({ graph, faceId, distance, color = PREVIEW_COL
     const basis = planeBasis(f.plane);
     const order = loopVertexIds(graph, f.outerLoop);
     const points2D = order.map((vid) => projectToBasis(getVertex(graph, vid).position, basis));
-    const offset2D = offsetPolygon2D(points2D, distance);
-    const pts = offset2D.map((p) => unprojectFromBasis(p, basis));
+    const outline = faceOffsetOutline(points2D, distance);
+    // Too large an offset: outline the original in red instead (release does nothing).
+    const pts = (outline.ok ? outline.points : points2D).map((p) => unprojectFromBasis(p, basis));
 
     const lines: number[] = [];
     const n = pts.length;
@@ -49,14 +51,14 @@ export function FaceOffsetPreview({ graph, faceId, distance, color = PREVIEW_COL
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lines), 3));
-    return geo;
+    return { geo, ok: outline.ok };
   }, [graph, faceId, distance]);
 
-  if (!lineGeometry) return null;
+  if (!preview) return null;
 
   return (
-    <lineSegments geometry={lineGeometry} raycast={() => null} renderOrder={4}>
-      <lineBasicMaterial color={color} transparent opacity={0.9} depthTest={false} />
+    <lineSegments geometry={preview.geo} raycast={() => null} renderOrder={4}>
+      <lineBasicMaterial color={preview.ok ? color : '#dc2626'} transparent opacity={0.9} depthTest={false} />
     </lineSegments>
   );
 }

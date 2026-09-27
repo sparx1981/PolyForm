@@ -59,9 +59,14 @@ export function createWallMiterFootprintGeometry(
   footprint: [number, number][],
   height: number
 ): THREE.BufferGeometry {
+  // A wedge-shaped piece (from Convert To Wall at a collapsed edge or cut corner) repeats a corner.
+  const pts = footprint.filter((p, i) => {
+    const q = footprint[(i + 1) % footprint.length];
+    return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6;
+  });
   const shape = new THREE.Shape();
-  shape.moveTo(footprint[0][0], footprint[0][1]);
-  for (let i = 1; i < footprint.length; i++) shape.lineTo(footprint[i][0], footprint[i][1]);
+  shape.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i][0], pts[i][1]);
   shape.closePath();
   const geom = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, steps: 1 });
   // ExtrudeGeometry extrudes the shape's local (X, Y) along +Z from 0..height. Center it, then

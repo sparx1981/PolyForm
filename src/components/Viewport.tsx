@@ -114,6 +114,7 @@ import { rankSnap } from '../tools/tuning';
 import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
+import { applyBoolean, planBoolean, BOOLEAN_LABELS, orderedShapeGroups, type BooleanOp, type BooleanPlan, type BooleanRejection } from '../tools/kernelBoolean';
 import { planCurvedMerge, isCurvedPiece, type MergeResult, type MergeRejection } from '../tools/convertedWallMerge';
 import { analyzeWallConversion, buildWallShapes, captureFaces, graphSignature, heightWarnings, type WallConversionPlan, type WallConversionRejection } from '../tools/kernelConvertToWall';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
@@ -1812,6 +1813,15 @@ function Scene() {
     event.nativeEvent?.preventDefault();
     const clientX = event.nativeEvent?.clientX ?? 0;
     const clientY = event.nativeEvent?.clientY ?? 0;
+    // Right-clicking inside a selection of several shapes keeps it (for Merge / Subtract /
+    // Intersect); otherwise the clicked shape becomes the selection, as before.
+    const current = kernelSelectedSetRef.current;
+    if (current.has(faceId) && orderedShapeGroups(kernelHost.graph, [...current]).length > 1) {
+      setSelectedId(null);
+      setSelectedIds([]);
+      setContextMenu({ x: clientX, y: clientY, type: 'kernel', data: [...current], faceId });
+      return;
+    }
     const group = groupContaining(kernelHost.graph, faceId);
     setSelectedFaceIds(group);
     setSelectedId(null);
@@ -1821,6 +1831,15 @@ function Scene() {
 
   const handleKernelFaceClick = useCallback((faceId: FaceId, event: { shiftKey?: boolean; point?: THREE.Vector3 }) => {
     if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
+      return;
+    }
+    if (activeTool === 'combine') {
+      // Combine Shapes: each click adds (or removes) a whole shape, in order; the first leads.
+      const group = groupContaining(kernelHost.graph, faceId);
+      const groupSet = new Set<number>(group);
+      setSelectedId(null);
+      setSelectedIds([]);
+      setSelectedFaceIds(prev => prev.includes(faceId) ? prev.filter(f => !groupSet.has(f)) : [...prev, ...group]);
       return;
     }
     if (activeTool === 'paint') {
@@ -1838,34 +1857,37 @@ function Scene() {
       // many separate primitives they came from — the height map carried by
       // the active material included, same as its color.
       if (event.shiftKey) {
-        if (paintFace(kernelHost.graph, faceId, activeMaterial, activeFaceFinish())) {
+        if (kernelHost.transact(() => {
+          if (!paintFace(kernelHost.graph, faceId, activeMaterial, activeFaceFinish())) return false;
           setFaceSurfaceDepth(kernelHost.graph, faceId, activeSurfaceDepth ?? null);
-          bumpKernel();
-        }
+          return true;
+        })) bumpKernel();
       } else if (kernelSelectedSet.size > 1) {
-        if (paintFaces(kernelHost.graph, kernelSelectedSet, activeMaterial, activeFaceFinish()) > 0) {
+        if (kernelHost.transact(() => {
+          if (paintFaces(kernelHost.graph, kernelSelectedSet, activeMaterial, activeFaceFinish()) === 0) return false;
           setFacesSurfaceDepth(kernelHost.graph, kernelSelectedSet, activeSurfaceDepth ?? null);
-          bumpKernel();
-        }
+          return true;
+        })) bumpKernel();
       } else {
         const group = groupContaining(kernelHost.graph, faceId);
-        if (paintFaces(kernelHost.graph, group, activeMaterial, activeFaceFinish()) > 0) {
+        if (kernelHost.transact(() => {
+          if (paintFaces(kernelHost.graph, group, activeMaterial, activeFaceFinish()) === 0) return false;
           setFacesSurfaceDepth(kernelHost.graph, group, activeSurfaceDepth ?? null);
-          bumpKernel();
-        }
+          return true;
+        })) bumpKernel();
       }
       return;
     }
     if (activeTool === 'eraser') {
       if (event.shiftKey) {
         // Shift-click deletes a single surface/face
-        deleteFaceAndEdges(kernelHost.graph, faceId);
+        kernelHost.transact(() => { deleteFaceAndEdges(kernelHost.graph, faceId); return true; });
         bumpKernel();
         setSelectedFaceIds(prev => prev.filter(f => f !== faceId));
       } else {
         // Plain click on an object deletes all of that object's surfaces
         const group = groupContaining(kernelHost.graph, faceId);
-        deleteGroupFacesAndEdges(kernelHost.graph, group);
+        kernelHost.transact(() => { deleteGroupFacesAndEdges(kernelHost.graph, group); return true; });
         bumpKernel();
         const groupSet = new Set(group);
         setSelectedFaceIds(prev => prev.filter(f => !groupSet.has(f as FaceId)));
@@ -2971,9 +2993,10 @@ function Scene() {
       };
       const finish = () => {
         removeListeners();
-        faceOffsetRef.current.commit();
+        const distance = faceOffsetRef.current.session?.distance ?? 0;
+        const ok = faceOffsetRef.current.commit();
         setFaceOffsetPreview(null);
-        setMeasurements('');
+        setMeasurements(ok || Math.abs(distance) < 1e-3 ? '' : 'That offset is larger than the shape allows, so nothing was changed.');
       };
 
       window.addEventListener('pointermove', onMove);
@@ -3766,35 +3789,27 @@ function Scene() {
       }
     }
 
-    // Geometry triangulation
-    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-    
-    const newShape: Shape = {
-      id: Math.random().toString(36).substr(2, 9),
-      type: 'poly',
-      position: [origin.x, origin.y, origin.z],
-      quaternion: [quat.x, quat.y, quat.z, quat.w],
-      args: { vertices: p2d.map(p => [p.x, p.y]) },
-      color: activeMaterial,
-      roughness: activePBR.roughness,
-      metalness: activePBR.metalness,
-      opacity: activePBR.opacity
-    };
-
-    addShape(newShape);
-    commitHistory();
+    // A drawn surface in the geometry kernel, like Rectangle / Circle / Polygon, so Offset,
+    // Push/Pull, Convert To Wall and Merge all work on it. One undo step.
+    const committed = kernelHost.commitIsolatedRing(polyVertices.map(v => ({ x: v.x, y: v.y, z: v.z })));
+    if (!committed.ok) {
+      setConsoleOutput(prev => [...prev, `[ERROR] Could not create the shape: ${committed.reason ?? 'unknown error'}.`]);
+      diagLog('ERROR', 'Poly failed: kernel commit', { reason: committed.reason });
+      return;
+    }
+    bumpKernel();
     setActiveTool('select');
-    setSelectedId(newShape.id);
-    
-    diagLog('SDK', 'Poly shape created', { id: newShape.id, vertexCount: p2d.length });
-    
+    setSelectedId(null);
+    setSelectedIds([]);
+    setSelectedFaceIds(committed.faces);
+
+    diagLog('SDK', 'Poly surface created', { faces: committed.faces.length, vertexCount: p2d.length });
+
     setPolyVertices([]);
     setPolyPlane(null);
     setPolyNormal(null);
     setPolyCandidatePos(null);
-    
-    recordAction(`sdk.createPoly({ vertices: ${JSON.stringify(newShape.args.vertices)} });`);
-  }, [polyVertices, polyNormal, polyPlaneOnId, activeMaterial, activePBR, addShape, commitHistory, setActiveTool, setSelectedId, diagLog, recordAction, setConsoleOutput, setPolyVertices, setPolyPlane, setPolyNormal, setPolyCandidatePos]);
+  }, [polyVertices, polyNormal, polyPlaneOnId, kernelHost, bumpKernel, setActiveTool, setSelectedId, setSelectedIds, setSelectedFaceIds, diagLog, setConsoleOutput, setPolyVertices, setPolyPlane, setPolyNormal, setPolyCandidatePos]);
 
   const finalizeWallChain = useCallback(() => {
     setWallVertices([]);
@@ -4238,44 +4253,39 @@ function Scene() {
     const tessPts = tessellateEntireCurve(currentKnots, true, bezierResolution);
     if (tessPts.length < 3) return;
 
+    // Flatten onto the drawing plane, then commit as a kernel surface like the other shape tools.
     const origin = currentKnots[0].point.clone();
     const normal = (bezierActivePlane ? bezierActivePlane.normal.clone() : new THREE.Vector3(0, 1, 0)).normalize();
-    const p2d = projectToPlane(tessPts, origin, normal);
-
-    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-
-    const newShape: Shape = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: `Bézier Surface ${shapes.filter(s => s.type === 'poly' || s.type === 'bezier').length + 1}`,
-      type: 'poly',
-      position: [origin.x, origin.y, origin.z],
-      quaternion: [quat.x, quat.y, quat.z, quat.w],
-      args: {
-        vertices: p2d.map(p => [p.x, p.y]),
-        height: 0,
-        isClosed: true,
-        bezierKnots: currentKnots.map(k => ({
-          point: [k.point.x, k.point.y, k.point.z],
-          handleIn: k.handleIn ? [k.handleIn.x, k.handleIn.y, k.handleIn.z] : null,
-          handleOut: k.handleOut ? [k.handleOut.x, k.handleOut.y, k.handleOut.z] : null,
-          mode: k.mode
-        })),
-        resolution: bezierResolution
-      },
-      color: activeMaterial || '#ffffff',
-      roughness: activePBR.roughness,
-      metalness: activePBR.metalness,
-      opacity: activePBR.opacity
-    };
-
-    addShape(newShape);
-    commitHistory();
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, origin);
+    const ringPts = tessPts.map(p => plane.projectPoint(p, new THREE.Vector3()));
+    if (checkSelfIntersection(projectToPlane(ringPts, origin, normal))) {
+      setMeasurements('A closed Bézier shape cannot cross itself.');
+      return;
+    }
+    const committed = kernelHost.commitIsolatedRing(ringPts.map(p => ({ x: p.x, y: p.y, z: p.z })));
+    if (!committed.ok) {
+      setMeasurements(`Could not create the Bézier surface: ${committed.reason ?? 'unknown error'}.`);
+      return;
+    }
+    // Keep the curve's knots on the surface, for editing the curve later.
+    const knots = currentKnots.map(k => ({
+      point: [k.point.x, k.point.y, k.point.z],
+      handleIn: k.handleIn ? [k.handleIn.x, k.handleIn.y, k.handleIn.z] : null,
+      handleOut: k.handleOut ? [k.handleOut.x, k.handleOut.y, k.handleOut.z] : null,
+      mode: k.mode,
+    }));
+    for (const fid of committed.faces) {
+      const face = kernelHost.graph.faces.get(fid as FaceId);
+      if (face) face.attributes.custom.bezier = { knots, resolution: bezierResolution };
+    }
+    bumpKernel();
     setActiveTool('select');
-    setSelectedId(newShape.id);
-    setSelectedIds([newShape.id]);
+    setSelectedId(null);
+    setSelectedIds([]);
+    setSelectedFaceIds(committed.faces);
 
-    diagLog('SDK', 'Bézier closed loop surface created', { id: newShape.id, vertexCount: p2d.length });
-    setMeasurements(`Created solid Bézier surface (${p2d.length} vertices) ready for Push/Pull.`);
+    diagLog('SDK', 'Bézier closed loop surface created', { faces: committed.faces.length, vertexCount: ringPts.length });
+    setMeasurements(`Created Bézier surface (${ringPts.length} points) ready for Offset or Push/Pull.`);
 
     setBezierKnots([]);
     setBezierActivePlane(null);
@@ -4284,7 +4294,7 @@ function Scene() {
     setSnapIndicator(null);
     setIsDraggingBezierHandle(false);
     bezierToolRef.current.activate();
-  }, [bezierKnots, bezierResolution, bezierActivePlane, activeMaterial, activePBR, addShape, commitHistory, setActiveTool, setSelectedId, setSelectedIds, setMeasurements, shapes, diagLog]);
+  }, [bezierKnots, bezierResolution, bezierActivePlane, kernelHost, bumpKernel, setActiveTool, setSelectedId, setSelectedIds, setSelectedFaceIds, setMeasurements, diagLog]);
 
   const finishBezierOpenPath = useCallback(() => {
     const currentKnots = bezierKnots.length > 0 ? bezierKnots : bezierToolRef.current.getKnots();
@@ -4690,7 +4700,7 @@ function Scene() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && !drawingStartRef.current) {
         if (kernelSelectedSetRef.current.size > 0) {
           e.preventDefault();
-          deleteGroupFacesAndEdges(kernelHost.graph, [...kernelSelectedSetRef.current]);
+          kernelHost.transact(() => { deleteGroupFacesAndEdges(kernelHost.graph, [...kernelSelectedSetRef.current]); return true; });
           setSelectedFaceIds([]);
           bumpKernel();
           return;
@@ -8113,12 +8123,18 @@ function Scene() {
         // the user never asked for.
         const faceIdsBefore = new Set(kernelHost.graph.faces.keys());
         let ok = ring.length >= 3;
-        for (let i = 0; ok && i < ring.length; i++) {
-          const result = lineBinding.commitIsolatedDrag(ring[i]!, ring[(i + 1) % ring.length]!);
-          if (!result.ok) {
-            // A zero-width drag: nothing worth committing.
-            if (i === 0) ok = false;
+        // One shape, one undo step (not one per side).
+        kernelHost.beginBatch();
+        try {
+          for (let i = 0; ok && i < ring.length; i++) {
+            const result = lineBinding.commitIsolatedDrag(ring[i]!, ring[(i + 1) % ring.length]!);
+            if (!result.ok) {
+              // A zero-width drag: nothing worth committing.
+              if (i === 0) ok = false;
+            }
           }
+        } finally {
+          kernelHost.endBatch();
         }
         // Mark every genuinely new face as an isolated shape, so
         // push/pull's own insertFn option (see kernelPushPull.ts) keeps
@@ -13011,6 +13027,39 @@ export default function Viewport() {
     // kernelRevision: the graph is mutated in place.
   }, [contextMenu, kernelHost, kernelRevision]);
   const [convertWallPlan, setConvertWallPlan] = useState<WallConversionPlan | null>(null);
+  // Combine Shapes tool: the chosen operation, applied to the shapes clicked (in order).
+  const [combineMode, setCombineMode] = useState<BooleanOp>('merge');
+  const combineGroups = useMemo(
+    () => activeTool === 'combine' ? orderedShapeGroups(kernelHost.graph, selectedFaceIds as FaceId[]) : [],
+    // kernelRevision: the graph is mutated in place.
+    [activeTool, kernelHost, selectedFaceIds, kernelRevision],
+  );
+  const combinePlan = useMemo(
+    () => combineGroups.length >= 2 ? planBoolean(kernelHost.graph, combineGroups, combineMode) : null,
+    [combineGroups, combineMode, kernelHost],
+  );
+  const applyCombine = useCallback(() => {
+    if (!combinePlan || !combinePlan.ok) return;
+    let faces: FaceId[] = [];
+    kernelHost.transact(() => {
+      faces = applyBoolean({ graph: kernelHost.graph, tolerances: kernelHost.tolerances, index: kernelHost.spatialIndex }, combinePlan as BooleanPlan, kernelHost.deriveOptions);
+      return true;
+    });
+    kernelHost.refreshIndex();
+    bumpKernel();
+    setSelectedFaceIds(faces);
+    setMeasurements(`${BOOLEAN_LABELS[combineMode]}: done.`);
+  }, [combinePlan, combineMode, kernelHost, bumpKernel, setSelectedFaceIds, setMeasurements]);
+  useEffect(() => {
+    if (activeTool !== 'combine') return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.key === 'Enter') { e.preventDefault(); applyCombine(); }
+      else if (e.key === 'Escape') setSelectedFaceIds([]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeTool, applyCombine, setSelectedFaceIds]);
   const [convertWallHeight, setConvertWallHeight] = useState('2.4');
   /**
    * "Snap To Building" for a patio or deck: edges drawn a little short of (or
@@ -13971,10 +14020,11 @@ export default function Viewport() {
               */}
               <button
                 onClick={() => {
-                  if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial, faceFinishFor(activeMaterialBindingId, activePBR)) > 0) {
+                  if (kernelHost.transact(() => {
+                    if (paintFaces(kernelHost.graph, contextMenu.data, activeMaterial, faceFinishFor(activeMaterialBindingId, activePBR)) === 0) return false;
                     setFacesSurfaceDepth(kernelHost.graph, contextMenu.data, activeSurfaceDepth ?? null);
-                    bumpKernel();
-                  }
+                    return true;
+                  })) bumpKernel();
                   setContextMenu(null);
                 }}
                 className={cn(
@@ -14004,12 +14054,16 @@ export default function Viewport() {
                   }
                   const width = isFinite(minX) ? (maxX - minX) : 1;
                   const offset = { x: width + 1, y: 0, z: 0 };
-                  const result = duplicateGroup(
-                    { graph: kernelHost.graph, tolerances: kernelHost.tolerances, index: kernelHost.spatialIndex },
-                    contextMenu.data,
-                    offset,
-                    kernelHost.deriveOptions,
-                  );
+                  let result: { newFaceIds: FaceId[] } = { newFaceIds: [] };
+                  kernelHost.transact(() => {
+                    result = duplicateGroup(
+                      { graph: kernelHost.graph, tolerances: kernelHost.tolerances, index: kernelHost.spatialIndex },
+                      contextMenu.data,
+                      offset,
+                      kernelHost.deriveOptions,
+                    );
+                    return result.newFaceIds.length > 0;
+                  });
                   bumpKernel();
                   setSelectedFaceIds(result.newFaceIds);
                   setContextMenu(null);
@@ -14077,9 +14131,50 @@ export default function Viewport() {
                   </div>
                 </div>
               ))}
+              {(() => {
+                // Merge / Subtract / Intersect when the menu covers two or more shapes.
+                const groups = orderedShapeGroups(kernelHost.graph, contextMenu.data);
+                if (groups.length < 2) return null;
+                return (['merge', 'subtract', 'intersect'] as BooleanOp[]).map(op => {
+                  const plan = planBoolean(kernelHost.graph, groups, op);
+                  const label = `${BOOLEAN_LABELS[op]} ${groups.length} Shapes`;
+                  if (!plan.ok) {
+                    return (
+                      <div key={op} className="w-full px-3 py-1.5 text-xs cursor-not-allowed" aria-disabled="true">
+                        <div className="text-gray-400">{label}</div>
+                        <div className={cn("text-[10px] leading-snug mt-0.5 max-w-[220px]", theme === 'dark' ? "text-gray-500" : "text-gray-400")}>
+                          {(plan as BooleanRejection).reason}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={op}
+                      onClick={() => {
+                        let faces: FaceId[] = [];
+                        kernelHost.transact(() => {
+                          faces = applyBoolean({ graph: kernelHost.graph, tolerances: kernelHost.tolerances, index: kernelHost.spatialIndex }, plan as BooleanPlan, kernelHost.deriveOptions);
+                          return true;
+                        });
+                        kernelHost.refreshIndex();
+                        bumpKernel();
+                        setSelectedFaceIds(faces);
+                        setContextMenu(null);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+                        theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                });
+              })()}
               <button
                 onClick={() => {
-                  if (setGroupHidden(kernelHost.graph, contextMenu.data, true) > 0) bumpKernel();
+                  if (kernelHost.transact(() => setGroupHidden(kernelHost.graph, contextMenu.data, true) > 0)) bumpKernel();
                   setContextMenu(null);
                 }}
                 className={cn(
@@ -14091,7 +14186,7 @@ export default function Viewport() {
               </button>
               <button
                 onClick={() => {
-                  deleteGroupFacesAndEdges(kernelHost.graph, contextMenu.data);
+                  kernelHost.transact(() => { deleteGroupFacesAndEdges(kernelHost.graph, contextMenu.data); return true; });
                   bumpKernel();
                   setSelectedFaceIds([]);
                   setContextMenu(null);
@@ -14279,6 +14374,34 @@ export default function Viewport() {
         </div>
       )}
 
+      {activeTool === 'combine' && (
+        <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-[60] pointer-events-auto max-w-[calc(100%-2rem)]">
+          <div className={cn(
+            "rounded-lg shadow-xl border px-3 py-2 flex flex-wrap items-center gap-2 text-xs",
+            theme === 'dark' ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-800"
+          )}>
+            {(['merge', 'subtract', 'intersect'] as BooleanOp[]).map(op => (
+              <button key={op} onClick={() => setCombineMode(op)}
+                className={cn("px-2 py-1 rounded border font-semibold",
+                  combineMode === op ? "border-polyform-blue bg-polyform-blue/10 text-polyform-blue"
+                    : (theme === 'dark' ? "border-gray-600 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"))}>
+                {BOOLEAN_LABELS[op]}
+              </button>
+            ))}
+            <span className={cn("text-[11px] max-w-[260px]", theme === 'dark' ? "text-gray-400" : "text-gray-500")}>
+              {combineGroups.length === 0 ? 'Click the shapes to combine. The first one leads (Subtract keeps it).'
+                : combineGroups.length === 1 ? '1 shape picked. Click another.'
+                : combinePlan && !combinePlan.ok ? (combinePlan as BooleanRejection).reason
+                : `${combineGroups.length} shapes picked. Press Enter or Apply.`}
+            </span>
+            <button onClick={applyCombine} disabled={!combinePlan || !combinePlan.ok}
+              className="px-2 py-1 rounded bg-polyform-blue text-white font-semibold disabled:opacity-40">Apply</button>
+            <button onClick={() => setSelectedFaceIds([])} disabled={!combineGroups.length}
+              className={cn("px-2 py-1 rounded disabled:opacity-40", theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100")}>Clear</button>
+          </div>
+        </div>
+      )}
+
       {convertWallPlan && (() => {
         const plan = convertWallPlan;
         const height = plan.height ?? parseFloat(convertWallHeight);
@@ -14419,9 +14542,13 @@ export default function Viewport() {
               <button
                 onClick={() => {
                   const ctx = { graph: kernelHost.graph, tolerances: kernelHost.tolerances, index: kernelHost.spatialIndex };
-                  const result = divideRectangularFace(ctx, divideSurfaceTarget, divideColumns, divideRows);
+                  let result: ReturnType<typeof divideRectangularFace> = { ok: false } as ReturnType<typeof divideRectangularFace>;
+                  kernelHost.transact(() => {
+                    result = divideRectangularFace(ctx, divideSurfaceTarget, divideColumns, divideRows);
+                    if (result.ok) derive(kernelHost.graph, result.touched, kernelHost.deriveOptions);
+                    return result.ok;
+                  });
                   if (result.ok) {
-                    derive(kernelHost.graph, result.touched, kernelHost.deriveOptions);
                     bumpKernel();
                   } else {
                     setMeasurements(result.reason ? `Could not divide: ${result.reason}` : 'Could not divide surface.');
