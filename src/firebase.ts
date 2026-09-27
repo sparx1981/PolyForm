@@ -1,12 +1,14 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDoc, setDoc, getDocFromServer, Bytes } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
-import type { GeometryOffloadIO } from './lib/firestoreGeometryOffload';
+import { withGeometryCache, type GeometryOffloadIO } from './lib/firestoreGeometryOffload';
+import { chunkedBlobIO } from './lib/blobCodec';
 export { cleanFirestoreDataForSave, restoreFirestoreArraysAfterLoad } from './lib/firestoreArrayCodec';
-export { offloadLargeGeometryForSave, hydrateOffloadedGeometry } from './lib/firestoreGeometryOffload';
+export { offloadLargeGeometryForSave, hydrateOffloadedGeometry, offloadModelForSave, hydrateOffloadedModel } from './lib/firestoreGeometryOffload';
+export { assertModelFits, ModelTooLargeError } from './lib/firestoreDocSize';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -17,28 +19,23 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1'); // Default region, change if you deployed elsewhere
 export const googleProvider = new GoogleAuthProvider();
 
-// Firestore-backed IO for offloadLargeGeometryForSave/
-// hydrateOffloadedGeometry (see firestoreGeometryOffload.ts) - deliberately
+// Firestore-backed IO for offloadModelForSave/hydrateOffloadedModel
+// (see firestoreGeometryOffload.ts and blobCodec.ts) - deliberately
 // NOT Storage, since a raw browser fetch() of a Storage download URL needs
 // the bucket's CORS config to allow this app's origin, which isn't
 // something client code can arrange and fails hard (with no fallback) in
 // any hosting context where it hasn't been set up. Going through the
 // Firestore SDK like every other read/write in this app has no such
 // requirement.
-export const firebaseGeometryIO: GeometryOffloadIO = {
-  upload: async (docId, jsonText) => {
-    await setDoc(doc(db, 'geometryOverflow', docId), {
-      userId: auth.currentUser?.uid || '',
-      data: jsonText,
-      createdAt: Date.now(),
-    });
-  },
-  fetch: async (docId) => {
+export const firebaseGeometryIO: GeometryOffloadIO = withGeometryCache(chunkedBlobIO({
+  write: (docId, fields) => setDoc(doc(db, 'geometryOverflow', docId), fields),
+  read: async (docId) => {
     const snap = await getDoc(doc(db, 'geometryOverflow', docId));
-    if (!snap.exists()) throw new Error(`Offloaded geometry document not found: ${docId}`);
-    return snap.data().data as string;
+    return snap.exists() ? snap.data() : null;
   },
-};
+  toBytes: bytes => Bytes.fromUint8Array(bytes),
+  fromBytes: value => (value as Bytes).toUint8Array(),
+}, () => auth.currentUser?.uid || ''));
 
 // Validate connection to Firestore on initialization
 export async function testConnection() {
@@ -81,8 +78,14 @@ export interface FirestoreErrorInfo {
 }
 
 let quotaLockdownUntil = 0;
+let lastQuotaError = '';
+
+/** How long cloud saving pauses after Firestore refuses a request for quota or rate reasons. */
+export const QUOTA_PAUSE_MS = 60_000;
 
 export const isQuotaLocked = () => Date.now() < quotaLockdownUntil;
+/** Firestore's own words for the refusal behind the current pause. */
+export const getLastQuotaError = () => lastQuotaError;
 export const getQuotaLockdownUntil = () => quotaLockdownUntil;
 
 export interface FirestoreErrorResult {
@@ -120,7 +123,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
   console.error('Firestore Error: ', JSON.stringify(errInfo));
 
-  const isQuotaError = errorCode === 'resource-exhausted' || errorMessage.includes('Quota exceeded');
+  // Only Firestore's own refusal code: other services' "quota exceeded"
+  // messages must not pause cloud saving. On the Blaze plan this is a rate
+  // limit (e.g. one document written too often), not a daily allowance.
+  const isQuotaError = errorCode === 'resource-exhausted';
   const isOfflineError = !isQuotaError && (
     errorCode === 'unavailable' ||
     errorMessage.includes('unavailable') ||
@@ -130,7 +136,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
   // If quota exceeded, initiate global lockdown
   if (isQuotaError) {
-     quotaLockdownUntil = Date.now() + 600000; // 10 minute lockdown
+     quotaLockdownUntil = Date.now() + QUOTA_PAUSE_MS;
+     lastQuotaError = errorMessage;
      console.warn(`[QUOTA] Global lockdown initiated until ${new Date(quotaLockdownUntil).toLocaleTimeString()}`);
   } else if (isOfflineError) {
     console.warn(`[FIRESTORE] Backend currently unreachable (${errorMessage}). Operating in offline mode.`);
@@ -140,7 +147,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     isQuotaError,
     isOfflineError,
     message: isQuotaError
-      ? 'Cloud save quota exceeded - saving is paused for 10 minutes.'
+      ? `Firestore refused the request (${errorMessage}) - cloud saving will retry in a minute.`
       : isOfflineError
         ? 'No connection to the cloud - your changes will save once you are back online.'
         : errorMessage

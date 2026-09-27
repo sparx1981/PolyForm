@@ -7,9 +7,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { normalizeGraphicsSettings } from './lib/graphics/graphicsSettings';
 import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from './firebase';
+import { auth, db, getLastQuotaError, getQuotaLockdownUntil } from './firebase';
 import { AppProvider, useApp, type ToolbarKey, type DockZone } from './AppContext';
-import { handleFirestoreError, OperationType, restoreFirestoreArraysAfterLoad, hydrateOffloadedGeometry, firebaseGeometryIO } from './firebase';
+import { handleFirestoreError, OperationType, restoreFirestoreArraysAfterLoad, hydrateOffloadedModel, firebaseGeometryIO } from './firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { cn } from './lib/utils';
 import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle, GripHorizontal } from 'lucide-react';
@@ -343,7 +343,7 @@ function AppContent() {
       }
     };
     const toolbarsInZone = (zone: DockZone) => toolbarOrder.filter((k) => toolbarDocks[k] === zone && isToolbarEnabled(k));
-    const remainingSeconds = Math.max(0, Math.ceil((quotaLockdownTime - Date.now()) / 1000));
+    const remainingSeconds = Math.max(0, Math.ceil((Math.max(quotaLockdownTime, getQuotaLockdownUntil()) - Date.now()) / 1000));
     const remainingMinutes = Math.floor(remainingSeconds / 60);
     const remainingSecs = remainingSeconds % 60;
   
@@ -414,9 +414,8 @@ function AppContent() {
             return;
           }
           if (modelDoc.exists()) {
-            const data = restoreFirestoreArraysAfterLoad(modelDoc.data());
-            const hydratedShapes = await hydrateOffloadedGeometry(data.shapes || [], firebaseGeometryIO);
-            setShapesSilent(hydratedShapes);
+            const data = await hydrateOffloadedModel(restoreFirestoreArraysAfterLoad(modelDoc.data()), firebaseGeometryIO);
+            setShapesSilent(data.shapes || []);
             setTagsSilent(data.tags || []);
             setScenesSilent(data.scenes || []);
             setCustomMaterialsSilent(data.customMaterials || []);
@@ -506,7 +505,7 @@ function AppContent() {
             <div className="flex items-center gap-3">
               <ShieldAlert size={18} />
               <span>
-                <strong>Firestore Quota Exceeded.</strong> Auto-sync is paused for the next {remainingMinutes}:{remainingSecs.toString().padStart(2, '0')} to protect your account.
+                <strong>Cloud saving paused.</strong> Firestore refused a request{getLastQuotaError() ? <> ("{getLastQuotaError()}")</> : null}. Retrying in {remainingMinutes}:{remainingSecs.toString().padStart(2, '0')}.
               </span>
             </div>
             <button 

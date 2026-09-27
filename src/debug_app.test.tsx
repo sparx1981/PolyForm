@@ -28,10 +28,15 @@ vi.mock('./firebase', () => ({
     WRITE: 'write',
   },
   isQuotaLocked: () => false,
+  getLastQuotaError: () => '',
+  getQuotaLockdownUntil: () => 0,
+  QUOTA_PAUSE_MS: 60000,
   cleanFirestoreDataForSave: (obj: any) => obj,
   restoreFirestoreArraysAfterLoad: (obj: any) => obj,
-  offloadLargeGeometryForSave: vi.fn(async (s) => s),
-  hydrateOffloadedGeometry: vi.fn(async (s) => s),
+  offloadModelForSave: vi.fn(async (s) => s),
+  hydrateOffloadedModel: vi.fn(async (s) => s),
+  assertModelFits: vi.fn(),
+  ModelTooLargeError: class extends Error {},
   firebaseGeometryIO: {},
 }));
 

@@ -252,8 +252,13 @@ service cloud.firestore {
     // materials/scripts above. Entries are content-addressed by a docId
     // that embeds the owning uid, so ownership can be checked without a
     // read-before-write.
+    // Large meshes, images and terrain grids moved out of model documents.
+    // Anyone who can open a model must be able to read its parts (invited
+    // collaborators, public viewers), and a document's id - the saver's uid
+    // plus a hash of its content - only appears inside the model it belongs
+    // to. Only the saver can write or delete them.
     match /geometryOverflow/{docId} {
-      allow get: if isDocOwner();
+      allow get: if isAuthenticated();
       allow create: if isNewDocOwner();
       allow update: if isDocOwner() && isNewDocOwner();
       allow delete: if isDocOwner();

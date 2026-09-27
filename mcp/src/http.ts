@@ -23,8 +23,8 @@ export interface AppDeps {
 }
 
 const INSTRUCTIONS = `PolyForm is a 3D modelling app for buildings and gardens. Units are metres; y is up and the ground is y = 0 (or the terrain).
-Find the model first (list_models), then read it (get_model, list_objects) before changing it. Building tools add real PolyForm objects that also appear live in the app if it is open.
-Use screenshot to check work as you go. When a design is finished (created or changed), always call preview_model once and show the user its pictures: a 3D view and, for buildings, a floor plan of each level. Pass room_labels naming the rooms you built.
+Find the model first (list_models), then read it (get_model, list_objects) before changing it. Always pass the model's id, not its name, to every tool after that. Building tools add real PolyForm objects that also appear live in the app if it is open.
+Screenshots are slow and costly: take one only when you need to check something you can't tell from list_objects, not after every change. When a design is finished (created or changed), always call preview_model once and show the user its pictures: a 3D view and, for buildings, a floor plan of each level. Pass room_labels naming the rooms you built.
 Each change can be reversed with undo_last_change.`;
 
 function baseUrl(req: IncomingMessage, deps: AppDeps) {

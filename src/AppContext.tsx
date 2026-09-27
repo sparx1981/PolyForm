@@ -7,7 +7,7 @@ import { RENDER_MODE } from './lib/renderMode';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
-import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadLargeGeometryForSave, hydrateOffloadedGeometry, firebaseGeometryIO } from './firebase';
+import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAUSE_MS, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import { undoWallConversion, redoWallConversion, type WallConversionUndoLink } from './tools/kernelConvertToWall';
 import type { FaceId } from './lib/geometry/types';
@@ -396,10 +396,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       values
     };
     logBuffer.current.push(entry);
-    
-    if (message.includes('Quota exceeded')) {
-      setQuotaLockdownTime(Date.now() + 600000);
-    }
   };
 
   const clearDiagnosticLogs = () => {
@@ -1000,7 +996,7 @@ console.log("Created rectangle:", myRect.id);`);
       setCollaborators(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)) as Collaborator[]);
     }, (error) => {
        const result = handleFirestoreError(error, OperationType.GET, 'collaborations');
-       if (result.isQuotaError) setQuotaLockdownTime(Date.now() + 600000);
+       if (result.isQuotaError) setQuotaLockdownTime(Date.now() + QUOTA_PAUSE_MS);
     });
 
     // 2. Sync Chat Messages
@@ -1049,15 +1045,11 @@ console.log("Created rectangle:", myRect.id);`);
       setExternalStorage(null);
 
       if (snapshot.exists()) {
-        const data = restoreFirestoreArraysAfterLoad(snapshot.data());
+        // Reverses offloadModelForSave: large meshes, images and terrain
+        // grids stored in their own documents (see the sync push below) come
+        // back here as small markers - fetch them before they reach the scene.
+        const data = await hydrateOffloadedModel(restoreFirestoreArraysAfterLoad(snapshot.data()), firebaseGeometryIO);
         const assetState = readAssetProjectState(data);
-        // Reverses offloadLargeGeometryForSave: any shape whose
-        // geometryData was too large to store inline in the document (see
-        // the sync push above) comes back here as a small URL marker -
-        // fetch the real geometry back before it reaches the scene.
-        if (Array.isArray(data.shapes)) {
-          data.shapes = await hydrateOffloadedGeometry(data.shapes, firebaseGeometryIO);
-        }
         isRemoteUpdate.current = true;
 
         // Update local hash to prevent redundant pushes
@@ -1104,7 +1096,7 @@ console.log("Created rectangle:", myRect.id);`);
       setSyncStatus('error');
       const result = handleFirestoreError(error, OperationType.GET, `models/${currentModelId}`);
       setSyncErrorMessage(result.message);
-      if (result.isQuotaError) setQuotaLockdownTime(Date.now() + 600000);
+      if (result.isQuotaError) setQuotaLockdownTime(Date.now() + QUOTA_PAUSE_MS);
     });
 
     // Ensure we have a collaboration document for presence
@@ -1252,19 +1244,14 @@ console.log("Created rectangle:", myRect.id);`);
       setSyncStatus('syncing');
 
       try {
-        // Offload any single shape's geometryData that's too large to
-        // comfortably fit in a Firestore document (e.g. a detailed
-        // roof-tile mesh) to Storage before writing - otherwise a
-        // sufficiently detailed design fails outright on every auto-save
-        // attempt with "document ... exceeds the maximum allowed size",
-        // and this is the path that fires on every edit, not just an
-        // explicit Save.
-        const offloadedShapes = user?.uid
-          ? await offloadLargeGeometryForSave(shapes, user.uid, firebaseGeometryIO)
-          : shapes;
-
-        const stateToPush = cleanData({
-          shapes: offloadedShapes,
+        // Move large meshes (e.g. a detailed roof-tile mesh), embedded
+        // images and big terrain grids into their own compressed documents
+        // before writing - otherwise a sufficiently detailed design fails
+        // outright on every auto-save attempt with "document ... exceeds the
+        // maximum allowed size", and this is the path that fires on every
+        // edit, not just an explicit Save.
+        const content = {
+          shapes,
           tags,
           scenes,
           customMaterials,
@@ -1283,8 +1270,12 @@ console.log("Created rectangle:", myRect.id);`);
           // unmount when you switch documents it also leaks between them:
           // the previous model's surfaces appear in the next one.
           kernel: serializeGraph(kernelHost.graph),
+        };
+        const stateToPush = cleanData({
+          ...(user?.uid ? await offloadModelForSave(content, user.uid, firebaseGeometryIO) : content),
           updatedAt: serverTimestamp()
         });
+        assertModelFits(stateToPush);
 
         await updateDoc(doc(db, 'models', currentModelId), stateToPush);
         syncState.lastStateHash = currentStateHash;
@@ -1294,6 +1285,12 @@ console.log("Created rectangle:", myRect.id);`);
       } catch (error: any) {
         console.error('[Sync] Error pushing to Firestore:', error);
         setSyncStatus('error');
+        if (error instanceof ModelTooLargeError) {
+          // Retrying would send the same too-large model again: say what to trim instead.
+          setSyncErrorMessage(error.message);
+          diagLog('Sync', 'Auto-save skipped: model too large', { modelId: currentModelId, bytes: error.bytes, message: error.message });
+          return;
+        }
         const result = handleFirestoreError(error, OperationType.UPDATE, `models/${currentModelId}`);
         setSyncErrorMessage(result.message);
         // This auto-save path only otherwise surfaces as a small hover
@@ -1312,11 +1309,13 @@ console.log("Created rectangle:", myRect.id);`);
           retryCount: syncState.retryCount,
         });
 
-        // Auto-retry with exponential backoff. Quota lockdowns are skipped
-        // here since checkQuota() already blocks pushes until it clears -
-        // retrying immediately would just fail the same way.
-        if (!result.isQuotaError && syncState.retryCount < 5) {
-          const delay = Math.min(60000, 10000 * Math.pow(2, syncState.retryCount));
+        // Auto-retry with exponential backoff. After a quota refusal, retry
+        // just after the pause ends (checkQuota() blocks pushes until then),
+        // so the change still saves even if nothing else is edited.
+        if (syncState.retryCount < 5) {
+          const delay = result.isQuotaError
+            ? QUOTA_PAUSE_MS + 1000
+            : Math.min(60000, 10000 * Math.pow(2, syncState.retryCount));
           syncState.retryCount += 1;
           syncState.retryTimeoutId = setTimeout(() => {
             syncState.retryTimeoutId = null;
