@@ -1,5 +1,6 @@
 import { readAssetProjectState } from './assets/projectCodec';
 import { normalizeGraphicsSettings } from './graphics/graphicsSettings';
+import { normalizePresentationContent } from './presentation/content';
 import type { useApp } from '../AppContext';
 
 /**
@@ -16,6 +17,7 @@ export function applySavedModelToAppState(model: any, api: ReturnType<typeof use
   if (model.animations) api.setAnimations(model.animations);
   if (model.notes) api.setNotes(model.notes);
   if (model.customLights) api.setCustomLights(model.customLights);
+  api.setPresentationContent(normalizePresentationContent(model.presentationContent));
   const legacySkybox = assetState.environment.legacySkybox;
   api.setEnvironment(assetState.environment);
   api.setMaterialBindings(assetState.materialBindings);

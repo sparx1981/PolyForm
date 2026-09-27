@@ -36,10 +36,15 @@ function VegetationCell({ plants, wind, onSelect, onContextMenu, shadows, detail
       const visible: VegetationBatch[] = [], shadowOnly: VegetationBatch[] = [];
       for (const primitive of primitives) {
         const batch = new VegetationBatch(primitive.geometry, primitive.material, wind, plants.length);
+        // Presentation mode's build-up shows the garden last; batched trees are found by this mark.
+        batch.mesh.userData.presentationVegetation = true;
+        // Which plant each instance is, so presentation mode can find each tree's real size.
+        batch.mesh.userData.plantIds = placements.map(p => p.id);
         batch.setInstances(placements); owned.push(batch); visible.push(batch);
       }
       for (const primitive of shadowPrimitives) {
         const batch = new VegetationBatch(primitive.geometry, primitive.material, wind, plants.length);
+        batch.mesh.userData.presentationVegetation = true;
         batch.setInstances(placements);
         batch.mesh.material.colorWrite = false;
         batch.mesh.material.depthWrite = false;

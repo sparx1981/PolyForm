@@ -19,7 +19,8 @@ const perspective = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.
 const orthographic = new THREE.OrthographicCamera(-22, 22, 16, -16, 0.1, 400);
 perspective.position.set(17, 11, 24); orthographic.position.copy(perspective.position);
 let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = perspective;
-const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 3, 0); controls.update();
+// Typed as any camera: the button below swaps between perspective and orthographic.
+const controls = new OrbitControls(camera as THREE.Camera, renderer.domElement); controls.target.set(0, 3, 0); controls.update();
 scene.add(new THREE.HemisphereLight('#d8edff', '#425532', 2));
 const sun = new THREE.DirectionalLight('#fff0da', 3); sun.position.set(15, 30, 10); sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -25, right: 25, top: 25, bottom: -25, far: 90 });

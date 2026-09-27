@@ -31,6 +31,7 @@ import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
 import { useModalA11y } from './ui/useModalA11y';
 import { readAssetProjectState } from '../lib/assets/projectCodec';
+import { normalizePresentationContent } from '../lib/presentation/content';
 
 // Local, dependency-free placeholder - no network round-trip, so it can never
 // itself fail to load the way an external image URL (or an expired/blocked
@@ -57,6 +58,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     setShapes, 
     setTags, 
     setScenes, 
+    setPresentationContent,
     setCustomMaterials,
     setGraphicsSettings,
     setCurrentModelId, 
@@ -378,6 +380,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
     setShapes(model.shapes || []);
     setTags(model.tags || []);
     setScenes(model.scenes || []);
+    setPresentationContent(normalizePresentationContent(model.presentationContent));
     setAnimations(model.animations || []);
     if (model.customMaterials) setCustomMaterials(model.customMaterials);
     setGraphicsSettings(normalizeGraphicsSettings(model.graphicsSettings));

@@ -18,6 +18,16 @@ service firebase.storage {
         request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
+    // Client presentation snapshots and cover pictures: readable by anyone with the page's
+    // unguessable link (the path holds the share id), written only by their owner.
+    match /presentations/{userId}/{shareId}/{file} {
+      // get, not read: fetching a known file only, never listing a folder.
+      allow get: if true;
+      allow create, update: if request.auth != null && request.auth.uid == userId &&
+        request.resource.size < 100 * 1024 * 1024 &&
+        (request.resource.contentType == 'application/json' || request.resource.contentType.matches('image/.*'));
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
     match /geometry/{userId}/{allPaths=**} {
       allow read, delete: if request.auth != null && request.auth.uid == userId;
       allow create, update: if request.auth != null && request.auth.uid == userId &&
