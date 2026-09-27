@@ -2,7 +2,10 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useApp } from '../../AppContext';
 import { PresentationEngine } from '../../lib/presentation/engine';
-import { presentation, STAGE_PLAY_SECONDS } from '../../lib/presentation/store';
+import * as THREE from 'three';
+import { presentation, STAGE_PLAY_SECONDS, usePresentation } from '../../lib/presentation/store';
+import { DoorOpener, doorMotion } from '../../lib/presentation/doors';
+import { pickMode, pickShape } from '../../lib/presentation/camera';
 import { canvasRef } from '../../lib/presentation/recorder';
 
 /**
@@ -13,6 +16,57 @@ export default function PresentationDriver() {
   const { scene, gl, camera } = useThree();
   const { shapes, kernelRevision } = useApp();
   const engine = useRef<PresentationEngine | null>(null);
+  const doors = useRef(new DoorOpener());
+  const { active } = usePresentation();
+  const shapesRef = useRef(shapes);
+  shapesRef.current = shapes;
+
+  // Doors open and close on a click (not a drag) while presenting. The press is kept from the
+  // editor so it doesn't also select the door or start orbiting.
+  useEffect(() => {
+    if (!active) { doors.current.dispose(); return; }
+    const doorAt = (e: PointerEvent) => {
+      if (pickMode.active || e.button !== 0 || e.target !== gl.domElement) return null;
+      const hit = pickShape(e.clientX, e.clientY);
+      const shape = hit && shapesRef.current.find(s => s.id === hit.id);
+      if (!hit || shape?.type !== 'door' || doorMotion(shape.archStyle) === 'none') return null;
+      const mesh = (hit.root as THREE.Mesh).isMesh ? (hit.root as THREE.Mesh) : null;
+      return mesh ? { mesh, shape } : null;
+    };
+    let down: { x: number; y: number; door: NonNullable<ReturnType<typeof doorAt>> } | null = null;
+    const onDown = (e: PointerEvent) => {
+      const door = doorAt(e);
+      if (!door) return;
+      down = { x: e.clientX, y: e.clientY, door };
+      e.stopImmediatePropagation();
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!down) return;
+      const { door } = down;
+      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      down = null;
+      e.stopImmediatePropagation();
+      if (moved > 6) return;
+      const [w = 0.9, h = 2.1] = Array.isArray(door.shape.args) ? door.shape.args as number[] : [];
+      doors.current.toggle(door.mesh, { width: w, height: h }, door.shape.archStyle, camera.position);
+    };
+    let last = 0;
+    const onMove = (e: PointerEvent) => {
+      if (e.buttons || performance.now() - last < 120) return;
+      last = performance.now();
+      if (e.target !== gl.domElement) return;
+      gl.domElement.style.cursor = !pickMode.active && doorAt(e) ? 'pointer' : pickMode.active ? 'crosshair' : '';
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('pointerup', onUp, true);
+    window.addEventListener('pointermove', onMove, true);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointermove', onMove, true);
+      gl.domElement.style.cursor = '';
+    };
+  }, [active, gl, camera]);
   const wasActive = useRef(false);
   const frame = useRef(0);
 
@@ -24,7 +78,7 @@ export default function PresentationDriver() {
   useEffect(() => {
     const e = new PresentationEngine(scene);
     engine.current = e;
-    return () => { e.dispose(); engine.current = null; };
+    return () => { doors.current.dispose(); e.dispose(); engine.current = null; };
   }, [scene]);
 
   // After React has drawn the change (next frame), re-read which objects are what.
@@ -59,6 +113,7 @@ export default function PresentationDriver() {
     // come out nearly black from the post-processing pass.
     if (frame.current++ % 60 === 0) e.pageColour.set(pageColourBehind(gl.domElement));
     e.update(presentation.get(), Math.min(dt, 0.1), camera);
+    doors.current.update(Math.min(dt, 0.1));
   });
 
   return null;

@@ -354,3 +354,54 @@ describe('client comments', () => {
     expect(unreadCount(all)).toBe(2);
   });
 });
+
+describe('clickable doors', () => {
+  it('splits a door into frame and leaf, swings it open away from the viewer, and puts it back', async () => {
+    const { createDoorGeometry } = await import('../archGeometry');
+    const { DoorOpener, pieces, isFramePiece, doorMotion } = await import('./doors');
+    const geo = createDoorGeometry(0.9, 2.1, 0.15, '4panel');
+    const parts = pieces(geo);
+    const frame = parts.filter(p => isFramePiece(p.box, 0.9, 2.1));
+    expect(frame.length).toBe(1); // jambs and header, joined at the corners
+    expect(parts.length).toBeGreaterThan(frame.length);
+
+    const mesh = new THREE.Mesh(geo, [new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial(), new THREE.MeshStandardMaterial()]);
+    mesh.updateMatrixWorld();
+    const doors = new DoorOpener();
+    const viewer = new THREE.Vector3(0, 1.5, 5); // in front (+z)
+    doors.toggle(mesh, { width: 0.9, height: 2.1 }, '4panel', viewer);
+    expect(mesh.geometry).not.toBe(geo);
+    for (let i = 0; i < 30; i++) doors.update(0.05);
+    const leaf = mesh.children[0];
+    expect(Math.abs(leaf.rotation.y)).toBeGreaterThan(1.5);
+    // The leaf's free edge has moved away from the viewer (to -z).
+    const edge = new THREE.Vector3(0.8, 0, 0).applyEuler(leaf.rotation);
+    expect(edge.z).toBeLessThan(0);
+    expect(doors.isOpen(mesh)).toBe(true);
+
+    doors.toggle(mesh, { width: 0.9, height: 2.1 }, '4panel', viewer);
+    for (let i = 0; i < 30; i++) doors.update(0.05);
+    expect(mesh.geometry).toBe(geo);
+    expect(mesh.children).toHaveLength(0);
+
+    expect(doorMotion('double-french')).toBe('double');
+    expect(doorMotion('barn')).toBe('slide');
+    expect(doorMotion('archway-round')).toBe('none');
+  });
+
+  it('opens both leaves of French doors and slides a barn door', async () => {
+    const { createDoorGeometry } = await import('../archGeometry');
+    const { DoorOpener } = await import('./doors');
+    const french = new THREE.Mesh(createDoorGeometry(1.6, 2.1, 0.15, 'double-french'), new THREE.MeshStandardMaterial());
+    const barn = new THREE.Mesh(createDoorGeometry(1.0, 2.1, 0.15, 'barn'), new THREE.MeshStandardMaterial());
+    const doors = new DoorOpener();
+    doors.toggle(french, { width: 1.6, height: 2.1 }, 'double-french', new THREE.Vector3(0, 1, 5));
+    doors.toggle(barn, { width: 1.0, height: 2.1 }, 'barn', new THREE.Vector3(0, 1, 5));
+    for (let i = 0; i < 30; i++) doors.update(0.05);
+    expect(french.children).toHaveLength(2);
+    expect(Math.sign(french.children[0].rotation.y)).toBe(-Math.sign(french.children[1].rotation.y));
+    expect(barn.children[0].position.x).toBeGreaterThan(0.8);
+    doors.dispose();
+    expect(french.children).toHaveLength(0);
+  });
+});

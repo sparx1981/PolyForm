@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Crosshair, ChevronUp, ChevronDown, Eye, Camera } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
-import { currentView, flyTo, pickPoint } from '../../lib/presentation/camera';
+import { currentView, flyTo, pickMode, pickPoint } from '../../lib/presentation/camera';
 import { canvasRef } from '../../lib/presentation/recorder';
 import { newContentId } from '../../lib/presentation/content';
 import type { PresentationContent, PresentationLabel, TourStop } from '../../types';
@@ -31,6 +31,7 @@ export function usePickOnModel(active: boolean, onPick: (point: [number, number,
   cancel.current = onCancel;
   useEffect(() => {
     if (!active) return;
+    pickMode.active = true;
     let down: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0 || !overModel(e)) return;
@@ -61,6 +62,7 @@ export function usePickOnModel(active: boolean, onPick: (point: [number, number,
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('pointerup', onUp, true);
       window.removeEventListener('keydown', onKey, true);
+      pickMode.active = false;
       if (canvas) canvas.style.cursor = prev ?? '';
     };
   }, [active]);

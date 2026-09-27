@@ -110,3 +110,32 @@ export function hidden(point: [number, number, number]): boolean {
   }
   return false;
 }
+
+/** Set while a tool is waiting for a click on the model (placing a label or a comment pin). */
+export const pickMode = { active: false };
+
+/** The shape under a screen position: its root object, id and the mesh hit. */
+export function pickShape(clientX: number, clientY: number): { root: THREE.Object3D; id: string; mesh: THREE.Mesh } | null {
+  const scene = mainSceneRef.current, canvas = canvasRef.current, c = orbitControls();
+  if (!scene || !canvas || !c) return null;
+  const r = canvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(ndc, c.object);
+  for (const h of ray.intersectObjects(scene.children, true)) {
+    const mesh = h.object as THREE.Mesh;
+    if (!mesh.isMesh) continue;
+    const m = mesh.material as THREE.Material | undefined;
+    if (m && !Array.isArray(m) && (m.visible === false || (m.transparent && m.opacity < 0.05))) continue;
+    let root: THREE.Object3D | null = null, skip = false;
+    for (let o: THREE.Object3D | null = mesh; o; o = o.parent) {
+      if (!o.visible || o.userData?.isGrass) { skip = true; break; }
+      if (o.userData?.isShape) root = o;
+    }
+    if (skip) continue;
+    // A door leaf split off by the door opener is a presentation helper under the door's mesh.
+    if (!root) continue;
+    return { root, id: String(root.userData.id), mesh };
+  }
+  return null;
+}
