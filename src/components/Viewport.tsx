@@ -10,7 +10,7 @@ import { WaterEditHandles } from './WaterEditHandles';
 import { PatioMesh } from './landscape/PatioMesh';
 import { ProtractorTool, ProtractorMeasurement, type ProtractorArgs } from './ProtractorTool';
 import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint, type PatioClosure } from './landscape/PatioTool';
-import { buildCloseTargets, joinedEdges, patioWorldPath, snapOutlineToTargets, trimAgainstPatios } from '../lib/patio/patioClosure';
+import { buildCloseTargets, joinedEdges, patioWorldPath, snapPatioToBuilding, trimAgainstPatios } from '../lib/patio/patioClosure';
 import { makePatioShape, patioLevel, patioWallEdges } from '../lib/patio/patioPlacement';
 import { WaterDrawPreview } from './WaterDrawPreview';
 import { terrainsWithWaterBasins, defaultWaterLevel } from '../lib/water/waterBody';
@@ -13020,13 +13020,9 @@ export default function Viewport() {
   const patioSnapMenuItem = (shapeId: string) => {
     const patio = shapes.find(s => s.id === shapeId);
     if (!patio || patio.type !== 'patio' || !patio.patioData) return null;
-    const data = patio.patioData;
     const ground = patioGroundHelpers(shapes, new Map(), sampleTerrainElevation).originalGround;
-    const targets = buildCloseTargets(shapes, ground, { excludeId: patio.id });
-    const world = data.points.map(([x, z]) => [x + patio.position[0], z + patio.position[2]] as [number, number]);
-    const bulges = data.points.map((_, i) => data.bulges[i] ?? 0);
-    const result = snapOutlineToTargets(world, bulges, targets);
-    if (!result.moved) {
+    const result = snapPatioToBuilding(patio, shapes, ground);
+    if (!result.shape) {
       return (
         <div className="w-full px-3 py-1.5 text-xs cursor-not-allowed" aria-disabled="true">
           <div className="text-gray-400">Snap To Building</div>
@@ -13036,18 +13032,11 @@ export default function Viewport() {
         </div>
       );
     }
+    const snapped = result.shape;
     return (
       <button
         onClick={() => {
-          const joined = joinedEdges(result.points, bulges, targets);
-          setShapes(prev => prev.map(s => s.id !== patio.id ? s : {
-            ...s,
-            patioData: {
-              ...data,
-              points: result.points.map(([x, z]) => [x - patio.position[0], z - patio.position[2]] as [number, number]),
-              wallEdges: data.points.map((_, i) => !!(data.wallEdges[i] || joined[i])),
-            },
-          }));
+          setShapes(prev => prev.map(s => s.id === patio.id ? snapped : s));
           setSelectedSurface(null);
           setMeasurements(`Snapped ${result.moved} edge${result.moved === 1 ? '' : 's'} of ${patio.name ?? 'the patio'} onto the building.`);
           setContextMenu(null);

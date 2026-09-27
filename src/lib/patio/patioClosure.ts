@@ -564,7 +564,8 @@ export function closeCandidates(opts: {
   if (!atLast || !atFirst) return [];
 
   // Routes from where the loose end meets its target to where the first point meets its own.
-  const routes: { points: Vec2[]; bulges: number[]; targets: CloseTarget[] }[] = [];
+  // `bridge` marks a straight edge across open ground (no kerb-free join there).
+  const routes: { points: Vec2[]; bulges: number[]; targets: CloseTarget[]; bridge?: boolean }[] = [];
   if (atLast.target.id === atFirst.target.id) {
     for (const r of routesAlong(atLast.target.path, atLast.at, atFirst.at)) routes.push({ ...r, targets: [atLast.target] });
   } else {
@@ -578,6 +579,11 @@ export function closeCandidates(opts: {
           });
         }
       }
+    }
+    // Two things that never meet (a fence stopping short of the house, two separate
+    // buildings): close straight across between where each end meets its own.
+    if (!routes.length) {
+      routes.push({ points: [atLast.at.point, atFirst.at.point], bulges: [0], targets: [atLast.target, atFirst.target], bridge: true });
     }
   }
 
@@ -600,7 +606,7 @@ export function closeCandidates(opts: {
     // The drawn chain (its first point replaced by where it meets the target, when already on it).
     for (let i = 0; i < chain.length - 1; i++) push(i === 0 && startOnTarget ? atFirst.at.point : chain[i], chainBulges[i] ?? 0, false);
     if (!endOnTarget) push(last, 0, false); // straight in to the target
-    for (let i = 0; i < route.points.length - 1; i++) push(route.points[i], route.bulges[i] ?? 0, true);
+    for (let i = 0; i < route.points.length - 1; i++) push(route.points[i], route.bulges[i] ?? 0, !route.bridge);
     if (!startOnTarget) push(route.points[route.points.length - 1], 0, false); // straight back out to the first point
     // Closing edge: from the last point back to the first.
     if (points.length && dist(points[points.length - 1], points[0]) < 1e-4) { points.pop(); bulges.pop(); joined.pop(); }
@@ -769,4 +775,35 @@ export function buildingEdgePoint(q: Vec2, targets: CloseTarget[], reach: number
     if (!best || at.distance < best.d) best = { p: at.point, d: at.distance };
   }
   return best?.p ?? null;
+}
+
+/**
+ * "Snap To Building" for one patio or deck: its edges near a wall, fence or
+ * another patio pulled onto it. Returns the updated shape (or null when no
+ * edge needs moving) and how many edges moved.
+ */
+export function snapPatioToBuilding(
+  patio: Shape,
+  shapes: Shape[],
+  groundAt: (x: number, z: number) => number,
+): { shape: Shape | null; moved: number } {
+  const data = patio.patioData;
+  if (!data) return { shape: null, moved: 0 };
+  const targets = buildCloseTargets(shapes, groundAt, { excludeId: patio.id });
+  const world = data.points.map(([x, z]) => [x + patio.position[0], z + patio.position[2]] as Vec2);
+  const bulges = data.points.map((_, i) => data.bulges[i] ?? 0);
+  const result = snapOutlineToTargets(world, bulges, targets);
+  if (!result.moved) return { shape: null, moved: 0 };
+  const joined = joinedEdges(result.points, bulges, targets);
+  return {
+    moved: result.moved,
+    shape: {
+      ...patio,
+      patioData: {
+        ...data,
+        points: result.points.map(([x, z]) => [x - patio.position[0], z - patio.position[2]] as [number, number]),
+        wallEdges: data.points.map((_, i) => !!(data.wallEdges[i] || joined[i])),
+      },
+    },
+  };
 }

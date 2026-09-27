@@ -106,6 +106,12 @@ export const RoofModifierSection: React.FC = () => {
   });
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // A parapet roof has no eaves or fascia (the walls run up past the flat deck), so the
+  // eave overhang and fascia settings would do nothing there.
+  const isParapetRoof = !!activeRoof && (
+    (activeRoof.roofData ?? activeRoof.customData)?.roofType === 'parapet'
+    || activeRoof.tags?.includes('roof-parapet')
+    || !!activeRoof.name?.toLowerCase().includes('parapet'));
   const [eaveOverhang, setEaveOverhang] = useState<number>(activeRoof?.roofData?.eaveOverhang ?? 0.30);
   const [fasciaHeight, setFasciaHeight] = useState<number>(0.18);
 
@@ -860,8 +866,8 @@ export const RoofModifierSection: React.FC = () => {
         </div>
       </div>
 
-      {/* 7. EXPANDABLE ADVANCED TRIM & EAVES */}
-      <div className="border border-gray-200/70 dark:border-gray-700/60 rounded-lg overflow-hidden">
+      {/* 7. EXPANDABLE ADVANCED TRIM & EAVES (not for parapet roofs, which have neither) */}
+      {!isParapetRoof && <div className="border border-gray-200/70 dark:border-gray-700/60 rounded-lg overflow-hidden">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
@@ -908,7 +914,7 @@ export const RoofModifierSection: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 };

@@ -117,6 +117,22 @@ describe('closing against a fence and the house together', () => {
   });
 });
 
+describe('closing between two things that do not meet', () => {
+  it('closes straight across, without marking that edge as joined', () => {
+    // A fence that stops 1.5 m short of the house.
+    const fence: Shape = {
+      id: 'f2', type: 'fence', color: '#000', position: [0, 0, 0], args: [],
+      fenceData: { points: [[1, 3.6], [1, 8]], style: 'close-board', height: 1.8, seed: 1 },
+    };
+    const targets = buildCloseTargets([...room(), fence], flat);
+    const chain: Vec2[] = [[-2, 2.5], [-2, 5], [0.5, 5]];
+    const best = closeCandidates({ chain, chainBulges: [0, 0], targets })[0];
+    expect(best).toBeDefined();
+    // The straight bridge from the fence to the house is a free edge (kerbed).
+    expect(best.joined.filter(Boolean).length).toBe(0);
+  });
+});
+
 describe('round buildings', () => {
   it('follows a many-sided outline with a true arc under the walls', () => {
     const ring: Vec2[] = Array.from({ length: 32 }, (_, i) => [4 * Math.cos(2 * Math.PI * i / 32), 4 * Math.sin(2 * Math.PI * i / 32)] as Vec2);

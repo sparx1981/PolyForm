@@ -9,6 +9,9 @@ import {
   type PavingStyle, type RailingStyle,
 } from '../../lib/patio/patioTypes';
 import { buildPatio } from '../../lib/patio/patioGeometry';
+import { snapPatioToBuilding } from '../../lib/patio/patioClosure';
+import { patioGroundHelpers } from '../../lib/patio/patioPlacement';
+import { sampleTerrainElevation } from '../../lib/archRoomAssembly';
 
 type Look = PatioToolSettings['template'];
 
@@ -64,7 +67,7 @@ function suits(asset: AssetSummary, kind: PatioKind, paving: PavingStyle): boole
  * one (changes apply to it straight away), plus steps, lights and quantities.
  */
 export function PatioControls() {
-  const { patioToolSettings: tool, setPatioToolSettings, shapes, setShapes, selectedId, commitHistory, setMaterialBindings, setActiveTool } = useApp();
+  const { patioToolSettings: tool, setPatioToolSettings, shapes, setShapes, selectedId, commitHistory, setMaterialBindings, setActiveTool, setMeasurements } = useApp();
   const selected = shapes.find(shape => shape.id === selectedId && shape.type === 'patio' && shape.patioData);
   const data: Look & { kind: PatioKind } = selected ? selected.patioData! : { ...tool.template, kind: tool.kind };
   const kind = data.kind;
@@ -321,6 +324,27 @@ export function PatioControls() {
           format={v => `${v.toFixed(2)} m`}
           onChange={v => setShapes(prev => prev.map(s => s.id === selected.id ? { ...s, position: [s.position[0], v, s.position[2]] } : s))} />
       )}
+
+      {selected && (() => {
+        // Pull edges drawn a little short of (or past) a wall, fence or patio onto it.
+        const ground = patioGroundHelpers(shapes, new Map(), sampleTerrainElevation).originalGround;
+        const snap = snapPatioToBuilding(selected, shapes, ground);
+        return (
+          <button type="button" disabled={!snap.shape}
+            title={snap.shape ? undefined : 'No edge is within 300 mm of (and not already on) a wall, fence or patio.'}
+            onClick={() => {
+              if (!snap.shape) return;
+              const snapped = snap.shape;
+              setShapes(prev => prev.map(s => s.id === selected.id ? snapped : s));
+              setMeasurements(`Snapped ${snap.moved} edge${snap.moved === 1 ? '' : 's'} of ${selected.name ?? 'the patio'} onto the building.`);
+            }}
+            className={cn('w-full rounded-md border px-2 py-1.5 text-[11px] font-semibold transition-colors',
+              snap.shape ? 'border-gray-200 text-gray-700 hover:border-polyform-blue hover:text-polyform-blue dark:border-gray-700 dark:text-gray-200'
+                : 'cursor-not-allowed border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-500')}>
+            {snap.shape ? `Snap To Building (${snap.moved} edge${snap.moved === 1 ? '' : 's'})` : 'Snap To Building: nothing to snap'}
+          </button>
+        );
+      })()}
 
       {selected && stats && (
         <div className="rounded-lg bg-gray-100 p-2 text-[11px] text-gray-700 dark:bg-gray-800 dark:text-gray-200">

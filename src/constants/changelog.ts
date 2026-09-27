@@ -20,6 +20,9 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Snap To Building: right-click an existing patio or deck to pull edges drawn a little short of (or past) a wall, fence or patio onto it, closing old gaps.',
       'Patio snapping now keeps the same feel at any zoom (about 12 pixels on screen, never more than 350 mm), and snaps to fences and other patios as well as walls.',
       'Fixed patio edges stopping short of the corner on rooms with mitred corners, which left a wedge-shaped gap against the house.',
+      'Patio / Decking: when the two ends are near two things that do not meet (a fence stopping short of the house, two separate buildings), the outline now closes with a straight edge across between them.',
+      'Snap To Building is now also a button in the Patio panel when a patio or deck is selected.',
+      'Parapet roofs no longer show the Advanced Trim & Eaves settings: a parapet roof has no eaves or fascia, so they had no effect.',
     ]
   },
   {
