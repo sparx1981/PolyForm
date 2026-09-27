@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import type { Shape } from '../../types';
-import { buildPose, buildSchedule, categoryOf, explodeLift, levelFor, storeyElevations, EXPLODE_STOREY_GAP } from './classify';
+import { buildPose, buildSchedule, categoryOf, explodeLift, levelFor, lookAt, storeyElevations, EXPLODE_STOREY_GAP } from './classify';
 import { billOfMaterials, bomToCsv, pathLength, polygonArea } from './bom';
 import { floorPlans } from './floorPlans';
 import { newShareId, shareIdFromPath, SHARE_ID_PATTERN } from './share';
@@ -92,6 +92,21 @@ describe('classify', () => {
     expect(mid.drop).toBeGreaterThan(0);
     expect(buildPose(slot, 0.8, 'wall')).toEqual({ visible: true, drop: 0, scale: 1 });
     expect(buildPose(slot, 0.6, 'landscape').scale).toBeGreaterThan(0);
+  });
+});
+
+describe('look stages', () => {
+  it('goes from pencil on paper to the built model', () => {
+    const sketch = lookAt(0), massing = lookAt(1), detailed = lookAt(2), built = lookAt(3);
+    expect(sketch).toMatchObject({ mode: 'clay', whiteness: 0, glass: false, furniture: false, plants: false, paper: 1 });
+    expect(sketch.pencil).toBeGreaterThan(massing.pencil);
+    expect(massing).toMatchObject({ mode: 'clay', whiteness: 1, glass: false });
+    expect(detailed).toMatchObject({ mode: 'clay', glass: true, furniture: true, plants: false, treeSketch: 1 });
+    expect(built).toMatchObject({ mode: 'built', pencil: 0, plants: true, treeSketch: 0, paper: 0 });
+    // Between Detailed and Built the real materials fade in under the model layer.
+    expect(lookAt(2.5)).toMatchObject({ mode: 'fade', clayOver: 0.5 });
+    expect(lookAt(-1)).toEqual(sketch);
+    expect(lookAt(9)).toEqual(built);
   });
 });
 
@@ -247,6 +262,51 @@ describe('presentation engine', () => {
     w.position.set(10, 1.4, 10);
     for (let i = 0; i < 200; i++) e.update({ ...on, explode: 0 }, 0.05);
     expect(w.position.toArray()).toEqual([10, 1.4, 10]);
+  });
+
+  it('shows the white model with pencil lines, hides furniture and trees, then restores', () => {
+    const shapes: Shape[] = [...house(), { id: 'sofa', type: 'box', position: [1, 0.4, 1], args: [2, 0.8, 0.9], color: '#933' }];
+    const s = scene(shapes);
+    const e = new PresentationEngine(s);
+    e.sync(shapes);
+    const w = byId(s, 'gn'), sofa = byId(s, 'sofa'), tree = byId(s, 'oak');
+    const wallMat = w.material;
+    const massing = { ...INITIAL_PRESENTATION, active: true, stage: 1 };
+    for (let i = 0; i < 60; i++) e.update(massing, 0.05);
+    expect(w.material).not.toBe(wallMat);
+    expect(w.children.some(c => (c as THREE.LineSegments).isLineSegments)).toBe(true);
+    expect(sofa.visible).toBe(false);
+    expect(tree.visible).toBe(false);
+    // Pencil outlines of the trees stand in for them.
+    expect(s.children.some(c => c.userData.presentationAux && c.children.length > 0)).toBe(true);
+    expect(s.background).not.toBeNull();
+
+    for (let i = 0; i < 80; i++) e.update({ ...massing, stage: 3 }, 0.05);
+    expect(w.material).toBe(wallMat);
+    expect(w.children).toHaveLength(0);
+    expect(sofa.visible).toBe(true);
+    expect(tree.visible).toBe(true);
+    expect(s.background).toBeNull();
+  });
+
+  it('dims the sun and lights the rooms at dusk, then puts the daylight back', () => {
+    const shapes = house();
+    const s = scene(shapes);
+    const sun = new THREE.DirectionalLight('#ffffff', 2);
+    s.add(sun);
+    const e = new PresentationEngine(s);
+    e.sync(shapes);
+    for (let i = 0; i < 100; i++) e.update({ ...INITIAL_PRESENTATION, active: true, dusk: true }, 0.05);
+    expect(sun.intensity).toBeLessThan(0.5);
+    let roomLights = 0;
+    s.traverse(o => { if ((o as THREE.PointLight).isPointLight && (o as THREE.PointLight).intensity > 0) roomLights++; });
+    expect(roomLights).toBe(2);
+    for (let i = 0; i < 200; i++) e.update({ ...INITIAL_PRESENTATION, active: true }, 0.05);
+    expect(sun.intensity).toBe(2);
+    expect(sun.color.getHexString()).toBe('ffffff');
+    let left = 0;
+    s.traverse(o => { if ((o as THREE.PointLight).isPointLight) left++; });
+    expect(left).toBe(0);
   });
 
   it('hides everything but the ground at the start of a build', () => {

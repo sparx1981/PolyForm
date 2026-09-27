@@ -13,3 +13,10 @@ export function plantSpread(s: Shape): number {
   if (!species) return 0;
   return species.defaultSpread * (s.scale?.[0] ?? 1);
 }
+
+/** Height of a plant, metres (0 when the species is unknown). */
+export function plantHeight(s: Shape): number {
+  const species = s.plantSpeciesId ? byId.get(s.plantSpeciesId) : undefined;
+  if (!species) return 0;
+  return species.defaultHeight * (s.scale?.[1] ?? 1);
+}

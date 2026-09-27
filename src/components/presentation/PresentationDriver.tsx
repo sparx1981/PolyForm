@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
-import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useApp } from '../../AppContext';
 import { PresentationEngine } from '../../lib/presentation/engine';
-import { presentation } from '../../lib/presentation/store';
+import { presentation, STAGE_PLAY_SECONDS } from '../../lib/presentation/store';
 import { canvasRef } from '../../lib/presentation/recorder';
 
 /**
@@ -11,11 +10,11 @@ import { canvasRef } from '../../lib/presentation/recorder';
  * (and costs nothing) until presentation mode is switched on.
  */
 export default function PresentationDriver() {
-  const { scene, gl } = useThree();
+  const { scene, gl, camera } = useThree();
   const { shapes, kernelRevision } = useApp();
   const engine = useRef<PresentationEngine | null>(null);
   const wasActive = useRef(false);
-  const backdrop = useRef<THREE.Color | null>(null);
+  const frame = useRef(0);
 
   useEffect(() => {
     canvasRef.current = gl.domElement;
@@ -52,20 +51,14 @@ export default function PresentationDriver() {
       const next = Math.min(1, s.build + dt / Math.max(1, s.buildSeconds));
       presentation.set({ build: next, buildPlaying: next < 1 });
     }
-    const now = presentation.get();
-    e.update(now, Math.min(dt, 0.1));
-
-    // See-through walls over an empty sky: with no scene background the canvas is transparent
-    // there, and the post-processing output turns a faint wall over "nothing" nearly black.
-    // Paint the colour the page shows behind the canvas while x-ray is on.
-    const want = now.active && now.xray;
-    if (want && !scene.background) {
-      backdrop.current = new THREE.Color(pageColourBehind(gl.domElement));
-      scene.background = backdrop.current;
-    } else if (!want && backdrop.current) {
-      if (scene.background === backdrop.current) scene.background = null;
-      backdrop.current = null;
+    if (s.stagePlaying) {
+      const next = Math.min(3, s.stage + (dt * 3) / STAGE_PLAY_SECONDS);
+      presentation.set({ stage: next, stagePlaying: next < 3 });
     }
+    // The colour behind the canvas: under x-ray, a faint wall over an empty sky would otherwise
+    // come out nearly black from the post-processing pass.
+    if (frame.current++ % 60 === 0) e.pageColour.set(pageColourBehind(gl.domElement));
+    e.update(presentation.get(), Math.min(dt, 0.1), camera);
   });
 
   return null;

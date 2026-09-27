@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-  Presentation, X, Hammer, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2,
+  Presentation, X, Hammer, PenLine, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2,
 } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
-import { playBuild, presentation, usePresentation, type CutMode } from '../../lib/presentation/store';
+import { playBuild, playStages, presentation, usePresentation, type CutMode } from '../../lib/presentation/store';
+import { StageCaption, StageTimeline } from './StageTimeline';
 import { downloadBlob, recordingSupported, startRecording, videoFileName, type Recording } from '../../lib/presentation/recorder';
 import { runShowcase, SHOWCASE_STEPS } from '../../lib/presentation/showcase';
 import { modelledBounds } from '../Viewport';
@@ -65,7 +66,7 @@ export default function PresentationPanel() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [showcaseStep, setShowcaseStep] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [open, setOpen] = useState<'explode' | 'cut' | null>(null);
+  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | null>(null);
   const abort = useRef<AbortController | null>(null);
   const orbitBefore = useRef<boolean | null>(null);
 
@@ -138,6 +139,7 @@ export default function PresentationPanel() {
         className="fixed left-1/2 -translate-x-1/2 bottom-6 z-[80] max-w-[calc(100vw-16px)]"
         onPointerDown={e => e.stopPropagation()}
       >
+        {open === 'stages' && <StageTimeline className="mb-2 mx-auto w-[min(560px,calc(100vw-16px))]" />}
         {open === 'explode' && (
           <Popover title="Exploded view" hint={building ? 'Lift floors and roof apart' : 'Add walls to explode a building'}>
             <Slider label="Spread" value={s.explode} min={0} max={1} step={0.01} onChange={v => presentation.set({ explode: v })} format={v => `${Math.round(v * 100)}%`} />
@@ -168,6 +170,9 @@ export default function PresentationPanel() {
         )}
 
         <div className="flex items-center gap-1 rounded-2xl bg-slate-900/85 backdrop-blur-md px-2 py-2 shadow-2xl border border-white/10 text-white overflow-x-auto">
+          <Tool icon={<PenLine size={18} />} label="Stages" active={open === 'stages' || s.stage < 3 || s.dusk} onClick={() => {
+            if (open !== 'stages') { setOpen('stages'); if (s.stage >= 3) playStages(); } else { setOpen(null); presentation.set({ stage: 3, stagePlaying: false, dusk: false }); }
+          }} disabled={!!showcaseStep} title="Sketch → White model → Detailed → Built, and evening light" />
           <Tool icon={<Hammer size={18} />} label="Build" active={s.buildPlaying} onClick={() => (s.buildPlaying ? presentation.set({ buildPlaying: false, build: 1 }) : playBuild())} disabled={!!showcaseStep} />
           <Tool icon={<Layers size={18} />} label="Explode" active={s.explode > 0 || open === 'explode'} onClick={() => {
             if (open !== 'explode') { setOpen('explode'); if (s.explode === 0) presentation.set({ explode: 1 }); } else { setOpen(null); presentation.set({ explode: 0 }); }
@@ -200,6 +205,7 @@ export default function PresentationPanel() {
           </button>
         </div>
       </div>
+      {(open === 'stages' || showcaseStep === 'Stages') && <StageCaption className="fixed left-6 bottom-28 z-[79]" dark={s.dusk} />}
       {shareOpen && <ShareWithClientDialog onClose={() => setShareOpen(false)} />}
     </>
   );

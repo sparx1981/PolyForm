@@ -173,3 +173,43 @@ export function buildPose(slot: BuildSlot | undefined, progress: number, categor
   const height = category === 'roof' ? 4 : 2.5;
   return { visible: true, drop: (1 - easeOutCubic(t)) * height, scale: 1 };
 }
+
+export interface Look {
+  /** 'clay': everything wears the model material; 'fade': real materials under a fading clay layer; 'built': as modelled. */
+  mode: 'clay' | 'fade' | 'built';
+  /** 0 = sketch paper, 1 = white card, for the model material's colour. */
+  whiteness: number;
+  /** Pencil outline opacity (0 = no outlines). */
+  pencil: number;
+  /** Opacity of the clay layer over the real materials in 'fade'. */
+  clayOver: number;
+  /** Glass shows as glass (from Detailed on); before that windows are open holes. */
+  glass: boolean;
+  /** Furniture and props (from Detailed on). */
+  furniture: boolean;
+  /** Real trees and plants (Built); before that they're drawn as pencil outlines. */
+  plants: boolean;
+  /** Opacity of the pencil tree outlines. */
+  treeSketch: number;
+  /** How much of the paper backdrop shows instead of the real sky, 0-1. */
+  paper: number;
+}
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * clamp01(t);
+
+/** How the model looks at a (fractional) stage between 0 (Sketch) and 3 (Built). */
+export function lookAt(stage: number): Look {
+  const s = Math.min(3, Math.max(0, stage));
+  return {
+    mode: s >= 2.98 ? 'built' : s > 2 ? 'fade' : 'clay',
+    whiteness: clamp01(s),
+    pencil: s < 1 ? lerp(0.85, 0.3, s) : s < 2 ? lerp(0.3, 0.1, s - 1) : 0,
+    clayOver: s > 2 ? clamp01(3 - s) : 1,
+    glass: s >= 1.5,
+    furniture: s >= 1.5,
+    plants: s >= 2.5,
+    treeSketch: s < 2.5 ? (s < 2 ? 1 : lerp(1, 0, (s - 2) / 0.5)) : 0,
+    paper: s < 2 ? 1 : clamp01((2.98 - s) / 0.98),
+  };
+}

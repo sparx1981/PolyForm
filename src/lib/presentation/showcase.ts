@@ -1,4 +1,4 @@
-import { playBuild, presentation } from './store';
+import { playBuild, playStages, presentation, STAGE_PLAY_SECONDS } from './store';
 
 /**
  * The one-click showcase: the model builds itself up, splits into floors, turns see-through and
@@ -22,7 +22,11 @@ async function untilBuilt(signal: AbortSignal) {
   while (presentation.get().buildPlaying) await wait(100, signal);
 }
 
-export const SHOWCASE_STEPS = ['Build', 'Explode', 'X-ray', 'Cut', 'Finish'] as const;
+async function untilStaged(signal: AbortSignal) {
+  while (presentation.get().stagePlaying) await wait(100, signal);
+}
+
+export const SHOWCASE_STEPS = ['Stages', 'Evening', 'Build', 'Explode', 'X-ray', 'Cut', 'Finish'] as const;
 
 export async function runShowcase({ frame, orbit, signal }: ShowcaseOptions, onStep?: (step: typeof SHOWCASE_STEPS[number]) => void) {
   const s0 = presentation.get();
@@ -30,6 +34,18 @@ export async function runShowcase({ frame, orbit, signal }: ShowcaseOptions, onS
   frame();
   orbit(true);
   try {
+    // From a pencil sketch to the finished house, then the sun goes down.
+    onStep?.('Stages');
+    playStages();
+    await wait(STAGE_PLAY_SECONDS * 500, signal);
+    await untilStaged(signal);
+    await wait(900, signal);
+    onStep?.('Evening');
+    presentation.set({ dusk: true });
+    await wait(3500, signal);
+    presentation.set({ dusk: false });
+    await wait(1500, signal);
+
     onStep?.('Build');
     presentation.set({ buildSeconds: Math.max(5, s0.buildSeconds) });
     playBuild();
@@ -56,6 +72,6 @@ export async function runShowcase({ frame, orbit, signal }: ShowcaseOptions, onS
     await wait(1500, signal);
   } finally {
     orbit(false);
-    presentation.set({ buildPlaying: false, build: 1 });
+    presentation.set({ buildPlaying: false, build: 1, stagePlaying: false, stage: 3, dusk: false });
   }
 }

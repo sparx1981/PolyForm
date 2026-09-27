@@ -13,6 +13,7 @@ import { playBuild, presentation, usePresentation } from '../../lib/presentation
 import { plantSpread } from '../../lib/presentation/plants';
 import { downloadBlob } from '../../lib/presentation/recorder';
 import { frameModel, Popover, Slider, Tool, cutRange } from './PresentationPanel';
+import { SERIF, StageCaption, StageTimeline } from './StageTimeline';
 import type { Shape } from '../../types';
 
 const LEVEL_NAMES = ['Ground floor', 'First floor', 'Second floor', 'Third floor', 'Fourth floor'];
@@ -32,6 +33,7 @@ export default function ClientPresentationPage({ shareId }: { shareId: string })
   const [bundle, setBundle] = useState<ClientPresentationBundle | null>(null);
   const live = useRef(app);
   live.current = app;
+  const { dusk } = usePresentation();
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +119,7 @@ export default function ClientPresentationPage({ shareId }: { shareId: string })
         {meta ? (
           <>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-polyform-blue mb-2">Design presentation</p>
-            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-slate-900">{meta.title}</h1>
+            <h1 className="text-4xl sm:text-6xl tracking-tight text-slate-900" style={{ fontFamily: SERIF }}>{meta.title}</h1>
             <p className="mt-3 text-slate-600">
               {meta.designerName && <>Prepared by <b className="text-slate-800">{meta.designerName}</b></>}
               {meta.designerName && meta.clientName && ' for '}
@@ -143,6 +145,7 @@ export default function ClientPresentationPage({ shareId }: { shareId: string })
             </div>
           )}
           {status === 'ready' && meta && <ViewerControls effects={meta.effects} />}
+          {status === 'ready' && <StageCaption className="absolute left-4 sm:left-6 bottom-40 sm:bottom-36 z-10" dark={dusk} />}
         </div>
         <p className="text-xs text-slate-500 mt-2 px-1">Drag to look around · right-drag or two fingers to move · scroll or pinch to zoom</p>
       </section>
@@ -164,7 +167,8 @@ function ViewerControls({ effects }: { effects: ClientPresentationDoc['effects']
   const building = s.storeys > 0;
   const range = cutRange(s);
   return (
-    <div className="absolute left-1/2 -translate-x-1/2 bottom-4 z-10 max-w-[calc(100%-16px)]" onPointerDown={e => e.stopPropagation()}>
+    <div className="absolute left-1/2 -translate-x-1/2 bottom-4 z-10 w-[min(560px,calc(100%-16px))] flex flex-col items-center" onPointerDown={e => e.stopPropagation()}>
+      {!open && <StageTimeline className="w-full mb-2" />}
       {open === 'explode' && (
         <Popover title="Exploded view" hint="Floors and roof lifted apart">
           <Slider label="Spread" value={s.explode} min={0} max={1} step={0.01} onChange={v => presentation.set({ explode: v })} format={v => `${Math.round(v * 100)}%`} />
