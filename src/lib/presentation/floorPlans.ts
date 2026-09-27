@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { Shape } from '../../types';
+import { ROOF_BUILDUP, dormerCeilingAt, layoutsOf, type DormerLayout } from '../dormers';
+import { RoofSurface } from '../roofSurface';
 
 /**
  * Simple architectural floor plans drawn from a model's objects: walls, the doors and windows
@@ -19,6 +21,11 @@ export interface RoomLabel {
 export interface PlanRoom {
   name?: string;
   areaM2: number;
+  /**
+   * Floor area with at least 1.5 m headroom, when a sloping roof (a loft room) takes some away;
+   * a dormer's floor counts at the dormer's own ceiling height. Missing when all of it is usable.
+   */
+  usableM2?: number;
   /** Width (x) and depth (z) of the room's bounding box, metres. */
   size: V2;
   /** [x, z] of the room's label spot (pass it back as a RoomLabel to name the room). */
@@ -253,6 +260,57 @@ const metres = (n: number) => `${n.toFixed(2)} m`;
 
 const LEVEL_NAMES = ['Ground floor', 'First floor', 'Second floor', 'Third floor'];
 
+/** Headroom that counts as usable floor area (the usual loft-conversion measure). */
+export const USABLE_HEADROOM = 1.5;
+
+/**
+ * Headroom under the roofs at a plan point above a floor, or null when nothing low covers it:
+ * the underside of the lowest roof above the floor, or inside a dormer its ceiling. Roofs are
+ * read from their own geometry (like the dormers), so any roof the roof tool built works.
+ */
+function roofHeadroom(shapes: Shape[], levels: Level[]) {
+  const roofs = shapes.filter(s => s.roofData && s.geometryData && !s.hidden && !s.tags?.includes('roof-extra'));
+  if (!roofs.length) return null;
+  const read = roofs.map(r => {
+    let layouts: DormerLayout[] = [];
+    try { layouts = layoutsOf(r); } catch { layouts = []; }
+    return { r, surface: new RoofSurface(r), layouts };
+  });
+  const above = (e: number) => levels.find(l => l.elevation > e + LEVEL_GAP)?.elevation ?? Infinity;
+  const cache = new Map<string, number>();
+  return (x: number, z: number, floor: number): number => {
+    const key = `${floor}|${Math.round(x / 0.25)}|${Math.round(z / 0.25)}`;
+    const hit = cache.get(key);
+    if (hit !== undefined) return hit;
+    let h = above(floor) - floor;
+    for (const { r, surface, layouts } of read) {
+      const [px, py, pz] = r.position;
+      const lx = x - px, lz = z - pz;
+      const inDormer = dormerCeilingAt(layouts, lx, lz);
+      const y = inDormer ?? (surface.at(lx, lz)?.y ?? null);
+      if (y === null) continue;
+      const underside = py + y - (inDormer === null ? ROOF_BUILDUP : 0);
+      if (underside > floor + 0.05) h = Math.min(h, underside - floor);
+    }
+    cache.set(key, h);
+    return h;
+  };
+}
+
+function usableCells(
+  r: { id: number; minI: number; maxI: number; minJ: number; maxJ: number },
+  label: Int32Array | number[], grid: Grid, headroom: (x: number, z: number) => number,
+) {
+  let n = 0;
+  for (let j = r.minJ; j <= r.maxJ; j++) {
+    for (let i = r.minI; i <= r.maxI; i++) {
+      if (label[j * grid.nx + i] !== r.id) continue;
+      if (headroom(grid.x0 + (i + 0.5) * CELL, grid.z0 + (j + 0.5) * CELL) >= USABLE_HEADROOM) n++;
+    }
+  }
+  return n;
+}
+
 export interface PlanOptions {
   /** 'technical' (the default): black walls, measured. 'artistic': coloured, textured floors, planting. */
   style?: 'technical' | 'artistic';
@@ -330,6 +388,7 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
   const font = options.fontFamily ?? 'DejaVu Sans';
   const ink = art ? '#3b322b' : '#111';
   const marks = { door: 0, window: 0 };
+  const headroom = roofHeadroom(shapes, levels);
 
   return levels.map(level => {
     const { rooms, label } = findRooms(level, grid, labels);
@@ -348,9 +407,12 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
       const x = grid.x0 + r.minI * CELL, z = grid.z0 + r.minJ * CELL;
       const w = (r.maxI - r.minI + 1) * CELL, d = (r.maxJ - r.minJ + 1) * CELL;
       const bi = r.best % grid.nx, bj = (r.best - bi) / grid.nx;
+      const areaM2 = +(r.cells * CELL * CELL).toFixed(1);
+      const usable = headroom ? usableCells(r, label, grid, (x, z) => headroom(x, z, level.elevation)) * CELL * CELL : r.cells * CELL * CELL;
       planRooms.push({
-        name: r.name, areaM2: +(r.cells * CELL * CELL).toFixed(1), size: [+w.toFixed(2), +d.toFixed(2)],
+        name: r.name, areaM2, size: [+w.toFixed(2), +d.toFixed(2)],
         at: [+(grid.x0 + (bi + 0.5) * CELL).toFixed(2), +(grid.z0 + (bj + 0.5) * CELL).toFixed(2)],
+        ...(areaM2 - usable >= 0.1 ? { usableM2: +usable.toFixed(1) } : {}),
       });
       const fill = art ? ROOM_TINTS[n % ROOM_TINTS.length] : '#f5f1e8';
       const texture = art ? (WET.test(r.name ?? '') ? 'tile' : 'wood') : null;
@@ -452,7 +514,8 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
       const small = r.bestD * CELL * scale < 40;
       if (room.name) out.push(`<text x="${f(cx)}" y="${f(cz - (small ? 4 : 10))}" font-size="${small ? 12 : 16}" font-weight="bold" text-anchor="middle" fill="${ink}">${esc(room.name)}</text>`);
       out.push(`<text x="${f(cx)}" y="${f(cz + (room.name ? (small ? 10 : 10) : 0))}" font-size="${small ? 11 : 14}" text-anchor="middle" fill="#444">${m2(room.areaM2)}</text>`);
-      if (!small && !art) out.push(`<text x="${f(cx)}" y="${f(cz + (room.name ? 28 : 18))}" font-size="12" text-anchor="middle" fill="#777">${size}</text>`);
+      const extra = [!small && !art ? size : '', room.usableM2 !== undefined ? `${m2(room.usableM2)} usable` : ''].filter(Boolean).join(' · ');
+      if (extra) out.push(`<text x="${f(cx)}" y="${f(cz + (room.name ? (small ? 23 : 28) : 18))}" font-size="${small ? 10 : 12}" text-anchor="middle" fill="#777">${extra}</text>`);
     });
 
     if (options.wallDimensions) out.push(wallDimensionLines(level, grid, label, X, Z, scale));

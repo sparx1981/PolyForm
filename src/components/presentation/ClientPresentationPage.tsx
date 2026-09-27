@@ -320,6 +320,9 @@ function Details({ meta, bundle }: { meta: ClientPresentationDoc; bundle: Client
                 <p className="font-semibold text-slate-900">{r.name || `Room ${i + 1}`}</p>
                 <p className="mt-1 text-2xl font-bold tracking-tight text-polyform-dark-blue">{r.areaM2.toFixed(1)} m²</p>
                 <p className="text-xs text-slate-500">About {r.size[0].toFixed(1)} × {r.size[1].toFixed(1)} m</p>
+                {r.usableM2 !== undefined && (
+                  <p className="mt-1 text-xs text-slate-600">{r.usableM2.toFixed(1)} m² with 1.5 m or more headroom</p>
+                )}
               </div>
             ))}
           </div>

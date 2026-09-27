@@ -19,6 +19,7 @@ import {
   RoofToolOutput,
 } from '../types';
 import { WallOpening } from './archGeometry';
+import { dormerFrame, dormerOpenings, layoutsOf, type DormerLayout } from './dormers';
 import {
   STRUCTURAL_VALIDATION_RULES,
   DEFAULT_WALL_LAYER_STACK,
@@ -1018,6 +1019,9 @@ export function generateTimberFraming(
       !s.tags?.includes('roof-pediment') &&
       !s.tags?.includes('roof-soffit') &&
       !s.tags?.includes('roof-ridge-cap') &&
+      // Dormers, gutters, chimneys and the like belong to the roof they sit on (framed with it
+      // below); "Dormer roofs" would otherwise match the name test above.
+      !s.tags?.includes('roof-extra') &&
       !s.tags?.includes('timber-frame')
     );
 
@@ -1073,7 +1077,7 @@ export function generateTimberFraming(
         (roof.args as any)?.roofType === 'hip';
 
       // Helper to add a 3D timber member connecting two local points
-      const addBeamSegment = (
+      const emitBeam = (
         name: string,
         pStartLocal: THREE.Vector3,
         pEndLocal: THREE.Vector3,
@@ -1173,6 +1177,28 @@ export function generateTimberFraming(
           lengthMm: Math.round(span * 1000)
         });
       };
+
+      // Dormers: the main roof's rafters and noggins stop at each dormer's opening, doubled
+      // trimmers and headers go round it, and the dormer gets its own small frame.
+      let dormerLayouts: DormerLayout[] = [];
+      if (roof.roofData?.extras && roof.geometryData) {
+        try { dormerLayouts = layoutsOf(roof); } catch { dormerLayouts = []; }
+      }
+      const openings = dormerOpenings(dormerLayouts, roofH);
+      const addBeamSegment = (
+        name: string,
+        pStartLocal: THREE.Vector3,
+        pEndLocal: THREE.Vector3,
+        width: number,
+        depth: number,
+        subTag: string
+      ) => {
+        for (const [a, b] of openings.trim(pStartLocal, pEndLocal, subTag)) emitBeam(name, a, b, width, depth, subTag);
+      };
+      for (const m of openings.members) emitBeam(m.name, m.a, m.b, m.width, m.depth, m.subTag);
+      for (const L of dormerLayouts) {
+        for (const m of dormerFrame(L, studSpacing)) emitBeam(m.name, m.a, m.b, m.width, m.depth, m.subTag);
+      }
 
       // 1. Check for attached roofData or customData (roofData itself,
       // and roofH/eaveOverhang from it, are already resolved above)

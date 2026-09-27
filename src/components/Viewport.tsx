@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import PresentationDriver from './presentation/PresentationDriver';
+import { cutForDormers, dormerFingerprint, layoutsOf } from '../lib/dormers';
 import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
@@ -12953,7 +12954,33 @@ function CustomGeometry({ shape }: { shape: Shape }) {
     return JSON.stringify(hosted.map(w => [w.id, w.position, w.quaternion, w.rotation, w.args]));
   }, [shapes, shape.id]);
 
+  // Dormers open up the roof they sit on: the roof itself, and its tiles, fascias and soffits.
+  // Like the windows above, only a change to this roof's dormers reruns the cut.
+  const dormerRoof = useMemo(() => {
+    if (shape.tags?.includes('roof-extra') || shape.tags?.includes('roof-deck')) return undefined;
+    if (shape.roofData?.extras) return shape;
+    const parent = shape.parentShapeId ? shapes.find(s => s.id === shape.parentShapeId) : undefined;
+    return parent?.roofData?.extras ? parent : undefined;
+  }, [shapes, shape]);
+  const dormerRoofRef = useRef(dormerRoof);
+  dormerRoofRef.current = dormerRoof;
+  const dormerKey = useMemo(() => dormerFingerprint(dormerRoof), [dormerRoof]);
+
   const geometry = useMemo(() => {
+    const withDormers = (g: THREE.BufferGeometry): THREE.BufferGeometry => {
+      const roof = dormerRoofRef.current;
+      if (!dormerKey || !roof) return g;
+      try {
+        const layouts = layoutsOf(roof);
+        if (!layouts.length) return g;
+        const tiles = !!shape.tags?.includes('roof-tiles');
+        const offset = new THREE.Vector3(...shape.position).sub(new THREE.Vector3(...roof.position));
+        return cutForDormers(tiles ? g : mergeVertices(g), layouts, offset, tiles ? 'tiles' : 'solid', { Brush, Evaluator, SUBTRACTION });
+      } catch (err) {
+        console.warn('Dormer roof cut-out error:', err);
+        return g;
+      }
+    };
     // 1. Roadway Strip 3D Geometry
     if (shape.args?.isRoad && Array.isArray(shape.args?.path) && shape.args.path.length >= 2) {
       const pathPts = shape.args.path.map((p: any) => new THREE.Vector3(p[0], p[1], p[2]));
@@ -13141,20 +13168,20 @@ function CustomGeometry({ shape }: { shape: Shape }) {
               if (cutsApplied > 0 && currentBrush.geometry) {
                 const cutGeom = mergeVertices(currentBrush.geometry);
                 cutGeom.computeVertexNormals();
-                return cutGeom;
+                return withDormers(cutGeom);
               }
             } catch (csgErr) {
               console.warn('Velux roof window cutout error:', csgErr);
             }
           }
         }
-        return baseGeo;
+        return withDormers(baseGeo);
       }
     }
 
     // Fallback
     return new THREE.BoxGeometry(1, 1, 1);
-  }, [shape.args, shape.geometryData, shape.position, shape.quaternion, shape.rotation, shape.id, hostedWindowsFingerprint]);
+  }, [shape.args, shape.geometryData, shape.position, shape.quaternion, shape.rotation, shape.id, hostedWindowsFingerprint, dormerKey]);
 
   useEffect(() => {
     return () => {
