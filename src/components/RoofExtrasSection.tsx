@@ -140,6 +140,8 @@ function DormerEditor({ roof, flat }: { roof: Shape; flat: boolean }) {
     save(next);
   };
 
+  const fits = list.map(d => !!dormerLayout(roof, d));
+
   const btn = (active?: boolean) => cn('px-2 py-1 rounded text-[10px] font-semibold border', active
     ? 'bg-polyform-blue text-white border-polyform-blue'
     : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700');
@@ -154,7 +156,10 @@ function DormerEditor({ roof, flat }: { roof: Shape; flat: boolean }) {
       {list.map((d, i) => (
         <div key={d.id} className="rounded border border-gray-200 dark:border-gray-700 p-2 space-y-1.5 bg-white/60 dark:bg-gray-900/30">
           <div className="flex items-center justify-between gap-1">
-            <span className="text-[10px] font-bold text-gray-500">Dormer {i + 1}</span>
+            <span className="text-[10px] font-bold text-gray-500">
+              Dormer {i + 1}
+              {!fits[i] && <span className="ml-1 font-semibold text-amber-600" title="It isn't drawn. Move it, or make it narrower or lower.">doesn't fit</span>}
+            </span>
             <div className="flex gap-1">
               <button type="button" className={btn(placing === d.id)} onClick={() => setPlacing(placing === d.id ? null : d.id)}>
                 {placing === d.id ? 'Click the roof…' : 'Move'}

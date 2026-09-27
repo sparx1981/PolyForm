@@ -163,8 +163,10 @@ export function dormerLayout(roof: Shape, dormer: Dormer, surface = new RoofSurf
     const depthRoof = Math.max(depthCheek, (top - roofAtFront) / tan);
 
     // The whole dormer must stay on this one slope, clear of hips and the ridge.
+    // (A gable or hipped dormer's roof narrows to its ridge, so only the ridge reaches depthRoof.)
     const lx = X.clone().multiplyScalar(w / 2 + EAVE);
-    for (const [sx, d] of [[-1, 0.1], [1, 0.1], [-1, depthRoof], [1, depthRoof], [0, depthRoof]] as const) {
+    const sides = dormer.type === 'flat' ? depthRoof : depthCheek;
+    for (const [sx, d] of [[-1, 0.1], [1, 0.1], [-1, sides], [1, sides], [0, depthRoof]] as const) {
       const p = origin.clone().addScaledVector(Z, d).addScaledVector(lx, sx);
       const s = surface.at(p.x, p.z);
       if (!s) return null;
