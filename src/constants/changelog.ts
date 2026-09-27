@@ -7,6 +7,8 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'September 27, 2026',
     items: [
+      'My Designs: each design now shows its saved picture, and Preview opens it in 3D right on the page (drag to orbit, right-drag or two fingers to pan, scroll or pinch to zoom) with the same materials and lighting as the editor, before you open it. Nothing is changed or saved by previewing.',
+      'Fixed Save As losing drawn surfaces (Rectangle, Circle, Polygon, Poly Line, Bézier, Offset, Push/Pull and Combine results): the new cloud copy now includes them, and Save also stores them together with terrain edits and timber frame settings.',
       'Convert To Wall: right-click a shape drawn with the Rectangle, Circle, Polygon, Bezier, Poly Line or Triangle tools that has been given a wall thickness with Offset (and, optionally, pulled straight up) to turn it into real walls that doors, windows, timber framing and the other architecture tools work with. The option only appears when the shape qualifies: an even-thickness ring lying flat, pulled straight up to a flat, level top, not joined to other geometry and not filled in the middle.',
       'Each edge becomes one wall with exact mitred corners at any angle. Curves keep the pieces they were drawn with, and the dialog reports which pieces are wide enough for a door (1.1 m) or a window (0.7 m) and which suit a decorative wall or column. A flat, unextruded ring asks for a wall height.',
       'Convert To Wall warns about unrealistic thicknesses (under 75 mm, partition-thin, over 500 mm) and heights (under 2.0 m, over a 4 m storey), sharp corners and very short walls. The original shape is replaced; Ctrl+Z brings it back, and the floor inside the ring is kept.',

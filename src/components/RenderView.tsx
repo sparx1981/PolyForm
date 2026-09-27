@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { signInWithCustomToken } from 'firebase/auth';
+import { onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useApp } from '../AppContext';
@@ -21,6 +21,26 @@ declare global {
     __polyformRender?: (job: RenderJob) => Promise<{ objects: number }>;
   }
 }
+
+/**
+ * `?render=1&preview=<modelId>`: the My Designs page's 3D preview. It runs in
+ * an iframe on the same site, so it uses the visitor's own sign-in rather than
+ * a connector token, and it stays interactive (orbit, zoom, pan).
+ */
+const PREVIEW_MODEL_ID = typeof window !== 'undefined'
+  ? new URLSearchParams(window.location.search).get('preview')
+  : null;
+
+/** Messages the preview posts to the page that embeds it. */
+export type PreviewMessage =
+  | { type: 'polyform-preview'; status: 'ready' }
+  | { type: 'polyform-preview'; status: 'error'; message: string }
+  /** Escape pressed inside the preview (the keyboard focus is in the frame after a drag). */
+  | { type: 'polyform-preview'; status: 'escape' };
+
+const tellParent = (message: PreviewMessage) => {
+  if (window.parent !== window) window.parent.postMessage(message, window.location.origin);
+};
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const nextFrames = (n: number) => new Promise<void>(resolve => {
@@ -79,6 +99,59 @@ export default function RenderView() {
   useEffect(() => {
     window.__polyformRender = next => new Promise((resolve, reject) => setJob({ ...next, resolve, reject }));
     return () => { delete window.__polyformRender; };
+  }, []);
+
+  // Preview mode: open the visitor's own design and frame it.
+  useEffect(() => {
+    if (!PREVIEW_MODEL_ID) return;
+    const modelId = PREVIEW_MODEL_ID;
+    let started = false;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') tellParent({ type: 'polyform-preview', status: 'escape' });
+    };
+    window.addEventListener('keydown', onKey);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (started) return;
+      started = true;
+      (async () => {
+        if (!currentUser) throw new Error('Sign in to preview this design.');
+        setUser(currentUser);
+        setGridEnabled(false);
+        setAxisIndicatorEnabled(false);
+        setMiniAxisIndicatorEnabled(false);
+        // Left drag orbits, right drag pans, the wheel zooms; nothing edits.
+        app.setActiveTool('orbit');
+        const snap = await getDoc(doc(db, 'models', modelId));
+        if (!snap.exists()) throw new Error('This design could not be found.');
+        const data = snap.data();
+        const expected = Array.isArray(data.shapes) ? data.shapes.length : 0;
+        setCurrentModelId(modelId);
+        await waitUntil(() => (!data.name || live.current.currentModelName === data.name) && live.current.shapes.length === expected, 45000, 'the design to load');
+        // Terrain, fences and textures build in the background; give them a moment.
+        await sleep(1200);
+        // Saved settings arrive after sign-in and may turn these back on.
+        setGridEnabled(false);
+        setAxisIndicatorEnabled(false);
+        setMiniAxisIndicatorEnabled(false);
+        app.setActiveTool('orbit');
+        const types = new Map(live.current.shapes.map(s => [s.id, s.type]));
+        const box = modelledBounds(id => types.get(id) !== 'terrain' && types.get(id) !== 'measurement')
+          ?? modelledBounds(() => true)
+          ?? new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 3, 5));
+        const { position, target } = framing(box, 'perspective', window.innerWidth / Math.max(1, window.innerHeight));
+        window.dispatchEvent(new CustomEvent('set-camera', { detail: { position, target } }));
+        await nextFrames(4);
+        tellParent({ type: 'polyform-preview', status: 'ready' });
+      })().catch(error => tellParent({
+        type: 'polyform-preview',
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      }));
+    });
+    return () => {
+      unsubscribe();
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   useEffect(() => {

@@ -282,10 +282,17 @@ export default function TopBar() {
             // a small URL marker - otherwise a sufficiently detailed
             // design fails outright with "document ... exceeds the
             // maximum allowed size", with nothing done about it.
+            const projectState = getProjectState();
             const content = await offloadModelForSave({
               shapes: shapes || [], tags: tags || [], scenes: scenes || [], customMaterials: customMaterials || [],
               graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [],
               environment, materialBindings,
+              // Drawn surfaces, terrain edits and timber settings, as auto-save
+              // writes them. Without the kernel a new document opens with no
+              // drawn geometry (loading replaces the graph wholesale).
+              kernel: projectState.kernel ?? null,
+              timberFrameParams: projectState.timberFrameParams ?? null,
+              terrainModifiers: projectState.terrainModifiers ?? [],
             }, user.uid, firebaseGeometryIO);
             const update = {
               id: currentModelId,
@@ -302,6 +309,9 @@ export default function TopBar() {
               assetCatalogRelease: '2026-09-18-pilot-r1',
               environment: cleanFirestoreData(content.environment),
               materialBindings: cleanFirestoreData(content.materialBindings),
+              kernel: cleanFirestoreData(content.kernel),
+              timberFrameParams: cleanFirestoreData(content.timberFrameParams),
+              terrainModifiers: cleanFirestoreData(content.terrainModifiers),
               ...(previewUrl ? { previewUrl } : {}),
             };
             assertModelFits(update);
@@ -477,10 +487,17 @@ export default function TopBar() {
             // offload any oversized shape geometry to Storage first so a
             // detailed design doesn't fail outright on Firestore's 1MiB
             // document limit.
+            const projectState = getProjectState();
             const content = await offloadModelForSave({
               shapes: shapes || [], tags: tags || [], scenes: scenes || [], customMaterials: customMaterials || [],
               graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [],
               environment, materialBindings,
+              // Drawn surfaces, terrain edits and timber settings, as auto-save
+              // writes them. Without the kernel a new document opens with no
+              // drawn geometry (loading replaces the graph wholesale).
+              kernel: projectState.kernel ?? null,
+              timberFrameParams: projectState.timberFrameParams ?? null,
+              terrainModifiers: projectState.terrainModifiers ?? [],
             }, user.uid, firebaseGeometryIO);
             const fields = {
               id: '',
@@ -499,6 +516,9 @@ export default function TopBar() {
               assetCatalogRelease: '2026-09-18-pilot-r1',
               environment: cleanFirestoreData(content.environment),
               materialBindings: cleanFirestoreData(content.materialBindings),
+              kernel: cleanFirestoreData(content.kernel),
+              timberFrameParams: cleanFirestoreData(content.timberFrameParams),
+              terrainModifiers: cleanFirestoreData(content.terrainModifiers),
               previewUrl: previewUrl || '',
             };
             assertModelFits(fields);

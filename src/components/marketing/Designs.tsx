@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { FolderOpen, Trash2, Plus, Loader2 } from 'lucide-react';
+import { FolderOpen, Trash2, Plus, Loader2, Rotate3d } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../../firebase';
 import { useApp } from '../../AppContext';
 import { applySavedModelToAppState } from '../../lib/loadSavedModel';
+import DesignPreviewDialog from './DesignPreviewDialog';
 
 interface SavedModel {
   id: string;
@@ -17,6 +18,8 @@ export default function Designs({ onOpenDesign, onSignInRequired }: { onOpenDesi
   const { user } = api;
   const [models, setModels] = useState<SavedModel[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [previewing, setPreviewing] = useState<SavedModel | null>(null);
+  const closePreview = useCallback(() => setPreviewing(null), []);
 
   useEffect(() => {
     if (!user) { setModels(null); return; }
@@ -95,32 +98,65 @@ export default function Designs({ onOpenDesign, onSignInRequired }: { onOpenDesi
           {models.map(model => (
             <div
               key={model.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col gap-3 hover:border-polyform-blue/40 transition-colors"
+              className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col hover:border-polyform-blue/40 transition-colors"
             >
-              <div className="w-9 h-9 rounded-lg bg-polyform-blue/10 text-polyform-blue flex items-center justify-center">
-                <FolderOpen size={18} />
-              </div>
-              <p className="font-semibold text-polyform-dark-blue truncate">{model.name || 'Untitled design'}</p>
-              <div className="flex items-center gap-2 mt-auto">
-                <button
-                  type="button"
-                  onClick={() => openDesign(model)}
-                  className="flex-1 text-sm font-semibold px-3 py-2 rounded-lg bg-polyform-blue text-white hover:bg-polyform-dark-blue transition-colors"
-                >
-                  Open in PolyForm
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deleteDesign(model.id)}
-                  aria-label={`Delete ${model.name || 'design'}`}
-                  className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
+              <button
+                type="button"
+                onClick={() => setPreviewing(model)}
+                aria-label={`Preview ${model.name || 'design'} in 3D`}
+                className="group relative aspect-video bg-slate-100 flex items-center justify-center overflow-hidden"
+              >
+                {typeof model.previewUrl === 'string' && model.previewUrl ? (
+                  <img src={model.previewUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="w-10 h-10 rounded-lg bg-polyform-blue/10 text-polyform-blue flex items-center justify-center">
+                    <FolderOpen size={20} />
+                  </span>
+                )}
+                <span className="absolute inset-0 flex items-center justify-center bg-slate-900/0 group-hover:bg-slate-900/35 group-focus-visible:bg-slate-900/35 transition-colors">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-polyform-dark-blue opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+                    <Rotate3d size={14} /> Preview in 3D
+                  </span>
+                </span>
+              </button>
+              <div className="p-4 flex flex-col gap-3 flex-1">
+                <p className="font-semibold text-polyform-dark-blue truncate">{model.name || 'Untitled design'}</p>
+                <div className="flex items-center gap-2 mt-auto">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewing(model)}
+                    className="text-sm font-semibold px-3 py-2 rounded-lg border border-slate-200 text-polyform-dark-blue hover:bg-slate-50 transition-colors"
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDesign(model)}
+                    className="flex-1 text-sm font-semibold px-3 py-2 rounded-lg bg-polyform-blue text-white hover:bg-polyform-dark-blue transition-colors"
+                  >
+                    Open in PolyForm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteDesign(model.id)}
+                    aria-label={`Delete ${model.name || 'design'}`}
+                    className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {previewing && (
+        <DesignPreviewDialog
+          model={previewing}
+          onOpen={() => { const m = previewing; setPreviewing(null); openDesign(m); }}
+          onClose={closePreview}
+        />
       )}
     </section>
   );
