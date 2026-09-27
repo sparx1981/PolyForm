@@ -56,7 +56,7 @@ import { SkpService, HuggingFaceService } from '../services/skpService';
 import { LOGIN_ACTIVITY_ADMIN_EMAIL } from '../lib/loginActivity';
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
-import { readAssetProjectState } from '../lib/assets/projectCodec';
+import { applySavedModelToAppState } from '../lib/loadSavedModel';
 
 function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const positions: number[] = [];
@@ -97,9 +97,10 @@ export default function TopBar() {
   const submenuClass = (id: 'export' | 'dev', desktop: string) => isPhone
     ? (openSubmenu === id ? "block pl-4 bg-gray-50 border-y border-gray-100 py-1" : "hidden")
     : desktop;
-    const { 
-      user, 
-      shapes, 
+    const appApi = useApp();
+    const {
+      user,
+      shapes,
       setShapes,
       clearShapes, 
       theme, 
@@ -175,7 +176,7 @@ export default function TopBar() {
       setEnvironment,
       materialBindings,
       setMaterialBindings
-    } = useApp();
+    } = appApi;
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -675,24 +676,7 @@ export default function TopBar() {
   };
 
   const loadModel = (model: any) => {
-    const assetState = readAssetProjectState(model);
-    setShapes(model.shapes || []);
-    setTags(model.tags || []);
-    setScenes(model.scenes || []);
-    if (model.customMaterials) setCustomMaterials(model.customMaterials);
-    setGraphicsSettings(normalizeGraphicsSettings(model.graphicsSettings));
-    if (model.animations) setAnimations(model.animations);
-    if (model.notes) setNotes(model.notes);
-    if (model.customLights) setCustomLights(model.customLights);
-    const legacySkybox = assetState.environment.legacySkybox;
-    setEnvironment(assetState.environment);
-    setMaterialBindings(assetState.materialBindings);
-    if (legacySkybox) setSkybox(legacySkybox as Parameters<typeof setSkybox>[0]);
-    setSkyboxBlur(assetState.environment.blur);
-    setSkyboxRotation(assetState.environment.rotationRadians * 180 / Math.PI);
-    setEnvironmentIntensity(assetState.environment.intensity);
-    setCurrentModelId(model.id || null);
-    setCurrentModelName(model.name || null);
+    applySavedModelToAppState(model, appApi);
     setIsSavedModelsOpen(false);
   };
 

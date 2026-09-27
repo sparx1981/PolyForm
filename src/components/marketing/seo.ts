@@ -35,6 +35,11 @@ export const SEO: Record<Page, SeoMeta> = {
     description: 'Every method in the PolyForm Developer Console’s sdk object, grouped by subsystem, with full signatures and return types.',
     path: '/developers/sdk',
   },
+  designs: {
+    title: 'My Designs | PolyForm',
+    description: 'Your saved PolyForm designs. Sign in to open one and keep editing.',
+    path: '/designs',
+  },
 };
 
 function setMeta(name: string, content: string, attr: 'name' | 'property' = 'name') {
@@ -83,6 +88,7 @@ export function usePageSeo(page: Page) {
     setMeta('twitter:card', 'summary');
     setMeta('twitter:title', meta.title);
     setMeta('twitter:description', meta.description);
+    setMeta('robots', page === 'designs' ? 'noindex' : 'index, follow');
 
     setJsonLd('ld-software-application', {
       '@context': 'https://schema.org',
