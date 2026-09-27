@@ -78,6 +78,20 @@ function toVec2(r: Ring): Vec2[] {
   return pts;
 }
 
+/** True when every face of a shape lies on one plane (a drawn flat shape, not a pulled-up solid). */
+export function isFlatShape(g: Graph, faces: readonly FaceId[]): boolean {
+  const first = g.faces.get(faces[0]!);
+  if (!first) return false;
+  const n = first.plane.normal, o = first.plane.point;
+  return faces.every(id => {
+    const f = g.faces.get(id);
+    if (!f) return false;
+    const fn = f.plane.normal, fp = f.plane.point;
+    return Math.abs(fn.x * n.x + fn.y * n.y + fn.z * n.z) >= PARALLEL
+      && Math.abs((fp.x - o.x) * n.x + (fp.y - o.y) * n.y + (fp.z - o.z) * n.z) <= ON_PLANE;
+  });
+}
+
 /**
  * The shapes a face selection covers, each as its whole group, in the
  * order they were first selected (the first shape leads).

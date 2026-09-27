@@ -7,6 +7,13 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'September 27, 2026',
     items: [
+      'Balconies are now shaped with sliders instead of corner handles: Width left and Width right (from the door\'s centre, as seen from outside), Depth and Floor level. On a curved wall the widths are measured along the curve.',
+      'Add a level to a balcony: a new piece joined to its front, left or right, at the same level or any height up or down. Each level has its own width, depth, position, support, floor and guarding. Where levels meet at the same height there is no guarding between them; where the height changes, steps are built automatically and the upper level is guarded along the drop except across the steps. A level added to the front of a cantilever or bracket balcony stands on posts. Deleting a balcony removes its levels.',
+      'Show All Dimensions now also shows each balcony\'s floor height above the ground below it.',
+      'Convert To Wall: the thickness can now be changed in the dialog (the outside face stays where it was drawn), and a new "Also add floor slab and foundation" option (on by default for walls on the ground) adds a 200 mm floor slab in place of the drawn floor, with the walls standing on it, a foundation below and the ground levelled, as the Wall tool does.',
+      'Combine now does everything the separate Subtract tool did: pick flat drawn shapes or 3D objects (boxes, pulled-up shapes, imported objects) and Merge, Subtract or Intersect them. The old Subtract tool has been folded into it.',
+      'Closing a Bézier shape is easier: the start point catches the cursor from about 12 pixels away at any zoom, and Enter or a double-click closes the shape (Shift+Enter leaves the curve open). Fixed closed Bézier shapes being wrongly refused as crossing themselves.',
+      'The profile menu in the app has a PolyForm home link, which opens the homepage in a new tab.',
       'Balconies on curved walls: placed at a door in a curved wall, a balcony now follows the wall either side of the door instead of leaving wedge gaps. Choose per balcony whether its front follows the same curve or runs straight across (at least the set depth from the wall everywhere). Brackets and posts are spaced evenly along the curve.',
       'A balcony whose wall pieces are merged (for example to fit its door) now stays on the merged wall instead of being removed.',
       'Balconies: the Patio / Decking tool has a new Balcony option. Hover a door (or a window) and click: a balcony goes on the outside of the wall, centred on the opening and 600 mm wider each side, with its floor 50 mm below the door sill (a window takes the storey floor). Drag its corners to resize it, or set its depth and floor level in the panel.',

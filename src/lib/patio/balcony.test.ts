@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import type { Shape } from '../../types';
 import { buildPatio, infillCount, polygonArea, SPINDLE, type Vec2 } from './patioGeometry';
-import { DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK, DEFAULT_PATIO_TEMPLATE, type BalconySupport, type PatioData } from './patioTypes';
-import { balconyAtOpening, balconyWarnings, BALCONY_STEP_DOWN, followHostWalls, JULIET_DEPTH, moveWithWall, outsideSide, placeBalcony, reshapeBalcony, wallChain } from './balcony';
+import { DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK, DEFAULT_PATIO_TEMPLATE, type BalconyLevel, type BalconySupport, type PatioData } from './patioTypes';
+import { balconyAtOpening, balconyFrame, balconyWarnings, BALCONY_STEP_DOWN, followHostWalls, JULIET_DEPTH, moveWithWall, newLevel, outsideSide, placeBalcony, reshapeBalcony, syncBalconyLevels, wallChain } from './balcony';
 import { makePatioShape } from './patioPlacement';
 
 /** A 6 m wall along x at z = 0, 2.5 m high on a first floor at y = 3, 0.3 m thick. */
@@ -282,5 +282,103 @@ describe('curved walls', () => {
     const next = [...pieces.filter(w => w.id !== host.id), merged, movedDoor, shape];
     const out = followHostWalls(next, [...shapes, shape]);
     expect(out.find(s => s.id === 'cb')!.hostWallId).toBe('merged');
+  });
+});
+
+describe('widths and levels', () => {
+  const opts = { depth: 1.5, margin: 0.6, juliet: false };
+  const make = (left = 1.2, right = 1.2): Shape => {
+    const p = balconyAtOpening(door, wall, 1, { ...opts, left, right })!;
+    return { ...makePatioShape({ id: 'b', name: 'Balcony 1', world: p.world, bulges: [0, 0, 0, 0], level: p.level, wallEdges: p.wallEdges, kind: 'balcony',
+      template: { ...DEFAULT_PATIO_TEMPLATE, ...DEFAULT_BALCONY_LOOK, balcony: { ...DEFAULT_BALCONY, hostOpeningId: 'd', widthLeft: left, widthRight: right } } }), hostWallId: 'w' };
+  };
+  const worldOf = (s: Shape) => s.patioData!.points.map(([x, z]) => [x + s.position[0], z + s.position[2]] as Vec2);
+
+  it('width left and right are measured from the door centre, as seen from outside', () => {
+    // Outside is +z; facing the wall from there, right is +x. The door is at x = 1.
+    const p = balconyAtOpening(door, wall, 1, { ...opts, left: 0.5, right: 1.5 })!;
+    const xs = p.world.map(q => q[0]);
+    expect(Math.min(...xs)).toBeCloseTo(0.5);
+    expect(Math.max(...xs)).toBeCloseTo(2.5);
+    // From the other side (outside is -z) right is -x.
+    const q = balconyAtOpening(door, wall, -1, { ...opts, left: 0.5, right: 1.5 })!;
+    expect(Math.min(...q.world.map(v => v[0]))).toBeCloseTo(-0.5);
+    expect(Math.max(...q.world.map(v => v[0]))).toBeCloseTo(1.5);
+  });
+
+  it('reshapes to new widths and keeps them', () => {
+    const b = make();
+    const wider = reshapeBalcony(b, [wall, door, b], { widthRight: 2 })!;
+    const xs = worldOf(wider).map(p => p[0]);
+    expect(Math.max(...xs)).toBeCloseTo(3);
+    expect(Math.min(...xs)).toBeCloseTo(-0.2);
+    expect(wider.patioData!.balcony!.widthRight).toBe(2);
+    const f = balconyFrame(wider)!;
+    expect(f.centre[0]).toBeCloseTo(1);
+    expect(f.left).toBeCloseTo(1.2);
+    expect(f.rightReach).toBeCloseTo(2);
+  });
+
+  const withLevel = (parent: Shape, patch: Partial<BalconyLevel>, attach: 'front' | 'left' | 'right' = 'front') => {
+    const level = { ...newLevel(parent, attach)!, ...patch };
+    const child: Shape = { ...parent, id: 'c', patioData: { ...parent.patioData!, balcony: { ...parent.patioData!.balcony!, level } } };
+    return syncBalconyLevels([wall, door, parent, child]);
+  };
+
+  it('a front level at the same level joins with no guarding between', () => {
+    const out = withLevel(make(), { rise: 0 });
+    const parent = out.find(s => s.id === 'b')!, child = out.find(s => s.id === 'c')!;
+    const zs = worldOf(child).map(p => p[1]);
+    expect(Math.min(...zs)).toBeCloseTo(0.14 + 1.5);
+    expect(Math.max(...zs)).toBeCloseTo(0.14 + 1.5 + 1.2);
+    expect(child.position[1]).toBeCloseTo(parent.position[1]);
+    expect(parent.patioData!.balcony!.railGaps).toHaveLength(1);
+    expect(child.patioData!.balcony!.railGaps).toHaveLength(1);
+    expect(child.patioData!.balcony!.stepFlight).toBeUndefined();
+    // No guarding where they meet: the parent's front railing is gone there.
+    const railZ = (s: Shape) => { const g = buildPatio(s.patioData!, () => -3).parts.glass; if (!g) return []; g.computeBoundingBox(); return [g.boundingBox!.min.z, g.boundingBox!.max.z]; };
+    expect(railZ(parent)[1]).toBeLessThan(1.4);
+  });
+
+  it('a level a step up gets steps down onto the balcony, guarded except across them', () => {
+    const out = withLevel(make(), { rise: 0.5 });
+    const child = out.find(s => s.id === 'c')!, parent = out.find(s => s.id === 'b')!;
+    const f = child.patioData!.balcony!.stepFlight!;
+    expect(f.count).toBe(3);
+    expect(f.top).toBe(0);
+    expect(f.bottom).toBeCloseTo(-0.5);
+    expect(f.dir[1]).toBeCloseTo(-1); // down towards the wall, onto the balcony
+    expect(child.position[1]).toBeCloseTo(parent.position[1] + 0.5);
+    const [gap] = child.patioData!.balcony!.railGaps!;
+    expect(Math.hypot(gap[1][0] - gap[0][0], gap[1][1] - gap[0][1])).toBeCloseTo(1.0);
+    expect(buildPatio(child.patioData!, () => -3).parts.steps).toBeDefined();
+  });
+
+  it('a level a step down has its steps on the level itself', () => {
+    const out = withLevel(make(), { rise: -0.34 });
+    const f = out.find(s => s.id === 'c')!.patioData!.balcony!.stepFlight!;
+    expect(f.count).toBe(2);
+    expect(f.top).toBeCloseTo(0.34);
+    expect(f.bottom).toBe(0);
+    expect(f.dir[1]).toBeCloseTo(1);
+  });
+
+  it('a side level runs along the wall', () => {
+    const out = withLevel(make(), { rise: 0 }, 'right');
+    const child = out.find(s => s.id === 'c')!;
+    const xs = worldOf(child).map(p => p[0]);
+    expect(Math.min(...xs)).toBeCloseTo(2.2);
+    expect(Math.max(...xs)).toBeCloseTo(3.7);
+    expect(child.patioData!.wallEdges[0]).toBe(true);
+  });
+
+  it('follows its parent and goes with it', () => {
+    const parent = make();
+    let shapes = withLevel(parent, { rise: 0 });
+    const wider = reshapeBalcony(shapes.find(s => s.id === 'b')!, shapes, { widthRight: 2, depth: 2 })!;
+    shapes = syncBalconyLevels(shapes.map(s => s.id === 'b' ? wider : s));
+    const zs = worldOf(shapes.find(s => s.id === 'c')!).map(p => p[1]);
+    expect(Math.min(...zs)).toBeCloseTo(0.14 + 2);
+    expect(syncBalconyLevels(shapes.filter(s => s.id !== 'b')).some(s => s.id === 'c')).toBe(false);
   });
 });

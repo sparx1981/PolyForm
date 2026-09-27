@@ -12,7 +12,7 @@ import { ProtractorTool, ProtractorMeasurement, type ProtractorArgs } from './Pr
 import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint, type PatioClosure } from './landscape/PatioTool';
 import { buildCloseTargets, joinedEdges, patioWorldPath, snapPatioToBuilding, trimAgainstPatios } from '../lib/patio/patioClosure';
 import { makePatioShape, patioLevel, patioWallEdges } from '../lib/patio/patioPlacement';
-import { balconyWarnings, type BalconyPlacement } from '../lib/patio/balcony';
+import { balconyFrame, balconyWarnings, type BalconyPlacement } from '../lib/patio/balcony';
 import { DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK } from '../lib/patio/patioTypes';
 import { BalconyPlaceTool } from './landscape/BalconyTool';
 import { WaterDrawPreview } from './WaterDrawPreview';
@@ -43,7 +43,8 @@ import {
 import { EffectComposer, N8AO, GodRays } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as THREE from 'three';
-import { SUBTRACTION, Evaluator, Brush } from 'three-bvh-csg';
+import { SUBTRACTION, ADDITION, INTERSECTION, Evaluator, Brush } from 'three-bvh-csg';
+import { COMBINE_SOLIDS_EVENT, setCombinePicks, useCombinePicks, type CombineSolid } from '../tools/combinePicks';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db, isQuotaLocked, handleFirestoreError, OperationType } from '../firebase';
 // @ts-ignore
@@ -117,9 +118,9 @@ import { rankSnap } from '../tools/tuning';
 import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
-import { applyBoolean, planBoolean, BOOLEAN_LABELS, orderedShapeGroups, type BooleanOp, type BooleanPlan, type BooleanRejection } from '../tools/kernelBoolean';
+import { applyBoolean, planBoolean, BOOLEAN_LABELS, orderedShapeGroups, isFlatShape, type BooleanOp, type BooleanPlan, type BooleanRejection } from '../tools/kernelBoolean';
 import { planCurvedMerge, isCurvedPiece, type MergeResult, type MergeRejection } from '../tools/convertedWallMerge';
-import { analyzeWallConversion, buildWallShapes, captureFaces, graphSignature, heightWarnings, type WallConversionPlan, type WallConversionRejection } from '../tools/kernelConvertToWall';
+import { analyzeWallConversion, buildWallShapes, captureFaces, floorFacesWithin, graphSignature, heightWarnings, outerRing, planWithThickness, type WallConversionPlan, type WallConversionRejection } from '../tools/kernelConvertToWall';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
@@ -1849,12 +1850,12 @@ function Scene() {
       return;
     }
     if (activeTool === 'combine') {
-      // Combine Shapes: each click adds (or removes) a whole shape, in order; the first leads.
+      // Combine: each click adds (or removes) a whole shape or object, in order; the first leads.
       const group = groupContaining(kernelHost.graph, faceId);
       const groupSet = new Set<number>(group);
-      setSelectedId(null);
-      setSelectedIds([]);
-      setSelectedFaceIds(prev => prev.includes(faceId) ? prev.filter(f => !groupSet.has(f)) : [...prev, ...group]);
+      setCombinePicks(prev => prev.some(p => p.kind === 'kernel' && groupSet.has(p.face))
+        ? prev.filter(p => !(p.kind === 'kernel' && groupSet.has(p.face)))
+        : [...prev, { kind: 'kernel', face: faceId }]);
       return;
     }
     if (activeTool === 'paint') {
@@ -2694,6 +2695,122 @@ function Scene() {
       setConsoleOutput(prev => [...prev, `[ERROR] Mixed CSG Operation failed: ${error.message}`]);
     }
   };
+
+  /**
+   * Combine tool with 3D objects: merges, subtracts or intersects them in click order (the
+   * first leads: Subtract cuts every later one out of it, and the result takes its place,
+   * material and transform). Kernel solids and Shapes mix freely. One undo step.
+   */
+  const performSolidCombine = (picks: CombineSolid[], op: BooleanOp): boolean => {
+    try {
+      const kernelGeometry = (faces: FaceId[]): THREE.BufferGeometry | null => {
+        const meshes = faces.map(id => tessellateFace(kernelHost.graph, id)).filter((m): m is NonNullable<typeof m> => m !== null);
+        if (!meshes.length) return null;
+        const merged = mergeBuffers(meshes);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(merged.position, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(merged.normal, 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(merged.uv, 2));
+        geo.setIndex(new THREE.BufferAttribute(merged.index, 1));
+        return geo; // world space
+      };
+      const [lead, ...rest] = picks;
+      if (!lead || !rest.length) return false;
+      // The result lives in the lead's space: a Shape's own local space, or world space for kernel geometry.
+      let leadMesh: THREE.Mesh | null = null;
+      let result: Brush;
+      if (lead.kind === 'shape') {
+        leadMesh = getSceneObjectById(lead.id) as THREE.Mesh;
+        if (!leadMesh?.geometry) { setMeasurements('Combine: the first object could not be found.'); return false; }
+        leadMesh.updateMatrixWorld(true);
+        result = new Brush(mergeVertices(leadMesh.geometry.clone()), leadMesh.material);
+      } else {
+        const geo = kernelGeometry(lead.faces);
+        if (!geo) { setMeasurements('Combine: the first shape could not be read.'); return false; }
+        result = new Brush(mergeVertices(geo));
+      }
+      result.updateMatrixWorld();
+      const toLead = leadMesh ? leadMesh.matrixWorld.clone().invert() : new THREE.Matrix4();
+      const evaluator = new Evaluator();
+      const operation = op === 'merge' ? ADDITION : op === 'intersect' ? INTERSECTION : SUBTRACTION;
+      for (const pick of rest) {
+        let brush: Brush;
+        if (pick.kind === 'shape') {
+          const mesh = getSceneObjectById(pick.id) as THREE.Mesh;
+          if (!mesh?.geometry) { setMeasurements('Combine: one of the objects could not be found.'); return false; }
+          mesh.updateMatrixWorld(true);
+          brush = new Brush(mergeVertices(mesh.geometry.clone()), mesh.material);
+          brush.applyMatrix4(mesh.matrixWorld.clone().premultiply(toLead));
+        } else {
+          const geo = kernelGeometry(pick.faces);
+          if (!geo) { setMeasurements('Combine: one of the shapes could not be read.'); return false; }
+          brush = new Brush(mergeVertices(geo));
+          brush.applyMatrix4(toLead);
+        }
+        brush.updateMatrixWorld();
+        result = evaluator.evaluate(result, brush, operation);
+        result.updateMatrixWorld();
+      }
+      result.geometry = mergeVertices(result.geometry);
+      healTJunctions(result.geometry);
+      removeDegenerateCSGTriangles(result.geometry);
+      result.geometry.computeVertexNormals();
+      if (!result.geometry.getAttribute('position')?.count) {
+        setMeasurements(op === 'intersect' ? 'Intersect: those objects do not all overlap, so nothing would be left.' : 'Combine: nothing would be left.');
+        return false;
+      }
+      const geometryData = result.geometry.toJSON();
+
+      const kernelFaces = picks.flatMap(p => p.kind === 'kernel' ? p.faces : []);
+      if (kernelFaces.length) {
+        const before = snapshot(kernelHost.graph);
+        deleteGroupFacesAndEdges(kernelHost.graph, kernelFaces);
+        kernelHost.recordUndo(before);
+        bumpKernel();
+      }
+      const others = new Set(rest.flatMap(p => p.kind === 'shape' ? [p.id] : []));
+      let resultId: string;
+      if (lead.kind === 'shape' && leadMesh) {
+        resultId = lead.id;
+        const m = leadMesh;
+        setShapes(prev => prev.filter(s => !others.has(s.id)).map(s => s.id === lead.id ? {
+          ...s, type: 'custom',
+          position: [m.position.x, m.position.y, m.position.z],
+          quaternion: [m.quaternion.x, m.quaternion.y, m.quaternion.z, m.quaternion.w],
+          scale: [m.scale.x, m.scale.y, m.scale.z],
+          geometryData,
+        } : s));
+      } else {
+        resultId = Math.random().toString(36).substr(2, 9);
+        const newShape: Shape = {
+          id: resultId, name: `${BOOLEAN_LABELS[op]} Result`, type: 'custom',
+          position: [0, 0, 0], quaternion: [0, 0, 0, 1], scale: [1, 1, 1],
+          color: kernelHost.graph.faces.size >= 0 ? activeMaterial : activeMaterial, args: [], geometryData,
+        };
+        setShapes(prev => [...prev.filter(s => !others.has(s.id)), newShape]);
+      }
+      commitHistory();
+      setSelectedIds([resultId]);
+      setMeasurements(`${BOOLEAN_LABELS[op]}: done.`);
+      recordAction(`// Combine (${op}) of ${picks.length} objects`);
+      return true;
+    } catch (error: any) {
+      console.error('[CSG] Combine failed:', error);
+      setMeasurements(`Combine failed: ${error?.message ?? error}`);
+      return false;
+    }
+  };
+
+  const performSolidCombineRef = useRef(performSolidCombine);
+  performSolidCombineRef.current = performSolidCombine;
+  useEffect(() => {
+    const onCombine = (e: Event) => {
+      const { picks, op } = (e as CustomEvent<{ picks: CombineSolid[]; op: BooleanOp }>).detail;
+      if (performSolidCombineRef.current(picks, op)) setCombinePicks([]);
+    };
+    window.addEventListener(COMBINE_SOLIDS_EVENT, onCombine);
+    return () => window.removeEventListener(COMBINE_SOLIDS_EVENT, onCombine);
+  }, []);
 
   const handleKernelFacePointerDown = useCallback((faceId: FaceId, event: { point?: THREE.Vector3 }) => {
     // Return value tells KernelGeometry whether to stop propagation. Only
@@ -4267,7 +4384,11 @@ function Scene() {
   }, [activeSplineDraft, civilRoadSettings, terrainModifiers, addTerrainModifier, setSelectedModifierId, setActiveSplineDraft, setMeasurements, shapes, setShapes]);
 
   const closeBezierLoop = useCallback(() => {
-    const currentKnots = bezierKnots.length > 0 ? bezierKnots : bezierToolRef.current.getKnots();
+    let currentKnots = bezierKnots.length > 0 ? bezierKnots : bezierToolRef.current.getKnots();
+    // A double-click (or a click on the start point) can leave extra knots on top of the last
+    // one or the first one: drop them so the loop closes cleanly.
+    currentKnots = currentKnots.filter((k, i) => i === 0 || k.point.distanceTo(currentKnots[i - 1].point) > 0.02);
+    while (currentKnots.length > 2 && currentKnots[currentKnots.length - 1].point.distanceTo(currentKnots[0].point) < 0.02) currentKnots = currentKnots.slice(0, -1);
     if (currentKnots.length < 2) return;
 
     // Tessellate curve with resolution
@@ -4278,7 +4399,11 @@ function Scene() {
     const origin = currentKnots[0].point.clone();
     const normal = (bezierActivePlane ? bezierActivePlane.normal.clone() : new THREE.Vector3(0, 1, 0)).normalize();
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, origin);
-    const ringPts = tessPts.map(p => plane.projectPoint(p, new THREE.Vector3()));
+    // A closed curve's tessellation ends back on its first point: drop that (and any repeated
+    // points), or the ring touches itself there and reads as crossing itself.
+    const ringPts = tessPts.map(p => plane.projectPoint(p, new THREE.Vector3()))
+      .filter((p, i, all) => i === 0 || p.distanceTo(all[i - 1]) > 1e-6);
+    while (ringPts.length > 3 && ringPts[ringPts.length - 1].distanceTo(ringPts[0]) < 1e-6) ringPts.pop();
     if (checkSelfIntersection(projectToPlane(ringPts, origin, normal))) {
       setMeasurements('A closed Bézier shape cannot cross itself.');
       return;
@@ -4584,7 +4709,14 @@ function Scene() {
     const template = { ...DEFAULT_BALCONY_LOOK, ...patioToolSettings.template };
     const balcony = {
       ...DEFAULT_BALCONY, ...template.balcony, hostOpeningId: placement.openingId,
+      level: undefined, railGaps: undefined, stepFlight: undefined,
       depth: patioToolSettings.balconyDepth, margin: patioToolSettings.balconyMargin,
+      ...(() => {
+        // Left and right reach from the door's centre, for the width sliders.
+        const opening = shapes.find(s => s.id === placement.openingId);
+        const half = (Array.isArray(opening?.args) ? (opening!.args as number[])[0] ?? 0.9 : 0.9) / 2;
+        return { widthLeft: half + patioToolSettings.balconyMargin, widthRight: half + patioToolSettings.balconyMargin };
+      })(),
       front: template.balcony?.front ?? 'curve', curvedWall: placement.curved,
     };
     const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === 'balcony').length + 1;
@@ -4606,7 +4738,7 @@ function Scene() {
     setSelectedId(newShape.id);
     recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
     const warnings = balconyWarnings(newShape.patioData!);
-    setMeasurements(warnings.length ? `${newShape.name} placed. ${warnings.join(' ')}` : `${newShape.name} placed. Drag its corners to resize it; it moves with its wall.`);
+    setMeasurements(warnings.length ? `${newShape.name} placed. ${warnings.join(' ')}` : `${newShape.name} placed. Set its widths, depth and levels in the panel; it moves with its wall.`);
     diagLog('TOOL', `${newShape.name} placed`, { level: placement.level, wall: placement.wallId, opening: placement.openingId });
   }, [patioToolSettings, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog, setMeasurements]);
 
@@ -4930,6 +5062,11 @@ function Scene() {
               setTypedLength('');
               return;
             }
+          }
+          // Enter closes the shape (Shift+Enter leaves the curve open).
+          if (bezierKnots.length >= 3 && !e.shiftKey) {
+            closeBezierLoop();
+            return;
           }
           if (bezierKnots.length >= 2) {
             finishBezierOpenPath();
@@ -5280,7 +5417,7 @@ function Scene() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, setSelectionShapeMode, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, fenceVertices.length, finalizeFenceChain, rectangleInputState.active, finalizeRectangleInput, wallJustification, wallToolSettings, setWallJustification, setWallToolSettings, closeWallLoopAndAssembleRoom, setMeasurements]);
+  }, [isDeveloperConsoleOpen, activeTool, undo, redo, setActiveTool, setSelectionShapeMode, polyVertices.length, finalizePoly, wallVertices.length, finalizeWallChain, fenceVertices.length, finalizeFenceChain, rectangleInputState.active, finalizeRectangleInput, wallJustification, wallToolSettings, setWallJustification, setWallToolSettings, closeWallLoopAndAssembleRoom, setMeasurements, closeBezierLoop, finishBezierOpenPath]);
 
   const [pointerDownInfo, setPointerDownInfo] = useState<{ time: number, pos: THREE.Vector3 } | null>(null);
 
@@ -5343,7 +5480,7 @@ function Scene() {
         } else {
           setBezierKnots([...bezierToolRef.current.getKnots()]);
           setIsDraggingBezierHandle(true);
-          setMeasurements(`Bézier Knot #${bezierKnots.length + 1} placed · Click & drag for C1 smooth handles · Alt for broken tangent`);
+          setMeasurements(`Bézier Knot #${bezierKnots.length + 1} placed · Click & drag for C1 smooth handles · Alt for broken tangent${bezierKnots.length + 1 >= 3 ? ' · Enter, double-click or click the start point to close (Shift+Enter leaves it open)' : ''}`);
         }
       }
       return;
@@ -6495,12 +6632,20 @@ function Scene() {
             if (bezierKnots.length >= 2) {
               const origin = bezierKnots[0].point;
               const d = finalPos.distanceTo(origin);
-              if (d < 0.35) {
+              // About 12 pixels on screen at any zoom (never under 5 cm).
+              const pixels = gl.domElement.clientHeight || 1;
+              const cam = camera as THREE.PerspectiveCamera & THREE.OrthographicCamera;
+              const metresPerPixel = cam.isPerspectiveCamera
+                ? (2 * cam.position.distanceTo(origin) * Math.tan((cam.fov * Math.PI) / 360)) / (pixels * (cam.zoom || 1))
+                : (cam.top - cam.bottom) / ((cam.zoom || 1) * pixels);
+              const closeReach = Math.max(0.05, 12 * metresPerPixel);
+              bezierToolRef.current.setCloseReach(closeReach);
+              if (d < closeReach) {
                 setBezierHoveredKnotIndex(0);
                 setSnapIndicator({
                   point: [origin.x, origin.y + 0.05, origin.z],
                   type: 'endpoint',
-                  tooltip: '🟢 Snap to Start Node · Click or press C to Close Loop & Form Planar Surface'
+                  tooltip: '🟢 Start point · Click, press Enter or double-click to close the shape'
                 });
               } else {
                 setBezierHoveredKnotIndex(null);
@@ -8701,6 +8846,14 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'combine') {
+      e.stopPropagation();
+      setCombinePicks(prev => prev.some(p => p.kind === 'shape' && p.id === shape.id)
+        ? prev.filter(p => !(p.kind === 'shape' && p.id === shape.id))
+        : [...prev, { kind: 'shape', id: shape.id }]);
+      return;
+    }
+
     if (activeTool === 'subtract') {
        e.stopPropagation();
        if (kernelSubtractTarget) {
@@ -9812,6 +9965,8 @@ function Scene() {
               finalizeWallChain();
             } else if (activeTool === 'poly' && polyVertices.length >= 3) {
               finalizePoly();
+            } else if (activeTool === 'bezier' && bezierKnots.length >= 3) {
+              closeBezierLoop();
             } else if (activeTool === 'bezier' && bezierKnots.length >= 2) {
               finishBezierOpenPath();
             } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
@@ -9837,6 +9992,8 @@ function Scene() {
               finalizeWallChain();
             } else if (activeTool === 'poly' && polyVertices.length >= 3) {
               finalizePoly();
+            } else if (activeTool === 'bezier' && bezierKnots.length >= 3) {
+              closeBezierLoop();
             } else if (activeTool === 'bezier' && bezierKnots.length >= 2) {
               finishBezierOpenPath();
             } else if ((activeTool === 'landscape_road' || activeTool === 'landscape_zone') && roadPoints.length >= 2) {
@@ -10645,7 +10802,8 @@ function Scene() {
             <React.Fragment key={shape.id}>
               <PatioMesh shape={shape} groundAt={patioOriginalGround} meshProps={meshProps} selectionHighlight={selectionHighlight}
                 surfaceBinding={bindingMaterial(shape.patioData.surfaceMaterialId)} />
-              {selectedId === shape.id && (activeTool === 'select' || activeTool === 'lasso' || activeTool === 'patio') && (
+              {/* Balconies are shaped with the panel's sliders, so they get no corner handles. */}
+              {selectedId === shape.id && shape.patioData.kind !== 'balcony' && (activeTool === 'select' || activeTool === 'lasso' || activeTool === 'patio') && (
                 <PatioEditHandles shape={shape} />
               )}
             </React.Fragment>
@@ -11203,6 +11361,37 @@ function Scene() {
               {label}
             </div>
           </Html>
+        );
+      })}
+
+      {/* Show All Dimensions: each balcony's floor height above the ground below its front. */}
+      {showAllDimensions && shapes.map((shape) => {
+        const data = shape.patioData;
+        if (shape.hidden || shape.type !== 'patio' || data?.kind !== 'balcony' || data.points.length < 3) return null;
+        const frame = balconyFrame(shape);
+        const [px, floorY, pz] = shape.position;
+        // The middle of the front edge (or the outline's centre for other shapes).
+        const front: [number, number] = frame
+          ? [frame.centre[0] + frame.right[0] * (frame.rightReach - frame.left) / 2 + frame.out[0] * frame.depth,
+             frame.centre[1] + frame.right[1] * (frame.rightReach - frame.left) / 2 + frame.out[1] * frame.depth]
+          : [px + data.points.reduce((m, p) => m + p[0], 0) / data.points.length, pz + data.points.reduce((m, p) => m + p[1], 0) / data.points.length];
+        const groundY = patioDrawnGround(front[0], front[1]);
+        const height = floorY - groundY;
+        if (height < 0.05) return null;
+        const top = new THREE.Vector3(front[0], floorY, front[1]);
+        const bottom = new THREE.Vector3(front[0], groundY, front[1]);
+        const tick = frame ? new THREE.Vector3(frame.right[0] * 0.15, 0, frame.right[1] * 0.15) : new THREE.Vector3(0.15, 0, 0);
+        return (
+          <group key={`balcony-height-${shape.id}`}>
+            <Line points={[bottom, top]} color="#06b6d4" lineWidth={1.5} depthTest={false} renderOrder={40} />
+            <Line points={[top.clone().sub(tick), top.clone().add(tick)]} color="#06b6d4" lineWidth={1.5} depthTest={false} renderOrder={40} />
+            <Line points={[bottom.clone().sub(tick), bottom.clone().add(tick)]} color="#06b6d4" lineWidth={1.5} depthTest={false} renderOrder={40} />
+            <Html position={[front[0], (floorY + groundY) / 2, front[1]]} center occlude={false}>
+              <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap pointer-events-none shadow-lg border border-cyan-500/40">
+                {shape.name ?? 'Balcony'}: {formatValue(height, unit, 2)} above ground
+              </div>
+            </Html>
+          </group>
         );
       })}
 
@@ -13088,18 +13277,53 @@ export default function Viewport() {
     // kernelRevision: the graph is mutated in place.
   }, [contextMenu, kernelHost, kernelRevision]);
   const [convertWallPlan, setConvertWallPlan] = useState<WallConversionPlan | null>(null);
-  // Combine Shapes tool: the chosen operation, applied to the shapes clicked (in order).
+  // Combine tool: the chosen operation, applied to the shapes and objects clicked (in order).
+  // Flat drawn shapes combine into a flat shape; 3D objects (and pulled-up shapes) combine as solids.
   const [combineMode, setCombineMode] = useState<BooleanOp>('merge');
-  const combineGroups = useMemo(
-    () => activeTool === 'combine' ? orderedShapeGroups(kernelHost.graph, selectedFaceIds as FaceId[]) : [],
+  const combinePicks = useCombinePicks();
+  const combineResolved = useMemo((): CombineSolid[] => {
+    if (activeTool !== 'combine') return [];
+    const out: CombineSolid[] = [];
+    for (const p of combinePicks) {
+      if (p.kind === 'kernel') {
+        if (kernelHost.graph.faces.has(p.face)) out.push({ kind: 'kernel', faces: groupContaining(kernelHost.graph, p.face) });
+      } else if (shapes.some(s => s.id === p.id)) out.push(p);
+    }
+    return out;
     // kernelRevision: the graph is mutated in place.
-    [activeTool, kernelHost, selectedFaceIds, kernelRevision],
+  }, [activeTool, combinePicks, kernelHost, kernelRevision, shapes]);
+  const combineFlat = combineResolved.length > 0 && combineResolved.every(p => p.kind === 'kernel' && isFlatShape(kernelHost.graph, p.faces));
+  const combineGroups = useMemo(
+    () => combineFlat ? combineResolved.map(p => (p as { faces: FaceId[] }).faces) : [],
+    [combineFlat, combineResolved],
   );
-  const combinePlan = useMemo(
-    () => combineGroups.length >= 2 ? planBoolean(kernelHost.graph, combineGroups, combineMode) : null,
-    [combineGroups, combineMode, kernelHost],
-  );
+  // Highlight the picks.
+  useEffect(() => {
+    if (activeTool !== 'combine') return;
+    setSelectedFaceIds(combineResolved.flatMap(p => p.kind === 'kernel' ? p.faces : []));
+    setSelectedIds(combineResolved.flatMap(p => p.kind === 'shape' ? [p.id] : []));
+    setSelectedId(null);
+  }, [activeTool, combineResolved, setSelectedFaceIds, setSelectedIds, setSelectedId]);
+  useEffect(() => { if (activeTool !== 'combine') setCombinePicks([]); }, [activeTool]);
+  // The old Subtract tool is now Combine's Subtract.
+  useEffect(() => {
+    if (activeTool === 'subtract') { setCombineMode('subtract'); setActiveTool('combine'); }
+  }, [activeTool, setActiveTool]);
+  const combinePlan = useMemo((): BooleanPlan | BooleanRejection | null => {
+    if (combineResolved.length < 2) return null;
+    if (combineFlat) return planBoolean(kernelHost.graph, combineGroups, combineMode);
+    if (combineResolved.some(p => p.kind === 'kernel' && isFlatShape(kernelHost.graph, p.faces))) {
+      return { ok: false, reason: 'Flat shapes combine only with other flat shapes. Pull a flat shape up first to combine it with 3D objects.' };
+    }
+    return null;
+  }, [combineResolved, combineFlat, combineGroups, combineMode, kernelHost]);
+  const combineReady = combineResolved.length >= 2 && (combineFlat ? !!combinePlan?.ok : !combinePlan);
   const applyCombine = useCallback(() => {
+    if (!combineReady) return;
+    if (!combineFlat) {
+      window.dispatchEvent(new CustomEvent(COMBINE_SOLIDS_EVENT, { detail: { picks: combineResolved, op: combineMode } }));
+      return;
+    }
     if (!combinePlan || !combinePlan.ok) return;
     let faces: FaceId[] = [];
     kernelHost.transact(() => {
@@ -13108,20 +13332,22 @@ export default function Viewport() {
     });
     kernelHost.refreshIndex();
     bumpKernel();
-    setSelectedFaceIds(faces);
+    setCombinePicks(faces.length ? [{ kind: 'kernel', face: faces[0] }] : []);
     setMeasurements(`${BOOLEAN_LABELS[combineMode]}: done.`);
-  }, [combinePlan, combineMode, kernelHost, bumpKernel, setSelectedFaceIds, setMeasurements]);
+  }, [combineReady, combineFlat, combineResolved, combinePlan, combineMode, kernelHost, bumpKernel, setMeasurements]);
   useEffect(() => {
     if (activeTool !== 'combine') return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
       if (e.key === 'Enter') { e.preventDefault(); applyCombine(); }
-      else if (e.key === 'Escape') setSelectedFaceIds([]);
+      else if (e.key === 'Escape') setCombinePicks([]);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activeTool, applyCombine, setSelectedFaceIds]);
+  }, [activeTool, applyCombine]);
   const [convertWallHeight, setConvertWallHeight] = useState('2.4');
+  const [convertWallThickness, setConvertWallThickness] = useState('200');
+  const [convertWallSlab, setConvertWallSlab] = useState(true);
   /**
    * "Snap To Building" for a patio or deck: edges drawn a little short of (or
    * past) a wall, fence or another patio are pulled onto it, closing the gaps
@@ -13216,26 +13442,47 @@ export default function Viewport() {
     });
   };
 
-  const convertToWalls = useCallback((plan: WallConversionPlan, height: number) => {
+  /** The terrain under a conversion's walls, if any. */
+  const convertTerrain = (plan: WallConversionPlan) => {
+    const first = plan.pieces[0]!;
+    return shapes.find(t => t.type === 'terrain' && !t.hidden && t.terrainData
+      && Math.abs(first.start.x - t.position[0]) <= t.terrainData.width / 2
+      && Math.abs(first.start.z - t.position[2]) <= t.terrainData.depth / 2) ?? null;
+  };
+  /** Storey from the height above the ground under the walls, as the Wall tool does. */
+  const convertStorey = (plan: WallConversionPlan) => {
+    const first = plan.pieces[0]!;
+    const terrain = convertTerrain(plan);
+    const groundY = terrain ? sampleTerrainElevation(first.start.x, first.start.z, terrain) : 0;
+    return Math.max(1, Math.round((plan.baseY - groundY) / 2.8) + 1);
+  };
+
+  const convertToWalls = useCallback((plan: WallConversionPlan, height: number, withSlab = false) => {
     const g = kernelHost.graph;
     // The analysis may be stale if the geometry changed while the dialog was open.
     if (plan.sourceFaces.some(id => !g.faces.has(id))) {
       setMeasurements('Convert To Wall: the shape changed. Right-click it again.');
       return;
     }
+    // With a slab, the drawn floor inside the walls is replaced by it.
+    const floorFaces = withSlab ? floorFacesWithin(g, plan) : [];
     const before = snapshot(g);
-    const removed = captureFaces(g, plan.sourceFaces);
-    deleteGroupFacesAndEdges(g, plan.sourceFaces);
+    const removed = captureFaces(g, [...plan.sourceFaces, ...floorFaces]);
+    deleteGroupFacesAndEdges(g, [...plan.sourceFaces, ...floorFaces]);
     kernelHost.refreshIndex();
     const after = snapshot(g);
 
-    // Storey from the height above the ground under the walls, as the Wall tool does.
-    const first = plan.pieces[0]!;
-    const terrain = shapes.find(t => t.type === 'terrain' && !t.hidden && t.terrainData
-      && Math.abs(first.start.x - t.position[0]) <= t.terrainData.width / 2
-      && Math.abs(first.start.z - t.position[2]) <= t.terrainData.depth / 2);
-    const groundY = terrain ? sampleTerrainElevation(first.start.x, first.start.z, terrain) : 0;
-    const story = Math.max(1, Math.round((plan.baseY - groundY) / 2.8) + 1);
+    const story = convertStorey(plan);
+    const terrain = convertTerrain(plan);
+
+    // Floor slab and foundation as the Wall tool makes them: the slab's top is the finished
+    // floor (levelled with the ground), and the walls stand on it.
+    let assembly: ReturnType<typeof buildRoomAssembly> | null = null;
+    if (withSlab) {
+      const ring = outerRing(plan).map(p => new THREE.Vector3(p.x, plan.baseY, p.z));
+      assembly = buildRoomAssembly(ring, terrain, wallToolSettings, { wallHeight: height, wallThickness: plan.thickness, story });
+      plan = { ...plan, baseY: assembly.datumZ };
+    }
 
     const walls = buildWallShapes(plan, {
       height,
@@ -13253,13 +13500,24 @@ export default function Viewport() {
       afterSig: graphSignature(g),
       removed,
     });
-    setShapes(prev => [...prev, ...walls]);
+    setShapes(prev => {
+      const next = [...prev, ...walls];
+      if (assembly) {
+        next.push(assembly.slabShape);
+        if (assembly.foundationShape) next.push(assembly.foundationShape);
+        if (assembly.updatedTerrainData && assembly.modifiedTerrainShapeId) {
+          const id = assembly.modifiedTerrainShapeId, data = assembly.updatedTerrainData;
+          return next.map(s => s.id === id ? { ...s, terrainData: data } : s);
+        }
+      }
+      return next;
+    });
     setSelectedFaceIds([]);
     setSelectedIds(walls.map(w => w.id));
     bumpKernel();
-    setMeasurements(`Converted to ${walls.length} wall${walls.length === 1 ? '' : 's'} (${Math.round(plan.thickness * 1000)} mm thick, ${height.toFixed(2)} m high).`);
+    setMeasurements(`Converted to ${walls.length} wall${walls.length === 1 ? '' : 's'} (${Math.round(plan.thickness * 1000)} mm thick, ${height.toFixed(2)} m high)${assembly ? ', with a floor slab and foundation' : ''}.`);
     recordAction(`// Convert To Wall: ${walls.length} walls, thickness ${plan.thickness.toFixed(3)}, height ${height.toFixed(2)}`);
-  }, [kernelHost, shapes, activeMaterial, activePBR, registerWallConversionUndo, setShapes, setSelectedFaceIds, setSelectedIds, bumpKernel, setMeasurements, recordAction]);
+  }, [kernelHost, shapes, activeMaterial, activePBR, wallToolSettings, registerWallConversionUndo, setShapes, setSelectedFaceIds, setSelectedIds, bumpKernel, setMeasurements, recordAction]);
   const [divideColumns, setDivideColumns] = useState(2);
   const [divideRows, setDivideRows] = useState(2);
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
@@ -14173,6 +14431,9 @@ export default function Viewport() {
                     setConvertWallHeight(String(plan.height !== null
                       ? +plan.height.toFixed(3)
                       : (wallToolSettings?.height || 2.4)));
+                    setConvertWallThickness(String(Math.round(plan.thickness * 1000)));
+                    // Floor slab and foundation: on by default for walls standing on the ground.
+                    setConvertWallSlab(convertStorey(plan) === 1);
                     setContextMenu(null);
                   }}
                   className={cn(
@@ -14450,24 +14711,28 @@ export default function Viewport() {
               </button>
             ))}
             <span className={cn("text-[11px] max-w-[260px]", theme === 'dark' ? "text-gray-400" : "text-gray-500")}>
-              {combineGroups.length === 0 ? 'Click the shapes to combine. The first one leads (Subtract keeps it).'
-                : combineGroups.length === 1 ? '1 shape picked. Click another.'
+              {combineResolved.length === 0 ? 'Click the shapes or objects to combine: flat drawn shapes, or 3D objects. The first one leads (Subtract keeps it).'
+                : combineResolved.length === 1 ? '1 picked. Click another.'
                 : combinePlan && !combinePlan.ok ? (combinePlan as BooleanRejection).reason
-                : `${combineGroups.length} shapes picked. Press Enter or Apply.`}
+                : `${combineResolved.length} ${combineFlat ? 'flat shapes' : 'objects'} picked. Press Enter or Apply.`}
             </span>
-            <button onClick={applyCombine} disabled={!combinePlan || !combinePlan.ok}
+            <button onClick={applyCombine} disabled={!combineReady}
               className="px-2 py-1 rounded bg-polyform-blue text-white font-semibold disabled:opacity-40">Apply</button>
-            <button onClick={() => setSelectedFaceIds([])} disabled={!combineGroups.length}
+            <button onClick={() => setCombinePicks([])} disabled={!combineResolved.length}
               className={cn("px-2 py-1 rounded disabled:opacity-40", theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100")}>Clear</button>
           </div>
         </div>
       )}
 
       {convertWallPlan && (() => {
-        const plan = convertWallPlan;
+        const thicknessMm = parseFloat(convertWallThickness);
+        const resized = Number.isFinite(thicknessMm) ? planWithThickness(convertWallPlan, thicknessMm / 1000) : null;
+        const plan = resized?.ok ? resized : convertWallPlan;
+        const thicknessError = !resized ? 'Enter a thickness in millimetres.' : resized.ok ? null : (resized as WallConversionRejection).reason;
         const height = plan.height ?? parseFloat(convertWallHeight);
         const heightValid = Number.isFinite(height) && height >= 0.1;
         const warnings = [...plan.warnings, ...(heightValid ? heightWarnings(height, plan.baseY) : [])];
+        const onGround = convertStorey(plan) === 1;
         return (
           <div
             className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40"
@@ -14483,7 +14748,26 @@ export default function Viewport() {
               <h3 className="text-sm font-bold mb-3">Convert To Wall</h3>
               <div className="space-y-2 mb-3 text-xs">
                 <div className="flex justify-between"><span>Walls</span><span>{plan.pieces.length}</span></div>
-                <div className="flex justify-between"><span>Thickness</span><span>{Math.round(plan.thickness * 1000)} mm</span></div>
+                <label className="flex items-center justify-between">
+                  <span>Thickness (mm)</span>
+                  <input
+                    type="number"
+                    min={20}
+                    step={10}
+                    value={convertWallThickness}
+                    onChange={(e) => setConvertWallThickness(e.target.value)}
+                    className={cn(
+                      "w-20 px-2 py-1 rounded border text-xs text-right",
+                      thicknessError ? "border-red-400" : theme === 'dark' ? "bg-gray-900 border-gray-700" : "bg-white border-gray-300",
+                      theme === 'dark' && "bg-gray-900"
+                    )}
+                  />
+                </label>
+                {thicknessError ? (
+                  <p className="text-[11px] text-red-500">{thicknessError}</p>
+                ) : Math.abs(plan.thickness - convertWallPlan.thickness) > 1e-6 && (
+                  <p className={cn("text-[11px]", theme === 'dark' ? "text-gray-400" : "text-gray-500")}>The outside face stays where it was drawn; the walls grow or shrink inwards.</p>
+                )}
                 {plan.height !== null ? (
                   <div className="flex justify-between"><span>Height</span><span>{plan.height.toFixed(2)} m</span></div>
                 ) : (
@@ -14520,6 +14804,17 @@ export default function Viewport() {
                   ))}
                 </ul>
               )}
+              {onGround ? (
+                <label className="flex items-start gap-2 mb-3 text-xs cursor-pointer">
+                  <input type="checkbox" className="mt-0.5" checked={convertWallSlab} onChange={(e) => setConvertWallSlab(e.target.checked)} />
+                  <span>
+                    Also add floor slab and foundation
+                    <span className={cn("block text-[11px]", theme === 'dark' ? "text-gray-400" : "text-gray-500")}>
+                      As the Wall tool does: a 200 mm slab (replacing the drawn floor) with the walls standing on it, a foundation below, and the ground levelled round it.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
               <p className={cn("text-[11px] mb-4", theme === 'dark' ? "text-gray-400" : "text-gray-500")}>
                 The original shape is replaced by the walls. Undo brings it back.
               </p>
@@ -14534,9 +14829,9 @@ export default function Viewport() {
                   Cancel
                 </button>
                 <button
-                  disabled={!heightValid}
+                  disabled={!heightValid || !!thicknessError}
                   onClick={() => {
-                    convertToWalls(plan, height);
+                    convertToWalls(plan, height, onGround && convertWallSlab);
                     setConvertWallPlan(null);
                   }}
                   className="px-3 py-1.5 text-xs rounded bg-polyform-blue text-white hover:opacity-90 disabled:opacity-40"

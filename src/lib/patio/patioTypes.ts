@@ -34,6 +34,41 @@ export interface BalconyData {
   /** How far it was set to stand out from the wall, and past the opening each side (m). */
   depth?: number;
   margin?: number;
+  /** How far it reaches left and right of its door's centre, as seen from outside (m). */
+  widthLeft?: number;
+  widthRight?: number;
+  /** An added level: a piece joined to another balcony's front, left or right side. */
+  level?: BalconyLevel;
+  /** Stretches of edge (local x/z, end to end) with no guarding: where it joins another level. */
+  railGaps?: [[number, number], [number, number]][];
+  /** Steps down from this level's shared edge to a lower one (local x/z). */
+  stepFlight?: BalconySteps;
+}
+
+export type BalconyAttach = 'front' | 'left' | 'right';
+
+export interface BalconyLevel {
+  parentId: string;
+  attach: BalconyAttach;
+  /** Left-to-right size (along the building) and how far it stands out (m). */
+  width: number;
+  depth: number;
+  /** Front: centre offset along the parent's front (+ = right). Sides: distance out from the wall. */
+  offset: number;
+  /** Floor height above (+) or below (-) the parent's floor (m). */
+  rise: number;
+}
+
+export interface BalconySteps {
+  /** Middle of the flight's top edge, on the shared edge. */
+  start: [number, number];
+  /** Unit direction the flight goes down. */
+  dir: [number, number];
+  width: number;
+  count: number;
+  /** Floor levels at the top and bottom of the flight, relative to this level's floor. */
+  top: number;
+  bottom: number;
 }
 
 export type BalconyFront = 'curve' | 'straight';

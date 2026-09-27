@@ -36,7 +36,6 @@ import {
   CornerUpRight,
   Code,
   Globe,
-  Scissors,
   Combine,
   Ruler,
   ToggleLeft,
@@ -790,21 +789,11 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           id: 'combine',
           tool: 'combine',
           label: 'Combine Shapes',
-          subtitle: 'Merge, subtract or intersect flat shapes on one surface',
+          subtitle: 'Merge, subtract or intersect flat shapes or 3D objects',
           icon: <Combine size={19} />,
           isActive: (s) => s.activeTool === 'combine',
           onClick: (s) => s.setActiveTool('combine'),
-          keywords: ['merge', 'union', 'combine', 'join', 'subtract', 'intersect', 'boolean', 'shapes']
-        },
-        {
-          id: 'subtract',
-          tool: 'subtract',
-          label: 'Subtract (Boolean)',
-          subtitle: 'Cut 2nd object out of 1st object',
-          icon: <Scissors size={19} />,
-          isActive: (s) => s.activeTool === 'subtract',
-          onClick: (s) => s.setActiveTool('subtract'),
-          keywords: ['subtract', 'boolean', 'cut', 'difference', 'trim']
+          keywords: ['merge', 'union', 'combine', 'join', 'subtract', 'intersect', 'boolean', 'shapes', 'cut', 'difference', 'trim', 'csg', 'solid']
         },
         {
           id: 'bevel_radius',

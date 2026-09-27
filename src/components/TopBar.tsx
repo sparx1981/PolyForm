@@ -11,6 +11,7 @@ import {
   Download,
   Settings, 
   LogOut,
+  Home,
   Moon,
   Sun,
   Palette,
@@ -997,6 +998,11 @@ export default function TopBar() {
                   <div className="text-xs text-gray-500 truncate">{user?.email}</div>
                 </div>
                 <div className="py-1">
+                  <MenuButton
+                    icon={<Home size={16} className="text-polyform-blue" />}
+                    label="PolyForm home"
+                    onClick={() => { window.open('/', '_blank', 'noopener'); setIsProfileOpen(false); }}
+                  />
                   <MenuButton 
                     icon={<LogOut size={16} className="text-red-500" />} 
                     label="Logout" 

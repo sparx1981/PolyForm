@@ -19,7 +19,7 @@ import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimber
 import { DEFAULT_TIMBER_FRAME_PARAMS } from './constants/timberFrameDefaults';
 import { TimberFrameParams, TimberFrameRecomputeState, WalkModePhase, FenceToolSettings, WaterToolSettings } from './types';
 import { DEFAULT_PATIO_TOOL_SETTINGS, type PatioToolSettings } from './lib/patio/patioTypes';
-import { followHostWalls } from './lib/patio/balcony';
+import { followHostWalls, syncBalconyLevels } from './lib/patio/balcony';
 import { createWalkBridge } from './lib/walkMode/inputState';
 import { MOVEMENT_SPEED_RANGE, MOUSE_SENSITIVITY_RANGE } from './lib/walkMode/constants';
 import { defaultGraphicsSettings, normalizeGraphicsSettings } from './lib/graphics/graphicsSettings';
@@ -1634,7 +1634,8 @@ console.log("Created rectangle:", myRect.id);`);
    */
   const deriveShapesState = (rawShapes: Shape[], prev: Shape[]): Shape[] => {
       // Balconies move and turn with their wall, and go when it is deleted.
-      const withCutouts = applyStairwellHolesToSlabs(followHostWalls(rawShapes, prev));
+      // Added balcony levels are then laid out again from the balcony they join.
+      const withCutouts = applyStairwellHolesToSlabs(syncBalconyLevels(followHostWalls(rawShapes, prev)));
 
       // Ensure terrain excavation with 1m safety apron is maintained for all floor slabs
       const terrainShape = withCutouts.find(s => s.type === 'terrain' && s.terrainData);

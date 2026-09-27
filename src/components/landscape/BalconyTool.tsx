@@ -88,7 +88,7 @@ export function BalconyPlaceTool({ onCommit, juliet, depth, margin, front }: {
   latest.current = { find, onCommit };
 
   useEffect(() => {
-    setMeasurements('Balcony: hover a door (or a window) and click to put a balcony outside it. On a curved wall it follows the curve. Drag its corners afterwards to resize it.');
+    setMeasurements('Balcony: hover a door (or a window) and click to put a balcony outside it. On a curved wall it follows the curve. Then set its widths, depth and extra levels in the panel.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

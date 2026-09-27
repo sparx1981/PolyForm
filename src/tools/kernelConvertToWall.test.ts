@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { KernelArcHost } from './kernelArcHost';
 import { createFaceOffsetBinding } from './kernelFaceOffset';
 import { createPushPullBinding } from './kernelPushPull';
-import { analyzeWallConversion, buildWallShapes, cleanPolygon, heightWarnings, captureFaces, graphSignature, undoWallConversion, redoWallConversion, type WallConversionPlan, type WallConversionRejection, type WallConversionUndoLink } from './kernelConvertToWall';
+import { analyzeWallConversion, buildWallShapes, outerRing, planWithThickness, cleanPolygon, heightWarnings, captureFaces, graphSignature, undoWallConversion, redoWallConversion, type WallConversionPlan, type WallConversionRejection, type WallConversionUndoLink } from './kernelConvertToWall';
 import { deleteGroupFacesAndEdges } from './kernelSelection';
 import { snapshot } from '../lib/geometry/heal';
 import { groupContaining } from './kernelSelection';
@@ -364,5 +364,51 @@ describe('undo', () => {
     expect(again.pieces).toHaveLength(4);
     redoWallConversion(h, link);
     expect(h.graph.faces.size).toBe(withNew);
+  });
+});
+
+describe('changing the thickness', () => {
+  /** A 4 m square of 200 mm walls, outside face on x/z = ±2, as the analysis would plan it. */
+  const square = (): WallConversionPlan => {
+    const o = [{ x: -2, z: -2 }, { x: 2, z: -2 }, { x: 2, z: 2 }, { x: -2, z: 2 }];
+    const t = 0.2;
+    const inner = [{ x: -1.8, z: -1.8 }, { x: 1.8, z: -1.8 }, { x: 1.8, z: 1.8 }, { x: -1.8, z: 1.8 }];
+    const outs = [{ x: 0, z: -1 }, { x: 1, z: 0 }, { x: 0, z: 1 }, { x: -1, z: 0 }];
+    return {
+      ok: true, sourceFaces: [], flat: true, baseY: 0, height: null, thickness: t, color: null, warnings: [],
+      pieces: o.map((a, i) => {
+        const b = o[(i + 1) % 4]!, ia = inner[i]!, ib = inner[(i + 1) % 4]!;
+        const start = { x: (a.x + ia.x) / 2, z: (a.z + ia.z) / 2 }, end = { x: (b.x + ib.x) / 2, z: (b.z + ib.z) / 2 };
+        return { start, end, outward: outs[i]!, corners: [a, ia, ib, b], length: Math.hypot(end.x - start.x, end.z - start.z), curved: false };
+      }),
+    };
+  };
+
+  it('keeps the outside face and moves the inside face in', () => {
+    const r = planWithThickness(square(), 0.35);
+    expect(r.ok).toBe(true);
+    const plan = r as WallConversionPlan;
+    expect(plan.thickness).toBe(0.35);
+    expect(outerRing(plan)).toEqual(outerRing(square()));
+    const inner = plan.pieces.map(p => p.corners[1]);
+    for (const p of inner) {
+      expect(Math.abs(p.x)).toBeCloseTo(1.65);
+      expect(Math.abs(p.z)).toBeCloseTo(1.65);
+    }
+    // The centreline is midway through the new thickness.
+    expect(Math.abs(plan.pieces[0]!.start.z)).toBeCloseTo(2 - 0.175);
+    const walls = buildWallShapes(plan, { height: 2.4, color: '#fff', story: 1, makeId: () => 'x', existingWallCount: 0 });
+    expect((walls[0]!.args as number[])[2]).toBe(0.35);
+  });
+
+  it('refuses a thickness that would make the inside faces cross', () => {
+    const r = planWithThickness(square(), 2.5);
+    expect(r.ok).toBe(false);
+    expect((r as WallConversionRejection).reason).toMatch(/too thick/);
+  });
+
+  it('swaps the thickness warnings', () => {
+    const r = planWithThickness(square(), 0.06) as WallConversionPlan;
+    expect(r.warnings.some(w => /thinner than any real wall/.test(w.message))).toBe(true);
   });
 });

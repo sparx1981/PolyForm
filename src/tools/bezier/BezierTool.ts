@@ -67,6 +67,10 @@ export class BezierTool {
     return tessellateEntireCurve(this.state.knots, this.state.isClosed, this.state.segmentsPerSpan);
   }
 
+  /** How near (m) a click must land to the first knot to close the loop; set from the zoom. */
+  private closeReach = 0.25;
+  public setCloseReach(reach: number) { this.closeReach = reach; }
+
   public onPointerDown(point: THREE.Vector3, isAltPressed: boolean, snappedPlane?: THREE.Plane): { closed: boolean; knotIndex: number } {
     // 1. Establish Work Plane on first click if not set
     if (!this.state.activePlane) {
@@ -78,7 +82,7 @@ export class BezierTool {
     // 2. Check for Loop Closure: clicked close to start knot
     if (this.state.knots.length >= 2) {
       const origin = this.state.knots[0]!.point;
-      if (projectedPoint.distanceTo(origin) < 0.25) {
+      if (projectedPoint.distanceTo(origin) < this.closeReach) {
         this.state.isClosed = true;
         this.host?.commitCurve(this.state, false);
         return { closed: true, knotIndex: 0 };

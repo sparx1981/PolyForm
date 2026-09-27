@@ -1182,8 +1182,26 @@ function buildBalcony(
     return;
   }
 
-  // Guarding along the open edges (not along the wall).
-  buildRailing(data, poly, part, () => false, onWall, deckTone);
+  // Guarding along the open edges: not along the wall, nor where it joins another level
+  // (or only across the steps, where the levels differ).
+  const gapped = withGaps(poly, onWall, b.railGaps ?? []);
+  buildRailing(data, gapped.poly, part, gapped.inGap, gapped.onWall, deckTone);
+
+  // Steps down to (or up from) a joined level.
+  if (b.stepFlight && b.stepFlight.count > 1) {
+    const f = b.stepFlight;
+    const steps = part('steps');
+    const tone = b.floor === 'boards' ? deckTone : new THREE.Color(data.color);
+    const r = (f.top - f.bottom) / f.count;
+    const across: Vec2 = [-f.dir[1], f.dir[0]];
+    const corner = (d: number, w: number): Vec2 => [f.start[0] + f.dir[0] * d + across[0] * w, f.start[1] + f.dir[1] * d + across[1] * w];
+    for (let j = 1; j < f.count; j++) {
+      const top = f.top - j * r;
+      const tread = ensureCCW([corner((j - 1) * STEP_GOING, -f.width / 2), corner(j * STEP_GOING, -f.width / 2), corner(j * STEP_GOING, f.width / 2), corner((j - 1) * STEP_GOING, f.width / 2)]);
+      steps.setColor(shade(tone, j * 7, 0.05));
+      addPiece(steps, tread, top, top - f.bottom + 0.02, 0.003);
+    }
+  }
 
   // Floor finish (top at y = 0) and what it sits on.
   const finish = b.floor === 'boards' ? 0.028 : b.floor === 'tiles' ? 0.03 : 0;
@@ -1232,7 +1250,8 @@ function buildBalcony(
     }
   }
 
-  if (b.support === 'brackets') {
+  // Brackets need a wall to fix to: a level standing clear of it goes on posts instead.
+  if (b.support === 'brackets' && poly.some((_, k) => onWall(k))) {
     // Angled brackets fixed to the wall, spaced along each run of wall (curved walls too): a
     // level arm under the frame and a strut up to it.
     for (const run of wallRuns(poly, onWall)) {
@@ -1288,6 +1307,42 @@ function buildBalcony(
 }
 
 const sub2 = (a: Vec2, b: Vec2): Vec2 => [a[0] - b[0], a[1] - b[1]];
+
+/** Going (tread depth) of the steps between balcony levels. */
+const STEP_GOING = 0.25;
+
+/**
+ * The outline split where guarding gaps start and end, with a test for the pieces inside a gap
+ * (and the wall test carried over to the split pieces).
+ */
+function withGaps(poly: Vec2[], onWall: (k: number) => boolean, gaps: [[number, number], [number, number]][]) {
+  if (!gaps.length) return { poly, onWall, inGap: () => false };
+  const out: Vec2[] = [], wall: boolean[] = [];
+  const n = poly.length;
+  for (let k = 0; k < n; k++) {
+    const a = poly[k], b = poly[(k + 1) % n], e = sub2(b, a), l = len(e);
+    const cuts: number[] = [];
+    for (const g of gaps) for (const p of g) {
+      if (l < 1e-9) continue;
+      const t = ((p[0] - a[0]) * e[0] + (p[1] - a[1]) * e[1]) / (l * l);
+      const q: Vec2 = [a[0] + e[0] * t, a[1] + e[1] * t];
+      if (t > 1e-3 && t < 1 - 1e-3 && len(sub2(p, q)) < 0.02) cuts.push(t);
+    }
+    cuts.sort((x, y) => x - y);
+    out.push(a); wall.push(onWall(k));
+    for (const t of cuts) { out.push([a[0] + e[0] * t, a[1] + e[1] * t]); wall.push(onWall(k)); }
+  }
+  const inGap = (a: Vec2, b: Vec2) => {
+    const m: Vec2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    return gaps.some(([p, q]) => {
+      const e = sub2(q, p), l2 = e[0] * e[0] + e[1] * e[1];
+      if (l2 < 1e-12) return false;
+      const t = ((m[0] - p[0]) * e[0] + (m[1] - p[1]) * e[1]) / l2;
+      return t >= -1e-3 && t <= 1 + 1e-3 && len(sub2(m, [p[0] + e[0] * t, p[1] + e[1] * t])) < 0.02;
+    });
+  };
+  return { poly: out, onWall: (k: number) => wall[k] ?? false, inGap };
+}
 const len = (a: Vec2) => Math.hypot(a[0], a[1]);
 
 /** Runs of consecutive outline segments along the wall, as polylines. */

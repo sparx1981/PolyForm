@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Shape } from '../../types';
 import type { Vec2 } from './patioGeometry';
 import { railingHeight } from './patioGeometry';
-import { DEFAULT_BALCONY, type BalconyData, type BalconyFront, type PatioData } from './patioTypes';
+import { DEFAULT_BALCONY, type BalconyAttach, type BalconyData, type BalconyFront, type BalconyLevel, type PatioData } from './patioTypes';
 
 /**
  * Balconies: where one goes when placed at a door, the UK guarding checks, and keeping it on
@@ -50,7 +50,22 @@ function wallFrame(wall: Shape) {
  * deep, and its floor sits just below the door's sill. A window's balcony takes the storey
  * floor instead (a window sill is well above it), except a Juliet, which guards the opening.
  */
-export function balconyAtOpening(opening: Shape, wall: Shape, side: 1 | -1, opts: { depth: number; margin: number; juliet: boolean }): BalconyPlacement | null {
+/**
+ * How far a balcony reaches either side of its opening's centre, as seen from outside looking
+ * at the building: `left` and `right` when set, otherwise half the opening plus `margin`.
+ */
+export interface BalconyExtent { depth: number; margin: number; left?: number; right?: number }
+
+/** Unit vector pointing to the right for someone outside facing the wall (whose outward normal is `out`). */
+export const rightOf = (out: Vec2): Vec2 => [out[1], -out[0]];
+
+function reach(opening: Shape, opts: BalconyExtent, juliet: boolean): { left: number; right: number } {
+  const [openWidth = 0.9] = Array.isArray(opening.args) ? (opening.args as number[]) : [];
+  if (juliet) return { left: openWidth / 2 + 0.05, right: openWidth / 2 + 0.05 };
+  return { left: opts.left ?? openWidth / 2 + opts.margin, right: opts.right ?? openWidth / 2 + opts.margin };
+}
+
+export function balconyAtOpening(opening: Shape, wall: Shape, side: 1 | -1, opts: BalconyExtent & { juliet: boolean }): BalconyPlacement | null {
   if (!Array.isArray(wall.args) || !Array.isArray(opening.args)) return null;
   const [wallLength = 0, wallHeight = 0, thickness = 0.2] = wall.args as number[];
   const [openWidth = 0.9, openHeight = 2.1] = opening.args as number[];
@@ -59,8 +74,10 @@ export function balconyAtOpening(opening: Shape, wall: Shape, side: 1 | -1, opts
   const out: Vec2 = [normal[0] * side, normal[1] * side];
   const [wx, , wz] = wall.position;
   const along = (opening.position[0] - wx) * dir[0] + (opening.position[2] - wz) * dir[1];
-  const margin = opts.juliet ? 0.05 : opts.margin;
-  let from = along - openWidth / 2 - margin, to = along + openWidth / 2 + margin;
+  // Left and right as seen from outside, mapped onto the wall's own direction.
+  const { left, right } = reach(opening, opts, opts.juliet);
+  const forward = dir[0] * rightOf(out)[0] + dir[1] * rightOf(out)[1] >= 0;
+  let from = along - (forward ? left : right), to = along + (forward ? right : left);
   // Stay on the wall (but always at least as wide as the opening).
   from = Math.max(from, Math.min(-wallLength / 2, along - openWidth / 2));
   to = Math.min(to, Math.max(wallLength / 2, along + openWidth / 2));
@@ -209,7 +226,7 @@ function slice(line: Vec2[], s0: number, s1: number): Vec2[] {
  * at least `depth` from the wall everywhere. Null when the wall is straight where the balcony
  * would go (the plain rectangle is used then).
  */
-export function curvedBalcony(opening: Shape, wall: Shape, side: 1 | -1, shapes: Shape[], opts: { depth: number; margin: number; front: BalconyFront }): BalconyPlacement | null {
+export function curvedBalcony(opening: Shape, wall: Shape, side: 1 | -1, shapes: Shape[], opts: BalconyExtent & { front: BalconyFront }): BalconyPlacement | null {
   const chain = wallChain(wall, side, shapes);
   if (chain.length < 2) return null;
   const hostIndex = chain.findIndex(p => p.wall.id === wall.id);
@@ -243,8 +260,10 @@ export function curvedBalcony(opening: Shape, wall: Shape, side: 1 | -1, shapes:
     if (dist < best) { best = dist; s0 = s + t * l; }
     s += l;
   }
-  const half = openWidth / 2 + opts.margin;
-  const back = slice(line, Math.max(0, s0 - half), Math.min(total, s0 + half));
+  const { left, right } = reach(opening, opts, false);
+  // The line runs along the host face's direction; left and right are as seen from outside.
+  const forward = hostDir[0] * rightOf(out)[0] + hostDir[1] * rightOf(out)[1] >= 0;
+  const back = slice(line, Math.max(0, s0 - (forward ? left : right)), Math.min(total, s0 + (forward ? right : left)));
   if (back.length < 2) return null;
   // Straight where it goes: a plain rectangle does.
   let bends = false;
@@ -290,7 +309,7 @@ export function curvedBalcony(opening: Shape, wall: Shape, side: 1 | -1, shapes:
  * Where a balcony goes at an opening: along a curved wall when the wall curves there (not
  * for a Juliet, which only guards the opening), otherwise a rectangle out from the wall.
  */
-export function placeBalcony(opening: Shape, wall: Shape, side: 1 | -1, shapes: Shape[], opts: { depth: number; margin: number; juliet: boolean; front: BalconyFront }): BalconyPlacement | null {
+export function placeBalcony(opening: Shape, wall: Shape, side: 1 | -1, shapes: Shape[], opts: BalconyExtent & { juliet: boolean; front: BalconyFront }): BalconyPlacement | null {
   if (!opts.juliet) {
     const curved = curvedBalcony(opening, wall, side, shapes, opts);
     if (curved) return curved;
@@ -303,12 +322,13 @@ export function placeBalcony(opening: Shape, wall: Shape, side: 1 | -1, shapes: 
  * to or from a Juliet), keeping its floor level unless it changes to or from a Juliet. Null
  * when its door or wall has gone (the outline is then left as it is).
  */
-export function reshapeBalcony(balcony: Shape, shapes: Shape[], patch: { depth?: number; front?: BalconyFront; juliet?: boolean }): Shape | null {
+export function reshapeBalcony(balcony: Shape, shapes: Shape[], patch: { depth?: number; front?: BalconyFront; juliet?: boolean; widthLeft?: number; widthRight?: number }): Shape | null {
   const data = balcony.patioData;
   const b = balconySettings(data ?? {});
   const opening = shapes.find(s => s.id === b.hostOpeningId);
   const wall = shapes.find(s => s.id === balcony.hostWallId);
-  if (!data || !opening || !wall) return null;
+  // Added levels are laid out from their parent (syncBalconyLevels), not from the door.
+  if (!data || !opening || !wall || b.level) return null;
   const { normal } = wallFrame(wall);
   const c = data.points.reduce((m, p) => [m[0] + p[0] / data.points.length, m[1] + p[1] / data.points.length] as Vec2, [0, 0] as Vec2);
   const centre: Vec2 = [balcony.position[0] + c[0], balcony.position[2] + c[1]];
@@ -317,7 +337,8 @@ export function reshapeBalcony(balcony: Shape, shapes: Shape[], patch: { depth?:
   const juliet = patch.juliet ?? wasJuliet;
   const depth = patch.depth ?? b.depth ?? 1.5;
   const front = patch.front ?? b.front ?? 'curve';
-  const placement = placeBalcony(opening, wall, side, shapes, { depth, margin: b.margin ?? 0.6, juliet, front });
+  const widthLeft = patch.widthLeft ?? b.widthLeft, widthRight = patch.widthRight ?? b.widthRight;
+  const placement = placeBalcony(opening, wall, side, shapes, { depth, margin: b.margin ?? 0.6, left: widthLeft, right: widthRight, juliet, front });
   if (!placement) return null;
   const cx = placement.world.reduce((m, p) => m + p[0], 0) / placement.world.length;
   const cz = placement.world.reduce((m, p) => m + p[1], 0) / placement.world.length;
@@ -329,7 +350,7 @@ export function reshapeBalcony(balcony: Shape, shapes: Shape[], patch: { depth?:
       points: placement.world.map(([x, z]) => [x - cx, z - cz] as Vec2),
       bulges: placement.world.map(() => 0),
       wallEdges: placement.wallEdges,
-      balcony: { ...b, depth: juliet ? b.depth : depth, front, curvedWall: placement.curved },
+      balcony: { ...b, depth: juliet ? b.depth : depth, front, curvedWall: placement.curved, widthLeft, widthRight },
     },
   };
 }
@@ -449,3 +470,182 @@ export function followHostWalls(next: Shape[], prev: Shape[]): Shape[] {
   }
   return changed ? out : next;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Added levels
+// ---------------------------------------------------------------------------------------------
+
+/** Below this (m) two levels count as the same floor. */
+const SAME_LEVEL = 0.03;
+/** Step flights: at most this rise per step, and this going. */
+const STEP_MAX_RISE = 0.19;
+const STEP_GOING = 0.25;
+
+/**
+ * A rectangular balcony's frame, seen from outside: the point on the wall under its centre
+ * (its door's centre), unit vectors to the right and out from the wall, and its reach left,
+ * right and out. Null for curved balconies, Juliets and hand-drawn shapes.
+ */
+export interface BalconyFrame { centre: Vec2; right: Vec2; out: Vec2; left: number; rightReach: number; depth: number; y: number }
+
+export function balconyFrame(shape: Shape): BalconyFrame | null {
+  const d = shape.patioData;
+  if (!d || d.kind !== 'balcony' || d.points.length !== 4) return null;
+  const b = balconySettings(d);
+  // Edge 0 is the back: along the wall for a balcony, the inner edge for an added level.
+  if (!d.wallEdges[0] && !b.level) return null;
+  if (b.support === 'juliet' || b.curvedWall) return null;
+  const w = d.points.map(([x, z]) => [x + shape.position[0], z + shape.position[2]] as Vec2);
+  const [p0, p1, , p3] = w;
+  const e = sub(p1, p0), el = len2(e) || 1;
+  let out: Vec2 = [-e[1] / el, e[0] / el];
+  if ((p3[0] - p0[0]) * out[0] + (p3[1] - p0[1]) * out[1] < 0) out = [-out[0], -out[1]];
+  const right = rightOf(out);
+  const u0 = p0[0] * right[0] + p0[1] * right[1], u1 = p1[0] * right[0] + p1[1] * right[1];
+  const [backLeft, backRight] = u0 <= u1 ? [p0, p1] : [p1, p0];
+  const width = Math.abs(u1 - u0);
+  const left = Math.min(width, Math.max(0, b.widthLeft ?? width / 2));
+  const centre: Vec2 = [backLeft[0] + right[0] * left, backLeft[1] + right[1] * left];
+  const depth = Math.abs((p3[0] - p0[0]) * out[0] + (p3[1] - p0[1]) * out[1]);
+  return { centre, right, out, left, rightReach: width - left, depth, y: shape.position[1] };
+}
+
+/** A level's rectangle in its parent's frame: u (right) and v (out) ranges. */
+function levelBox(f: BalconyFrame, l: BalconyLevel): { u0: number; u1: number; v0: number; v1: number } {
+  if (l.attach === 'front') return { u0: l.offset - l.width / 2, u1: l.offset + l.width / 2, v0: f.depth, v1: f.depth + l.depth };
+  if (l.attach === 'right') return { u0: f.rightReach, u1: f.rightReach + l.width, v0: l.offset, v1: l.offset + l.depth };
+  return { u0: -f.left - l.width, u1: -f.left, v0: l.offset, v1: l.offset + l.depth };
+}
+
+const at = (f: BalconyFrame, u: number, v: number): Vec2 => [f.centre[0] + f.right[0] * u + f.out[0] * v, f.centre[1] + f.right[1] * u + f.out[1] * v];
+
+/** The default size of a new level on a side of a balcony. */
+export function newLevel(parent: Shape, attach: BalconyAttach): BalconyLevel | null {
+  const f = balconyFrame(parent);
+  if (!f) return null;
+  if (attach === 'front') return { parentId: parent.id, attach, width: f.left + f.rightReach, depth: 1.2, offset: (f.rightReach - f.left) / 2, rise: 0 };
+  return { parentId: parent.id, attach, width: 1.5, depth: f.depth, offset: 0, rise: 0 };
+}
+
+/** Moves a point into a shape's local frame. */
+const local = (s: Shape, p: Vec2): [number, number] => [p[0] - s.position[0], p[1] - s.position[2]];
+
+/**
+ * Lays out every added level from the balcony it is joined to (so levels follow their parent
+ * when it is resized or moves with its wall), with guarding gaps where levels meet and a flight
+ * of steps where their floors differ. A level whose parent has gone is removed too.
+ */
+export function syncBalconyLevels(shapes: Shape[]): Shape[] {
+  const levels = shapes.filter(s => s.type === 'patio' && s.patioData?.balcony?.level);
+  const hasGaps = shapes.some(s => s.patioData?.balcony?.railGaps?.length);
+  if (!levels.length && !hasGaps) return shapes;
+  const byId = new Map(shapes.map(s => [s.id, s]));
+  const updates = new Map<string, Shape>();
+  const gaps = new Map<string, [[number, number], [number, number]][]>();
+  const removed = new Set<string>();
+  const current = (id: string) => updates.get(id) ?? byId.get(id);
+
+  // Parents before children (levels can be joined to levels).
+  const depthOf = (s: Shape, seen = new Set<string>()): number => {
+    const pid = s.patioData?.balcony?.level?.parentId;
+    const p = pid ? byId.get(pid) : undefined;
+    if (!p || seen.has(s.id)) return 0;
+    seen.add(s.id);
+    return 1 + depthOf(p, seen);
+  };
+  for (const child of [...levels].sort((a, b) => depthOf(a) - depthOf(b))) {
+    const data = child.patioData!;
+    const b = balconySettings(data);
+    const l = b.level!;
+    const parent = current(l.parentId);
+    if (!parent || removed.has(l.parentId) || parent.patioData?.kind !== 'balcony') { removed.add(child.id); continue; }
+    const f = balconyFrame(parent);
+    if (!f) continue;
+    const box = levelBox(f, l);
+    const world = [at(f, box.u0, box.v0), at(f, box.u1, box.v0), at(f, box.u1, box.v1), at(f, box.u0, box.v1)];
+    const cx = world.reduce((m, p) => m + p[0], 0) / 4, cz = world.reduce((m, p) => m + p[1], 0) / 4;
+    const y = f.y + l.rise;
+    const next: Shape = { ...child, position: [cx, y, cz], hostWallId: parent.hostWallId };
+
+    // Where the two meet, in the parent's frame: an overlap along u (front) or v (sides).
+    let edgeA: Vec2, edgeB: Vec2, into: Vec2;
+    if (l.attach === 'front') {
+      const a = Math.max(-f.left, box.u0), c = Math.min(f.rightReach, box.u1);
+      edgeA = at(f, a, f.depth); edgeB = at(f, Math.max(a, c), f.depth); into = f.out;
+    } else {
+      const u = l.attach === 'right' ? f.rightReach : -f.left;
+      const a = Math.max(0, box.v0), c = Math.min(f.depth, box.v1);
+      edgeA = at(f, u, a); edgeB = at(f, u, Math.max(a, c));
+      into = l.attach === 'right' ? f.right : [-f.right[0], -f.right[1]];
+    }
+    const overlap = len2(sub(edgeB, edgeA));
+    const rise = l.rise;
+    const childGaps: [[number, number], [number, number]][] = [];
+    const parentGaps = gaps.get(parent.id) ?? [];
+    let stepFlight: BalconyData['stepFlight'];
+    if (overlap > 0.05) {
+      if (Math.abs(rise) < SAME_LEVEL) {
+        childGaps.push([local(next, edgeA), local(next, edgeB)]);
+        parentGaps.push([local(parent, edgeA), local(parent, edgeB)]);
+      } else {
+        // Steps on the lower level, down from the shared edge, in the middle of it.
+        const width = Math.min(1.0, overlap - 0.1);
+        const mid: Vec2 = [(edgeA[0] + edgeB[0]) / 2, (edgeA[1] + edgeB[1]) / 2];
+        const along = sub(edgeB, edgeA), al = len2(along) || 1;
+        const half: Vec2 = [along[0] / al * width / 2, along[1] / al * width / 2];
+        const openA: Vec2 = [mid[0] - half[0], mid[1] - half[1]], openB: Vec2 = [mid[0] + half[0], mid[1] + half[1]];
+        const childUpper = rise > 0;
+        // The upper level is guarded along the drop except across the steps; the lower one is open there.
+        if (width >= 0.6) {
+          (childUpper ? childGaps : parentGaps).push(childUpper ? [local(next, openA), local(next, openB)] : [local(parent, openA), local(parent, openB)]);
+          const down: Vec2 = childUpper ? [-into[0], -into[1]] : into;
+          stepFlight = {
+            start: local(next, mid), dir: down, width,
+            count: Math.max(1, Math.ceil(Math.abs(rise) / STEP_MAX_RISE)),
+            top: childUpper ? 0 : Math.abs(rise), bottom: childUpper ? -Math.abs(rise) : 0,
+          };
+        }
+        (childUpper ? parentGaps : childGaps).push(childUpper ? [local(parent, edgeA), local(parent, edgeB)] : [local(next, edgeA), local(next, edgeB)]);
+      }
+    }
+    gaps.set(parent.id, parentGaps);
+    const wallEdges = [l.attach !== 'front' && l.offset <= 1e-6 && !!parent.patioData!.wallEdges[0], false, false, false];
+    next.patioData = {
+      ...data,
+      points: world.map(p => local(next, p)),
+      bulges: [0, 0, 0, 0],
+      wallEdges,
+      balcony: { ...b, railGaps: [...(gaps.get(child.id) ?? []), ...childGaps], stepFlight },
+    };
+    gaps.set(child.id, next.patioData.balcony!.railGaps!);
+    updates.set(child.id, next);
+  }
+  // Parents' gaps (and levels' own, from levels joined to them).
+  let changed = removed.size > 0;
+  const out: Shape[] = [];
+  for (const s of shapes) {
+    if (removed.has(s.id)) continue;
+    let next = updates.get(s.id) ?? s;
+    const data = next.patioData;
+    if (data?.kind === 'balcony') {
+      const g = gaps.get(s.id) ?? [];
+      const b: Partial<BalconyData> = data.balcony ?? {};
+      if (JSON.stringify(b.railGaps ?? []) !== JSON.stringify(g)) {
+        next = { ...next, patioData: { ...data, balcony: { ...DEFAULT_BALCONY, ...b, railGaps: g.length ? g : undefined } } };
+      }
+    }
+    if (next !== s && JSON.stringify(next) === JSON.stringify(s)) next = s;
+    if (next !== s) changed = true;
+    out.push(next);
+  }
+  return changed ? out : shapes;
+}
+
+/** Steps between levels: how many, and their rise (for the panel). */
+export function stepsFor(rise: number): { count: number; rise: number } | null {
+  if (Math.abs(rise) < SAME_LEVEL) return null;
+  const count = Math.max(1, Math.ceil(Math.abs(rise) / STEP_MAX_RISE));
+  return { count, rise: Math.abs(rise) / count };
+}
+
+export { STEP_GOING };

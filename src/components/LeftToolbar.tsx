@@ -25,7 +25,6 @@ import {
   CircleDot,
   CornerUpRight,
   Code,
-  Scissors,
   Combine,
   CircleDashed,
   Grab,
@@ -745,8 +744,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       
       <ToolButton tool="pushpull" icon={<ArrowUpFromLine size={20} />} label="Extrude (P)" />
       <ToolButton tool="offset" icon={<Layers size={20} />} label="Offset" />
-      <ToolButton tool="combine" icon={<Combine size={20} />} label="Combine Shapes" />
-      <ToolButton tool="subtract" icon={<Scissors size={20} />} label="Subtract Tool - 1st click on the object to keep, 2nd click on object to subtract" />
+      <ToolButton tool="combine" icon={<Combine size={20} />} label="Combine: merge, subtract or intersect flat shapes or 3D objects" />
       <div 
         className="relative"
         ref={measureGroupRef}

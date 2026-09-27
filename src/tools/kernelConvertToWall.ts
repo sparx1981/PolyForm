@@ -897,3 +897,75 @@ export function redoWallConversion(host: KernelArcHost, link: WallConversionUndo
     host.refreshIndex();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Changing the thickness, and the footprint for a floor slab
+// ---------------------------------------------------------------------------
+
+/** The walls' outside outline in order (world X/Z): each piece's outer-start corner. */
+export function outerRing(plan: WallConversionPlan): P2[] {
+  const ring: P2[] = [];
+  for (const piece of plan.pieces) {
+    const p = piece.corners[0];
+    const last = ring[ring.length - 1];
+    if (!last || len2(sub2(p, last)) > POINT_TOL) ring.push({ x: p.x, z: p.z });
+  }
+  if (ring.length > 1 && len2(sub2(ring[0]!, ring[ring.length - 1]!)) <= POINT_TOL) ring.pop();
+  return ring;
+}
+
+/**
+ * The same walls at another thickness, keeping the outside face where it was drawn (the
+ * building's outline stays put; the walls grow or shrink inwards). Rejected when the inside
+ * faces would cross (too thick for the shape).
+ */
+export function planWithThickness(plan: WallConversionPlan, thickness: number): WallConversionPlan | WallConversionRejection {
+  if (Math.abs(thickness - plan.thickness) < 1e-6) return plan;
+  if (!(thickness >= 0.02)) return { ok: false, reason: 'Enter a thickness of at least 20 mm.', nearMiss: false };
+  // Outer edges, each with the outward normal of the piece that runs along it.
+  const edges: { a: P2; b: P2; out: P2; curved: boolean }[] = [];
+  for (const piece of plan.pieces) {
+    const a = piece.corners[0], b = piece.corners[3];
+    if (len2(sub2(b, a)) > POINT_TOL) edges.push({ a, b, out: piece.outward, curved: piece.curved });
+  }
+  const n = edges.length;
+  if (n < 3) return { ok: false, reason: 'This shape cannot take another thickness.', nearMiss: false };
+  const shifted = edges.map(e => ({ p: { x: e.a.x - e.out.x * thickness, z: e.a.z - e.out.z * thickness }, d: sub2(e.b, e.a) }));
+  // Inside corner i: where the inside faces of edges i-1 and i meet.
+  const inner: P2[] = edges.map((e, i) => {
+    const l1 = shifted[(i - 1 + n) % n]!, l2 = shifted[i]!;
+    const cross = l1.d.x * l2.d.z - l1.d.z * l2.d.x;
+    if (Math.abs(cross) < 1e-9 * len2(l1.d) * len2(l2.d)) return { x: e.a.x - e.out.x * thickness, z: e.a.z - e.out.z * thickness };
+    const w = sub2(l2.p, l1.p);
+    const t = (w.x * l2.d.z - w.z * l2.d.x) / cross;
+    return { x: l1.p.x + l1.d.x * t, z: l1.p.z + l1.d.z * t };
+  });
+  const pieces: WallPiece[] = [];
+  for (let i = 0; i < n; i++) {
+    const e = edges[i]!, ia = inner[i]!, ib = inner[(i + 1) % n]!;
+    const innerDir = sub2(ib, ia);
+    if (len2(innerDir) < 0.005 || dot2(innerDir, sub2(e.b, e.a)) <= 0) {
+      return { ok: false, reason: `${fmtMm(thickness)} is too thick for this shape: the inside faces of the walls would cross.`, nearMiss: false };
+    }
+    const start = mid2(e.a, ia), end = mid2(e.b, ib);
+    pieces.push({ start, end, outward: e.out, corners: [e.a, ia, ib, e.b], length: len2(sub2(end, start)), curved: e.curved });
+  }
+  // Swap the old thickness warnings for the new ones.
+  const oldWarnings: ConversionWarning[] = [];
+  addThicknessWarnings(oldWarnings, plan.thickness);
+  const warnings = plan.warnings.filter(w => !oldWarnings.some(o => o.message === w.message));
+  addThicknessWarnings(warnings, thickness);
+  return { ...plan, thickness, pieces, warnings };
+}
+
+/** Flat faces on the walls' base level inside their outline (the drawn floor), for replacing with a slab. */
+export function floorFacesWithin(g: Graph, plan: WallConversionPlan): FaceId[] {
+  const ring = outerRing(plan);
+  const source = new Set(plan.sourceFaces);
+  const out: FaceId[] = [];
+  for (const [id] of g.faces) {
+    if (source.has(id)) continue;
+    if (isFloorFace(g, id, ring, plan.baseY)) out.push(id);
+  }
+  return out;
+}

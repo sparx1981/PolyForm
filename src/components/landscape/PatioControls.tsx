@@ -5,10 +5,10 @@ import { useAssetCatalog } from '../../lib/assets/useAssetCatalog';
 import { isMaterialAssetId, type AssetSummary } from '../../lib/assets/types';
 import {
   BALCONY_SUPPORTS, DECK_BOARDS, DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK, PAVING_STYLES, SLAB_SIZES,
-  type BalconyData, type BalconyFloor, type BalconyFront, type BlockPattern, type BoardDirection, type DeckBoard, type PatioData, type PatioKind, type PatioToolSettings,
+  type BalconyAttach, type BalconyData, type BalconyFloor, type BalconyFront, type BalconyLevel, type BlockPattern, type BoardDirection, type DeckBoard, type PatioData, type PatioKind, type PatioToolSettings,
   type PavingStyle, type RailingStyle,
 } from '../../lib/patio/patioTypes';
-import { balconySettings, balconyWarnings, JULIET_DEPTH, reshapeBalcony } from '../../lib/patio/balcony';
+import { balconyFrame, balconySettings, balconyWarnings, JULIET_DEPTH, newLevel, reshapeBalcony, stepsFor } from '../../lib/patio/balcony';
 import { buildPatio } from '../../lib/patio/patioGeometry';
 import { snapPatioToBuilding } from '../../lib/patio/patioClosure';
 import { patioGroundHelpers } from '../../lib/patio/patioPlacement';
@@ -95,7 +95,7 @@ function suits(asset: AssetSummary, kind: PatioKind, paving: PavingStyle): boole
  * one (changes apply to it straight away), plus steps, lights and quantities.
  */
 export function PatioControls() {
-  const { patioToolSettings: tool, setPatioToolSettings, shapes, setShapes, selectedId, commitHistory, setMaterialBindings, setActiveTool, setMeasurements } = useApp();
+  const { patioToolSettings: tool, setPatioToolSettings, shapes, setShapes, selectedId, setSelectedId, commitHistory, setMaterialBindings, setActiveTool, setMeasurements } = useApp();
   const selected = shapes.find(shape => shape.id === selectedId && shape.type === 'patio' && shape.patioData);
   const data: Look & { kind: PatioKind } = selected ? selected.patioData! : { ...tool.template, kind: tool.kind };
   const kind = data.kind;
@@ -105,8 +105,15 @@ export function PatioControls() {
   const { assets } = useAssetCatalog('material');
 
   const update = (patch: Partial<PatioData>) => {
-    const { kind: nextKind, ...look } = patch;
-    setPatioToolSettings(prev => ({ ...prev, ...(nextKind ? { kind: nextKind } : {}), template: { ...prev.template, ...look } }));
+    const { kind: nextKind, points: _points, bulges: _bulges, wallEdges: _wallEdges, steps: _steps, balcony: nextBalcony, ...look } = patch;
+    // Only the look carries over to the next one: never a balcony's place, size or levels.
+    const balconyLook = nextBalcony
+      ? { support: nextBalcony.support === 'juliet' && nextBalcony.level ? 'cantilever' as const : nextBalcony.support, floor: nextBalcony.floor, railingHeight: nextBalcony.railingHeight, front: nextBalcony.front }
+      : undefined;
+    setPatioToolSettings(prev => ({
+      ...prev, ...(nextKind ? { kind: nextKind } : {}),
+      template: { ...prev.template, ...look, ...(balconyLook ? { balcony: { ...DEFAULT_BALCONY, ...prev.template.balcony, ...balconyLook } } : {}) },
+    }));
     if (selected) {
       setShapes(prev => prev.map(shape => shape.id !== selected.id ? shape : { ...shape, patioData: { ...shape.patioData!, ...patch } }));
       commitHistory();
@@ -143,8 +150,8 @@ export function PatioControls() {
   };
   const setBalconyDepth = (depth: number) => {
     if (!selected) { setPatioToolSettings(prev => ({ ...prev, balconyDepth: depth })); return; }
-    // Along a curved wall the front is rebuilt from the wall; a rectangle keeps its width.
-    if (curvedBalcony && reshape({ depth })) return;
+    // Rebuilt from its door (keeping its widths); a balcony without one keeps its outline's width.
+    if (reshape({ depth })) return;
     const points = withBalconyDepth(selected.patioData!, depth);
     if (points) update({ points, balcony: { ...balcony, depth } });
   };
@@ -169,6 +176,35 @@ export function PatioControls() {
     update({ balcony: { ...balcony, floor }, color, surfaceMaterialId: undefined });
   };
   const warnings = kind === 'balcony' ? balconyWarnings({ ...(data as PatioData), kind }) : [];
+  // Widths either side of the door's centre (seen from outside), and added levels.
+  const level = balcony.level;
+  const parentShape = level ? shapes.find(sh => sh.id === level.parentId) : undefined;
+  const parentFrame = parentShape ? balconyFrame(parentShape) : null;
+  const frame = selected && kind === 'balcony' ? balconyFrame(selected) : null;
+  const opening = selected && balcony.hostOpeningId ? shapes.find(sh => sh.id === balcony.hostOpeningId) : undefined;
+  const openingHalf = opening && Array.isArray(opening.args) ? ((opening.args as number[])[0] ?? 0.9) / 2 : 0.45;
+  const widthLeft = balcony.widthLeft ?? frame?.left ?? openingHalf + (balcony.margin ?? tool.balconyMargin);
+  const widthRight = balcony.widthRight ?? frame?.rightReach ?? openingHalf + (balcony.margin ?? tool.balconyMargin);
+  const setWidth = (sideName: 'widthLeft' | 'widthRight', value: number) => {
+    if (!reshape({ [sideName]: value })) update({ balcony: { ...balcony, [sideName]: value } });
+  };
+  const updateLevel = (patch: Partial<BalconyLevel>) => { if (level) update({ balcony: { ...balcony, level: { ...level, ...patch } } }); };
+  const addLevel = (attach: BalconyAttach) => {
+    if (!selected) return;
+    const l = newLevel(selected, attach);
+    if (!l) return;
+    // A front level stands clear of the wall: brackets or a cantilever there need posts.
+    const support = attach === 'front' && (balcony.support === 'cantilever' || balcony.support === 'brackets') ? 'posts' : balcony.support;
+    const id = Math.random().toString(36).substr(2, 9);
+    const count = shapes.filter(sh => sh.patioData?.balcony?.level?.parentId === selected.id).length + 1;
+    const child = {
+      ...selected, id, name: `${selected.name ?? 'Balcony'} (level ${count})`,
+      patioData: { ...selected.patioData!, balcony: { ...balcony, support, level: l, railGaps: undefined, stepFlight: undefined, curvedWall: false } },
+    };
+    setShapes(prev => [...prev, child]);
+    commitHistory();
+    setSelectedId(id);
+  };
 
   const chooseMaterial = (asset: AssetSummary | null) => {
     if (asset && isMaterialAssetId(asset.id)) {
@@ -201,7 +237,7 @@ export function PatioControls() {
       <p className="text-[10px] text-gray-500 dark:text-gray-400">
         {kind === 'balcony'
           ? (selected
-            ? `Editing ${selected.name}. Drag the yellow corners to resize it. It stays on its wall: moving or turning the wall takes the balcony with it, and deleting the wall removes it.`
+            ? `Editing ${selected.name}. Use the sliders below to size it and add levels. It stays on its wall: moving or turning the wall takes the balcony with it, and deleting the wall removes it.`
             : 'Hover a door (or a window) and click: a balcony goes on the outside of the wall, centred on the opening, with its floor just below the door sill.')
           : selected
           ? `Editing ${selected.name}. Drag yellow corners to reshape; click a white dot to add a corner; Shift-drag a dot to curve that edge (drag a violet dot to change a curve); right-click a corner to remove it.`
@@ -223,7 +259,7 @@ export function PatioControls() {
           <div>
             <label className={label}>Support</label>
             <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-              {BALCONY_SUPPORTS.map(option => (
+              {BALCONY_SUPPORTS.filter(option => !(level && option.id === 'juliet')).map(option => (
                 <button key={option.id} type="button" title={option.description} className={chip(balcony.support === option.id)}
                   onClick={() => setSupport(option.id)}>
                   {option.label}
@@ -264,7 +300,7 @@ export function PatioControls() {
               {balcony.floor !== 'concrete' && (
                 <ColorField text={balcony.floor === 'boards' ? 'Board colour' : 'Tile colour'} value={data.color} onChange={v => update({ color: v })} />
               )}
-              {(!selected || curvedBalcony) && (
+              {(!selected || curvedBalcony) && !level && (
                 <div>
                   <label className={label}>{selected ? 'Front edge (curved wall)' : 'Front edge on a curved wall'}</label>
                   <div className="mt-1.5 grid grid-cols-2 gap-1.5">
@@ -274,9 +310,42 @@ export function PatioControls() {
                   </div>
                 </div>
               )}
-              {selected ? (selectedDepth !== null && (
-                <Slider text="Depth (out from the wall)" value={selectedDepth} min={0.6} max={3} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={setBalconyDepth} />
-              )) : (
+              {selected && level ? (
+                <div className="space-y-2 rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+                  <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-300">
+                    <span>Level on the {level.attach} of {parentShape?.name ?? 'its balcony'}</span>
+                    {parentShape && <button type="button" className="text-polyform-blue hover:underline" onClick={() => setSelectedId(parentShape.id)}>Select it</button>}
+                  </div>
+                  <Slider text="Width" value={level.width} min={0.6} max={8} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={v => updateLevel({ width: v })} />
+                  <Slider text="Depth" value={level.depth} min={0.6} max={4} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={v => updateLevel({ depth: v })} />
+                  {level.attach === 'front' ? (
+                    <Slider text="Position along the front" value={level.offset}
+                      min={-(parentFrame ? parentFrame.left + level.width / 2 : 4)} max={parentFrame ? parentFrame.rightReach + level.width / 2 : 4} step={0.05}
+                      format={v => `${v >= 0 ? '+' : ''}${v.toFixed(2)} m`} onChange={v => updateLevel({ offset: v })} />
+                  ) : (
+                    <Slider text="Distance out from the wall" value={level.offset} min={0} max={parentFrame ? Math.max(0, parentFrame.depth - 0.3) : 2} step={0.05}
+                      format={v => `${v.toFixed(2)} m`} onChange={v => updateLevel({ offset: v })} />
+                  )}
+                  <Slider text="Height change" value={level.rise} min={-1.5} max={1.5} step={0.01}
+                    format={v => Math.abs(v) < 0.03 ? 'Same level' : `${v > 0 ? 'Up' : 'Down'} ${Math.round(Math.abs(v) * 1000)} mm`}
+                    onChange={v => updateLevel({ rise: v })} />
+                  {(() => {
+                    const st = stepsFor(level.rise);
+                    return st ? <p className="text-[10px] text-gray-500 dark:text-gray-400">{st.count} step{st.count === 1 ? '' : 's'} of {Math.round(st.rise * 1000)} mm, built where the levels meet.</p> : null;
+                  })()}
+                </div>
+              ) : selected ? (
+                <>
+                  {selectedDepth !== null && (
+                    <Slider text="Depth (out from the wall)" value={selectedDepth} min={0.6} max={3} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={setBalconyDepth} />
+                  )}
+                  <Slider text="Width left (from the door's centre)" value={widthLeft} min={Math.max(0.3, openingHalf)} max={6} step={0.05}
+                    format={v => `${v.toFixed(2)} m`} onChange={v => setWidth('widthLeft', v)} />
+                  <Slider text="Width right (from the door's centre)" value={widthRight} min={Math.max(0.3, openingHalf)} max={6} step={0.05}
+                    format={v => `${v.toFixed(2)} m`} onChange={v => setWidth('widthRight', v)} />
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Left and right as seen from outside, looking at the building.</p>
+                </>
+              ) : (
                 <>
                   <Slider text="Depth (out from the wall)" value={tool.balconyDepth} min={0.6} max={3} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={setBalconyDepth} />
                   <Slider text="Wider than the door, each side" value={tool.balconyMargin} min={0} max={1.5} step={0.05} format={v => `${v.toFixed(2)} m`}
@@ -296,6 +365,21 @@ export function PatioControls() {
           {data.railing !== 'none' && (
             <Slider text="Guarding height" value={balcony.railingHeight * 1000} min={900} max={1300} step={10} format={v => `${Math.round(v)} mm`}
               onChange={v => updateBalcony({ railingHeight: v / 1000 })} />
+          )}
+          {selected && balcony.support !== 'juliet' && (
+            <div>
+              <label className={label}>Add a level</label>
+              {frame ? (
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                  {(['left', 'front', 'right'] as BalconyAttach[]).map(a => (
+                    <button key={a} type="button" className={chip(false)} onClick={() => addLevel(a)}>{a === 'front' ? 'Front' : a === 'left' ? 'Left' : 'Right'}</button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">Levels can be added to balconies on straight walls.</p>
+              )}
+              <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">A new piece joined to this one: the same level, a step up or a step down, with its own size.</p>
+            </div>
           )}
           {warnings.length > 0 && (
             <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
