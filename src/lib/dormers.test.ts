@@ -9,6 +9,7 @@ import {
 } from './dormers';
 import { withRoofExtras, gutterRuns } from './roofExtras';
 import { generateTimberFrameForRoof } from './timberFrameGenerator';
+import { floorPlans } from './presentation/floorPlans';
 import { RoofSurface, eavePolygon, roofEdges } from './roofSurface';
 
 const wall = (id: string, x: number, z: number, len: number, rotY: number, h = 2.8): Shape => ({
@@ -173,5 +174,22 @@ describe('dormer timber and headroom', () => {
     expect(plain.some(s => s.tags?.includes('timber-trimmer-rafter'))).toBe(false);
     const extra = withD.find(s => s.tags?.includes('roof-extra-dormer-roofs'))!;
     expect(generateTimberFrameForRoof(extra, withD).filter(s => s.id.includes(extra.id))).toHaveLength(0);
+  });
+
+  it('counts usable floor area (1.5 m headroom) in a loft room, and a dormer adds to it', () => {
+    // A loft: low knee walls under the roof.
+    const { shapes, roof } = gableHouse(0.4);
+    const [loft] = floorPlans(shapes)[0].rooms;
+    expect(loft.usableM2).toBeDefined();
+    expect(loft.usableM2!).toBeLessThan(loft.areaM2 * 0.9);
+    expect(loft.usableM2!).toBeGreaterThan(loft.areaM2 * 0.5);
+    const withD = withRoofExtras(shapes, roof.id, { dormerList: [dormer({ z: 3.9, flush: true, width: 2.4, height: 1.9 })] });
+    const [bigger] = floorPlans(withD)[0].rooms;
+    expect(bigger.areaM2).toBeCloseTo(loft.areaM2);
+    expect(bigger.usableM2!).toBeGreaterThan(loft.usableM2! + 1.2);
+    expect(floorPlans(withD)[0].svg).toContain('usable');
+    // A room with normal walls under the same roof is all usable.
+    const [room] = floorPlans(gableHouse().shapes)[0].rooms;
+    expect(room.usableM2).toBeUndefined();
   });
 });

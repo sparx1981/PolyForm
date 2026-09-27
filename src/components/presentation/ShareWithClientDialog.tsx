@@ -211,7 +211,7 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                 {allRooms.map(({ level, room }, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="w-28 shrink-0 text-xs text-slate-500">Level {level} · {room.areaM2.toFixed(1)} m²</span>
+                    <span className="w-28 shrink-0 text-xs text-slate-500">Level {level} · {room.areaM2.toFixed(1)} m²{room.usableM2 !== undefined ? ` (${room.usableM2.toFixed(1)} usable)` : ''}</span>
                     <input value={names[roomKey(level, room.at)] ?? room.name ?? ''} placeholder="e.g. Kitchen"
                       onChange={e => setNames({ ...names, [roomKey(level, room.at)]: e.target.value })} className={cn(input, 'py-1.5')} />
                   </div>
