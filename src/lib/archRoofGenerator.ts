@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRoofModel, edgeFrame, facePlan, roofHeightAt, type RoofModel } from './roofSkeleton';
+import { buildRoofModel, edgeFrame, facePlan, isCurveCrease, roofHeightAt, type RoofModel } from './roofSkeleton';
 import { Shape } from '../types';
 import { computeStairHoleForSlab } from './archStairwell';
 import { 
@@ -1527,15 +1527,6 @@ export function createGeneralPolygonalRoofSlopesGeometry(
 // -------------------------------------------------------------
 // SKELETON ROOFS (any outline: L, T, U, bays, curves, rectangles)
 // -------------------------------------------------------------
-
-/** Two neighbouring faces meet at less than this in plan: a curve's facets, not a real hip. */
-const CURVE_CREASE = Math.sin(THREE.MathUtils.degToRad(20));
-
-/** Whether a skeleton line is just the crease between two facets of a curved wall's roof. */
-export function isCurveCrease(m: RoofModel, e: { faces: [number, number] }): boolean {
-  const u1 = edgeFrame(m.eave, m.faces[e.faces[0]].edge).u, u2 = edgeFrame(m.eave, m.faces[e.faces[1]].edge).u;
-  return Math.abs(u1[0] * u2[1] - u1[1] * u2[0]) < CURVE_CREASE && u1[0] * u2[0] + u1[1] * u2[1] > 0;
-}
 
 /** The skeleton roof over an outline, or null (not loaded, or the outline defeats it). */
 export function skeletonRoofModel(

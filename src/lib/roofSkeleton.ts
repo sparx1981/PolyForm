@@ -346,3 +346,12 @@ export function roofHeightAt(m: RoofModel, x: number, z: number): number | null 
   }
   return null;
 }
+
+/** Neighbouring faces meeting at less than this in plan are a curve's facets, not a real hip. */
+const CURVE_CREASE = Math.sin((20 * Math.PI) / 180);
+
+/** Whether a skeleton line is just the crease between two facets of a curved wall's roof. */
+export function isCurveCrease(m: RoofModel, e: { faces: [number, number] }): boolean {
+  const u1 = edgeFrame(m.eave, m.faces[e.faces[0]].edge).u, u2 = edgeFrame(m.eave, m.faces[e.faces[1]].edge).u;
+  return Math.abs(u1[0] * u2[1] - u1[1] * u2[0]) < CURVE_CREASE && u1[0] * u2[0] + u1[1] * u2[1] > 0;
+}

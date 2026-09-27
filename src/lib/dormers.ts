@@ -384,7 +384,7 @@ export function dormerOpenings(layouts: DormerLayout[], ridgeHeight: number) {
     if (p.dBack < p.dRidge - 0.1) header(p.dBack + rw / 2);
   }
 
-  const trimmable = (subTag: string) => (subTag.includes('rafter') || subTag.includes('noggin'))
+  const trimmable = (subTag: string) => (subTag.includes('rafter') || subTag.includes('noggin') || subTag.includes('purlin'))
     && !/hip-rafter|valley-rafter|ridge|dormer|trimmer|header/.test(subTag);
 
   const trim = (a: THREE.Vector3, b: THREE.Vector3, subTag: string): [THREE.Vector3, THREE.Vector3][] => {

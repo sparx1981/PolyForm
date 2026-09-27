@@ -91,8 +91,10 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
     // leaving that wing's roof with only the ridge/valley/hip rafters and
     // none of the intermediate common rafters actually holding the roof
     // surface up.
-    const wing1Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 1'));
-    const wing2Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 2'));
+    // (Counted by where they stand: the long wing runs along z = 0…6, the short one x = -4…0, z = -4…0.)
+    const commons = members.filter(s => s.tags?.includes('timber-common-rafter'));
+    const wing1Rafters = commons.filter(s => s.position[2] > 0.5);
+    const wing2Rafters = commons.filter(s => s.position[2] < -0.5 && s.position[0] < 0);
     expect(wing1Rafters.length).toBeGreaterThan(5);
     expect(wing2Rafters.length).toBeGreaterThan(5);
 
@@ -152,15 +154,15 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
     // one wing's common rafters (§7) or hip-setback jacks (§8A)
     // independently of the other, so an aggregate >0 check across both
     // wings combined wouldn't have caught either.
-    const wing1Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 1'));
-    const wing2Rafters = members.filter(s => s.name?.includes('Common Rafter (Wing 2'));
-    expect(wing1Rafters.length).toBeGreaterThan(0);
-    expect(wing2Rafters.length).toBeGreaterThan(0);
+    // (Counted by where they stand: the long wing runs along z = 0…6, the short one x = -4…0, z = -4…0.)
+    const commons = members.filter(s => s.tags?.includes('timber-common-rafter'));
+    expect(commons.filter(s => s.position[2] > 0.5).length).toBeGreaterThan(0);
+    expect(commons.filter(s => s.position[2] < -0.5 && s.position[0] < 0).length).toBeGreaterThan(0);
 
-    const wing1ValleyHipJacks = members.filter(s => s.name?.includes('Jack Rafter (Wing 1 Valley Hip)'));
-    const wing2ValleyHipJacks = members.filter(s => s.name?.includes('Jack Rafter (Wing 2 Valley Hip)'));
-    expect(wing1ValleyHipJacks.length).toBeGreaterThan(0);
-    expect(wing2ValleyHipJacks.length).toBeGreaterThan(0);
+    // Jacks on both wings' hip ends, and valley jacks either side of the valley.
+    expect(hipJackRafters.filter(s => s.position[2] > 0.5).length).toBeGreaterThan(0);
+    expect(hipJackRafters.filter(s => s.position[2] < -0.5 && s.position[0] < 0).length).toBeGreaterThan(0);
+    expect(members.filter(s => s.tags?.includes('timber-valley-jack-rafter')).length).toBeGreaterThan(1);
   });
 
   it('generates accurate timber framing for rectangular gable and hip roofs', () => {
