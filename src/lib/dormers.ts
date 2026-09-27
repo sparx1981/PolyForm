@@ -337,6 +337,104 @@ export function dormerFrame(L: DormerLayout, spacing = 0.4): FrameMember[] {
   return out;
 }
 
+/**
+ * What the main roof's framing needs round its dormer openings: `members` are the doubled trimmer
+ * rafters either side of each hole and the headers across its top and bottom; `trim` takes one of
+ * the main roof's own members (roof-local, on the roof surface line like the generator draws
+ * them) and returns the pieces of it to keep - rafters and noggins lose the length inside a hole,
+ * and a rafter that would sit where a trimmer now goes is dropped. Other members pass through.
+ */
+export function dormerOpenings(layouts: DormerLayout[], ridgeHeight: number) {
+  const [rw] = RAFTER;
+  const plans = layouts.map(L => {
+    const tan = Math.tan(L.slope);
+    const y0 = L.origin.y + L.roofAtFront;
+    const rel = L.footprint.map(([x, z]) => {
+      const dx = x - L.origin.x, dz = z - L.origin.z;
+      return { x: dx * L.X.x + dz * L.X.z, d: dx * L.Z.x + dz * L.Z.z };
+    });
+    return {
+      L, tan, y0,
+      sideX: Math.max(...rel.map(p => Math.abs(p.x))) + rw / 2 + 0.005,
+      dFront: Math.min(...rel.map(p => p.d)),
+      dBack: Math.max(...rel.map(p => p.d)),
+      dEave: -y0 / tan,
+      dRidge: (ridgeHeight - y0) / tan,
+    };
+  });
+  type Plan = typeof plans[number];
+  const point = (p: Plan, x: number, d: number) =>
+    p.L.origin.clone().addScaledVector(p.L.X, x).addScaledVector(p.L.Z, d).setY(p.y0 + d * p.tan);
+
+  const members: FrameMember[] = [];
+  for (const p of plans) {
+    if (p.dRidge <= p.dEave) continue;
+    for (const sx of [-1, 1]) {
+      for (const k of [0, 1]) {
+        const x = sx * (p.sideX + k * rw);
+        members.push({ name: 'Dormer Trimmer Rafter', a: point(p, x, p.dEave), b: point(p, x, p.dRidge), width: rw, depth: RAFTER[1], subTag: 'timber-trimmer-rafter' });
+      }
+    }
+    const header = (d: number) => members.push({
+      name: 'Dormer Header', a: point(p, -p.sideX, d), b: point(p, p.sideX, d), width: rw, depth: RAFTER[1], subTag: 'timber-header-rafter',
+    });
+    if (p.dFront > p.dEave + 0.1) header(p.dFront - rw / 2);
+    if (p.dBack < p.dRidge - 0.1) header(p.dBack + rw / 2);
+  }
+
+  const trimmable = (subTag: string) => (subTag.includes('rafter') || subTag.includes('noggin'))
+    && !/hip-rafter|valley-rafter|ridge|dormer|trimmer|header/.test(subTag);
+
+  const trim = (a: THREE.Vector3, b: THREE.Vector3, subTag: string): [THREE.Vector3, THREE.Vector3][] => {
+    if (!layouts.length || !trimmable(subTag)) return [[a, b]];
+    let pieces: [THREE.Vector3, THREE.Vector3][] = [[a, b]];
+    for (const p of plans) {
+      const next: typeof pieces = [];
+      for (const [s, e] of pieces) {
+        const dx = e.x - s.x, dz = e.z - s.z;
+        const len = Math.hypot(dx, dz);
+        // A rafter running up the slope where a trimmer now stands is replaced by it.
+        if (len > 1e-6 && subTag.includes('rafter') && Math.abs((dx * p.L.X.x + dz * p.L.X.z) / len) < 0.15) {
+          const x = (s.x - p.L.origin.x) * p.L.X.x + (s.z - p.L.origin.z) * p.L.X.z;
+          const ds = (s.x - p.L.origin.x) * p.L.Z.x + (s.z - p.L.origin.z) * p.L.Z.z;
+          const de = (e.x - p.L.origin.x) * p.L.Z.x + (e.z - p.L.origin.z) * p.L.Z.z;
+          const overlaps = Math.max(ds, de) > p.dFront && Math.min(ds, de) < p.dBack;
+          if (overlaps && Math.abs(x) > p.sideX - rw - 0.03 && Math.abs(x) < p.sideX + 2 * rw + 0.03) continue;
+        }
+        // Split at every crossing of the hole's outline and drop the pieces inside it.
+        const ts = [0, 1];
+        const poly = p.L.footprint;
+        for (let i = 0; i < poly.length; i++) {
+          const [x1, z1] = poly[i], [x2, z2] = poly[(i + 1) % poly.length];
+          const ex = x2 - x1, ez = z2 - z1;
+          const den = dx * ez - dz * ex;
+          if (Math.abs(den) < 1e-9) continue;
+          const t = ((x1 - s.x) * ez - (z1 - s.z) * ex) / den;
+          const u = ((x1 - s.x) * dz - (z1 - s.z) * dx) / den;
+          if (t > 0 && t < 1 && u >= 0 && u <= 1) ts.push(t);
+        }
+        ts.sort((m, n) => m - n);
+        for (let i = 0; i < ts.length - 1; i++) {
+          const tm = (ts[i] + ts[i + 1]) / 2;
+          if (pointInPolygon([s.x + dx * tm, s.z + dz * tm], poly)) continue;
+          next.push([s.clone().lerp(e, ts[i]), s.clone().lerp(e, ts[i + 1])]);
+        }
+      }
+      pieces = next;
+    }
+    // Join neighbouring kept pieces back together (split points that turned out to be outside).
+    const joined: typeof pieces = [];
+    for (const piece of pieces) {
+      const last = joined[joined.length - 1];
+      if (last && last[1].distanceTo(piece[0]) < 1e-6) last[1] = piece[1];
+      else joined.push(piece);
+    }
+    return joined;
+  };
+
+  return { members, trim };
+}
+
 // --- Headroom ----------------------------------------------------------------------------------
 
 /**

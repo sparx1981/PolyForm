@@ -8,6 +8,7 @@ import {
   cutForDormers, dormerCeilingAt, dormerFrame, dormerLayout, dormerMeshes, evenlySpaced, layoutsOf, pointInPolygon, type Dormer,
 } from './dormers';
 import { withRoofExtras, gutterRuns } from './roofExtras';
+import { generateTimberFrameForRoof } from './timberFrameGenerator';
 import { RoofSurface, eavePolygon, roofEdges } from './roofSurface';
 
 const wall = (id: string, x: number, z: number, len: number, rotY: number, h = 2.8): Shape => ({
@@ -142,5 +143,35 @@ describe('dormer timber and headroom', () => {
     expect(dormerCeilingAt(layouts, 4, 2)).toBeNull();
     // And the dormer's shapes are on the model, linings included.
     expect(withD.some(s => s.tags?.includes('roof-extra-dormer-lining'))).toBe(true);
+  });
+
+  it('frames the main roof round the opening: no rafter through the hole, trimmers and headers beside it', () => {
+    const { shapes, roof } = gableHouse();
+    const withD = withRoofExtras(shapes, roof.id, { dormerList: [dormer()] });
+    const r = withD.find(s => s.id === roof.id)!;
+    const L = layoutsOf(r)[0];
+    const frame = generateTimberFrameForRoof(r, withD);
+    const tagged = (t: string) => frame.filter(s => s.tags?.includes(t));
+    expect(tagged('timber-trimmer-rafter')).toHaveLength(4);
+    expect(tagged('timber-header-rafter')).toHaveLength(2);
+    expect(tagged('timber-dormer-stud').length).toBeGreaterThan(4);
+    // Every common rafter or noggin, sampled along its length in plan, stays out of the hole.
+    const inv = new THREE.Vector3(...r.position);
+    const mains = frame.filter(s => /timber-(common-)?rafter|timber-roof-noggin/.test((s.tags ?? []).join(' ')) && !s.tags?.some(t => /dormer|trimmer|header/.test(t)));
+    expect(mains.length).toBeGreaterThan(40);
+    for (const m of mains) {
+      const q = new THREE.Quaternion(...m.quaternion!);
+      const half = new THREE.Vector3(0, 0, (m.args as number[])[2] / 2).applyQuaternion(q);
+      const c = new THREE.Vector3(...m.position).sub(inv);
+      for (const t of [-0.9, -0.5, 0, 0.5, 0.9]) {
+        const p = c.clone().addScaledVector(half, t);
+        expect(pointInPolygon([p.x, p.z], L.footprint)).toBe(false);
+      }
+    }
+    // Without the dormer the same roof has no trimmers, and dormer shapes aren't framed as roofs.
+    const plain = generateTimberFrameForRoof(roof, shapes);
+    expect(plain.some(s => s.tags?.includes('timber-trimmer-rafter'))).toBe(false);
+    const extra = withD.find(s => s.tags?.includes('roof-extra-dormer-roofs'))!;
+    expect(generateTimberFrameForRoof(extra, withD).filter(s => s.id.includes(extra.id))).toHaveLength(0);
   });
 });
