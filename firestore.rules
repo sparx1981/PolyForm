@@ -264,6 +264,26 @@ service cloud.firestore {
       allow delete: if isDocOwner();
     }
 
+    // Client presentation pages (/p/<shareId>). The id is 128 random bits and is the only way to
+    // reach a page, so anyone holding the link may fetch that one document - but nobody can list
+    // them except the owner, who finds their own to update or turn off.
+    match /presentations/{shareId} {
+      allow get: if true;
+      allow list: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+      allow create: if isAuthenticated() && shareId.size() >= 20 && isValidPresentation(request.resource.data);
+      allow update: if isDocOwner() && isValidPresentation(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    function isValidPresentation(data) {
+      return data.ownerId == request.auth.uid &&
+             data.keys().hasAll(['ownerId', 'title', 'storagePath', 'effects']) &&
+             data.title is string && data.title.size() <= 120 &&
+             data.storagePath is string &&
+             data.storagePath.matches('presentations/' + request.auth.uid + '/[0-9A-Za-z]+/project[.]json') &&
+             (!('message' in data) || (data.message is string && data.message.size() <= 4000));
+    }
+
     match /scripts/{scriptId} {
       allow get, list: if isDocOwner() || resource.data.isPublic == true;
       allow create: if isNewDocOwner() && isValidScript(request.resource.data);

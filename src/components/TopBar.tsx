@@ -37,6 +37,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { PresentButton } from './presentation/PresentationPanel';
 import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave, offloadModelForSave, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -970,6 +971,7 @@ export default function TopBar() {
       </div>
 
       <div className="flex items-center gap-4">
+        <PresentButton compact={isPhone} />
         <div className="relative" ref={profileRef}>
           <button 
             onClick={() => setIsProfileOpen(!isProfileOpen)}

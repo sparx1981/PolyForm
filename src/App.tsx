@@ -27,6 +27,9 @@ import RightPanelStack from './components/RightPanelStack';
 import StatusBar from './components/StatusBar';
 import Viewport from './components/Viewport';
 import AIRenderer from './components/AIRenderer';
+import PresentationPanel from './components/presentation/PresentationPanel';
+import ClientPresentationPage from './components/presentation/ClientPresentationPage';
+import { shareIdFromPath } from './lib/presentation/share';
 import AIQuery from './components/AIQuery';
 import WorldView from './components/WorldView';
 import AIGenerate from './components/AIGenerate';
@@ -551,6 +554,7 @@ function AppContent() {
 
   const modals = (
     <>
+      <PresentationPanel />
       <AIRenderer />
       <AIGenerate />
       <AIQuery />
@@ -837,7 +841,17 @@ function AppContent() {
   );
 }
 
+const CLIENT_SHARE_ID = typeof window !== 'undefined' ? shareIdFromPath(window.location.pathname) : null;
+
 export default function App() {
+  if (CLIENT_SHARE_ID) {
+    // A client's presentation link: its own read-only page, no sign-in.
+    return (
+      <AppProvider>
+        <ClientPresentationPage shareId={CLIENT_SHARE_ID} />
+      </AppProvider>
+    );
+  }
   if (RENDER_MODE) {
     return (
       <AppProvider>

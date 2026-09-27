@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
+import PresentationDriver from './presentation/PresentationDriver';
 import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
@@ -9885,6 +9886,7 @@ function Scene() {
         castShadow={shadowsEnabled} 
       />
       <ShareMainScene />
+      <PresentationDriver />
       <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />
       
       {godRaysEnabled && (

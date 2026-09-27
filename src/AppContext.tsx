@@ -3,7 +3,7 @@ import { buildProjectFile, parseProjectFile } from './lib/storage/projectFile';
 import { storageProviders, STORAGE_LABELS } from './lib/storage/registry';
 import { StorageAuthError, type ExternalFileRef } from './lib/storage/providers';
 import type { ProjectState } from './lib/storage/projectFile';
-import { RENDER_MODE } from './lib/renderMode';
+import { RENDER_MODE, CLIENT_PAGE } from './lib/renderMode';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
@@ -906,7 +906,7 @@ console.log("Created rectangle:", myRect.id);`);
 
   // Persistence for user settings
   useEffect(() => {
-    if (user?.uid && !RENDER_MODE) {
+    if (user?.uid && !RENDER_MODE && !CLIENT_PAGE) {
       const saveSettings = async () => {
         if (checkQuota()) return;
         try {
@@ -1173,7 +1173,7 @@ console.log("Created rectangle:", myRect.id);`);
   // Push local changes to Firestore (Debounced)
   useEffect(() => {
     // Render mode only looks: it must never write the model back.
-    if (!currentModelId || !user || RENDER_MODE) {
+    if (!currentModelId || !user || RENDER_MODE || CLIENT_PAGE) {
       setSyncStatus('unsaved');
       return;
     }
