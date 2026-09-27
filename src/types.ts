@@ -2,6 +2,7 @@ import type { FenceData, FenceStyle, WoodFinish } from './lib/fence/fenceTypes';
 import type { WaterData, WaterClarity } from './lib/water/waterBody';
 import type { PatioData, PatioToolSettings } from './lib/patio/patioTypes';
 import type { KernelArcHost } from './tools/kernelArcHost';
+import type { WallConversionUndoLink } from './tools/kernelConvertToWall';
 import type * as THREE from 'three';
 import type { FaceId } from './lib/geometry/types';
 import type { GraphicsSettings } from './lib/graphics/graphicsSettings';
@@ -415,6 +416,8 @@ export interface AppState {
   setCustomLightsSilent: (lights: CustomLight[] | ((prev: CustomLight[]) => CustomLight[])) => void;
   setNotesSilent: (notes: SceneNote[] | ((prev: SceneNote[]) => SceneNote[])) => void;
   commitHistory: () => void;
+  /** Links a Convert To Wall step's kernel change to Shape undo/redo. */
+  registerWallConversionUndo: (link: WallConversionUndoLink) => void;
   addShape: (shape: Shape) => void;
   removeShape: (id: string) => void;
   updateShapeColor: (id: string, color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => void;

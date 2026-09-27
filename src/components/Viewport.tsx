@@ -113,6 +113,7 @@ import { rankSnap } from '../tools/tuning';
 import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
+import { analyzeWallConversion, buildWallShapes, captureFaces, graphSignature, heightWarnings, type WallConversionPlan } from '../tools/kernelConvertToWall';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
@@ -12944,7 +12945,9 @@ export default function Viewport() {
     setActiveStory,
     isToolModifierDocked,
     setIsToolModifierDocked,
-    setActiveTool
+    setActiveTool,
+    kernelRevision,
+    registerWallConversionUndo
   } = useApp();
   // Local to Viewport() now, alongside the dialog itself (moved from
   // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
@@ -12965,6 +12968,62 @@ export default function Viewport() {
   // this lives in Viewport(), not Scene(), because the modal that reads it
   // is rendered from here.
   const [divideSurfaceTarget, setDivideSurfaceTarget] = useState<FaceId | null>(null);
+  // Convert To Wall: the plan is worked out when the kernel context menu
+  // opens, so the menu only offers it when the shape actually qualifies,
+  // and the dialog then confirms it (and asks for a height when the ring
+  // has not been pulled up yet).
+  const wallConversion = useMemo(() => {
+    if (!contextMenu || contextMenu.type !== 'kernel' || contextMenu.faceId === undefined) return null;
+    const result = analyzeWallConversion(kernelHost.graph, contextMenu.faceId, contextMenu.data);
+    return result.ok ? result : null;
+    // kernelRevision: the graph is mutated in place.
+  }, [contextMenu, kernelHost, kernelRevision]);
+  const [convertWallPlan, setConvertWallPlan] = useState<WallConversionPlan | null>(null);
+  const [convertWallHeight, setConvertWallHeight] = useState('2.4');
+  const convertToWalls = useCallback((plan: WallConversionPlan, height: number) => {
+    const g = kernelHost.graph;
+    // The analysis may be stale if the geometry changed while the dialog was open.
+    if (plan.sourceFaces.some(id => !g.faces.has(id))) {
+      setMeasurements('Convert To Wall: the shape changed. Right-click it again.');
+      return;
+    }
+    const before = snapshot(g);
+    const removed = captureFaces(g, plan.sourceFaces);
+    deleteGroupFacesAndEdges(g, plan.sourceFaces);
+    kernelHost.refreshIndex();
+    const after = snapshot(g);
+
+    // Storey from the height above the ground under the walls, as the Wall tool does.
+    const first = plan.pieces[0]!;
+    const terrain = shapes.find(t => t.type === 'terrain' && !t.hidden && t.terrainData
+      && Math.abs(first.start.x - t.position[0]) <= t.terrainData.width / 2
+      && Math.abs(first.start.z - t.position[2]) <= t.terrainData.depth / 2);
+    const groundY = terrain ? sampleTerrainElevation(first.start.x, first.start.z, terrain) : 0;
+    const story = Math.max(1, Math.round((plan.baseY - groundY) / 2.8) + 1);
+
+    const walls = buildWallShapes(plan, {
+      height,
+      color: plan.color || activeMaterial || '#e2e8f0',
+      story,
+      pbr: activePBR,
+      makeId: () => Math.random().toString(36).substr(2, 9),
+      existingWallCount: shapes.filter(s => s.type === 'wall').length,
+    });
+    registerWallConversionUndo({
+      wallIds: walls.map(w => w.id),
+      before,
+      after,
+      beforeSig: graphSignature(before.graph),
+      afterSig: graphSignature(g),
+      removed,
+    });
+    setShapes(prev => [...prev, ...walls]);
+    setSelectedFaceIds([]);
+    setSelectedIds(walls.map(w => w.id));
+    bumpKernel();
+    setMeasurements(`Converted to ${walls.length} wall${walls.length === 1 ? '' : 's'} (${Math.round(plan.thickness * 1000)} mm thick, ${height.toFixed(2)} m high).`);
+    recordAction(`// Convert To Wall: ${walls.length} walls, thickness ${plan.thickness.toFixed(3)}, height ${height.toFixed(2)}`);
+  }, [kernelHost, shapes, activeMaterial, activePBR, registerWallConversionUndo, setShapes, setSelectedFaceIds, setSelectedIds, bumpKernel, setMeasurements, recordAction]);
   const [divideColumns, setDivideColumns] = useState(2);
   const [divideRows, setDivideRows] = useState(2);
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
@@ -13863,6 +13922,23 @@ export default function Viewport() {
                   Divide Surface
                 </button>
               )}
+              {wallConversion && (
+                <button
+                  onClick={() => {
+                    setConvertWallPlan(wallConversion);
+                    setConvertWallHeight(String(wallConversion.height !== null
+                      ? +wallConversion.height.toFixed(3)
+                      : (wallToolSettings?.height || 2.4)));
+                    setContextMenu(null);
+                  }}
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+                    theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                  )}
+                >
+                  Convert To Wall
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (setGroupHidden(kernelHost.graph, contextMenu.data, true) > 0) bumpKernel();
@@ -14062,6 +14138,92 @@ export default function Viewport() {
           </div>
         </div>
       )}
+
+      {convertWallPlan && (() => {
+        const plan = convertWallPlan;
+        const height = plan.height ?? parseFloat(convertWallHeight);
+        const heightValid = Number.isFinite(height) && height >= 0.1;
+        const warnings = [...plan.warnings, ...(heightValid ? heightWarnings(height, plan.baseY) : [])];
+        return (
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40"
+            onClick={() => setConvertWallPlan(null)}
+          >
+            <div
+              className={cn(
+                "rounded-lg shadow-2xl border p-5 w-[360px] max-w-[calc(100vw-2rem)]",
+                theme === 'dark' ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-800"
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-bold mb-3">Convert To Wall</h3>
+              <div className="space-y-2 mb-3 text-xs">
+                <div className="flex justify-between"><span>Walls</span><span>{plan.pieces.length}</span></div>
+                <div className="flex justify-between"><span>Thickness</span><span>{Math.round(plan.thickness * 1000)} mm</span></div>
+                {plan.height !== null ? (
+                  <div className="flex justify-between"><span>Height</span><span>{plan.height.toFixed(2)} m</span></div>
+                ) : (
+                  <label className="flex items-center justify-between">
+                    <span>Height (m)</span>
+                    <input
+                      type="number"
+                      min={0.1}
+                      step={0.1}
+                      value={convertWallHeight}
+                      onChange={(e) => setConvertWallHeight(e.target.value)}
+                      className={cn(
+                        "w-20 px-2 py-1 rounded border text-xs text-right",
+                        theme === 'dark' ? "bg-gray-900 border-gray-700" : "bg-white border-gray-300"
+                      )}
+                    />
+                  </label>
+                )}
+              </div>
+              {warnings.length > 0 && (
+                <ul className="mb-4 space-y-1.5 text-[11px] leading-snug">
+                  {warnings.map((w, i) => (
+                    <li
+                      key={i}
+                      className={cn(
+                        "rounded px-2 py-1.5",
+                        w.level === 'warning'
+                          ? (theme === 'dark' ? "bg-amber-900/40 text-amber-200" : "bg-amber-50 text-amber-800")
+                          : (theme === 'dark' ? "bg-gray-700/60 text-gray-300" : "bg-gray-100 text-gray-600")
+                      )}
+                    >
+                      {w.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className={cn("text-[11px] mb-4", theme === 'dark' ? "text-gray-400" : "text-gray-500")}>
+                The original shape is replaced by the walls. Undo brings it back.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConvertWallPlan(null)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs rounded",
+                    theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+                  )}
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={!heightValid}
+                  onClick={() => {
+                    convertToWalls(plan, height);
+                    setConvertWallPlan(null);
+                  }}
+                  className="px-3 py-1.5 text-xs rounded bg-polyform-blue text-white hover:opacity-90 disabled:opacity-40"
+                >
+                  Convert
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {divideSurfaceTarget !== null && (
         <div

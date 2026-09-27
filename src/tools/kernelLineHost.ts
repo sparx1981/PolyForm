@@ -96,6 +96,15 @@ export class KernelLineHost implements LineToolHost {
     this.pushUndo(before);
   }
 
+  /**
+   * Rebuilds the spatial index after the graph was restored from a
+   * snapshot outside this host (e.g. undoing a Convert To Wall). Unlike
+   * reindex(), history is kept: it is still the same document.
+   */
+  refreshIndex(): void {
+    this.rebuildIndex();
+  }
+
   reindex(): void {
     this.rebuildIndex();
     this.undoStack = [];

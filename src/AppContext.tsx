@@ -9,6 +9,7 @@ import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, Sc
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadLargeGeometryForSave, hydrateOffloadedGeometry, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
+import { undoWallConversion, redoWallConversion, type WallConversionUndoLink } from './tools/kernelConvertToWall';
 import type { FaceId } from './lib/geometry/types';
 import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp, runTransaction } from 'firebase/firestore';
@@ -1411,9 +1412,36 @@ console.log("Created rectangle:", myRect.id);`);
     }
   };
 
-  const saveToHistory = (newShapes: Shape[]) => {
+  // Convert To Wall adds walls to Shape history and removes the source
+  // geometry from the kernel in one step, but the kernel is not part of
+  // Shape history. The conversion registers its kernel change just before
+  // adding the walls; the history entry that records them is tagged with
+  // it, so undoing or redoing exactly that step also applies the kernel
+  // change. Keyed by the entry array itself, which keeps its identity when
+  // the history is trimmed. The pending link is cleared once the history
+  // update has committed (not when first read, since StrictMode runs the
+  // state updater that saves history twice).
+  const wallConversionLinks = useRef(new WeakMap<Shape[], WallConversionUndoLink>()).current;
+  const pendingWallConversionRef = useRef<WallConversionUndoLink | null>(null);
+  const registerWallConversionUndo = useCallback((link: WallConversionUndoLink) => {
+    pendingWallConversionRef.current = link;
+  }, []);
+  useEffect(() => {
+    pendingWallConversionRef.current = null;
+  }, [history]);
+
+  const saveToHistory = (newShapes: Shape[], prevShapes?: Shape[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push([...newShapes]);
+    const entry = [...newShapes];
+    const pending = pendingWallConversionRef.current;
+    if (pending && pending.wallIds.every(id => entry.some(s => s.id === id))) {
+      wallConversionLinks.set(entry, pending);
+      // History starts empty and its first entry can never be undone, so a
+      // conversion in a model with no Shape edits yet (drawn geometry lives
+      // in the kernel, not here) would have nothing to step back to.
+      if (newHistory.length === 0 && prevShapes) newHistory.push([...prevShapes]);
+    }
+    newHistory.push(entry);
     if (newHistory.length > 100) newHistory.shift();
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
@@ -1670,7 +1698,7 @@ console.log("Created rectangle:", myRect.id);`);
     setShapes(prev => {
       const rawShapes = typeof newShapesOrFn === 'function' ? newShapesOrFn(prev) : newShapesOrFn;
       const nextShapes = deriveShapesState(rawShapes, prev);
-      saveToHistory(nextShapes);
+      saveToHistory(nextShapes, prev);
       return nextShapes;
     });
   };
@@ -1773,6 +1801,12 @@ console.log("Created rectangle:", myRect.id);`);
   const undo = () => {
     if (historyIndex > 0) {
       const targetShapes = history[historyIndex - 1];
+      const link = wallConversionLinks.get(history[historyIndex]);
+      if (link) {
+        undoWallConversion(kernelHost, link);
+        setSelectedFaceIds([]);
+        bumpKernel();
+      }
       // Runs the restored snapshot through the same reconciliation
       // handleSetShapes uses (stairwell cutouts, terrain flattening under
       // floor slabs, timber-frame recompute) instead of setShapes(target)
@@ -1788,6 +1822,12 @@ console.log("Created rectangle:", myRect.id);`);
   const redo = () => {
     if (historyIndex < history.length - 1) {
       const targetShapes = history[historyIndex + 1];
+      const link = wallConversionLinks.get(targetShapes);
+      if (link) {
+        redoWallConversion(kernelHost, link);
+        setSelectedFaceIds([]);
+        bumpKernel();
+      }
       setShapes(prev => deriveShapesState(targetShapes, prev));
       setHistoryIndex(historyIndex + 1);
     }
@@ -2274,6 +2314,7 @@ console.log("Created rectangle:", myRect.id);`);
       setCustomLightsSilent,
       setNotesSilent,
       commitHistory,
+      registerWallConversionUndo,
       addShape,
       removeShape,
       updateShapeColor,
