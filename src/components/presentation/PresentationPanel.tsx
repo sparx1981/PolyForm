@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-  Presentation, X, Hammer, PenLine, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2,
+  Presentation, X, Hammer, PenLine, Tag, Route, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2,
 } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
 import { playBuild, playStages, presentation, usePresentation, type CutMode } from '../../lib/presentation/store';
-import { StageCaption, StageTimeline } from './StageTimeline';
+import { SERIF, StageCaption, StageTimeline } from './StageTimeline';
+import { LabelsEditor, TourEditor } from './ContentEditor';
+import { LabelCallout, PinLayer } from './PinLayer';
 import { downloadBlob, recordingSupported, startRecording, videoFileName, type Recording } from '../../lib/presentation/recorder';
 import { runShowcase, SHOWCASE_STEPS } from '../../lib/presentation/showcase';
 import { modelledBounds } from '../Viewport';
@@ -66,7 +68,7 @@ export default function PresentationPanel() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [showcaseStep, setShowcaseStep] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | null>(null);
+  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | null>(null);
   const abort = useRef<AbortController | null>(null);
   const orbitBefore = useRef<boolean | null>(null);
 
@@ -139,6 +141,8 @@ export default function PresentationPanel() {
         className="fixed left-1/2 -translate-x-1/2 bottom-6 z-[80] max-w-[calc(100vw-16px)]"
         onPointerDown={e => e.stopPropagation()}
       >
+        {open === 'labels' && <LabelsEditor />}
+        {open === 'tour' && <TourEditor />}
         {open === 'stages' && <StageTimeline className="mb-2 mx-auto w-[min(560px,calc(100vw-16px))]" />}
         {open === 'explode' && (
           <Popover title="Exploded view" hint={building ? 'Lift floors and roof apart' : 'Add walls to explode a building'}>
@@ -183,6 +187,9 @@ export default function PresentationPanel() {
           <Tool icon={<ScanEye size={18} />} label="X-ray" active={s.xray} onClick={() => presentation.set({ xray: !s.xray })} disabled={!!showcaseStep} />
           <Tool icon={<RotateCw size={18} />} label="Orbit" active={app.autoOrbitEnabled} onClick={() => setOrbit(!app.autoOrbitEnabled)} disabled={!!showcaseStep} />
           <Divider />
+          <Tool icon={<Tag size={18} />} label="Labels" active={open === 'labels'} onClick={() => setOpen(open === 'labels' ? null : 'labels')} disabled={!!showcaseStep} />
+          <Tool icon={<Route size={18} />} label="Tour" active={open === 'tour'} onClick={() => setOpen(open === 'tour' ? null : 'tour')} disabled={!!showcaseStep} />
+          <Divider />
           <Tool icon={showcaseStep ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
             label={showcaseStep ? `${showcaseStep}… (stop)` : 'Showcase'} active={!!showcaseStep} onClick={() => showcase(false)} />
           {recordingSupported() && (
@@ -205,6 +212,9 @@ export default function PresentationPanel() {
           </button>
         </div>
       </div>
+      <PinLayer hide={s.explode > 0.01 || s.buildPlaying || s.build < 1} pins={app.presentationContent.labels.map(l => ({
+        id: l.id, position: l.position, node: <LabelCallout text={l.text} detail={l.detail} serif={SERIF} />,
+      }))} />
       {(open === 'stages' || showcaseStep === 'Stages') && <StageCaption className="fixed left-6 bottom-28 z-[79]" dark={s.dusk} />}
       {shareOpen && <ShareWithClientDialog onClose={() => setShareOpen(false)} />}
     </>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Hammer, Layers, Scissors, ScanEye, RotateCw, Maximize2, Download, FileSpreadsheet, Loader2, AlertTriangle, Ruler, Palette,
-  Home, DoorOpen, Package, MessageSquare, Box,
+  Home, DoorOpen, Package, MessageSquare, Box, Route,
 } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import Viewport from '../Viewport';
@@ -14,6 +14,8 @@ import { plantSpread } from '../../lib/presentation/plants';
 import { downloadBlob } from '../../lib/presentation/recorder';
 import { frameModel, Popover, Slider, Tool, cutRange } from './PresentationPanel';
 import { SERIF, StageCaption, StageTimeline } from './StageTimeline';
+import { LabelCallout, PinLayer } from './PinLayer';
+import { TourPlayer } from './TourPlayer';
 import type { Shape } from '../../types';
 
 const LEVEL_NAMES = ['Ground floor', 'First floor', 'Second floor', 'Third floor', 'Fourth floor'];
@@ -164,9 +166,16 @@ function ViewerControls({ effects }: { effects: ClientPresentationDoc['effects']
   const s = usePresentation();
   const app = useApp();
   const [open, setOpen] = useState<'explode' | 'cut' | null>(null);
+  const [touring, setTouring] = useState(false);
   const building = s.storeys > 0;
   const range = cutRange(s);
+  const { labels, tour } = app.presentationContent;
   return (
+    <>
+    <PinLayer hide={s.explode > 0.01 || s.buildPlaying || s.build < 1} pins={labels.map(l => ({
+      id: l.id, position: l.position, node: <LabelCallout text={l.text} detail={l.detail} serif={SERIF} />,
+    }))} />
+    {touring && tour.length > 0 && <TourPlayer stops={tour} onClose={() => setTouring(false)} className="absolute left-4 top-4 z-10" />}
     <div className="absolute left-1/2 -translate-x-1/2 bottom-4 z-10 w-[min(560px,calc(100%-16px))] flex flex-col items-center" onPointerDown={e => e.stopPropagation()}>
       {!open && <StageTimeline className="w-full mb-2" />}
       {open === 'explode' && (
@@ -202,9 +211,11 @@ function ViewerControls({ effects }: { effects: ClientPresentationDoc['effects']
         )}
         {effects.xray && <Tool icon={<ScanEye size={18} />} label="X-ray" active={s.xray} onClick={() => presentation.set({ xray: !s.xray })} />}
         <Tool icon={<RotateCw size={18} />} label="Orbit" active={app.autoOrbitEnabled} onClick={() => app.setAutoOrbitEnabled(!app.autoOrbitEnabled)} />
-        <Tool icon={<Maximize2 size={18} />} label="Reset" onClick={() => { setOpen(null); presentation.reset(true); frameModel(app.shapes); }} />
+        {tour.length > 0 && <Tool icon={<Route size={18} />} label="Tour" active={touring} onClick={() => setTouring(!touring)} />}
+        <Tool icon={<Maximize2 size={18} />} label="Reset" onClick={() => { setOpen(null); setTouring(false); presentation.reset(true); frameModel(app.shapes); }} />
       </div>
     </div>
+    </>
   );
 }
 

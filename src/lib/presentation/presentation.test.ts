@@ -321,3 +321,25 @@ describe('presentation engine', () => {
     expect(byId(s, 'gn').visible).toBe(true);
   });
 });
+
+describe('presentation content (labels and tour)', () => {
+  it('keeps well-formed labels and stops and drops the rest', async () => {
+    const { normalizePresentationContent } = await import('./content');
+    const good = {
+      labels: [{ id: 'a', text: 'Patio', position: [1, 0, 2] }, { id: 'b', text: 'Bad', position: [1, 'x', 2] }, null],
+      tour: [{ id: 't', title: 'Arrive', position: [5, 3, 5], target: [0, 1, 0], caption: 'Hello' }, { id: 'u', title: 'No target', position: [1, 1, 1] }],
+    };
+    const c = normalizePresentationContent(good);
+    expect(c.labels.map(l => l.id)).toEqual(['a']);
+    expect(c.tour.map(t => t.id)).toEqual(['t']);
+    expect(normalizePresentationContent(undefined)).toEqual({ labels: [], tour: [] });
+    expect(normalizePresentationContent('nonsense')).toEqual({ labels: [], tour: [] });
+  });
+
+  it('round-trips through a project file', async () => {
+    const { buildProjectFile, parseProjectFile } = await import('../storage/projectFile');
+    const content = { labels: [{ id: 'a', text: 'Patio', position: [1, 0, 2] }], tour: [] };
+    const text = buildProjectFile({ shapes: [], tags: [], scenes: [], customMaterials: [], animations: [], notes: [], customLights: [], terrainModifiers: [], presentationContent: content });
+    expect(parseProjectFile(text).presentationContent).toEqual(content);
+  });
+});

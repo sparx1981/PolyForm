@@ -4,8 +4,9 @@ import { storageProviders, STORAGE_LABELS } from './lib/storage/registry';
 import { StorageAuthError, type ExternalFileRef } from './lib/storage/providers';
 import type { ProjectState } from './lib/storage/projectFile';
 import { RENDER_MODE, CLIENT_PAGE } from './lib/renderMode';
+import { normalizePresentationContent } from './lib/presentation/content';
 import * as THREE from 'three';
-import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
+import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, PresentationContent, EMPTY_PRESENTATION_CONTENT, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAUSE_MS, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
@@ -274,6 +275,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [skybox, setSkybox] = useState<SkyboxType>('none');
   const [environment, setEnvironment] = useState<EnvironmentState>(() => legacyEnvironmentState('none', 1, 0, 0));
   const [customLights, setCustomLights] = useState<CustomLight[]>([]);
+  const [presentationContent, setPresentationContent] = useState<PresentationContent>(EMPTY_PRESENTATION_CONTENT);
   const [fogSettings, setFogSettings] = useState<FogSettings>(DEFAULT_FOG);
   const [gridEnabled, setGridEnabled] = useState(true);
   const [axisIndicatorEnabled, setAxisIndicatorEnabled] = useState(true);
@@ -1094,6 +1096,7 @@ console.log("Created rectangle:", myRect.id);`);
         if (data.animations) setAnimations(data.animations);
         if (data.notes) setNotes(data.notes);
         if (data.customLights) setCustomLights(data.customLights);
+        setPresentationContent(normalizePresentationContent(data.presentationContent));
         if (data.timberFrameParams) setTimberFrameParams(data.timberFrameParams);
         if (data.terrainModifiers && Array.isArray(data.terrainModifiers)) setTerrainModifiers(data.terrainModifiers.filter((m: any) => m.type !== 'pad'));
         setEnvironment(assetState.environment);
@@ -1195,7 +1198,7 @@ console.log("Created rectangle:", myRect.id);`);
     // kernelRevision stands in for the graph itself: the graph is mutated in
     // place, so hashing it by reference would never change and a
     // geometry-only edit would never be saved.
-    const currentState = { shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, kernelRevision, timberFrameParams, terrainModifiers, environment, materialBindings };
+    const currentState = { shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, presentationContent, kernelRevision, timberFrameParams, terrainModifiers, environment, materialBindings };
     const currentStateHash = JSON.stringify(currentState);
 
     if (currentStateHash === syncState.lastStateHash) {
@@ -1212,7 +1215,7 @@ console.log("Created rectangle:", myRect.id);`);
         try {
           const text = buildProjectFile({
             name: currentModelName ?? undefined, shapes, tags, scenes, customMaterials, graphicsSettings, animations,
-            notes, customLights, timberFrameParams, terrainModifiers, environment, materialBindings,
+            notes, customLights, presentationContent, timberFrameParams, terrainModifiers, environment, materialBindings,
             kernel: serializeGraph(kernelHost.graph), assetSchemaVersion: 1, assetCatalogRelease: '2026-09-18-pilot-r1',
           });
           const next = await storageProviders[external.provider].update(external, text);
@@ -1272,6 +1275,7 @@ console.log("Created rectangle:", myRect.id);`);
           animations,
           notes,
           customLights,
+          presentationContent,
           timberFrameParams,
           terrainModifiers,
           assetSchemaVersion: 1,
@@ -1362,7 +1366,7 @@ console.log("Created rectangle:", myRect.id);`);
         syncState.retryTimeoutId = null;
       }
     };
-  }, [shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, currentModelId, user?.uid, timberFrameParams, terrainModifiers, environment, materialBindings]);
+  }, [shapes, tags, scenes, customMaterials, graphicsSettings, animations, notes, customLights, presentationContent, currentModelId, user?.uid, timberFrameParams, terrainModifiers, environment, materialBindings]);
 
   const retrySync = useCallback(() => {
     retrySyncRef.current?.();
@@ -2130,6 +2134,7 @@ console.log("Created rectangle:", myRect.id);`);
     setGraphicsSettings(defaultGraphicsSettings());
     setNotes([]);
     setCustomLights([]);
+    setPresentationContent(EMPTY_PRESENTATION_CONTENT);
     setAnimations([]);
     setHistory([]);
     setHistoryIndex(-1);
@@ -2237,6 +2242,7 @@ console.log("Created rectangle:", myRect.id);`);
     animations,
     notes,
     customLights,
+    presentationContent,
     timberFrameParams,
     terrainModifiers,
     environment,
@@ -2258,6 +2264,7 @@ console.log("Created rectangle:", myRect.id);`);
     setAnimations((data.animations ?? []) as SceneAnimation[]);
     setNotes((data.notes ?? []) as SceneNote[]);
     setCustomLights((data.customLights ?? []) as CustomLight[]);
+    setPresentationContent(normalizePresentationContent(data.presentationContent));
     setTimberFrameParams((data.timberFrameParams as TimberFrameParams) ?? DEFAULT_TIMBER_FRAME_PARAMS);
     setTerrainModifiers(((data.terrainModifiers ?? []) as TerrainModifier[]).filter(m => m.type !== 'pad'));
     setEnvironment(assetState.environment);
@@ -2457,6 +2464,8 @@ console.log("Created rectangle:", myRect.id);`);
       setSkybox: handleSetSkybox,
       customLights,
       setCustomLights: handleSetCustomLights,
+      presentationContent,
+      setPresentationContent,
       fogSettings,
       setFogSettings: handleSetFogSettings,
       gridEnabled,

@@ -336,6 +336,32 @@ export interface SceneAnimation {
   flockAltitude?: number;
 }
 
+/** A label pinned to the model for the client page ("Oak flooring throughout"). */
+export interface PresentationLabel {
+  id: string;
+  text: string;
+  /** A second, smaller line. */
+  detail?: string;
+  position: [number, number, number];
+}
+
+/** A stop on the client page's guided tour: a camera view and a caption. */
+export interface TourStop {
+  id: string;
+  title: string;
+  caption?: string;
+  position: [number, number, number];
+  target: [number, number, number];
+}
+
+/** What the designer adds for the client presentation, saved with the model. */
+export interface PresentationContent {
+  labels: PresentationLabel[];
+  tour: TourStop[];
+}
+
+export const EMPTY_PRESENTATION_CONTENT: PresentationContent = { labels: [], tour: [] };
+
 export interface SceneNote {
   id: string;
   text: string;
@@ -492,6 +518,8 @@ export interface AppState {
   setSkybox: (skybox: SkyboxType) => void;
   customLights: CustomLight[];
   setCustomLights: (lights: CustomLight[] | ((prev: CustomLight[]) => CustomLight[])) => void;
+  presentationContent: PresentationContent;
+  setPresentationContent: (content: PresentationContent | ((prev: PresentationContent) => PresentationContent)) => void;
   fogSettings: FogSettings;
   setFogSettings: (settings: FogSettings | ((prev: FogSettings) => FogSettings)) => void;
   gridEnabled: boolean;
@@ -924,6 +952,7 @@ export interface SavedModel {
   customMaterials: any[];
   animations?: SceneAnimation[];
   notes?: SceneNote[];
+  presentationContent?: PresentationContent;
   terrainModifiers?: TerrainModifier[];
   previewUrl?: string;
   createdAt: any;

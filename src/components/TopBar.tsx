@@ -131,6 +131,7 @@ export default function TopBar() {
       setNotes,
       customLights,
       setCustomLights,
+      presentationContent,
       getProjectState,
       applyProjectState,
       adoptExternalModel,
@@ -287,7 +288,7 @@ export default function TopBar() {
             const projectState = getProjectState();
             const content = await offloadModelForSave({
               shapes: shapes || [], tags: tags || [], scenes: scenes || [], customMaterials: customMaterials || [],
-              graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [],
+              graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [], presentationContent,
               environment, materialBindings,
               // Drawn surfaces, terrain edits and timber settings, as auto-save
               // writes them. Without the kernel a new document opens with no
@@ -307,6 +308,7 @@ export default function TopBar() {
               animations: cleanFirestoreData(content.animations),
               notes: cleanFirestoreData(content.notes),
               customLights: cleanFirestoreData(content.customLights),
+              presentationContent: cleanFirestoreData(content.presentationContent),
               assetSchemaVersion: 1,
               assetCatalogRelease: '2026-09-18-pilot-r1',
               environment: cleanFirestoreData(content.environment),
@@ -492,7 +494,7 @@ export default function TopBar() {
             const projectState = getProjectState();
             const content = await offloadModelForSave({
               shapes: shapes || [], tags: tags || [], scenes: scenes || [], customMaterials: customMaterials || [],
-              graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [],
+              graphicsSettings, animations: animations || [], notes: notes || [], customLights: customLights || [], presentationContent,
               environment, materialBindings,
               // Drawn surfaces, terrain edits and timber settings, as auto-save
               // writes them. Without the kernel a new document opens with no
@@ -514,6 +516,7 @@ export default function TopBar() {
               graphicsSettings: cleanFirestoreData(content.graphicsSettings),
               notes: cleanFirestoreData(content.notes),
               customLights: cleanFirestoreData(content.customLights),
+              presentationContent: cleanFirestoreData(content.presentationContent),
               assetSchemaVersion: 1,
               assetCatalogRelease: '2026-09-18-pilot-r1',
               environment: cleanFirestoreData(content.environment),

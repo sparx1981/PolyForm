@@ -19,6 +19,8 @@ export interface ProjectState {
   animations: unknown[];
   notes: unknown[];
   customLights: unknown[];
+  /** Labels and tour stops for the client presentation page. */
+  presentationContent?: unknown;
   timberFrameParams?: unknown;
   terrainModifiers: unknown[];
   environment?: unknown;
@@ -67,6 +69,7 @@ export function parseProjectFile(text: string): ProjectState {
     animations: list(data.animations),
     notes: list(data.notes),
     customLights: list(data.customLights),
+    presentationContent: data.presentationContent ?? undefined,
     timberFrameParams: data.timberFrameParams ?? undefined,
     terrainModifiers: list(data.terrainModifiers),
     environment: data.environment,
