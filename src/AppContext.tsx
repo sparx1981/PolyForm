@@ -2060,9 +2060,11 @@ console.log("Created rectangle:", myRect.id);`);
     });
   };
 
-  const updateShapeColor = (id: string, color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => {
+  const updateShapeColor = (id: string | string[], color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => {
+    // Several at once (a whole wall run) is one change, one undo step.
+    const ids = new Set(Array.isArray(id) ? id : [id]);
     handleSetShapes(prev => prev.map(s => {
-      if (s.id === id) {
+      if (ids.has(s.id)) {
         const updated: Shape = {
           ...s,
           color,

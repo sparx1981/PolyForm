@@ -7,6 +7,7 @@ import {
   buildCeilingSlabForRoom,
   buildNextFloorLevel,
   buildRoofAssemblyForRoom,
+  buildParapetGeometry,
 } from './archRoofGenerator';
 import { Shape } from '../types';
 
@@ -476,5 +477,35 @@ describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () =
     // ~93.5% of the real roof surface (the widening wedge structurally
     // unreachable); the fix brings it to ~102%.
     expect(tileAreaXZ / trueSlopeArea).toBeGreaterThan(0.98);
+  });
+});
+
+describe('parapet roof deck as its own part', () => {
+  /** An L-shaped centreline (concave), CCW. */
+  const ell: [number, number][] = [[0, 0], [8, 0], [8, 4], [4, 4], [4, 8], [0, 8]];
+  const upArea = (g: THREE.BufferGeometry) => {
+    const pos = g.getAttribute('position');
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    let total = 0;
+    for (let i = 0; i < pos.count; i += 3) {
+      a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
+      const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+      if (n.y > 1e-9) total += n.y / 2;
+    }
+    return total;
+  };
+
+  it('builds the deck separately, covering exactly the inside of the parapet (concave too)', () => {
+    const { walls, deck } = buildParapetGeometry(ell, { wallThickness: 0.2, parapetHeight: 0.6 });
+    // Outer face 0.1 out from the centreline, parapet 0.2 thick: the deck is the centreline
+    // inset by 0.1, a 7.8 m square less a 4 m notch.
+    expect(upArea(deck)).toBeCloseTo(7.8 * 7.8 - 4 * 4, 1);
+    // The parapet walls no longer carry a deck.
+    expect(upArea(walls)).toBeLessThan(1);
+  });
+
+  it('can still build the deck into the parapet for older roofs', () => {
+    const { walls } = buildParapetGeometry(ell, { wallThickness: 0.2, parapetHeight: 0.6, includeDeck: true });
+    expect(upArea(walls)).toBeGreaterThan(40);
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { SceneWeather } from './graphics/SceneWeather';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
@@ -44,6 +44,9 @@ import { EffectComposer, N8AO, GodRays } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as THREE from 'three';
 import { SUBTRACTION, ADDITION, INTERSECTION, Evaluator, Brush } from 'three-bvh-csg';
+import { edgesOffPlanes, joinedEndPlanes, sameShapePart, wallRuns } from '../lib/wallRuns';
+import { singleSidedGeometry } from '../lib/edgeLines';
+import { cutTerrainUnderFootprints } from '../lib/terrain/terrainCut';
 import { COMBINE_SOLIDS_EVENT, setCombinePicks, useCombinePicks, type CombineSolid } from '../tools/combinePicks';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db, isQuotaLocked, handleFirestoreError, OperationType } from '../firebase';
@@ -137,7 +140,7 @@ import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
 import { SunShadowRig } from './graphics/SunShadowRig';
-import { buildRoomAssembly, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
+import { buildRoomAssembly, groundSlabFootprints, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
 import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
@@ -1499,6 +1502,32 @@ function pressHitsGeometry(e: { intersections?: { object: THREE.Object3D }[] }):
   });
 }
 
+/**
+ * Edge lines like drei's Edges (drawn from the parent mesh's geometry), leaving out the lines
+ * lying in the given planes: where a wall piece joins the next piece of its run.
+ */
+function RunEdges({ planes, singleSided = false, ...props }: { planes: { point: THREE.Vector3; normal: THREE.Vector3 }[]; singleSided?: boolean } & Record<string, any>) {
+  const ref = useRef<any>(null);
+  const seed = useMemo(() => [0, 0, 0, 1, 0, 0], []);
+  const memo = useRef<{ geometry: THREE.BufferGeometry | null; key: string }>({ geometry: null, key: '' });
+  const key = planes.map(p => `${p.point.toArray().map(v => v.toFixed(4))}|${p.normal.toArray().map(v => v.toFixed(4))}`).join(';') + (singleSided ? '|1' : '');
+  useLayoutEffect(() => {
+    const line = ref.current;
+    const geometry = line?.parent?.geometry as THREE.BufferGeometry | undefined;
+    if (!line || !geometry) return;
+    if (memo.current.geometry === geometry && memo.current.key === key) return;
+    memo.current = { geometry, key };
+    // A double-sided mesh (roofs) would otherwise draw every triangle's edges.
+    const source = singleSided ? singleSidedGeometry(geometry) : geometry;
+    const kept = edgesOffPlanes(new THREE.EdgesGeometry(source, 15).attributes.position.array, planes);
+    if (source !== geometry) source.dispose();
+    line.geometry.setPositions(kept.length ? kept : [0, 0, 0, 0, 0, 0]);
+    line.visible = kept.length > 0;
+    line.computeLineDistances();
+  });
+  return <Line segments points={seed} ref={ref} raycast={() => null} {...props} />;
+}
+
 function Scene() {
   const { graphicsSettings } = useApp();
   const { assets: groundMaterialAssets } = useAssetCatalog('material');
@@ -1718,6 +1747,11 @@ function Scene() {
   const { resolved: resolvedMaterialBindings } = useMaterialBindings(usedMaterialBindings, '2k');
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
+  // Walls joined into runs (a curved wall of many pieces, or pieces in line) act as one wall.
+  const wallRunInfo = useMemo(() => wallRuns(shapes), [shapes]);
+  // Ground-floor slab outlines: the terrain mesh is cut away under them.
+  const slabFootprintsKey = useMemo(() => JSON.stringify(groundSlabFootprints(shapes).map(f => f.poly.map(p => [+p[0].toFixed(3), +p[1].toFixed(3)]))), [shapes]);
+  const slabFootprints = useMemo(() => JSON.parse(slabFootprintsKey) as [number, number][][], [slabFootprintsKey]);
   const managedBindingTextures = useManagedBindingTextures(gl, resolvedMaterialBindings);
   /** Library material textures for kernel faces (same pipeline as shapes' bindingMaterial). */
   const kernelBindingFor = useCallback((bindingId: string): KernelFaceBinding | undefined => {
@@ -8506,6 +8540,14 @@ function Scene() {
       finalizeWallChain();
       return;
     }
+    if (activeTool === 'select' && (wallRunInfo.runOf.get(id)?.length ?? 1) > 1) {
+      // Double-click a piece of a wall run: just that piece.
+      setSelectedId(id);
+      setSelectedIds([id]);
+      setSelectedSurface(null);
+      setMeasurements('Selected one piece of the wall. Click the wall again to select all of it.');
+      return;
+    }
     if (activeTool === 'select') {
       if (e.faceIndex !== undefined) {
         const shape = shapes.find(s => s.id === id);
@@ -8555,9 +8597,15 @@ function Scene() {
     }
 
     if (activeTool === 'select') {
+      // A piece of a wall run selects the whole run (double-click picks the single piece).
+      const run = shape?.type === 'wall' ? (wallRunInfo.runOf.get(id) ?? [id]) : [id];
       if (e.shiftKey) {
-        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => !run.includes(i)) : [...prev, ...run.filter(r => !prev.includes(r))]);
         setSelectedId(null);
+      } else if (run.length > 1) {
+        const alreadyRun = selectedIds.length === run.length && run.every(r => selectedIds.includes(r));
+        setSelectedId(alreadyRun ? null : id);
+        setSelectedIds(alreadyRun ? [] : run);
       } else {
         setSelectedId(id === selectedId ? null : id);
         setSelectedIds([id]);
@@ -8570,7 +8618,16 @@ function Scene() {
       setSelectedLightId(null);
       setSelectedModifierId(null);
     } else if (activeTool === 'paint') {
-    if (!e.shiftKey && subFaceIndex !== undefined) {
+    const paintRun = shape?.type === 'wall' ? wallRunInfo.runOf.get(id) : undefined;
+    if (paintRun && paintRun.length > 1 && subFaceIndex === undefined) {
+      // A wall run is painted as one wall: Shift paints just the curve (or straight stretch)
+      // it is in, Alt just this piece.
+      const ids = e.altKey ? [id] : e.shiftKey ? sameShapePart(wallRunInfo, id) : paintRun;
+      updateShapeColor(ids, activeMaterial, activePBR, activeSurfaceDepth);
+      setMeasurements(e.altKey ? 'Painted one piece of the wall.' : e.shiftKey
+        ? `Painted the ${wallRunInfo.curved.has(id) ? 'curved' : 'straight'} part of the wall (${ids.length} piece${ids.length === 1 ? '' : 's'}).`
+        : `Painted the whole wall (${ids.length} pieces). Shift+click paints just the curved or straight part; Alt+click one piece.`);
+    } else if (!e.shiftKey && subFaceIndex !== undefined) {
       // Apply to sub-face
       const key = `${e.faceIndex}-${subFaceIndex}`;
       setShapes(prev => prev.map(s => {
@@ -10957,7 +11014,12 @@ function Scene() {
           ) : shape.type === 'custom' ? (
             <CustomGeometry shape={shape} />
           ) : shape.type === 'terrain' ? (
-            <TerrainGeometry terrainData={dugTerrains.get(shape.id)?.terrainData ?? shape.terrainData} />
+            <TerrainGeometry terrainData={dugTerrains.get(shape.id)?.terrainData ?? shape.terrainData}
+              {...(() => {
+                // Ground-floor slab outlines in this terrain's own frame.
+                const local = slabFootprints.map(f => f.map(([x, z]) => [x - shape.position[0], z - shape.position[2]] as [number, number]));
+                return { footprints: local, footprintsKey: `${slabFootprintsKey}@${shape.position[0]},${shape.position[2]}` };
+              })()} />
           ) : (
             <boxGeometry args={(Array.isArray(shape.args) ? shape.args : [1, 1, 1]) as any} />
           )}
@@ -11074,21 +11136,21 @@ function Scene() {
           {selectionHighlight}
           {subtractHighlight}
           {/* Task #149: dark edge lines between adjacent faces */}
-          {edgeLinesEnabled && (
-            <Edges 
-              threshold={15} 
-              color={edgeLinesColor} 
-              lineWidth={edgeLinesThickness}
-              linewidth={edgeLinesThickness}
-              transparent={edgeLinesOpacity < 1} 
-              opacity={edgeLinesOpacity} 
-              depthTest={true} 
-              polygonOffset 
-              polygonOffsetFactor={-2} 
-              polygonOffsetUnits={-2} 
-              renderOrder={2} 
-            />
-          )}
+          {edgeLinesEnabled && (() => {
+            const lineProps = {
+              color: edgeLinesColor, lineWidth: edgeLinesThickness, linewidth: edgeLinesThickness,
+              transparent: edgeLinesOpacity < 1, opacity: edgeLinesOpacity, depthTest: true,
+              polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, renderOrder: 2,
+            };
+            // A piece of a wall run draws no lines where it joins the next piece.
+            const ends = shape.type === 'wall' ? wallRunInfo.joined.get(shape.id) : undefined;
+            if (ends && (ends.start || ends.end)) {
+              return <RunEdges planes={joinedEndPlanes(shape, ends)} {...lineProps} />;
+            }
+            // Custom meshes (roofs, parapets, combined objects) are often stored double-sided.
+            if (shape.type === 'custom') return <RunEdges planes={[]} singleSided {...lineProps} />;
+            return <Edges threshold={15} {...lineProps} />;
+          })()}
         </mesh>
       );
     })}
@@ -13101,7 +13163,7 @@ function CustomGeometry({ shape }: { shape: Shape }) {
   return <primitive object={geometry} attach="geometry" />;
 }
 
-function TerrainGeometry({ terrainData }: { terrainData?: any }) {
+function TerrainGeometry({ terrainData, footprints, footprintsKey = '' }: { terrainData?: any; footprints?: [number, number][][]; footprintsKey?: string }) {
   const geometry = useMemo(() => {
     if (!terrainData || !terrainData.heights) {
       return new THREE.PlaneGeometry(20, 20, 32, 32);
@@ -13181,10 +13243,15 @@ function TerrainGeometry({ terrainData }: { terrainData?: any }) {
       geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     }
 
+    // No ground inside a building: cut away under ground-floor slabs.
+    if (footprints && footprints.length) {
+      const cut = cutTerrainUnderFootprints(geo, footprints);
+      if (cut !== geo) { geo.dispose(); return cut; }
+    }
     return geo;
   // Only fields that shape the mesh: grass and wildflower edits must not rebuild the terrain.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, terrainGeometryDeps(terrainData));
+  }, [...terrainGeometryDeps(terrainData), footprintsKey]);
 
   useEffect(() => {
     return () => {

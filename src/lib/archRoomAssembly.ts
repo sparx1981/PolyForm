@@ -333,18 +333,11 @@ export function excavateTerrainMesh(
 }
 
 /**
- * Automatically flattens terrain for all floor slabs present in the shapes collection.
- * Perimeter and elevation are strictly based on Floor Slabs (not Foundation Skirts, as foundations go underground).
- * Includes a 1m flattened safety apron around each slab with feathered daylight batter slope.
- * Can be applied regardless of whether terrain or floor slab was added first.
+ * The ground-floor slabs and their outlines in world x/z (upper floors never touch the ground).
+ * Shared by terrain levelling and by the terrain mesh, which is cut away under them.
  */
-export function flattenTerrainForFloorSlabs(
-  terrain: Shape,
-  allShapes: Shape[],
-  apronMargin: number = 1.0
-): TerrainData | null {
-  if (!terrain.terrainData) return null;
-
+export function groundSlabFootprints(allShapes: Shape[], excludeId?: string): { slab: Shape; poly: Array<[number, number]> }[] {
+  const terrain = { id: excludeId ?? '' };
   // STRICT REQUIREMENT: Base perimeter strictly on 'Floor Slab', NOT 'Foundation Skirt'.
   // Foundations of a building typically extend down into the ground.
   // Only the ground floor (story-1, or untagged for older saved projects) should ever
@@ -364,7 +357,7 @@ export function flattenTerrainForFloorSlabs(
   );
   const slabs = candidates.filter(s => !s.hidden);
 
-  if (slabs.length === 0) return null;
+  if (slabs.length === 0) return [];
 
   // Upper floors' slabs are not always tagged with their story (e.g. a slab just named "First
   // Floor Slab"), and treating one as a ground slab raises the ground up to that floor. Only the
@@ -377,9 +370,7 @@ export function flattenTerrainForFloorSlabs(
   const lowestTop = Math.min(...candidates.map(slabTop));
   const groundSlabs = slabs.filter(slab => slabTop(slab) <= lowestTop + 1.0);
 
-  let currentTerrainData: TerrainData = { ...terrain.terrainData, heights: [...terrain.terrainData.heights] };
-  let modified = false;
-
+  const out: { slab: Shape; poly: Array<[number, number]> }[] = [];
   for (const slab of groundSlabs) {
     let poly2D: Array<[number, number]> = [];
     if (slab.type === 'poly' && slab.args?.vertices && Array.isArray(slab.args.vertices)) {
@@ -410,7 +401,30 @@ export function flattenTerrainForFloorSlabs(
       ];
     }
 
-    if (poly2D.length < 3) continue;
+    if (poly2D.length >= 3) out.push({ slab, poly: poly2D });
+  }
+  return out;
+}
+
+/**
+ * Automatically flattens terrain for all floor slabs present in the shapes collection.
+ * Perimeter and elevation are strictly based on Floor Slabs (not Foundation Skirts, as foundations go underground).
+ * Includes a 1m flattened safety apron around each slab with feathered daylight batter slope.
+ * Can be applied regardless of whether terrain or floor slab was added first.
+ */
+export function flattenTerrainForFloorSlabs(
+  terrain: Shape,
+  allShapes: Shape[],
+  apronMargin: number = 1.0
+): TerrainData | null {
+  if (!terrain.terrainData) return null;
+
+  const footprints = groundSlabFootprints(allShapes, terrain.id);
+  if (footprints.length === 0) return null;
+  let currentTerrainData: TerrainData = { ...terrain.terrainData, heights: [...terrain.terrainData.heights] };
+  let modified = false;
+
+  for (const { slab, poly: poly2D } of footprints) {
 
     const slabH = slab.type === 'poly' ? ((slab.args as any)?.height || 0.2) : (Array.isArray(slab.args) ? slab.args[1] || 0.2 : 0.2);
     // Top of floor slab:

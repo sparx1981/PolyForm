@@ -7,6 +7,10 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'September 27, 2026',
     items: [
+      'Curved walls now act as one wall: pieces joined end to end (a curve made of short pieces, or pieces in line) are drawn without lines between them, one click selects the whole wall and the paint bucket paints all of it. A wall ends at a real corner (sharper than 30 degrees), so a straight wall flowing into a curve is part of the same wall. Double-click selects a single piece; with the paint bucket, Shift+click paints just the curved (or just the straight) part and Alt+click paints one piece.',
+      'Parapet roofs: the roof surface and the parapet are now separate, so each can be painted on its own (existing parapet roofs get a separate surface the next time their settings change). The roof surface is triangulated properly on curved and L-shaped outlines.',
+      'Fixed roofs and other double-sided objects showing a line along every triangle (the diagonal lines across parapets and roof surfaces).',
+      'Fixed the ground showing through the floor slab and foundation, which happened most along curved walls: the terrain is now cut away inside ground-floor slabs, so neither the ground nor its surface relief can poke through the floor.',
       'Windows and doors on curved walls (walls made of many short pieces, e.g. from a Bézier shape) are now cut cleanly through every piece they cross, instead of only the piece or two nearest their centre.',
       'Walls with doors and windows no longer show stray edge lines: each wall face is now built as one piece with the openings cut out, so lines appear only round the openings, not across the wall above, below or beside them, and no diagonal seams on curved walls.',
       'Logging out of the app now takes you back to the PolyForm homepage.',

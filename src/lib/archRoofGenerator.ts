@@ -21,6 +21,7 @@ export interface RoofParams {
   parapetHeight?: number;    // e.g. 0.60 m (for parapet flat roofs)
   parapetThickness?: number; // e.g. 0.20 m
   copingOverhang?: number;   // coping drip past the parapet faces, e.g. 0.04 m
+  deckColor?: string;        // parapet roof deck (membrane) colour
   slabProjection?: number;   // roof slab projecting past the outer wall face, 0-1.5 m
   copingColor?: string;      // e.g. '#334155'
   color?: string;
@@ -1526,7 +1527,8 @@ export function createParapetWallsGeometry(
   innerPoly: [number, number][],
   parapetHeight: number = 0.60,
   baseY: number = 0,
-  slab?: { outerPoly: [number, number][]; thickness: number }
+  slab?: { outerPoly: [number, number][]; thickness: number },
+  includeDeck: boolean = true
 ): THREE.BufferGeometry {
   return createGeometryFromBuilder((addTriangle, addQuad) => {
     const n = Math.min(outerPoly.length, innerPoly.length);
@@ -1556,24 +1558,8 @@ export function createParapetWallsGeometry(
       addQuad(i2_bot, i1_bot, i1_top, i2_top);
     }
 
-    // 3. Flat roof membrane/deck inside innerPoly
-    let cx = 0, cz = 0;
-    for (const p of innerPoly) {
-      cx += p[0];
-      cz += p[1];
-    }
-    cx /= (innerPoly.length || 1);
-    cz /= (innerPoly.length || 1);
-    const center3D: [number, number, number] = [cx, b + 0.05, cz];
-
-    for (let i = 0; i < n; i++) {
-      const p1 = innerPoly[i];
-      const p2 = innerPoly[(i + 1) % n];
-      const p1_3d: [number, number, number] = [p1[0], b + 0.05, p1[1]];
-      const p2_3d: [number, number, number] = [p2[0], b + 0.05, p2[1]];
-      // Facing up (+Y)
-      addTriangle(p1_3d, p2_3d, center3D, [0, 1, 0]);
-    }
+    // 3. Flat roof membrane/deck inside innerPoly (unless it is built as its own part).
+    if (includeDeck) addParapetDeck(addTriangle, innerPoly, b + 0.05);
 
     // 4. A projecting roof slab under the parapet: its edge faces and its underside (soffit).
     if (slab && slab.outerPoly.length >= 3) {
@@ -1596,6 +1582,27 @@ export function createParapetWallsGeometry(
   });
 }
 
+/**
+ * The flat roof deck inside the parapet, facing up: triangulated properly (a fan from the
+ * middle spills outside curved or L-shaped outlines).
+ */
+function addParapetDeck(
+  addTriangle: (p1: [number, number, number], p2: [number, number, number], p3: [number, number, number], normal?: [number, number, number]) => void,
+  innerPoly: [number, number][],
+  y: number,
+) {
+  const contour = innerPoly.map(([x, z]) => new THREE.Vector2(x, z));
+  for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, [])) {
+    const a = innerPoly[i], c = innerPoly[j], d = innerPoly[k];
+    addTriangle([a[0], y, a[1]], [c[0], y, c[1]], [d[0], y, d[1]], [0, 1, 0]);
+  }
+}
+
+/** The roof deck inside a parapet as its own geometry (so it can be painted apart from the parapet). */
+export function createParapetDeckGeometry(innerPoly: [number, number][], baseY: number): THREE.BufferGeometry {
+  return createGeometryFromBuilder((addTriangle) => addParapetDeck(addTriangle, innerPoly, baseY + 0.05));
+}
+
 export interface ParapetOptions {
   /** Thickness of the walls the parapet stands on. */
   wallThickness: number;
@@ -1609,6 +1616,8 @@ export interface ParapetOptions {
   slabProjection?: number;
   /** Thickness of a projecting roof slab. */
   slabThickness?: number;
+  /** Build the roof deck into the parapet's own geometry (older roofs, which have no separate deck part). */
+  includeDeck?: boolean;
 }
 
 export const PARAPET_SLAB_THICKNESS = 0.25;
@@ -1621,6 +1630,8 @@ export const PARAPET_SLAB_THICKNESS = 0.25;
 export function buildParapetGeometry(centreline: [number, number][], opts: ParapetOptions): {
   walls: THREE.BufferGeometry;
   coping: THREE.BufferGeometry;
+  /** The roof deck inside the parapet, as its own part. */
+  deck: THREE.BufferGeometry;
 } {
   const t = opts.wallThickness || 0.20;
   const parapetThick = opts.parapetThickness ?? t;
@@ -1630,9 +1641,10 @@ export function buildParapetGeometry(centreline: [number, number][], opts: Parap
   const outer = offsetPolygon2D(centreline, t / 2 + (hasSlab ? projection : 0));
   const inner = insetPolygon2D(outer, parapetThick);
   const base = hasSlab ? slabT : 0;
-  const walls = createParapetWallsGeometry(outer, inner, opts.parapetHeight, base, hasSlab ? { outerPoly: outer, thickness: slabT } : undefined);
+  const walls = createParapetWallsGeometry(outer, inner, opts.parapetHeight, base, hasSlab ? { outerPoly: outer, thickness: slabT } : undefined, opts.includeDeck ?? false);
+  const deck = createParapetDeckGeometry(inner, base);
   const coping = createParapetCopingGeometry(outer, inner, base + opts.parapetHeight, 0.06, opts.copingOverhang ?? 0.04);
-  return { walls, coping };
+  return { walls, coping, deck };
 }
 
 /**
@@ -1750,7 +1762,7 @@ export function buildRoofAssemblyForRoom(
     const parapetH = params.parapetHeight ?? 0.60;
     const copingOverhang = params.copingOverhang ?? 0.04;
     const slabProjection = params.slabProjection ?? 0;
-    const { walls: parapetWallGeom, coping: copingGeom } = buildParapetGeometry(localWallPoly, {
+    const { walls: parapetWallGeom, coping: copingGeom, deck: deckGeom } = buildParapetGeometry(localWallPoly, {
       wallThickness: bounds.wallThickness || 0.20,
       parapetHeight: parapetH,
       ...(params.parapetThickness !== undefined ? { parapetThickness: params.parapetThickness } : {}),
@@ -1817,11 +1829,27 @@ export function buildRoofAssemblyForRoom(
       tags: ['architecture', 'roof-coping', 'roof-part'],
     };
 
+    // The roof deck is its own part, so it can be painted apart from the parapet.
+    const deckShape: Shape = {
+      id: `deck_${Math.random().toString(36).substr(2, 9)}`,
+      name: 'Roof Deck',
+      type: 'custom',
+      position: [centerX, topY, centerZ],
+      rotation: [0, 0, 0],
+      args: [width, 0.01, depth],
+      parentShapeId: roofId,
+      color: params.deckColor || '#374151',
+      roughness: 0.9,
+      metalness: 0.02,
+      geometryData: safeExtractGeometryData(deckGeom),
+      tags: ['architecture', 'roof-deck', 'roof-part'],
+    };
+
     return {
       roofShape,
       fasciaShape: copingShape,
       ridgeCapShape: copingShape,
-      allShapes: [roofShape, copingShape],
+      allShapes: [roofShape, copingShape, deckShape],
     };
   }
 
@@ -3306,11 +3334,15 @@ export function updateRoofAssembly(
     ];
     const copingOverhang = Math.max(0, Math.min(0.10, params.copingOverhang ?? roofData.copingOverhang ?? 0.04));
     const slabProjection = Math.max(0, Math.min(1.5, params.slabProjection ?? roofData.slabProjection ?? 0));
-    const { walls: parapetWallGeom, coping: copingGeom } = buildParapetGeometry(localWallPoly, {
+    // Older roofs have no separate deck part: they get one now (so the deck can be painted
+    // apart from the parapet), taking the roof's own colour so nothing changes on screen.
+    const hasDeckPart = allShapes.some(s => s.parentShapeId === roofId && s.tags?.includes('roof-deck'));
+    const { walls: parapetWallGeom, coping: copingGeom, deck: deckGeom } = buildParapetGeometry(localWallPoly, {
       wallThickness: roofData.bounds?.wallThickness || 0.20,
       parapetHeight: clampedHeight,
       copingOverhang,
       slabProjection,
+      includeDeck: false,
     });
 
     const updatedRoofShape: Shape = {
@@ -3336,8 +3368,27 @@ export function updateRoofAssembly(
           geometryData: safeExtractGeometryData(copingGeom),
         };
       }
+      if (s.parentShapeId === roofId && s.tags?.includes('roof-deck')) {
+        return { ...s, geometryData: safeExtractGeometryData(deckGeom) };
+      }
       return s;
     });
+    if (!hasDeckPart) {
+      updatedShapes.push({
+        id: `deck_${Math.random().toString(36).substr(2, 9)}`,
+        name: 'Roof Deck',
+        type: 'custom',
+        position: [...targetRoof.position] as [number, number, number],
+        rotation: [0, 0, 0],
+        args: [width, 0.01, depth],
+        parentShapeId: roofId,
+        color: targetRoof.color,
+        roughness: targetRoof.roughness ?? 0.85,
+        metalness: targetRoof.metalness ?? 0.05,
+        geometryData: safeExtractGeometryData(deckGeom),
+        tags: ['architecture', 'roof-deck', 'roof-part'],
+      });
+    }
 
     return { 
       updatedShapes, 
