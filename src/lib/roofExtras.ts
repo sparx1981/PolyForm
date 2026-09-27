@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Shape } from '../types';
+import { RoofSurface, eavePolygon, wallPolygon, roofEdges as edges, facingEdge, type Edge, type V2, type Facing } from './roofSurface';
+import { dormerLayout, dormerMeshes, dormersOf, type Dormer, type DormerLayout } from './dormers';
 
 /**
  * Roof extras: gutters and downpipes, a chimney, solar panels and dormers, built to sit on an
@@ -10,7 +12,7 @@ import type { Shape } from '../types';
  * (`roofData.extras`) and the extras are rebuilt whenever the roof changes.
  */
 
-export type Facing = 'south' | 'north' | 'east' | 'west';
+export type { Facing } from './roofSurface';
 
 export interface RoofExtras {
   gutters?: boolean;
@@ -22,8 +24,11 @@ export interface RoofExtras {
   chimneyColor?: string;
   solar?: boolean;
   solarFacing?: Facing;
+  /** Older setting: this many dormers, evenly spaced on one side (kept for designs saved with it). */
   dormers?: number;
   dormerFacing?: Facing;
+  /** Each dormer, placed by clicking or by "space evenly". */
+  dormerList?: Dormer[];
 }
 
 export const DEFAULT_ROOF_EXTRAS: RoofExtras = {
@@ -33,93 +38,13 @@ export const DEFAULT_ROOF_EXTRAS: RoofExtras = {
   dormers: 0, dormerFacing: 'south',
 };
 
-const FACING: Record<Facing, [number, number]> = { south: [0, 1], north: [0, -1], east: [1, 0], west: [-1, 0] };
 
-type V2 = [number, number];
 
 export const isRoofExtra = (s: Shape) => Boolean(s.tags?.includes('roof-extra'));
 
 /** The roof shape that carries the settings: the slopes / assembly, or a parapet roof. */
 export function extrasOf(roof: Shape | undefined): RoofExtras {
   return { ...DEFAULT_ROOF_EXTRAS, ...((roof?.roofData?.extras as RoofExtras | undefined) ?? {}) };
-}
-
-// --- Roof surface ---------------------------------------------------------------------------
-
-class RoofSurface {
-  private mesh: THREE.Mesh | null = null;
-  private ray = new THREE.Raycaster();
-  constructor(roof: Shape) {
-    const pos = roof.geometryData?.positions as number[] | undefined;
-    if (pos && pos.length >= 9) {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-      this.mesh.updateMatrixWorld();
-    }
-  }
-  /** Top of the roof at a local plan point, with its upward normal; null off the roof. */
-  at(x: number, z: number): { y: number; normal: THREE.Vector3 } | null {
-    if (!this.mesh) return null;
-    this.ray.set(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0));
-    const hit = this.ray.intersectObject(this.mesh, false)[0];
-    if (!hit || !hit.face) return null;
-    const n = hit.face.normal.clone();
-    if (n.y < 0) n.negate();
-    return { y: hit.point.y, normal: n };
-  }
-  dispose() { this.mesh?.geometry.dispose(); }
-}
-
-function eavePolygon(roof: Shape): V2[] {
-  const rd = roof.roofData ?? {};
-  if (Array.isArray(rd.localEavePoly) && rd.localEavePoly.length >= 3) return rd.localEavePoly as V2[];
-  const [w = 8, , d = 8] = Array.isArray(roof.args) ? roof.args as number[] : [];
-  const o = rd.eaveOverhang ?? 0.3;
-  return [[-w / 2 - o, -d / 2 - o], [w / 2 + o, -d / 2 - o], [w / 2 + o, d / 2 + o], [-w / 2 - o, d / 2 + o]];
-}
-
-function wallPolygon(roof: Shape): V2[] {
-  const rd = roof.roofData ?? {};
-  if (Array.isArray(rd.localWallPoly) && rd.localWallPoly.length >= 3) return rd.localWallPoly as V2[];
-  const [w = 8, , d = 8] = Array.isArray(roof.args) ? roof.args as number[] : [];
-  return [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]];
-}
-
-function signedArea(p: V2[]) {
-  let a = 0;
-  for (let i = 0; i < p.length; i++) { const [x1, z1] = p[i], [x2, z2] = p[(i + 1) % p.length]; a += x1 * z2 - x2 * z1; }
-  return a / 2;
-}
-
-interface Edge { a: V2; b: V2; u: V2; out: V2; length: number; sloped: boolean }
-
-/** The roof's eave edges, each with its outward direction and whether the roof rises from it (not a gable end). */
-function edges(poly: V2[], surface: RoofSurface): Edge[] {
-  const ccw = signedArea(poly) > 0;
-  return poly.map((a, i) => {
-    const b = poly[(i + 1) % poly.length];
-    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const u: V2 = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
-    // Outward normal: for a counter-clockwise (x, z) polygon, (u.z, -u.x).
-    const out: V2 = ccw ? [u[1], -u[0]] : [-u[1], u[0]];
-    const mid: V2 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    const near = surface.at(mid[0] - out[0] * 0.15, mid[1] - out[1] * 0.15);
-    const far = surface.at(mid[0] - out[0] * 1.2, mid[1] - out[1] * 1.2);
-    const sloped = !!near && !!far && far.y - near.y > 0.15;
-    return { a, b, u, out, length, sloped };
-  });
-}
-
-function facingEdge(all: Edge[], facing: Facing): Edge | null {
-  const [fx, fz] = FACING[facing];
-  let best: Edge | null = null, score = -Infinity;
-  for (const e of all) {
-    if (!e.sloped) continue;
-    const s = e.out[0] * fx + e.out[1] * fz + e.length * 0.001;
-    if (s > score) { score = s; best = e; }
-  }
-  return best;
 }
 
 const merge = (parts: THREE.BufferGeometry[]) => {
@@ -138,7 +63,26 @@ function boxAt(size: [number, number, number], centre: THREE.Vector3, basis: THR
 
 // --- Builders -------------------------------------------------------------------------------
 
-function gutters(roof: Shape, surface: RoofSurface, eaves: Edge[]) {
+/** The stretches of an eave left for gutter once flush dormers have broken it, as distances along it. */
+export function gutterRuns(e: Edge, flush: DormerLayout[]): [number, number][] {
+  const gaps: [number, number][] = [];
+  for (const L of flush) {
+    if (Math.abs(L.edge.a[0] - e.a[0]) > 1e-6 || Math.abs(L.edge.a[1] - e.a[1]) > 1e-6) continue;
+    const ts = L.footprint.slice(0, 2).map(p => (p[0] - e.a[0]) * e.u[0] + (p[1] - e.a[1]) * e.u[1]);
+    gaps.push([Math.min(...ts) - 0.05, Math.max(...ts) + 0.05]);
+  }
+  gaps.sort((a, b) => a[0] - b[0]);
+  const runs: [number, number][] = [];
+  let t = 0;
+  for (const [g0, g1] of gaps) {
+    if (g0 > t + 0.1) runs.push([t, Math.min(g0, e.length)]);
+    t = Math.max(t, g1);
+  }
+  if (e.length > t + 0.1) runs.push([t, e.length]);
+  return runs;
+}
+
+function gutters(roof: Shape, surface: RoofSurface, eaves: Edge[], flushDormers: DormerLayout[] = []) {
   const parts: THREE.BufferGeometry[] = [];
   const walls = wallPolygon(roof);
   const minY = -roof.position[1];
@@ -155,17 +99,20 @@ function gutters(roof: Shape, surface: RoofSurface, eaves: Edge[]) {
     const edgeY = surface.at((e.a[0] + e.b[0]) / 2 - e.out[0] * 0.05, (e.a[1] + e.b[1]) / 2 - e.out[1] * 0.05)?.y;
     if (edgeY === undefined) continue;
     const y = edgeY - 0.14;
-    const g = new THREE.ExtrudeGeometry(profile, { depth: e.length, bevelEnabled: false, curveSegments: 8 });
     // Profile is in (x, y) with the trough below y = 0; extrusion runs along +z. Lay it along the edge.
     const basis = new THREE.Matrix4().makeBasis(
       new THREE.Vector3(e.out[0], 0, e.out[1]),
       new THREE.Vector3(0, 1, 0),
       new THREE.Vector3(e.u[0], 0, e.u[1]),
     );
-    g.applyMatrix4(basis);
-    g.translate(e.a[0] + e.out[0] * 0.07, y + 0.065, e.a[1] + e.out[1] * 0.07);
-    parts.push(g);
-    length += e.length;
+    // A dormer built flush with the wall below breaks the eave: the gutter stops either side of it.
+    for (const [t0, t1] of gutterRuns(e, flushDormers)) {
+      const g = new THREE.ExtrudeGeometry(profile, { depth: t1 - t0, bevelEnabled: false, curveSegments: 8 });
+      g.applyMatrix4(basis);
+      g.translate(e.a[0] + e.u[0] * t0 + e.out[0] * 0.07, y + 0.065, e.a[1] + e.u[1] * t0 + e.out[1] * 0.07);
+      parts.push(g);
+      length += t1 - t0;
+    }
     for (const p of [e.a, e.b]) corners.set(`${p[0].toFixed(2)},${p[1].toFixed(2)}`, p);
     // Downpipes run from the gutter's ends, down the nearest wall corner.
     for (const p of [e.a, e.b]) {
@@ -270,65 +217,6 @@ function solarPanels(roof: Shape, surface: RoofSurface, edge: Edge | null, flat:
   return { geometry: merge(parts), count: parts.length };
 }
 
-function dormers(roof: Shape, surface: RoofSurface, edge: Edge | null, count: number) {
-  if (!edge || count < 1) return null;
-  const walls: THREE.BufferGeometry[] = [], roofs: THREE.BufferGeometry[] = [], glass: THREE.BufferGeometry[] = [];
-  const inward: V2 = [-edge.out[0], -edge.out[1]];
-  const overhang = roof.roofData?.eaveOverhang ?? 0.3;
-  const w = 1.5, hf = 1.25, pitch = THREE.MathUtils.degToRad(40), t = 0.1;
-  let made = 0;
-  for (let k = 0; k < count; k++) {
-    const along = edge.length * (k + 1) / (count + 1);
-    const run = overhang + 0.7;
-    const px = edge.a[0] + edge.u[0] * along + inward[0] * run;
-    const pz = edge.a[1] + edge.u[1] * along + inward[1] * run;
-    const base = surface.at(px, pz);
-    if (!base) continue;
-    const slope = Math.atan2(Math.hypot(base.normal.x, base.normal.z), base.normal.y);
-    if (slope < 0.15) continue;
-    // Deep enough for the dormer's eaves to meet the main roof behind it.
-    const depth = hf / Math.tan(slope) + 0.25;
-    // Dormer frame: x across (along the eave), y up, z into the roof.
-    const X = new THREE.Vector3(edge.u[0], 0, edge.u[1]);
-    const Y = new THREE.Vector3(0, 1, 0);
-    const Z = new THREE.Vector3(inward[0], 0, inward[1]);
-    const basis = new THREE.Matrix4().makeBasis(X, Y, Z);
-    const origin = new THREE.Vector3(px, base.y, pz);
-    const toRoof = (g: THREE.BufferGeometry) => { g.applyMatrix4(basis); g.translate(origin.x, origin.y, origin.z); return g; };
-    // Front wall round a window.
-    const win = { w: w - 0.5, h: hf - 0.45, sill: 0.2 };
-    walls.push(toRoof(new THREE.BoxGeometry(w, win.sill, t).translate(0, win.sill / 2, t / 2)));
-    walls.push(toRoof(new THREE.BoxGeometry(w, hf - win.sill - win.h, t).translate(0, win.sill + win.h + (hf - win.sill - win.h) / 2, t / 2)));
-    for (const sx of [-1, 1]) walls.push(toRoof(new THREE.BoxGeometry((w - win.w) / 2, win.h, t).translate(sx * (w + win.w) / 4, win.sill + win.h / 2, t / 2)));
-    glass.push(toRoof(new THREE.BoxGeometry(win.w, win.h, 0.02).translate(0, win.sill + win.h / 2, t / 2)));
-    // Gable over the front.
-    const gableH = (w / 2) * Math.tan(pitch);
-    const tri = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, gableH)]);
-    walls.push(toRoof(new THREE.ExtrudeGeometry(tri, { depth: t, bevelEnabled: false }).translate(0, hf, 0)));
-    // Cheeks: triangles from the front down to where they meet the roof.
-    const cheek = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0, hf), new THREE.Vector2(depth, hf)]);
-    for (const sx of [-1, 1]) {
-      const g = new THREE.ExtrudeGeometry(cheek, { depth: 0.08, bevelEnabled: false });
-      // Shape is in (x, y) = (depth, height); turn it so x runs into the roof (z).
-      g.rotateY(-Math.PI / 2);
-      // After the turn the extrusion runs from x = -0.08 to 0: keep both cheeks inside the dormer's width.
-      g.translate(sx > 0 ? w / 2 : -w / 2 + 0.08, 0, 0);
-      walls.push(toRoof(g));
-    }
-    // The dormer's own gable roof.
-    const slopeLen = (w / 2 + 0.15) / Math.cos(pitch);
-    for (const sx of [-1, 1]) {
-      const g = new THREE.BoxGeometry(slopeLen, 0.07, depth + 0.25);
-      g.rotateZ(sx * -pitch);
-      g.translate(sx * (w / 4 + 0.075) * 1, hf + gableH / 2 + 0.03, depth / 2 - 0.12);
-      roofs.push(toRoof(g));
-    }
-    made++;
-  }
-  if (!made) return null;
-  return { walls: merge(walls), roofs: merge(roofs), glass: merge(glass), count: made };
-}
-
 // --- Assembly -------------------------------------------------------------------------------
 
 function toShape(roof: Shape, kind: string, name: string, geometry: THREE.BufferGeometry | null | undefined, look: Partial<Shape>, data: Record<string, unknown> = {}): Shape | null {
@@ -363,8 +251,9 @@ export function buildRoofExtras(roof: Shape, extras: RoofExtras, wallColor = '#e
   const eaves = edges(eavePolygon(roof), surface);
   const out: (Shape | null)[] = [];
   try {
+    const layouts = flat ? [] : dormersOf(roof).map(d => dormerLayout(roof, d, surface, false)).filter((l): l is DormerLayout => !!l);
     if (extras.gutters && !flat) {
-      const g = gutters(roof, surface, eaves);
+      const g = gutters(roof, surface, eaves, layouts.filter(l => l.dormer.flush));
       out.push(toShape(roof, 'gutters', `Gutters & downpipes (${g.length.toFixed(1)} m)`, g.geometry,
         { color: extras.gutterColor ?? '#374151', roughness: 0.5, metalness: 0.3 }, { length: +g.length.toFixed(2), downpipes: g.pipes }));
     }
@@ -377,13 +266,15 @@ export function buildRoofExtras(roof: Shape, extras: RoofExtras, wallColor = '#e
       out.push(toShape(roof, 'solar', `Solar panels (${s.count})`, s.geometry,
         { color: '#1b2a41', roughness: 0.25, metalness: 0.55 }, { count: s.count }));
     }
-    if ((extras.dormers ?? 0) > 0 && !flat) {
-      const d = dormers(roof, surface, facingEdge(eaves, extras.dormerFacing ?? 'south'), Math.min(3, extras.dormers ?? 0));
-      if (d) {
-        out.push(toShape(roof, 'dormer-walls', `Dormers (${d.count})`, d.walls, { color: wallColor, roughness: 0.85 }, { count: d.count }));
-        out.push(toShape(roof, 'dormer-roofs', 'Dormer roofs', d.roofs, { color: roof.color || '#7c2d12', roughness: 0.8 }));
-        out.push(toShape(roof, 'dormer-glass', 'Dormer windows', d.glass, { color: '#cfe8f3', opacity: 0.35, roughness: 0.05, metalness: 0.1 }));
-      }
+    if (layouts.length) {
+      const all = layouts.map(dormerMeshes);
+      const pick = (k: keyof ReturnType<typeof dormerMeshes>) => merge(all.flatMap(m => m[k]));
+      const types = [...new Set(layouts.map(l => l.dormer.type))].join(', ');
+      out.push(toShape(roof, 'dormer-walls', `Dormers (${layouts.length}, ${types})`, pick('walls'), { color: wallColor, roughness: 0.85 },
+        { count: layouts.length, dormers: layouts.map(l => ({ id: l.dormer.id, type: l.dormer.type, width: l.width, flush: l.dormer.flush })) }));
+      out.push(toShape(roof, 'dormer-roofs', 'Dormer roofs', pick('roofs'), { color: roof.color || '#7c2d12', roughness: 0.8 }));
+      out.push(toShape(roof, 'dormer-glass', 'Dormer windows', pick('glass'), { color: '#cfe8f3', opacity: 0.35, roughness: 0.05, metalness: 0.1 }));
+      out.push(toShape(roof, 'dormer-lining', 'Dormer linings & ceilings', pick('lining'), { color: '#f4f2ee', roughness: 0.95 }));
     }
   } finally {
     surface.dispose();

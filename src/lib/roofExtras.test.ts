@@ -28,7 +28,7 @@ const heights = (s: Shape) => {
 describe('roof extras', () => {
   it('fits gutters, a chimney, solar panels and dormers to a hip roof', () => {
     const { shapes, roofId, roof } = roofed('hip');
-    const out = withRoofExtras(shapes, roofId, { gutters: true, chimney: true, chimneyX: 0.3, chimneyZ: 0, solar: true, solarFacing: 'south', dormers: 2, dormerFacing: 'north' });
+    const out = withRoofExtras(shapes, roofId, { gutters: true, chimney: true, chimneyX: 0.3, chimneyZ: 0, solar: true, solarFacing: 'south', dormers: 1, dormerFacing: 'north' });
     const gutters = extra(out, 'gutters')!;
     // All four eaves of a hip roof get a gutter: about the eave perimeter (10.25+0.8)*2 + (8.25+0.8)*2.
     expect(gutters.customData.length).toBeGreaterThan(38);
@@ -47,7 +47,8 @@ describe('roof extras', () => {
     for (let i = 2; i < p.length; i += 3) zSum += p[i];
     expect(zSum / (p.length / 3)).toBeGreaterThan(0.5);
 
-    expect(extra(out, 'dormer-walls')!.customData.count).toBe(2);
+    expect(extra(out, 'dormer-walls')!.customData.count).toBe(1);
+    expect(extra(out, 'dormer-lining')).toBeTruthy();
     expect(extra(out, 'dormer-roofs')).toBeTruthy();
     expect(extra(out, 'dormer-glass')!.opacity).toBeLessThan(1);
 
