@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { Shape } from '../../types';
 import { buildPatio, infillCount, polygonArea, SPINDLE, type Vec2 } from './patioGeometry';
 import { DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK, DEFAULT_PATIO_TEMPLATE, type BalconySupport, type PatioData } from './patioTypes';
-import { balconyAtOpening, balconyWarnings, BALCONY_STEP_DOWN, followHostWalls, JULIET_DEPTH, moveWithWall, outsideSide } from './balcony';
+import { balconyAtOpening, balconyWarnings, BALCONY_STEP_DOWN, followHostWalls, JULIET_DEPTH, moveWithWall, outsideSide, placeBalcony, reshapeBalcony, wallChain } from './balcony';
 import { makePatioShape } from './patioPlacement';
 
 /** A 6 m wall along x at z = 0, 2.5 m high on a first floor at y = 3, 0.3 m thick. */
@@ -194,5 +194,93 @@ describe('following the wall', () => {
     const b = place();
     const moved = moveWithWall(b, wall, { ...wall, position: [0, 4.25, 1] });
     expect(moved.position[2] - b.position[2]).toBeCloseTo(1);
+  });
+});
+
+describe('curved walls', () => {
+  /** A semicircular wall of radius 5 in 15-degree straight pieces, 0.3 m thick, floor at y = 3. */
+  const R = 5, STEP = Math.PI / 12;
+  const pieces: Shape[] = Array.from({ length: 12 }, (_, i) => {
+    const phi = (i + 0.5) * STEP;
+    const a = Math.atan2(-Math.cos(phi), -Math.sin(phi));
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a);
+    const r = R * Math.cos(STEP / 2);
+    return {
+      id: `c${i}`, type: 'wall', position: [r * Math.cos(phi), 4.25, r * Math.sin(phi)] as [number, number, number],
+      quaternion: [q.x, q.y, q.z, q.w] as [number, number, number, number], args: [2 * R * Math.sin(STEP / 2), 2.5, 0.3], color: '#fff',
+    };
+  });
+  const host = pieces[6];
+  const curvedDoor: Shape = { id: 'cd', type: 'door', position: [host.position[0], 3 + 1.05, host.position[2]], quaternion: host.quaternion, args: [0.9, 2.1, 0.1], color: '#fff', hostWallId: host.id };
+  const shapes = [...pieces, curvedDoor];
+  // The wall's normal points into the circle; the balcony goes outside.
+  const opts = { depth: 1.5, margin: 0.6, juliet: false };
+
+  it('traces the whole curve either side of the door', () => {
+    expect(wallChain(host, -1, shapes).map(p => p.wall.id)).toEqual(pieces.map(p => p.id));
+  });
+
+  it('follows the curve: back edge on the wall face, front 1.5 m further out', () => {
+    const p = placeBalcony(curvedDoor, host, -1, shapes, { ...opts, front: 'curve' })!;
+    expect(p.curved).toBe(true);
+    const back = p.world.filter((_, i) => p.wallEdges[i] || p.wallEdges[i - 1]);
+    for (const q of back) expect(Math.hypot(q[0], q[1])).toBeGreaterThan(5.0);
+    for (const q of back) expect(Math.hypot(q[0], q[1])).toBeLessThan(5.2);
+    for (const q of p.front) expect(Math.hypot(q[0], q[1])).toBeGreaterThan(6.4);
+    // Wider than the door by 0.6 m each side, measured along the wall.
+    let along = 0;
+    for (let i = 0; i + 1 < back.length; i++) along += Math.hypot(back[i + 1][0] - back[i][0], back[i + 1][1] - back[i][1]);
+    expect(along).toBeCloseTo(0.9 + 1.2, 1);
+    expect(p.level).toBeCloseTo(3 - BALCONY_STEP_DOWN);
+  });
+
+  it('a straight front stands at least the depth off the wall everywhere', () => {
+    const p = placeBalcony(curvedDoor, host, -1, shapes, { ...opts, front: 'straight' })!;
+    expect(p.front).toHaveLength(2);
+    const [f0, f1] = p.front;
+    const d = [f1[0] - f0[0], f1[1] - f0[1]], l = Math.hypot(d[0], d[1]);
+    const back = p.world.filter((_, i) => p.wallEdges[i] || p.wallEdges[i - 1]);
+    const distances = back.map(q => Math.abs((q[0] - f0[0]) * -d[1] / l + (q[1] - f0[1]) * d[0] / l));
+    expect(Math.min(...distances)).toBeCloseTo(1.5, 2);
+  });
+
+  it('builds a curved balcony with brackets spaced along the curve', () => {
+    const p = placeBalcony(curvedDoor, host, -1, shapes, { ...opts, front: 'curve' })!;
+    const shape = makePatioShape({ id: 'cb', name: 'Balcony', world: p.world, bulges: p.world.map(() => 0), level: p.level, wallEdges: p.wallEdges, kind: 'balcony',
+      template: { ...DEFAULT_PATIO_TEMPLATE, ...DEFAULT_BALCONY_LOOK, balcony: { ...DEFAULT_BALCONY, support: 'brackets' } } });
+    const b = buildPatio(shape.patioData!, () => -3);
+    expect(b.parts.steel).toBeDefined();
+    expect(b.parts.glass).toBeDefined();
+    expect(b.stats.area).toBeGreaterThan(2.5);
+  });
+
+  it('a straight run of wall still gets a plain rectangle, and a Juliet always does', () => {
+    expect(placeBalcony(door, wall, 1, [wall, door], { ...opts, front: 'curve' })!.curved).toBe(false);
+    const straightNeighbour: Shape = { ...wall, id: 'w2', position: [6, wall.position[1], 0] };
+    expect(placeBalcony(door, wall, 1, [wall, straightNeighbour, door], { ...opts, front: 'curve' })!.world).toHaveLength(4);
+    expect(placeBalcony(curvedDoor, host, -1, shapes, { ...opts, juliet: true, front: 'curve' })!.curved).toBe(false);
+  });
+
+  it('stops at a building corner', () => {
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+    const corner: Shape = { ...wall, id: 'corner', position: [3, wall.position[1], -3], quaternion: [q.x, q.y, q.z, q.w], args: [6, 2.5, 0.3] };
+    expect(wallChain(wall, 1, [wall, corner]).map(p => p.wall.id)).toEqual(['w']);
+  });
+
+  it('reshapes from the door for a new front, and stays with the door when its wall is replaced', () => {
+    const p = placeBalcony(curvedDoor, host, -1, shapes, { ...opts, front: 'curve' })!;
+    const shape: Shape = { ...makePatioShape({ id: 'cb', name: 'Balcony', world: p.world, bulges: p.world.map(() => 0), level: p.level, wallEdges: p.wallEdges, kind: 'balcony',
+      template: { ...DEFAULT_PATIO_TEMPLATE, ...DEFAULT_BALCONY_LOOK, balcony: { ...DEFAULT_BALCONY, hostOpeningId: 'cd', curvedWall: true, front: 'curve', depth: 1.5, margin: 0.6 } } }), hostWallId: host.id };
+    const straight = reshapeBalcony(shape, [...shapes, shape], { front: 'straight' })!;
+    expect(straight.patioData!.balcony!.front).toBe('straight');
+    expect(straight.patioData!.points.length).toBeLessThan(shape.patioData!.points.length);
+    expect(straight.position[1]).toBeCloseTo(shape.position[1]);
+
+    // Pieces merged into one wall that now hosts the door.
+    const merged: Shape = { ...host, id: 'merged' };
+    const movedDoor = { ...curvedDoor, hostWallId: 'merged' };
+    const next = [...pieces.filter(w => w.id !== host.id), merged, movedDoor, shape];
+    const out = followHostWalls(next, [...shapes, shape]);
+    expect(out.find(s => s.id === 'cb')!.hostWallId).toBe('merged');
   });
 });

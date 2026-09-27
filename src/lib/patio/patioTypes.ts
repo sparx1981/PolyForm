@@ -27,7 +27,16 @@ export interface BalconyData {
   railingHeight: number;
   /** The door or window it was placed at, if any. */
   hostOpeningId?: string;
+  /** On a curved wall: the front edge follows the wall's curve, or runs straight across. */
+  front?: BalconyFront;
+  /** True when it was placed along a curved wall (its back edge follows the wall's face). */
+  curvedWall?: boolean;
+  /** How far it was set to stand out from the wall, and past the opening each side (m). */
+  depth?: number;
+  margin?: number;
 }
+
+export type BalconyFront = 'curve' | 'straight';
 export type DeckUnderside = 'frame' | 'skirting';
 
 /** Steps down from one edge: centred `t` (0..1) of the way along drawn edge `edge`. */

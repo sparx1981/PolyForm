@@ -1233,19 +1233,17 @@ function buildBalcony(
   }
 
   if (b.support === 'brackets') {
-    // Angled brackets fixed to the wall: a level arm under the frame and a strut up to it.
-    for (let k = 0; k < n; k++) {
-      if (!onWall(k)) continue;
-      const a = poly[k], c = poly[(k + 1) % n];
-      const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
-      if (len < 0.3) continue;
-      const tx = (c[0] - a[0]) / len, tz = (c[1] - a[1]) / len;
-      // Inward normal (the outline is CCW).
-      const inward: Vec2 = [-tz, tx];
-      const count = Math.max(2, Math.ceil((len - 0.3) / 1.2) + 1);
+    // Angled brackets fixed to the wall, spaced along each run of wall (curved walls too): a
+    // level arm under the frame and a strut up to it.
+    for (const run of wallRuns(poly, onWall)) {
+      const length = runLength(run);
+      if (length < 0.3) continue;
+      const count = Math.max(2, Math.ceil((length - 0.3) / 1.2) + 1);
       for (let i = 0; i < count; i++) {
-        const along = 0.15 + ((len - 0.3) * i) / (count - 1);
-        const w: Vec2 = [a[0] + tx * along + inward[0] * 0.01, a[1] + tz * along + inward[1] * 0.01];
+        const { point, tangent } = alongRun(run, 0.15 + ((length - 0.3) * i) / (count - 1));
+        // Inward normal (the outline is CCW).
+        const inward: Vec2 = [-tangent[1], tangent[0]];
+        const w: Vec2 = [point[0] + inward[0] * 0.01, point[1] + inward[1] * 0.01];
         const depth = reachInside(w, inward, poly);
         if (depth < 0.3) continue;
         const reach = depth - 0.08;
@@ -1260,26 +1258,25 @@ function buildBalcony(
     return;
   }
 
-  // Posts to the ground at the open corners and along open edges.
+  // Posts to the ground: at the front's real corners and never more than 2.4 m apart along it
+  // (curved fronts included). The ends against the wall are carried by the wall.
   const postsAt: Vec2[] = [];
-  const inset = offsetPolygon(poly, -0.08);
-  for (let k = 0; k < n; k++) {
-    const prevWall = onWall((k - 1 + n) % n), thisWall = onWall(k);
-    if (thisWall && prevWall) continue;
-    const corner = poly[k];
-    const prev = poly[(k - 1 + n) % n], next = poly[(k + 1) % n];
-    const turn = Math.abs(Math.atan2(next[1] - corner[1], next[0] - corner[0]) - Math.atan2(corner[1] - prev[1], corner[0] - prev[0]));
-    const sharp = Math.min(turn, Math.PI * 2 - turn) > 0.35;
-    if (sharp && !thisWall && !prevWall) postsAt.push(inset[k]);
-  }
-  for (let k = 0; k < n; k++) {
-    if (onWall(k)) continue;
-    const a = inset[k], c = inset[(k + 1) % n];
-    const len = Math.hypot(c[0] - a[0], c[1] - a[1]);
-    const between = Math.floor(len / 2.4);
-    for (let i = 1; i <= between; i++) {
-      const t = i / (between + 1);
-      postsAt.push([a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t]);
+  for (const run of railingRuns(poly, () => false, onWall, 0.08)) {
+    const closed = run.length > 2 && len(sub2(run[0], run[run.length - 1])) < 1e-6;
+    // Stops: sharp corners (and the run's ends, which get no post unless the run is a loop).
+    const stops = [0];
+    for (let k = 1; k + 1 < run.length; k++) {
+      const a = sub2(run[k], run[k - 1]), c = sub2(run[k + 1], run[k]);
+      const turn = Math.abs(Math.atan2(a[0] * c[1] - a[1] * c[0], a[0] * c[0] + a[1] * c[1]));
+      if (turn > 0.35) stops.push(k);
+    }
+    stops.push(run.length - 1);
+    for (let t = 0; t + 1 < stops.length; t++) {
+      const piece = run.slice(stops[t], stops[t + 1] + 1);
+      const length = runLength(piece);
+      const between = Math.max(0, Math.ceil(length / 2.4) - 1);
+      if (t > 0 || closed) postsAt.push(piece[0]);
+      for (let i = 1; i <= between; i++) postsAt.push(alongRun(piece, (length * i) / (between + 1)).point);
     }
   }
   for (const p of postsAt) {
@@ -1288,6 +1285,48 @@ function buildBalcony(
     addPost(steel, p, ground - 0.2, frameBottom, 0.1);
     addPost(steel, p, ground, ground + 0.012, 0.22);
   }
+}
+
+const sub2 = (a: Vec2, b: Vec2): Vec2 => [a[0] - b[0], a[1] - b[1]];
+const len = (a: Vec2) => Math.hypot(a[0], a[1]);
+
+/** Runs of consecutive outline segments along the wall, as polylines. */
+function wallRuns(poly: Vec2[], onWall: (k: number) => boolean): Vec2[][] {
+  const n = poly.length;
+  const start = poly.findIndex((_, k) => !onWall(k));
+  if (start < 0) return [];
+  const runs: Vec2[][] = [];
+  let current: Vec2[] | null = null;
+  for (let step = 1; step <= n; step++) {
+    const k = (start + step) % n;
+    if (onWall(k)) {
+      current ??= [poly[k]];
+      current.push(poly[(k + 1) % n]);
+    } else if (current) { runs.push(current); current = null; }
+  }
+  if (current) runs.push(current);
+  return runs;
+}
+
+function runLength(run: Vec2[]): number {
+  let total = 0;
+  for (let k = 1; k < run.length; k++) total += len(sub2(run[k], run[k - 1]));
+  return total;
+}
+
+/** The point `distance` along a polyline, and the direction there. */
+function alongRun(run: Vec2[], distance: number): { point: Vec2; tangent: Vec2 } {
+  let s = 0;
+  for (let k = 1; k < run.length; k++) {
+    const d = sub2(run[k], run[k - 1]), l = len(d);
+    if (l < 1e-9) continue;
+    if (s + l >= distance || k === run.length - 1) {
+      const t = Math.max(0, Math.min(1, (distance - s) / l));
+      return { point: [run[k - 1][0] + d[0] * t, run[k - 1][1] + d[1] * t], tangent: [d[0] / l, d[1] / l] };
+    }
+    s += l;
+  }
+  return { point: run[0], tangent: [1, 0] };
 }
 
 /**

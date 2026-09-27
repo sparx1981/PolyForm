@@ -6,7 +6,8 @@ import type { Shape } from '../../types';
 import { useApp } from '../../AppContext';
 import { pointInPolygon, type Vec2 } from '../../lib/patio/patioGeometry';
 import { buildingOutlines } from '../../lib/patio/patioClosure';
-import { balconyAtOpening, outsideSide, type BalconyPlacement } from '../../lib/patio/balcony';
+import { outsideSide, placeBalcony, type BalconyPlacement } from '../../lib/patio/balcony';
+import type { BalconyFront } from '../../lib/patio/patioTypes';
 
 /** The shape a scene object belongs to. */
 function shapeIdOf(object: THREE.Object3D | null): string | null {
@@ -41,11 +42,13 @@ export function openingNear(wall: Shape, point: THREE.Vector3, shapes: Shape[]):
  * Places a balcony: hover a door (or a window) to see where it would go, click to place it.
  * It goes on the outside of the wall, centred on the opening, its floor just below the sill.
  */
-export function BalconyPlaceTool({ onCommit, juliet, depth, margin }: {
+export function BalconyPlaceTool({ onCommit, juliet, depth, margin, front }: {
   onCommit: (placement: BalconyPlacement) => void;
   juliet: boolean;
   depth: number;
   margin: number;
+  /** On a curved wall: whether the front follows the curve or runs straight across. */
+  front: BalconyFront;
 }) {
   const { gl, camera, raycaster, scene } = useThree();
   const { shapes, setMeasurements } = useApp();
@@ -77,7 +80,7 @@ export function BalconyPlaceTool({ onCommit, juliet, depth, margin }: {
       }
       if (!opening || !wall || wall.type !== 'wall') return null;
       const side = outsideSide(opening, wall, [camera.position.x, camera.position.z], insideBuilding);
-      return balconyAtOpening(opening, wall, side, { depth, margin, juliet });
+      return placeBalcony(opening, wall, side, shapes, { depth, margin, juliet, front });
     }
     return null;
   };
@@ -85,7 +88,7 @@ export function BalconyPlaceTool({ onCommit, juliet, depth, margin }: {
   latest.current = { find, onCommit };
 
   useEffect(() => {
-    setMeasurements('Balcony: hover a door (or a window) and click to put a balcony outside it. Drag its corners afterwards to resize it.');
+    setMeasurements('Balcony: hover a door (or a window) and click to put a balcony outside it. On a curved wall it follows the curve. Drag its corners afterwards to resize it.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -122,7 +125,7 @@ export function BalconyPlaceTool({ onCommit, juliet, depth, margin }: {
     <group>
       <Line points={outline} color="#38bdf8" lineWidth={2.5} dashed dashSize={0.2} gapSize={0.12} depthTest={false} renderOrder={30} />
       {/* The guarding height, on the outer edge. */}
-      <Line points={[placement.world[2], placement.world[3]].map(([x, z]) => new THREE.Vector3(x, y + 1.08, z))}
+      <Line points={placement.front.map(([x, z]) => new THREE.Vector3(x, y + 1.08, z))}
         color="#38bdf8" lineWidth={1.5} dashed dashSize={0.1} gapSize={0.08} depthTest={false} renderOrder={30} />
     </group>
   );

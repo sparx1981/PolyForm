@@ -4582,7 +4582,11 @@ function Scene() {
   /** A balcony placed at a door: on the outside of its wall, which it then moves with. */
   const commitBalcony = useCallback((placement: BalconyPlacement) => {
     const template = { ...DEFAULT_BALCONY_LOOK, ...patioToolSettings.template };
-    const balcony = { ...DEFAULT_BALCONY, ...template.balcony, hostOpeningId: placement.openingId };
+    const balcony = {
+      ...DEFAULT_BALCONY, ...template.balcony, hostOpeningId: placement.openingId,
+      depth: patioToolSettings.balconyDepth, margin: patioToolSettings.balconyMargin,
+      front: template.balcony?.front ?? 'curve', curvedWall: placement.curved,
+    };
     const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === 'balcony').length + 1;
     const newShape: Shape = {
       ...makePatioShape({
@@ -11772,7 +11776,8 @@ function Scene() {
       )}
       {activeTool === 'patio' && patioToolSettings.kind === 'balcony' && (
         <BalconyPlaceTool onCommit={commitBalcony} juliet={(patioToolSettings.template.balcony ?? DEFAULT_BALCONY).support === 'juliet'}
-          depth={patioToolSettings.balconyDepth} margin={patioToolSettings.balconyMargin} />
+          depth={patioToolSettings.balconyDepth} margin={patioToolSettings.balconyMargin}
+          front={patioToolSettings.template.balcony?.front ?? 'curve'} />
       )}
 
       {/* Fence / Railing Path Drawing Preview */}

@@ -7,6 +7,8 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'September 27, 2026',
     items: [
+      'Balconies on curved walls: placed at a door in a curved wall, a balcony now follows the wall either side of the door instead of leaving wedge gaps. Choose per balcony whether its front follows the same curve or runs straight across (at least the set depth from the wall everywhere). Brackets and posts are spaced evenly along the curve.',
+      'A balcony whose wall pieces are merged (for example to fit its door) now stays on the merged wall instead of being removed.',
       'Balconies: the Patio / Decking tool has a new Balcony option. Hover a door (or a window) and click: a balcony goes on the outside of the wall, centred on the opening and 600 mm wider each side, with its floor 50 mm below the door sill (a window takes the storey floor). Drag its corners to resize it, or set its depth and floor level in the panel.',
       'Four kinds of balcony: a cantilevered concrete slab (with a drip under the edge), a steel frame on angled brackets fixed to the wall, a steel frame on posts down to the ground, or a Juliet balcony (guarding across the door, no floor). Floors can be tiles, boards or plain concrete; guarding can be glass, metal balusters, timber spindles, metal & cable, or a solid rendered wall with a coping.',
       'A balcony stays on its wall: moving or turning the wall takes the balcony with it, and deleting the wall removes it (undo brings both back).',

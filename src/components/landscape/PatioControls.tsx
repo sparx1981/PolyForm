@@ -5,10 +5,10 @@ import { useAssetCatalog } from '../../lib/assets/useAssetCatalog';
 import { isMaterialAssetId, type AssetSummary } from '../../lib/assets/types';
 import {
   BALCONY_SUPPORTS, DECK_BOARDS, DEFAULT_BALCONY, DEFAULT_BALCONY_LOOK, PAVING_STYLES, SLAB_SIZES,
-  type BalconyData, type BalconyFloor, type BlockPattern, type BoardDirection, type DeckBoard, type PatioData, type PatioKind, type PatioToolSettings,
+  type BalconyData, type BalconyFloor, type BalconyFront, type BlockPattern, type BoardDirection, type DeckBoard, type PatioData, type PatioKind, type PatioToolSettings,
   type PavingStyle, type RailingStyle,
 } from '../../lib/patio/patioTypes';
-import { balconySettings, balconyWarnings, JULIET_DEPTH } from '../../lib/patio/balcony';
+import { balconySettings, balconyWarnings, JULIET_DEPTH, reshapeBalcony } from '../../lib/patio/balcony';
 import { buildPatio } from '../../lib/patio/patioGeometry';
 import { snapPatioToBuilding } from '../../lib/patio/patioClosure';
 import { patioGroundHelpers } from '../../lib/patio/patioPlacement';
@@ -129,17 +129,39 @@ export function PatioControls() {
   };
   const balcony = balconySettings(data);
   const updateBalcony = (patch: Partial<BalconyData>) => update({ balcony: { ...balcony, ...patch } });
-  const selectedDepth = selected ? balconyDepth(selected.patioData!) : null;
+  const curvedBalcony = !!selected && kind === 'balcony' && !!balcony.curvedWall;
+  const selectedDepth = selected ? (curvedBalcony ? (balcony.depth ?? tool.balconyDepth) : balconyDepth(selected.patioData!)) : null;
+  /** Rebuilds the selected balcony from its door; false when that isn't possible. */
+  const reshape = (patch: { depth?: number; front?: BalconyFront; juliet?: boolean }, extra: Partial<BalconyData> = {}) => {
+    if (!selected) return false;
+    const next = reshapeBalcony(selected, shapes, patch);
+    if (!next) return false;
+    const reshaped = { ...next, patioData: { ...next.patioData!, balcony: { ...next.patioData!.balcony!, ...extra } } };
+    setShapes(prev => prev.map(s => s.id === selected.id ? reshaped : s));
+    commitHistory();
+    return true;
+  };
   const setBalconyDepth = (depth: number) => {
     if (!selected) { setPatioToolSettings(prev => ({ ...prev, balconyDepth: depth })); return; }
+    // Along a curved wall the front is rebuilt from the wall; a rectangle keeps its width.
+    if (curvedBalcony && reshape({ depth })) return;
     const points = withBalconyDepth(selected.patioData!, depth);
-    if (points) update({ points });
+    if (points) update({ points, balcony: { ...balcony, depth } });
+  };
+  const setFront = (front: BalconyFront) => {
+    if (!selected) { update({ balcony: { ...balcony, front } }); return; }
+    if (!reshape({ front })) update({ balcony: { ...balcony, front } });
   };
   const setSupport = (support: BalconyData['support']) => {
-    // Switching to or from a Juliet changes how far it stands out.
+    // Switching to or from a Juliet changes its shape: rebuilt from the door where possible.
     const wasJuliet = balcony.support === 'juliet', isJuliet = support === 'juliet';
-    const points = selected && wasJuliet !== isJuliet ? withBalconyDepth(selected.patioData!, isJuliet ? JULIET_DEPTH : tool.balconyDepth) : null;
-    update({ balcony: { ...balcony, support }, ...(points ? { points } : {}) });
+    if (selected && wasJuliet !== isJuliet) {
+      if (reshape({ juliet: isJuliet }, { support })) return;
+      const points = withBalconyDepth(selected.patioData!, isJuliet ? JULIET_DEPTH : tool.balconyDepth);
+      update({ balcony: { ...balcony, support }, ...(points ? { points } : {}) });
+      return;
+    }
+    update({ balcony: { ...balcony, support } });
   };
   const setFloor = (floor: BalconyFloor) => {
     const color = floor === 'boards' ? (DECK_BOARDS.find(b => b.id === data.board)?.color ?? DECK_BOARDS[0].color)
@@ -241,6 +263,16 @@ export function PatioControls() {
               )}
               {balcony.floor !== 'concrete' && (
                 <ColorField text={balcony.floor === 'boards' ? 'Board colour' : 'Tile colour'} value={data.color} onChange={v => update({ color: v })} />
+              )}
+              {(!selected || curvedBalcony) && (
+                <div>
+                  <label className={label}>{selected ? 'Front edge (curved wall)' : 'Front edge on a curved wall'}</label>
+                  <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                    {([['curve', 'Follows the wall'], ['straight', 'Straight across']] as [BalconyFront, string][]).map(([id, text]) => (
+                      <button key={id} type="button" className={chip((balcony.front ?? 'curve') === id)} onClick={() => setFront(id)}>{text}</button>
+                    ))}
+                  </div>
+                </div>
               )}
               {selected ? (selectedDepth !== null && (
                 <Slider text="Depth (out from the wall)" value={selectedDepth} min={0.6} max={3} step={0.05} format={v => `${v.toFixed(2)} m`} onChange={setBalconyDepth} />
