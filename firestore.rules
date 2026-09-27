@@ -275,6 +275,37 @@ service cloud.firestore {
       allow delete: if isDocOwner();
     }
 
+    // Comments on a client page. Anyone holding the link can read them and leave one under
+    // a name (no account); only the page's owner can post as the designer, mark them read or
+    // delete them.
+    match /presentations/{shareId}/comments/{commentId} {
+      allow get, list: if exists(/databases/$(database)/documents/presentations/$(shareId));
+      allow create: if exists(/databases/$(database)/documents/presentations/$(shareId)) &&
+        isValidComment(request.resource.data) &&
+        (request.resource.data.fromDesigner == false && request.resource.data.read == false ||
+         isPresentationOwner(shareId));
+      allow update: if isPresentationOwner(shareId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+        request.resource.data.read is bool;
+      allow delete: if isPresentationOwner(shareId);
+    }
+
+    function isPresentationOwner(shareId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/presentations/$(shareId)).data.ownerId == request.auth.uid;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasOnly(['authorName', 'text', 'createdAt', 'fromDesigner', 'read', 'anchor', 'replyTo']) &&
+             data.keys().hasAll(['authorName', 'text', 'createdAt', 'fromDesigner', 'read']) &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 60 &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 2000 &&
+             data.createdAt == request.time &&
+             data.fromDesigner is bool && data.read is bool &&
+             (!('anchor' in data) || data.anchor == null || (data.anchor is list && data.anchor.size() == 3)) &&
+             (!('replyTo' in data) || data.replyTo == null || (data.replyTo is string && data.replyTo.size() <= 40));
+    }
+
     function isValidPresentation(data) {
       return data.ownerId == request.auth.uid &&
              data.keys().hasAll(['ownerId', 'title', 'storagePath', 'effects']) &&

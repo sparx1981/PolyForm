@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-  Presentation, X, Hammer, PenLine, Tag, Route, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2,
+  Presentation, X, Hammer, PenLine, Tag, Route, MessageSquare, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2,
 } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
@@ -9,6 +9,7 @@ import { playBuild, playStages, presentation, usePresentation, type CutMode } fr
 import { SERIF, StageCaption, StageTimeline } from './StageTimeline';
 import { LabelsEditor, TourEditor } from './ContentEditor';
 import { LabelCallout, PinLayer } from './PinLayer';
+import { CommentPinMarker, DesignerCommentsList, DesignerCommentsSync, pinNumbers, useDesignerComments, useUnreadComments } from './Comments';
 import { downloadBlob, recordingSupported, startRecording, videoFileName, type Recording } from '../../lib/presentation/recorder';
 import { runShowcase, SHOWCASE_STEPS } from '../../lib/presentation/showcase';
 import { modelledBounds } from '../Viewport';
@@ -30,7 +31,10 @@ export function frameModel(shapes: { id: string; type: string }[]) {
 /** The top bar's "Present" switch. */
 export function PresentButton({ compact }: { compact?: boolean }) {
   const { active } = usePresentation();
+  const unread = useUnreadComments();
   return (
+    <>
+    <DesignerCommentsSync />
     <button
       onClick={() => (active ? closePresentation() : presentation.set({ active: true }))}
       className={cn(
@@ -43,7 +47,12 @@ export function PresentButton({ compact }: { compact?: boolean }) {
     >
       <Presentation size={16} />
       {!compact && <span>Present</span>}
+      {unread > 0 && (
+        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-black text-[10px] font-bold flex items-center justify-center"
+          title={`${unread} new client comment${unread === 1 ? '' : 's'}`}>{unread}</span>
+      )}
     </button>
+    </>
   );
 }
 
@@ -68,7 +77,9 @@ export default function PresentationPanel() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [showcaseStep, setShowcaseStep] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | null>(null);
+  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | 'comments' | null>(null);
+  const unread = useUnreadComments();
+  const { comments } = useDesignerComments();
   const abort = useRef<AbortController | null>(null);
   const orbitBefore = useRef<boolean | null>(null);
 
@@ -143,6 +154,7 @@ export default function PresentationPanel() {
       >
         {open === 'labels' && <LabelsEditor />}
         {open === 'tour' && <TourEditor />}
+        {open === 'comments' && <Popover title="Client comments" hint="From your client page"><DesignerCommentsList /></Popover>}
         {open === 'stages' && <StageTimeline className="mb-2 mx-auto w-[min(560px,calc(100vw-16px))]" />}
         {open === 'explode' && (
           <Popover title="Exploded view" hint={building ? 'Lift floors and roof apart' : 'Add walls to explode a building'}>
@@ -189,6 +201,8 @@ export default function PresentationPanel() {
           <Divider />
           <Tool icon={<Tag size={18} />} label="Labels" active={open === 'labels'} onClick={() => setOpen(open === 'labels' ? null : 'labels')} disabled={!!showcaseStep} />
           <Tool icon={<Route size={18} />} label="Tour" active={open === 'tour'} onClick={() => setOpen(open === 'tour' ? null : 'tour')} disabled={!!showcaseStep} />
+          <Tool icon={<span className="relative"><MessageSquare size={18} />{unread > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-amber-400 text-black text-[9px] font-bold flex items-center justify-center">{unread}</span>}</span>}
+            label="Comments" active={open === 'comments'} onClick={() => setOpen(open === 'comments' ? null : 'comments')} disabled={!!showcaseStep} />
           <Divider />
           <Tool icon={showcaseStep ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
             label={showcaseStep ? `${showcaseStep}… (stop)` : 'Showcase'} active={!!showcaseStep} onClick={() => showcase(false)} />
@@ -212,6 +226,9 @@ export default function PresentationPanel() {
           </button>
         </div>
       </div>
+      {open === 'comments' && <PinLayer pins={[...pinNumbers(comments)].map(([id, n]) => ({
+        id: `c-${id}`, position: comments.find(c => c.id === id)!.anchor!, node: <CommentPinMarker n={n} />,
+      }))} />}
       <PinLayer hide={s.explode > 0.01 || s.buildPlaying || s.build < 1} pins={app.presentationContent.labels.map(l => ({
         id: l.id, position: l.position, node: <LabelCallout text={l.text} detail={l.detail} serif={SERIF} />,
       }))} />

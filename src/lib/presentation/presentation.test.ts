@@ -343,3 +343,14 @@ describe('presentation content (labels and tour)', () => {
     expect(parseProjectFile(text).presentationContent).toEqual(content);
   });
 });
+
+describe('client comments', () => {
+  it('groups replies under their comment and counts what the designer has not read', async () => {
+    const { threads, unreadCount } = await import('./comments');
+    const c = (id: string, extra: object = {}) => ({ id, authorName: 'A', text: 't', createdAt: 1, fromDesigner: false, read: false, anchor: null, replyTo: null, ...extra });
+    const all = [c('a'), c('b', { replyTo: 'a', fromDesigner: true, read: true }), c('c', { read: true }), c('d', { replyTo: 'gone' })];
+    const t = threads(all);
+    expect(t.map(x => [x.root.id, x.replies.map(r => r.id)])).toEqual([['a', ['b']], ['c', []], ['d', []]]);
+    expect(unreadCount(all)).toBe(2);
+  });
+});

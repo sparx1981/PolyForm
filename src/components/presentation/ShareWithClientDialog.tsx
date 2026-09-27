@@ -11,6 +11,7 @@ import {
 import { plantName } from '../../lib/presentation/plants';
 import { canvasRef } from '../../lib/presentation/recorder';
 import { mainSceneRef } from '../Viewport';
+import { refreshDesignerComments } from './Comments';
 import type { Shape } from '../../types';
 
 const EFFECT_LABELS: { key: keyof ClientEffects; label: string }[] = [
@@ -115,6 +116,7 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
         bundle: { project: app.getProjectState(), roomNames, bom },
       });
       setExisting(published);
+      refreshDesignerComments();
     } catch (err) {
       setError(friendly(err));
     } finally {
@@ -130,6 +132,7 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
     try {
       await revokePresentation(existing.id, user.uid);
       setExisting(null);
+      refreshDesignerComments();
     } catch (err) {
       setError(friendly(err));
     } finally {

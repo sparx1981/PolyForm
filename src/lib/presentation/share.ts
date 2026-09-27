@@ -7,6 +7,7 @@ import type { Shape } from '../../types';
 import type { BomLine, MeasuredArea } from './bom';
 import type { RoomLabel } from './floorPlans';
 import { categoryOf } from './classify';
+import { deleteAllComments } from './comments';
 
 /**
  * Client share links. Publishing takes a snapshot of the model as it is now, so the client sees
@@ -122,6 +123,8 @@ export async function publishPresentation(input: {
 }
 
 export async function revokePresentation(shareId: string, ownerId: string) {
+  // Comments first: once the page is gone, nobody may touch them any more.
+  await deleteAllComments(shareId).catch(() => {});
   await deleteDoc(doc(db, 'presentations', shareId));
   const folder = `presentations/${ownerId}/${shareId}`;
   await Promise.all(['project.json', 'cover.jpg'].map(f => deleteObject(ref(storage, `${folder}/${f}`)).catch(() => {})));

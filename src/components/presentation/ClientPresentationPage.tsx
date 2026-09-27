@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Hammer, Layers, Scissors, ScanEye, RotateCw, Maximize2, Download, FileSpreadsheet, Loader2, AlertTriangle, Ruler, Palette,
-  Home, DoorOpen, Package, MessageSquare, Box, Route,
+  Home, DoorOpen, Package, MessageSquare, MessageSquarePlus, MapPin, Box, Route,
 } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import Viewport from '../Viewport';
@@ -16,6 +16,9 @@ import { frameModel, Popover, Slider, Tool, cutRange } from './PresentationPanel
 import { SERIF, StageCaption, StageTimeline } from './StageTimeline';
 import { LabelCallout, PinLayer } from './PinLayer';
 import { TourPlayer } from './TourPlayer';
+import { usePickOnModel } from './ContentEditor';
+import { CommentComposer, CommentPinMarker, CommentThreads, pinNumbers } from './Comments';
+import { postComment, watchComments, type PresentationComment } from '../../lib/presentation/comments';
 import type { Shape } from '../../types';
 
 const LEVEL_NAMES = ['Ground floor', 'First floor', 'Second floor', 'Third floor', 'Fourth floor'];
@@ -36,6 +39,12 @@ export default function ClientPresentationPage({ shareId }: { shareId: string })
   const live = useRef(app);
   live.current = app;
   const { dusk } = usePresentation();
+  const [comments, setComments] = useState<PresentationComment[]>([]);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  useEffect(() => {
+    if (status !== 'ready') return;
+    return watchComments(shareId, setComments, () => {});
+  }, [shareId, status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,13 +155,14 @@ export default function ClientPresentationPage({ shareId }: { shareId: string })
               <Loader2 size={24} className="animate-spin" /> Loading the design…
             </div>
           )}
-          {status === 'ready' && meta && <ViewerControls effects={meta.effects} />}
+          {status === 'ready' && meta && <ViewerControls effects={meta.effects} shareId={shareId} comments={comments} onOpenComment={setHighlight} />}
           {status === 'ready' && <StageCaption className="absolute left-4 sm:left-6 bottom-40 sm:bottom-36 z-10" dark={dusk} />}
         </div>
         <p className="text-xs text-slate-500 mt-2 px-1">Drag to look around · right-drag or two fingers to move · scroll or pinch to zoom</p>
       </section>
 
       {meta && bundle && <Details meta={meta} bundle={bundle} />}
+      {meta && <ClientCommentsSection shareId={shareId} designer={meta.designerName} comments={comments} highlight={highlight} />}
 
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-10 text-sm text-slate-500 flex flex-wrap items-center justify-between gap-3">
         <span>Made with <a href="/" className="font-semibold text-polyform-blue hover:underline">PolyForm</a></span>
@@ -162,10 +172,19 @@ export default function ClientPresentationPage({ shareId }: { shareId: string })
   );
 }
 
-function ViewerControls({ effects }: { effects: ClientPresentationDoc['effects'] }) {
+function ViewerControls({ effects, shareId, comments, onOpenComment }: {
+  effects: ClientPresentationDoc['effects'];
+  shareId: string;
+  comments: PresentationComment[];
+  onOpenComment: (id: string) => void;
+}) {
   const s = usePresentation();
   const app = useApp();
-  const [open, setOpen] = useState<'explode' | 'cut' | null>(null);
+  const [open, setOpen] = useState<'explode' | 'cut' | 'comment' | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const [anchor, setAnchor] = useState<[number, number, number] | null>(null);
+  usePickOnModel(placing, p => { setAnchor(p); setPlacing(false); }, () => setPlacing(false));
+  const pins = pinNumbers(comments);
   const [touring, setTouring] = useState(false);
   const building = s.storeys > 0;
   const range = cutRange(s);
@@ -175,9 +194,42 @@ function ViewerControls({ effects }: { effects: ClientPresentationDoc['effects']
     <PinLayer hide={s.explode > 0.01 || s.buildPlaying || s.build < 1} pins={labels.map(l => ({
       id: l.id, position: l.position, node: <LabelCallout text={l.text} detail={l.detail} serif={SERIF} />,
     }))} />
+    <PinLayer pins={[
+      ...[...pins].map(([id, n]) => ({
+        id: `c-${id}`, position: comments.find(c => c.id === id)!.anchor!,
+        node: <CommentPinMarker n={n} onClick={() => {
+          onOpenComment(id);
+          document.getElementById(`comment-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }} />,
+      })),
+      ...(anchor ? [{ id: 'new-comment', position: anchor, node: <CommentPinMarker n={pins.size + 1} active /> }] : []),
+    ]} />
     {touring && tour.length > 0 && <TourPlayer stops={tour} onClose={() => setTouring(false)} className="absolute left-4 top-4 z-10" />}
     <div className="absolute left-1/2 -translate-x-1/2 bottom-4 z-10 w-[min(560px,calc(100%-16px))] flex flex-col items-center" onPointerDown={e => e.stopPropagation()}>
       {!open && <StageTimeline className="w-full mb-2" />}
+      {open === 'comment' && placing && (
+        <div className="mb-2 flex items-center gap-3 rounded-full bg-[#2f3a33] text-white px-4 py-2 text-sm shadow-xl">
+          <MapPin size={15} className="text-amber-300" /> Click the spot your comment is about
+          <button onClick={() => setPlacing(false)} className="text-white/70 hover:text-white underline text-xs">skip</button>
+        </div>
+      )}
+      {open === 'comment' && !placing && (
+        <div className="mb-2 w-full rounded-2xl bg-[#f7f5f0]/95 backdrop-blur-md shadow-xl ring-1 ring-black/5 p-4 text-slate-800">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-sm font-bold">Leave a comment</span>
+            <button onClick={() => { setPlacing(!placing); }} className={cn('flex items-center gap-1 text-xs font-semibold rounded-lg px-2 py-1', placing ? 'bg-[#b4553a] text-white' : 'text-[#b4553a] hover:bg-black/5')}>
+              <MapPin size={13} /> {anchor ? 'Move the pin' : 'Pin it to a spot'}
+            </button>
+          </div>
+          <CommentComposer compact anchor={anchor} onClearAnchor={() => setAnchor(null)}
+            placeholder="A question or thought for your designer…"
+            onSend={async (name, text) => {
+              await postComment(shareId, { authorName: name, text, anchor });
+              setAnchor(null);
+              setOpen(null);
+            }} />
+        </div>
+      )}
       {open === 'explode' && (
         <Popover title="Exploded view" hint="Floors and roof lifted apart">
           <Slider label="Spread" value={s.explode} min={0} max={1} step={0.01} onChange={v => presentation.set({ explode: v })} format={v => `${Math.round(v * 100)}%`} />
@@ -211,6 +263,9 @@ function ViewerControls({ effects }: { effects: ClientPresentationDoc['effects']
         )}
         {effects.xray && <Tool icon={<ScanEye size={18} />} label="X-ray" active={s.xray} onClick={() => presentation.set({ xray: !s.xray })} />}
         <Tool icon={<RotateCw size={18} />} label="Orbit" active={app.autoOrbitEnabled} onClick={() => app.setAutoOrbitEnabled(!app.autoOrbitEnabled)} />
+        <Tool icon={<MessageSquarePlus size={18} />} label="Comment" active={open === 'comment'} onClick={() => {
+          if (open === 'comment') { setOpen(null); setPlacing(false); setAnchor(null); } else { setOpen('comment'); setPlacing(true); }
+        }} />
         {tour.length > 0 && <Tool icon={<Route size={18} />} label="Tour" active={touring} onClick={() => setTouring(!touring)} />}
         <Tool icon={<Maximize2 size={18} />} label="Reset" onClick={() => { setOpen(null); setTouring(false); presentation.reset(true); frameModel(app.shapes); }} />
       </div>
@@ -296,6 +351,34 @@ function Details({ meta, bundle }: { meta: ClientPresentationDoc; bundle: Client
         <p className="text-xs text-slate-500 mt-3">Quantities are measured from the 3D model and are approximate. Wall areas are net of doors and windows.</p>
       </section>
     </>
+  );
+}
+
+function ClientCommentsSection({ shareId, designer, comments, highlight }: {
+  shareId: string; designer: string; comments: PresentationComment[]; highlight: string | null;
+}) {
+  return (
+    <section id="comments" className="max-w-6xl mx-auto px-4 sm:px-6 pt-14 scroll-mt-16">
+      <SectionTitle eyebrow="Conversation" title="Comments" />
+      <div className="grid lg:grid-cols-[1fr_380px] gap-6 items-start">
+        <div>
+          <CommentThreads
+            comments={comments}
+            canReply
+            highlight={highlight}
+            emptyText={`No comments yet. Leave one below, or use Comment in the 3D view to pin it to a spot. ${designer || 'Your designer'} will see it.`}
+            onReply={async (text, replyTo) => {
+              const name = (() => { try { return localStorage.getItem('polyform_comment_name') ?? ''; } catch { return ''; } })() || window.prompt('Your name') || '';
+              await postComment(shareId, { authorName: name, text, replyTo });
+            }}
+          />
+        </div>
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
+          <p className="text-sm font-semibold text-slate-900 mb-2">Add a comment</p>
+          <CommentComposer onSend={(name, text) => postComment(shareId, { authorName: name, text })} compact />
+        </div>
+      </div>
+    </section>
   );
 }
 
