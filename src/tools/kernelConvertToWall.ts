@@ -28,6 +28,7 @@
 
 import type { EdgeId, FaceId, Graph, Vec3 } from '../lib/geometry/types';
 import { loopPoints, removeFace } from '../lib/geometry/topology';
+import { planeBasis, projectToBasis } from '../lib/geometry/math';
 import { insertIsolatedEdge, type InsertContext } from '../lib/geometry/insert';
 import { derive, type DeriveOptions } from '../lib/geometry/derive';
 import type { Shape } from '../types';
@@ -113,6 +114,12 @@ export interface WallConversionPlan {
 export interface WallConversionRejection {
   readonly ok: false;
   readonly reason: string;
+  /**
+   * True when the shape looks like an attempt at walls (an offset ring was
+   * found) but fails a check, so the menu can show the option greyed out
+   * with the reason instead of hiding it.
+   */
+  readonly nearMiss: boolean;
 }
 
 export type WallConversionResult = WallConversionPlan | WallConversionRejection;
@@ -316,8 +323,28 @@ function pairEdges(outer: readonly P2[], inner: readonly P2[]): Pairing | null {
 // Analysis
 // ---------------------------------------------------------------------------
 
-function reject(reason: string): WallConversionRejection {
-  return { ok: false, reason };
+function reject(reason: string, nearMiss = true): WallConversionRejection {
+  return { ok: false, reason, nearMiss };
+}
+
+/**
+ * An upright or tilted face with one hole only counts as a near miss when
+ * the hole is an even offset of its outline: an offset ring drawn on the
+ * wrong plane. A window outline drawn on a wall also has one hole, but is
+ * not an attempt at walls and should not bring up the option.
+ */
+function isOffsetRingOnItsPlane(g: Graph, id: FaceId): boolean {
+  const f = g.faces.get(id);
+  if (!f || f.innerLoops.length !== 1) return false;
+  const basis = planeBasis(f.plane);
+  const flat = (pts: Vec3[]) => cleanPolygon(pts.map((p) => {
+    const q = projectToBasis(p, basis);
+    return { x: q.x, z: q.y };
+  }));
+  const pairing = pairEdges(flat(loopPoints(g, f.outerLoop)), flat(loopPoints(g, f.innerLoops[0]!)));
+  if (!pairing) return false;
+  const t = pairing.thicknesses;
+  return Math.max(...t) - Math.min(...t) <= Math.max(POINT_TOL, Math.max(...t) * 0.01);
 }
 
 /**
@@ -331,7 +358,7 @@ export function analyzeWallConversion(
   clickedFace: FaceId,
   groupFaces: readonly FaceId[],
 ): WallConversionResult {
-  if (!g.faces.has(clickedFace)) return reject('That surface no longer exists.');
+  if (!g.faces.has(clickedFace)) return reject('That surface no longer exists.', false);
 
   // 1. Find the offset ring: a flat face with exactly one hole, in or
   //    touching the clicked group. Touching matters because a ring's own
@@ -347,18 +374,16 @@ export function analyzeWallConversion(
     const f = g.faces.get(id);
     if (!f || f.innerLoops.length !== 1) continue;
     if (!isHorizontal(g, id)) {
-      tiltedRing = true;
+      if (isOffsetRingOnItsPlane(g, id)) tiltedRing = true;
       continue;
     }
     ring = id;
     break;
   }
   if (ring === null) {
-    return reject(
-      tiltedRing
-        ? 'The shape must be drawn flat and pulled straight up to become walls.'
-        : 'Use the Offset tool first so the shape has a wall thickness.',
-    );
+    return tiltedRing
+      ? reject('The shape must be drawn flat on the ground and pulled straight up to become walls.')
+      : reject('Use the Offset tool first so the shape has a wall thickness.', false);
   }
 
   const ringFace = g.faces.get(ring)!;

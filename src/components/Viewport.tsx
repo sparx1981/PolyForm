@@ -113,7 +113,8 @@ import { rankSnap } from '../tools/tuning';
 import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
-import { analyzeWallConversion, buildWallShapes, captureFaces, graphSignature, heightWarnings, type WallConversionPlan } from '../tools/kernelConvertToWall';
+import { planCurvedMerge, isCurvedPiece, type MergeResult, type MergeRejection } from '../tools/convertedWallMerge';
+import { analyzeWallConversion, buildWallShapes, captureFaces, graphSignature, heightWarnings, type WallConversionPlan, type WallConversionRejection } from '../tools/kernelConvertToWall';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
@@ -9773,7 +9774,8 @@ function Scene() {
       })}
 
       {/* Render selection highlight for non-divided surfaces */}
-      {selectedSurface && !(shapes.find(s => s.id === selectedSurface.shapeId)?.surfaceDivisions?.[selectedSurface.faceIndex]) && (
+      {/* The shape can be gone for a render when an edit replaces it (e.g. merging wall pieces). */}
+      {selectedSurface && shapes.some(s => s.id === selectedSurface.shapeId) && !(shapes.find(s => s.id === selectedSurface.shapeId)?.surfaceDivisions?.[selectedSurface.faceIndex]) && (
         <FaceGrid 
           shape={shapes.find(s => s.id === selectedSurface.shapeId)!} 
           faceIndex={selectedSurface.faceIndex} 
@@ -12975,11 +12977,67 @@ export default function Viewport() {
   const wallConversion = useMemo(() => {
     if (!contextMenu || contextMenu.type !== 'kernel' || contextMenu.faceId === undefined) return null;
     const result = analyzeWallConversion(kernelHost.graph, contextMenu.faceId, contextMenu.data);
-    return result.ok ? result : null;
+    // Nothing ring-like at all: keep the menu free of the option.
+    return result.ok || (result as WallConversionRejection).nearMiss ? result : null;
     // kernelRevision: the graph is mutated in place.
   }, [contextMenu, kernelHost, kernelRevision]);
   const [convertWallPlan, setConvertWallPlan] = useState<WallConversionPlan | null>(null);
   const [convertWallHeight, setConvertWallHeight] = useState('2.4');
+  const curvedMergeMenuItems = (shapeId: string) => {
+    // Curved pieces from Convert To Wall: a door or window sits on
+    // one flat piece, so offer to merge neighbours into a flat
+    // section wide enough for one.
+    const piece = shapes.find(s => s.id === shapeId);
+    if (!piece || !isCurvedPiece(piece)) return null;
+    const pieceWidth = Array.isArray(piece.args) ? (piece.args[0] as number) : 0;
+    const options = [
+      { label: 'Merge Pieces For A Door', width: 1.1 },
+      { label: 'Merge Pieces For A Window', width: 0.7 },
+    ].filter(o => pieceWidth < o.width);
+    return options.map(o => {
+      const plan = planCurvedMerge(shapes, piece.id, o.width, () => Math.random().toString(36).substr(2, 9));
+      if (!plan.ok) {
+        return (
+          <div key={o.label} className="w-full px-3 py-1.5 text-xs cursor-not-allowed" aria-disabled="true">
+            <div className="text-gray-400">{o.label}</div>
+            <div className={cn("text-[10px] leading-snug mt-0.5 max-w-[220px]", theme === 'dark' ? "text-gray-500" : "text-gray-400")}>
+              {(plan as MergeRejection).reason}
+            </div>
+          </div>
+        );
+      }
+      const merge = plan as MergeResult;
+      return (
+        <button
+          key={o.label}
+          onClick={() => {
+            const removed = new Set(merge.removeIds);
+            const moved = new Map(merge.rehosted.map(r => [r.id, r]));
+            setShapes(prev => {
+              const next: Shape[] = [];
+              for (const s of prev) {
+                if (s.id === piece.id) next.push(merge.merged);
+                else if (!removed.has(s.id)) next.push(moved.get(s.id) ?? s);
+              }
+              return next;
+            });
+            setSelectedSurface(null);
+            setSelectedIds([merge.merged.id]);
+            setSelectedId(merge.merged.id);
+            setMeasurements(`Merged ${merge.removeIds.length} curved pieces into one flat wall ${merge.width.toFixed(2)} m wide.`);
+            setContextMenu(null);
+          }}
+          className={cn(
+            "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+            theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+          )}
+        >
+          {o.label} ({merge.removeIds.length} pieces, {merge.width.toFixed(2)} m)
+        </button>
+      );
+    });
+  };
+
   const convertToWalls = useCallback((plan: WallConversionPlan, height: number) => {
     const g = kernelHost.graph;
     // The analysis may be stale if the geometry changed while the dialog was open.
@@ -13800,6 +13858,7 @@ export default function Viewport() {
                 }
                 return null;
               })()}
+              {curvedMergeMenuItems(contextMenu.data.shapeId)}
               <button 
                 onClick={() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; if (st === 'box' || st === 'rect') setIsDividePopupOpen(true); }} disabled={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return st !== 'box' && st !== 'rect'; })()} title={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return (st === 'box' || st === 'rect') ? undefined : 'Only available on box/rectangle faces'; })()}
                 className={cn(
@@ -13922,12 +13981,13 @@ export default function Viewport() {
                   Divide Surface
                 </button>
               )}
-              {wallConversion && (
+              {wallConversion && (wallConversion.ok ? (
                 <button
                   onClick={() => {
-                    setConvertWallPlan(wallConversion);
-                    setConvertWallHeight(String(wallConversion.height !== null
-                      ? +wallConversion.height.toFixed(3)
+                    const plan = wallConversion as WallConversionPlan;
+                    setConvertWallPlan(plan);
+                    setConvertWallHeight(String(plan.height !== null
+                      ? +plan.height.toFixed(3)
                       : (wallToolSettings?.height || 2.4)));
                     setContextMenu(null);
                   }}
@@ -13938,7 +13998,16 @@ export default function Viewport() {
                 >
                   Convert To Wall
                 </button>
-              )}
+              ) : (
+                // Looks like an attempt at walls but fails a check: shown
+                // greyed out with the reason, so the fix is obvious.
+                <div className="w-full px-3 py-1.5 text-xs cursor-not-allowed" aria-disabled="true">
+                  <div className="text-gray-400">Convert To Wall</div>
+                  <div className={cn("text-[10px] leading-snug mt-0.5 max-w-[220px]", theme === 'dark' ? "text-gray-500" : "text-gray-400")}>
+                    {(wallConversion as WallConversionRejection).reason}
+                  </div>
+                </div>
+              ))}
               <button
                 onClick={() => {
                   if (setGroupHidden(kernelHost.graph, contextMenu.data, true) > 0) bumpKernel();
@@ -13991,6 +14060,7 @@ export default function Viewport() {
                 }
                 return null;
               })()}
+              {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && curvedMergeMenuItems(contextMenu.data[0])}
               <button 
                 onClick={() => {
                   const groupId = Math.random().toString(36).substr(2, 9);

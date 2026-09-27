@@ -10,6 +10,9 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Convert To Wall: right-click a shape drawn with the Rectangle, Circle, Polygon, Bezier, Poly Line or Triangle tools that has been given a wall thickness with Offset (and, optionally, pulled straight up) to turn it into real walls that doors, windows, timber framing and the other architecture tools work with. The option only appears when the shape qualifies: an even-thickness ring lying flat, pulled straight up to a flat, level top, not joined to other geometry and not filled in the middle.',
       'Each edge becomes one wall with exact mitred corners at any angle. Curves keep the pieces they were drawn with, and the dialog reports which pieces are wide enough for a door (1.1 m) or a window (0.7 m) and which suit a decorative wall or column. A flat, unextruded ring asks for a wall height.',
       'Convert To Wall warns about unrealistic thicknesses (under 75 mm, partition-thin, over 500 mm) and heights (under 2.0 m, over a 4 m storey), sharp corners and very short walls. The original shape is replaced; Ctrl+Z brings it back, and the floor inside the ring is kept.',
+      'Convert To Wall now also shows greyed out, with the reason, when a shape looks like an attempt at walls but fails a check (for example a ring drawn on an upright face, or one with its middle pulled up too), so the fix is obvious.',
+      'Merge Pieces For A Door / Window: right-click a curved wall piece that is too narrow for an opening to merge it with just enough neighbouring pieces into one flat section (centred where you clicked), the way real curved buildings do. The pieces either side still meet it flush, and any door or window already on the merged pieces moves onto the new wall.',
+      'Fixed a crash when the wall whose surface was selected is replaced by an edit.',
     ]
   },
   {

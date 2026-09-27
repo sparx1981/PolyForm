@@ -174,6 +174,8 @@ describe('rejections', () => {
     const r = analyse(h, only(h));
     expect(r.ok).toBe(false);
     expect((r as WallConversionRejection).reason).toMatch(/Offset/);
+    // Not a near miss: no greyed-out menu item on every plain shape.
+    expect((r as WallConversionRejection).nearMiss).toBe(false);
   });
 
   it('a plain extruded box', () => {
@@ -190,6 +192,7 @@ describe('rejections', () => {
     const r = analyse(h, ringFace(h));
     expect(r.ok).toBe(false);
     expect((r as WallConversionRejection).reason).toMatch(/flat/);
+    expect((r as WallConversionRejection).nearMiss).toBe(true);
   });
 
   it('a ring whose middle was pulled up too', () => {
@@ -200,6 +203,34 @@ describe('rejections', () => {
     pullUp(h, ringFace(h), 2);
     pullUp(h, inner, 2);
     expect(analyse(h, sideFace(h)).ok).toBe(false);
+  });
+});
+
+describe('near misses', () => {
+  it('a window outline drawn on an upright face is not offered at all', () => {
+    const h = host();
+    outline(h, [vec3(0, 0, 0), vec3(4, 0, 0), vec3(4, 3, 0), vec3(0, 3, 0)]);
+    outline(h, [vec3(1, 1, 0), vec3(2, 1, 0), vec3(2, 2.5, 0), vec3(1, 2.5, 0)]);
+    const face = [...h.graph.faces.entries()].find(([, f]) => f.innerLoops.length === 1)![0];
+    const r = analyse(h, face) as WallConversionRejection;
+    expect(r.ok).toBe(false);
+    expect(r.nearMiss).toBe(false);
+  });
+
+  it('a ring with its middle filled in is a near miss with a reason', () => {
+    const h = host();
+    rect(h, 6, 4);
+    offsetInward(h, only(h), 0.2);
+    pullUp(h, ringFace(h), 2.5);
+    // A lid over the middle.
+    const floor = [...h.graph.faces.entries()].find(([, f]) =>
+      f.innerLoops.length === 0 && Math.abs(f.plane.normal.y) > 0.99 &&
+      loopPoints(h.graph, f.outerLoop).every(p => Math.abs(p.y) < 1e-6))![0];
+    pullUp(h, floor, 2.5);
+    const r = analyse(h, sideFace(h)) as WallConversionRejection;
+    expect(r.ok).toBe(false);
+    expect(r.nearMiss).toBe(true);
+    expect(r.reason.length).toBeGreaterThan(10);
   });
 });
 
