@@ -101,7 +101,14 @@ export function billOfMaterials(
         break;
       }
       case 'roof': {
-        if (isRoofTrim(s)) break;
+        const extra = s.customData?.roofExtra as string | undefined;
+        if (extra === 'gutters') {
+          t.add({ group: 'Structure', item: 'Gutters', qty: Number(s.customData.length) || 0, unit: 'm' });
+          t.add({ group: 'Structure', item: 'Downpipes', qty: Number(s.customData.downpipes) || 0, unit: 'no.' });
+        } else if (extra === 'chimney') t.add({ group: 'Structure', item: 'Chimney', qty: 1, unit: 'no.' });
+        else if (extra === 'solar') t.add({ group: 'Structure', item: 'Solar panels', detail: 'About 1.0 × 1.7 m', qty: Number(s.customData.count) || 0, unit: 'no.' });
+        else if (extra === 'dormer-walls') t.add({ group: 'Structure', item: 'Dormer windows', qty: Number(s.customData.count) || 0, unit: 'no.' });
+        if (extra || isRoofTrim(s)) break;
         const area = opts.measured?.[s.id]?.topArea ?? 0;
         const type = s.roofData?.roofType ? `${titleCase(String(s.roofData.roofType))} roof` : 'Roof';
         if (area > 0) t.add({ group: 'Structure', item: 'Roof covering', detail: type, qty: area, unit: 'm²' });

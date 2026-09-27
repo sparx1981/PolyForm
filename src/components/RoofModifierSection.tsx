@@ -32,6 +32,8 @@ import {
   updateRoofAssemblyHeight 
 } from '../lib/archRoofGenerator';
 import { Shape } from '../types';
+import { refreshRoofExtras } from '../lib/roofExtras';
+import { RoofExtrasSection } from './RoofExtrasSection';
 
 export const RoofModifierSection: React.FC = () => {
   const { 
@@ -230,11 +232,13 @@ export const RoofModifierSection: React.FC = () => {
       return s;
     });
 
-    setShapes(finalShapes);
+    // Gutters, chimney, solar panels and dormers follow the roof's new shape.
+    const withExtras = refreshRoofExtras(finalShapes, activeRoof.id);
+    setShapes(withExtras);
 
     // If timber frame exists in the design and height or overhang changed, run "Commit Updated Framing"
     if (hasTimberFraming && (params.height !== undefined || params.eaveOverhang !== undefined)) {
-      commitUpdatedFraming(finalShapes);
+      commitUpdatedFraming(withExtras);
       setMeasurements(`Roof updated (${actualHeight.toFixed(2)}m height, ${(targetOverhang * 100).toFixed(0)}cm overhang, ${pitchAngleDeg}° pitch). Recomputed timber framing.`);
     }
 
@@ -964,6 +968,7 @@ export const RoofModifierSection: React.FC = () => {
           </div>
         )}
       </div>}
+      {activeRoof && <RoofExtrasSection roof={activeRoof} />}
     </div>
   );
 };
