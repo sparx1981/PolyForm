@@ -5,14 +5,28 @@ import { Line } from '@react-three/drei';
 import type { Shape } from '../../types';
 import { useApp } from '../../AppContext';
 import { groundUnderRay } from '../../lib/terrain/groundRay';
-import { arcPoint, bulgeThrough, stepAnchor, type Vec2 } from '../../lib/patio/patioGeometry';
+import { arcPoint, bulgeThrough, denseOutline, stepAnchor, type Vec2 } from '../../lib/patio/patioGeometry';
 import type { PatioData } from '../../lib/patio/patioTypes';
 import { wallFaces, type WallFace } from '../../lib/patio/patioPlacement';
+import { buildCloseTargets, buildingEdgePoint, closeCandidates, projectOntoPath, snapRectangleSide, type CloseCandidate, type CloseTarget } from '../../lib/patio/patioClosure';
 
 export { wallFaces, patioGroundHelpers } from '../../lib/patio/patioPlacement';
 
-/** How close (m) the cursor must be to a wall face, corner or the first point to snap to it. */
+/** Furthest (m) the cursor snaps to a wall face, corner or the first point. */
 const SNAP = 0.35;
+/** Snapping reach on screen: the same feel at any zoom, never more than SNAP. */
+const SNAP_PIXELS = 12;
+
+/** World metres per screen pixel at a point, for the current camera. */
+function metresPerPixel(camera: THREE.Camera, at: THREE.Vector3, viewportHeight: number): number {
+  if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+    const cam = camera as THREE.PerspectiveCamera;
+    const depth = cam.position.distanceTo(at);
+    return (2 * depth * Math.tan((cam.fov * Math.PI) / 360)) / (viewportHeight * (cam.zoom || 1));
+  }
+  const cam = camera as THREE.OrthographicCamera;
+  return (cam.top - cam.bottom) / ((cam.zoom || 1) * viewportHeight);
+}
 
 /**
  * Set by an edit handle when it takes a pointer press, so the drawing tool (whose canvas
@@ -20,17 +34,30 @@ const SNAP = 0.35;
  */
 const handleBusy = { current: false };
 
-export interface SnappedPoint { p: Vec2; wall?: WallFace }
+export interface SnappedPoint {
+  p: Vec2;
+  wall?: WallFace;
+  /** A fence or another patio the point snapped onto. */
+  target?: CloseTarget;
+}
+
+/** How a finished outline was closed along what it was drawn against. */
+export interface PatioClosure {
+  /** Edges that run along a building, fence or patio: no kerb, railing or steps. */
+  joined: boolean[];
+  /** Level of the building or patio it joins. */
+  level?: number;
+}
 
 /** Snaps a ground point onto the nearest wall corner or face within reach. */
-export function snapToWalls(p: Vec2, faces: WallFace[]): SnappedPoint {
+export function snapToWalls(p: Vec2, faces: WallFace[], reach = SNAP): SnappedPoint {
   let best: SnappedPoint = { p };
-  let bestDistance = SNAP;
+  let bestDistance = reach;
   for (const face of faces) {
     for (const corner of [face.a, face.b]) {
       const d = Math.hypot(p[0] - corner[0], p[1] - corner[1]);
       // Corners win over faces at the same distance.
-      if (d < bestDistance + 0.1 && d < SNAP) { best = { p: [corner[0], corner[1]], wall: face }; bestDistance = d - 0.1; }
+      if (d < bestDistance + 0.1 && d < reach) { best = { p: [corner[0], corner[1]], wall: face }; bestDistance = d - 0.1; }
     }
     const dx = face.b[0] - face.a[0], dz = face.b[1] - face.a[1], len2 = dx * dx + dz * dz;
     const t = ((p[0] - face.a[0]) * dx + (p[1] - face.a[1]) * dz) / len2;
@@ -59,19 +86,25 @@ interface Draft {
 export function PatioDrawTool({ groundAt, onCommit, paused }: {
   /** Ground height at world x/z as drawn (for the cursor). */
   groundAt: (x: number, z: number) => number;
-  onCommit: (points: SnappedPoint[], bulges: number[]) => void;
+  onCommit: (points: SnappedPoint[], bulges: number[], closure?: PatioClosure) => void;
   /** While steps are being placed, clicks belong to that instead. */
   paused: boolean;
 }) {
   const { gl, camera, raycaster } = useThree();
   const { shapes, setMeasurements } = useApp();
   const faces = useMemo(() => wallFaces(shapes), [shapes]);
+  // Buildings, fences and other patios the outline can close against.
+  const targets = useMemo(() => buildCloseTargets(shapes, groundAt), [shapes, groundAt]);
   const [draft, setDraft] = useState<Draft>({ points: [], bulges: [], through: null });
   const [cursor, setCursor] = useState<SnappedPoint | null>(null);
   const [drag, setDrag] = useState<{ from: SnappedPoint; to: Vec2 } | null>(null);
+  // Which way round the ghost goes; Tab steps through the alternatives.
+  const [ghostIndex, setGhostIndex] = useState(0);
   const draftRef = useRef(draft); draftRef.current = draft;
   const dragRef = useRef(drag); dragRef.current = drag;
   const pointer = useMemo(() => new THREE.Vector2(), []);
+  // Snapping reach at the cursor (metres), from the fixed on-screen distance.
+  const reachRef = useRef(SNAP);
 
   const groundPoint = (event: PointerEvent | MouseEvent): SnappedPoint | null => {
     const rect = gl.domElement.getBoundingClientRect();
@@ -79,27 +112,76 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
     raycaster.setFromCamera(pointer, camera);
     const hit = groundUnderRay(raycaster.ray, groundAt);
     if (!hit) return null;
-    return snapToWalls([hit.x, hit.z], faces);
+    const reach = Math.min(SNAP, SNAP_PIXELS * metresPerPixel(camera, hit, rect.height || 1));
+    reachRef.current = reach;
+    const snapped = snapToWalls([hit.x, hit.z], faces, reach);
+    if (snapped.wall) return snapped;
+    // Fences and other patios snap too (buildings are covered by the wall faces above).
+    let best: SnappedPoint = snapped;
+    let bestDistance = reach;
+    for (const target of targets) {
+      if (target.kind === 'building') continue;
+      const at = projectOntoPath(target.path, [hit.x, hit.z]);
+      if (at && at.distance < bestDistance) { best = { p: at.point, target }; bestDistance = at.distance; }
+    }
+    return best;
   };
 
   useEffect(() => {
-    setMeasurements('Patio / Decking: click the corners (hold Shift to curve the next edge through a point) or drag a rectangle. Click the first point or press Enter to finish.');
+    setMeasurements('Patio / Decking: click the corners (hold Shift to curve the next edge through a point) or drag a rectangle. Near a building, fence or patio a dashed outline shows how it will close: click the wall (or press Enter) to accept, Tab for the other way round.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Ways to close the outline along what it is drawn against. With the cursor
+   * on a wall, fence or patio, the cursor is the loose end (a click there
+   * accepts); otherwise the last corner placed is (Enter accepts).
+   */
+  // Over a wall the ground under the cursor is often just behind it; the loose end is then
+  // where the cursor meets the building from outside.
+  const cursorOnBuilding = useMemo(() => {
+    if (!cursor || cursor.target) return null;
+    return buildingEdgePoint(cursor.p, targets, cursor.wall ? 0.5 : 0);
+  }, [cursor, targets]);
+  const ghostFromCursor = !!cursor && !!(cursorOnBuilding || cursor.target) && draft.points.length >= 2;
+  const candidates = useMemo((): CloseCandidate[] => {
+    if (drag) return [];
+    const pts = draft.points.map(p => p.p);
+    const bulges = draft.bulges.slice(0, Math.max(0, pts.length - 1)).map(b => b ?? 0);
+    while (bulges.length < pts.length - 1) bulges.push(0);
+    if (ghostFromCursor && cursor) {
+      const last = pts[pts.length - 1];
+      const loose = cursorOnBuilding ?? cursor.p;
+      bulges.push(draft.through ? bulgeThrough(last, loose, draft.through) : 0);
+      pts.push(loose);
+    } else if (pts.length < 3) return [];
+    return closeCandidates({ chain: pts, chainBulges: bulges, targets });
+  }, [draft, cursor, drag, ghostFromCursor, cursorOnBuilding, targets]);
+  const ghost = candidates.length ? candidates[ghostIndex % candidates.length] : null;
+  const ghostRef = useRef({ ghost, fromCursor: ghostFromCursor, count: candidates.length });
+  ghostRef.current = { ghost, fromCursor: ghostFromCursor, count: candidates.length };
 
   // The listeners below are attached once. They read everything that changes between renders
   // through this ref: the app's callbacks are recreated on every app render, and re-attaching
   // the listeners between a press and its release used to lose the click entirely.
-  const latest = useRef({ groundPoint, onCommit, faces, paused });
-  latest.current = { groundPoint, onCommit, faces, paused };
+  const latest = useRef({ groundPoint, onCommit, faces, paused, targets });
+  latest.current = { groundPoint, onCommit, faces, paused, targets };
 
   useEffect(() => {
     const canvas = gl.domElement;
     let downAt: { x: number; y: number; point: SnappedPoint } | null = null;
     const groundPoint = (event: PointerEvent | MouseEvent) => latest.current.groundPoint(event);
-    const onCommit = (points: SnappedPoint[], bulges: number[]) => latest.current.onCommit(points, bulges);
+    const onCommit = (points: SnappedPoint[], bulges: number[], closure?: PatioClosure) => latest.current.onCommit(points, bulges, closure);
+    const acceptGhost = (candidate: CloseCandidate) => {
+      onCommit(candidate.points.map(p => ({ p })), candidate.bulges, { joined: candidate.joined, level: candidate.level });
+      setDraft({ points: [], bulges: [], through: null });
+      setGhostIndex(0);
+    };
     const finish = () => {
       const d = draftRef.current;
+      // Enter / double-click close along the building (etc.) when that is on offer.
+      const g = ghostRef.current;
+      if (g.ghost && !g.fromCursor) { acceptGhost(g.ghost); return; }
       if (d.points.length >= 3) {
         const bulges = d.points.map((_, i) => d.bulges[i] ?? 0);
         onCommit(d.points, bulges);
@@ -129,14 +211,22 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
       const currentDrag = dragRef.current;
       if (currentDrag) {
         setDrag(null);
-        const corners = dragRectangle(currentDrag.from, currentDrag.to);
-        if (corners) onCommit(corners.map(p => snapToWalls(p, latest.current.faces)), [0, 0, 0, 0]);
+        const corners = snappedRectangle(currentDrag.from, currentDrag.to, latest.current.targets);
+        // Corners keep their place (a side moved onto a wall sits 10 mm under it) and only
+        // note the wall they touch, for the patio's level.
+        if (corners) onCommit(corners.map(p => ({ p, wall: snapToWalls(p, latest.current.faces, 0.02).wall })), [0, 0, 0, 0]);
         return;
       }
       const point = groundPoint(event) ?? start.point;
       const d = draftRef.current;
+      // Clicking a wall, fence or patio while the ghost shows accepts it.
+      const g = ghostRef.current;
+      if (g.ghost && g.fromCursor && (point.wall || point.target || buildingEdgePoint(point.p, latest.current.targets, 0))) {
+        acceptGhost(g.ghost);
+        return;
+      }
       // Clicking the first point closes the outline.
-      if (d.points.length >= 3 && Math.hypot(point.p[0] - d.points[0].p[0], point.p[1] - d.points[0].p[1]) < SNAP) {
+      if (d.points.length >= 3 && Math.hypot(point.p[0] - d.points[0].p[0], point.p[1] - d.points[0].p[1]) < Math.max(reachRef.current, 0.05)) {
         const bulges = d.bulges.slice();
         if (d.through) bulges[d.points.length - 1] = bulgeThrough(d.points[d.points.length - 1].p, d.points[0].p, d.through);
         draftRef.current = { ...d, bulges, through: null };
@@ -158,6 +248,12 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
     const dblclick = () => finish();
     const key = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (event.key === 'Tab' && ghostRef.current.count > 1) {
+        // The other way round the building (or the next alternative).
+        event.preventDefault();
+        setGhostIndex(i => i + 1);
+        return;
+      }
       if (event.key === 'Enter') finish();
       else if (event.key === 'Escape') setDraft({ points: [], bulges: [], through: null });
       else if (event.key === 'Backspace' && draftRef.current.points.length) {
@@ -185,7 +281,7 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
     const pts = draft.points.map(p => p.p);
     const bulges = draft.bulges.slice();
     if (drag) {
-      const corners = dragRectangle(drag.from, drag.to);
+      const corners = snappedRectangle(drag.from, drag.to, targets);
       return corners ? { line: [...corners, corners[0]], closed: true } : null;
     }
     if (!pts.length) return null;
@@ -199,11 +295,20 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
       for (let k = 0; k <= 16; k++) line.push(arcPoint(last, cursor.p, bulge, k / 16));
     } else line.push(last);
     return { line, closed: false };
-  }, [draft, cursor, drag]);
+  }, [draft, cursor, drag, targets]);
+
+  const ghostLine = useMemo(() => {
+    if (!ghost) return null;
+    const dense = denseOutline(ghost.points, ghost.bulges, 0.1).points;
+    return [...dense, dense[0]];
+  }, [ghost]);
 
   const lift = (p: Vec2) => new THREE.Vector3(p[0], groundAt(p[0], p[1]) + 0.04, p[1]);
   return (
     <group>
+      {ghostLine && (
+        <Line points={ghostLine.map(lift)} color="#38bdf8" lineWidth={2} dashed dashSize={0.25} gapSize={0.15} depthTest={false} renderOrder={29} />
+      )}
       {preview && preview.line.length > 1 && (
         <Line points={preview.line.map(lift)} color="#f59e0b" lineWidth={2.5} depthTest={false} renderOrder={30} />
       )}
@@ -227,6 +332,13 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
       )}
     </group>
   );
+}
+
+/** A dragged rectangle, with its side nearest a parallel wall or fence moved onto it. */
+export function snappedRectangle(from: SnappedPoint, to: Vec2, targets: CloseTarget[]): Vec2[] | null {
+  const corners = dragRectangle(from, to);
+  if (!corners) return null;
+  return snapRectangleSide(corners, targets) ?? corners;
 }
 
 /** Rectangle corners for a drag from one point to another: along a wall if it started on one, else square to the world. */

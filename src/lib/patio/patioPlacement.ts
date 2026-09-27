@@ -23,6 +23,16 @@ export function wallFaces(shapes: Shape[]): WallFace[] {
     const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
     const [cx, cy, cz] = s.position;
     const floor = cy - height / 2;
+    const fp = s.wallMiterFootprint;
+    if (fp) {
+      // A mitred wall's faces run to its true corners; the box's faces stop
+      // short at an outside corner, which left a wedge of bare ground there.
+      const world = ([x, z]: [number, number]): Vec2 => [cx + dir.x * x + normal.x * z, cz + dir.z * x + normal.z * z];
+      for (const [p, q] of [[fp[0], fp[3]], [fp[1], fp[2]]] as [[number, number], [number, number]][]) {
+        faces.push({ a: world(p), b: world(q), floor, wallId: s.id, face: (p[1] + q[1]) / 2 >= 0 ? 1 : -1 });
+      }
+      continue;
+    }
     for (const side of [1, -1]) {
       const ox = cx + normal.x * side * thickness / 2, oz = cz + normal.z * side * thickness / 2;
       faces.push({

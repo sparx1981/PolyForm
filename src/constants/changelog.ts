@@ -13,6 +13,13 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Convert To Wall now also shows greyed out, with the reason, when a shape looks like an attempt at walls but fails a check (for example a ring drawn on an upright face, or one with its middle pulled up too), so the fix is obvious.',
       'Merge Pieces For A Door / Window: right-click a curved wall piece that is too narrow for an opening to merge it with just enough neighbouring pieces into one flat section (centred where you clicked), the way real curved buildings do. The pieces either side still meet it flush, and any door or window already on the merged pieces moves onto the new wall.',
       'Fixed a crash when the wall whose surface was selected is replaced by an edit.',
+      'Patio / Decking: draw only the garden side. When both ends of what you have drawn are within 2 m of a building, a fence or garden wall, or another patio, a dashed outline shows how it will close: each loose end runs straight to the wall and the outline follows the building (round corners, and across to a fence where the two meet) back to where you started. Click the wall or press Enter to accept; Tab steps to the other way round. It never wraps round the house.',
+      'Patios and decks now tuck 10 mm under walls and fences so no hairline gap can show, and share an exact edge with a neighbouring patio. Edges along a building, fence or patio get no kerb, railing or steps. A patio takes the building floor level, or the level of a patio it joins.',
+      'Round buildings are followed with a smooth curved paving edge that stays just under the walls (or piece by piece where the pieces are too coarse for that).',
+      'A dragged patio rectangle now moves its near side onto a parallel wall or fence within 2 m. A new patio that overlaps an existing one is trimmed back to share its edge.',
+      'Snap To Building: right-click an existing patio or deck to pull edges drawn a little short of (or past) a wall, fence or patio onto it, closing old gaps.',
+      'Patio snapping now keeps the same feel at any zoom (about 12 pixels on screen, never more than 350 mm), and snaps to fences and other patios as well as walls.',
+      'Fixed patio edges stopping short of the corner on rooms with mitred corners, which left a wedge-shaped gap against the house.',
     ]
   },
   {

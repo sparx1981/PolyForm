@@ -9,7 +9,8 @@ import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
 import { PatioMesh } from './landscape/PatioMesh';
 import { ProtractorTool, ProtractorMeasurement, type ProtractorArgs } from './ProtractorTool';
-import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint } from './landscape/PatioTool';
+import { PatioDrawTool, PatioEditHandles, patioGroundHelpers, wallFaces, type SnappedPoint, type PatioClosure } from './landscape/PatioTool';
+import { buildCloseTargets, joinedEdges, patioWorldPath, snapOutlineToTargets, trimAgainstPatios } from '../lib/patio/patioClosure';
 import { makePatioShape, patioLevel, patioWallEdges } from '../lib/patio/patioPlacement';
 import { WaterDrawPreview } from './WaterDrawPreview';
 import { terrainsWithWaterBasins, defaultWaterLevel } from '../lib/water/waterBody';
@@ -4492,14 +4493,43 @@ function Scene() {
   }
   const patioOriginalGround = originalGroundRef.current.groundAt;
 
-  /** A drawn outline becomes a patio or deck: level with the house floor when drawn against it. */
-  const commitPatio = useCallback((points: SnappedPoint[], bulges: number[]) => {
+  /**
+   * A drawn outline becomes a patio or deck: level with the house floor when drawn against it
+   * (or with a neighbouring patio it joins), trimmed back where it overlaps an existing patio.
+   */
+  const commitPatio = useCallback((points: SnappedPoint[], bulges: number[], closure?: PatioClosure) => {
     if (points.length < 3) return;
     const settings = patioToolSettings;
-    const world = points.map(p => p.p);
+    let world = points.map(p => p.p);
+    // Building floor first, then a neighbouring patio's level; a fence leaves the ground level.
     const walls = points.filter(p => p.wall).map(p => p.wall!.floor);
+    const neighbourLevels = points.filter(p => p.target?.kind === 'patio' && p.target.level !== undefined).map(p => p.target!.level!);
+    const joinLevels: number[] = closure?.level !== undefined ? [closure.level] : walls.length ? walls : neighbourLevels.slice(0, 1);
     const kind = settings.kind;
-    const level = patioLevel(world, bulges, kind, settings.deckHeight, walls, patioOriginalGround);
+    const targets = buildCloseTargets(shapes, patioOriginalGround);
+    // Never overlap an existing patio or deck: share its edge instead.
+    const others = shapes.filter(s => s.type === 'patio' && !s.hidden).map(patioWorldPath).filter((p): p is NonNullable<typeof p> => !!p);
+    const trimmed = trimAgainstPatios(world, bulges, others);
+    if (trimmed && trimmed.points.length < 3) {
+      setMeasurements('That outline is entirely covered by an existing patio or deck, so nothing was added.');
+      return;
+    }
+    let joinedByClosure = closure?.joined;
+    if (trimmed) {
+      world = trimmed.points;
+      bulges = trimmed.bulges;
+      joinedByClosure = undefined;
+      setMeasurements('Trimmed back to the existing patio it overlapped, so the two share an edge.');
+    }
+    // An edge along a wall, fence or patio gets no kerb, railing or steps.
+    const alongWall = patioWallEdges(world, bulges, wallFaces(shapes));
+    const alongTarget = joinedEdges(world, bulges, targets);
+    if (!joinLevels.length) {
+      // Sharing an edge with a patio (e.g. after trimming) takes that patio's level.
+      const neighbour = targets.find(t => t.kind === 'patio' && joinedEdges(world, bulges, [t]).some(Boolean));
+      if (neighbour?.level !== undefined) joinLevels.push(neighbour.level);
+    }
+    const level = patioLevel(world, bulges, kind, settings.deckHeight, joinLevels, patioOriginalGround);
     const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === kind).length + 1;
     const newShape = makePatioShape({
       id: Math.random().toString(36).substr(2, 9),
@@ -4507,8 +4537,7 @@ function Scene() {
       world,
       bulges,
       level,
-      // An edge lies along a wall when its middle is on a wall face.
-      wallEdges: patioWallEdges(world, bulges, wallFaces(shapes)),
+      wallEdges: world.map((_, i) => !!(alongWall[i] || alongTarget[i] || joinedByClosure?.[i])),
       kind,
       template: settings.template,
     });
@@ -4516,8 +4545,8 @@ function Scene() {
     commitHistory();
     setSelectedId(newShape.id);
     recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
-    diagLog('TOOL', `${newShape.name} placed`, { points: points.length, level, againstWall: walls.length > 0 });
-  }, [patioToolSettings, patioOriginalGround, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog]);
+    diagLog('TOOL', `${newShape.name} placed`, { points: world.length, level, againstWall: joinLevels.length > 0, closedAlong: !!closure, trimmed: !!trimmed });
+  }, [patioToolSettings, patioOriginalGround, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog, setMeasurements]);
 
   const finalizeFenceChain = useCallback((closed = false) => {
     // The fence already exists (built live); closing is the only change finishing can make.
@@ -12983,6 +13012,56 @@ export default function Viewport() {
   }, [contextMenu, kernelHost, kernelRevision]);
   const [convertWallPlan, setConvertWallPlan] = useState<WallConversionPlan | null>(null);
   const [convertWallHeight, setConvertWallHeight] = useState('2.4');
+  /**
+   * "Snap To Building" for a patio or deck: edges drawn a little short of (or
+   * past) a wall, fence or another patio are pulled onto it, closing the gaps
+   * a hand-traced outline can leave.
+   */
+  const patioSnapMenuItem = (shapeId: string) => {
+    const patio = shapes.find(s => s.id === shapeId);
+    if (!patio || patio.type !== 'patio' || !patio.patioData) return null;
+    const data = patio.patioData;
+    const ground = patioGroundHelpers(shapes, new Map(), sampleTerrainElevation).originalGround;
+    const targets = buildCloseTargets(shapes, ground, { excludeId: patio.id });
+    const world = data.points.map(([x, z]) => [x + patio.position[0], z + patio.position[2]] as [number, number]);
+    const bulges = data.points.map((_, i) => data.bulges[i] ?? 0);
+    const result = snapOutlineToTargets(world, bulges, targets);
+    if (!result.moved) {
+      return (
+        <div className="w-full px-3 py-1.5 text-xs cursor-not-allowed" aria-disabled="true">
+          <div className="text-gray-400">Snap To Building</div>
+          <div className={cn("text-[10px] leading-snug mt-0.5 max-w-[220px]", theme === 'dark' ? "text-gray-500" : "text-gray-400")}>
+            Nothing to snap: no edge is within 300 mm of (and not already on) a wall, fence or patio.
+          </div>
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={() => {
+          const joined = joinedEdges(result.points, bulges, targets);
+          setShapes(prev => prev.map(s => s.id !== patio.id ? s : {
+            ...s,
+            patioData: {
+              ...data,
+              points: result.points.map(([x, z]) => [x - patio.position[0], z - patio.position[2]] as [number, number]),
+              wallEdges: data.points.map((_, i) => !!(data.wallEdges[i] || joined[i])),
+            },
+          }));
+          setSelectedSurface(null);
+          setMeasurements(`Snapped ${result.moved} edge${result.moved === 1 ? '' : 's'} of ${patio.name ?? 'the patio'} onto the building.`);
+          setContextMenu(null);
+        }}
+        className={cn(
+          "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+          theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100"
+        )}
+      >
+        Snap To Building ({result.moved} edge{result.moved === 1 ? '' : 's'})
+      </button>
+    );
+  };
+
   const curvedMergeMenuItems = (shapeId: string) => {
     // Curved pieces from Convert To Wall: a door or window sits on
     // one flat piece, so offer to merge neighbours into a flat
@@ -13859,6 +13938,7 @@ export default function Viewport() {
                 return null;
               })()}
               {curvedMergeMenuItems(contextMenu.data.shapeId)}
+              {patioSnapMenuItem(contextMenu.data.shapeId)}
               <button 
                 onClick={() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; if (st === 'box' || st === 'rect') setIsDividePopupOpen(true); }} disabled={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return st !== 'box' && st !== 'rect'; })()} title={(() => { const st = shapes.find(sh => sh.id === contextMenu.data.shapeId)?.type; return (st === 'box' || st === 'rect') ? undefined : 'Only available on box/rectangle faces'; })()}
                 className={cn(
@@ -14061,6 +14141,7 @@ export default function Viewport() {
                 return null;
               })()}
               {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && curvedMergeMenuItems(contextMenu.data[0])}
+              {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && patioSnapMenuItem(contextMenu.data[0])}
               <button 
                 onClick={() => {
                   const groupId = Math.random().toString(36).substr(2, 9);

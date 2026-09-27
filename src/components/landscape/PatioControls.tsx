@@ -122,7 +122,7 @@ export function PatioControls() {
       <p className="text-[10px] text-gray-500 dark:text-gray-400">
         {selected
           ? `Editing ${selected.name}. Drag yellow corners to reshape; click a white dot to add a corner; Shift-drag a dot to curve that edge (drag a violet dot to change a curve); right-click a corner to remove it.`
-          : 'Click the corners (hold Shift and click to curve the next edge through that point), or drag out a rectangle. Click the first point or press Enter to finish. Points snap to walls; a patio or deck drawn against a building is set level with its floor.'}
+          : 'Click the corners (hold Shift and click to curve the next edge through that point), or drag out a rectangle. Only the garden side needs drawing: near a building, fence or another patio a dashed outline shows how it will close along it. Click the wall (or press Enter) to accept, Tab for another way round. Points snap to walls, fences and patios; a patio or deck drawn against a building is set level with its floor.'}
       </p>
 
       <div className="grid grid-cols-2 gap-1.5">
