@@ -278,6 +278,7 @@ export function buildRoofExtras(roof: Shape, extras: RoofExtras, wallColor = '#e
       out.push(toShape(roof, 'dormer-walls', `Dormers (${layouts.length}, ${types})`, pick('walls'), { color: wallColor, roughness: 0.85 },
         { count: layouts.length, dormers: layouts.map(l => ({ id: l.dormer.id, type: l.dormer.type, width: l.width, flush: l.dormer.flush })) }));
       out.push(toShape(roof, 'dormer-roofs', 'Dormer roofs', pick('roofs'), { color: roof.color || '#7c2d12', roughness: 0.8 }));
+      out.push(toShape(roof, 'dormer-ridge-caps', 'Dormer ridge caps', pick('caps'), { color: '#334155', roughness: 0.6, metalness: 0.1 }));
       out.push(toShape(roof, 'dormer-membrane', 'Flat dormer roof membrane', pick('membrane'), { color: '#2f3336', roughness: 0.9 }));
       out.push(toShape(roof, 'dormer-trim', 'Flat dormer lead trim', pick('trim'), { color: '#8a9298', roughness: 0.55, metalness: 0.25 }));
       // Pitched dormers wear the same tiles as the roof.

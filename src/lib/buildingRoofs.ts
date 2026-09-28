@@ -21,6 +21,8 @@ const polygonClipping = ((polygonClippingModule as unknown as { default?: typeof
 const LEVEL_GAP = 0.5;
 /** Clearance between a lean-to's top and the sill of a window above it. */
 const WINDOW_CLEARANCE = 0.15;
+/** Room left between a lean-to's top and the eaves of the storey above it. */
+const EAVES_CLEARANCE = 0.5;
 /** Below this, tiles don't keep water out well. */
 const MIN_TILED_PITCH = 15;
 
@@ -136,7 +138,10 @@ export function extensionsOf(storeys: Storey[], shapes: Shape[]): { plans: Exten
       const ts = touching.flatMap(([p, q]) => [along(p), along(q)]);
       const a: V2 = [p0[0] + u[0] * Math.min(...ts), p0[1] + u[1] * Math.min(...ts)];
       const b: V2 = [p0[0] + u[0] * Math.max(...ts), p0[1] + u[1] * Math.max(...ts)];
-      plans.push({ storey: k, outline, abut: { a, b }, houseWallThickness: upper.wallThickness, top: lower.top, maxRise: windowLimit(shapes, upper, a, b, lower.top) });
+      // Under the windows above, and in any case well under the storey above's eaves.
+      const underEaves = upper.top - lower.top - EAVES_CLEARANCE;
+      const underWindows = windowLimit(shapes, upper, a, b, lower.top);
+      plans.push({ storey: k, outline, abut: { a, b }, houseWallThickness: upper.wallThickness, top: lower.top, maxRise: Math.min(underEaves, underWindows ?? Infinity) });
     }
   }
   return { plans, notes };

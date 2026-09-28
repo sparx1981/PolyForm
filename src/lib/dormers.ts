@@ -210,6 +210,8 @@ export interface DormerMeshes {
   /** A flat dormer's roof covering (a dark membrane) and the lead-grey trim round its edges. */
   membrane: THREE.BufferGeometry[];
   trim: THREE.BufferGeometry[];
+  /** Ridge caps over a pitched dormer's tiles. */
+  caps: THREE.BufferGeometry[];
 }
 
 /** Triangles from a list of quads/triangles (each an array of points), both sides drawn by the viewer. */
@@ -239,7 +241,7 @@ export function dormerMeshes(L: DormerLayout): DormerMeshes {
   const tan = Math.tan(L.slope);
   const basis = new THREE.Matrix4().makeBasis(L.X, new THREE.Vector3(0, 1, 0), L.Z);
   const place = (g: THREE.BufferGeometry) => { g.applyMatrix4(basis); g.translate(L.origin.x, L.origin.y, L.origin.z); return g; };
-  const out: DormerMeshes = { walls: [], roofs: [], glass: [], lining: [], membrane: [], trim: [] };
+  const out: DormerMeshes = { walls: [], roofs: [], glass: [], lining: [], membrane: [], trim: [], caps: [] };
 
   // Front wall round a window.
   const win = { w: w - 0.4, h: hf - 0.45, sill: 0.25 };
@@ -284,6 +286,14 @@ export function dormerMeshes(L: DormerLayout): DormerMeshes {
       const rFront = new THREE.Vector3(0, ridgeY, ridgeFront), rBack = new THREE.Vector3(0, ridgeY, back);
       out.roofs.push(place(slab(sx < 0 ? [eFront, rFront, rBack, eBack] : [rFront, eFront, eBack, rBack], 0.06)));
     }
+    // A ridge cap over the tiles, sitting on both slopes.
+    const capW = 0.15, capDrop = capW * Math.tan(DORMER_PITCH), lift = 0.14;
+    const capFront = ridgeFront - (L.dormer.type === 'hipped' ? 0 : 0.02);
+    const cap = (x: number, y: number, z: number) => new THREE.Vector3(x, y + lift, z);
+    for (const sx of [-1, 1]) {
+      out.caps.push(place(surfaces([[cap(0, ridgeY, capFront), cap(sx * capW, ridgeY - capDrop, capFront), cap(sx * capW, ridgeY - capDrop, back), cap(0, ridgeY, back)]])));
+    }
+    out.caps.push(place(surfaces([[cap(-capW, ridgeY - capDrop, capFront), cap(capW, ridgeY - capDrop, capFront), cap(0, ridgeY, capFront)]])));
     if (L.dormer.type === 'hipped') {
       out.roofs.push(place(slab([new THREE.Vector3(-ex, eaveY, -EAVE), new THREE.Vector3(ex, eaveY, -EAVE), new THREE.Vector3(0, ridgeY, ridgeFront)], 0.06)));
     } else {

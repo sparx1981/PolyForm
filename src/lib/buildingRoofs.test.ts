@@ -51,8 +51,9 @@ describe('roofing a building storey by storey', () => {
     expect(ext.position[1]).toBeCloseTo(2.8);
     expect(ext.roofData.extension.kind).toBe('lean-to');
     expect(ext.name).toMatch(/Lean-to/);
-    // No windows above, so it takes the main roof's pitch: 4.4 m of run at 40°.
-    expect(ext.roofData.skeleton.ridgeHeight).toBeCloseTo((4 - 0.125 + 0.4) * Math.tan((40 * Math.PI) / 180), 1);
+    // No windows above: the main roof's pitch would take it 3.6 m up, past the first floor's
+    // eaves, so it stops 0.5 m below them (2.8 - 0.5).
+    expect(ext.roofData.skeleton.ridgeHeight).toBeCloseTo(2.3, 2);
     expect(r.notes).toEqual([]);
     // Its timber: rafters up to a ledger on the house wall.
     const f = frameSkeletonRoof(ext.roofData.skeleton);
