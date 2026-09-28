@@ -136,7 +136,23 @@ export async function loadPresentation(shareId: string): Promise<{ meta: ClientP
   const snap = await getDoc(doc(db, 'presentations', shareId));
   if (!snap.exists()) throw new ShareNotFoundError('This presentation link is no longer active.');
   const meta = snap.data() as ClientPresentationDoc;
-  const bytes = await getBytes(ref(storage, meta.storagePath));
+  // A raw browser fetch of a Storage object (this is what the Storage SDK's getBytes does
+  // under the hood) requires the bucket itself to send CORS headers for this app's exact
+  // origin - see firestoreGeometryOffload.ts's own note on the same limitation. Unlike that
+  // path, this one has no Firestore-only fallback (the bundle is too large for a document),
+  // so a missing bucket CORS entry surfaces here as an opaque network failure. Rethrown with
+  // a message that says what it actually is, so the client page's error screen is useful
+  // instead of a raw SDK/network error.
+  let bytes: ArrayBuffer;
+  try {
+    bytes = await getBytes(ref(storage, meta.storagePath));
+  } catch (err) {
+    throw new Error(
+      "This presentation's file could not be reached. If you are the site owner, the Storage " +
+      "bucket needs a CORS entry for this domain (Cloud Storage CORS config, not Firestore/" +
+      `Storage security rules).\n\nUnderlying error: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   const bundle = JSON.parse(new TextDecoder().decode(bytes)) as ClientPresentationBundle;
   return { meta, bundle };
 }
