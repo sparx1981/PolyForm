@@ -361,9 +361,9 @@ export interface SDK {
     listTerrainTextures: () => LandscapeTexturePreset[];
     configureLandscapeDefaults: (settings: LandscapeConfigDefaults) => void;
     getLandscapeDefaults: () => LandscapeConfigDefaults;
-    configureSculptSettings: (settings: { radius?: number; strength?: number; mode?: 'raise' | 'lower' | 'smooth' | 'flatten' }) => void;
+    configureSculptSettings: (settings: { radius?: number; intensity?: number; mode?: 'push' | 'pull' | 'smooth' | 'flatten' | 'pinch'; masked?: boolean }) => void;
     getSculptSettings: () => any;
-    configureRoadSettings: (settings: { width?: number; curbHeight?: number; material?: string }) => void;
+    configureRoadSettings: (settings: { width?: number; embankment?: boolean; roadColor?: string; curbHeight?: number }) => void;
     getRoadSettings: () => any;
   };
 
@@ -375,7 +375,14 @@ export interface SDK {
       metalness?: number;
       opacity?: number;
       textureUrl?: string;
+      normalMapUrl?: string;
       normalScale?: number;
+      roughnessMapUrl?: string;
+      metalnessMapUrl?: string;
+      aoMapUrl?: string;
+      aoMapIntensity?: number;
+      displacementMapUrl?: string;
+      displacementScale?: number;
       uvScale?: number;
     }) => void;
     setEdgeLines: (settings: { enabled?: boolean; color?: string; opacity?: number; thickness?: number }) => void;
@@ -1449,7 +1456,7 @@ export class DeveloperSDK implements SDK {
         return { ...this.landscapeDefaults };
       },
 
-      configureSculptSettings: (settings: { radius?: number; strength?: number; mode?: 'raise' | 'lower' | 'smooth' | 'flatten' }): void => {
+      configureSculptSettings: (settings: { radius?: number; intensity?: number; mode?: 'push' | 'pull' | 'smooth' | 'flatten' | 'pinch'; masked?: boolean }): void => {
         if (this.extraSetters.setLandscapeSculptSettings) {
           this.extraSetters.setLandscapeSculptSettings((prev: any) => ({ ...prev, ...settings }));
         }
@@ -1460,7 +1467,7 @@ export class DeveloperSDK implements SDK {
         return this.extraSetters.landscapeSculptSettings || {};
       },
 
-      configureRoadSettings: (settings: { width?: number; curbHeight?: number; material?: string }): void => {
+      configureRoadSettings: (settings: { width?: number; embankment?: boolean; roadColor?: string; curbHeight?: number }): void => {
         if (this.extraSetters.setLandscapeRoadSettings) {
           this.extraSetters.setLandscapeRoadSettings((prev: any) => ({ ...prev, ...settings }));
         }

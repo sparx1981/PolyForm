@@ -10,7 +10,7 @@ when the app isn't open. It runs on Vercel and talks to PolyForm's Firebase proj
 | Read | `list_models`, `get_model` (counts, extent, wall/fence length, patio/deck area), `list_objects`, `get_object`, `list_catalog` |
 | See | `screenshot` (perspective, plan, front, back, left, right; whole model or one object) |
 | Preview | `preview_model`: called when a design is finished. A 3D picture, plus a floor plan of each level for buildings (rooms and areas, doors, windows, stairs). The plans are drawn by the connector itself, so they work even without screenshots |
-| Build | `create_model`, `add_shape`, `add_room`, `add_wall`, `add_opening` (door/window in a wall), `add_roof`, `add_stairs`, `add_terrain`, `add_plant`, `add_fence`, `add_pond`, `add_patio` |
+| Build | `create_model`, `add_shape`, `add_room`, `add_wall`, `add_opening` (door/window in a wall), `add_roof`, `add_stairs`, `add_terrain`, `flatten_terrain` (level a terrain back to one height), `add_plant`, `add_fence`, `add_pond`, `add_patio` |
 | Edit | `transform_objects`, `set_appearance` (colour, material presets, plain finishes, and for terrain: ground texture, procedural grass and wildflower meadows), `set_weather` (rain, snow, clouds, mist and wind), `rename_object`, `delete_objects`, `undo_last_change` |
 
 Building uses the app's own code (the scripting library, the roof tool's roof assembly, the

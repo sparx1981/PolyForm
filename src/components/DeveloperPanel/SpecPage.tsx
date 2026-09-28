@@ -444,7 +444,7 @@ const TOOL_SECTIONS: Section[] = [
         functional: 'Expands inline into a Primitive Picker strip: Box, Sphere, Cylinder, Cone, Torus, Capsule, Wedge, Pyramid. Click a thumbnail, then click-drag in the viewport to place. Drag footprint defines the XZ bounding; vertical mouse movement sets height. Placed primitives are immediately selected with their parameters editable in the Properties Panel.',
         implementation: 'Each primitive type maps to a Three.js geometry constructor. Placement uses a two-phase pointer handler: phase 1 (pointerdown → pointermove) defines the XZ footprint via a bounding rect; phase 2 (pointermove with button held) maps mouse Y delta to height. Final geometry is constructed from computed dimensions and added as a SceneObject.',
         source: 'src/tools/PrimitiveTool.ts\nsrc/components/PrimitivePicker.tsx',
-        tryItSnippet: 'sdk.addBox({ width: 2, height: 2, depth: 2 });',
+        tryItSnippet: 'sdk.createBox({ width: 2, height: 2, depth: 2 });',
       },
       {
         title: 'Poly Tool',
@@ -452,7 +452,7 @@ const TOOL_SECTIONS: Section[] = [
         functional: 'Place sequential vertices on surfaces or the ground. Enter to close. Generates flat polygon meshes with optimized triangulation.',
         implementation: 'Uses THREE.Shape and dynamic projection to the first-vertex plane. Stabilized via PolyGeometry component. Features real-time self-intersection prevention and detailed diagnostic logging for debugging vertex placement and orientation.',
         source: 'src/components/Viewport.tsx (finalizePoly)',
-        tryItSnippet: 'sdk.createPoly({ vertices: [[0,0], [5,0], [5,5], [0,5]] });',
+        tryItSnippet: 'sdk.createPoly({ vertices: [[0,0,0], [5,0,0], [5,0,5], [0,0,5]] });',
       },
     ],
   },
@@ -467,7 +467,7 @@ const TOOL_SECTIONS: Section[] = [
         functional: 'Highlight edges on the selected object. Drag to apply a bevel. Optimized for large-scale models with an expanded range (up to 250m) and 0.5m precision steps.',
         implementation: 'Scaled range input (0-250m) in the tool modifier palette. Uses HalfEdge structures for underlying geometry mutation. Real-time diagnostic logging is active for performance monitoring.',
         source: 'src/tools/BevelTool.ts\nsrc/components/ToolModifierPalette.tsx',
-        tryItSnippet: 'sdk.applyBevel({ radius: 10, segments: 4 });',
+        tryItSnippet: 'const s = sdk.getSelectedObject(); if (s) sdk.setBevel(s, { amount: 0.5, type: "radius", segments: 4 });',
       },
       {
         title: 'Push / Pull Tool',
@@ -613,7 +613,7 @@ const PANEL_CARDS: FeatureCard[] = [
     functional: 'Invite team members and manage real-time messaging. The Messaging entry point is now context-aware and only visible when collaborators are present. Supports independent docking/undocking from the right-hand panel stack.',
     implementation: 'React-based sub-panel management. Messaging visibility gated by presence. Docking functionality integrated into RightPanelStack.',
     source: 'src/components/RightPanelStack.tsx\nsrc/components/Messaging.tsx',
-    tryItSnippet: 'sdk.openMessaging();',
+    tryItSnippet: 'console.log(sdk.getCollaborators());',
   },
   {
     title: 'Scripts / Developer Panel',

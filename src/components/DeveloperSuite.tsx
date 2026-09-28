@@ -507,7 +507,7 @@ const roof = sdk.architecture.createRoof({
   pitchAngleDeg: 30,
   eaveOverhang: 0.45,
   fasciaHeight: 0.20,
-  tileShape: "spanish",
+  tileShape: "roman",
   tileSize: 0.85,
   tileColor: "#c2410c",
   randomizeColor: true,
@@ -544,7 +544,7 @@ const room = sdk.architecture.createRoom({
   wallColor: "#f8fafc",
   floorColor: "#334155"
 });
-console.log("Room envelope generated:", room.length, "elements");`
+console.log("Room envelope generated:", room.wallShapes.length, "walls, floor:", !!room.floorShape, "ceiling:", !!room.ceilingShape);`
     },
     {
       name: 'Structural Timber Framing',
@@ -643,7 +643,7 @@ const customTb = sdk.toolbars.create({
           width: 8.5,
           depth: 10.5,
           pitchAngleDeg: 28,
-          tileShape: "spanish",
+          tileShape: "roman",
           tileColor: "#c2410c",
           position: [0, 3.2, 0]
         });
@@ -733,34 +733,33 @@ sdk.architecture.configureRoofDefaults({
   pitchAngleDeg: 35,
   eaveOverhang: 0.5,
   fasciaHeight: 0.22,
-  tileShape: "spanish",
+  tileShape: "roman",
   tileSize: 0.85,
   tileColor: "#c2410c",
   randomizeColor: true,
   colorPalette: ["#c2410c", "#9a3412", "#ea580c", "#b45309"],
-  ridgeCap: true,
-  gutter: true
+  gableWalls: true
 });
 
 // 2. Architecture: Stair Defaults
-sdk.architecture.configureStairDefaults({
+sdk.architecture.configureStairsDefaults({
   style: "straight",
   structure: "floating",
   railing: "both",
   width: 1.2,
   height: 3.0,
   idealStepHeight: 0.175,
-  treadColor: "#d97706",
-  stringerColor: "#334155",
+  color: "#d97706",
+  railingColor: "#334155",
   handrailHeight: 0.95
 });
 
 // 3. Architecture: Wall Defaults
-sdk.architecture.configureWallDefaults({
-  wallThickness: 0.25,
-  wallHeight: 3.2,
-  wallColor: "#f1f5f9",
-  transparency: 0.0
+sdk.architecture.configureWallSettings({
+  thickness: 0.25,
+  height: 3.2,
+  color: "#f1f5f9",
+  transparency: { overall: 0.0 }
 });
 
 // 4. Landscape: Sculpt Settings
@@ -783,18 +782,20 @@ sdk.landscape.configureRoadSettings({
 sdk.materials.configureMaterialDefaults({
   roughness: 0.45,
   metalness: 0.05,
-  opacity: 1.0,
-  edgeLinesEnabled: true,
-  edgeLinesColor: "#0f172a",
-  edgeLinesThickness: 1.5,
-  edgeLinesOpacity: 0.95
+  opacity: 1.0
+});
+sdk.materials.setEdgeLines({
+  enabled: true,
+  color: "#0f172a",
+  thickness: 1.5,
+  opacity: 0.95
 });
 
 // 7. Measurement Defaults
 sdk.measurement.configureMeasurementSettings({
   unit: "m",
   precision: 3,
-  showAllDimensions: true
+  showUnits: true
 });
 
 console.log("All tool parameters and variables successfully configured!");`
@@ -1311,7 +1312,7 @@ const roof = sdk.architecture.createRoof({
   pitchAngleDeg: 30,
   eaveOverhang: 0.45,
   fasciaHeight: 0.20,
-  tileShape: "spanish",
+  tileShape: "roman",
   tileSize: 0.85,
   tileColor: "#c2410c",
   randomizeColor: true,
@@ -1556,8 +1557,8 @@ function FullDocumentation() {
       items: [
         {
           name: "Create Roof (Spanish 3D Tiles)",
-          code: `// Supported profiles: 'none', 'roman', 'mission', 'spanish', 'flat', 'slate', 'shingle', 'barrel', 'scallop', 'interlocking', 'standing-seam'
-// Supported roof types: 'gable', 'hip', 'mansard', 'shed', 'flat', 'dutch-hip', 'gambrel', 'butterfly', 'saltbox', 'parapet'
+          code: `// Supported tile profiles: 'none', 'roman' (Spanish / Mission barrel), 'flat', 'scallop', 'diamond', 'pantile', 'standing-seam'
+// Supported roof types: 'gable', 'hip', 'parapet' (flat roof behind parapet walls)
 sdk.architecture.createRoof({
   roofType: "gable",
   width: 8,
@@ -1565,7 +1566,7 @@ sdk.architecture.createRoof({
   pitchAngleDeg: 30,       // or ridgeHeight: 2.5
   eaveOverhang: 0.40,
   fasciaHeight: 0.18,
-  tileShape: "spanish",
+  tileShape: "roman",
   tileSize: 0.85,
   tileColor: "#c2410c",
   randomizeColor: true,
@@ -1589,12 +1590,12 @@ sdk.architecture.createRoof({
         },
         {
           name: "Update Existing Roof",
-          code: `// Modify roof pitch, fascia, or tile profile at runtime
+          code: `// Modify roof height, eave overhang, fascia, or tile profile at runtime
 const roofs = sdk.architecture.listRoofs();
 if (roofs.length > 0) {
   sdk.architecture.updateRoof(roofs[0].id, {
-    pitchAngleDeg: 35,
-    tileShape: "barrel",
+    height: 2.8,
+    tileShape: "pantile",
     eaveOverhang: 0.60
   });
 }`
@@ -2374,12 +2375,12 @@ console.log("Active story is now:", sdk.architecture.getActiveStory());`
         {
           name: "Configure Terrain Sculpt Brush Defaults",
           code: `// Defaults used by the in-app sculpting brush (push/pull/smooth/flatten)
-sdk.landscape.configureSculptSettings({ radius: 4, strength: 0.6, mode: "smooth" });
+sdk.landscape.configureSculptSettings({ radius: 4, intensity: 0.6, mode: "smooth" });
 console.log("Sculpt settings:", sdk.landscape.getSculptSettings());`
         },
         {
           name: "Configure Road/Path Defaults",
-          code: `sdk.landscape.configureRoadSettings({ width: 6, curbHeight: 0.15, material: "asphalt-weathered" });
+          code: `sdk.landscape.configureRoadSettings({ width: 6, curbHeight: 0.15, embankment: true, roadColor: "#334155" });
 console.log("Road settings:", sdk.landscape.getRoadSettings());`
         },
         {

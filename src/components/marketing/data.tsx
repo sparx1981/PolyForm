@@ -307,7 +307,7 @@ export const CODE_LONG: CodeLine[] = code([
   '',
   'const room = sdk.createBox({ width: 4, height: 0.2, depth: 3, position: [0, 0, 0] });',
   'sdk.pushPull(room, 2.4);',
-  "sdk.setBevel(room, { amount: 0.05, type: 'round', segments: 4 });",
+  "sdk.setBevel(room, { amount: 0.05, type: 'radius', segments: 4 });",
   "sdk.applyColor(room, '#e8e1d5');",
   '',
   '// Cut a doorway',
