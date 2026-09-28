@@ -5,6 +5,7 @@ import {
   Waves,
   LayoutGrid,
   DraftingCompass,
+  Type,
   Lasso,
   Footprints,
   Eraser,
@@ -837,6 +838,26 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'protractor',
           onClick: (s) => s.setActiveTool('protractor'),
           keywords: ['protractor', 'angle', 'degrees', 'guide', 'measure']
+        },
+        {
+          id: 'text',
+          tool: 'text',
+          label: 'Text',
+          subtitle: 'Place a flat text label on a surface or the ground (room names, signage)',
+          icon: <Type size={19} />,
+          isActive: (s) => s.activeTool === 'text',
+          onClick: (s) => s.setActiveTool('text'),
+          keywords: ['text', 'label', 'annotation', 'words', 'sign', 'room name']
+        },
+        {
+          id: 'text3d',
+          tool: 'text3d',
+          label: '3D Text',
+          subtitle: 'Place solid raised letters that stand up from the ground or out of a wall',
+          icon: <Type size={19} strokeWidth={2.75} />,
+          isActive: (s) => s.activeTool === 'text3d',
+          onClick: (s) => s.setActiveTool('text3d'),
+          keywords: ['3d text', 'letters', 'extruded text', 'sign', 'lettering']
         },
         {
           id: 'dimensions_toggle',

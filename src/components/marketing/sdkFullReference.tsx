@@ -253,6 +253,15 @@ export const SDK_REFERENCE: SdkTag[] = [
     ],
   },
   {
+    id: 'text', title: 'text',
+    description: 'Flat text labels and solid 3D letters, as the Text and 3D Text tools place them.',
+    methods: [
+      m('add', 'sdk.text.add({ text, position, normal?, towardsViewer?, size?, bold?, align?, color? })', 'Shape', 'Place a flat text label on a surface (default: the ground), reading the right way up from towardsViewer.'),
+      m('add3D', 'sdk.text.add3D({ text, position, size?, depth?, normal?, towardsViewer?, … })', 'Shape', 'Place solid 3D letters standing on position, facing the viewer (or out of a wall, given its normal).'),
+      m('edit', 'sdk.text.edit(id, { text?, size?, depth?, bold?, align? })', 'void', "Change a text object's words or settings."),
+    ],
+  },
+  {
     id: 'drawing', title: 'drawing',
     description: 'Drawn geometry: lines, arcs and surfaces, and push/pull on their faces. Points are [x, y, z] in metres. Faces are numbered, and the same steps on the same drawing give the same numbers.',
     methods: [

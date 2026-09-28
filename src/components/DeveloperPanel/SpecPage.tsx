@@ -523,6 +523,14 @@ export const TOOL_SECTIONS: Section[] = [
         tryItSnippet: 'const s = sdk.createSphere({ radius: 1 });\nsdk.deformObject(s.id, { radius: 0.5, strength: 0.3, direction: "outward" });',
       },
       {
+        title: 'Text and 3D Text',
+        badges: ['ANNOTATION'],
+        functional: 'Text places a flat label on a surface or the ground, reading the right way up from where you are; 3D Text places solid letters that stand up facing you, or stand out of a wall. Click, type the words and size, then edit them later in Entity Info.',
+        implementation: 'A text object stores only its words and settings (textData); the letters are drawn from the bundled Helvetiker font when it renders.',
+        source: 'src/lib/textShapes.ts\nsrc/components/TextMesh.tsx\nsrc/components/TextPlacementDialog.tsx\nsrc/components/TextEntityFields.tsx',
+        tryItSnippet: 'sdk.text.add({ text: "Kitchen", position: [0, 0, 0], size: 0.5 });\nsdk.text.add3D({ text: "No. 12", position: [2, 0, 0], depth: 0.1 });',
+      },
+      {
         title: 'Measuring Tape and Protractor',
         badges: ['MEASUREMENT'],
         functional: 'Measure distances and angles and place guide lines. Lengths show in the display unit (m, cm or mm).',

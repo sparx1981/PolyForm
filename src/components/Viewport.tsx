@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
+import { TextMesh } from './TextMesh';
+import { TextPlacementDialog } from './TextPlacementDialog';
+import { setTextPlacement } from '../lib/textPlacement';
 import PresentationDriver from './presentation/PresentationDriver';
 import { cutForDormers, dormerFingerprint, layoutsOf } from '../lib/dormers';
 import { SceneWeather } from './graphics/SceneWeather';
@@ -2873,6 +2876,12 @@ function Scene() {
       setPlacingNotePos(event.point.clone());
       return true;
     }
+    if (activeTool === 'text' || activeTool === 'text3d') {
+      const face = kernelHost.graph.faces.get(faceId);
+      if (!event.point || !face) return false;
+      startTextPlacement(event.point.clone(), new THREE.Vector3(face.plane.normal.x, face.plane.normal.y, face.plane.normal.z));
+      return true;
+    }
 
     if (activeTool === 'subtract') {
       // Same click-target-then-click-cutter flow as the Shape-based
@@ -5467,6 +5476,17 @@ function Scene() {
 
   const [pointerDownInfo, setPointerDownInfo] = useState<{ time: number, pos: THREE.Vector3 } | null>(null);
 
+  /** The Text tools: remember where the click landed and on what, then ask for the words. */
+  const startTextPlacement = (point: THREE.Vector3, normal: THREE.Vector3) => {
+    const towards = camera.position.clone().sub(point);
+    setTextPlacement({
+      kind: activeTool as 'text' | 'text3d',
+      point: [point.x, point.y, point.z],
+      normal: [normal.x, normal.y, normal.z],
+      towardsViewer: [towards.x, towards.y, towards.z],
+    });
+  };
+
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     // Walk Mode handles its own placement click and pointer-lock entirely
     // through native listeners on the canvas element (see
@@ -5480,6 +5500,12 @@ function Scene() {
 
     // Portal clicks are owned by TeleportPortalPreview's canvas listener.
     if (activeTool === 'teleport') return;
+
+    if (activeTool === 'text' || activeTool === 'text3d') {
+      e.stopPropagation();
+      startTextPlacement(e.point.clone(), new THREE.Vector3(0, 1, 0));
+      return;
+    }
 
     if (activeTool === 'bezier') {
       e.stopPropagation();
@@ -8889,6 +8915,13 @@ function Scene() {
       return;
     }
 
+    if (activeTool === 'text' || activeTool === 'text3d') {
+      e.stopPropagation();
+      const normal = e.face ? e.face.normal.clone().transformDirection(e.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+      startTextPlacement(e.point.clone(), normal);
+      return;
+    }
+
     if (activeTool === 'combine') {
       e.stopPropagation();
       setCombinePicks(prev => prev.some(p => p.kind === 'shape' && p.id === shape.id)
@@ -9996,7 +10029,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['text', 'text3d', 'terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -10888,6 +10921,10 @@ function Scene() {
               {selectedId === shape.id && (activeTool === 'select' || activeTool === 'lasso') && <FenceEditHandles shape={shape} terrain={fenceGround} />}
             </React.Fragment>
           );
+        }
+
+        if ((shape.type === 'text' || shape.type === 'text3d') && shape.textData) {
+          return <TextMesh key={shape.id} shape={shape} meshProps={meshProps} selectionHighlight={selectionHighlight} />;
         }
 
         if ((shape.type === 'tree' || shape.type === 'bush' || shape.type === 'rock') && shape.plantSpeciesId) {
@@ -13734,6 +13771,8 @@ export default function Viewport() {
 
       {activeTool === 'walk' && <WalkModeOverlay />}
       {activeTool === 'look' && <LookModeOverlay />}
+
+      <TextPlacementDialog />
 
       {placingNotePos && (
         // Rendered directly here — no portal needed, since this whole

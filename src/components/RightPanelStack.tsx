@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { actionLabel } from '../lib/macroRecorder';
+import { TextEntityFields } from './TextEntityFields';
 import { WeatherControls } from './graphics/WeatherControls';
 import { PlainFinishPicker } from './PlainFinishPicker';
 import { FLOCK_DEFAULTS } from './animations/FlockSystem';
@@ -940,6 +941,11 @@ export default function RightPanelStack() {
                   </div>
                 </div>
 
+                {selectedShape.textData && (selectedShape.type === 'text' || selectedShape.type === 'text3d') && (
+                  <TextEntityFields shape={selectedShape} />
+                )}
+
+                {!selectedShape.textData && (
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Dimensions ({unit})</label>
                   <div className="flex flex-wrap gap-1.5 mt-1">
@@ -1024,6 +1030,7 @@ export default function RightPanelStack() {
                     )}
                   </div>
                 </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Position ({unit})</label>

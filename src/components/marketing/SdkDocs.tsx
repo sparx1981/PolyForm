@@ -19,6 +19,7 @@ const TAG_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   blockKit: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
   worldView: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
   drawing: { bg: 'bg-lime-50', text: 'text-lime-700', dot: 'bg-lime-500' },
+  text: { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', dot: 'bg-fuchsia-500' },
 };
 
 function matches(query: string, tag: SdkTag, method: SdkMethod): boolean {

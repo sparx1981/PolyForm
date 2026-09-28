@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { Shape, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
+import { Shape, TextData, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
 import { roofBuilding, type RoofTileLook } from '../lib/buildingRoofs';
 import { withShapeIds } from '../lib/shapeIds';
+import { buildTextShape, editTextShape, type TextOptions } from '../lib/textShapes';
 import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
 import { commitKernelPushPull } from '../tools/kernelPushPull';
 import { commitKernelFaceOffset } from '../tools/kernelFaceOffset';
@@ -570,6 +571,13 @@ export interface SDK {
     setAltitude: (altitude: number) => void;
   };
 
+  // Text Subsystem - flat text labels and solid 3D letters, as the Text tools place them.
+  text: {
+    add: (options: TextOptions) => Shape;
+    add3D: (options: TextOptions) => Shape;
+    edit: (id: string, changes: Partial<TextData>) => void;
+  };
+
   // Drawing Subsystem - drawn geometry (the geometry kernel): lines, arcs and surfaces
   // drawn with Line / Arc / Rectangle / Circle / Polygon, and push/pull on their faces.
   // Faces are numbered; the same steps on the same drawing give the same numbers.
@@ -630,6 +638,7 @@ export class DeveloperSDK implements SDK {
   public blockKit: any;
   public worldView: any;
   public drawing: SDK['drawing'];
+  public text: SDK['text'];
   public toolbars: any;
 
   // Configuration Defaults
@@ -2246,6 +2255,23 @@ export class DeveloperSDK implements SDK {
         host.transact(() => { applyKernelPatch(host.graph, changes); return true; });
         host.refreshIndex();
         changed();
+      },
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // TEXT SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.text = {
+      add: (options) => this.placeBuilt(buildTextShape('text', options)),
+      add3D: (options) => this.placeBuilt(buildTextShape('text3d', options)),
+      edit: (id, changes) => {
+        const shape = this.shapes.find(s => s.id === id);
+        if (!shape?.textData) {
+          this.log(`text.edit: no text object with id ${id}.`);
+          return;
+        }
+        const edited = editTextShape(shape, changes);
+        this.setShapes(prev => prev.map(s => (s.id === id ? edited : s)));
       },
     };
 

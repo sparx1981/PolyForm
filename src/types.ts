@@ -136,10 +136,21 @@ export function isTextureUrl(val?: any): boolean {
          /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(val);
 }
 
+/** A text object's words and settings. The letters are drawn from them when it renders. */
+export interface TextData {
+  text: string;
+  /** Letter height, metres. */
+  size: number;
+  /** How far 3D letters stand out, metres (3D text only). */
+  depth?: number;
+  bold?: boolean;
+  align: 'left' | 'center' | 'right';
+}
+
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio' | 'text' | 'text3d';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
@@ -188,6 +199,8 @@ export interface Shape {
   waterData?: WaterData;
   /** Patio or deck outline and finish; the shape's y position is the level of its walking surface. */
   patioData?: PatioData;
+  /** Words and settings of a text label ('text') or 3D letters ('text3d'); see lib/textShapes.ts. */
+  textData?: TextData;
   plantVariation?: string;
   roofData?: any;
   roofTileData?: any;
