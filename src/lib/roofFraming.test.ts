@@ -104,6 +104,15 @@ describe('framing skeleton roofs', () => {
     expectSound(m, f);
     expect(f.members.filter(x => x.name === 'Radial Rafter').length).toBeGreaterThanOrEqual(46);
     expect(of(f, 'timber-hip-rafter')).toHaveLength(0);
+    // A ring beam round the wall head, a boss where the radials meet, and the rafters between
+    // radials stopping on a ring of trimmers well short of the centre.
+    expect(of(f, 'timber-wall-plate')).toHaveLength(48);
+    expect(of(f, 'timber-roof-boss')).toHaveLength(1);
+    expect(of(f, 'timber-trimmer-rafter').length).toBeGreaterThan(20);
+    for (const r of of(f, 'timber-common-rafter').filter(x => x.name === 'Common Rafter')) {
+      expect(Math.min(Math.hypot(r.a.x, r.a.z), Math.hypot(r.b.x, r.b.z))).toBeGreaterThan(1.5);
+    }
+    expect(f.warnings.join(' ')).toMatch(/ring beam/);
   });
 
   it('sizes rafters closer together for wider spacing', () => {

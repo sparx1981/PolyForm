@@ -70,7 +70,7 @@ interface RafterLine {
   /** The skeleton line (node pair) the top end lands on. */
   hiEdge: string | null;
 }
-type SideKind = 'eave' | RoofEdgeKind | 'crease';
+type SideKind = 'eave' | RoofEdgeKind | 'crease' | 'ring';
 
 export function frameSkeletonRoof(m: RoofModel, opts: { spacing?: number } = {}): RoofFraming {
   const spacing = Math.max(0.3, opts.spacing ?? 0.4);
@@ -90,6 +90,17 @@ export function frameSkeletonRoof(m: RoofModel, opts: { spacing?: number } = {})
     // How far in from the eave the wall line (where the rafters bear) is.
     const inset = (w[0] - fr.a[0]) * fr.inward[0] + (w[1] - fr.a[1]) * fr.inward[1];
     return { ...fr, inset: Math.max(0, inset) };
+  });
+
+  // Facets of a curved wall's roof: both sides are creases, and they narrow to a point.
+  const curveFacet = m.faces.map(f => !f.gable && f.verts.length >= 3
+    && kindOf(f.verts[0], f.verts[1]) === 'crease' && kindOf(f.verts[f.verts.length - 2], f.verts[f.verts.length - 1]) === 'crease');
+  /** How far up a curve facet (from its eave) it is still wide enough for rafters between its radial ones. */
+  const curveStop = m.faces.map((f, fi) => {
+    if (!curveFacet[fi]) return Infinity;
+    const { a, inward, len } = faceFrames[fi];
+    const tA = Math.max(...facePlan(m, f).map(p => (p[0] - a[0]) * inward[0] + (p[1] - a[1]) * inward[1]));
+    return tA * (1 - Math.min(1, 0.5 / Math.max(len, 1e-6)));
   });
 
   // --- Rafter lines on every slope ---------------------------------------------------------------
@@ -122,6 +133,9 @@ export function frameSkeletonRoof(m: RoofModel, opts: { spacing?: number } = {})
         if (t < tLo) { tLo = t; lo = kind; }
         if (t > tHi) { tHi = t; hi = kind; hiEdge = kind === 'eave' ? null : key(i, j); }
       }
+      if (!(tHi - tLo > 0.25)) continue;
+      // On a curve facet the rafters between the radial ones stop at a ring of trimmers.
+      if (tHi > curveStop[fi]) { tHi = curveStop[fi]; hi = 'ring'; hiEdge = null; }
       if (!(tHi - tLo > 0.25)) continue;
       lines.push({ face: fi, origin, dir: inward, tLo: Math.max(0, tLo), tHi, lo, hi, hiEdge });
     }
@@ -188,6 +202,53 @@ export function frameSkeletonRoof(m: RoofModel, opts: { spacing?: number } = {})
     if (l.lo === 'valley') add('Valley Jack Rafter', A, B, sizes.rafter, 'timber-valley-jack-rafter');
     else if (l.hi === 'hip') add('Hip Jack Rafter', A, B, sizes.rafter, 'timber-hip-jack-rafter');
     else add('Common Rafter', A, B, sizes.rafter, 'timber-common-rafter');
+  }
+
+  // Round roofs: the trimmer ring those rafters stop on, a ring beam on the wall head to take the
+  // rafters' outward push, and a boss where the radial rafters meet.
+  const crossAt = (fi: number, t: number): [THREE.Vector3, THREE.Vector3] | null => {
+    const { a, u, inward } = faceFrames[fi];
+    const plan = facePlan(m, m.faces[fi]);
+    const us: number[] = [];
+    for (let s2 = 0; s2 < plan.length; s2++) {
+      const P = plan[s2], Q = plan[(s2 + 1) % plan.length];
+      const tp = (P[0] - a[0]) * inward[0] + (P[1] - a[1]) * inward[1];
+      const tq = (Q[0] - a[0]) * inward[0] + (Q[1] - a[1]) * inward[1];
+      if ((tp - t) * (tq - t) > 0 || tp === tq) continue;
+      const k = (t - tp) / (tq - tp);
+      us.push((P[0] + (Q[0] - P[0]) * k - a[0]) * u[0] + (P[1] + (Q[1] - P[1]) * k - a[1]) * u[1]);
+    }
+    if (us.length < 2) return null;
+    const pt = (uu: number) => v3([a[0] + u[0] * uu + inward[0] * t, a[1] + u[1] * uu + inward[1] * t], t * tan);
+    return [pt(Math.min(...us)), pt(Math.max(...us))];
+  };
+  let curved = false;
+  m.faces.forEach((f, fi) => {
+    if (!curveFacet[fi]) return;
+    curved = true;
+    const ends = Number.isFinite(curveStop[fi]) && lines.some(l => l.face === fi && l.hi === 'ring') ? crossAt(fi, curveStop[fi]) : null;
+    if (ends) add('Ring Trimmer', ends[0], ends[1], sizes.rafter, 'timber-trimmer-rafter');
+    const w0 = m.wall[f.edge], w1 = m.wall[(f.edge + 1) % n];
+    add('Ring Beam (Wall Plate)', v3(w0, 0.04), v3(w1, 0.04), [0.15, 0.075], 'timber-wall-plate');
+  });
+  if (curved) {
+    // Radial rafters meet at (or, on a nudged outline, very near) a point: group ends within 30 cm.
+    const groups: { top: THREE.Vector3; count: number }[] = [];
+    for (const e of m.edges) {
+      if (e.kind !== 'hip' || !isCurveCrease(m, e)) continue;
+      for (const v of [e.a, e.b]) {
+        if (v < n) continue;
+        const p = new THREE.Vector3(...m.nodes[v]);
+        const g = groups.find(x => Math.hypot(x.top.x - p.x, x.top.z - p.z) < 0.3);
+        if (!g) groups.push({ top: p, count: 1 });
+        else { g.count++; if (p.y > g.top.y) g.top = p; }
+      }
+    }
+    for (const { top, count } of groups) {
+      if (count < 5) continue;
+      add('Roof Boss', top.clone().setY(top.y - 0.1), top.clone().setY(top.y - 0.6), [0.15, 0.15], 'timber-roof-boss');
+    }
+    warnings.push('Round roof: the rafters push outwards at the eaves, so the ring beam on the wall head has to hold them in; its joints must be made to take tension.');
   }
 
   // Noggins (blocking) between neighbouring rafters on the same slope, half way up where both run.
