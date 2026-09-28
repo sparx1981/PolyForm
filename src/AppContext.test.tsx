@@ -348,3 +348,48 @@ describe('AppContext / useApp', () => {
     });
   });
 });
+
+describe('AppProvider action recorder', () => {
+  it('records manual actions as a script that replays to the same model', async () => {
+    const { DeveloperSDK } = await import('./services/developerService');
+    const { result } = renderApp();
+    act(() => { result.current.setShapes([]); });
+    const start = result.current.shapes;
+
+    act(() => { result.current.setIsRecording(true); });
+    const box = makeShape({ id: 'rec-box', name: 'Shed' });
+    act(() => { result.current.addShape(box); });
+    await act(async () => { await new Promise(r => setTimeout(r, 450)); });
+    act(() => { result.current.updateShapeColor('rec-box', '#123456'); });
+    // A slider dragged through many values records only the last one.
+    act(() => { result.current.setSunIntensity(0.3); });
+    act(() => { result.current.setSunIntensity(0.6); });
+    act(() => { result.current.setSunIntensity(0.9); });
+    act(() => { result.current.setIsRecording(false); });
+
+    const code = result.current.recordedCode;
+    expect(code).toContain('// Add Shed');
+    expect(code.indexOf('// Add Shed')).toBeLessThan(code.indexOf('sdk.addObject("box"'));
+    expect(code.match(/setSunSettings/g)).toHaveLength(1);
+    expect(code).toContain('sdk.setSunSettings({ intensity: 0.9 });');
+    expect(code).toContain('sdk.updateObject("rec-box"');
+
+    // Replay against a fresh model through the real SDK.
+    let shapes = start;
+    const sunIntensity: number[] = [];
+    const sdk = new DeveloperSDK(shapes, (next: any) => { shapes = typeof next === 'function' ? next(shapes) : next; },
+      () => {}, null, { setSunIntensity: (v: number) => sunIntensity.push(v) });
+    new Function('sdk', code)(sdk);
+    const final = result.current.shapes.find(s => s.id === 'rec-box')!;
+    expect(shapes.find(s => s.id === 'rec-box')).toEqual(final);
+    expect(final.color).toBe('#123456');
+    expect(sunIntensity).toEqual([0.9]);
+  });
+
+  it('records nothing while not recording', () => {
+    const { result } = renderApp();
+    act(() => { result.current.setRecordedCode(''); });
+    act(() => { result.current.addShape(makeShape({ id: 'not-recorded' })); });
+    expect(result.current.recordedCode).toBe('');
+  });
+});

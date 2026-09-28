@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
+import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
 import PresentationDriver from './presentation/PresentationDriver';
 import { cutForDormers, dormerFingerprint, layoutsOf } from '../lib/dormers';
 import { SceneWeather } from './graphics/SceneWeather';
@@ -2569,7 +2570,7 @@ function Scene() {
       commitHistory();
 
       setConsoleOutput(prev => [...prev, `[SUCCESS] Kernel CSG Subtraction completed.`]);
-      recordAction(`sdk.performCSG(kernel target, kernel cutter, "SUBTRACTION");`);
+      recordAction(actionLabel("Subtract (drawn geometry)"));
     } catch (error: any) {
       console.error("[CSG] Kernel operation failed:", error);
       setConsoleOutput(prev => [...prev, `[ERROR] Kernel CSG Operation failed: ${error.message}`]);
@@ -2741,7 +2742,7 @@ function Scene() {
       commitHistory();
 
       setConsoleOutput(prev => [...prev, `[SUCCESS] Mixed CSG Subtraction completed.`]);
-      recordAction(`sdk.performCSG(mixed target, mixed cutter, "SUBTRACTION");`);
+      recordAction(actionLabel("Subtract (drawn geometry and objects)"));
     } catch (error: any) {
       console.error("[CSG] Mixed operation failed:", error);
       setConsoleOutput(prev => [...prev, `[ERROR] Mixed CSG Operation failed: ${error.message}`]);
@@ -3929,7 +3930,7 @@ function Scene() {
       
       addShape(newShape);
       commitHistory();
-      recordAction(`sdk.createRectangle({ width: ${w}, height: ${d}, position: [${centerX.x.toFixed(2)}, ${centerX.y.toFixed(2)}, ${centerX.z.toFixed(2)}] });`);
+      recordAction(actionLabel(`Rectangle tool: ${w} x ${d}`));
     }
     
     setRectangleInputState({ active: false, startPoint: null, width: '', depth: '' });
@@ -4130,7 +4131,7 @@ function Scene() {
 
     addShape(newShape);
     commitHistory();
-    recordAction(`sdk.createWall({ length: ${dist.toFixed(2)}, height: ${actualHeight.toFixed(2)}, thickness: ${actualThickness.toFixed(2)}, position: [${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}] });`);
+    recordAction(actionLabel(`Wall tool: ${dist.toFixed(2)} m wall`));
     return newShape;
   }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction, wallToolSettings, wallJustification, activeStory]);
 
@@ -4635,7 +4636,7 @@ function Scene() {
     liveFenceIdRef.current = newShape.id;
     addShape(newShape);
     commitHistory();
-    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
     diagLog('TOOL', 'Fence placed', { style: settings.style, points: vertices.length, closed, length });
   }, [fenceToolSettings, shapes, setShapes, unit, addShape, commitHistory, recordAction, diagLog]);
 
@@ -4685,7 +4686,7 @@ function Scene() {
     };
     addShape(newShape);
     commitHistory();
-    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
     diagLog('TOOL', `${kind} placed`, { points: vertices.length, level, extent });
   }, [shapes, waterToolSettings, addShape, commitHistory, recordAction, diagLog, setMeasurements]);
 
@@ -4752,7 +4753,7 @@ function Scene() {
     addShape(newShape);
     commitHistory();
     setSelectedId(newShape.id);
-    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
     diagLog('TOOL', `${newShape.name} placed`, { points: world.length, level, againstWall: joinLevels.length > 0, closedAlong: !!closure, trimmed: !!trimmed });
   }, [patioToolSettings, patioOriginalGround, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog, setMeasurements]);
 
@@ -4788,7 +4789,7 @@ function Scene() {
     addShape(newShape);
     commitHistory();
     setSelectedId(newShape.id);
-    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
     const warnings = balconyWarnings(newShape.patioData!);
     setMeasurements(warnings.length ? `${newShape.name} placed. ${warnings.join(' ')}` : `${newShape.name} placed. Set its widths, depth and levels in the panel; it moves with its wall.`);
     diagLog('TOOL', `${newShape.name} placed`, { level: placement.level, wall: placement.wallId, opening: placement.openingId });
@@ -4855,7 +4856,7 @@ function Scene() {
 
     addShape(newShape);
     commitHistory();
-    recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
     return newShape;
   }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction, unit]);
 
@@ -6221,7 +6222,7 @@ function Scene() {
         setMeasurements(windowStyle === 'velux-roof' 
           ? 'Velux Roof Skylight placed on roof pitch & updated framing committed. Click to place another, or switch tool.'
           : `${activeTool === 'door' ? 'Door' : 'Window'} placed & wall opening cut (updated timber framing committed). Click to place another, or switch tool.`);
-        recordAction(`sdk.addShape(${JSON.stringify(newDoorWindowShape)});`);
+        recordAction(actionLabel(`Add ${newDoorWindowShape.name || newDoorWindowShape.type}`));
       }
       return;
     }
@@ -6254,7 +6255,7 @@ function Scene() {
         setPreviewShape(null);
         setActiveTool('select');
         setMeasurements(`${isStaircase ? 'Parametric Staircase' : 'Step'} placed. Right-click on stairs to configure styles and parametric rise.`);
-        recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+        recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
       }
       return;
     }
@@ -6298,7 +6299,7 @@ function Scene() {
       addShape(newShape);
       commitHistory();
       setMeasurements(`Placed ${char.name} at [${hitPoint.x.toFixed(2)}, ${hitPoint.y.toFixed(2)}, ${hitPoint.z.toFixed(2)}] (${targetH.toFixed(2)}m eye-level benchmark)`);
-      recordAction(`sdk.addShape(${JSON.stringify(newShape)});`);
+      recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
       return;
     }
 
@@ -8298,7 +8299,7 @@ function Scene() {
       commitHistory();
       const shape = shapes.find(s => s.id === bevelState.id);
       if (shape) {
-        recordAction(`const obj = sdk.getObjectByName("${shape.id}");\nif (obj) {\n  sdk.setBevel(obj, {\n    amount: ${shape.bevelAmount},\n    type: "${shape.bevelType}",\n    segments: ${shape.bevelSegments}\n  });\n}`);
+        recordAction(actionLabel(`Bevel ${shape.name || shape.id}`));
       }
       setBevelState(null);
       setMeasurements('');
@@ -9354,7 +9355,7 @@ function Scene() {
           }).catch(() => {});
         }
         
-        recordAction(`const obj = sdk.getObjectByName("${sId}");\nif (obj) {\n  obj.position = [${position.map(p => p.toFixed(2)).join(', ')}];\n  obj.quaternion = [${quaternion.map(q => q.toFixed(2)).join(', ')}];\n  obj.scale = [${scale.map(s => s.toFixed(2)).join(', ')}];\n}`);
+        recordAction(actionLabel(`Move/rotate/scale ${sId}`));
       }
     }
     captureDiagnosticData();
@@ -9644,7 +9645,7 @@ function Scene() {
 
       setConsoleOutput(prev => [...prev, `[SUCCESS] CSG Subtraction completed.`]);
       removeShape(cutterId);
-      recordAction(`sdk.performCSG("${targetId}", "${cutterId}", "SUBTRACTION");`);
+      recordAction(actionLabel(`Subtract ${cutterId} from ${targetId}`));
     } catch (error: any) {
       console.error("[CSG] Operation failed:", error);
       setConsoleOutput(prev => [...prev, `[ERROR] CSG Operation failed: ${error.message}`]);
@@ -10652,7 +10653,7 @@ function Scene() {
                   geometryData: bufferGeo.toJSON()
                 } : s));
                 commitHistory();
-                recordAction(`sdk.deformObject("${shapeId}", ${JSON.stringify(deformationSettings)});`);
+                recordAction(actionLabel(`Deform ${shapeId}`));
               }
             }
             handlePointerUp(e);
@@ -13662,7 +13663,7 @@ export default function Viewport() {
         // Apply to both triangles of the box face
         const otherIdx = faceIdx % 2 === 0 ? faceIdx + 1 : faceIdx - 1;
         
-        recordAction(`sdk.divideSurface("${s.id}", ${faceIdx}, [${gridX}, ${gridY}]);`);
+        recordAction(actionLabel(`Divide face ${faceIdx} of ${s.id} into ${gridX} x ${gridY}`));
 
         return { 
           ...s, 
@@ -13825,7 +13826,7 @@ export default function Viewport() {
                         completed: false
                       };
                       setNotes(prev => [...prev, newNote]);
-                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                      recordAction(`sdk.addNote(${JSON.stringify(_noteText)}, ${sdkLiteral([placingNotePos.x, placingNotePos.y, placingNotePos.z])});`);
                     }
                     setPlacingNotePos(null);
                   }
@@ -13855,7 +13856,7 @@ export default function Viewport() {
                         completed: false
                       };
                       setNotes(prev => [...prev, newNote]);
-                      recordAction(`sdk.addNote("${_noteText}", [${placingNotePos.x}, ${placingNotePos.y}, ${placingNotePos.z}]);`);
+                      recordAction(`sdk.addNote(${JSON.stringify(_noteText)}, ${sdkLiteral([placingNotePos.x, placingNotePos.y, placingNotePos.z])});`);
                     }
                     setPlacingNotePos(null);
                   }}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { actionLabel } from '../lib/macroRecorder';
 import { WeatherControls } from './graphics/WeatherControls';
 import { PlainFinishPicker } from './PlainFinishPicker';
 import { FLOCK_DEFAULTS } from './animations/FlockSystem';
@@ -956,7 +957,7 @@ export default function RightPanelStack() {
                                 const newArgs = [...selectedShape.args];
                                 newArgs[idx] = meters;
                                 setShapes(prev => prev.map(s => s.id === selectedShape.id ? { ...s, args: newArgs } : s));
-                                recordAction(`sdk.updateObject("${selectedShape.id}", { args: [${newArgs.join(', ')}] });`);
+                                recordAction(actionLabel(`Set dimensions of ${selectedShape.name || selectedShape.id}`));
                               }
                               setEditingDimIndex(null);
                             }}
@@ -997,7 +998,7 @@ export default function RightPanelStack() {
                                     ...s,
                                     args: { ...s.args, height: meters }
                                   } : s));
-                                  recordAction(`sdk.updateObject("${selectedShape.id}", { args: { height: ${meters} } });`);
+                                  recordAction(actionLabel(`Set height of ${selectedShape.name || selectedShape.id}`));
                                 }
                                 setEditingDimIndex(null);
                               }}
@@ -1042,7 +1043,7 @@ export default function RightPanelStack() {
                                 const newPos = [...selectedShape.position];
                                 newPos[idx] = meters;
                                 setShapes(prev => prev.map(s => s.id === selectedShape.id ? { ...s, position: newPos as [number, number, number] } : s));
-                                recordAction(`sdk.updateObject("${selectedShape.id}", { position: [${newPos.join(', ')}] });`);
+                                recordAction(actionLabel(`Set position of ${selectedShape.name || selectedShape.id}`));
                               }
                               setEditingPosIndex(null);
                             }}
@@ -1089,7 +1090,7 @@ export default function RightPanelStack() {
                                   const newRot = [...(selectedShape.rotation || [0, 0, 0])] as [number, number, number];
                                   newRot[idx] = val * (Math.PI / 180);
                                   setShapes(prev => prev.map(s => s.id === selectedShape.id ? { ...s, rotation: newRot, quaternion: undefined } : s));
-                                  recordAction(`sdk.updateObject("${selectedShape.id}", { rotation: [${newRot.join(', ')}] });`);
+                                  recordAction(actionLabel(`Set rotation of ${selectedShape.name || selectedShape.id}`));
                                 }
                                 setEditingRotIndex(null);
                               }}

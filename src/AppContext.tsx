@@ -28,6 +28,7 @@ import { defaultGraphicsSettings, normalizeGraphicsSettings } from './lib/graphi
 import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
 import { legacyEnvironmentState } from './lib/assets/legacyAdapter';
 import { readAssetProjectState } from './lib/assets/projectCodec';
+import { diffShapesToSdk, actionLabel, sdkLiteral } from './lib/macroRecorder';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -1428,10 +1429,71 @@ console.log("Created rectangle:", myRect.id);`);
     setFocusOnMapTrigger(prev => prev + 1);
   };
 
-  const recordAction = (code: string) => {
+  // --- Action recorder ("record macro") ------------------------------------
+  // While recording, every change to the model is written as SDK lines that replay it
+  // exactly: the model is compared with how it was at the last write (see macroRecorder.ts),
+  // so no tool can be missed. Tools add a comment naming the action through recordAction.
+  // Refs, not state, so callbacks memoised before recording started still record.
+  const isRecordingRef = useRef(false);
+  const latestShapesRef = useRef<Shape[]>(shapes);
+  latestShapesRef.current = shapes;
+  const recordBaselineRef = useRef<Shape[] | null>(null);
+  // A slider sends a change on every tick; consecutive changes to one setting keep only the
+  // last value, so the script says "set it to 0.8" once rather than fifty times.
+  const lastRecordedSettingRef = useRef<{ key: string; line: string } | null>(null);
+  const appendRecorded = (lines: string[]) => {
+    if (lines.length === 0) return;
+    setRecordedCode(prev => prev + lines.join('\n') + '\n');
+  };
+  const flushRecordedChanges = () => {
+    const baseline = recordBaselineRef.current;
+    if (!baseline) return;
+    const current = latestShapesRef.current;
+    if (baseline === current) return;
+    const lines = diffShapesToSdk(baseline, current);
+    if (lines.length > 0) lastRecordedSettingRef.current = null;
+    appendRecorded(lines);
+    recordBaselineRef.current = current;
+  };
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
     if (isRecording) {
-      setRecordedCode(prev => prev + code + '\n');
+      recordBaselineRef.current = latestShapesRef.current;
+    } else if (recordBaselineRef.current) {
+      flushRecordedChanges();
+      recordBaselineRef.current = null;
     }
+  }, [isRecording]);
+  // Written once an action settles, so a drag records one move rather than every frame.
+  useEffect(() => {
+    if (!isRecording) return;
+    const timer = setTimeout(flushRecordedChanges, 400);
+    return () => clearTimeout(timer);
+  }, [shapes, isRecording]);
+
+  /** Records a setting change, replacing the previous line if it set the same setting. */
+  const recordSetting = (key: string, line: string) => {
+    if (!isRecordingRef.current) return;
+    flushRecordedChanges();
+    const last = lastRecordedSettingRef.current;
+    lastRecordedSettingRef.current = { key, line };
+    if (last && last.key === key) {
+      setRecordedCode(prev => prev.endsWith(last.line + '\n')
+        ? prev.slice(0, prev.length - last.line.length - 1) + line + '\n'
+        : prev + line + '\n');
+      return;
+    }
+    appendRecorded([line]);
+  };
+
+  /** Adds a line to the recording: SDK code, or a comment naming what the user did. */
+  const recordAction = (code: string) => {
+    if (!isRecordingRef.current) return;
+    lastRecordedSettingRef.current = null;
+    // Changes from earlier actions go first, so each label sits above its own changes.
+    flushRecordedChanges();
+    const trimmed = code.trim();
+    appendRecorded([trimmed.startsWith('//') || trimmed.startsWith('sdk.') || trimmed.startsWith('const ') ? trimmed : actionLabel(trimmed)]);
   };
 
   // Convert To Wall adds walls to Shape history and removes the source
@@ -1938,37 +2000,15 @@ console.log("Created rectangle:", myRect.id);`);
       return nextShapes;
     });
     
-    // Record action
-    let sdkCall = '';
-    const pos = `[${shape.position.map(p => p.toFixed(2)).join(', ')}]`;
-    
-    switch(shape.type) {
-      case 'rect': sdkCall = `sdk.createRectangle({ width: ${shape.args[0]}, height: ${shape.args[2]}, position: ${pos} });`; break;
-      case 'box': sdkCall = `sdk.createBox({ width: ${shape.args[0]}, height: ${shape.args[1]}, depth: ${shape.args[2]}, position: ${pos} });`; break;
-      case 'sphere': sdkCall = `sdk.createSphere({ radius: ${shape.args[0]}, position: ${pos} });`; break;
-      case 'cone': sdkCall = `sdk.createCone({ radius: ${shape.args[0]}, height: ${shape.args[1]}, position: ${pos} });`; break;
-      case 'pyramid': sdkCall = `sdk.createPyramid({ radius: ${shape.args[0]}, height: ${shape.args[1]}, position: ${pos} });`; break;
-      case 'donut': sdkCall = `sdk.createDonut({ radius: ${shape.args[0]}, tube: ${shape.args[1]}, position: ${pos} });`; break;
-      case 'dome': sdkCall = `sdk.createDome({ radius: ${shape.args[0]}, position: ${pos} });`; break;
-      case 'poly': {
-        const worldVertices = (shape.args.vertices || []).map((v: number[]) => {
-          const local = new THREE.Vector3(v[0], v[1], 0);
-          const quat = new THREE.Quaternion(...(shape.quaternion || [0,0,0,1]));
-          return local.applyQuaternion(quat).add(new THREE.Vector3(...shape.position)).toArray();
-        });
-        sdkCall = `sdk.createPoly({ vertices: ${JSON.stringify(worldVertices)}, position: ${pos} });`; 
-        break;
-      }
-    }
-    
-    if (sdkCall) recordAction(sdkCall);
+    // The exact addObject line comes from the recorder's change tracking.
+    recordAction(actionLabel(`Add ${shape.name || shape.type}`));
   };
 
   const removeShape = (id: string) => {
     handleSetShapes(prev => prev.filter(s => s.id !== id));
     setSelectedIds(prev => prev.filter(sid => sid !== id));
     if (selectedId === id) setSelectedId(null);
-    recordAction(`sdk.deleteObject("${id}");`);
+    recordAction(actionLabel(`Delete ${id}`));
   };
 
   /**
@@ -1995,7 +2035,7 @@ console.log("Created rectangle:", myRect.id);`);
 
     handleSetShapes(prev => [...prev, newShape]);
     setSelectedId(newShape.id);
-    recordAction(`sdk.duplicateObject("${id}");`);
+    recordAction(actionLabel(`Duplicate ${shape.name || id}`));
   };
 
   const duplicateMultiple = (ids: string[]) => {
@@ -2014,7 +2054,7 @@ console.log("Created rectangle:", myRect.id);`);
     if (newShapes.length > 0) {
       handleSetShapes(prev => [...prev, ...newShapes]);
       setSelectedIds(newShapes.map(s => s.id));
-      recordAction(`sdk.duplicateObjects(${JSON.stringify(ids)});`);
+      recordAction(actionLabel(`Duplicate ${ids.length} objects`));
     }
   };
 
@@ -2025,13 +2065,13 @@ console.log("Created rectangle:", myRect.id);`);
       legacySkybox: type,
       background: type !== 'none',
     });
-    recordAction(`sdk.setSkybox("${type}", ${skyboxBlur}, ${skyboxRotation}, ${environmentIntensity});`);
+    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(type)}, ${skyboxBlur}, ${skyboxRotation}, ${environmentIntensity});`);
   };
 
   const handleSetFogSettings = (settings: FogSettings | ((prev: FogSettings) => FogSettings)) => {
     setFogSettings(prev => {
       const next = typeof settings === 'function' ? settings(prev) : settings;
-      recordAction(`sdk.setFog(${JSON.stringify(next)});`);
+      recordSetting('fog', `sdk.setFog(${sdkLiteral(next)});`);
       return next;
     });
   };
@@ -2041,7 +2081,7 @@ console.log("Created rectangle:", myRect.id);`);
       const next = typeof lights === 'function' ? lights(prev) : lights;
       if (next.length > prev.length) {
         const newLight = next[next.length - 1];
-        recordAction(`sdk.addLight(${JSON.stringify(newLight)});`);
+        recordAction(`sdk.addLight(${sdkLiteral(newLight)});`);
       }
       return next;
     });
@@ -2049,7 +2089,7 @@ console.log("Created rectangle:", myRect.id);`);
 
   const handleSetActiveBevelType = (type: 'radius' | 'chamfer') => {
     setActiveBevelType(type);
-    recordAction(`sdk.setBevelType("${type}");`);
+    recordSetting('bevelType', `sdk.setBevelType(${JSON.stringify(type)});`);
   };
 
   const handleSetScenes = (newScenes: SceneState[] | ((prev: SceneState[]) => SceneState[])) => {
@@ -2057,7 +2097,7 @@ console.log("Created rectangle:", myRect.id);`);
       const next = typeof newScenes === 'function' ? newScenes(prev) : newScenes;
       if (next.length > prev.length) {
         const newScene = next[next.length - 1];
-        recordAction(`sdk.saveScene("${newScene.name}");`);
+        recordAction(`sdk.saveScene(${JSON.stringify(newScene.name)});`);
       }
       return next;
     });
@@ -2103,7 +2143,7 @@ console.log("Created rectangle:", myRect.id);`);
       }
       return s;
     }));
-    recordAction(`const obj = sdk.getObjectByName("${id}");\nif (obj) sdk.applyColor(obj, "${color}");`);
+    recordAction(actionLabel(`Paint ${id} with ${color.startsWith('data:') ? 'an image' : color}`));
   };
 
   const handleSetActiveMaterial = (value: string) => {
@@ -2113,7 +2153,7 @@ console.log("Created rectangle:", myRect.id);`);
 
   const updateShapeDimensions = (id: string, position: [number, number, number], args: any) => {
     handleSetShapes(prev => prev.map(s => s.id === id ? { ...s, position, args } : s));
-    recordAction(`const obj = sdk.getObjectByName("${id}");\nif (obj) {\n  obj.position = [${position.map(p => p.toFixed(2)).join(', ')}];\n  obj.args = [${args.map((a: any) => typeof a === 'number' ? a.toFixed(2) : a).join(', ')}];\n}`);
+    recordAction(actionLabel(`Resize ${id}`));
   };
 
   const clearShapes = () => {
@@ -2167,75 +2207,75 @@ console.log("Created rectangle:", myRect.id);`);
     window.dispatchEvent(new CustomEvent('reset-camera'));
     window.dispatchEvent(new CustomEvent('clear-3d-space'));
     
-    recordAction(`sdk.clear();`);
+    recordAction(actionLabel('Clear the model'));
   };
 
   const handleSetShadowsEnabled = (enabled: boolean) => {
     setShadowsEnabled(enabled);
-    recordAction(`sdk.setShadows(${enabled});`);
+    recordSetting('shadows', `sdk.setShadows(${enabled});`);
   };
 
   const handleSetGridEnabled = (enabled: boolean) => {
     setGridEnabled(enabled);
-    recordAction(`sdk.setGrid(${enabled});`);
+    recordSetting('grid', `sdk.setGrid(${enabled});`);
   };
 
   const handleSetAxisIndicatorEnabled = (enabled: boolean) => {
     setAxisIndicatorEnabled(enabled);
-    recordAction(`sdk.setAxisIndicator(${enabled});`);
+    recordSetting('axis', `sdk.setAxisIndicator(${enabled});`);
   };
 
   const handleSetMiniAxisIndicatorEnabled = (enabled: boolean) => {
     setMiniAxisIndicatorEnabled(enabled);
-    recordAction(`sdk.setMiniAxisIndicator(${enabled});`);
+    recordSetting('miniAxis', `sdk.setMiniAxisIndicator(${enabled});`);
   };
 
   const handleSetFloorEnabled = (enabled: boolean) => {
     setFloorEnabled(enabled);
-    recordAction(`sdk.setFloor(${enabled});`);
+    recordSetting('floor', `sdk.setFloor(${enabled});`);
   };
 
   const handleSetAmbientOcclusionEnabled = (enabled: boolean) => {
     setAmbientOcclusionEnabled(enabled);
-    recordAction(`sdk.setAmbientOcclusion(${enabled});`);
+    recordSetting('ao', `sdk.setAmbientOcclusion(${enabled});`);
   };
 
   const handleSetSunIntensity = (intensity: number) => {
     setSunIntensity(intensity);
-    recordAction(`sdk.setSunSettings({ intensity: ${intensity} });`);
+    recordSetting('sunIntensity', `sdk.setSunSettings({ intensity: ${intensity} });`);
   };
 
   const handleSetSkyboxBlur = (blur: number) => {
     setSkyboxBlur(blur);
     setEnvironment(previous => ({ ...previous, blur }));
-    recordAction(`sdk.setSkybox("${skybox}", { blur: ${blur} });`);
+    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(skybox)}, ${blur}, ${skyboxRotation}, ${environmentIntensity});`);
   };
 
   const handleSetEnvironmentIntensity = (intensity: number) => {
     setEnvironmentIntensity(intensity);
     setEnvironment(previous => ({ ...previous, intensity, backgroundIntensity: intensity }));
-    recordAction(`sdk.setSkybox("${skybox}", { intensity: ${intensity} });`);
+    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(skybox)}, ${skyboxBlur}, ${skyboxRotation}, ${intensity});`);
   };
 
   const handleSetSkyboxRotation = (rotation: number) => {
     setSkyboxRotation(rotation);
     setEnvironment(previous => ({ ...previous, rotationRadians: rotation * Math.PI / 180 }));
-    recordAction(`sdk.setSkybox("${skybox}", { rotation: ${rotation} });`);
+    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(skybox)}, ${skyboxBlur}, ${rotation}, ${environmentIntensity});`);
   };
 
   const handleSetAnimateSun = (animate: boolean) => {
     setAnimateSun(animate);
-    recordAction(`sdk.setSunSettings({ animate: ${animate} });`);
+    recordSetting('sunAnimate', `sdk.setSunSettings({ animate: ${animate} });`);
   };
 
   const handleSetSunSpeed = (speed: number) => {
     setSunSpeed(speed);
-    recordAction(`sdk.setSunSettings({ speed: ${speed} });`);
+    recordSetting('sunSpeed', `sdk.setSunSettings({ speed: ${speed} });`);
   };
 
   const handleSetLightPosition = (pos: [number, number, number]) => {
     setLightPosition(pos);
-    recordAction(`sdk.setSunSettings({ position: [${pos[0]}, ${pos[1]}, ${pos[2]}] });`);
+    recordSetting('sunPosition', `sdk.setSunSettings({ position: ${sdkLiteral(pos)} });`);
   };
 
   const getProjectState = (): ProjectState => ({

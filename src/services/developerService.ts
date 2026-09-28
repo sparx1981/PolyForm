@@ -194,6 +194,7 @@ export interface SDK {
   getSelectedObject: () => Shape | null;
   select: (idOrIds: string | string[]) => void;
   deleteObject: (id: string) => void;
+  updateObject: (id: string, changes: Partial<Shape>) => void;
   saveScene: (name: string) => void;
   setSkybox: (type: any, blur?: number, rotation?: number, intensity?: number) => void;
   setFog: (settings: any) => void;
@@ -211,6 +212,13 @@ export interface SDK {
   animateSun: (cycleSpeed?: number) => void;
   toggleFloor: (enabled: boolean) => void;
   toggleGrid: (enabled: boolean) => void;
+  setFloor: (enabled: boolean, color?: string) => void;
+  setGrid: (enabled: boolean) => void;
+  setShadows: (enabled: boolean) => void;
+  setAmbientOcclusion: (enabled: boolean) => void;
+  setAxisIndicator: (enabled: boolean) => void;
+  setMiniAxisIndicator: (enabled: boolean) => void;
+  setSunSettings: (settings: { intensity?: number; position?: [number, number, number]; animate?: boolean; speed?: number }) => void;
   setZoom: (zoom: number) => void;
   resetView: (view: 'perspective' | 'plan' | 'front' | 'rear' | 'left' | 'right') => void;
   setCameraDefaults: (position: [number, number, number], target: [number, number, number]) => void;
@@ -2657,9 +2665,28 @@ export class DeveloperSDK implements SDK {
       color: props.color || '#ffffff',
       ...props
     };
-    this.setShapes(prev => [...prev, newShape]);
-    this.log(`Added object (${type}) ${id}.`);
+    // Adding an object whose id is already in the model replaces it, so a recorded
+    // script replayed on the same model doesn't create duplicates.
+    this.setShapes(prev => prev.some(s => s.id === newShape.id)
+      ? prev.map(s => s.id === newShape.id ? newShape : s)
+      : [...prev, newShape]);
+    this.shapes = this.shapes.some(s => s.id === newShape.id)
+      ? this.shapes.map(s => s.id === newShape.id ? newShape : s)
+      : [...this.shapes, newShape];
+    this.log(`Added object (${type}) ${newShape.id}.`);
     return newShape;
+  }
+
+  updateObject(id: string, changes: Partial<Shape>): void {
+    // Shallow merge; a field given as undefined is removed from the object.
+    const apply = (s: Shape): Shape => {
+      if (s.id !== id) return s;
+      const next: any = { ...s, ...changes, id };
+      for (const [k, v] of Object.entries(changes)) if (v === undefined) delete next[k];
+      return next;
+    };
+    this.setShapes(prev => prev.map(apply));
+    this.shapes = this.shapes.map(apply);
   }
 
   toggleFloor(enabled: boolean): void {
