@@ -67,6 +67,13 @@ export interface KernelGeometryProps {
   opacity?: number;
   /** Resolves a library material painted onto faces to its loaded textures. */
   bindingFor?: (bindingId: string) => KernelFaceBinding | undefined;
+  /**
+   * Drawn as part of an object (a group or component, see tools/kernelGroups.ts) rather than
+   * as the model's loose drawn geometry: its faces aren't marked as kernel faces, so the
+   * drawing tools, which work on the loose geometry, leave them alone and a click selects the
+   * object.
+   */
+  asObject?: boolean;
 }
 
 /** A library material's textures and values, as resolved by the Viewport. */
@@ -127,6 +134,7 @@ export function KernelGeometry({
   selectedColor = DEFAULT_SELECTED,
   opacity = 1,
   bindingFor,
+  asObject = false,
 }: KernelGeometryProps) {
 
   /**
@@ -190,14 +198,14 @@ export function KernelGeometry({
   const hasSelection = (selectedFaces?.size ?? 0) > 0;
 
   return (
-    <group name="kernel-geometry">
+    <group name={asObject ? undefined : 'kernel-geometry'}>
       {groups.map((g) => (
         <mesh
           key={g.key}
           geometry={g.geometry}
           castShadow
           receiveShadow
-          userData={{ isKernelGeometry: true, faceOfTriangle: g.faceOfTriangle }}
+          userData={asObject ? { isGroupGeometry: true } : { isKernelGeometry: true, faceOfTriangle: g.faceOfTriangle }}
           onPointerDown={(event) => {
             if (!onFacePointerDown) return;
             const triangle = event.faceIndex;

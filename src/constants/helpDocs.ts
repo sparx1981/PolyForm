@@ -383,6 +383,20 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'groups-components',
+    title: 'Groups and Components',
+    category: 'tools',
+    content: 'A group turns shapes you drew into one object: it moves, turns, copies, hides and takes tags as a whole, and nothing you draw against it sticks to it or cuts into it. A component is a group whose copies share their inside: change one and they all change - handy for windows, chairs, fence panels or anything repeated.',
+    steps: [
+      'Select the drawn faces (click, Shift-click or drag a selection), right-click one and choose Make Group or Make Component. The Make Component button in the toolbar does the same for the selected faces.',
+      'Move, rotate, scale, copy and tag it like any other object. Copies of a component (Duplicate, or Copy in the Components panel) stay linked.',
+      'Double-click it (or Edit inside in Entity Info) to change what is inside: the rest of the drawing fades and every drawing tool works as usual. Press Esc or Close to finish. For a component, every copy updates.',
+      'Right-click a group > Explode turns it back into ordinary drawn faces, where it now stands. Right-click a component copy > Make Unique splits it off so it can be changed on its own; a group can become a component with Make Component.',
+      'The Components panel lists the components in the model with how many copies each has: rename one, place another copy, or select all its copies.',
+      'Undo takes back any of these in one step. Saving as .skp keeps components as real SketchUp components.'
+    ]
+  },
+  {
     id: 'section-planes',
     title: 'Section Planes (slice the model to see inside)',
     category: 'tools',

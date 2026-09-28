@@ -729,7 +729,9 @@ export default function TopBar() {
   const handleExport = (format: 'gltf' | 'stl' | 'skp') => {
     // Each exported piece is named after its object, and the file after the model.
     const names = Object.fromEntries(shapes.filter(s => s.name).map(s => [s.id, s.name as string]));
-    window.dispatchEvent(new CustomEvent('export-scene-advanced', { detail: { format, modelName: currentModelName, names } }));
+    // Copies of a component go into a SketchUp file as one component placed several times.
+    const components = Object.fromEntries(shapes.filter(s => s.componentId).map(s => [s.id, s.componentId as string]));
+    window.dispatchEvent(new CustomEvent('export-scene-advanced', { detail: { format, modelName: currentModelName, names, components } }));
     diagLog('Export', `Exported as ${format.toUpperCase()}`);
     setIsMenuOpen(false);
   };

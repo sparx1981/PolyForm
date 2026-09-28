@@ -31,6 +31,8 @@ export interface ExportItem {
   instanced: boolean;
   /** Drawn geometry: which kernel face each triangle belongs to. */
   kernelFaceOfTriangle?: readonly FaceId[];
+  /** Copies of the same component share this (see tools/kernelGroups.ts). */
+  componentKey?: string;
 }
 
 type Tag = 'model' | 'kernel' | 'excluded' | null;
@@ -78,7 +80,11 @@ const isCollapsed = (m: THREE.Matrix4) => Math.abs(m.determinant()) < 1e-12;
  * Every piece of the model under `root`, in world space. Each mesh appears once, with its own
  * world matrix - never its local position applied on top of the world one.
  */
-export function collectModelItems(root: THREE.Object3D, nameOf?: (id: string) => string | undefined): ExportItem[] {
+export function collectModelItems(
+  root: THREE.Object3D,
+  nameOf?: (id: string) => string | undefined,
+  componentOf?: (id: string) => string | undefined,
+): ExportItem[] {
   root.updateMatrixWorld(true);
   const items: ExportItem[] = [];
 
@@ -115,6 +121,7 @@ export function collectModelItems(root: THREE.Object3D, nameOf?: (id: string) =>
       matrices: [mesh.matrixWorld.clone()],
       instanced: false,
       kernelFaceOfTriangle: tag === 'kernel' ? mesh.userData.faceOfTriangle : undefined,
+      componentKey: ownerId ? componentOf?.(ownerId) : undefined,
     });
   });
 

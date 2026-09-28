@@ -4,6 +4,7 @@ import { AutoLightingPanel } from './AutoLightingPanel';
 import { actionLabel } from '../lib/macroRecorder';
 import { SiteBuildingFields } from './WorldSiteControls';
 import { SectionPlaneFields } from './SectionPlaneFields';
+import { ComponentsList } from './ComponentsList';
 import { isSectionShape } from '../tools/sectionPlanes';
 import { TextEntityFields } from './TextEntityFields';
 import { WeatherControls } from './graphics/WeatherControls';
@@ -218,6 +219,7 @@ export default function RightPanelStack() {
     guidesVisible,
     setGuidesVisible,
     deleteAllGuides,
+    enterGroupEdit,
     floorEnabled,
     setFloorEnabled,
     floorColor,
@@ -876,7 +878,7 @@ export default function RightPanelStack() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Type</label>
-                    <div className="font-medium text-polyform-blue uppercase">{selectedShape.type}</div>
+                    <div className="font-medium text-polyform-blue uppercase">{selectedShape.type === 'kernel_group' ? (selectedShape.componentId ? 'Component' : 'Group') : selectedShape.type}</div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Volume</label>
@@ -955,6 +957,20 @@ export default function RightPanelStack() {
                 )}
 
                 {isSectionShape(selectedShape) && <SectionPlaneFields shape={selectedShape} />}
+
+                {selectedShape.type === 'kernel_group' && (
+                  <div className="space-y-1">
+                    {selectedShape.componentId && (
+                      <div className="text-[10px] text-gray-400">
+                        Component <strong>{selectedShape.componentName || selectedShape.name}</strong>: {shapes.filter(s => s.componentId === selectedShape.componentId).length} copies share its inside.
+                      </div>
+                    )}
+                    <button onClick={() => enterGroupEdit(selectedShape.id)}
+                      className="w-full text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:border-polyform-blue transition-colors">
+                      Edit inside (or double-click it)
+                    </button>
+                  </div>
+                )}
 
                 {selectedShape.type === 'site_building' && selectedShape.siteBuildingData && (
                   <SiteBuildingFields shape={selectedShape} />
@@ -4343,6 +4359,10 @@ export default function RightPanelStack() {
                 className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-polyform-blue focus:border-polyform-blue outline-none"
               />
               <Search size={14} className="absolute left-2.5 top-2 text-gray-400" />
+            </div>
+            <div className="mt-3 space-y-1">
+              <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">In this model</div>
+              <ComponentsList />
             </div>
           </Panel>
         )}

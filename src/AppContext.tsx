@@ -12,7 +12,18 @@ import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAU
 import { KernelArcHost } from './tools/kernelArcHost';
 import { undoWallConversion, redoWallConversion, type WallConversionUndoLink } from './tools/kernelConvertToWall';
 import type { FaceId } from './lib/geometry/types';
-import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
+import { serializeGraph, deserializeGraph, type SerializedGraph } from './lib/geometry/serialize';
+import { applyGroupEdit, isGroupShape, shapeMatrix, transformSerializedGraph } from './tools/kernelGroups';
+import type { HostHistory } from './tools/kernelLineHost';
+
+/** A group open for editing: what was set aside, and where the group sits. */
+interface GroupEditState {
+  shapeId: string;
+  name: string;
+  mainGraph: SerializedGraph;
+  mainHistory: HostHistory;
+  matrix: number[];
+}
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
@@ -125,9 +136,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     g.components = next.components;
     g.nextId = next.nextId;
     kernelHostRef.current!.reindex();
+    // A new document: any group being edited belonged to the old one.
+    groupEditRef.current = null;
+    setGroupEdit(null);
     setSelectedFaceIds([]);
     setKernelRevision(r => r + 1);
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Editing inside a group or component (tools/kernelGroups.ts). The group's faces are loaded
+  // into the kernel, placed where the group sits, so every drawing tool works on them; the
+  // model's own drawn geometry and its undo history are set aside until the group is closed,
+  // when the edited faces go back into the group (and every copy of a component).
+  // ---------------------------------------------------------------------------
+  const groupEditRef = useRef<GroupEditState | null>(null);
+  const [groupEdit, setGroupEdit] = useState<{ shapeId: string; name: string; mainGraph: SerializedGraph } | null>(null);
+
+  /** Swaps the kernel graph's contents, keeping the object and its history. */
+  const swapKernelGraph = (data: unknown) => {
+    const next = deserializeGraph(data as never);
+    const g = kernelHostRef.current!.graph;
+    g.vertices = next.vertices;
+    g.edges = next.edges;
+    g.loops = next.loops;
+    g.faces = next.faces;
+    g.curves = next.curves;
+    g.components = next.components;
+    g.nextId = next.nextId;
+    kernelHostRef.current!.refreshIndex();
+    setSelectedFaceIds([]);
+    setKernelRevision(r => r + 1);
+  };
+
+  /** The model's own drawn geometry, for saving: never a group's inside that's open for editing. */
+  const documentKernel = () => groupEditRef.current?.mainGraph ?? serializeGraph(kernelHostRef.current!.graph);
 
   // Console handle for driving the kernel by hand.
   //
@@ -1230,7 +1272,7 @@ console.log("Created rectangle:", myRect.id);`);
           const text = buildProjectFile({
             name: currentModelName ?? undefined, shapes, tags, scenes, customMaterials, graphicsSettings, animations,
             notes, customLights, presentationContent, timberFrameParams, terrainModifiers, environment, materialBindings,
-            kernel: serializeGraph(kernelHost.graph), assetSchemaVersion: 1, assetCatalogRelease: '2026-09-18-pilot-r1',
+            kernel: documentKernel(), assetSchemaVersion: 1, assetCatalogRelease: '2026-09-18-pilot-r1',
           });
           const next = await storageProviders[external.provider].update(external, text);
           externalRef.current = next;
@@ -1300,7 +1342,7 @@ console.log("Created rectangle:", myRect.id);`);
           // this it is never persisted, and because the provider does not
           // unmount when you switch documents it also leaks between them:
           // the previous model's surfaces appear in the next one.
-          kernel: serializeGraph(kernelHost.graph),
+          kernel: documentKernel(),
         };
         const stateToPush = cleanData({
           ...(user?.uid ? await offloadModelForSave(content, user.uid, firebaseGeometryIO) : content),
@@ -1574,7 +1616,7 @@ console.log("Created rectangle:", myRect.id);`);
     const newHistory = history.slice(0, historyIndex + 1);
     const entry = [...newShapes];
     const pending = pendingWallConversionRef.current;
-    if (pending && pending.wallIds.every(id => entry.some(s => s.id === id))) {
+    if (pending && pending.wallIds.every(id => entry.some(s => s.id === id)) && (pending.goneIds ?? []).every(id => !entry.some(s => s.id === id))) {
       wallConversionLinks.set(entry, pending);
       // History starts empty and its first entry can never be undone, so a
       // conversion in a model with no Shape edits yet (drawn geometry lives
@@ -2067,6 +2109,50 @@ console.log("Created rectangle:", myRect.id);`);
     recordAction(actionLabel(`Delete ${id}`));
   };
 
+  /** Opens a group or component to edit its inside (double-click it). */
+  const enterGroupEdit = (shapeId: string) => {
+    if (groupEditRef.current) exitGroupEdit();
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape || !isGroupShape(shape)) return;
+    const host = kernelHostRef.current!;
+    const matrix = shapeMatrix(shape);
+    groupEditRef.current = {
+      shapeId,
+      name: shape.name || (shape.componentId ? 'Component' : 'Group'),
+      mainGraph: serializeGraph(host.graph),
+      mainHistory: host.takeHistory(),
+      matrix: matrix.toArray(),
+    };
+    swapKernelGraph(transformSerializedGraph(shape.kernelGraph as SerializedGraph, matrix));
+    setSelectedId(null);
+    setSelectedIds([]);
+    setGroupEdit({ shapeId, name: groupEditRef.current.name, mainGraph: groupEditRef.current.mainGraph });
+    recordAction(actionLabel(`Edit ${groupEditRef.current.name}`));
+  };
+
+  /** Closes the open group: its edited faces go back into it (and into every copy of a component). */
+  const exitGroupEdit = () => {
+    const edit = groupEditRef.current;
+    if (!edit) return;
+    const host = kernelHostRef.current!;
+    const inverse = new THREE.Matrix4().fromArray(edit.matrix).invert();
+    const local = transformSerializedGraph(serializeGraph(host.graph), inverse);
+    groupEditRef.current = null;
+    swapKernelGraph(edit.mainGraph);
+    host.putHistory(edit.mainHistory);
+    setGroupEdit(null);
+    const shape = shapes.find(s => s.id === edit.shapeId);
+    if (!shape) return;
+    if (local.faces.length === 0) {
+      // Everything inside was erased: the group goes too.
+      handleSetShapes(prev => prev.filter(s => s.id !== shape.id));
+      return;
+    }
+    if (JSON.stringify(local) === JSON.stringify(shape.kernelGraph)) return;
+    handleSetShapes(prev => applyGroupEdit(prev, shape, local)); // one undo step
+    recordAction(actionLabel(`Finish editing ${edit.name}`));
+  };
+
   /** Removes every guide line (Tape Measure and Protractor) as one undo step. */
   const deleteAllGuides = () => {
     const ids = new Set(shapes.filter(isGuideShape).map(s => s.id));
@@ -2386,7 +2472,7 @@ console.log("Created rectangle:", myRect.id);`);
     terrainModifiers,
     environment,
     materialBindings,
-    kernel: serializeGraph(kernelHost.graph),
+    kernel: documentKernel(),
     assetSchemaVersion: 1,
     assetCatalogRelease: '2026-09-18-pilot-r1',
   });
@@ -2530,6 +2616,9 @@ console.log("Created rectangle:", myRect.id);`);
       addShape,
       removeShape,
       deleteAllGuides,
+      groupEdit,
+      enterGroupEdit,
+      exitGroupEdit,
       updateShapeColor,
       updateShapeDimensions,
       isAIRendererOpen,

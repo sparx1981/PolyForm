@@ -146,6 +146,8 @@ import { SectionCutter } from './SectionCutter';
 import { SectionPlaneMesh } from './SectionPlaneMesh';
 import { activeSection, dragDistance, isSectionShape, moveSection, sectionOnFace, type SectionArgs } from '../tools/sectionPlanes';
 import { usePresentation } from '../lib/presentation/store';
+import { explodeGroup, isGroupShape, makeGroup, makeUnique } from '../tools/kernelGroups';
+import { KernelGroupMesh } from './KernelGroupMesh';
 import { commitKernelFollowMe, outlineEdges, pathFromEdge, pathFromFace, previewFollowMe, type FollowMePath } from '../tools/kernelFollowMe';
 import { createPushPullBinding, commitKernelPushPull } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
@@ -1705,6 +1707,9 @@ function Scene() {
     walkMouseSensitivity,
     walkBridgeRef,
     guidesVisible,
+    groupEdit,
+    enterGroupEdit,
+    exitGroupEdit,
   } = useApp();
 
   const usedMaterialBindings = useMemo(() => {
@@ -3603,6 +3608,11 @@ function Scene() {
     setTypedLength('');
   }, [activeTool]);
   const drawingStartRef = useRef(drawingStart);
+  // Esc closes an open group when nothing is being drawn (read by the keydown handler).
+  const exitGroupEditRef = useRef(exitGroupEdit);
+  exitGroupEditRef.current = exitGroupEdit;
+  const groupEditOpenRef = useRef(false);
+  groupEditOpenRef.current = !!groupEdit;
   const drawingNormalRef = useRef(drawingNormal);
   const drawingStepRef = useRef(drawingStep);
   const activeSplineDraftRef = useRef(activeSplineDraft);
@@ -3753,10 +3763,12 @@ function Scene() {
 
   useEffect(() => {
     const handleExportAdvanced = (e: any) => {
-      const { format, modelName, names } = e.detail as { format: 'gltf' | 'stl' | 'skp'; modelName?: string | null; names?: Record<string, string> };
+      const { format, modelName, names, components } = e.detail as {
+        format: 'gltf' | 'stl' | 'skp'; modelName?: string | null; names?: Record<string, string>; components?: Record<string, string>;
+      };
       // Just the model - drawn geometry included, grid/sky/lights/previews left out - each
       // piece once, at its world position (see lib/export/modelExport.ts).
-      const items = collectModelItems(scene, id => names?.[id]);
+      const items = collectModelItems(scene, id => names?.[id], id => components?.[id]);
       if (items.length === 0) {
         alert('There is nothing in the model to export yet.');
         return;
@@ -5023,6 +5035,10 @@ function Scene() {
       }
 
       if (e.key === 'Escape') {
+        // Nothing in progress: Esc closes the group being edited.
+        if (groupEditOpenRef.current && !drawingStartRef.current && wallVertices.length === 0 && polyVertices.length === 0) {
+          exitGroupEditRef.current();
+        }
         if (activeTool === 'wall' && wallVertices.length > 0) {
           diagLog('TOOL', 'Wall drawing cancelled', { vertexCount: wallVertices.length });
         }
@@ -8471,6 +8487,15 @@ function Scene() {
       finalizeWallChain();
       return;
     }
+    // Double-click a group or component to edit inside it.
+    if (activeTool === 'select') {
+      const target = shapes.find(sh => sh.id === id);
+      if (target && isGroupShape(target)) {
+        enterGroupEdit(id);
+        setMeasurements(`Editing ${target.name ?? 'the group'}: draw and edit as usual. Press Esc (with nothing drawing) or Close to finish.`);
+        return;
+      }
+    }
     if (activeTool === 'select' && (wallRunInfo.runOf.get(id)?.length ?? 1) > 1) {
       // Double-click a piece of a wall run: just that piece.
       setSelectedId(id);
@@ -10466,7 +10491,6 @@ function Scene() {
       if (controls) controls.enabled = true;
       const moved = moveSection(drag.start, drag.distance);
       setShapes(prev => prev.map(sh => (sh.id === drag.id ? { ...sh, args: moved, position: moved.point } : sh)));
-      commitHistory();
       recordAction(actionLabel('Move section plane'));
       return;
     }
@@ -10481,7 +10505,6 @@ function Scene() {
       ...prev.map(sh => (isSectionShape(sh) && (sh.args as SectionArgs).active ? { ...sh, args: { ...(sh.args as SectionArgs), active: false } } : sh)),
       { id, name: `Section ${count + 1}`, type: 'measurement', position: args.point, args, color: '#f97316' } as Shape,
     ]);
-    commitHistory();
     recordAction(actionLabel('Add section plane'));
     setSectionHover(null);
     setMeasurements('Section placed. Drag its square to move it; select it to flip it or turn it off.');
@@ -11060,6 +11083,11 @@ function Scene() {
         edgeLineWidth={edgeLinesThickness}
         bindingFor={kernelBindingFor}
       />
+
+      {/* Editing inside a group: the rest of the drawing, set aside, shown faded. */}
+      {groupEdit && (
+        <KernelGroupMesh shape={{ kernelGraph: groupEdit.mainGraph } as Shape} groupProps={{}} opacity={0.25} />
+      )}
 
       <LassoOverlay getSceneObjectById={getSceneObjectById} />
 
@@ -11725,6 +11753,16 @@ function Scene() {
               />
             );
           }
+        }
+
+        if (isGroupShape(shape)) {
+          // Open for editing: its faces are in the drawing kernel right now.
+          if (groupEdit?.shapeId === shape.id) return null;
+          return (
+            <KernelGroupMesh key={shape.id} shape={shape} groupProps={meshProps}
+              showEdges={edgeLinesEnabled} edgeColor={edgeLinesColor} edgeOpacity={edgeLinesOpacity}
+              edgeLineWidth={edgeLinesThickness} bindingFor={kernelBindingFor} />
+          );
         }
 
         if ((shape.type === 'box' || shape.type === 'rect') && shape.bevelAmount) {
@@ -14200,7 +14238,10 @@ export default function Viewport() {
     setIsToolModifierDocked,
     setActiveTool,
     kernelRevision,
-    registerWallConversionUndo
+    registerWallConversionUndo,
+    enterGroupEdit,
+    exitGroupEdit,
+    groupEdit,
   } = useApp();
   // Local to Viewport() now, alongside the dialog itself (moved from
   // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
@@ -14309,6 +14350,96 @@ export default function Viewport() {
    * past) a wall, fence or another patio are pulled onto it, closing the gaps
    * a hand-traced outline can leave.
    */
+  // ---------------------------------------------------------------------------
+  // Groups and components (tools/kernelGroups.ts): right-click menu entries.
+  // ---------------------------------------------------------------------------
+  const menuButton = cn(
+    "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+    theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100",
+  );
+
+  /** Drawn faces -> one object (a group, or the first copy of a new component). */
+  const makeKernelGroup = (faceIds: number[], component: boolean) => {
+    const count = shapes.filter(s => s.type === 'kernel_group' && (component ? !!s.componentId : !s.componentId)).length;
+    const made = makeGroup(kernelHost, faceIds as FaceId[], { component, name: `${component ? 'Component' : 'Group'} ${count + 1}` });
+    if (!made) return;
+    registerWallConversionUndo(made.link);
+    setShapes(prev => [...prev, made.shape]);
+    setSelectedFaceIds([]);
+    setSelectedId(made.shape.id);
+    setSelectedIds([made.shape.id]);
+    bumpKernel();
+    recordAction(actionLabel(component ? 'Make Component' : 'Make Group'));
+    setMeasurements(`${made.shape.name}: move, copy and tag it as one object. Double-click it to edit inside.`);
+  };
+
+  const kernelGroupMenuItems = (faceIds: number[]) => (
+    <>
+      <button className={menuButton} onClick={() => { makeKernelGroup(faceIds, false); setContextMenu(null); }}>
+        Make Group
+      </button>
+      <button className={menuButton} onClick={() => { makeKernelGroup(faceIds, true); setContextMenu(null); }}>
+        Make Component
+      </button>
+    </>
+  );
+
+  // The toolbar's Make Component button: the selected drawn faces become a component.
+  const makeKernelGroupRef = useRef(makeKernelGroup);
+  makeKernelGroupRef.current = makeKernelGroup;
+  useEffect(() => {
+    if (activeTool !== 'component') return;
+    if (selectedFaceIds.length > 0) makeKernelGroupRef.current(selectedFaceIds, true);
+    else setMeasurements('Make Component: select some drawn faces first (or right-click them > Make Component).');
+    setActiveTool('select');
+  }, [activeTool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const groupObjectMenuItems = (shapeId: string) => {
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape || !isGroupShape(shape)) return null;
+    const kind = shape.componentId ? 'Component' : 'Group';
+    return (
+      <>
+        <button className={menuButton} onClick={() => { setContextMenu(null); enterGroupEdit(shape.id); }}>
+          Edit {kind}
+        </button>
+        <button className={menuButton} onClick={() => {
+          setContextMenu(null);
+          const link = explodeGroup(kernelHost, shape);
+          if (!link) return;
+          registerWallConversionUndo(link);
+          setShapes(prev => prev.filter(s => s.id !== shape.id));
+          setSelectedId(null);
+          setSelectedIds([]);
+          bumpKernel();
+          recordAction(actionLabel(`Explode ${shape.name ?? kind}`));
+          setMeasurements(`${shape.name ?? kind} exploded back into drawn faces.`);
+        }}>
+          Explode
+        </button>
+        {shape.componentId ? (
+          <button className={menuButton} onClick={() => {
+            setContextMenu(null);
+            setShapes(prev => prev.map(s => (s.id === shape.id ? makeUnique(s) : s)));
+            recordAction(actionLabel('Make Unique'));
+            setMeasurements('This copy is now its own component: editing it no longer changes the others.');
+          }}>
+            Make Unique
+          </button>
+        ) : (
+          <button className={menuButton} onClick={() => {
+            setContextMenu(null);
+            setShapes(prev => prev.map(s => (s.id === shape.id ? { ...s, componentId: Math.random().toString(36).substr(2, 9), componentName: s.name ?? 'Component' } : s)));
+            recordAction(actionLabel('Make Component'));
+            setMeasurements('Now a component: copies you make of it share their inside.');
+          }}>
+            Make Component
+          </button>
+        )}
+      </>
+    );
+  };
+
   const patioSnapMenuItem = (shapeId: string) => {
     const patio = shapes.find(s => s.id === shapeId);
     if (!patio || patio.type !== 'patio' || !patio.patioData || patio.patioData.kind === 'balcony') return null;
@@ -14604,6 +14735,18 @@ export default function Viewport() {
         >
           <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-xl border border-gray-700 max-w-md text-center">
             {viewportToast}
+          </div>
+        </div>
+      )}
+
+      {/* Editing inside a group or component */}
+      {groupEdit && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[999]">
+          <div className="flex items-center gap-3 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-xl border border-gray-700">
+            <span>Editing <strong>{groupEdit.name}</strong>{shapes.find(s => s.id === groupEdit.shapeId)?.componentId ? ' - every copy will change' : ''}</span>
+            <button onClick={() => exitGroupEdit()} className="px-2 py-0.5 rounded bg-polyform-blue hover:opacity-90 text-xs font-medium">
+              Close
+            </button>
           </div>
         </div>
       )}
@@ -15411,6 +15554,7 @@ export default function Viewport() {
                   </div>
                 </div>
               ))}
+              {Array.isArray(contextMenu.data) && contextMenu.data.length > 0 && kernelGroupMenuItems(contextMenu.data)}
               {(() => {
                 // Merge / Subtract / Intersect when the menu covers two or more shapes.
                 const groups = orderedShapeGroups(kernelHost.graph, contextMenu.data);
@@ -15506,6 +15650,7 @@ export default function Viewport() {
               })()}
               {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && curvedMergeMenuItems(contextMenu.data[0])}
               {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && patioSnapMenuItem(contextMenu.data[0])}
+              {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && groupObjectMenuItems(contextMenu.data[0])}
               <button 
                 onClick={() => {
                   const groupId = Math.random().toString(36).substr(2, 9);

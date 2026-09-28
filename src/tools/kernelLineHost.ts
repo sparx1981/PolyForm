@@ -32,6 +32,14 @@ export interface KernelHostOptions {
   readonly onUndoRecorded?: (id: number) => void;
 }
 
+/** A host's undo history, set aside while it edits something else. */
+export interface HostHistory {
+  undo: Snapshot[];
+  redo: Snapshot[];
+  undoIds: number[];
+  redoIds: number[];
+}
+
 export class KernelLineHost implements LineToolHost {
   readonly graph: Graph;
   readonly tolerances: Tolerances;
@@ -172,6 +180,26 @@ export class KernelLineHost implements LineToolHost {
    */
   refreshIndex(): void {
     this.rebuildIndex();
+  }
+
+  /**
+   * Sets the undo history aside (and starts an empty one), for while the host edits another
+   * graph - the inside of a group. `putHistory` brings it back.
+   */
+  takeHistory(): HostHistory {
+    const h = { undo: this.undoStack, redo: this.redoStack, undoIds: this.undoIds, redoIds: this.redoIds };
+    this.undoStack = [];
+    this.redoStack = [];
+    this.undoIds = [];
+    this.redoIds = [];
+    return h;
+  }
+
+  putHistory(h: HostHistory): void {
+    this.undoStack = h.undo;
+    this.redoStack = h.redo;
+    this.undoIds = h.undoIds;
+    this.redoIds = h.redoIds;
   }
 
   reindex(): void {

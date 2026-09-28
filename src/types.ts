@@ -227,11 +227,19 @@ export interface TextData {
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio' | 'text' | 'text3d' | 'site_building';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio' | 'text' | 'text3d' | 'site_building' | 'kernel_group';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
   scale?: [number, number, number];
+  /**
+   * A group or component of drawn geometry (type 'kernel_group'): its faces, serialized, in the
+   * group's own frame. See tools/kernelGroups.ts.
+   */
+  kernelGraph?: unknown;
+  /** Copies of a component share this id (and their kernelGraph): editing one edits all. */
+  componentId?: string;
+  componentName?: string;
   args: any;
   terrainData?: TerrainData;
   /** An existing building on an imported real-world site (World View). */
@@ -541,6 +549,13 @@ export interface AppState {
   removeShape: (id: string) => void;
   /** Removes every guide line (Tape Measure and Protractor) as one undo step; returns how many. */
   deleteAllGuides: () => number;
+  /** The group or component open for editing (its inside is in the kernel), if any. */
+  /** mainGraph: the model's own drawn geometry, set aside (shown faded) while the group is open. */
+  groupEdit: { shapeId: string; name: string; mainGraph: unknown } | null;
+  /** Opens a group or component to edit its inside. */
+  enterGroupEdit: (shapeId: string) => void;
+  /** Closes the open group, putting the edited faces back into it (and every copy of a component). */
+  exitGroupEdit: () => void;
   updateShapeColor: (id: string | string[], color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => void;
   updateShapeDimensions: (id: string, position: [number, number, number], args: any) => void;
   isAIRendererOpen: boolean;

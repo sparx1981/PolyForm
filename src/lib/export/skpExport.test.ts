@@ -152,4 +152,29 @@ describe('buildSkp', () => {
     expect(bounds.min.toArray().map(v => +v.toFixed(3))).toEqual([2, 0, -0.5]);
     expect(bounds.max.toArray().map(v => +v.toFixed(3))).toEqual([4, 1, 0.5]);
   });
+
+  it('writes copies of a component as one definition placed per copy', () => {
+    const scene = new THREE.Scene();
+    const geometry = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    for (const [id, x, turn] of [['a', 0, 0], ['b', 5, Math.PI / 2]] as const) {
+      const root = new THREE.Group();
+      root.userData = { isShape: true, id };
+      root.position.set(x, 0, 0);
+      root.rotation.y = turn;
+      root.add(new THREE.Mesh(geometry, standard()));
+      scene.add(root);
+    }
+    const items = collectModelItems(scene, undefined, () => 'chair');
+    const result = buildSkp(items);
+    expect(result.faces).toBe(6); // the box, stored once
+    const { scene: back, model } = readBack(result.bytes);
+    expect(back.bounds!.min.map(v => +v.toFixed(3))).toEqual([-0.5, 0, -0.5]);
+    expect(back.bounds!.max.map(v => +v.toFixed(3))).toEqual([5.5, 1, 0.5]);
+    // Two placements of the same definition.
+    const placed = back.sceneHierarchy.children ?? [];
+    expect(placed).toHaveLength(2);
+    expect(new Set(placed.map(n => n.definitionName)).size).toBe(1);
+    void model;
+  });
 });
+

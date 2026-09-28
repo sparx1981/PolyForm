@@ -871,6 +871,13 @@ export interface WallConversionUndoLink {
   readonly beforeSig: string;
   readonly afterSig: string;
   readonly removed: readonly CapturedFace[];
+  /**
+   * Objects this step took away (Explode turns a group back into drawn faces); their absence
+   * marks the step too. Used by the same Shape/kernel pairing as Make Group and Explode.
+   */
+  readonly goneIds?: readonly string[];
+  /** Faces this step drew into the kernel (Explode's). */
+  readonly added?: readonly CapturedFace[];
 }
 
 /** Puts the source geometry back. Exact when the kernel is untouched since. */
@@ -879,6 +886,10 @@ export function undoWallConversion(host: KernelArcHost, link: WallConversionUndo
     restore(host.graph, link.before);
     host.refreshIndex();
   } else {
+    if (link.added?.length) {
+      removeMatchingFaces(host.graph, link.added);
+      host.refreshIndex();
+    }
     recreateFaces(
       { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex },
       link.removed,
@@ -895,6 +906,9 @@ export function redoWallConversion(host: KernelArcHost, link: WallConversionUndo
   } else {
     removeMatchingFaces(host.graph, link.removed);
     host.refreshIndex();
+    if (link.added?.length) {
+      recreateFaces({ graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex }, link.added, host.deriveOptions);
+    }
   }
 }
 

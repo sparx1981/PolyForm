@@ -10,7 +10,7 @@ import { parseTypedLength } from '../tools/typedEntry';
 // undo step. Dragging the plane with the Section tool moves it too.
 
 export function SectionPlaneFields({ shape }: { shape: Shape }) {
-  const { setShapes, commitHistory, recordAction, unit } = useApp();
+  const { setShapes, recordAction, unit } = useApp();
   const args = shape.args as SectionArgs;
   const [distance, setDistance] = useState('');
   const field = 'w-full px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-polyform-blue';
@@ -18,8 +18,7 @@ export function SectionPlaneFields({ shape }: { shape: Shape }) {
   const button = 'flex-1 text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:border-polyform-blue transition-colors';
 
   const change = (what: string, update: (s: Shape) => Shape) => {
-    setShapes(prev => prev.map(update));
-    commitHistory();
+    setShapes(prev => prev.map(update)); // one undo step
     recordAction(actionLabel(what));
   };
 

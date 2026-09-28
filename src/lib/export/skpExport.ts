@@ -386,6 +386,8 @@ export function buildSkp(items: readonly ExportItem[], graph?: Graph): SkpExport
   // SketchUp's file wants every material first, then every definition, then what's placed at
   // the top level - so work out all the faces up front.
   const components: { item: ExportItem; faces: SkpFace[] }[] = [];
+  // Copies of a component: one definition from the first copy, placed once per copy.
+  const shared = new Map<string, { name: string; parts: { item: ExportItem; faces: SkpFace[] }[]; placements: THREE.Matrix4[]; owners: Set<string> }>();
   const groups = new Map<string, { name: string; parts: { item: ExportItem; faces: SkpFace[] }[] }>();
   const loose: { item: ExportItem; faces: SkpFace[] }[] = [];
 
@@ -395,6 +397,24 @@ export function buildSkp(items: readonly ExportItem[], graph?: Graph): SkpExport
       return;
     }
     const matrix = item.matrices[0];
+    if (item.componentKey && item.ownerId) {
+      let def = shared.get(item.componentKey);
+      if (!def) {
+        def = { name: item.name, parts: [], placements: [], owners: new Set() };
+        shared.set(item.componentKey, def);
+      }
+      const first = [...def.owners][0];
+      if (!def.owners.has(item.ownerId)) {
+        def.owners.add(item.ownerId);
+        def.placements.push(matrix);
+      }
+      // The definition is the first copy's geometry, in that copy's own frame.
+      if ((first ?? item.ownerId) === item.ownerId) {
+        const toLocal = def.placements[0]!.clone().invert().multiply(matrix);
+        def.parts.push({ item, faces: facesFromMesh(item.geometry, toLocal) });
+      }
+      return;
+    }
     if (item.kernelFaceOfTriangle && graph) {
       loose.push({ item, faces: facesFromKernel(graph, item.kernelFaceOfTriangle, matrix) });
       return;
@@ -409,6 +429,7 @@ export function buildSkp(items: readonly ExportItem[], graph?: Graph): SkpExport
   // Materials first.
   const register = (item: ExportItem, faces: SkpFace[]) => faces.forEach(f => materials.handle(materialAt(item.material, f.materialIndex)));
   components.forEach(c => register(c.item, c.faces));
+  shared.forEach(d => d.parts.forEach(p => register(p.item, p.faces)));
   groups.forEach(g => g.parts.forEach(p => register(p.item, p.faces)));
   loose.forEach(l => register(l.item, l.faces));
 
@@ -426,6 +447,12 @@ export function buildSkp(items: readonly ExportItem[], graph?: Graph): SkpExport
     const def = builder.addComponentDefinition(uniqueName(c.item.name), d => writeFaces(d, c.faces, c.item.material, materials, tally));
     placed.push({ def, item: c.item });
   }
+  const sharedPlaced: { def: ComponentDefinitionBuilder; placements: THREE.Matrix4[] }[] = [];
+  shared.forEach(d => {
+    if (!d.parts.some(p => p.faces.length)) return;
+    const def = builder.addComponentDefinition(uniqueName(d.name), b => d.parts.forEach(p => writeFaces(b, p.faces, p.item.material, materials, tally)));
+    sharedPlaced.push({ def, placements: d.placements });
+  });
   groups.forEach(g => {
     if (!g.parts.some(p => p.faces.length)) return;
     builder.addGroup(d => g.parts.forEach(p => writeFaces(d, p.faces, p.item.material, materials, tally)), { name: g.name });
@@ -435,6 +462,12 @@ export function buildSkp(items: readonly ExportItem[], graph?: Graph): SkpExport
   const pos = new THREE.Vector3();
   for (const { def, item } of placed) {
     for (const m of item.matrices) {
+      pos.setFromMatrixPosition(m);
+      builder.addInstance(def, { translation: toSkpPoint(pos.x, pos.y, pos.z), matrix3x3: toSkpMatrix3(m) });
+    }
+  }
+  for (const { def, placements } of sharedPlaced) {
+    for (const m of placements) {
       pos.setFromMatrixPosition(m);
       builder.addInstance(def, { translation: toSkpPoint(pos.x, pos.y, pos.z), matrix3x3: toSkpMatrix3(m) });
     }
