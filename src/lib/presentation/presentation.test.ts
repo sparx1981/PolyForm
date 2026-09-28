@@ -50,7 +50,10 @@ describe('classify', () => {
     expect(part(['architecture', 'roof-structure', 'roof-assembly', 'roof-slopes'])).toBe('roof');
     expect(part(['architecture', 'roof-fascia', 'roof-part'])).toBe('roof');
     expect(part(['architecture', 'slab', 'floor', 'story-2'])).toBe('slab');
-    expect(part(['timber-frame', 'roof-truss'])).toBe('other');
+    expect(part(['timber-frame', 'roof-truss'])).toBe('roofFrame');
+    expect(part(['timber-frame', 'timber-stud'])).toBe('frame');
+    expect(part(['timber-frame', 'timber-floor-joist'])).toBe('floorFrame');
+    expect(part(['timber-frame', 'timber-ceiling-joist'])).toBe('roofFrame');
   });
 
   it('finds storeys from wall bases', () => {
@@ -66,6 +69,27 @@ describe('classify', () => {
     expect(explodeLift('wall', 1, 2)).toBeGreaterThan(EXPLODE_STOREY_GAP);
     expect(explodeLift('roof', 1, 2)).toBeGreaterThan(explodeLift('wall', 1, 2));
     expect(explodeLift('landscape', 0, 2)).toBe(0);
+  });
+
+  it('puts the timber frame up before the walls and roof close over it', () => {
+    const plan = buildSchedule([
+      { key: 'joists', category: 'floorFrame', level: 1, x: 0, z: 0 },
+      { key: 'slab0', category: 'slab', level: 0, x: 0, z: 0 },
+      { key: 'studs0', category: 'frame', level: 0, x: 0, z: 0 },
+      { key: 'wall0', category: 'wall', level: 0, x: 0, z: 0 },
+      { key: 'slab1', category: 'slab', level: 1, x: 0, z: 0 },
+      { key: 'studs1', category: 'frame', level: 1, x: 0, z: 0 },
+      { key: 'wall1', category: 'wall', level: 1, x: 0, z: 0 },
+      { key: 'rafters', category: 'roofFrame', level: 1, x: 0, z: 0 },
+      { key: 'roof', category: 'roof', level: 1, x: 0, z: 0 },
+    ]);
+    const order = ['slab0', 'studs0', 'wall0', 'joists', 'slab1', 'studs1', 'wall1', 'rafters', 'roof'].map(k => plan.get(k)!.start);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('lifts roof timbers with the roof and floor joists with their slab when exploded', () => {
+    expect(explodeLift('roofFrame', 1, 2)).toBe(explodeLift('roof', 1, 2));
+    expect(explodeLift('floorFrame', 1, 2)).toBe(explodeLift('slab', 1, 2));
   });
 
   it('builds storey by storey, roof after walls, garden last', () => {

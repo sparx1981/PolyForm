@@ -12,6 +12,9 @@ export type PresentCategory =
   | 'opening'
   | 'stair'
   | 'roof'
+  | 'floorFrame'
+  | 'frame'
+  | 'roofFrame'
   | 'landscape'
   | 'kernel'
   | 'other';
@@ -42,8 +45,22 @@ export function isRoofTrim(s: Pick<Shape, 'tags'>): boolean {
   return Boolean(s.tags?.includes('roof-part'));
 }
 
+/** A timber frame member (generated framing), by its tags or its tf- id. */
+export function isTimber(s: Pick<Shape, 'tags' | 'id'>): boolean {
+  return Boolean(s.tags?.some(t => t.startsWith('timber')) || s.id?.startsWith('tf-'));
+}
+
+/** Which part of the frame a timber member belongs to: floor, walls, or roof. */
+export function timberPart(s: Pick<Shape, 'tags' | 'id'>): 'floorFrame' | 'frame' | 'roofFrame' {
+  const tags = s.tags ?? [];
+  if (s.id?.startsWith('tf-roof-') || tags.some(t => /rafter|ridge|collar|truss|roof|ceiling-joist/.test(t))) return 'roofFrame';
+  if (tags.some(t => /floor|trimmer-joist|header-joist|rim/.test(t))) return 'floorFrame';
+  return 'frame';
+}
+
 export function categoryOf(s: Shape | undefined): PresentCategory {
   if (!s) return 'kernel';
+  if (isTimber(s)) return timberPart(s);
   if (s.type === 'terrain') return 'terrain';
   if (isRoof(s)) return 'roof';
   if (s.type === 'wall') return 'wall';
@@ -96,8 +113,10 @@ export function explodeLift(category: PresentCategory, level: number, storeys: n
     case 'landscape':
       return 0;
     case 'roof':
+    case 'roofFrame':
       return Math.max(0, storeys - 1) * EXPLODE_STOREY_GAP + EXPLODE_SLAB_GAP + EXPLODE_ROOF_GAP;
     case 'slab':
+    case 'floorFrame':
       return level * EXPLODE_STOREY_GAP;
     default:
       return level * EXPLODE_STOREY_GAP + EXPLODE_SLAB_GAP;
@@ -105,15 +124,18 @@ export function explodeLift(category: PresentCategory, level: number, storeys: n
 }
 
 const PHASE_ORDER: Record<PresentCategory, number> = {
-  terrain: -1, slab: 0, wall: 1, kernel: 1, stair: 2, opening: 3, other: 4, roof: 0, landscape: 0,
+  terrain: -1, floorFrame: 0, slab: 1, frame: 2, wall: 3, kernel: 3, stair: 4, opening: 5, other: 6,
+  roofFrame: 0, roof: 0, landscape: 0,
 };
 
 /**
- * Build-up sort key: storey by storey (slab, walls, stairs, openings, fittings), then the roof,
- * then the garden. Terrain is there from the start.
+ * Build-up sort key, in the order a building goes up: storey by storey (floor joists, slab, wall
+ * frame, walls closing over it, stairs, openings, fittings), then the roof timbers, the roof
+ * covering, and the garden. Terrain is there from the start.
  */
 export function buildRank(category: PresentCategory, level: number): number {
   if (category === 'terrain') return -1;
+  if (category === 'roofFrame') return 9_000;
   if (category === 'roof') return 10_000;
   if (category === 'landscape') return 20_000;
   return level * 10 + PHASE_ORDER[category];

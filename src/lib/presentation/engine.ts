@@ -286,7 +286,9 @@ export class PresentationEngine {
 
     const p = buildPose(this.schedule.get(e.key), build, e.category);
     if (e.batched) { p.drop = 0; p.scale = 1; }
-    const byStage = e.plant ? look.plants : e.category === 'other' ? look.furniture : true;
+    // Fittings and the timber frame show from the Detailed stage on, as before.
+      const byStage = e.plant ? look.plants
+        : e.category === 'other' || e.category === 'floorFrame' || e.category === 'frame' || e.category === 'roofFrame' ? look.furniture : true;
     const dy = e.lift * this.explodeNow + p.drop;
     o.position.copy(e.base);
     if (Math.abs(dy) > EPS) o.position.addScaledVector(e.up, dy);
