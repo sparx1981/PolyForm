@@ -1,4 +1,6 @@
+import { NoteCard } from './NoteCard';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { AutoLightingPanel } from './AutoLightingPanel';
 import { actionLabel } from '../lib/macroRecorder';
 import { TextEntityFields } from './TextEntityFields';
 import { WeatherControls } from './graphics/WeatherControls';
@@ -821,7 +823,8 @@ export default function RightPanelStack() {
     'fence',
     'railing',
     'timber-frame',
-    'roof'
+    'roof',
+    'lamp'
   ].includes(activeTool);
 
   if (allPanelsHidden) return null;
@@ -3609,6 +3612,7 @@ export default function RightPanelStack() {
               </SubSection>
 
               <SubSection title="Lighting">
+                <AutoLightingPanel />
                 <div className="space-y-3">
                   <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
                     <span className="text-[10px] font-bold text-gray-400 uppercase">See Light Source</span>
@@ -3792,6 +3796,7 @@ export default function RightPanelStack() {
                       "p-2 rounded border space-y-2",
                       theme === 'dark' ? "bg-gray-700/50 border-gray-600" : "bg-gray-50 border-gray-200"
                     )}>
+                      {light.name && <p className="text-xs font-semibold">{light.name}</p>}
                       <div className="flex items-center justify-between">
                         <select 
                           value={light.type}
@@ -4518,68 +4523,14 @@ export default function RightPanelStack() {
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                {notes.map(note => (
-                  <div 
-                    key={note.id} 
-                    className={cn(
-                      "p-2.5 rounded-lg border flex flex-col gap-2 transition-all hover:shadow-sm",
-                      note.completed 
-                        ? "bg-gray-50 border-gray-100 opacity-70" 
-                        : "bg-white border-gray-200"
-                    )}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-[8px] font-bold text-polyform-blue uppercase truncate">{note.authorName}</span>
-                        <p className={cn(
-                          "text-[10px] leading-relaxed",
-                          note.completed && "line-through text-gray-400"
-                        )}>{note.text}</p>
-                      </div>
-                      <div className="flex gap-1 shrink-0 ml-2">
-                        <button 
-                          onClick={() => setNotes(prev => prev.map(n => n.id === note.id ? { ...n, visible: n.visible === false ? true : false } : n))}
-                          className={cn(
-                            "p-1 rounded transition-colors",
-                            note.visible !== false ? "text-polyform-blue hover:bg-polyform-blue/5" : "text-gray-300 hover:text-polyform-blue hover:bg-gray-50"
-                          )}
-                          title={note.visible !== false ? "Hide in 3D" : "Show in 3D"}
-                        >
-                          {note.visible !== false ? <Eye size={14} /> : <EyeOff size={14} />}
-                        </button>
-                        <button 
-                          onClick={() => setNotes(prev => prev.map(n => n.id === note.id ? { ...n, completed: !n.completed, completedAt: !n.completed ? Date.now() : undefined, completedBy: !n.completed ? user?.displayName : undefined } : n))}
-                          className={cn(
-                            "p-1 rounded transition-colors",
-                            note.completed
-                              ? "text-emerald-600 bg-emerald-50"
-                              : "text-emerald-600/50 hover:text-emerald-700"
-                          )}
-                        >
-                          <CheckCircle2 size={14} />
-                        </button>
-                        <button 
-                          onClick={() => setNotes(prev => prev.filter(n => n.id !== note.id))}
-                          className="p-1 text-red-400/70 hover:text-red-700 rounded transition-colors"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between pt-1 border-t border-gray-50">
-                       <span className="text-[8px] text-gray-400">
-                        {safelyToDate(note.createdAt).toLocaleDateString()}
-                       </span>
-                       <button 
-                        onClick={() => window.dispatchEvent(new CustomEvent('set-camera', { detail: { position: [note.position.x + 10, note.position.y + 8, note.position.z + 10], target: [note.position.x, note.position.y, note.position.z] } }))}
-                        className="text-[8px] font-bold text-polyform-blue hover:underline uppercase"
-                       >
-                        Go to Entity
-                       </button>
-                    </div>
-                  </div>
+              <div className="space-y-3 max-h-[360px] overflow-y-auto p-1">
+                {notes.map((note, index) => (
+                  <NoteCard key={note.id} note={note} number={index + 1} date={safelyToDate(note.createdAt).toLocaleDateString()}
+                    onVisible={() => setNotes(prev => prev.map(n => n.id === note.id ? { ...n, visible: n.visible === false } : n))}
+                    onComplete={() => setNotes(prev => prev.map(n => n.id === note.id ? { ...n, completed: !n.completed, completedAt: !n.completed ? Date.now() : undefined, completedBy: !n.completed ? user?.displayName : undefined } : n))}
+                    onDelete={() => setNotes(prev => prev.filter(n => n.id !== note.id))}
+                    onShow={() => window.dispatchEvent(new CustomEvent('set-camera', { detail: { position: [note.position.x + 10, note.position.y + 8, note.position.z + 10], target: [note.position.x, note.position.y, note.position.z] } }))}
+                  />
                 ))}
                 {notes.length === 0 && (
                   <div className="text-center py-8 px-4 text-gray-400 text-[10px] bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center gap-2">

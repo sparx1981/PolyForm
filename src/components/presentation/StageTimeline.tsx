@@ -19,7 +19,7 @@ export function StageTimeline({ className }: { className?: string }) {
     if (!el) return;
     const r = el.getBoundingClientRect();
     const t = Math.min(1, Math.max(0, (clientX - r.left) / Math.max(1, r.width)));
-    presentation.set({ stage: t * 3, stagePlaying: false });
+    presentation.set({ stage: t * 3, stagePlaying: false, build: 1, buildPlaying: false });
   };
 
   const current = Math.min(3, Math.max(0, Math.round(s.stage)));
@@ -38,7 +38,7 @@ export function StageTimeline({ className }: { className?: string }) {
         <div className="flex-1 min-w-0">
           <div className="grid grid-cols-4 gap-2">
             {STAGES.map((st, i) => (
-              <button key={st.n} onClick={() => presentation.set({ stage: i, stagePlaying: false })}
+              <button key={st.n} onClick={() => presentation.set({ stage: i, stagePlaying: false, build: 1, buildPlaying: false })}
                 className={cn('text-left min-w-0', i === current ? 'text-[#2a241e]' : 'text-[#8b8177] hover:text-[#4a4239]')}>
                 <span className="block text-[9px] tracking-widest">{st.n}</span>
                 <span className={cn('block text-[11px] sm:text-xs truncate', i === current && 'font-semibold')}>{st.name}</span>
@@ -51,13 +51,19 @@ export function StageTimeline({ className }: { className?: string }) {
             onPointerDown={e => { dragging.current = true; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); scrub(e.clientX); }}
             onPointerMove={e => { if (dragging.current) scrub(e.clientX); }}
             onPointerUp={() => { dragging.current = false; }}
+            onPointerCancel={() => { dragging.current = false; }}
+            onLostPointerCapture={() => { dragging.current = false; }}
             role="slider"
             aria-label="Design stage"
             aria-valuemin={0}
             aria-valuemax={3}
             aria-valuenow={Number(s.stage.toFixed(2))}
+            aria-valuetext={STAGES[current].name}
             tabIndex={0}
             onKeyDown={e => {
+              if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) e.preventDefault();
+              if (e.key === 'Home') presentation.set({ stage: 0, stagePlaying: false });
+              if (e.key === 'End') presentation.set({ stage: 3, stagePlaying: false });
               if (e.key === 'ArrowRight') presentation.set({ stage: Math.min(3, s.stage + 0.1), stagePlaying: false });
               if (e.key === 'ArrowLeft') presentation.set({ stage: Math.max(0, s.stage - 0.1), stagePlaying: false });
             }}
@@ -77,6 +83,7 @@ export function StageTimeline({ className }: { className?: string }) {
           {s.dusk ? <Moon size={15} /> : <Sun size={15} />}
         </button>
       </div>
+      <p className="mt-2 text-[10px] text-[#70675e]">Line drawing → white volumes → glass, structure and fittings → finished materials. Use Build for construction order.</p>
     </div>
   );
 }

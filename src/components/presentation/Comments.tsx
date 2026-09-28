@@ -1,3 +1,4 @@
+import { conversationCard, conversationMeta, conversationText } from '../ui/conversationStyles';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { MapPin, Send, Trash2, Loader2, Reply } from 'lucide-react';
 import { useApp } from '../../AppContext';
@@ -92,10 +93,10 @@ export function CommentPinMarker({ n, active, onClick }: { n: number; active?: b
 
 function Bubble({ c, pin, dark, onDelete, onShow }: { c: PresentationComment; pin?: number; dark?: boolean; onDelete?: () => void; onShow?: () => void }) {
   return (
-    <div className={cn('rounded-xl px-3 py-2', c.fromDesigner
+    <div className={cn(conversationCard, c.fromDesigner
       ? (dark ? 'bg-sky-500/20' : 'bg-[#eef3f0] ring-1 ring-[#cfe0d6]')
       : (dark ? 'bg-white/10' : 'bg-white ring-1 ring-black/5'))}>
-      <div className={cn('flex items-center gap-2 text-[11px]', dark ? 'text-white/60' : 'text-slate-500')}>
+      <div className={cn(conversationMeta, dark ? 'text-white/60' : 'text-slate-500')}>
         {pin && <button onClick={onShow} className="flex items-center gap-0.5 font-bold text-[#b4553a]" title="Show on the model"><MapPin size={11} />{pin}</button>}
         <span className={cn('font-semibold', dark ? 'text-white' : 'text-slate-800')}>{c.authorName}</span>
         {c.fromDesigner && <span className="rounded bg-[#2f3a33] text-white px-1 text-[9px] uppercase tracking-wide">Designer</span>}
@@ -103,7 +104,7 @@ function Bubble({ c, pin, dark, onDelete, onShow }: { c: PresentationComment; pi
         <span className="ml-auto">{when(c.createdAt)}</span>
         {onDelete && <button onClick={onDelete} className="opacity-60 hover:opacity-100 hover:text-red-400" title="Delete"><Trash2 size={11} /></button>}
       </div>
-      <p className={cn('mt-0.5 text-sm whitespace-pre-line break-words', dark ? 'text-white/90' : 'text-slate-700')}>{c.text}</p>
+      <p className={cn(conversationText, dark ? 'text-white/90' : 'text-slate-700')}>{c.text}</p>
     </div>
   );
 }

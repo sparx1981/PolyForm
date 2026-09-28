@@ -87,12 +87,12 @@ export function usePresentation(): PresentationState {
 
 /** Starts the build-up from an empty site. */
 export function playBuild() {
-  presentation.set({ build: 0, buildPlaying: true });
+  presentation.set({ build: 0, buildPlaying: true, stage: 3, stagePlaying: false, explode: 0 });
 }
 
 /** Plays the look stages from Sketch to Built. */
 export function playStages() {
-  presentation.set({ stage: 0, stagePlaying: true });
+  presentation.set({ stage: 0, stagePlaying: true, build: 1, buildPlaying: false, explode: 0 });
 }
 
 export const STAGES = [

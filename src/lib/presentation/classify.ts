@@ -197,6 +197,8 @@ export function buildPose(slot: BuildSlot | undefined, progress: number, categor
 }
 
 export interface Look {
+  /** Solid surfaces emerge from the open line drawing during Sketch → Massing. */
+  surfaceOpacity: number;
   /** 'clay': everything wears the model material; 'fade': real materials under a fading clay layer; 'built': as modelled. */
   mode: 'clay' | 'fade' | 'built';
   /** 0 = sketch paper, 1 = white card, for the model material's colour. */
@@ -224,6 +226,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * clamp01(t);
 export function lookAt(stage: number): Look {
   const s = Math.min(3, Math.max(0, stage));
   return {
+    surfaceOpacity: easeInOutCubic(clamp01(s)),
     mode: s >= 2.98 ? 'built' : s > 2 ? 'fade' : 'clay',
     whiteness: clamp01(s),
     pencil: s < 1 ? lerp(0.85, 0.3, s) : s < 2 ? lerp(0.3, 0.1, s - 1) : 0,

@@ -285,6 +285,7 @@ export interface SceneState {
 
 export interface CustomLight {
   id: string;
+  name?: string;
   type: 'point' | 'directional' | 'spot' | 'projector' | 'rect';
   color: string;
   intensity: number;

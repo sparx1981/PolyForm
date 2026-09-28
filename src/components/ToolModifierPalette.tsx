@@ -21,6 +21,7 @@ import { RoofModifierSection } from './RoofModifierSection';
 import { ScaleFigureModifierSection } from './ScaleFigureModifierSection';
 import { CameraClippingSection } from './CameraClippingSection';
 import { WalkModeModifiers } from './walk/WalkModeModifiers';
+import { AutoLightingPanel } from './AutoLightingPanel';
 import { usePhoneLayout } from '../lib/phoneLayout';
 
 export const ToolModifierPalette: React.FC = () => {
@@ -96,6 +97,7 @@ export const ToolModifierPalette: React.FC = () => {
     'roof',
     'scale_figure',
     'clipping'
+    , 'lamp'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -246,6 +248,8 @@ export const ToolModifierPalette: React.FC = () => {
             <PersonStanding size={14} className="text-polyform-blue" />
           ) : activeTool === 'clipping' ? (
             <Crop size={14} className="text-sky-500" />
+          ) : activeTool === 'lamp' ? (
+            <Zap size={14} className="text-amber-500" />
           ) : activeTool === 'bezier' ? (
             <Spline size={14} className="text-polyform-blue" />
           ) : (activeTool === 'select' || activeTool === 'lasso') ? (
@@ -254,7 +258,7 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-polyform-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -486,6 +490,14 @@ export const ToolModifierPalette: React.FC = () => {
           <ErrorBoundary name="Camera Clipping Modifiers" compact>
             <CameraClippingSection idPrefix="palette-camera" />
           </ErrorBoundary>
+        )}
+
+        {activeTool === 'lamp' && (
+          <div className="space-y-3">
+            <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Lighting workflow</div>
+            <AutoLightingPanel />
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">Place or edit a fixture, then use Auto Light to balance fixtures or generate editable room lighting.</p>
+          </div>
         )}
 
         {activeTool === 'walk' && (

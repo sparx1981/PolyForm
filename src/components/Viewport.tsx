@@ -1,3 +1,4 @@
+import { NoteCard } from './NoteCard';
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
 import { TextMesh } from './TextMesh';
@@ -10481,33 +10482,10 @@ function Scene() {
       {notes.filter(n => allNotesVisible && n.visible !== false).map(note => (
         <group key={note.id} position={[note.position.x, note.position.y, note.position.z]}>
           <Html distanceFactor={12} transform sprite zIndexRange={[0, 10]}>
-            <div 
-              className={cn(
-                "p-4 rounded-2xl shadow-2xl border transition-all cursor-pointer min-w-[250px] space-y-2 select-none",
-                note.completed 
-                  ? "bg-gray-50/90 dark:bg-gray-900/90 border-gray-200 dark:border-gray-800" 
-                  : "bg-white/95 dark:bg-gray-800/95 border-polyform-blue dark:border-polyform-blue shadow-modus-4"
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                setNotes(prev => prev.map(n => n.id === note.id ? { ...n, completed: !n.completed } : n));
-              }}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Note - {note.authorName}</div>
-                {note.completed && <CheckCircle2 size={12} className="text-green-500" />}
-              </div>
-              <p className={cn(
-                "text-sm leading-relaxed text-gray-900 dark:text-white", 
-                note.completed && "line-through text-gray-400 dark:text-gray-500"
-              )}>
-                {note.text}
-              </p>
-              <div className="pt-2 flex justify-end">
-                 <div className="text-[8px] text-gray-400 dark:text-gray-500">
-                   {safelyToDate(note.createdAt).toLocaleDateString()}
-                 </div>
-              </div>
+            <div className="w-[290px] shadow-xl rounded-xl select-none" onPointerDown={e => e.stopPropagation()}>
+              <NoteCard note={note} number={notes.findIndex(n => n.id === note.id) + 1} date={safelyToDate(note.createdAt).toLocaleDateString()}
+                onComplete={() => setNotes(prev => prev.map(n => n.id === note.id ? { ...n, completed: !n.completed, completedAt: !n.completed ? Date.now() : undefined, completedBy: !n.completed ? user?.displayName : undefined } : n))}
+              />
             </div>
           </Html>
         </group>
@@ -12841,6 +12819,12 @@ function CustomLightComponent({
   }, [light.color, light.contrast]);
 
   const rectRef = useRef<any>(null);
+  const lightTarget = useMemo(() => {
+    const target = new THREE.Object3D();
+    target.position.set(...(light.target ?? [0, 0, 0]));
+    target.updateMatrixWorld(true);
+    return target;
+  }, [light.target?.[0], light.target?.[1], light.target?.[2]]);
 
   useFrame((state, delta) => {
     if (light.type === 'rect' && light.animateRotationY && rectRef.current) {
@@ -12866,7 +12850,7 @@ function CustomLightComponent({
           color={baseColor} 
           intensity={light.intensity * (light.scale || 1)} 
           castShadow={shadowsEnabled}
-          target-position={light.target || [0, 0, 0]}
+          target={lightTarget}
         />
       )}
       {light.type === 'spot' && (
@@ -12875,7 +12859,7 @@ function CustomLightComponent({
           color={baseColor} 
           intensity={light.intensity * (light.scale || 1)} 
           castShadow={shadowsEnabled}
-          target-position={light.target || [0, 0, 0]}
+          target={lightTarget}
           distance={(light.distance || 50) * (light.scale || 1)}
           angle={light.angle || Math.PI / 3}
           penumbra={light.penumbra || 0}

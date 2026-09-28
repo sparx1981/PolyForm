@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { presentation } from '../lib/presentation/store';
 import * as THREE from 'three';
 import { Shape, Tag } from '../types';
 import { ThickLineSegments } from './ThickLineSegments';
@@ -105,6 +106,7 @@ function InstancedMeshGroup({
   useLayoutEffect(() => {
     const mesh = meshRef.current;
     if (!mesh || count === 0) return;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
     for (let i = 0; i < count; i++) {
       const item = items[i];
@@ -143,6 +145,10 @@ function InstancedMeshGroup({
     }
 
     mesh.instanceMatrix.needsUpdate = true;
+    // The presentation engine animates these members through their instance matrices.
+    mesh.userData.presentationTimber = items.map(item => item.id);
+    mesh.computeBoundingBox();
+    mesh.computeBoundingSphere();
     if (mesh.instanceColor) {
       mesh.instanceColor.needsUpdate = true;
     }
@@ -192,6 +198,7 @@ export function InstancedTimberFraming({
   edgeLinesOpacity = 1,
   edgeLinesThickness = 1,
 }: InstancedTimberFramingProps) {
+  const presenting = useSyncExternalStore(presentation.subscribe, () => presentation.get().active);
   const selectedSet = useMemo(() => {
     const set = new Set<string>();
     if (selectedId) set.add(selectedId);
@@ -297,7 +304,7 @@ export function InstancedTimberFraming({
           shadowsEnabled={shadowsEnabled}
         />
       ))}
-      {edgeLinesEnabled && edgeLinePositions && (
+      {edgeLinesEnabled && !presenting && edgeLinePositions && (
         <ThickLineSegments
           positions={edgeLinePositions}
           color={edgeLinesColor}
