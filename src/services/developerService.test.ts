@@ -67,8 +67,8 @@ describe('DeveloperSDK', () => {
     });
 
     it('measurementDefaults.unit picks up extraSetters.unit when provided', () => {
-      const { makeSdk } = makeHarness([], { unit: 'ft' });
-      expect(makeSdk().measurementDefaults.unit).toBe('ft');
+      const { makeSdk } = makeHarness([], { unit: 'cm' });
+      expect(makeSdk().measurementDefaults.unit).toBe('cm');
     });
   });
 

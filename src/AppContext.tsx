@@ -28,7 +28,7 @@ import { defaultGraphicsSettings, normalizeGraphicsSettings } from './lib/graphi
 import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
 import { legacyEnvironmentState } from './lib/assets/legacyAdapter';
 import { readAssetProjectState } from './lib/assets/projectCodec';
-import { diffShapesToSdk, actionLabel, sdkLiteral } from './lib/macroRecorder';
+import { diffShapesToSdk, diffSettingsToSdk, actionLabel, sdkLiteral, type RecordedSetting } from './lib/macroRecorder';
 
 const AppContext = createContext<AppState | undefined>(undefined);
 
@@ -2065,13 +2065,11 @@ console.log("Created rectangle:", myRect.id);`);
       legacySkybox: type,
       background: type !== 'none',
     });
-    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(type)}, ${skyboxBlur}, ${skyboxRotation}, ${environmentIntensity});`);
   };
 
   const handleSetFogSettings = (settings: FogSettings | ((prev: FogSettings) => FogSettings)) => {
     setFogSettings(prev => {
       const next = typeof settings === 'function' ? settings(prev) : settings;
-      recordSetting('fog', `sdk.setFog(${sdkLiteral(next)});`);
       return next;
     });
   };
@@ -2089,7 +2087,6 @@ console.log("Created rectangle:", myRect.id);`);
 
   const handleSetActiveBevelType = (type: 'radius' | 'chamfer') => {
     setActiveBevelType(type);
-    recordSetting('bevelType', `sdk.setBevelType(${JSON.stringify(type)});`);
   };
 
   const handleSetScenes = (newScenes: SceneState[] | ((prev: SceneState[]) => SceneState[])) => {
@@ -2212,71 +2209,100 @@ console.log("Created rectangle:", myRect.id);`);
 
   const handleSetShadowsEnabled = (enabled: boolean) => {
     setShadowsEnabled(enabled);
-    recordSetting('shadows', `sdk.setShadows(${enabled});`);
   };
 
   const handleSetGridEnabled = (enabled: boolean) => {
     setGridEnabled(enabled);
-    recordSetting('grid', `sdk.setGrid(${enabled});`);
   };
 
   const handleSetAxisIndicatorEnabled = (enabled: boolean) => {
     setAxisIndicatorEnabled(enabled);
-    recordSetting('axis', `sdk.setAxisIndicator(${enabled});`);
   };
 
   const handleSetMiniAxisIndicatorEnabled = (enabled: boolean) => {
     setMiniAxisIndicatorEnabled(enabled);
-    recordSetting('miniAxis', `sdk.setMiniAxisIndicator(${enabled});`);
   };
 
   const handleSetFloorEnabled = (enabled: boolean) => {
     setFloorEnabled(enabled);
-    recordSetting('floor', `sdk.setFloor(${enabled});`);
   };
 
   const handleSetAmbientOcclusionEnabled = (enabled: boolean) => {
     setAmbientOcclusionEnabled(enabled);
-    recordSetting('ao', `sdk.setAmbientOcclusion(${enabled});`);
   };
 
   const handleSetSunIntensity = (intensity: number) => {
     setSunIntensity(intensity);
-    recordSetting('sunIntensity', `sdk.setSunSettings({ intensity: ${intensity} });`);
   };
 
   const handleSetSkyboxBlur = (blur: number) => {
     setSkyboxBlur(blur);
     setEnvironment(previous => ({ ...previous, blur }));
-    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(skybox)}, ${blur}, ${skyboxRotation}, ${environmentIntensity});`);
   };
 
   const handleSetEnvironmentIntensity = (intensity: number) => {
     setEnvironmentIntensity(intensity);
     setEnvironment(previous => ({ ...previous, intensity, backgroundIntensity: intensity }));
-    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(skybox)}, ${skyboxBlur}, ${skyboxRotation}, ${intensity});`);
   };
 
   const handleSetSkyboxRotation = (rotation: number) => {
     setSkyboxRotation(rotation);
     setEnvironment(previous => ({ ...previous, rotationRadians: rotation * Math.PI / 180 }));
-    recordSetting('skybox', `sdk.setSkybox(${JSON.stringify(skybox)}, ${skyboxBlur}, ${rotation}, ${environmentIntensity});`);
   };
 
   const handleSetAnimateSun = (animate: boolean) => {
     setAnimateSun(animate);
-    recordSetting('sunAnimate', `sdk.setSunSettings({ animate: ${animate} });`);
   };
 
   const handleSetSunSpeed = (speed: number) => {
     setSunSpeed(speed);
-    recordSetting('sunSpeed', `sdk.setSunSettings({ speed: ${speed} });`);
   };
 
   const handleSetLightPosition = (pos: [number, number, number]) => {
     setLightPosition(pos);
-    recordSetting('sunPosition', `sdk.setSunSettings({ position: ${sdkLiteral(pos)} });`);
   };
+
+  // Settings the recorder watches, each with the SDK line that sets it. Watching the values
+  // (rather than the handlers) records a change made from any panel or shortcut.
+  const recordedSettings: RecordedSetting[] = [
+    { key: 'skybox', value: [skybox, skyboxBlur, skyboxRotation, environmentIntensity], toSdk: v => `sdk.setSkybox(${(v as unknown[]).map(sdkLiteral).join(', ')});` },
+    { key: 'fog', value: fogSettings, toSdk: v => `sdk.setFog(${sdkLiteral(v)});` },
+    { key: 'shadows', value: shadowsEnabled, toSdk: v => `sdk.setShadows(${v});` },
+    { key: 'ao', value: ambientOcclusionEnabled, toSdk: v => `sdk.setAmbientOcclusion(${v});` },
+    { key: 'grid', value: gridEnabled, toSdk: v => `sdk.setGrid(${v});` },
+    { key: 'floor', value: [floorEnabled, floorColor], toSdk: v => `sdk.setFloor(${(v as unknown[]).map(sdkLiteral).join(', ')});` },
+    { key: 'axis', value: axisIndicatorEnabled, toSdk: v => `sdk.setAxisIndicator(${v});` },
+    { key: 'miniAxis', value: miniAxisIndicatorEnabled, toSdk: v => `sdk.setMiniAxisIndicator(${v});` },
+    { key: 'sun', value: { intensity: sunIntensity, position: lightPosition, animate: animateSun, speed: sunSpeed }, toSdk: v => `sdk.setSunSettings(${sdkLiteral(v)});` },
+    { key: 'weather', value: graphicsSettings, toSdk: v => `sdk.setGraphicsSettings(${sdkLiteral(v)});` },
+    { key: 'bevelType', value: activeBevelType, toSdk: v => `sdk.setBevelType(${sdkLiteral(v)});` },
+    { key: 'unit', value: unit, toSdk: v => `sdk.measurement.setUnit(${sdkLiteral(v)});` },
+    { key: 'edgeLines', value: { enabled: edgeLinesEnabled, color: edgeLinesColor, opacity: edgeLinesOpacity, thickness: edgeLinesThickness }, toSdk: v => `sdk.materials.setEdgeLines(${sdkLiteral(v)});` },
+    { key: 'wallTransparency', value: { overall: wallTransparency, exterior: exteriorWallTransparency, interior: interiorWallTransparency }, toSdk: v => `sdk.architecture.setWallTransparency(${sdkLiteral(v)});` },
+    { key: 'story', value: activeStory, toSdk: v => `sdk.architecture.setActiveStory(${sdkLiteral(v)});` },
+    { key: 'selectionFilter', value: selectionFilter, toSdk: v => `sdk.selection.setFilter(${sdkLiteral(v)});` },
+    { key: 'selectionMode', value: selectionShapeMode, toSdk: v => `sdk.selection.setMode(${sdkLiteral(v)});` },
+    { key: 'depthClipping', value: { enabled: cameraDepthClippingEnabled, near: cameraNear, far: cameraFar }, toSdk: v => `sdk.camera.setDepthClipping(${sdkLiteral(v)});` },
+    { key: 'autoOrbit', value: [autoOrbitEnabled, orbitRotationSpeed], toSdk: v => `sdk.camera.setAutoOrbit(${(v as unknown[]).map(sdkLiteral).join(', ')});` },
+    { key: 'contactFriction', value: contactFrictionEnabled, toSdk: v => `sdk.setContactFriction(${v});` },
+    { key: 'sculpt', value: landscapeSculptSettings, toSdk: v => `sdk.landscape.configureSculptSettings(${sdkLiteral(v)});` },
+    { key: 'road', value: landscapeRoadSettings, toSdk: v => `sdk.landscape.configureRoadSettings(${sdkLiteral(v)});` },
+  ];
+  const recordedSettingsRef = useRef(recordedSettings);
+  recordedSettingsRef.current = recordedSettings;
+  const settingsBaselineRef = useRef<Record<string, unknown> | null>(null);
+  const snapshotSettings = () => Object.fromEntries(recordedSettingsRef.current.map(s => [s.key, s.value]));
+  useEffect(() => {
+    settingsBaselineRef.current = isRecording ? snapshotSettings() : null;
+  }, [isRecording]);
+  const settingsFingerprint = sdkLiteral(recordedSettings.map(s => s.value));
+  useEffect(() => {
+    const baseline = settingsBaselineRef.current;
+    if (!isRecording || !baseline) return;
+    const changed = recordedSettingsRef.current.filter(s => diffSettingsToSdk(baseline, [s]).length > 0);
+    for (const s of changed) recordSetting(s.key, s.toSdk(s.value));
+    settingsBaselineRef.current = snapshotSettings();
+  }, [settingsFingerprint, isRecording]);
 
   const getProjectState = (): ProjectState => ({
     name: currentModelName ?? undefined,

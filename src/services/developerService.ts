@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Shape, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
+import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 
 export interface RoofConfigDefaults {
   roofType?: RoofType;
@@ -100,7 +101,7 @@ export interface LandscapeConfigDefaults {
 }
 
 export interface MeasurementConfigDefaults {
-  unit?: 'm' | 'ft' | 'in' | 'mm';
+  unit?: 'm' | 'cm' | 'mm';
   precision?: number;
   lineColor?: string;
   textColor?: string;
@@ -219,6 +220,7 @@ export interface SDK {
   setAxisIndicator: (enabled: boolean) => void;
   setMiniAxisIndicator: (enabled: boolean) => void;
   setSunSettings: (settings: { intensity?: number; position?: [number, number, number]; animate?: boolean; speed?: number }) => void;
+  setGraphicsSettings: (settings: GraphicsSettings) => void;
   setZoom: (zoom: number) => void;
   resetView: (view: 'perspective' | 'plan' | 'front' | 'rear' | 'left' | 'right') => void;
   setCameraDefaults: (position: [number, number, number], target: [number, number, number]) => void;
@@ -412,7 +414,7 @@ export interface SDK {
       pitchDeg: number;
       formatted: string;
     };
-    setUnit: (unit: 'm' | 'ft' | 'in' | 'mm') => void;
+    setUnit: (unit: 'm' | 'cm' | 'mm') => void;
     getUnit: () => string;
     configureMeasurementSettings: (settings: MeasurementConfigDefaults) => void;
     getMeasurementSettings: () => MeasurementConfigDefaults;
@@ -1616,8 +1618,7 @@ export class DeveloperSDK implements SDK {
 
         let formatted = `${dist.toFixed(3)}m`;
         if (currentUnit === 'mm') formatted = `${(dist * 1000).toFixed(0)}mm`;
-        else if (currentUnit === 'ft') formatted = `${(dist * 3.28084).toFixed(2)}ft`;
-        else if (currentUnit === 'in') formatted = `${(dist * 39.3701).toFixed(1)}in`;
+        else if (currentUnit === 'cm') formatted = `${(dist * 100).toFixed(1)}cm`;
 
         return { distance: dist, dx, dy, dz, horizontalRun: horiz, rise: dy, pitchDeg, formatted };
       },
@@ -1650,7 +1651,11 @@ export class DeveloperSDK implements SDK {
         return dimShape;
       },
 
-      setUnit: (unit: 'm' | 'ft' | 'in' | 'mm'): void => {
+      setUnit: (unit: 'm' | 'cm' | 'mm'): void => {
+        if (!['m', 'cm', 'mm'].includes(unit)) {
+          this.log(`Unknown unit "${unit}" - use 'm', 'cm' or 'mm'.`);
+          return;
+        }
         if (this.extraSetters.setUnit) {
           this.extraSetters.setUnit(unit);
         }
@@ -2727,6 +2732,14 @@ export class DeveloperSDK implements SDK {
     } else {
       console.log(`[SDK DIAG: ${category}] ${message}`, values);
     }
+  }
+
+  setGraphicsSettings(settings: GraphicsSettings): void {
+    // Whole weather and vegetation-wind settings, checked and clamped the same way a saved model's are.
+    if (this.extraSetters.setGraphicsSettings) {
+      this.extraSetters.setGraphicsSettings(normalizeGraphicsSettings(settings));
+    }
+    this.log('Updated weather and vegetation settings.');
   }
 
   setContactFriction(enabled: boolean): void {

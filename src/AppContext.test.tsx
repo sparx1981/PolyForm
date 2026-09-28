@@ -371,7 +371,7 @@ describe('AppProvider action recorder', () => {
     expect(code).toContain('// Add Shed');
     expect(code.indexOf('// Add Shed')).toBeLessThan(code.indexOf('sdk.addObject("box"'));
     expect(code.match(/setSunSettings/g)).toHaveLength(1);
-    expect(code).toContain('sdk.setSunSettings({ intensity: 0.9 });');
+    expect(code).toMatch(/sdk\.setSunSettings\(\{"intensity":0\.9,/);
     expect(code).toContain('sdk.updateObject("rec-box"');
 
     // Replay against a fresh model through the real SDK.
@@ -384,6 +384,19 @@ describe('AppProvider action recorder', () => {
     expect(shapes.find(s => s.id === 'rec-box')).toEqual(final);
     expect(final.color).toBe('#123456');
     expect(sunIntensity).toEqual([0.9]);
+  });
+
+  it('records settings changed from any panel as SDK lines', async () => {
+    const { result } = renderApp();
+    act(() => { result.current.setIsRecording(true); });
+    act(() => { result.current.setGridEnabled(false); });
+    act(() => { result.current.setUnit('cm'); });
+    act(() => { result.current.setGraphicsSettings(prev => ({ ...prev, weather: { ...prev.weather, enabled: true } })); });
+    act(() => { result.current.setIsRecording(false); });
+    const code = result.current.recordedCode;
+    expect(code).toContain('sdk.setGrid(false);');
+    expect(code).toContain('sdk.measurement.setUnit("cm");');
+    expect(code).toMatch(/sdk\.setGraphicsSettings\(\{.*"weather":\{"enabled":true/);
   });
 
   it('records nothing while not recording', () => {

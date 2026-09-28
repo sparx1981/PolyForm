@@ -117,6 +117,9 @@ export function DeveloperSuite() {
     setMiniAxisIndicatorEnabled,
     setFloorEnabled,
     setFloorColor,
+    activeStory,
+    setActiveStory,
+    setGraphicsSettings,
     setAmbientOcclusionEnabled,
     setSunIntensity,
     setLightPosition,
@@ -263,7 +266,10 @@ export function DeveloperSuite() {
         landscapeSculptSettings,
         setLandscapeSculptSettings,
         landscapeRoadSettings,
-        setLandscapeRoadSettings
+        setLandscapeRoadSettings,
+        activeStory,
+        setActiveStory,
+        setGraphicsSettings
       }
     );
   }, [
@@ -291,6 +297,7 @@ export function DeveloperSuite() {
     setEdgeLinesThickness, undo, redo, selectionFilter, setSelectionFilter,
     selectionShapeMode, setSelectionShapeMode, setShadowsEnabled,
     setGridEnabled, setAxisIndicatorEnabled, setMiniAxisIndicatorEnabled, setFloorEnabled, setFloorColor, setAmbientOcclusionEnabled,
+    activeStory, setActiveStory, setGraphicsSettings,
     setSunIntensity, setLightPosition, setAnimateSun, setSunSpeed,
     setNotes, setAllNotesVisible, customToolbars, setCustomToolbars,
     basicToolbarExtensions, setBasicToolbarExtensions,
@@ -1885,7 +1892,7 @@ console.log("Pitch Angle:", res.pitchDeg.toFixed(1) + "°");`
         },
         {
           name: "Set Active Unit",
-          code: `// Supported: 'm', 'ft', 'in', 'mm'
+          code: `// Supported: 'm', 'cm', 'mm'
 sdk.measurement.setUnit("m");
 console.log("Active unit is now:", sdk.measurement.getUnit());`
         }
