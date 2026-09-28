@@ -38,6 +38,13 @@ describe('racing the Overpass servers', () => {
     expect(await raceOverpass(query, { servers, stagger: 5, deadline: 2000, fetch: fetchImpl })).toBe(answer);
   });
 
+  it('asks them all again after a pause when every server was busy', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => (++calls > 3 ? new Response(answer) : new Response('rate limited', { status: 429 }))) as unknown as typeof fetch;
+    expect(await raceOverpass(query, { servers, stagger: 5, retryPause: 50, deadline: 2000, fetch: fetchImpl })).toBe(answer);
+    expect(calls).toBe(4);
+  });
+
   it('gives up with every server\'s reason, or at the deadline', async () => {
     const busy = vi.fn(async () => new Response('rate limited', { status: 429 })) as unknown as typeof fetch;
     const err = await raceOverpass(query, { servers, stagger: 5, deadline: 2000, fetch: busy }).catch(e => e);
