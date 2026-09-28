@@ -173,6 +173,22 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'world-view-3d-site',
+    title: 'WorldView 3D Site (real terrain and buildings)',
+    category: 'features',
+    content: 'Bring a real place into your model, up to 200 m square. You get its ground as an editable terrain and its existing buildings as white models. Design in context: delete a building and draw your own in its place, then show the old one as a ghost for before and after.',
+    steps: [
+      'Open WorldView (the Globe icon) and search for an address, a UK postcode or "lat, lng". The pin marks the centre of the site.',
+      'Under 3D Site, choose the area (20 to 200 m square) and the ground: Plain (white model) or Satellite (the aerial photo, which needs a Google Maps key).',
+      'Click "Import 3D site". The centre of the site becomes ground level (y = 0), and north is towards the top of the plan. Importing again replaces the site; your own design stays.',
+      'The ground is an ordinary terrain: sculpt, flatten, dig and pave it with the landscape tools.',
+      'Click an existing building to select it. Entity Info shows its height and where that came from: measured, from its number of floors (3 m each), or estimated. Type a new height to correct it.',
+      'Delete a building (Delete key or "Remove building"), then draw your new design in its place. Tick "Show removed buildings as ghosts" to see what was there, or "Put back" to restore them.',
+      'Existing buildings and the imported ground are left out of the bill of materials and are there from the start of a presentation build-up.',
+      'Data: building outlines © OpenStreetMap contributors (ODbL); ground heights from Terrain Tiles (AWS open data). Heights are about 3 m apart in the UK (finer in some places) and smoothed onto a 1 m grid.'
+    ]
+  },
+  {
     id: 'animations-scalable',
     title: 'Scalable Animations',
     category: 'features',

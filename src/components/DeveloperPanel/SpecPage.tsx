@@ -656,10 +656,18 @@ export const TOOL_SECTIONS: Section[] = [
       {
         title: 'WorldView',
         badges: ['GOOGLE MAPS'],
-        functional: 'Lays a map under the model at an address or coordinates, covering 50-450 m.',
+        functional: 'Lays a flat satellite map under the model at an address or coordinates, covering 50-450 m.',
         implementation: 'A Google Maps overlay at the origin, under the model.',
         source: 'src/components/Viewport.tsx',
         tryItSnippet: 'sdk.worldView.importMap({ lat: 51.5007, lng: -0.1246, zoom: 18 });',
+      },
+      {
+        title: 'WorldView 3D Site',
+        badges: ['REAL TERRAIN', 'EXISTING BUILDINGS'],
+        functional: 'Brings in a real place, up to 200 m square, from an address, postcode or coordinates. You get its ground as an editable terrain and its existing buildings as white models. Buildings can be selected, re-heighted, deleted (with ghosts for before and after) or put back. The ground can be plain or satellite. It is left out of the BOM and the build-up.',
+        implementation: 'Heights come from Terrain Tiles (AWS open data) on a 1 m grid, with the centre at y = 0. Buildings come from OpenStreetMap via the Overpass API, using measured height, then floors x 3 m, then an estimate from the building type. Each building is a site_building object. The satellite picture is a Google Static Map framed to the site, built at draw time so the key is never saved.',
+        source: 'src/lib/worldSite\nsrc/components/WorldSiteControls.tsx\nsrc/components/SiteBuildingMesh.tsx',
+        tryItSnippet: 'console.log(sdk.worldView.getSite(), sdk.worldView.listBuildings().length);',
       },
       {
         title: 'Depth Clipping',

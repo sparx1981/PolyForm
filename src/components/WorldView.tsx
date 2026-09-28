@@ -4,6 +4,8 @@ import { X, Globe, Search, MapPin, Layers, Navigation2, AlertCircle, ExternalLin
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
 import GoogleMapReact from 'google-map-react';
+import { findPlace } from '../lib/worldSite/fetchSite';
+import { WorldSiteSection } from './WorldSiteControls';
 
 interface MapMarkerProps {
   lat: number;
@@ -157,82 +159,12 @@ export default function WorldView() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
-    
     setIsSearching(true);
     try {
-      console.log('[WorldView] Searching for:', searchQuery);
-      
-      // Try to parse as coordinates first (lat, lng)
-      const coordRegex = /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/;
-      const coordMatch = searchQuery.match(coordRegex);
-      if (coordMatch) {
-        const lat = parseFloat(coordMatch[1]);
-        const lng = parseFloat(coordMatch[2]);
-        setWorldViewLocation({ 
-          lat, 
-          lng, 
-          address: `Coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}` 
-        });
-        setIsSearching(false);
-        return;
-      }
-
-      // Use Google Geocoding API if key is available
-      if (apiKey) {
-        const response = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(searchQuery)}&key=${apiKey}`
-        );
-        const data = await response.json();
-        
-        if (data.status === 'OK' && data.results.length > 0) {
-          const result = data.results[0];
-          const { lat, lng } = result.geometry.location;
-          console.log(`[WorldView] Geocoding success: ${result.formatted_address} (${lat}, ${lng})`);
-          setWorldViewLocation({ 
-            lat, 
-            lng, 
-            address: result.formatted_address 
-          });
-          return;
-        } else {
-          console.warn('[WorldView] Geocoding API returned status:', data.status);
-        }
-      }
-
-      // Fallback to Nominatim if API fails or key is missing
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        const data = await response.json();
-        
-        if (data && data.length > 0) {
-          const result = data[0];
-          const lat = parseFloat(result.lat);
-          const lng = parseFloat(result.lon);
-          console.log(`[WorldView] Nominatim success: ${result.display_name} (${lat}, ${lng})`);
-          setWorldViewLocation({ 
-            lat, 
-            lng, 
-            address: result.display_name 
-          });
-          return;
-        }
-      } catch (nomErr) {
-        console.warn('[WorldView] Nominatim fallback failed:', nomErr);
-      }
-
-      // Final fallback if all else fails
-      if (searchQuery.toLowerCase().includes('london')) {
-        setWorldViewLocation({ lat: 51.5074, lng: -0.1278, address: 'London, UK' });
-      } else {
-        setWorldViewLocation({ 
-          lat: worldViewLocation.lat,
-          lng: worldViewLocation.lng,
-          address: `Point: ${worldViewLocation.lat.toFixed(4)}, ${worldViewLocation.lng.toFixed(4)}`
-        });
-      }
+      // Coordinates as typed, a UK postcode, or any address (Google when there's a key, else OpenStreetMap).
+      const place = await findPlace(searchQuery, apiKey);
+      if (place) setWorldViewLocation({ lat: place.lat, lng: place.lng, address: place.address });
+      else setWorldViewLocation({ ...worldViewLocation, address: `Couldn't find "${searchQuery}"` });
     } catch (err) {
       console.error('[WorldView] Search error:', err);
     } finally {
@@ -268,10 +200,10 @@ export default function WorldView() {
             </button>
           </div>
 
-          <div className="flex-1 flex relative">
+          <div className="flex-1 flex relative min-h-0">
             {/* Sidebar Controls */}
             <div className={cn(
-              "w-72 border-r p-4 flex flex-col gap-6",
+              "w-72 border-r p-4 flex flex-col gap-6 overflow-y-auto",
               theme === 'dark' ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
             )}>
               {/* Search */}
@@ -332,7 +264,7 @@ export default function WorldView() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search address or coordinates..."
+                    placeholder="Address, postcode or lat, lng"
                     className={cn(
                       "w-full pl-9 pr-3 py-2 rounded-xl text-sm border focus:ring-2 focus:ring-polyform-blue outline-none transition-all",
                       theme === 'dark' ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-200 text-gray-900"
@@ -410,8 +342,10 @@ export default function WorldView() {
                 </div>
               </div>
 
-              {/* Status Toggle */}
-              <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-800">
+              <WorldSiteSection />
+
+              {/* Status Toggle: the flat map picture (the light alternative to a 3D site) */}
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
                 <button
                   onClick={() => {
                     const nextActive = !isWorldViewActive;

@@ -13,6 +13,10 @@ import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans, withStoryTags } from './plans';
 import { svgToPng } from './raster';
+import { nodeSiteIO } from './site';
+import { buildSite, replaceSite, type SiteIO } from '../../src/lib/worldSite/site';
+import { findPlace } from '../../src/lib/worldSite/fetchSite';
+import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../../src/lib/worldSite/geo';
 import {
   carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
 } from './ops';
@@ -36,6 +40,10 @@ export interface ToolContext {
   renderer?: Renderer;
   /** SVG to PNG (plans); swapped out in tests. */
   rasterize?: (svg: string) => Promise<Buffer>;
+  /** Where World View site data comes from; swapped out in tests. */
+  siteIO?: SiteIO;
+  /** Finds a place from an address or postcode; swapped out in tests. */
+  findPlace?: (text: string) => Promise<{ lat: number; lng: number; address: string } | null>;
 }
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
@@ -414,6 +422,35 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     const made = run.created.map(s => withTerrainTexture(s, a.texture));
     return { shapes: [...shapes, ...made], made };
   })));
+
+  server.registerTool('import_site', {
+    title: 'Import a real site',
+    description: 'Brings a real place into the model: its ground (an editable terrain, heights relative to the centre, which is y = 0) and its existing buildings as white models from OpenStreetMap, each its own object (type site_building) that can be moved or deleted. Up to 200 m square. Importing again replaces the previous site; the rest of the model is kept. North is -z.',
+    inputSchema: {
+      model: modelRef,
+      place: z.string().optional().describe('Address, UK postcode, or "lat, lng"'),
+      lat: z.number().min(-85).max(85).optional(),
+      lng: z.number().min(-180).max(180).optional(),
+      size: z.number().min(MIN_SITE_SIZE).max(MAX_SITE_SIZE).default(100).describe('Side of the square area, metres'),
+      ground: z.enum(['plain', 'satellite']).default('plain').describe('How the ground looks in the app (satellite needs the app\'s Google Maps key)'),
+      buildings: z.boolean().default(true).describe('false: the ground only'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  }, safe(async (a) => {
+    let found: { lat: number; lng: number; address: string } | null = null;
+    if (a.lat !== undefined && a.lng !== undefined) found = { lat: a.lat, lng: a.lng, address: a.place ?? `${a.lat.toFixed(6)}, ${a.lng.toFixed(6)}` };
+    else if (a.place) found = await (ctx.findPlace ?? (t => findPlace(t)))(a.place);
+    else throw new ToolError('Give a place (address, postcode or "lat, lng"), or lat and lng.');
+    if (!found) throw new ToolError(`Couldn't find "${a.place}". Try a postcode, a fuller address, or lat and lng.`);
+    const built = await buildSite(ctx.siteIO ?? nodeSiteIO, {
+      origin: { lat: found.lat, lng: found.lng }, size: a.size, address: found.address, groundStyle: a.ground, skipBuildings: !a.buildings,
+    });
+    return change(a.model, `Imported the site at ${found.address}`, shapes => ({
+      shapes: replaceSite(shapes, built),
+      made: [built.ground],
+      message: `Imported ${a.size} × ${a.size} m of ground at ${found!.address} with ${built.buildings.length} existing buildings (list_objects shows them as site_building).${built.warnings.length ? ` Note: ${built.warnings.join(' ')}` : ''}`,
+    }));
+  }));
 
   server.registerTool('flatten_terrain', {
     title: 'Flatten terrain',

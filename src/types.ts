@@ -116,6 +116,58 @@ export interface TerrainData {
   topography?: string;
   grass?: GrassSettings;
   flowers?: WildflowerSettings;
+  /** Set on ground imported from a real place (World View): where it is and how it was made. */
+  site?: WorldSiteInfo;
+  /**
+   * The buildings that stood on an imported site when it was brought in, so ones you delete can
+   * be shown as see-through ghosts ("show existing") or put back. Saved with the height grids.
+   */
+  siteExisting?: SiteBuildingSnapshot[];
+}
+
+/** An imported real-world site: its place on Earth and the choices made when it came in. */
+export interface WorldSiteInfo {
+  lat: number;
+  lng: number;
+  /** Side of the square area, metres (at most 200). */
+  size: number;
+  address?: string;
+  /** Height above sea level of the site's centre, metres. The model's y = 0 is this height. */
+  elevation: number;
+  /** Where the ground heights came from, e.g. "Terrain Tiles (AWS)". */
+  terrainSource: string;
+  /** Where the buildings came from, e.g. "OpenStreetMap". */
+  buildingSource: string;
+  importedAt: number;
+  groundStyle: 'plain' | 'satellite';
+  /** Draw deleted buildings as ghosts. */
+  showRemoved: boolean;
+}
+
+/** An existing building on an imported site: its outline and how tall it is. */
+export interface SiteBuildingData {
+  /** Where it came from, e.g. "osm:way/123456". */
+  sourceId: string;
+  /** Outline in plan, [x, z] metres relative to the shape's position. */
+  footprint: [number, number][];
+  holes?: [number, number][][];
+  /** Height of the top above the shape's position (its lowest ground point), metres. */
+  height: number;
+  /** Height of the underside above the shape's position, for canopies and overhangs. */
+  minHeight?: number;
+  /** 'tagged' = a measured height from the map; 'levels' = floors x 3 m; 'estimated' = a guess from the building type. */
+  heightSource: 'tagged' | 'levels' | 'estimated';
+  levels?: number;
+  /** The map's building type, e.g. "house", "apartments". */
+  kind?: string;
+}
+
+/** A building as it was imported (world position), kept for ghosts and restoring. */
+export interface SiteBuildingSnapshot {
+  id: string;
+  name: string;
+  position: [number, number, number];
+  data: SiteBuildingData;
 }
 
 const KNOWN_TEXTURE_IDS = new Set([
@@ -150,13 +202,15 @@ export interface TextData {
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio' | 'text' | 'text3d';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio' | 'text' | 'text3d' | 'site_building';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
   scale?: [number, number, number];
   args: any;
   terrainData?: TerrainData;
+  /** An existing building on an imported real-world site (World View). */
+  siteBuildingData?: SiteBuildingData;
   color: string;
   roughness?: number;
   metalness?: number;
@@ -580,7 +634,7 @@ export interface AppState {
   undo: () => void;
   redo: () => void;
   /** Adds a line to the action recording; `options.sdk` offers a readable command for the step (see macroVerify.ts). */
-  recordAction: (code: string, options?: { sdk?: string }) => void;
+  recordAction: (code: string, options?: { sdk?: string; unchecked?: boolean }) => void;
   // Developer Suite
   isDeveloperConsoleOpen: boolean;
   setIsDeveloperConsoleOpen: (open: boolean) => void;

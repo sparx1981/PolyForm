@@ -5,6 +5,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'September 28, 2026',
+    items: [
+      'WorldView 3D Site: bring a real place into your model, up to 200 m square, from an address, UK postcode or coordinates. The ground arrives as an editable terrain with its real slopes, and the existing buildings as white models at their mapped heights (measured where the map has them, else floors x 3 m, else estimated from the kind of building).',
+      'Existing buildings can be selected, re-heighted, deleted and put back. Deleted ones can be shown as see-through ghosts for before-and-after views. The ground can be plain or show the satellite photo.',
+      'The imported site is left out of the bill of materials and presentation build-ups, and is saved with the model. Scripts can do all of this through sdk.worldView (importArea, listBuildings, removeBuilding, restoreBuilding, setBuildingHeight, showExisting, setGroundStyle, getSite), and Claude can through the new import_site connector tool.',
+    ],
+  },
+  {
     date: 'September 27, 2026',
     items: [
       'Curved walls now act as one wall: pieces joined end to end (a curve made of short pieces, or pieces in line) are drawn without lines between them, one click selects the whole wall and the paint bucket paints all of it. A wall ends at a real corner (sharper than 30 degrees), so a straight wall flowing into a curve is part of the same wall. Double-click selects a single piece; with the paint bucket, Shift+click paints just the curved (or just the straight) part and Alt+click paints one piece.',

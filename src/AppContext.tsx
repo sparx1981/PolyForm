@@ -1450,7 +1450,7 @@ console.log("Created rectangle:", myRect.id);`);
     setRecordedCode(prev => prev + lines.join('\n') + '\n');
   };
   // A readable command a tool offered for the step it is doing (see macroVerify.ts).
-  const pendingToolCommandRef = useRef<string | null>(null);
+  const pendingToolCommandRef = useRef<{ sdk: string; unchecked?: boolean } | null>(null);
   // Drawn geometry lives in the kernel, not in shapes: it is compared the same way and written
   // as sdk.drawing.applyChanges. Captured only when the kernel may have changed (its revision
   // or undo stack moved), since capturing reads the whole drawing.
@@ -1477,10 +1477,13 @@ console.log("Created rectangle:", myRect.id);`);
       kernelBaselineRef.current = { key, state };
       kernelAfter = state;
     }
-    const offered = pendingToolCommandRef.current;
+    const pending = pendingToolCommandRef.current;
+    const offered = pending?.sdk;
     if (offered && lines.length > 0) {
       pendingToolCommandRef.current = null;
-      if (kernelBaseline && kernelAfter && commandReproducesStep(offered, {
+      if (pending.unchecked) {
+        lines = [offered];
+      } else if (kernelBaseline && kernelAfter && commandReproducesStep(offered, {
         shapesBefore: baseline, shapesAfter: current, kernelBefore: kernelBaseline.state, kernelAfter,
       }, { unit })) {
         lines = [offered];
@@ -1528,9 +1531,11 @@ console.log("Created rectangle:", myRect.id);`);
   /**
    * `options.sdk` is a readable SDK command for the step the tool is doing; it replaces the
    * recorded change if it reproduces it exactly. A tool that edits the drawing (which changes
-   * at once, not on the next render) calls this before its edit.
+   * at once, not on the next render) calls this before its edit. `options.unchecked` is for a
+   * command that can't be re-run to check it (one that downloads data, like importing a site):
+   * it is recorded as given.
    */
-  const recordAction = (code: string, options?: { sdk?: string }) => {
+  const recordAction = (code: string, options?: { sdk?: string; unchecked?: boolean }) => {
     if (!isRecordingRef.current) return;
     lastRecordedSettingRef.current = null;
     // Changes from earlier actions go first, so each label sits above its own changes.
@@ -1539,7 +1544,7 @@ console.log("Created rectangle:", myRect.id);`);
     const line = trimmed.startsWith('//') || trimmed.startsWith('sdk.') || trimmed.startsWith('const ') ? trimmed : actionLabel(trimmed);
     // addShape labels every new object, and the tool that called it may label it again.
     if (line !== lastRecordedLineRef.current) appendRecorded([line]);
-    if (options?.sdk) pendingToolCommandRef.current = options.sdk;
+    if (options?.sdk) pendingToolCommandRef.current = { sdk: options.sdk, unchecked: options.unchecked };
   };
 
   // Convert To Wall adds walls to Shape history and removes the source

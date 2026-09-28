@@ -2,6 +2,9 @@ import { NoteCard } from './NoteCard';
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
 import { TextMesh } from './TextMesh';
+import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
+import { removedBuildings } from '../lib/worldSite/buildings';
+import { findSiteGround, siteSatelliteUrl } from '../lib/worldSite/site';
 import { TextPlacementDialog } from './TextPlacementDialog';
 import { setTextPlacement } from '../lib/textPlacement';
 import PresentationDriver from './presentation/PresentationDriver';
@@ -1532,6 +1535,7 @@ function Scene() {
     isWorldViewActive,
     worldViewLocation,
     worldViewAltitude,
+    googleMapsApiKey,
     selectedIds,
     currentModelId,
     setSelectedIds,
@@ -4557,6 +4561,10 @@ function Scene() {
 
   // Terrains as drawn: ponds and lakes dig their basins on the fly (never saved into the terrain).
   const dugTerrains = useMemo(() => terrainsWithWaterBasins(shapes), [shapes]);
+  const siteGhosts = useMemo(() => {
+    const ground = findSiteGround(shapes);
+    return ground?.terrainData?.site?.showRemoved ? removedBuildings(ground.terrainData.siteExisting, shapes) : [];
+  }, [shapes]);
 
   /**
    * The fence tool builds one editable fence from the clicked path, live: it appears at the
@@ -10517,6 +10525,9 @@ function Scene() {
         <RenderMapTexture lat={worldViewLocation.lat} lng={worldViewLocation.lng} />
       )}
 
+      {/* Buildings deleted from an imported site, drawn as ghosts when "show existing" is on. */}
+      {siteGhosts.length > 0 && <SiteGhosts removed={siteGhosts} />}
+
       {/*
         Toast render moved to the outer Viewport() function — see
         showToast's own doc comment above for why this can't render here.
@@ -11184,6 +11195,13 @@ function Scene() {
           );
         }
 
+        if (shape.type === 'site_building' && shape.siteBuildingData) {
+          return (
+            <SiteBuildingMesh key={shape.id} shape={shape} meshProps={meshProps}
+              selected={selectedId === shape.id || selectedIds.includes(shape.id)} />
+          );
+        }
+
         if ((shape.type === 'text' || shape.type === 'text3d') && shape.textData) {
           return <TextMesh key={shape.id} shape={shape} meshProps={meshProps} selectionHighlight={selectionHighlight} />;
         }
@@ -11359,7 +11377,11 @@ function Scene() {
             ) :
             (() => {
               const isTerrainHeatmap = shape.type === 'terrain' && !!shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default';
-              const resolvedTexUrl = !isTerrainHeatmap ? (
+              const site = shape.type === 'terrain' ? shape.terrainData?.site : undefined;
+              const resolvedTexUrl = isTerrainHeatmap ? '' : site ? (
+                // Imported ground: plain white-model grey, or the satellite picture of exactly this site.
+                site.groundStyle === 'satellite' ? (siteSatelliteUrl(site, googleMapsApiKey || '') ?? '') : ''
+              ) : !isTerrainHeatmap ? (
                 (shape.type === 'terrain')
                   ? (isTextureUrl(shape.terrainData?.textureUrl) ? shape.terrainData!.textureUrl! : (isTextureUrl(shape.color) ? shape.color : (shape.terrainData?.textureUrl || 'lush_grass')))
                   : (isTextureUrl(shape.textureUrl) ? shape.textureUrl! : (isTextureUrl(shape.color) ? shape.color : ''))

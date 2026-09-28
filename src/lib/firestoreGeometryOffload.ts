@@ -32,7 +32,7 @@ const OFFLOAD_SIZE_THRESHOLD = 40000;
 const IMAGE_MARKER_PREFIX = 'pf-blob:';
 const IMAGE_SIZE_THRESHOLD = 20000;
 const TERRAIN_MARKER = '__offloadedArraysDocId';
-const TERRAIN_ARRAYS = ['heights', 'baseHeights', 'masks'] as const;
+const TERRAIN_ARRAYS = ['heights', 'baseHeights', 'masks', 'siteExisting'] as const;
 const TERRAIN_SIZE_THRESHOLD = 150000;
 
 export interface GeometryOffloadIO {

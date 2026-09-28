@@ -280,13 +280,21 @@ export const SDK_REFERENCE: SdkTag[] = [
   },
   {
     id: 'worldView', title: 'worldView',
-    description: 'The Google Maps overlay under the model.',
+    description: 'Real places: a 3D site (real ground and existing buildings, up to 200 m square), or the flat Google Maps overlay under the model.',
     methods: [
       m('importMap', 'sdk.worldView.importMap({ lat, lng, zoom?, altitude?, radius? })', 'void', 'Lay a map under the model at a location.'),
       m('setLocation', 'sdk.worldView.setLocation(lat, lng)', 'void', 'Move the map to a new location.'),
       m('setRadius', 'sdk.worldView.setRadius(radius)', 'void', 'Set how much ground the map covers.'),
       m('setZoom', 'sdk.worldView.setZoom(zoom)', 'void', 'Set the map zoom level.'),
       m('setAltitude', 'sdk.worldView.setAltitude(altitude)', 'void', 'Set the altitude the map sits at.'),
+      m('importArea', 'await sdk.worldView.importArea(place, { size?, groundStyle?, buildings? })', 'Promise<{ lat, lng, address, size, buildings, warnings }>', 'Bring in a real place: its ground as an editable terrain and its existing buildings. place is an address, a UK postcode, "lat, lng" or { lat, lng }; size is 20-200 m (default 100). Replaces the previous site.'),
+      m('getSite', 'sdk.worldView.getSite()', '{ lat, lng, size, address, elevation, groundStyle, showRemoved, ... } | null', 'The imported site, if there is one. elevation is the centre\'s height above sea level, which is y = 0 in the model.'),
+      m('listBuildings', 'sdk.worldView.listBuildings()', '{ id, name, height, heightSource, kind, position }[]', 'The existing buildings on the site. heightSource is tagged (measured), levels (floors x 3 m) or estimated.'),
+      m('removeBuilding', 'sdk.worldView.removeBuilding(id)', 'boolean', 'Delete an existing building. It can still be shown as a ghost, or put back.'),
+      m('restoreBuilding', 'sdk.worldView.restoreBuilding(id)', 'boolean', 'Put back a building you removed.'),
+      m('setBuildingHeight', 'sdk.worldView.setBuildingHeight(id, height)', 'boolean', 'Correct an existing building\'s height, in metres above its lowest ground.'),
+      m('showExisting', 'sdk.worldView.showExisting(show)', 'void', 'Draw removed buildings as see-through ghosts, for before and after.'),
+      m('setGroundStyle', "sdk.worldView.setGroundStyle('plain' | 'satellite')", 'void', 'Plain white-model ground, or the satellite picture (needs a Google Maps key).'),
     ],
   },
 ];
