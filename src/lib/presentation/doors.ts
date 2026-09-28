@@ -73,6 +73,15 @@ export function isFramePiece(box: THREE.Box3, width: number, height: number): bo
   return false;
 }
 
+/** Triangle index -> material index (glass is material 1 in door geometry). */
+function triangleMaterials(geometry: THREE.BufferGeometry): Map<number, number> {
+  const out = new Map<number, number>();
+  const total = (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+  if (!geometry.groups.length) { for (let t = 0; t < total; t++) out.set(t, 0); return out; }
+  for (const g of geometry.groups) for (let i = g.start; i < g.start + g.count; i += 3) out.set(i / 3, g.materialIndex ?? 0);
+  return out;
+}
+
 /** A new geometry from some triangles of `source`, keeping their material groups. */
 function subset(source: THREE.BufferGeometry, tris: Set<number>, offset: THREE.Vector3): THREE.BufferGeometry {
   const index = source.index;
@@ -157,8 +166,12 @@ export class DoorOpener {
     const left = { tris: new Set<number>(), hingeX: -inner, kind: 'swing' as const, sign: away, amount: SWING };
     const right = { tris: new Set<number>(), hingeX: inner, kind: 'swing' as const, sign: -away, amount: SWING };
     const panel = { tris: new Set<number>(), hingeX: 0, kind: 'slide' as const, sign: 1, amount: 0 };
+    const materials = triangleMaterials(original);
     for (const p of all) {
-      if (isFramePiece(p.box, width, height)) { p.tris.forEach(t => frameTris.add(t)); continue; }
+      // A glass pane that runs edge to edge is the leaf's glazing, not frame: left behind in the
+      // frame it would stay in the doorway as a ghost pane after the leaf swings open.
+      const glassOnly = p.tris.length > 0 && p.tris.every(t => materials.get(t) === 1);
+      if (!glassOnly && isFramePiece(p.box, width, height)) { p.tris.forEach(t => frameTris.add(t)); continue; }
       const cx = p.box.getCenter(new THREE.Vector3()).x;
       const target = motion === 'double' ? (cx < 0 ? left : right)
         : motion === 'slide-half' ? (cx > 0 ? panel : null)
@@ -199,8 +212,12 @@ export class DoorOpener {
   private hideClosedOverlays(d: OpenDoor) {
     // Edges and presentation overlays retain the CLOSED geometry when the leaf is split.
     // Leave hit targets alone; suppress only visual copies, including ones added later.
-    for (const child of d.mesh.children) {
-      if (d.leaves.some(l => l.pivot === child)) continue;
+    const candidates: THREE.Object3D[] = [];
+    for (const top of d.mesh.children) {
+      if (d.leaves.some(l => l.pivot === top)) continue;
+      top.traverse(o => candidates.push(o));
+    }
+    for (const child of candidates) {
       const visual = child as THREE.Mesh;
       if (!(child as THREE.Line).isLine && !(child as any).isLineSegments2 && visual.geometry !== d.original) continue;
       if (!d.hiddenOverlays.has(child)) d.hiddenOverlays.set(child, child.visible);

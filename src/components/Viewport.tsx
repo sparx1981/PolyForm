@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallba
 import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
 import { TextMesh } from './TextMesh';
 import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
+import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
+import { routeTool, withDrawnRoute } from '../lib/worldSite/streets';
 import { removedBuildings } from '../lib/worldSite/buildings';
 import { findSiteGround, siteSatelliteUrl } from '../lib/worldSite/site';
 import { TextPlacementDialog } from './TextPlacementDialog';
@@ -4666,6 +4668,24 @@ function Scene() {
   /** Where a pointer ray meets the ground, for the fence and water tools (see groundUnderRay). */
   const pointerGround = (ray: THREE.Ray) => groundUnderRay(ray, waterPreviewGround);
 
+  /** The route tool adds a walking or driving route to the imported site (see lib/worldSite/streets.ts). */
+  const commitSiteRoute = useCallback((vertices: THREE.Vector3[], closed: boolean) => {
+    if (!findSiteGround(shapes)) {
+      setMeasurements('Routes belong to an imported 3D site: import one in World View first.');
+      return;
+    }
+    const pts = vertices.map(v => [+v.x.toFixed(2), +v.z.toFixed(2)] as [number, number]);
+    if (closed && pts.length > 2) pts.push([...pts[0]!]);
+    if (pts.length < 2) return;
+    const kind = routeTool.kind;
+    setShapes(prev => withDrawnRoute(prev, kind, pts));
+    commitHistory();
+    recordAction(actionLabel(kind === 'road' ? 'Add driving route' : 'Add walking route'), {
+      sdk: `sdk.worldView.addRoute(${JSON.stringify(kind)}, ${JSON.stringify(pts)});`,
+    });
+    setMeasurements(`${kind === 'road' ? 'Driving' : 'Walking'} route added. ${kind === 'road' ? 'Cars' : 'People'} use it when street life is shown.`);
+  }, [shapes, setShapes, commitHistory, recordAction, setMeasurements]);
+
   /** The water tool fills the clicked outline, digging a basin into the terrain under it. */
   const commitWaterBody = useCallback((vertices: THREE.Vector3[]) => {
     if (vertices.length < 3) {
@@ -4825,12 +4845,13 @@ function Scene() {
     if (activeTool === 'fence' && closed) commitFenceRun(fenceVertices, true);
     liveFenceIdRef.current = null;
     if (activeTool === 'water') commitWaterBody(fenceVertices);
+    if (activeTool === 'site_route') commitSiteRoute(fenceVertices, closed);
     setFenceVertices([]);
     setFencePlane(null);
     setFenceCandidatePos(null);
     setFenceHoveredVertex(null);
     setMeasurements('');
-  }, [setMeasurements, activeTool, commitFenceRun, commitWaterBody, fenceVertices]);
+  }, [setMeasurements, activeTool, commitFenceRun, commitWaterBody, commitSiteRoute, fenceVertices]);
 
   /** The first modelled surface under the cursor for the railing tool (not other railings), else the ground. */
   const railingSurfaceUnderCursor = (): THREE.Vector3 | null => {
@@ -4993,7 +5014,7 @@ function Scene() {
               finalizeWallChain();
             }
             return;
-          } else if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+          } else if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
             setFenceVertices(prev => prev.slice(0, -1));
             if (fenceVertices.length <= 1) {
               finalizeFenceChain();
@@ -5042,7 +5063,7 @@ function Scene() {
         if (activeTool === 'wall' && wallVertices.length > 0) {
           diagLog('TOOL', 'Wall drawing cancelled', { vertexCount: wallVertices.length });
         }
-        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
           diagLog('TOOL', `${activeTool} drawing cancelled`, { vertexCount: fenceVertices.length });
         }
         if (activeTool === 'poly' && polyVertices.length > 0) {
@@ -5182,7 +5203,7 @@ function Scene() {
           finalizeCivilRoadDraft();
           return;
         }
-        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
           e.preventDefault();
           finalizeFenceChain();
           return;
@@ -5695,7 +5716,7 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
+    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') {
       e.stopPropagation();
 
       // If clicking first vertex -> close loop & finalize
@@ -5742,7 +5763,7 @@ function Scene() {
         setFencePlane(plane);
         setFenceVertices([p]);
         diagLog("TOOL", `${activeTool} started at point`, { pos: [p.x, p.y, p.z] });
-        setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
+        setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
       } else {
         placeFencePoint(pointToPlace ?? e.point.clone());
       }
@@ -6979,7 +7000,7 @@ function Scene() {
       }
     }
 
-    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
+    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') {
       const plane = fencePlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
       const target = new THREE.Vector3();
       // Fences and ponds follow the ground. Railings stand on whatever is under the cursor
@@ -7022,9 +7043,9 @@ function Scene() {
         if (fenceVertices.length > 0) {
           const lastVertex = fenceVertices[fenceVertices.length - 1];
           const dist = lastVertex.distanceTo(finalPos);
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'}: Section ${formatValue(dist, unit, 2)} (${fenceVertices.length} placed) · Click next point · Double-click/Enter to finish`);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'}: Section ${formatValue(dist, unit, 2)} (${fenceVertices.length} placed) · Click next point · Double-click/Enter to finish`);
         } else {
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'}: Click terrain or ground to start drawing path`);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'}: Click terrain or ground to start drawing path`);
         }
       }
     }
@@ -9170,7 +9191,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape' || activeTool === 'teleport') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'site_route', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
@@ -9968,7 +9989,7 @@ function Scene() {
     if (activeTool === 'fence') commitFenceRun(nextVerts, false);
     setFenceVertices(nextVerts);
     diagLog('TOOL', `${activeTool} segment placed`, { from: [prev.x, prev.y, prev.z], to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] });
-    setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: ${nextVerts.length} points placed · Click next point, or type a length and press Enter · Enter to finish`);
+    setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'} Path: ${nextVerts.length} points placed · Click next point, or type a length and press Enter · Enter to finish`);
   };
 
   /** Ends a drag-drawing gesture whose result was committed from a typed value. */
@@ -10560,7 +10581,7 @@ function Scene() {
     if (drawingStart && (activeTool === 'line' || activeTool in RING_TOOLS
       || ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool))) return true;
     if (activeTool === 'wall' && wallVertices.length > 0) return true;
-    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) return true;
+    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) return true;
     if (activeTool === 'bezier' && bezierKnots.length > 0) return true;
     return false;
   };
@@ -10621,7 +10642,7 @@ function Scene() {
       placeWallPoint(pointAlong(last, flat, len));
       return true;
     }
-    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
       const len = lengthOrError(typed);
       if (typeof len === 'string') return fail(len);
       const last = fenceVertices[fenceVertices.length - 1];
@@ -10838,7 +10859,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['text', 'text3d', 'terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['text', 'text3d', 'terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'site_route', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -11044,6 +11065,9 @@ function Scene() {
 
       {/* Buildings deleted from an imported site, drawn as ghosts when "show existing" is on. */}
       {siteGhosts.length > 0 && <SiteGhosts removed={siteGhosts} />}
+
+      {/* Moving cars and people on an imported site (presentations, or the editor if turned on). */}
+      <SiteStreetLifeLayer shapes={shapes} />
 
       {/*
         Toast render moved to the outer Viewport() function — see
@@ -12924,6 +12948,10 @@ function Scene() {
         <BalconyPlaceTool onCommit={commitBalcony} juliet={(patioToolSettings.template.balcony ?? DEFAULT_BALCONY).support === 'juliet'}
           depth={patioToolSettings.balconyDepth} margin={patioToolSettings.balconyMargin}
           front={patioToolSettings.template.balcony?.front ?? 'curve'} />
+      )}
+
+      {activeTool === 'site_route' && (
+        <RouteDrawPreview shapes={shapes} vertices={fenceVertices} candidate={fenceCandidatePos} groundAt={waterPreviewGround} />
       )}
 
       {/* Fence / Railing Path Drawing Preview */}

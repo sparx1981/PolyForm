@@ -65,10 +65,16 @@ async function overpassJson(res: Response): Promise<{ elements?: unknown[] }> {
  */
 async function fetchOverpass(query: string): Promise<{ elements?: unknown[] }> {
   const errors: string[] = [];
-  try {
-    return await overpassJson(await fetchWithTimeout(`/api/overpass?data=${encodeURIComponent(query)}`, {}, 30000));
-  } catch (err) {
-    errors.push(`relay: ${err instanceof Error ? err.message : String(err)}`);
+  // The relay, and once more if it said "all busy" quickly (a busy spell often passes in seconds).
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const started = Date.now();
+    try {
+      return await overpassJson(await fetchWithTimeout(`/api/overpass?data=${encodeURIComponent(query)}`, {}, 30000));
+    } catch (err) {
+      errors.push(`relay: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (Date.now() - started > 15000) break;
+    await new Promise(r => setTimeout(r, 3000));
   }
   try {
     return JSON.parse(await raceOverpass(query, { deadline: 25000 }));

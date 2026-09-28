@@ -105,7 +105,8 @@ export default function PresentationDriver() {
       const next = Math.min(1, s.build + dt / Math.max(1, s.buildSeconds));
       presentation.set({ build: next, buildPlaying: next < 1 });
     }
-    if (s.stagePlaying) {
+    // The timeline waits at Sketch while the pencil drawing is being drawn.
+    if (s.stagePlaying && !e.holdsSketch(s.stage)) {
       const next = Math.min(3, s.stage + (dt * 3) / STAGE_PLAY_SECONDS);
       presentation.set({ stage: next, stagePlaying: next < 3 });
     }

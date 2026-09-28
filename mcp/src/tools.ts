@@ -14,7 +14,8 @@ import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans, withStoryTags } from './plans';
 import { svgToPng } from './raster';
 import { nodeSiteIO } from './site';
-import { buildSite, replaceSite, type SiteIO } from '../../src/lib/worldSite/site';
+import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../../src/lib/worldSite/site';
+import { withDrawnRoute, withSiteSettings, withoutRoutes } from '../../src/lib/worldSite/streets';
 import { findPlace } from '../../src/lib/worldSite/fetchSite';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../../src/lib/worldSite/geo';
 import {
@@ -434,6 +435,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       size: z.number().min(MIN_SITE_SIZE).max(MAX_SITE_SIZE).default(100).describe('Side of the square area, metres'),
       ground: z.enum(['plain', 'satellite']).default('plain').describe('How the ground looks in the app (satellite needs the app\'s Google Maps key)'),
       buildings: z.boolean().default(true).describe('false: the ground only'),
+      street_life: z.enum(['off', 'quiet', 'normal', 'busy']).default('normal').describe('Moving cars and people along the real roads and paths, shown in presentations'),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   }, safe(async (a) => {
@@ -445,12 +447,47 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     const built = await buildSite(ctx.siteIO ?? nodeSiteIO, {
       origin: { lat: found.lat, lng: found.lng }, size: a.size, address: found.address, groundStyle: a.ground, skipBuildings: !a.buildings,
     });
+    const site = built.ground.terrainData!.site!;
+    site.streetLife = a.street_life;
     return change(a.model, `Imported the site at ${found.address}`, shapes => ({
       shapes: replaceSite(shapes, built),
       made: [built.ground],
       message: `Imported ${a.size} × ${a.size} m of ground at ${found!.address} with ${built.buildings.length} existing buildings (list_objects shows them as site_building).${built.warnings.length ? ` Note: ${built.warnings.join(' ')}` : ''}`,
     }));
   }));
+
+  server.registerTool('set_street_life', {
+    title: 'Set street life',
+    description: 'Moving cars and people on the imported site (import_site first). Cars drive the real roads, keeping to the country\'s side; white figures walk the footpaths and pavements, and sit on any benches. They move in presentations and on the client page unless off; in_editor also shows them while editing. add_routes are extra routes of your own as [x, z] points in metres: kind "path" for people (e.g. across a new garden) or "road" for cars (e.g. a new drive).',
+    inputSchema: {
+      model: modelRef,
+      level: z.enum(['off', 'quiet', 'normal', 'busy']).optional(),
+      in_editor: z.boolean().optional(),
+      add_routes: z.array(z.object({
+        kind: z.enum(['path', 'road']),
+        points: z.array(z.tuple([z.number(), z.number()])).min(2),
+      })).optional(),
+      remove_drawn_routes: z.boolean().optional().describe('Remove every route drawn by hand (map roads and paths stay)'),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, 'Set street life', shapes => {
+    const ground = findSiteGround(shapes);
+    if (!ground) throw new ToolError('This model has no imported site; use import_site first.');
+    let next = shapes;
+    if (a.remove_drawn_routes) next = withoutRoutes(next, (ground.terrainData!.site!.routes ?? []).filter(r => r.source === 'drawn').map(r => r.id));
+    for (const r of a.add_routes ?? []) next = withDrawnRoute(next, r.kind, r.points as [number, number][]);
+    next = withSiteSettings(next, {
+      ...(a.level ? { streetLife: a.level } : {}),
+      ...(a.in_editor !== undefined ? { streetLifeInEditor: a.in_editor } : {}),
+    });
+    const site = findSiteGround(next)!.terrainData!.site!;
+    const routes = site.routes ?? [];
+    return {
+      shapes: next,
+      made: [],
+      message: `Street life ${site.streetLife ?? 'normal'}${site.streetLifeInEditor ? ', also in the editor' : ''}; ${routes.filter(r => r.kind === 'road').length} driving and ${routes.filter(r => r.kind === 'path').length} walking routes${routes.length ? '' : ' (the app loads the map\'s roads and paths when it first shows street life)'}.`,
+    };
+  })));
 
   server.registerTool('flatten_terrain', {
     title: 'Flatten terrain',

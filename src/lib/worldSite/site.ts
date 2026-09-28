@@ -11,6 +11,7 @@ import { type LatLng, clampSiteSize, localToLatLng, metresPerPixel } from './geo
 import { type HeightTile, TERRAIN_SOURCE_NAME, gridHeightAt, siteHeights, tileSampler, tilesFor } from './terrain';
 import { BUILDING_SOURCE_NAME, overpassQuery, parseOverpassBuildings, siteBuildingShapes, snapshotBuildings } from './buildings';
 import type { LidarData } from './lidar';
+import { parseStreets, streetsQuery } from './streets';
 import { alignmentShift, lidarBuildings, lidarGround, localGrid } from './lidarSite';
 
 export const SITE_GROUND_ID = 'site-ground';
@@ -33,6 +34,8 @@ export interface SiteRequest {
   skipBuildings?: boolean;
   /** Don't look for LiDAR (global heights and map building heights only). */
   skipLidar?: boolean;
+  /** Leave out the roads and paths cars and people move along. */
+  skipStreets?: boolean;
   now?: number;
 }
 
@@ -96,6 +99,15 @@ export async function buildSite(io: SiteIO, req: SiteRequest): Promise<BuiltSite
     }
   }
 
+  // Roads and paths for moving cars and people. Not worth a warning when missing: they're
+  // fetched again the first time street life is shown.
+  let routes: WorldSiteInfo['routes'];
+  if (!req.skipStreets) {
+    try {
+      routes = parseStreets(await io.overpass(streetsQuery(req.origin, size)), req.origin, size);
+    } catch { /* fetched later */ }
+  }
+
   // Building heights and roofs from the surface model (only alongside its own ground model, so
   // both share one datum).
   let lidarShift: [number, number] | undefined;
@@ -123,6 +135,7 @@ export async function buildSite(io: SiteIO, req: SiteRequest): Promise<BuiltSite
     importedAt: req.now ?? Date.now(),
     groundStyle: req.groundStyle ?? 'plain',
     showRemoved: false,
+    ...(routes ? { routes } : {}),
   };
   return { ground: siteGroundShape(site, terrainData, snapshotBuildings(buildings)), buildings, warnings };
 }

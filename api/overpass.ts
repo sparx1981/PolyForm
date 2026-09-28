@@ -8,8 +8,8 @@ export const config = { runtime: 'edge' };
 
 export default async function handler(req: Request): Promise<Response> {
   const query = new URL(req.url).searchParams.get('data') ?? '';
-  // Only the kind of query the app makes: JSON, buildings, bounded, small.
-  if (!query.startsWith('[out:json]') || !query.includes('"building"') || query.length > 2000) {
+  // Only the kinds of query the app makes: JSON, buildings or streets, bounded, small.
+  if (!query.startsWith('[out:json]') || !/"(building|highway)"/.test(query) || query.length > 2000) {
     return new Response('Bad query', { status: 400 });
   }
   try {

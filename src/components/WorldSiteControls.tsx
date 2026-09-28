@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Building2, Eye, Mountain, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Building2, Car, Eye, Footprints, Mountain, RotateCcw, Trash2 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import type { Shape, WorldSiteInfo } from '../types';
 import { cn } from '../lib/utils';
@@ -8,6 +8,7 @@ import { browserSiteIO } from '../lib/worldSite/fetchSite';
 import { buildSite, findSiteGround, isSiteShape, replaceSite } from '../lib/worldSite/site';
 import { OSM_ATTRIBUTION, removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../lib/worldSite/geo';
+import { STREET_LIFE_LEVELS, routeTool, withSiteSettings, withoutRoutes } from '../lib/worldSite/streets';
 
 // World View's 3D site: bring in the real ground and existing buildings around the chosen place
 // (see lib/worldSite), then choose how the ground looks and whether removed buildings show as
@@ -44,7 +45,7 @@ function Toggle({ options, value, onChange }: { options: { id: string; label: st
 
 /** The World View panel's "3D site" section. */
 export function WorldSiteSection() {
-  const { shapes, worldViewLocation, setIsWorldViewActive, recordAction, setShapes, commitHistory, googleMapsApiKey } = useApp();
+  const { shapes, worldViewLocation, setIsWorldViewActive, recordAction, setShapes, commitHistory, googleMapsApiKey, setActiveTool } = useApp();
   const change = useSiteChange();
   const ground = findSiteGround(shapes);
   const site = ground?.terrainData?.site;
@@ -137,6 +138,11 @@ export function WorldSiteSection() {
               onChange={e => change(e.target.checked ? 'Show removed buildings' : 'Hide removed buildings', sdkCall('showExisting', e.target.checked), withSite({ showRemoved: e.target.checked }))} />
             <Eye size={12} /> Show removed buildings as ghosts
           </label>
+          <StreetLifeFields site={site} onDraw={kind => {
+            routeTool.kind = kind;
+            setActiveTool('site_route');
+            setIsWorldViewActive(false);
+          }} />
           {removed.length > 0 && (
             <button type="button"
               onClick={() => change('Restore removed buildings', removed.map(r => sdkCall('restoreBuilding', r.id)).join('\n'), prev => [...prev, ...removed.map(shapeFromSnapshot)])}
@@ -159,6 +165,58 @@ export function WorldSiteSection() {
       <p className="text-[9px] text-gray-400 leading-tight">
         Buildings {OSM_ATTRIBUTION} (ODbL). Heights: Terrain Tiles (AWS open data); LiDAR from the Environment Agency (OGL), AHN (CC0) or USGS 3DEP where available. Up to {MAX_SITE_SIZE} m square.
       </p>
+    </div>
+  );
+}
+
+/** Street life on the imported site: how busy, whether it moves in the editor, and routes. */
+function StreetLifeFields({ site, onDraw }: { site: WorldSiteInfo; onDraw: (kind: 'path' | 'road') => void }) {
+  const change = useSiteChange();
+  const level = site.streetLife ?? 'normal';
+  const routes = site.routes;
+  const mapRoads = routes?.filter(r => r.source === 'map' && r.kind === 'road').length ?? 0;
+  const mapPaths = routes?.filter(r => r.source === 'map' && r.kind === 'path').length ?? 0;
+  const drawn = routes?.filter(r => r.source === 'drawn') ?? [];
+  const small = 'text-[10px] text-polyform-blue hover:underline flex items-center gap-1';
+  return (
+    <div className="space-y-2 pt-2 border-t border-gray-200/70 dark:border-gray-700/70">
+      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Street life</span>
+      <Toggle options={STREET_LIFE_LEVELS} value={level}
+        onChange={id => id !== level && change(`Street life: ${id}`, sdkCall('setStreetLife', id), prev => withSiteSettings(prev, { streetLife: id as typeof level }))} />
+      <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+        <input type="checkbox" checked={!!site.streetLifeInEditor}
+          onChange={e => change(e.target.checked ? 'Show street life in the editor' : 'Hide street life in the editor',
+            sdkCall('setStreetLife', { inEditor: e.target.checked }), prev => withSiteSettings(prev, { streetLifeInEditor: e.target.checked }))} />
+        Show moving cars and people while editing
+      </label>
+      <p className="text-[10px] text-gray-400 leading-tight">
+        {routes
+          ? `${mapRoads} road${mapRoads === 1 ? '' : 's'} and ${mapPaths} path${mapPaths === 1 ? '' : 's'} from the map${drawn.length ? `, ${drawn.length} drawn by you` : ''}.`
+          : 'Roads and paths load from the map the first time street life shows.'}
+        {' '}Always moving in presentations unless Off.
+      </p>
+      <div className="flex gap-1.5">
+        <button type="button" onClick={() => onDraw('path')}
+          className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:border-polyform-blue">
+          <Footprints size={12} /> Draw walking route
+        </button>
+        <button type="button" onClick={() => onDraw('road')}
+          className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:border-polyform-blue">
+          <Car size={12} /> Draw driving route
+        </button>
+      </div>
+      {drawn.length > 0 && (
+        <div className="flex gap-3">
+          <button type="button" className={small}
+            onClick={() => change('Remove last drawn route', sdkCall('removeRoute', drawn[drawn.length - 1]!.id), prev => withoutRoutes(prev, [drawn[drawn.length - 1]!.id]))}>
+            <RotateCcw size={10} /> Remove last drawn
+          </button>
+          <button type="button" className={small}
+            onClick={() => change('Remove drawn routes', drawn.map(r => sdkCall('removeRoute', r.id)).join('\n'), prev => withoutRoutes(prev, drawn.map(r => r.id)))}>
+            <Trash2 size={10} /> Remove all drawn
+          </button>
+        </div>
+      )}
     </div>
   );
 }

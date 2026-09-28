@@ -143,6 +143,10 @@ describe('connector over HTTP', () => {
     expect(objects.total).toBe(2);
     const house = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: 'site-way-7' } }));
     expect(house.type).toBe('site_building');
+    const street = parse(await client.callTool({ name: 'set_street_life', arguments: {
+      model: id, level: 'busy', in_editor: true, add_routes: [{ kind: 'path', points: [[0, 0], [10, 5]] }],
+    } }));
+    expect(street.done).toMatch(/Street life busy, also in the editor; 0 driving and 1 walking routes/);
     // A second import swaps the site rather than adding another.
     await client.callTool({ name: 'import_site', arguments: { model: id, lat: 51.5, lng: -0.12, size: 40, buildings: false } });
     objects = parse(await client.callTool({ name: 'list_objects', arguments: { model: id } }));
