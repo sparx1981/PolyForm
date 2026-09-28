@@ -12,7 +12,7 @@ import { AppProvider, useApp, type ToolbarKey, type DockZone } from './AppContex
 import { handleFirestoreError, OperationType, restoreFirestoreArraysAfterLoad, hydrateOffloadedModel, firebaseGeometryIO } from './firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { cn } from './lib/utils';
-import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle, GripHorizontal } from 'lucide-react';
+import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle, GripHorizontal, ChevronUp, ChevronDown } from 'lucide-react';
 import TopBar from './components/TopBar';
 import LeftToolbar from './components/LeftToolbar';
 import ArchitectureToolbar from './components/ArchitectureToolbar';
@@ -610,10 +610,12 @@ function AppContent() {
               {!landscape && (
                 <button
                   onClick={() => setPhoneSheetCollapsed(c => !c)}
-                  className="w-full h-5 shrink-0 flex items-center justify-center"
+                  className={`w-full h-7 shrink-0 flex items-center justify-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
                   aria-label={phoneSheetCollapsed ? 'Show settings' : 'Hide settings'}
+                  aria-expanded={!phoneSheetCollapsed}
                 >
-                  <span className={`w-10 h-1 rounded-full ${theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'}`} />
+                  {/* Up when the sheet can be opened, down when it can be closed. */}
+                  {phoneSheetCollapsed ? <ChevronUp size={20} strokeWidth={2.5} /> : <ChevronDown size={20} strokeWidth={2.5} />}
                 </button>
               )}
               <div ref={setPhoneSlotRef} id="phone-settings-slot" className="flex-1 overflow-y-auto min-h-0" />
