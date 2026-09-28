@@ -383,6 +383,20 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'tape-measure-guides',
+    title: 'Tape Measure and Guide Lines',
+    category: 'tools',
+    content: 'The Tape Measure measures distances and places guide lines: dashed lines you draw against, like a builder\'s string line. The drawing tools snap onto guides and onto the points where two guides cross.',
+    steps: [
+      'Measure: pick the Tape Measure, click a corner or any point, then click a second point. The distance stays in the model as a yellow measurement.',
+      'Place a guide: click the middle of an edge (it lights up pink when you hover it), a guide, or the red, green or blue axis. Move away from it and click: a guide appears parallel to it at that distance. To be exact, type the distance (e.g. 2.5, 300mm or 8\'6") and press Enter.',
+      'Change the last guide: straight after placing one, type a new distance and press Enter. A minus sign puts it on the other side.',
+      'Build a grid: pull guides off other guides - for example every 3 m across a plot - and draw walls from crossing to crossing.',
+      'Esc cancels a guide or measurement in progress.',
+      'Hide or clear guides: Scene Helpers > Guides hides them all (hidden guides are not snapped to), and Delete All Guides removes every guide, including Protractor guides, in one step you can undo. To remove one guide, click it with the Select tool and press Delete.'
+    ]
+  },
+  {
     id: 'skp-import-export',
     title: 'SKP Support',
     category: 'advanced',

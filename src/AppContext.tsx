@@ -30,6 +30,7 @@ import { legacyEnvironmentState } from './lib/assets/legacyAdapter';
 import { readAssetProjectState } from './lib/assets/projectCodec';
 import { captureKernelState, diffKernelStates, type KernelState } from './lib/geometry/graphPatch';
 import { commandReproducesStep } from './lib/macroVerify';
+import { isGuideShape } from './tools/tapeGuides';
 import { diffShapesToSdk, diffSettingsToSdk, actionLabel, sdkLiteral, type RecordedSetting } from './lib/macroRecorder';
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -484,6 +485,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [unit, setUnit] = useState<'mm' | 'cm' | 'm'>('m');
   const [allNotesVisible, setAllNotesVisible] = useState(true);
+  /** Guide lines (Tape Measure and Protractor) shown and snapped to. */
+  const [guidesVisible, setGuidesVisible] = useState(true);
   const [showCollaboratorCursors, setShowCollaboratorCursors] = useState(true);
 
   // Sync scripts with Firestore (Optimized: One-time fetch with cache)
@@ -924,6 +927,7 @@ console.log("Created rectangle:", myRect.id);`);
             miniAxisIndicatorEnabled,
             floorEnabled,
             allNotesVisible,
+            guidesVisible,
             defaultCameraPosition,
             defaultCameraTarget,
             isArchitectureToolbarEnabled,
@@ -941,7 +945,7 @@ console.log("Created rectangle:", myRect.id);`);
       const timeout = setTimeout(saveSettings, 30000); // 30s debounce for settings
       return () => clearTimeout(timeout);
     }
-  }, [theme, unit, gridEnabled, axisIndicatorEnabled, miniAxisIndicatorEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, layoutMode, user?.uid]);
+  }, [theme, unit, gridEnabled, axisIndicatorEnabled, miniAxisIndicatorEnabled, floorEnabled, allNotesVisible, guidesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, layoutMode, user?.uid]);
 
   // Load user settings
   const lastSettingsLoad = useRef<number>(0);
@@ -963,6 +967,7 @@ console.log("Created rectangle:", myRect.id);`);
           if (data.miniAxisIndicatorEnabled !== undefined) setMiniAxisIndicatorEnabled(data.miniAxisIndicatorEnabled);
           if (data.floorEnabled !== undefined) setFloorEnabled(data.floorEnabled);
           if (data.allNotesVisible !== undefined) setAllNotesVisible(data.allNotesVisible);
+          if (data.guidesVisible !== undefined) setGuidesVisible(data.guidesVisible);
           // Deliberately NOT loading data.defaultCameraPosition/
           // defaultCameraTarget here on cold start — confirmed as the
           // actual cause of "click File New has a different zoom level
@@ -2062,6 +2067,17 @@ console.log("Created rectangle:", myRect.id);`);
     recordAction(actionLabel(`Delete ${id}`));
   };
 
+  /** Removes every guide line (Tape Measure and Protractor) as one undo step. */
+  const deleteAllGuides = () => {
+    const ids = new Set(shapes.filter(isGuideShape).map(s => s.id));
+    if (ids.size === 0) return 0;
+    handleSetShapes(prev => prev.filter(s => !ids.has(s.id)));
+    setSelectedIds(prev => prev.filter(sid => !ids.has(sid)));
+    if (selectedId && ids.has(selectedId)) setSelectedId(null);
+    recordAction(actionLabel(`Delete ${ids.size} guides`));
+    return ids.size;
+  };
+
   /**
    * The single, shared duplicate implementation — previously
    * Viewport.tsx's own right-click "Duplicate Object" and the
@@ -2513,6 +2529,7 @@ console.log("Created rectangle:", myRect.id);`);
       registerWallConversionUndo,
       addShape,
       removeShape,
+      deleteAllGuides,
       updateShapeColor,
       updateShapeDimensions,
       isAIRendererOpen,
@@ -2714,6 +2731,8 @@ console.log("Created rectangle:", myRect.id);`);
       setPlacingNoteId,
       allNotesVisible,
       setAllNotesVisible,
+      guidesVisible,
+      setGuidesVisible,
       // Collaboration
       isCollaborationOpen,
       setIsCollaborationOpen,

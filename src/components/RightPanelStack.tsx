@@ -213,6 +213,9 @@ export default function RightPanelStack() {
     setAxisIndicatorEnabled,
     miniAxisIndicatorEnabled,
     setMiniAxisIndicatorEnabled,
+    guidesVisible,
+    setGuidesVisible,
+    deleteAllGuides,
     floorEnabled,
     setFloorEnabled,
     floorColor,
@@ -4234,6 +4237,33 @@ export default function RightPanelStack() {
                       "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
                       miniAxisIndicatorEnabled ? "left-4.5" : "left-0.5"
                     )} />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span title="Guide lines from the Tape Measure and Protractor. Hidden guides aren't snapped to.">Guides</span>
+                    <button
+                      onClick={() => setGuidesVisible(!guidesVisible)}
+                      className={cn(
+                        "w-8 h-4 rounded-full relative transition-colors",
+                        guidesVisible ? "bg-polyform-blue" : "bg-gray-300"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                        guidesVisible ? "left-4.5" : "left-0.5"
+                      )} />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const removed = deleteAllGuides();
+                      if (removed === 0) alert('There are no guides to delete.');
+                    }}
+                    className="w-full text-xs px-2 py-1 rounded border border-gray-300 hover:border-red-400 hover:text-red-500 transition-colors"
+                  >
+                    Delete All Guides
                   </button>
                 </div>
 

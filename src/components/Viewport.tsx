@@ -137,7 +137,11 @@ import { planCurvedMerge, isCurvedPiece, type MergeResult, type MergeRejection }
 import { analyzeWallConversion, buildWallShapes, captureFaces, floorFacesWithin, graphSignature, heightWarnings, outerRing, planWithThickness, type WallConversionPlan, type WallConversionRejection } from '../tools/kernelConvertToWall';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
-import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
+import { loopVertexIds, getVertex, loopPoints, edgePoints } from '../lib/geometry/topology';
+import {
+  axisSources, featureEdges, guideCrossings, guideOffset, guideSegment, guideSnapCandidates, isGuideShape,
+  makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource,
+} from '../tools/tapeGuides';
 import { createPushPullBinding, commitKernelPushPull } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding, commitKernelFaceOffset } from '../tools/kernelFaceOffset';
@@ -1694,7 +1698,8 @@ function Scene() {
     setWalkModePhase,
     walkMovementSpeed,
     walkMouseSensitivity,
-    walkBridgeRef
+    walkBridgeRef,
+    guidesVisible,
   } = useApp();
 
   const usedMaterialBindings = useMemo(() => {
@@ -2389,6 +2394,17 @@ function Scene() {
   // measurement so its line + label stay visible after the second click.
   const [tapeStart, setTapeStart] = useState<THREE.Vector3 | null>(null);
   const [tapeEnd, setTapeEnd] = useState<THREE.Vector3 | null>(null);
+  // A guide being pulled off an edge, guide or axis (see tools/tapeGuides.ts): the line it's
+  // parallel to, and how far off it the pointer has moved it.
+  const [tapeGuide, setTapeGuide] = useState<{ linePoint: THREE.Vector3; dir: THREE.Vector3; offset: THREE.Vector3; label: string } | null>(null);
+  // The edge a click would pull a guide off, highlighted under the pointer.
+  const [tapeHover, setTapeHover] = useState<GuideSource | null>(null);
+  // Guides the drawing tools snap to, and where they cross.
+  const guideSegments = useMemo(
+    () => (guidesVisible ? shapes.filter(s => !s.hidden).map(guideSegment).filter((g): g is [THREE.Vector3, THREE.Vector3] => g !== null) : []),
+    [shapes, guidesVisible],
+  );
+  const guideCrossingPoints = useMemo(() => guideCrossings(guideSegments), [guideSegments]);
   const [lastMeasurement, setLastMeasurement] = useState<{ start: [number, number, number]; end: [number, number, number]; distance: number } | null>(null);
   const [arcStart, setArcStart] = useState<THREE.Vector3 | null>(null);
   const [arcEnd, setArcEnd] = useState<THREE.Vector3 | null>(null);
@@ -5030,6 +5046,9 @@ function Scene() {
         setFaceEditMode(null);
         setSnapIndicator(null);
         setTrackingGuide(null);
+        setTapeStart(null);
+        setTapeEnd(null);
+        setTapeGuide(null);
         awakenedRefPointsRef.current = [];
         setTypedLength('');
         setLastDrawTarget(null);
@@ -5902,43 +5921,8 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'tape') {
-      e.stopPropagation();
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      // Any real surface counts, not just Shape-typed objects - a `userData.isShape`-only
-      // check silently ignored kernel-rendered geometry, terrain, landscape props, roads and
-      // every other non-Shape mesh, falling through to whatever ground-plane/generic point
-      // the underlying click handler happened to compute instead of the actual surface hit.
-      const shapeIntersect = intersects.find(i =>
-        !i.object.userData.isHelper && !i.object.userData.isPreview && !i.object.userData.isGizmo &&
-        (i.object.userData.isShape || i.object.userData.isKernelGeometry ||
-         ((i.object as any).isMesh && i.object.name !== 'previewMesh'))
-      );
-      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
-
-      if (!tapeStart) {
-        setTapeStart(point);
-        setTapeEnd(point);
-        setMeasurements('Click second point to measure.');
-      } else {
-        const distance = tapeStart.distanceTo(point);
-        addShape({
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'measurement',
-          position: [(tapeStart.x + point.x) / 2, (tapeStart.y + point.y) / 2, (tapeStart.z + point.z) / 2],
-          args: {
-            start: [tapeStart.x, tapeStart.y, tapeStart.z],
-            end: [point.x, point.y, point.z],
-            distance,
-          },
-          color: '#FFD700',
-        } as Shape);
-        setMeasurements(`Distance: ${formatValue(distance, unit, 2)}`);
-        setTapeStart(null);
-        setTapeEnd(null);
-      }
-      return;
-    }
+    // The Tape Measure has its own pointer handling on the canvas (see the tape effect below).
+    if (activeTool === 'tape') return;
     if (activeTool === 'arc') {
       e.stopPropagation();
       const intersects = raycaster.intersectObjects(scene.children, true);
@@ -6535,17 +6519,6 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'tape' && tapeStart) {
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i =>
-        !i.object.userData.isHelper && !i.object.userData.isPreview && !i.object.userData.isGizmo &&
-        (i.object.userData.isShape || i.object.userData.isKernelGeometry ||
-         ((i.object as any).isMesh && i.object.name !== 'previewMesh'))
-      );
-      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
-      setTapeEnd(point);
-      setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
-    }
     if (activeTool === 'arc' && arcStep === 1 && arcStart) {
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeIntersect = intersects.find(i => i.object.userData?.isShape || i.object.userData?.id);
@@ -7387,13 +7360,26 @@ function Scene() {
         }
       }
 
+      // Guides: start a line on a guide, or where two guides cross.
+      let bestLabel: string | null = null;
+      for (const g of guideSnapCandidates(guideSegments, guideCrossingPoints, raycaster.ray, camera, hoverRect, { x: hoverMouseX, y: hoverMouseY })) {
+        const kind = g.label === 'Guide crossing' ? 'endpoint' as const : 'midpoint' as const;
+        const rank = rankSnap(kind, g.screenDist);
+        if (rank < bestRank) {
+          bestRank = rank;
+          bestPoint = g.point;
+          bestType = kind;
+          bestLabel = g.label;
+        }
+      }
+
       setSnapIndicator(
         bestPoint
           ? {
               point: [bestPoint.x, bestPoint.y, bestPoint.z],
               type: bestType,
-              tooltip:
-                bestType === 'endpoint' ? 'Endpoint' : bestType === 'midpoint' ? 'Midpoint' : 'Center',
+              tooltip: bestLabel ??
+                (bestType === 'endpoint' ? 'Endpoint' : bestType === 'midpoint' ? 'Midpoint' : 'Center'),
             }
           : null,
       );
@@ -7437,12 +7423,15 @@ function Scene() {
         // Collect geometric candidate points
         const candidates: Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; screenDist: number; label?: string }> = [];
         shapes.forEach(sh => {
-          if (sh.type === 'measurement' && sh.args?.kind === 'protractor') {
-            // Guide lines: snap onto the nearest point along the guide, and to its centre.
-            const gStart = new THREE.Vector3(...(sh.args.start as [number, number, number]));
-            const gEnd = new THREE.Vector3(...(sh.args.end as [number, number, number]));
+          if (isGuideShape(sh)) {
+            // Guide lines (Tape Measure and Protractor): snap onto the nearest point along the
+            // guide, and to a protractor's centre. Hidden guides don't snap.
+            if (!guidesVisible || sh.hidden) return;
+            const [gStart, gEnd] = guideSegment(sh)!;
             const onGuide = new THREE.Line3(gStart, gEnd).closestPointToPoint(target, true, new THREE.Vector3());
-            for (const [p, label] of [[onGuide, 'On guide'], [new THREE.Vector3(...(sh.args.centre as [number, number, number])), 'Guide centre']] as const) {
+            const points: [THREE.Vector3, string][] = [[onGuide, 'On guide']];
+            if (sh.args?.kind === 'protractor') points.push([new THREE.Vector3(...(sh.args.centre as [number, number, number])), 'Guide centre']);
+            for (const [p, label] of points) {
               const pr = projectToScreen(p);
               if (pr.inFront) candidates.push({ point: p.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) + (label === 'On guide' ? 4 : 0), label });
             }
@@ -7508,6 +7497,12 @@ function Scene() {
             }
           });
         });
+
+        // Where two guides cross: a corner you laid out with the Tape Measure.
+        for (const c of guideCrossingPoints) {
+          const pr = projectToScreen(c);
+          if (pr.inFront) candidates.push({ point: c.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) - 2, label: 'Guide crossing' });
+        }
 
         // Kernel geometry is a separate representation from `shapes`, so the
         // pass above cannot see it. Feed its points into the SAME candidate
@@ -10043,8 +10038,202 @@ function Scene() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Tape Measure: measure between two points, or pull a guide off an edge, a guide or an axis
+  // (see tools/tapeGuides.ts). Handled on the canvas itself, so every surface - and empty
+  // space - behaves the same.
+  // ---------------------------------------------------------------------------
+  const TAPE_GUIDE_COLOR = '#0e7490';
+  /** Meshes denser than this don't offer their edges to the tape (terrain, plants). */
+  const TAPE_EDGE_TRIANGLE_LIMIT = 20000;
+
+  /** What's under the pointer for the Tape Measure. */
+  const tapeProbe = (ev: PointerEvent, withPick: boolean) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const px = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+    const size = { width: rect.width, height: rect.height };
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2((px.x / size.width) * 2 - 1, -(px.y / size.height) * 2 + 1), camera);
+    const isModel = (o: THREE.Object3D) => {
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) {
+        const u = p.userData ?? {};
+        if (u.type === 'light') return false;
+        if (u.isShape || u.isKernelGeometry || typeof u.id === 'string') return true;
+      }
+      return false;
+    };
+    let surface: THREE.Intersection | undefined;
+    let model: THREE.Intersection | undefined;
+    for (const hit of rc.intersectObjects(scene.children, true)) {
+      const o = hit.object as THREE.Mesh & { isLine2?: boolean; isLineSegments2?: boolean };
+      if (!o.isMesh || o.isLine2 || o.isLineSegments2 || o.name === 'previewMesh'
+        || o.userData.isHelper || o.userData.isPreview || o.userData.isGizmo) continue;
+      if (!surface) surface = hit;
+      if (isModel(o)) { model = hit; break; }
+    }
+    // Nothing under the pointer: the ground.
+    const point = surface?.point.clone() ?? rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+
+    let pick: ReturnType<typeof pickGuideSource> = null;
+    if (withPick) {
+      const sources: GuideSource[] = [...axisSources()];
+      for (const [a, b] of guideSegments) sources.push({ a, b, endless: true, label: 'Guide' });
+      for (const edge of kernelHost.graph.edges.values()) {
+        if (edge.hidden) continue;
+        const [a, b] = edgePoints(kernelHost.graph, edge);
+        sources.push({ a: new THREE.Vector3(a.x, a.y, a.z), b: new THREE.Vector3(b.x, b.y, b.z), endless: false, label: 'Edge' });
+      }
+      const mesh = model?.object as THREE.Mesh | undefined;
+      if (mesh && !mesh.userData.isKernelGeometry && !(mesh as THREE.InstancedMesh).isInstancedMesh) {
+        const g = mesh.geometry as THREE.BufferGeometry;
+        const triangles = (g.index ? g.index.count : g.getAttribute('position')?.count ?? 0) / 3;
+        if (triangles <= TAPE_EDGE_TRIANGLE_LIMIT) sources.push(...featureEdges(mesh));
+      }
+      pick = pickGuideSource(sources, px, camera, size);
+    }
+    return { ray: rc.ray, point, modelPoint: model?.point.clone() ?? null, pick };
+  };
+
+  /** The corner of a picked edge nearest the pointer. */
+  const tapeCorner = (pick: NonNullable<ReturnType<typeof pickGuideSource>>) =>
+    (pick.point.distanceTo(pick.source.a) <= pick.point.distanceTo(pick.source.b) ? pick.source.a : pick.source.b).clone();
+
+  const commitTapeGuide = (draft: NonNullable<typeof tapeGuide>, offset: THREE.Vector3) => {
+    const distance = offset.length();
+    if (distance < 1e-4) {
+      setMeasurements('Move away from the line first (or type a distance), then click.');
+      return;
+    }
+    const guideAt = (o: THREE.Vector3, d: number): Partial<Shape> => {
+      const p = draft.linePoint.clone().add(o);
+      const args: GuideArgs = makeGuideArgs(p, draft.dir, d);
+      return { name: `Guide ${formatValue(d, unit, 2)}`, position: [p.x, p.y, p.z], args };
+    };
+    const id = Math.random().toString(36).substr(2, 9);
+    addShape({ id, type: 'measurement', color: TAPE_GUIDE_COLOR, ...guideAt(offset, distance) } as Shape);
+    setTapeGuide(null);
+    setMeasurements(`Guide placed ${formatValue(distance, unit, 2)} from the ${draft.label.toLowerCase()}. Type a distance and press Enter to change it.`);
+    offerShapeAdjust('tape', id, 'Guide distance', (_shape, typed) => {
+      const len = lengthOrError(typed, true);
+      if (typeof len === 'string') return len;
+      const o = offsetAtDistance(offset, draft.dir, len);
+      return o ? guideAt(o, Math.abs(len)) : 'Could not tell which side to put the guide on.';
+    });
+  };
+
+  const tapeClickRef = useRef<(ev: PointerEvent) => void>(() => {});
+  tapeClickRef.current = (ev) => {
+    if (tapeGuide) {
+      commitTapeGuide(tapeGuide, tapeGuide.offset);
+      return;
+    }
+    const probe = tapeProbe(ev, true);
+    const pick = probe.pick;
+    if (tapeStart) {
+      const point = pick?.onCorner ? tapeCorner(pick) : probe.point;
+      if (!point) return;
+      const distance = tapeStart.distanceTo(point);
+      addShape({
+        id: Math.random().toString(36).substr(2, 9),
+        type: 'measurement',
+        position: [(tapeStart.x + point.x) / 2, (tapeStart.y + point.y) / 2, (tapeStart.z + point.z) / 2],
+        args: {
+          start: [tapeStart.x, tapeStart.y, tapeStart.z],
+          end: [point.x, point.y, point.z],
+          distance,
+        },
+        color: '#FFD700',
+      } as Shape);
+      setMeasurements(`Distance: ${formatValue(distance, unit, 2)}`);
+      setTapeStart(null);
+      setTapeEnd(null);
+      return;
+    }
+    // The body of an edge, a guide or an axis: pull a guide off it.
+    if (pick && !pick.onCorner) {
+      const dir = pick.source.b.clone().sub(pick.source.a).normalize();
+      setTapeGuide({ linePoint: pick.point.clone(), dir, offset: new THREE.Vector3(), label: pick.source.label });
+      setTapeHover(null);
+      setMeasurements(`Move away from the ${pick.source.label.toLowerCase()} and click to place a guide parallel to it, or type a distance and press Enter. Esc cancels.`);
+      return;
+    }
+    // A corner or anywhere else: measure from there.
+    const start = pick?.onCorner ? tapeCorner(pick) : probe.point;
+    if (!start) return;
+    setTapeStart(start);
+    setTapeEnd(start);
+    setMeasurements('Click second point to measure.');
+  };
+
+  const tapeMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  tapeMoveRef.current = (ev) => {
+    if (tapeGuide) {
+      const probe = tapeProbe(ev, false);
+      const offset = guideOffset(tapeGuide.linePoint, tapeGuide.dir, probe.ray, probe.modelPoint);
+      setTapeGuide({ ...tapeGuide, offset });
+      setMeasurements(`Guide: ${formatValue(offset.length(), unit, 2)}   (click to place · type a distance · Esc cancels)`);
+      return;
+    }
+    const probe = tapeProbe(ev, true);
+    const pick = probe.pick;
+    if (tapeStart) {
+      const point = pick?.onCorner ? tapeCorner(pick) : probe.point;
+      if (!point) return;
+      setTapeEnd(point);
+      setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
+      return;
+    }
+    const hover = pick && !pick.onCorner ? pick.source : null;
+    const same = (x: GuideSource | null, y: GuideSource | null) =>
+      x === y || (!!x && !!y && x.a.equals(y.a) && x.b.equals(y.b));
+    if (!same(hover, tapeHover)) setTapeHover(hover);
+    setMeasurements(hover
+      ? `${hover.label}: click, then move away to place a guide parallel to it`
+      : pick?.onCorner ? 'Corner: click to measure from here' : 'Click to start measuring, or click an edge to pull a guide off it');
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'tape') {
+      setTapeGuide(null);
+      setTapeHover(null);
+      setTapeStart(null);
+      setTapeEnd(null);
+      return;
+    }
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => { if (ev.button === 0) down = { x: ev.clientX, y: ev.clientY }; };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      // A press that moved is a drag of the view, not a click.
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      if (isClick) tapeClickRef.current(ev);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (lastMove) tapeMoveRef.current(lastMove);
+      });
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [activeTool, gl]);
+
   typedWantedRef.current = () => {
     if (lastTypedStepRef.current?.tool === activeTool) return true;
+    if (activeTool === 'tape' && tapeGuide) return true;
     if (drawingStart && (activeTool === 'line' || activeTool in RING_TOOLS
       || ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool))) return true;
     if (activeTool === 'wall' && wallVertices.length > 0) return true;
@@ -10087,6 +10276,16 @@ function Scene() {
         return true;
       }
       return false; // the primitives' own typed sizes (below in the keydown handler)
+    }
+
+    // A guide being pulled: place it that far from its line, on the side the pointer is.
+    if (activeTool === 'tape' && tapeGuide) {
+      const len = lengthOrError(typed, true);
+      if (typeof len === 'string') return fail(len);
+      const offset = offsetAtDistance(tapeGuide.offset, tapeGuide.dir, len);
+      if (!offset) return fail('Move the pointer to the side the guide should go, then type the distance.');
+      commitTapeGuide(tapeGuide, offset);
+      return true;
     }
 
     // Between the clicks of a chain: the next point, that far towards the cursor.
@@ -10620,6 +10819,17 @@ function Scene() {
 
         if (!isVisible) return null;
 
+        // Guides hide together (Scene Helpers > Guides).
+        if (isGuideShape(shape) && !guidesVisible) return null;
+        if (shape.type === 'measurement' && (shape.args as any)?.kind === 'guide') {
+          const g = shape.args as GuideArgs;
+          const isSel = selectedId === shape.id;
+          return (
+            <Line key={shape.id} points={[g.start, g.end]} dashed dashSize={0.3} gapSize={0.2}
+              color={isSel ? '#FFFFFF' : (shape.color || '#0e7490')} lineWidth={isSel ? 2.5 : 1.5}
+              onClick={(e: any) => { if (activeTool !== 'select') return; e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }} />
+          );
+        }
         if (shape.type === 'measurement' && (shape.args as any)?.kind === 'protractor') {
           return (
             <ProtractorMeasurement key={shape.id} args={shape.args as ProtractorArgs} selected={selectedId === shape.id}
@@ -10814,12 +11024,6 @@ function Scene() {
           onContextMenu: (e: any) => handleContextMenu(e, shape.id),
           onPointerDown: (e: any) => handleMeshPointerDown(e, shape),
           onPointerMove: (e: any) => {
-            if (activeTool === 'tape' && tapeStart) {
-              const point = e.point.clone();
-              setTapeEnd(point);
-              setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
-              return;
-            }
             if (activeTool === 'arc' && arcStep === 1 && arcStart) {
               const point = e.point.clone();
               setArcEnd(point);
@@ -11949,6 +12153,28 @@ function Scene() {
           </Html>
         </group>
       )}
+      {/* Tape Measure: the edge a click would pull a guide off */}
+      {activeTool === 'tape' && tapeHover && !tapeGuide && !tapeStart && (
+        <Line points={[tapeHover.a.toArray(), tapeHover.b.toArray()]} color="#d946ef" lineWidth={4} depthTest={false} renderOrder={20} raycast={() => null} />
+      )}
+      {/* Tape Measure: the guide being pulled, and how far it is from its line */}
+      {tapeGuide && (() => {
+        const at = tapeGuide.linePoint.clone().add(tapeGuide.offset);
+        const reach = 100;
+        const a = at.clone().addScaledVector(tapeGuide.dir, -reach);
+        const b = at.clone().addScaledVector(tapeGuide.dir, reach);
+        return (
+          <group>
+            <Line points={[a.toArray(), b.toArray()]} color={TAPE_GUIDE_COLOR} lineWidth={1.5} dashed dashSize={0.3} gapSize={0.2} raycast={() => null} />
+            <Line points={[tapeGuide.linePoint.toArray(), at.toArray()]} color="#d946ef" lineWidth={1.5} raycast={() => null} />
+            <Html position={tapeGuide.linePoint.clone().lerp(at, 0.5).toArray()} center occlude={false}>
+              <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border border-cyan-500/50 pointer-events-none">
+                {formatValue(tapeGuide.offset.length(), unit, 2)}
+              </div>
+            </Html>
+          </group>
+        );
+      })()}
       {activeTool === 'arc' && arcStep === 1 && arcStart && arcEnd && (
         <group>
           <Line

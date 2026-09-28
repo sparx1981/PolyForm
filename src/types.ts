@@ -539,6 +539,8 @@ export interface AppState {
   registerWallConversionUndo: (link: WallConversionUndoLink) => void;
   addShape: (shape: Shape) => void;
   removeShape: (id: string) => void;
+  /** Removes every guide line (Tape Measure and Protractor) as one undo step; returns how many. */
+  deleteAllGuides: () => number;
   updateShapeColor: (id: string | string[], color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => void;
   updateShapeDimensions: (id: string, position: [number, number, number], args: any) => void;
   isAIRendererOpen: boolean;
@@ -752,6 +754,9 @@ export interface AppState {
   setPlacingNoteId: (id: string | null) => void;
   allNotesVisible: boolean;
   setAllNotesVisible: (visible: boolean) => void;
+  /** Guide lines (Tape Measure and Protractor) shown and snapped to. */
+  guidesVisible: boolean;
+  setGuidesVisible: (visible: boolean) => void;
   // Camera Defaults
   defaultCameraPosition: [number, number, number];
   setDefaultCameraPosition: (pos: [number, number, number]) => void;
