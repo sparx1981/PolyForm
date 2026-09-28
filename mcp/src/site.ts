@@ -2,7 +2,7 @@ import { decode } from 'fast-png';
 import type { SiteIO } from '../../src/lib/worldSite/site';
 import { decodeTerrariumPixels, terrariumTileUrl } from '../../src/lib/worldSite/terrain';
 import { loadLidar } from '../../src/lib/worldSite/lidar';
-import { OVERPASS_ENDPOINTS } from '../../src/lib/worldSite/fetchSite';
+import { raceOverpass } from '../../src/lib/worldSite/overpassRace';
 
 // The server's way of fetching a World View site's data (the app's is src/lib/worldSite/fetchSite.ts):
 // the same free services, with the height tiles' PNGs decoded here rather than on a canvas.
@@ -35,24 +35,12 @@ export function pngRgba(bytes: Uint8Array): Uint8Array {
   return out;
 }
 
-const OVERPASS = OVERPASS_ENDPOINTS;
 
 export const nodeSiteIO: SiteIO = {
   heightTiles: tiles => Promise.all(tiles.map(async t => {
     const res = await get(terrariumTileUrl(t.z, t.x, t.y));
     return { ...t, heights: decodeTerrariumPixels(pngRgba(new Uint8Array(await res.arrayBuffer()))) };
   })),
-  overpass: async query => {
-    let last: unknown = null;
-    for (const url of OVERPASS) {
-      try {
-        const res = await get(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(query)}` });
-        return await res.json() as { elements?: unknown[] };
-      } catch (err) {
-        last = err;
-      }
-    }
-    throw last instanceof Error ? last : new Error('map service unavailable');
-  },
+  overpass: async query => JSON.parse(await raceOverpass(query, { deadline: 30000, headers: { 'User-Agent': USER_AGENT } })),
   lidar: (origin, size) => loadLidar(origin, size, url => get(url, {}, 60000)),
 };
