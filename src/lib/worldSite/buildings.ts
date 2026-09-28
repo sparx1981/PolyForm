@@ -248,6 +248,22 @@ export function siteBuildingShapes(
   return placed.sort((a, b) => a.dist - b.dist).slice(0, MAX_SITE_BUILDINGS).map(p => p.shape);
 }
 
+/**
+ * A building given a new overall height (metres above its lowest ground). A fitted roof keeps
+ * its shape and pitch and moves up or down with it; the height counts as known from then on.
+ */
+export function withBuildingHeight(data: SiteBuildingData, height: number): SiteBuildingData {
+  const { heightCheck: _check, ...rest } = data;
+  const next: SiteBuildingData = { ...rest, height, heightSource: 'tagged' };
+  if (data.roof) {
+    const d = height - data.roof.ridge;
+    next.roof = { ...data.roof, eave: data.roof.eave + d, ridge: height, planes: data.roof.planes.map(([a, b, c]) => [a, b, c + d]) };
+    if (next.roof.eave <= (data.minHeight ?? 0) + 0.5) delete next.roof;
+  }
+  if (next.minHeight !== undefined && next.minHeight >= (next.roof?.eave ?? height)) next.minHeight = Math.max(0, (next.roof?.eave ?? height) - 0.3);
+  return next;
+}
+
 /** What's kept of each imported building, for ghosts and putting back. */
 export function snapshotBuildings(shapes: Shape[]): SiteBuildingSnapshot[] {
   return shapes

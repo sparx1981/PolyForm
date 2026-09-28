@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { Shape, SiteBuildingData, SiteBuildingSnapshot } from '../types';
+import { pitchedBuildingGeometry } from '../lib/worldSite/roofGeometry';
 
 // Existing buildings on an imported World View site: white-model blocks from their map outline
 // and height (see lib/worldSite/buildings.ts). They are drawn as simply as possible, as a site
@@ -9,6 +10,9 @@ import type { Shape, SiteBuildingData, SiteBuildingSnapshot } from '../types';
 /** A building's solid, in its own frame (origin on its lowest ground, footprint in x/z). */
 export function siteBuildingGeometry(data: SiteBuildingData): THREE.BufferGeometry | null {
   if (data.footprint.length < 3) return null;
+  // A LiDAR-fitted pitched roof; otherwise a flat-topped block.
+  const pitched = pitchedBuildingGeometry(data);
+  if (pitched) return pitched;
   // Drawn in x / -z, then stood up: extruding along +z and turning -90° about x makes +z the height.
   const outline = new THREE.Shape(data.footprint.map(([x, z]) => new THREE.Vector2(x, -z)));
   for (const hole of data.holes ?? []) {
@@ -26,11 +30,11 @@ export function siteBuildingGeometry(data: SiteBuildingData): THREE.BufferGeomet
 const solid = new THREE.MeshStandardMaterial({ color: '#f1f0ec', roughness: 0.9, metalness: 0 });
 const selectedSolid = new THREE.MeshStandardMaterial({ color: '#f1f0ec', roughness: 0.9, metalness: 0, emissive: new THREE.Color('#0063A3'), emissiveIntensity: 0.45 });
 const edges = new THREE.LineBasicMaterial({ color: '#8d8b85', transparent: true, opacity: 0.55 });
-const ghostSolid = new THREE.MeshBasicMaterial({ color: '#7aa7d6', transparent: true, opacity: 0.18, depthWrite: false });
+const ghostSolid = new THREE.MeshBasicMaterial({ color: '#7aa7d6', transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
 const ghostEdges = new THREE.LineBasicMaterial({ color: '#3b82f6', transparent: true, opacity: 0.8 });
 
 function useSiteGeometry(data: SiteBuildingData | undefined) {
-  const key = data ? JSON.stringify([data.footprint, data.holes, data.height, data.minHeight]) : '';
+  const key = data ? JSON.stringify([data.footprint, data.holes, data.height, data.minHeight, data.roof?.planes]) : '';
   const solidGeo = useMemo(() => (data ? siteBuildingGeometry(data) : null), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const edgeGeo = useMemo(() => (solidGeo ? new THREE.EdgesGeometry(solidGeo, 25) : null), [solidGeo]);
   useEffect(() => () => { solidGeo?.dispose(); edgeGeo?.dispose(); }, [solidGeo, edgeGeo]);

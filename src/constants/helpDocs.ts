@@ -185,7 +185,8 @@ export const HELP_DOCS: HelpTopic[] = [
       'Click an existing building to select it. Entity Info shows its height and where that came from: measured, from its number of floors (3 m each), or estimated. Type a new height to correct it.',
       'Delete a building (Delete key or "Remove building"), then draw your new design in its place. Tick "Show removed buildings as ghosts" to see what was there, or "Put back" to restore them.',
       'Existing buildings and the imported ground are left out of the bill of materials and are there from the start of a presentation build-up.',
-      'Data: building outlines © OpenStreetMap contributors (ODbL); ground heights from Terrain Tiles (AWS open data). Heights are about 3 m apart in the UK (finer in some places) and smoothed onto a 1 m grid.'
+      'LiDAR: in England and the Netherlands, the national LiDAR survey gives 1 m ground, each building\'s real height, and a basic roof (flat, lean-to, gable, hipped or pyramid). In the USA it gives 1 m ground only. A building the survey shows as open ground (newer than the survey, or a wrong outline) keeps the map\'s estimate and says "Check height".',
+      'Data: building outlines © OpenStreetMap contributors (ODbL). Ground heights: Terrain Tiles (AWS open data), about 3 m apart, smoothed onto a 1 m grid; LiDAR from the Environment Agency (Open Government Licence), AHN (CC0) and USGS 3DEP (public domain) where available.'
     ]
   },
   {

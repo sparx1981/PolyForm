@@ -10,6 +10,8 @@ import type { Shape, SiteBuildingSnapshot, WorldSiteInfo } from '../../types';
 import { type LatLng, clampSiteSize, localToLatLng, metresPerPixel } from './geo';
 import { type HeightTile, TERRAIN_SOURCE_NAME, gridHeightAt, siteHeights, tileSampler, tilesFor } from './terrain';
 import { BUILDING_SOURCE_NAME, overpassQuery, parseOverpassBuildings, siteBuildingShapes, snapshotBuildings } from './buildings';
+import type { LidarData } from './lidar';
+import { alignmentShift, lidarBuildings, lidarGround, localGrid } from './lidarSite';
 
 export const SITE_GROUND_ID = 'site-ground';
 export const SITE_GROUND_COLOR = '#d9d7d0';
@@ -18,6 +20,8 @@ export const SITE_GROUND_COLOR = '#d9d7d0';
 export interface SiteIO {
   heightTiles: (tiles: { x: number; y: number; z: number }[]) => Promise<HeightTile[]>;
   overpass: (query: string) => Promise<{ elements?: unknown[] }>;
+  /** National LiDAR for the site, if any covers it (see lidar.ts). */
+  lidar?: (origin: LatLng, size: number) => Promise<LidarData | null>;
 }
 
 export interface SiteRequest {
@@ -27,6 +31,8 @@ export interface SiteRequest {
   groundStyle?: WorldSiteInfo['groundStyle'];
   /** Leave the buildings out (ground only). */
   skipBuildings?: boolean;
+  /** Don't look for LiDAR (global heights and map building heights only). */
+  skipLidar?: boolean;
   now?: number;
 }
 
@@ -55,7 +61,30 @@ export async function buildSite(io: SiteIO, req: SiteRequest): Promise<BuiltSite
     terrainSource = 'Flat (heights unavailable)';
   }
   const grid = siteHeights(req.origin, size, heightAt);
-  const terrainData = { gridX: grid.gridX, gridY: grid.gridY, width: size, depth: size, heights: grid.heights };
+
+  // National LiDAR, where there is some: 1 m ground, then real building heights and roofs.
+  let lidar: LidarData | null = null;
+  if (io.lidar && !req.skipLidar) {
+    try {
+      lidar = await io.lidar(req.origin, size);
+    } catch (err) {
+      warnings.push(`LiDAR couldn't be loaded, so ground and building heights are from the global data and the map (${err instanceof Error ? err.message : String(err)}).`);
+    }
+  }
+  let elevation = grid.elevation;
+  let heights = grid.heights;
+  let lidarUsed = false;
+  if (lidar?.dtm) {
+    const coarse = { gridX: grid.gridX, gridY: grid.gridY, width: size, depth: size, heights: grid.heights };
+    const fine = lidarGround(size, grid.gridX, localGrid(req.origin, size + 2, 1, lidar.dtm), (x, z) => gridHeightAt(coarse, x, z));
+    if (fine) {
+      heights = fine.heights;
+      elevation = fine.elevation;
+      terrainSource = lidar.source;
+      lidarUsed = true;
+    }
+  }
+  const terrainData = { gridX: grid.gridX, gridY: grid.gridY, width: size, depth: size, heights };
 
   let buildings: Shape[] = [];
   if (!req.skipBuildings) {
@@ -67,13 +96,29 @@ export async function buildSite(io: SiteIO, req: SiteRequest): Promise<BuiltSite
     }
   }
 
+  // Building heights and roofs from the surface model (only alongside its own ground model, so
+  // both share one datum).
+  let lidarShift: [number, number] | undefined;
+  if (lidar?.dsm && lidarUsed && buildings.length) {
+    const dsm = lidar.dsm;
+    const surface = localGrid(req.origin, size + 60, 0.5, p => dsm(p) - elevation);
+    const ground = (x: number, z: number) => gridHeightAt(terrainData, x, z);
+    lidarShift = alignmentShift(
+      buildings.map(b => b.siteBuildingData!.footprint.map(([x, z]) => [x + b.position[0], z + b.position[2]] as [number, number])),
+      (x, z) => surface(x, z) - ground(x, z) > 2.5,
+    );
+    buildings = lidarBuildings(buildings, surface, ground, lidarShift);
+  }
+
   const site: WorldSiteInfo = {
     lat: req.origin.lat,
     lng: req.origin.lng,
     size,
     ...(req.address ? { address: req.address } : {}),
-    elevation: Math.round(grid.elevation * 100) / 100,
+    elevation: Math.round(elevation * 100) / 100,
     terrainSource,
+    ...(lidarUsed && lidar ? { lidarSource: lidar.source } : {}),
+    ...(lidarShift && (lidarShift[0] || lidarShift[1]) ? { lidarShift } : {}),
     buildingSource: BUILDING_SOURCE_NAME,
     importedAt: req.now ?? Date.now(),
     groundStyle: req.groundStyle ?? 'plain',

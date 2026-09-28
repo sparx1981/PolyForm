@@ -142,6 +142,10 @@ export interface WorldSiteInfo {
   groundStyle: 'plain' | 'satellite';
   /** Draw deleted buildings as ghosts. */
   showRemoved: boolean;
+  /** The LiDAR survey used, if there was one (ground and/or building heights). */
+  lidarSource?: string;
+  /** How far the LiDAR was slid (x, z metres) to line up with the map outlines. */
+  lidarShift?: [number, number];
 }
 
 /** An existing building on an imported site: its outline and how tall it is. */
@@ -155,11 +159,32 @@ export interface SiteBuildingData {
   height: number;
   /** Height of the underside above the shape's position, for canopies and overhangs. */
   minHeight?: number;
-  /** 'tagged' = a measured height from the map; 'levels' = floors x 3 m; 'estimated' = a guess from the building type. */
-  heightSource: 'tagged' | 'levels' | 'estimated';
+  /**
+   * 'lidar' = measured from a LiDAR survey; 'tagged' = a height given on the map (or typed in);
+   * 'levels' = floors x 3 m; 'estimated' = a guess from the building type.
+   */
+  heightSource: 'lidar' | 'tagged' | 'levels' | 'estimated';
+  /** A pitched roof fitted to LiDAR (none: flat top). */
+  roof?: SiteRoof;
+  /** The LiDAR survey shows open ground here (built since, or a wrong outline): height is the map's guess. */
+  heightCheck?: boolean;
   levels?: number;
   /** The map's building type, e.g. "house", "apartments". */
   kind?: string;
+}
+
+/**
+ * A basic roof on an existing building. Its surface is the lowest of its planes at each point:
+ * height = a*x + b*z + c above the building's position, x/z in its own plan frame.
+ */
+export interface SiteRoof {
+  shape: 'flat' | 'skillion' | 'gable' | 'hip' | 'pyramid';
+  planes: [number, number, number][];
+  /** Lowest and highest points of the roof over the outline, above the building's position. */
+  eave: number;
+  ridge: number;
+  /** Roof pitch, degrees. */
+  pitch: number;
 }
 
 /** A building as it was imported (world position), kept for ghosts and restoring. */

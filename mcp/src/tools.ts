@@ -425,7 +425,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('import_site', {
     title: 'Import a real site',
-    description: 'Brings a real place into the model: its ground (an editable terrain, heights relative to the centre, which is y = 0) and its existing buildings as white models from OpenStreetMap, each its own object (type site_building) that can be moved or deleted. Up to 200 m square. Importing again replaces the previous site; the rest of the model is kept. North is -z.',
+    description: 'Brings a real place into the model: its ground (an editable terrain, heights relative to the centre, which is y = 0) and its existing buildings as white models from OpenStreetMap, each its own object (type site_building) that can be moved or deleted. In England and the Netherlands, national LiDAR gives 1 m ground, measured building heights and fitted roofs (buildings the survey shows as open ground are flagged heightCheck); in the USA, 1 m ground. Up to 200 m square. Importing again replaces the previous site; the rest of the model is kept. North is -z.',
     inputSchema: {
       model: modelRef,
       place: z.string().optional().describe('Address, UK postcode, or "lat, lng"'),

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Eye, Mountain, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Building2, Eye, Mountain, RotateCcw, Trash2 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import type { Shape, WorldSiteInfo } from '../types';
 import { cn } from '../lib/utils';
 import { actionLabel } from '../lib/macroRecorder';
 import { browserSiteIO } from '../lib/worldSite/fetchSite';
 import { buildSite, findSiteGround, isSiteShape, replaceSite } from '../lib/worldSite/site';
-import { OSM_ATTRIBUTION, removedBuildings, shapeFromSnapshot } from '../lib/worldSite/buildings';
+import { OSM_ATTRIBUTION, removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../lib/worldSite/geo';
 
 // World View's 3D site: bring in the real ground and existing buildings around the chosen place
@@ -55,6 +55,7 @@ export function WorldSiteSection() {
 
   const buildingCount = shapes.filter(s => s.type === 'site_building').length;
   const removed = removedBuildings(ground?.terrainData?.siteExisting, shapes);
+  const checks = shapes.filter(s => s.siteBuildingData?.heightCheck).length;
 
   const importSite = async () => {
     if (status.busy) return;
@@ -127,6 +128,10 @@ export function WorldSiteSection() {
             {site.address ?? 'Imported site'} · {site.size} m · {buildingCount} building{buildingCount === 1 ? '' : 's'}
             {removed.length ? ` · ${removed.length} removed` : ''} · centre {site.elevation.toFixed(1)} m above sea level
           </p>
+          <p className="text-[10px] text-gray-400 leading-tight">
+            {site.lidarSource ? `LiDAR: ${site.lidarSource}` : `Heights: ${site.terrainSource}; building heights from the map`}
+            {checks > 0 ? ` · ${checks} building${checks === 1 ? '' : 's'} to check` : ''}
+          </p>
           <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
             <input type="checkbox" checked={site.showRemoved}
               onChange={e => change(e.target.checked ? 'Show removed buildings' : 'Hide removed buildings', sdkCall('showExisting', e.target.checked), withSite({ showRemoved: e.target.checked }))} />
@@ -152,7 +157,7 @@ export function WorldSiteSection() {
         </div>
       )}
       <p className="text-[9px] text-gray-400 leading-tight">
-        Buildings {OSM_ATTRIBUTION} (ODbL). Heights: Terrain Tiles, AWS open data. Up to {MAX_SITE_SIZE} m square.
+        Buildings {OSM_ATTRIBUTION} (ODbL). Heights: Terrain Tiles (AWS open data); LiDAR from the Environment Agency (OGL), AHN (CC0) or USGS 3DEP where available. Up to {MAX_SITE_SIZE} m square.
       </p>
     </div>
   );
@@ -161,8 +166,11 @@ export function WorldSiteSection() {
 const toMetres = (v: number, unit: 'm' | 'cm' | 'mm') => (unit === 'mm' ? v / 1000 : unit === 'cm' ? v / 100 : v);
 const fromMetres = (v: number, unit: 'm' | 'cm' | 'mm') => +(unit === 'mm' ? v * 1000 : unit === 'cm' ? v * 100 : v).toFixed(2);
 
+const ROOF_TEXT = { flat: 'Flat', skillion: 'Lean-to', gable: 'Gable', hip: 'Hipped', pyramid: 'Pyramid' } as const;
+
 const SOURCE_TEXT = {
-  tagged: 'Measured height from the map',
+  lidar: 'Measured from the LiDAR survey',
+  tagged: 'Height given on the map (or typed in)',
   levels: 'From its number of floors (3 m each)',
   estimated: 'Estimated from the kind of building',
 } as const;
@@ -178,8 +186,7 @@ export function SiteBuildingFields({ shape }: { shape: Shape }) {
   const applyHeight = () => {
     const h = toMetres(parseFloat(height), unit);
     if (!(h > 0) || Math.abs(h - data.height) < 1e-4) { setHeight(String(fromMetres(data.height, unit))); return; }
-    const next = { ...data, height: h, heightSource: 'tagged' as const };
-    if (data.minHeight !== undefined && data.minHeight >= h) next.minHeight = Math.max(0, h - 0.3);
+    const next = withBuildingHeight(data, h);
     change(`Set height of ${shape.name}`, sdkCall('setBuildingHeight', shape.id, h), prev => prev.map(s => (s.id === shape.id ? { ...s, siteBuildingData: next } : s)));
   };
 
@@ -194,6 +201,17 @@ export function SiteBuildingFields({ shape }: { shape: Shape }) {
         <p className="text-[10px] text-gray-400 leading-tight">
           {SOURCE_TEXT[data.heightSource]}{data.kind && data.kind !== 'yes' ? ` · ${data.kind.replace(/_/g, ' ')}` : ''}
         </p>
+        {data.roof && (
+          <p className="text-[10px] text-gray-500 leading-tight">
+            {ROOF_TEXT[data.roof.shape]} roof, {Math.round(data.roof.pitch)}° · eaves {fromMetres(data.roof.eave, unit)} {unit}
+          </p>
+        )}
+        {data.heightCheck && (
+          <p className="flex items-start gap-1 text-[10px] leading-tight text-amber-600">
+            <AlertTriangle size={11} className="mt-px shrink-0" />
+            Check height: the LiDAR survey shows open ground here, so this is the map's estimate. The building may be newer than the survey, or its outline may be wrong.
+          </p>
+        )}
       </div>
       <button type="button"
         onClick={() => {

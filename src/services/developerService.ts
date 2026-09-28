@@ -16,7 +16,7 @@ import { DEFAULT_SEGMENTS } from '../lib/geometry/curve';
 import type { FaceId, Vec3 } from '../lib/geometry/types';
 import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../lib/worldSite/site';
 import { browserSiteIO, findPlace } from '../lib/worldSite/fetchSite';
-import { removedBuildings, shapeFromSnapshot } from '../lib/worldSite/buildings';
+import { removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
 import { clampSiteSize } from '../lib/worldSite/geo';
 
 export interface RoofConfigDefaults {
@@ -217,6 +217,10 @@ export interface SiteBuildingInfo {
   /** Height of its top above its lowest ground, metres. */
   height: number;
   heightSource: SiteBuildingData['heightSource'];
+  /** A roof fitted from LiDAR; null for a flat top. */
+  roof: { shape: string; pitch: number; eave: number } | null;
+  /** The LiDAR shows open ground here: the height is the map's guess. */
+  heightCheck: boolean;
   kind?: string;
   position: [number, number, number];
 }
@@ -2389,6 +2393,8 @@ export class DeveloperSDK implements SDK {
           name: s.name ?? 'Existing building',
           height: s.siteBuildingData!.height,
           heightSource: s.siteBuildingData!.heightSource,
+          roof: s.siteBuildingData!.roof ? { shape: s.siteBuildingData!.roof.shape, pitch: s.siteBuildingData!.roof.pitch, eave: s.siteBuildingData!.roof.eave } : null,
+          heightCheck: !!s.siteBuildingData!.heightCheck,
           kind: s.siteBuildingData!.kind,
           position: [...s.position] as [number, number, number],
         })),
@@ -2416,9 +2422,7 @@ export class DeveloperSDK implements SDK {
           this.log(`worldView.setBuildingHeight: no existing building ${id}, or a height that isn't above 0.`);
           return false;
         }
-        const data = shape.siteBuildingData!;
-        const next: SiteBuildingData = { ...data, height, heightSource: 'tagged' };
-        if (data.minHeight !== undefined && data.minHeight >= height) next.minHeight = Math.max(0, height - 0.3);
+        const next = withBuildingHeight(shape.siteBuildingData!, height);
         this.setShapes(prev => prev.map(s => (s.id === id ? { ...s, siteBuildingData: next } : s)));
         return true;
       },

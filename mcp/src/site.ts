@@ -1,6 +1,7 @@
 import { decode } from 'fast-png';
 import type { SiteIO } from '../../src/lib/worldSite/site';
 import { decodeTerrariumPixels, terrariumTileUrl } from '../../src/lib/worldSite/terrain';
+import { loadLidar } from '../../src/lib/worldSite/lidar';
 
 // The server's way of fetching a World View site's data (the app's is src/lib/worldSite/fetchSite.ts):
 // the same free services, with the height tiles' PNGs decoded here rather than on a canvas.
@@ -52,4 +53,5 @@ export const nodeSiteIO: SiteIO = {
     }
     throw last instanceof Error ? last : new Error('map service unavailable');
   },
+  lidar: (origin, size) => loadLidar(origin, size, url => get(url, {}, 60000)),
 };

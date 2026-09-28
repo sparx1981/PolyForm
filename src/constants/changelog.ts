@@ -9,6 +9,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
     items: [
       'WorldView 3D Site: bring a real place into your model, up to 200 m square, from an address, UK postcode or coordinates. The ground arrives as an editable terrain with its real slopes, and the existing buildings as white models at their mapped heights (measured where the map has them, else floors x 3 m, else estimated from the kind of building).',
       'Existing buildings can be selected, re-heighted, deleted and put back. Deleted ones can be shown as see-through ghosts for before-and-after views. The ground can be plain or show the satellite photo.',
+      'LiDAR for imported sites: in England (Environment Agency, 1 m) and the Netherlands (AHN, 0.5 m) the ground is now the surveyed ground, and every existing building gets its measured height and a fitted roof (flat, lean-to, gable, hipped or pyramid). The survey is lined up with the map outlines automatically. Buildings the survey shows as open ground are flagged "Check height". In the USA, 3DEP gives 1 m ground. Typing a new height keeps a fitted roof\'s pitch.',
       'The imported site is left out of the bill of materials and presentation build-ups, and is saved with the model. Scripts can do all of this through sdk.worldView (importArea, listBuildings, removeBuilding, restoreBuilding, setBuildingHeight, showExisting, setGroundStyle, getSite), and Claude can through the new import_site connector tool.',
     ],
   },

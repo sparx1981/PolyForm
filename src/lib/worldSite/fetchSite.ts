@@ -5,6 +5,8 @@
  *  - ground heights: Terrain Tiles on AWS open data,
  *  - buildings: OpenStreetMap through the Overpass API (with fallback mirrors, as the public
  *    servers are busy at times),
+ *  - LiDAR (England, the Netherlands, the USA): straight from the national services, or through
+ *    the app's relay (api/lidar-proxy) when a service doesn't answer browsers,
  *  - finding a place: coordinates as typed, UK postcodes through postcodes.io, then Google's
  *    geocoder when there's a key, then OpenStreetMap's Nominatim.
  */
@@ -12,6 +14,7 @@
 import { type LatLng, parseLatLng, ukPostcode } from './geo';
 import { type HeightTile, decodeTerrariumPixels, terrariumTileUrl } from './terrain';
 import type { SiteIO } from './site';
+import { loadLidar } from './lidar';
 
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -67,10 +70,25 @@ async function fetchOverpass(query: string): Promise<{ elements?: unknown[] }> {
   throw lastError instanceof Error ? lastError : new Error('map service unavailable');
 }
 
+/**
+ * A LiDAR request: straight to the service, and if the browser isn't allowed to read the answer
+ * (no CORS) through the app's relay, which fetches it server-side.
+ */
+async function fetchLidar(url: string): Promise<Response> {
+  try {
+    const res = await fetchWithTimeout(url, {}, 45000);
+    if (res.ok) return res;
+  } catch { /* blocked or offline: try the relay */ }
+  const res = await fetchWithTimeout(`/api/lidar-proxy?url=${encodeURIComponent(url)}`, {}, 60000);
+  if (!res.ok) throw new Error(`LiDAR service: HTTP ${res.status}`);
+  return res;
+}
+
 /** The browser's way of getting a site's data. */
 export const browserSiteIO: SiteIO = {
   heightTiles: tiles => Promise.all(tiles.map(fetchHeightTile)),
   overpass: fetchOverpass,
+  lidar: (origin, size) => loadLidar(origin, size, fetchLidar, (source, err) => console.warn(`[WorldView] LiDAR (${source}) failed:`, err)),
 };
 
 export interface Place extends LatLng {
