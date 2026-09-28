@@ -2,7 +2,12 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Shape } from '../types';
 import { RoofSurface, eavePolygon, wallPolygon, roofEdges as edges, facingEdge, type Edge, type V2, type Facing } from './roofSurface';
-import { dormerLayout, dormerMeshes, dormersOf, type Dormer, type DormerLayout } from './dormers';
+import { dormerLayout, dormerMeshes, dormerRoofFacets, dormersOf, type Dormer, type DormerLayout } from './dormers';
+import { create3DRoofTilesGeometry } from './archRoofGenerator';
+import type { RoofTilePaletteItem, RoofTileShape } from './roofTileGenerator';
+
+/** A roof's tile settings (as saved on the roof or its tiles part). */
+interface RoofTileData { shape?: RoofTileShape | 'none'; size?: number; color?: string; randomizeColor?: boolean; colorPalette?: RoofTilePaletteItem[]; seed?: number }
 
 /**
  * Roof extras: gutters and downpipes, a chimney, solar panels and dormers, built to sit on an
@@ -245,7 +250,7 @@ function toShape(roof: Shape, kind: string, name: string, geometry: THREE.Buffer
 }
 
 /** The extra shapes for a roof, from its settings. */
-export function buildRoofExtras(roof: Shape, extras: RoofExtras, wallColor = '#e7e5e4'): Shape[] {
+export function buildRoofExtras(roof: Shape, extras: RoofExtras, wallColor = '#e7e5e4', tiles?: RoofTileData): Shape[] {
   const surface = new RoofSurface(roof);
   const flat = (roof.roofData?.roofType ?? roof.customData?.roofType) === 'parapet';
   const eaves = edges(eavePolygon(roof), surface);
@@ -273,6 +278,33 @@ export function buildRoofExtras(roof: Shape, extras: RoofExtras, wallColor = '#e
       out.push(toShape(roof, 'dormer-walls', `Dormers (${layouts.length}, ${types})`, pick('walls'), { color: wallColor, roughness: 0.85 },
         { count: layouts.length, dormers: layouts.map(l => ({ id: l.dormer.id, type: l.dormer.type, width: l.width, flush: l.dormer.flush })) }));
       out.push(toShape(roof, 'dormer-roofs', 'Dormer roofs', pick('roofs'), { color: roof.color || '#7c2d12', roughness: 0.8 }));
+      out.push(toShape(roof, 'dormer-membrane', 'Flat dormer roof membrane', pick('membrane'), { color: '#2f3336', roughness: 0.9 }));
+      out.push(toShape(roof, 'dormer-trim', 'Flat dormer lead trim', pick('trim'), { color: '#8a9298', roughness: 0.55, metalness: 0.25 }));
+      // Pitched dormers wear the same tiles as the roof.
+      const facets = layouts.flatMap(dormerRoofFacets);
+      if (tiles && tiles.shape && tiles.shape !== 'none' && facets.length) {
+        const g = create3DRoofTilesGeometry({
+          roofType: 'gable', width: 0, depth: 0, ridgeHeight: 0, eaveOverhang: 0,
+          tileShape: tiles.shape as RoofTileShape, tileSize: tiles.size, tileColor: tiles.color,
+          randomizeColor: tiles.randomizeColor, colorPalette: tiles.colorPalette, seed: tiles.seed, facets,
+        });
+        const pos = g.attributes.position;
+        if (pos?.count) {
+          out.push({
+            id: `roofx_dormer-tiles_${roof.id}`, name: 'Dormer roof tiles', type: 'custom',
+            position: [...roof.position] as [number, number, number], rotation: [0, 0, 0], args: [1, 1, 1],
+            color: tiles.color ?? roof.color ?? '#991b1b', roughness: tiles.shape === 'standing-seam' ? 0.45 : 0.75, metalness: tiles.shape === 'standing-seam' ? 0.35 : 0.05,
+            tags: ['architecture', 'roof-part', 'roof-extra', 'roof-extra-dormer-tiles', ...(roof.tags?.filter(t => /^story-\d+$/.test(t)) ?? [])],
+            parentShapeId: roof.id,
+            geometryData: {
+              positions: Array.from(pos.array as Float32Array),
+              normals: Array.from(g.attributes.normal.array as Float32Array),
+              ...(g.attributes.color ? { colors: Array.from(g.attributes.color.array as Float32Array) } : {}),
+            },
+            customData: { roofExtra: 'dormer-tiles' },
+          } as Shape);
+        }
+      }
       out.push(toShape(roof, 'dormer-glass', 'Dormer windows', pick('glass'), { color: '#cfe8f3', opacity: 0.35, roughness: 0.05, metalness: 0.1 }));
       out.push(toShape(roof, 'dormer-lining', 'Dormer linings & ceilings', pick('lining'), { color: '#f4f2ee', roughness: 0.95 }));
     }
@@ -289,7 +321,9 @@ export function withRoofExtras(shapes: Shape[], roofId: string, extras: RoofExtr
   const wallColor = shapes.find(s => s.type === 'wall')?.color;
   const savedRoof: Shape = { ...roof, roofData: { ...(roof.roofData ?? {}), extras } };
   const kept = shapes.filter(s => !(isRoofExtra(s) && s.parentShapeId === roofId)).map(s => (s.id === roofId ? savedRoof : s));
-  return [...kept, ...buildRoofExtras(savedRoof, extras, wallColor && !wallColor.startsWith('http') ? wallColor : undefined)];
+  // The roof's tiles (on the roof once edited, on its tiles part before that), for the dormers.
+  const tiles = (roof.roofTileData ?? shapes.find(s => s.parentShapeId === roofId && s.tags?.includes('roof-tiles'))?.roofTileData) as RoofTileData | undefined;
+  return [...kept, ...buildRoofExtras(savedRoof, extras, wallColor && !wallColor.startsWith('http') ? wallColor : undefined, tiles)];
 }
 
 /** After the roof itself changes: rebuild its extras, if it has any. */

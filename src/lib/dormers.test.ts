@@ -192,4 +192,40 @@ describe('dormer timber and headroom', () => {
     const [room] = floorPlans(gableHouse().shapes)[0].rooms;
     expect(room.usableM2).toBeUndefined();
   });
+
+  it('tiles pitched dormer roofs like the main roof, and gives flat ones a membrane', () => {
+    const w = [
+      wall('n', 0, -4, 10.25, 0), wall('s', 0, 4, 10.25, 0), wall('e', 5, 0, 8.25, Math.PI / 2), wall('w', -5, 0, 8.25, Math.PI / 2),
+    ];
+    const tiled = (tileShape: string) => {
+      const a = buildRoofAssemblyForRoom(w, { roofType: 'gable', pitchAngleDeg: 40, usePitchAngle: true, eaveOverhang: 0.4, tileShape } as any, w)!;
+      return { shapes: [...w, ...a.allShapes], roof: a.roofShape };
+    };
+    const { shapes, roof } = tiled('roman');
+    const three: Dormer[] = [dormer({ id: 'a', x: -2.8 }), dormer({ id: 'b', x: 0, type: 'hipped' }), dormer({ id: 'c', x: 2.8, type: 'flat' })];
+    const out = withRoofExtras(shapes, roof.id, { dormerList: three });
+    const tiles = out.find(s => s.tags?.includes('roof-extra-dormer-tiles'))!;
+    expect(tiles).toBeTruthy();
+    expect(tiles.geometryData.colors?.length).toBe(tiles.geometryData.positions.length);
+    // Tiles only on the two pitched dormers, over their openings (with their eaves).
+    const layouts = layoutsOf(out.find(s => s.id === roof.id)!);
+    const p = tiles.geometryData.positions as number[];
+    const onPitched = new Set<string>();
+    for (let i = 0; i < p.length; i += 9) {
+      const x = (p[i] + p[i + 3] + p[i + 6]) / 3, z = (p[i + 2] + p[i + 5] + p[i + 8]) / 3;
+      const L = layouts.find(l => Math.abs((x - l.origin.x) * l.X.x + (z - l.origin.z) * l.X.z) < l.width / 2 + 0.25
+        && (x - l.origin.x) * l.Z.x + (z - l.origin.z) * l.Z.z > -0.3 && (x - l.origin.x) * l.Z.x + (z - l.origin.z) * l.Z.z < l.depthRoof + 0.3);
+      expect(L).toBeTruthy();
+      onPitched.add(L!.dormer.type);
+    }
+    expect([...onPitched].sort()).toEqual(['gable', 'hipped']);
+    expect(out.some(s => s.tags?.includes('roof-extra-dormer-membrane'))).toBe(true);
+    expect(out.some(s => s.tags?.includes('roof-extra-dormer-trim'))).toBe(true);
+
+    // An untiled roof has untiled dormers; a roof of only pitched dormers has no membrane.
+    const plain = tiled('none');
+    const out2 = withRoofExtras(plain.shapes, plain.roof.id, { dormerList: [dormer()] });
+    expect(out2.some(s => s.tags?.includes('roof-extra-dormer-tiles'))).toBe(false);
+    expect(out2.some(s => s.tags?.includes('roof-extra-dormer-membrane'))).toBe(false);
+  });
 });

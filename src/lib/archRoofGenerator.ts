@@ -2595,6 +2595,8 @@ export function create3DRoofTilesGeometry(options: {
   pitchAngleDeg?: number;
   /** A skeleton roof: tiles are laid on each of its faces and trimmed to the face. */
   skeleton?: RoofModel | null;
+  /** Or any flat roof facets (a dormer's roof): each is tiled and trimmed to its outline. */
+  facets?: TileFacet[];
 }): THREE.BufferGeometry {
   const {
     roofType,
@@ -2615,6 +2617,7 @@ export function create3DRoofTilesGeometry(options: {
     isGeneralPolygon = false,
     pitchAngleDeg = 35,
     skeleton = null,
+    facets,
   } = options;
 
   const geom = new THREE.BufferGeometry();
@@ -2696,9 +2699,38 @@ export function create3DRoofTilesGeometry(options: {
     slopeLen: number;
     hwEave: number;
     getHalfWidthAt: (s: number) => number;
-    /** The facet's outline in (u, s): tiles whose middle falls outside it are dropped. */
+    /** The facet's outline in (u, s): tiles are trimmed to it. */
     clip?: [number, number][];
+    /** Tile pieces whose middle (in plan) fails this are dropped. */
+    keepPlan?: (x: number, z: number) => boolean;
   }
+
+  // A flat facet from its outline (3D, roof-local) and its eave edge a → b.
+  const pushFacet = (slopeIdx: number, a: THREE.Vector3, b: THREE.Vector3, pts: THREE.Vector3[], keepPlan?: (x: number, z: number) => boolean) => {
+    const uDir = b.clone().sub(a).setY(0).normalize();
+    const n = new THREE.Vector3();
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      n.x += (p.y - q.y) * (p.z + q.z); n.y += (p.z - q.z) * (p.x + q.x); n.z += (p.x - q.x) * (p.y + q.y);
+    }
+    n.normalize();
+    if (n.y < 0) n.negate();
+    const vDir = new THREE.Vector3().crossVectors(n, uDir).normalize();
+    if (vDir.y < 0) vDir.negate();
+    const uv = pts.map(p => { const d = p.clone().sub(a); return [d.dot(uDir), d.dot(vDir)] as [number, number]; });
+    const uMin = Math.min(...uv.map(p => p[0])), uMax = Math.max(...uv.map(p => p[0]));
+    const slopeLen = Math.max(...uv.map(p => p[1]));
+    if (uMax - uMin < 0.05 || slopeLen < 0.05) return;
+    // A little wider than the facet, so panels at its edges get laid and then trimmed to it.
+    const uMid = (uMin + uMax) / 2, hwFace = (uMax - uMin) / 2 + 0.6;
+    const o = a.clone().addScaledVector(uDir, uMid);
+    slopes.push({
+      slopeIdx, origin: [o.x, o.y, o.z], uDir: [uDir.x, uDir.y, uDir.z], vDir: [vDir.x, vDir.y, vDir.z], nDir: [n.x, n.y, n.z],
+      slopeLen, hwEave: hwFace, getHalfWidthAt: () => hwFace,
+      clip: uv.map(([pu, ps]): [number, number] => [pu - uMid, ps]),
+      keepPlan,
+    });
+  };
 
   const slopes: SlopeDef[] = [];
 
@@ -2758,32 +2790,14 @@ export function create3DRoofTilesGeometry(options: {
     };
   };
 
-  if (skeleton) {
+  if (facets) {
+    facets.forEach((f, i) => pushFacet(i, f.a, f.b, f.pts, f.keepPlan));
+  } else if (skeleton) {
     // One tile grid per face, square to its eave, covering the face and trimmed to it.
-    const cosP = Math.cos(skeleton.pitch), sinP = Math.sin(skeleton.pitch);
     skeleton.faces.forEach((f, fi) => {
       if (f.gable) return;
-      const { a, u, inward } = edgeFrame(skeleton.eave, f.edge);
-      const pts = facePlan(skeleton, f).map(([x, z]): [number, number] => [
-        (x - a[0]) * u[0] + (z - a[1]) * u[1],
-        ((x - a[0]) * inward[0] + (z - a[1]) * inward[1]) / cosP,
-      ]);
-      const uMin = Math.min(...pts.map(p => p[0])), uMax = Math.max(...pts.map(p => p[0]));
-      const slopeLen = Math.max(...pts.map(p => p[1]));
-      if (uMax - uMin < 0.05 || slopeLen < 0.05) return;
-      // A little wider than the face, so panels at its edges get laid and then trimmed to it.
-      const uMid = (uMin + uMax) / 2, hwFace = (uMax - uMin) / 2 + 0.6;
-      const uDir: [number, number, number] = [u[0], 0, u[1]];
-      const vDir: [number, number, number] = [inward[0] * cosP, sinP, inward[1] * cosP];
-      const nDir: [number, number, number] = [-inward[0] * sinP, cosP, -inward[1] * sinP];
-      slopes.push({
-        slopeIdx: fi,
-        origin: [a[0] + u[0] * uMid, 0, a[1] + u[1] * uMid],
-        uDir, vDir, nDir, slopeLen,
-        hwEave: hwFace,
-        getHalfWidthAt: () => hwFace,
-        clip: pts.map(([pu, ps]): [number, number] => [pu - uMid, ps]),
-      });
+      const { a, b } = edgeFrame(skeleton.eave, f.edge);
+      pushFacet(fi, new THREE.Vector3(a[0], 0, a[1]), new THREE.Vector3(b[0], 0, b[1]), f.verts.map(v => new THREE.Vector3(...skeleton.nodes[v])));
     });
   } else if (isLShape && localWallPoly && localEavePoly && reflexIndex !== undefined) {
     const V = getCanonicalLPolygon(localWallPoly, reflexIndex);
@@ -3500,6 +3514,16 @@ export function create3DRoofTilesGeometry(options: {
           for (let k = 1; k + 1 < poly.length; k++) out.push(poly[0], poly[k], poly[k + 1]);
         }
       }
+      if (slope.keepPlan) {
+        const keep = slope.keepPlan;
+        const kept: Vtx[] = [];
+        for (let k = 0; k < out.length; k += 3) {
+          const cx = (out[k].p[0] + out[k + 1].p[0] + out[k + 2].p[0]) / 3, cz = (out[k].p[2] + out[k + 1].p[2] + out[k + 2].p[2]) / 3;
+          if (keep(cx, cz)) kept.push(out[k], out[k + 1], out[k + 2]);
+        }
+        out.length = 0;
+        for (const v of kept) out.push(v);
+      }
       positions.length = firstVertex * 3; normals.length = firstVertex * 3; uvs.length = firstVertex * 2; colors.length = firstVertex * 3;
       for (const v of out) {
         positions.push(v.p[0], v.p[1], v.p[2]); normals.push(v.n[0], v.n[1], v.n[2]);
@@ -3514,6 +3538,14 @@ export function create3DRoofTilesGeometry(options: {
   geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
   return geom;
+}
+
+/** A flat roof facet to tile: its outline (roof-local) and its eave (lowest, level) edge a → b. */
+export interface TileFacet {
+  a: THREE.Vector3;
+  b: THREE.Vector3;
+  pts: THREE.Vector3[];
+  keepPlan?: (x: number, z: number) => boolean;
 }
 
 export interface RoofAssemblyUpdateParams {
