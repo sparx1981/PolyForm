@@ -36,10 +36,10 @@ const HOVER_STILL_PX = 2;
 // Frosted-glass rim around the look-through disc: a glass tube that bends and blurs the edge of
 // the destination view, catches a highlight along its bevel, and carries a soft white/cyan light
 // that sweeps continuously around it, with a faint halo outside. Drawn in the ring's local plane
-// (the disc has radius 1): glass from 0.9 to 1.12, halo out to 1.24.
-const RING_INNER = 0.9;
-const RING_GLASS = 1.12;
-const RING_OUTER = 1.24;
+// (the disc has radius 1): a narrow bevel and a restrained outer halo.
+const RING_INNER = 0.975;
+const RING_GLASS = 1.045;
+const RING_OUTER = 1.10;
 
 function createGlassRingMaterial(view: THREE.Texture) {
   return new THREE.ShaderMaterial({

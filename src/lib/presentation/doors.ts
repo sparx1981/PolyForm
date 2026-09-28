@@ -116,6 +116,7 @@ interface Leaf {
 }
 
 interface OpenDoor {
+  hiddenOverlays: Map<THREE.Object3D, boolean>;
   mesh: THREE.Mesh;
   original: THREE.BufferGeometry;
   frame: THREE.BufferGeometry;
@@ -190,7 +191,21 @@ export class DoorOpener {
       return { pivot, mesh: leafMesh, kind: l.kind, amount: l.kind === 'swing' ? l.amount * l.sign : l.amount };
     });
     mesh.geometry = frame;
-    return { mesh, original, frame, leaves, t: 0, target: 1 };
+    const door = { mesh, original, frame, leaves, t: 0, target: 1 as const, hiddenOverlays: new Map<THREE.Object3D, boolean>() };
+    this.hideClosedOverlays(door);
+    return door;
+  }
+
+  private hideClosedOverlays(d: OpenDoor) {
+    // Edges and presentation overlays retain the CLOSED geometry when the leaf is split.
+    // Leave hit targets alone; suppress only visual copies, including ones added later.
+    for (const child of d.mesh.children) {
+      if (d.leaves.some(l => l.pivot === child)) continue;
+      const visual = child as THREE.Mesh;
+      if (!(child as THREE.Line).isLine && !(child as any).isLineSegments2 && visual.geometry !== d.original) continue;
+      if (!d.hiddenOverlays.has(child)) d.hiddenOverlays.set(child, child.visible);
+      child.visible = false;
+    }
   }
 
   /** Moves doors towards open or shut; `dt` in seconds. */
@@ -198,6 +213,7 @@ export class DoorOpener {
     for (const [mesh, d] of this.doors) {
       // The viewport rebuilt the door (an edit): forget our split and start again closed.
       if (mesh.geometry !== d.frame) { this.drop(d, false); continue; }
+      this.hideClosedOverlays(d);
       const step = dt / 0.9;
       d.t = d.target === 1 ? Math.min(1, d.t + step) : Math.max(0, d.t - step);
       const e = easeInOutCubic(d.t);
@@ -211,6 +227,7 @@ export class DoorOpener {
   }
 
   private drop(d: OpenDoor, restore: boolean) {
+    for (const [overlay, visible] of d.hiddenOverlays) overlay.visible = visible;
     for (const l of d.leaves) { l.pivot.removeFromParent(); l.mesh.geometry.dispose(); }
     if (restore && d.mesh.geometry === d.frame) d.mesh.geometry = d.original;
     d.frame.dispose();

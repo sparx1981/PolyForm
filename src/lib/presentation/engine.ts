@@ -20,6 +20,9 @@ import type { PresentationState } from './store';
  */
 
 interface Entry {
+  instance?: { mesh: THREE.InstancedMesh; index: number };
+  instanceWrote?: THREE.Matrix4;
+  spread: THREE.Vector3;
   obj: THREE.Object3D;
   key: string;
   category: PresentCategory;
@@ -64,9 +67,16 @@ const DUSK_SKY = new THREE.Color('#1e2a40');
 const SUNSET = new THREE.Color('#ff9a57');
 
 function rootsOf(scene: THREE.Object3D) {
-  const roots: { obj: THREE.Object3D; id: string | null; batched?: boolean }[] = [];
+  const roots: { obj: THREE.Object3D; id: string | null; batched?: boolean; instance?: { mesh: THREE.InstancedMesh; index: number } }[] = [];
   const walk = (o: THREE.Object3D) => {
     if (o.userData?.[AUX]) return;
+    if ((o as THREE.InstancedMesh).isInstancedMesh && o.userData.presentationTimber) {
+      const mesh = o as THREE.InstancedMesh;
+      (o.userData.presentationTimber as string[]).forEach((id, index) => {
+        if (index < mesh.count) roots.push({ obj: mesh, id, instance: { mesh, index } });
+      });
+      return;
+    }
     if (o.userData?.presentationVegetation) { roots.push({ obj: o, id: null, batched: true }); return; }
     if (o.userData?.isShape) { roots.push({ obj: o, id: String(o.userData.id) }); return; }
     if (o.userData?.isKernelGeometry) { roots.push({ obj: o, id: null }); return; }
@@ -132,6 +142,10 @@ export class PresentationEngine {
 
   readonly plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1.2);
   private readonly planes = [this.plane];
+  private readonly emergencePlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+  private readonly emergencePlanes = [this.emergencePlane];
+  private readonly emergenceCutPlanes = [this.emergencePlane, this.plane];
+  private modelBox: THREE.Box3 | null = null;
   // Unlit, so it looks the same whatever the lighting and needs no normals. Front faces only:
   // with both sides, a wall's layers (and the pieces it's cut into round its windows) stack up
   // into grey slabs instead of reading as glass.
@@ -145,7 +159,7 @@ export class PresentationEngine {
   private readonly capMat = new THREE.MeshBasicMaterial({ color: '#2b2f36', side: THREE.BackSide });
   // The architectural model: card-white, matte.
   // A little self-light keeps the card white in shade, like a real model under studio light.
-  private readonly clay = new THREE.MeshStandardMaterial({ color: CARD.clone(), roughness: 0.92, metalness: 0, emissive: CARD.clone(), emissiveIntensity: 0.28 });
+  private readonly clay = new THREE.MeshStandardMaterial({ color: CARD.clone(), roughness: 0.92, metalness: 0, emissive: CARD.clone(), emissiveIntensity: 0.28, transparent: true });
   private readonly groundClay = new THREE.MeshStandardMaterial({ color: '#efeae1', roughness: 1, metalness: 0, emissive: '#efeae1', emissiveIntensity: 0.2 });
   private readonly glass = new THREE.MeshStandardMaterial({
     color: '#dfe8ec', roughness: 0.1, metalness: 0, transparent: true, opacity: 0.28, depthWrite: false,
@@ -172,29 +186,45 @@ export class PresentationEngine {
   }
 
   private collect() {
+    // Measure rest poses, never last frame's exploded/hidden positions.
+    this.restoreTransforms();
     this.scene.updateMatrixWorld();
     const seen = new Set<string>();
-    for (const { obj, id, batched = false } of rootsOf(this.scene)) {
-      const key = obj.uuid;
+    for (const root of rootsOf(this.scene)) {
+      const { id, batched = false, instance } = root;
+      const key = instance ? `${root.obj.uuid}:${id}` : root.obj.uuid;
       seen.add(key);
       const existing = this.entries.get(key);
+      const obj = instance ? (existing?.obj ?? new THREE.Object3D()) : root.obj;
+      if (instance) {
+        const matrix = new THREE.Matrix4();
+        instance.mesh.getMatrixAt(instance.index, matrix);
+        matrix.decompose(obj.position, obj.quaternion, obj.scale);
+        obj.parent = instance.mesh;
+        obj.updateMatrixWorld(true);
+      }
       const shape = id ? this.shapes.get(id) : undefined;
       const category = batched ? 'landscape' : categoryOf(shape);
       const plant = batched || shape?.type === 'tree' || shape?.type === 'bush';
-      const box = category === 'terrain' || batched ? new THREE.Box3() : new THREE.Box3().setFromObject(obj);
+      if (instance && !instance.mesh.geometry.boundingBox) instance.mesh.geometry.computeBoundingBox();
+      const box = instance ? instance.mesh.geometry.boundingBox!.clone().applyMatrix4(obj.matrixWorld)
+        : category === 'terrain' || batched ? new THREE.Box3() : new THREE.Box3().setFromObject(obj);
       const level = box.isEmpty() ? 0 : levelFor(category === 'slab' ? box.max.y : box.min.y, this.elevations);
       const parent = obj.parent ?? this.scene;
       const inv = new THREE.Matrix4().copy(parent.matrixWorld).invert();
       const up = new THREE.Vector3(0, 1, 0).applyMatrix4(inv).sub(new THREE.Vector3(0, 0, 0).applyMatrix4(inv));
       const lift = explodeLift(category, level, Math.max(1, this.elevations.length));
       if (existing) {
-        Object.assign(existing, { category, level, up, box, lift, plant });
+        Object.assign(existing, { category, level, up, box, lift, plant, instance });
+        existing.base.copy(obj.position);
+        existing.baseScale.copy(obj.scale);
+        existing.baseVisible = obj.visible;
         continue;
       }
       // A plant that has just finished loading: redraw the pencil trees at its real size.
       if (plant) this.disposeTreeSketch();
       this.entries.set(key, {
-        obj, key, category, level, up, box, lift, batched, plant,
+        obj, key, category, level, up, box, lift, batched, plant, instance, spread: new THREE.Vector3(),
         base: obj.position.clone(), baseScale: obj.scale.clone(), baseVisible: obj.visible,
         wrotePos: null, wroteScale: null, wroteVisible: null,
       });
@@ -206,6 +236,19 @@ export class PresentationEngine {
       const c = e.box.isEmpty() ? e.obj.position : e.box.getCenter(new THREE.Vector3());
       return { key: e.key, category: e.category, level: e.level, x: c.x, z: c.z };
     }));
+    const building = this.bounds();
+    this.modelBox = building;
+    const centre = building?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
+    for (const e of this.entries.values()) {
+      const timber = ['frame', 'floorFrame', 'roofFrame'].includes(e.category);
+      e.spread.set(0, 0, 0);
+      if (!timber) continue;
+      const c = e.box.getCenter(new THREE.Vector3());
+      // Separate members from each other and from the enclosing wall/roof skin.
+      const world = new THREE.Vector3((c.x - centre.x) * 0.4, e.category === 'roofFrame' ? -0.8 : 0.35, (c.z - centre.z) * 0.4);
+      const inv = new THREE.Matrix4().copy((e.obj.parent ?? this.scene).matrixWorld).invert();
+      e.spread.copy(world.applyMatrix4(inv).sub(new THREE.Vector3().applyMatrix4(inv)));
+    }
   }
 
   /** Extent of the building (not the ground or garden), for the cut sliders. */
@@ -265,8 +308,19 @@ export class PresentationEngine {
     }
 
     // Per-frame looks: shared materials, so no re-assignment needed.
+    // Solid volumes rise through the line drawing, matching the Sketch → Massing reveal.
+    // Pencil edges keep the complete design visible while the white surfaces emerge.
+    const emerging = state.active && look.surfaceOpacity < 1 && this.modelBox;
+    if (emerging) this.emergencePlane.constant = this.modelBox!.min.y + (this.modelBox!.max.y - this.modelBox!.min.y) * look.surfaceOpacity;
+    const clayPlanes = emerging ? (cutOn ? this.emergenceCutPlanes : this.emergencePlanes) : cutOn ? this.planes : null;
+    if (this.clay.clippingPlanes !== clayPlanes) { this.clay.clippingPlanes = clayPlanes; this.clay.needsUpdate = true; }
     this.clay.color.copy(PAPER).lerp(CARD, look.whiteness);
     this.clay.emissive.copy(this.clay.color);
+    this.clay.opacity = look.surfaceOpacity;
+    this.clay.depthWrite = look.surfaceOpacity >= 0.99;
+    for (const [mesh, rec] of this.materials) {
+      if (rec.applied === this.clay) mesh.castShadow = rec.castShadow && look.surfaceOpacity >= 0.99;
+    }
     this.clayOver.color.copy(this.clay.color);
     this.clayOver.emissive.copy(this.clay.color);
     this.clayOver.opacity = look.clayOver;
@@ -287,26 +341,61 @@ export class PresentationEngine {
     const p = buildPose(this.schedule.get(e.key), build, e.category);
     if (e.batched) { p.drop = 0; p.scale = 1; }
     // Fittings and the timber frame show from the Detailed stage on, as before.
-      const byStage = e.plant ? look.plants
-        : e.category === 'other' || e.category === 'floorFrame' || e.category === 'frame' || e.category === 'roofFrame' ? look.furniture : true;
+    const shape = this.shapes.get(e.instance ? this.instanceId(e) : String(e.obj.userData.id));
+    const detail = e.category === 'other' || e.category === 'opening' || e.category === 'floorFrame' || e.category === 'frame' || e.category === 'roofFrame' || shape?.tags?.includes('roof-part');
+    const byStage = e.plant ? look.plants : detail ? look.furniture : true;
     const dy = e.lift * this.explodeNow + p.drop;
     o.position.copy(e.base);
     if (Math.abs(dy) > EPS) o.position.addScaledVector(e.up, dy);
+    o.position.addScaledVector(e.spread, this.explodeNow);
     o.scale.copy(e.baseScale).multiplyScalar(p.scale);
     o.visible = e.baseVisible && p.visible && byStage;
     e.wrotePos = (e.wrotePos ?? new THREE.Vector3()).copy(o.position);
     e.wroteScale = (e.wroteScale ?? new THREE.Vector3()).copy(o.scale);
     e.wroteVisible = o.visible;
+    this.writeInstance(e);
   }
+
+  private writeInstance(e: Entry) {
+    if (!e.instance) return;
+    const { mesh, index } = e.instance;
+    if (mesh.userData.presentationTimber?.[index] !== this.instanceId(e)) return;
+    e.obj.updateMatrix();
+    const matrix = e.obj.matrix;
+    if (!e.obj.visible) matrix.elements.fill(0, 0, 12);
+    mesh.setMatrixAt(index, matrix);
+    // GPU instance matrices use Float32 values. Keep the same precision for equality checks.
+    e.instanceWrote ??= new THREE.Matrix4();
+    mesh.getMatrixAt(index, e.instanceWrote);
+    mesh.instanceMatrix.needsUpdate = true;
+    // Instances travel beyond their rest bounds during build/explode.
+    mesh.boundingBox = null;
+    mesh.boundingSphere = null;
+  }
+
+  private instanceId(e: Entry) { return e.key.slice(e.key.indexOf(':') + 1); }
 
   private restoreEntry(e: Entry) {
     const o = e.obj;
+    if (e.instance && e.instanceWrote) {
+      const current = new THREE.Matrix4();
+      e.instance.mesh.getMatrixAt(e.instance.index, current);
+      if (!current.equals(e.instanceWrote)) {
+        // React has rebuilt/moved this instance since our last frame. Preserve that edit.
+        current.decompose(o.position, o.quaternion, o.scale);
+        e.base.copy(o.position);
+        e.baseScale.copy(o.scale);
+        e.wrotePos = null;
+        e.wroteScale = null;
+      }
+    }
     if (e.wrotePos && o.position.equals(e.wrotePos)) o.position.copy(e.base);
     if (e.wroteScale && o.scale.equals(e.wroteScale)) o.scale.copy(e.baseScale);
     if (e.wroteVisible !== null && o.visible === e.wroteVisible) o.visible = e.baseVisible;
     e.wrotePos = null;
     e.wroteScale = null;
     e.wroteVisible = null;
+    this.writeInstance(e);
   }
 
   private restoreTransforms() {
@@ -342,7 +431,7 @@ export class PresentationEngine {
       const clipped = cut && isCuttable(e.category);
       const modelLook = look.mode === 'clay';
       if (!ghosted && !clipped && look.mode === 'built') continue;
-      meshesOf(e.obj, mesh => {
+      meshesOf(e.instance?.mesh ?? e.obj, mesh => {
         const rec = this.materials.get(mesh);
         if (rec && mesh.material === rec.applied) return;
         // Hit targets and hidden helpers draw nothing; they must stay that way.
