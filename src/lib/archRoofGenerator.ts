@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { buildRoofModel, edgeFrame, facePlan, isCurveCrease, roofHeightAt, type RoofModel } from './roofSkeleton';
+import { extensionRoofModel, type ExtensionKind } from './extensionRoof';
 import { Shape } from '../types';
 import { computeStairHoleForSlab } from './archStairwell';
 import { 
@@ -35,6 +37,13 @@ export interface RoofParams {
   randomizeColor?: boolean;
   colorPalette?: RoofTilePaletteItem[];
   seed?: number;
+  /** Roof this outline (world x/z on the wall centre lines, standing at topY) rather than working one out from the walls. */
+  footprint?: { polygon: [number, number][]; topY: number; wallThickness?: number };
+  /**
+   * A roof over an extension, meeting the house along `abut` (world x/z, the house wall's centre
+   * line). The rise at the house wall is kept to `maxRise` when given (to stay under windows).
+   */
+  extension?: { kind: ExtensionKind; abut: { a: [number, number]; b: [number, number] }; houseWallThickness: number; maxRise?: number };
 }
 
 export interface BuildingEnvelope {
@@ -244,46 +253,54 @@ export function extractRoomFootprintPolygon(
     }
 
     if (segments.length >= 3) {
-      const chained: THREE.Vector2[] = [segments[0].pA, segments[0].pB];
+      // Walk the walls end to end, each one pointing onward.
+      const ordered: { a: THREE.Vector2; b: THREE.Vector2 }[] = [{ a: segments[0].pA, b: segments[0].pB }];
       const used = new Set<number>([0]);
       let cur = segments[0].pB;
-
       while (used.size < segments.length) {
         let bestIdx = -1;
         let bestDist = Infinity;
         let connectAtA = true;
-
         for (let i = 0; i < segments.length; i++) {
           if (used.has(i)) continue;
           const dA = cur.distanceTo(segments[i].pA);
           const dB = cur.distanceTo(segments[i].pB);
-          const minD = Math.min(dA, dB);
-          if (minD < bestDist) {
-            bestDist = minD;
+          if (Math.min(dA, dB) < bestDist) {
+            bestDist = Math.min(dA, dB);
             bestIdx = i;
             connectAtA = dA <= dB;
           }
         }
+        if (bestIdx === -1) break;
+        used.add(bestIdx);
+        const seg = segments[bestIdx];
+        const next = connectAtA ? { a: seg.pA, b: seg.pB } : { a: seg.pB, b: seg.pA };
+        ordered.push(next);
+        cur = next.b;
+      }
 
-        if (bestIdx !== -1) {
-          used.add(bestIdx);
-          const nextSeg = segments[bestIdx];
-          if (connectAtA) {
-            chained.push(nextSeg.pB);
-            cur = nextSeg.pB;
-          } else {
-            chained.push(nextSeg.pA);
-            cur = nextSeg.pA;
-          }
-        } else {
-          break;
-        }
+      // Each corner is where two walls' centre lines meet. (Wall ends overlap at a corner by
+      // about half a wall's thickness, so taking either wall's end point skewed the outline.)
+      const meet = (p: { a: THREE.Vector2; b: THREE.Vector2 }, q: { a: THREE.Vector2; b: THREE.Vector2 }) => {
+        const d1 = p.b.clone().sub(p.a), d2 = q.b.clone().sub(q.a);
+        const den = d1.x * d2.y - d1.y * d2.x;
+        const mid = p.b.clone().add(q.a).multiplyScalar(0.5);
+        if (Math.abs(den) < 0.05 * d1.length() * d2.length()) return mid;
+        const t = ((q.a.x - p.a.x) * d2.y - (q.a.y - p.a.y) * d2.x) / den;
+        const hit = p.a.clone().add(d1.multiplyScalar(t));
+        return hit.distanceTo(mid) > 1.0 ? mid : hit;
+      };
+      const closed = ordered.length >= 3 && ordered[ordered.length - 1].b.distanceTo(ordered[0].a) < 0.8;
+      const chained: THREE.Vector2[] = [];
+      if (closed) {
+        for (let k = 0; k < ordered.length; k++) chained.push(meet(ordered[(k - 1 + ordered.length) % ordered.length], ordered[k]));
+      } else {
+        chained.push(ordered[0].a);
+        for (let k = 1; k < ordered.length; k++) chained.push(meet(ordered[k - 1], ordered[k]));
+        chained.push(ordered[ordered.length - 1].b);
       }
 
       if (chained.length >= 3) {
-        if (chained[chained.length - 1].distanceTo(chained[0]) < 0.6) {
-          chained.pop();
-        }
         worldPoly = chained.map(v => [v.x, v.y]);
       }
     }
@@ -1515,6 +1532,197 @@ export function createGeneralPolygonalRoofSlopesGeometry(
   }, true);
 }
 
+// -------------------------------------------------------------
+// SKELETON ROOFS (any outline: L, T, U, bays, curves, rectangles)
+// -------------------------------------------------------------
+
+/** Roofs built the current way (from the straight skeleton) carry this in `roofData.buildVersion`. */
+export const ROOF_BUILD_VERSION = 2;
+
+/** The skeleton roof over an outline, or null (not loaded, or the outline defeats it). */
+export function skeletonRoofModel(
+  localWallPoly: [number, number][], localEavePoly: [number, number][],
+  opts: { isHip: boolean; pitchDeg?: number; ridgeHeight?: number },
+): RoofModel | null {
+  return buildRoofModel(localEavePoly, localWallPoly, {
+    gable: !opts.isHip,
+    ...(opts.ridgeHeight !== undefined ? { ridgeHeight: opts.ridgeHeight } : { pitchDeg: opts.pitchDeg ?? 35 }),
+  });
+}
+
+/** The roof slopes: each face of the skeleton roof, triangulated. */
+export function createSkeletonRoofSlopesGeometry(m: RoofModel): THREE.BufferGeometry {
+  return createGeometryFromBuilder(addTriangle => {
+    for (const f of m.faces) {
+      if (f.gable) continue;
+      const contour = facePlan(m, f).map(([x, z]) => new THREE.Vector2(x, z));
+      for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, [])) {
+        const p = [f.verts[i], f.verts[j], f.verts[k]].map(v => m.nodes[v] as RoofPoint);
+        const up = (p[1][2] - p[0][2]) * (p[2][0] - p[0][0]) - (p[1][0] - p[0][0]) * (p[2][2] - p[0][2]);
+        if (up >= 0) addTriangle(p[0], p[1], p[2]);
+        else addTriangle(p[0], p[2], p[1]);
+      }
+    }
+  });
+}
+
+/** Where a gable end's wall stands: its eave corners and top, moved in to the wall line. */
+function gableAtWall(m: RoofModel, fi: number) {
+  const f = m.faces[fi];
+  const n = m.eave.length;
+  const { a, b, inward } = edgeFrame(m.eave, f.edge);
+  const w = m.wall[f.edge];
+  const inset = (w[0] - a[0]) * inward[0] + (w[1] - a[1]) * inward[1];
+  const top = m.nodes[f.verts[1]];
+  const move = (p: RoofPoint): RoofPoint => [p[0] + inward[0] * inset, p[1], p[2] + inward[1] * inset];
+  const wallA = m.wall[f.edge], wallB = m.wall[(f.edge + 1) % n];
+  const tan = Math.tan(m.pitch);
+  // Roof height over each wall corner: the slope beside it, which rises from the next eave in.
+  const h = (p: [number, number]) => roofHeightAt(m, p[0], p[1]) ?? 0;
+  return {
+    eaveA: [a[0], 0, a[1]] as RoofPoint, eaveB: [b[0], 0, b[1]] as RoofPoint, top,
+    wallA: [wallA[0], 0, wallA[1]] as RoofPoint, wallB: [wallB[0], 0, wallB[1]] as RoofPoint,
+    wallTop: move(top), hA: h(wallA), hB: h(wallB), inward, inset, tan,
+  };
+}
+
+/** Gable end walls, standing on the wall line up to the roof, as solid pieces (so windows can cut them). */
+export function createSkeletonPedimentGeometry(m: RoofModel, thickness = 0.2): THREE.BufferGeometry | null {
+  const gables = m.faces.map((f, i) => (f.gable ? i : -1)).filter(i => i >= 0);
+  if (!gables.length) return null;
+  return createGeometryFromBuilder((addTriangle, addQuad) => {
+    for (const fi of gables) {
+      const g = gableAtWall(m, fi);
+      const outer: RoofPoint[] = [g.wallA, g.wallB, [g.wallB[0], g.hB, g.wallB[2]], g.wallTop, [g.wallA[0], g.hA, g.wallA[2]]];
+      const inner = outer.map((p): RoofPoint => [p[0] + g.inward[0] * thickness, p[1], p[2] + g.inward[1] * thickness]);
+      const out: RoofPoint = [-g.inward[0], 0, -g.inward[1]];
+      const inn: RoofPoint = [g.inward[0], 0, g.inward[1]];
+      for (let k = 1; k < outer.length - 1; k++) {
+        addTriangle(outer[0], outer[k], outer[k + 1], out);
+        addTriangle(inner[0], inner[k + 1], inner[k], inn);
+      }
+      for (let k = 0; k < outer.length; k++) {
+        const k2 = (k + 1) % outer.length;
+        addQuad(outer[k], inner[k], inner[k2], outer[k2]);
+      }
+    }
+  });
+}
+
+/** Ridge and hip caps (not on a curve's creases, where the roof just turns smoothly). */
+export function createSkeletonRidgeCapGeometry(m: RoofModel): THREE.BufferGeometry {
+  const tan = Math.tan(m.pitch);
+  return createGeometryFromBuilder((_addTriangle, addQuad) => {
+    for (const e of m.edges) {
+      if (e.kind !== 'ridge' && e.kind !== 'hip') continue;
+      if (e.kind === 'hip' && isCurveCrease(m, e)) continue;
+      const a = m.nodes[e.a] as RoofPoint, b = m.nodes[e.b] as RoofPoint;
+      const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      if (len < 0.05) continue;
+      // How fast the roof falls away sideways from this line (just the pitch for a level ridge).
+      const d: [number, number] = [(b[0] - a[0]) / len, (b[2] - a[2]) / len];
+      const fall = e.faces.map(fi => {
+        const inward = edgeFrame(m.eave, m.faces[fi].edge).inward;
+        return tan * Math.abs(d[0] * inward[1] - d[1] * inward[0]);
+      });
+      const [lo, hi] = a[1] <= b[1] ? [a, b] : [b, a];
+      addRidgeSaddle(addQuad, lo, hi, (fall[0] + fall[1]) / 2, 0.14, 0.035, e.kind === 'ridge' ? 0.03 : 0);
+    }
+    // Lead flashing where the roof meets a house wall: up the wall, and down over the tiles.
+    for (const e of m.edges) {
+      if (e.kind !== 'wall') continue;
+      const a = m.nodes[e.a] as RoofPoint, b = m.nodes[e.b] as RoofPoint;
+      const f = m.faces[e.faces[0]];
+      if (f.gable) continue;
+      const inward = edgeFrame(m.eave, f.edge).inward;
+      const cosP = Math.cos(m.pitch), sinP = Math.sin(m.pitch);
+      const down = (p: RoofPoint, d: number): RoofPoint => [p[0] - inward[0] * d * cosP, p[1] - d * sinP + 0.03, p[2] - inward[1] * d * cosP];
+      const up = (p: RoofPoint, h: number): RoofPoint => [p[0] + inward[0] * 0.005, p[1] + h, p[2] + inward[1] * 0.005];
+      addQuad(down(a, 0.15), down(b, 0.15), up(b, 0.03), up(a, 0.03));
+      addQuad(up(a, 0.03), up(b, 0.03), up(b, 0.18), up(a, 0.18));
+    }
+    // Where several curve facets meet at a point, a small round cap.
+    const creases = new Map<number, number>();
+    for (const e of m.edges) {
+      if (e.kind === 'hip' && isCurveCrease(m, e)) for (const v of [e.a, e.b]) if (v >= m.eave.length) creases.set(v, (creases.get(v) ?? 0) + 1);
+    }
+    for (const [v, count] of creases) {
+      if (count < 4) continue;
+      const c = m.nodes[v];
+      const r = 0.22, rim = 12;
+      const ring = Array.from({ length: rim }, (_, k): RoofPoint => {
+        const t = (k / rim) * Math.PI * 2;
+        const x = c[0] + Math.cos(t) * r, z = c[2] + Math.sin(t) * r;
+        return [x, (roofHeightAt(m, x, z) ?? c[1] - r * tan) + 0.02, z];
+      });
+      for (let k = 0; k < rim; k++) {
+        const p = ring[k], q = ring[(k + 1) % rim];
+        addQuad(p, q, [c[0], c[1] + 0.05, c[2]], [c[0], c[1] + 0.05, c[2]]);
+      }
+    }
+  });
+}
+
+/** Fascia boards along the eaves, and bargeboards up each gable's verges. */
+export function createSkeletonFasciaGeometry(m: RoofModel, fasciaHeight = 0.18): THREE.BufferGeometry {
+  return createGeometryFromBuilder((_addTriangle, addQuad) => {
+    const down = (p: RoofPoint): RoofPoint => [p[0], p[1] - fasciaHeight, p[2]];
+    for (const f of m.faces) {
+      const { a, b } = edgeFrame(m.eave, f.edge);
+      const A: RoofPoint = [a[0], 0, a[1]], B: RoofPoint = [b[0], 0, b[1]];
+      if (!f.gable) {
+        addQuad(down(A), down(B), B, A);
+        continue;
+      }
+      const top = m.nodes[f.verts[1]] as RoofPoint;
+      addQuad(down(A), A, top, down(top));
+      addQuad(down(top), top, B, down(B));
+    }
+  });
+}
+
+/** Soffits: flat under the eaves, and sloping under each gable's verges. */
+export function createSkeletonSoffitGeometry(m: RoofModel, fasciaHeight = 0.18): THREE.BufferGeometry {
+  return createGeometryFromBuilder((_addTriangle, addQuad) => {
+    const n = m.eave.length;
+    const y = -fasciaHeight;
+    m.faces.forEach((f, fi) => {
+      const i = f.edge, j = (i + 1) % n;
+      if (!f.gable) {
+        const w1 = m.wall[i], w2 = m.wall[j], e1 = m.eave[i], e2 = m.eave[j];
+        addQuad([w1[0], y, w1[1]], [w2[0], y, w2[1]], [e2[0], y, e2[1]], [e1[0], y, e1[1]], [0, -1, 0]);
+        return;
+      }
+      const g = gableAtWall(m, fi);
+      const under = (p: RoofPoint, back: number): RoofPoint => [p[0] + g.inward[0] * back, p[1] - fasciaHeight, p[2] + g.inward[1] * back];
+      addQuad(under(g.eaveA, 0), under(g.top, 0), under(g.top, g.inset), under(g.eaveA, g.inset));
+      addQuad(under(g.top, 0), under(g.eaveB, 0), under(g.eaveB, g.inset), under(g.top, g.inset));
+    });
+  });
+}
+
+/** Every part of a skeleton roof. */
+export function createSkeletonRoofParts(m: RoofModel, opts: { fasciaHeight: number; wallThickness: number }) {
+  return {
+    slopesGeom: createSkeletonRoofSlopesGeometry(m),
+    pedimentGeom: createSkeletonPedimentGeometry(m, opts.wallThickness),
+    ridgeCapGeom: createSkeletonRidgeCapGeometry(m),
+    fasciaGeom: createSkeletonFasciaGeometry(m, opts.fasciaHeight),
+    soffitGeom: createSkeletonSoffitGeometry(m, opts.fasciaHeight),
+  };
+}
+
+/** The skeleton as saved on the roof (for its timber, and to rebuild it). */
+export function roofModelData(m: RoofModel) {
+  return {
+    eave: m.eave, wall: m.wall,
+    nodes: m.nodes.map(p => p.map(v => +v.toFixed(5)) as [number, number, number]),
+    faces: m.faces.map(f => ({ edge: f.edge, verts: f.verts, gable: f.gable })),
+    edges: m.edges.map(e => ({ a: e.a, b: e.b, kind: e.kind, faces: e.faces })),
+    pitch: m.pitch, ridgeHeight: m.ridgeHeight,
+  };
+}
+
 /** Legacy aliases for backwards compatibility with tests */
 export const createGableRoofGeometry = createDetailedGableRoofGeometry;
 export const createHipRoofGeometry = createDetailedHipRoofGeometry;
@@ -1730,12 +1938,28 @@ function safeExtractGeometryData(geom?: THREE.BufferGeometry | null): {
  * - Soffit Under-eaves Panels
  * Supports Rectangular, L-Shaped, and arbitrary non-rectangular buildings.
  */
+/** A footprint from a given outline (world x/z, wall centre lines), as extractRoomFootprintPolygon gives from walls. */
+function footprintFromOutline(o: { polygon: [number, number][]; topY: number; wallThickness?: number }): RoomFootprint | null {
+  if (o.polygon.length < 3) return null;
+  let a = 0;
+  for (let i = 0; i < o.polygon.length; i++) { const [x1, z1] = o.polygon[i], [x2, z2] = o.polygon[(i + 1) % o.polygon.length]; a += x1 * z2 - x2 * z1; }
+  const polygon = (a < 0 ? [...o.polygon].reverse() : o.polygon).map(p => [p[0], p[1]] as [number, number]);
+  const xs = polygon.map(p => p[0]), zs = polygon.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+  const bounds: BuildingEnvelope = {
+    minX, maxX, minZ, maxZ, width: maxX - minX, depth: maxZ - minZ, centerX: (minX + maxX) / 2, centerZ: (minZ + maxZ) / 2,
+    topY: o.topY, wallThickness: o.wallThickness ?? 0.2,
+  };
+  const isRectangular = polygon.length === 4 && Math.abs(a) / 2 >= 0.92 * bounds.width * bounds.depth;
+  return { polygon, topY: o.topY, centerX: bounds.centerX, centerZ: bounds.centerZ, isRectangular, isLShape: false, bounds, reflexIndex: undefined };
+}
+
 export function buildRoofAssemblyForRoom(
   roomWalls: Shape[],
   params: RoofParams,
   existingShapes: Shape[] = []
 ): RoofAssemblyResult | null {
-  const footprint = extractRoomFootprintPolygon(roomWalls, existingShapes);
+  const footprint = params.footprint ? footprintFromOutline(params.footprint) : extractRoomFootprintPolygon(roomWalls, existingShapes);
   if (!footprint) return null;
 
   const { polygon: worldPoly, isRectangular, isLShape, reflexIndex, centerX, centerZ, topY, bounds } = footprint;
@@ -1756,7 +1980,12 @@ export function buildRoofAssemblyForRoom(
 
   // Convert world polygon to local coordinates centered at (centerX, centerZ)
   const localWallPoly: [number, number][] = worldPoly.map(([x, z]) => [x - centerX, z - centerZ]);
-  const localEavePoly: [number, number][] = offsetPolygon2D(localWallPoly, isParapet ? 0 : eaveOverhang);
+  let localEavePoly: [number, number][] = offsetPolygon2D(localWallPoly, isParapet ? 0 : eaveOverhang);
+  const extension = params.extension && !isParapet ? {
+    kind: params.extension.kind,
+    abut: { a: [params.extension.abut.a[0] - centerX, params.extension.abut.a[1] - centerZ] as [number, number], b: [params.extension.abut.b[0] - centerX, params.extension.abut.b[1] - centerZ] as [number, number] },
+    houseWallThickness: params.extension.houseWallThickness,
+  } : null;
 
   if (isParapet) {
     const parapetH = params.parapetHeight ?? 0.60;
@@ -1859,7 +2088,27 @@ export function buildRoofAssemblyForRoom(
   let fasciaGeom: THREE.BufferGeometry;
   let soffitGeom: THREE.BufferGeometry;
 
-  if (isRectangular) {
+  // Any outline, rectangles included, gets its roof from the straight skeleton; the older
+  // builders below are only used if that isn't available.
+  const rise = params.usePitchAngle && params.pitchAngleDeg ? { pitchDeg: params.pitchAngleDeg } : { ridgeHeight: ridgeH };
+  let model: RoofModel | null;
+  if (extension) {
+    const ext = (r: { pitchDeg?: number; ridgeHeight?: number }) => extensionRoofModel(localWallPoly, extension.abut,
+      { kind: extension.kind, overhang: eaveOverhang, wallThickness: extension.houseWallThickness, ...r });
+    model = ext(rise);
+    // Keep a lean-to's top under the windows above it.
+    const maxRise = params.extension?.maxRise;
+    if (model && maxRise !== undefined && model.ridgeHeight > maxRise) model = ext({ ridgeHeight: maxRise });
+    if (model) localEavePoly = model.eave;
+  } else {
+    model = skeletonRoofModel(localWallPoly, localEavePoly, { isHip, ...rise });
+  }
+  if (model) {
+    ridgeH = model.ridgeHeight;
+    ({ slopesGeom, pedimentGeom, ridgeCapGeom, fasciaGeom, soffitGeom } = createSkeletonRoofParts(model, {
+      fasciaHeight, wallThickness: bounds.wallThickness || 0.20,
+    }));
+  } else if (isRectangular) {
     // Optimized standard rectangular roof
     slopesGeom = isHip
       ? createHipRoofSlopesGeometry(width, depth, ridgeH, eaveOverhang)
@@ -1907,7 +2156,9 @@ export function buildRoofAssemblyForRoom(
   // 1. Main Roof Slopes Shape
   const roofShape: Shape = {
     id: roofId,
-    name: `${isHip ? 'Hip' : 'Gable'} Roof (${width.toFixed(1)}m × ${depth.toFixed(1)}m)`,
+    name: extension
+      ? `${extension.kind === 'lean-to' ? 'Lean-to' : 'Pitched'} Extension Roof (${width.toFixed(1)}m × ${depth.toFixed(1)}m)`
+      : `${isHip ? 'Hip' : 'Gable'} Roof (${width.toFixed(1)}m × ${depth.toFixed(1)}m)`,
     type: 'custom',
     position: [centerX, topY, centerZ],
     rotation: [0, 0, 0],
@@ -1923,11 +2174,14 @@ export function buildRoofAssemblyForRoom(
       reflexIndex,
       ridgeHeight: ridgeH,
       eaveOverhang,
-      pitchAngleDeg: params.pitchAngleDeg,
+      fasciaHeight,
+      pitchAngleDeg: model ? Math.round(THREE.MathUtils.radToDeg(model.pitch) * 10) / 10 : params.pitchAngleDeg,
       localWallPoly,
       localEavePoly,
       worldWallPoly: worldPoly,
       bounds,
+      ...(model ? { skeleton: roofModelData(model), buildVersion: ROOF_BUILD_VERSION } : {}),
+      ...(extension && model ? { extension } : {}),
     },
     customData: {
       roofType: params.roofType,
@@ -1936,7 +2190,7 @@ export function buildRoofAssemblyForRoom(
       reflexIndex,
       ridgeHeight: ridgeH,
       eaveOverhang,
-      pitchAngleDeg: params.pitchAngleDeg,
+      pitchAngleDeg: model ? Math.round(THREE.MathUtils.radToDeg(model.pitch) * 10) / 10 : params.pitchAngleDeg,
       localWallPoly,
       localEavePoly,
       worldWallPoly: worldPoly,
@@ -2042,6 +2296,7 @@ export function buildRoofAssemblyForRoom(
       reflexIndex,
       isGeneralPolygon: !isRectangular && !(isLShape && reflexIndex !== undefined),
       pitchAngleDeg: params.pitchAngleDeg ?? 35,
+      skeleton: model,
     });
 
     if (tilesGeom.attributes.position && tilesGeom.attributes.position.count > 0) {
@@ -2392,6 +2647,10 @@ export function create3DRoofTilesGeometry(options: {
   // instead of falling back to the plain rectangular bounding-box grid.
   isGeneralPolygon?: boolean;
   pitchAngleDeg?: number;
+  /** A skeleton roof: tiles are laid on each of its faces and trimmed to the face. */
+  skeleton?: RoofModel | null;
+  /** Or any flat roof facets (a dormer's roof): each is tiled and trimmed to its outline. */
+  facets?: TileFacet[];
 }): THREE.BufferGeometry {
   const {
     roofType,
@@ -2411,6 +2670,8 @@ export function create3DRoofTilesGeometry(options: {
     reflexIndex,
     isGeneralPolygon = false,
     pitchAngleDeg = 35,
+    skeleton = null,
+    facets,
   } = options;
 
   const geom = new THREE.BufferGeometry();
@@ -2492,7 +2753,38 @@ export function create3DRoofTilesGeometry(options: {
     slopeLen: number;
     hwEave: number;
     getHalfWidthAt: (s: number) => number;
+    /** The facet's outline in (u, s): tiles are trimmed to it. */
+    clip?: [number, number][];
+    /** Tile pieces whose middle (in plan) fails this are dropped. */
+    keepPlan?: (x: number, z: number) => boolean;
   }
+
+  // A flat facet from its outline (3D, roof-local) and its eave edge a → b.
+  const pushFacet = (slopeIdx: number, a: THREE.Vector3, b: THREE.Vector3, pts: THREE.Vector3[], keepPlan?: (x: number, z: number) => boolean) => {
+    const uDir = b.clone().sub(a).setY(0).normalize();
+    const n = new THREE.Vector3();
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      n.x += (p.y - q.y) * (p.z + q.z); n.y += (p.z - q.z) * (p.x + q.x); n.z += (p.x - q.x) * (p.y + q.y);
+    }
+    n.normalize();
+    if (n.y < 0) n.negate();
+    const vDir = new THREE.Vector3().crossVectors(n, uDir).normalize();
+    if (vDir.y < 0) vDir.negate();
+    const uv = pts.map(p => { const d = p.clone().sub(a); return [d.dot(uDir), d.dot(vDir)] as [number, number]; });
+    const uMin = Math.min(...uv.map(p => p[0])), uMax = Math.max(...uv.map(p => p[0]));
+    const slopeLen = Math.max(...uv.map(p => p[1]));
+    if (uMax - uMin < 0.05 || slopeLen < 0.05) return;
+    // A little wider than the facet, so panels at its edges get laid and then trimmed to it.
+    const uMid = (uMin + uMax) / 2, hwFace = (uMax - uMin) / 2 + 0.6;
+    const o = a.clone().addScaledVector(uDir, uMid);
+    slopes.push({
+      slopeIdx, origin: [o.x, o.y, o.z], uDir: [uDir.x, uDir.y, uDir.z], vDir: [vDir.x, vDir.y, vDir.z], nDir: [n.x, n.y, n.z],
+      slopeLen, hwEave: hwFace, getHalfWidthAt: () => hwFace,
+      clip: uv.map(([pu, ps]): [number, number] => [pu - uMid, ps]),
+      keepPlan,
+    });
+  };
 
   const slopes: SlopeDef[] = [];
 
@@ -2552,7 +2844,16 @@ export function create3DRoofTilesGeometry(options: {
     };
   };
 
-  if (isLShape && localWallPoly && localEavePoly && reflexIndex !== undefined) {
+  if (facets) {
+    facets.forEach((f, i) => pushFacet(i, f.a, f.b, f.pts, f.keepPlan));
+  } else if (skeleton) {
+    // One tile grid per face, square to its eave, covering the face and trimmed to it.
+    skeleton.faces.forEach((f, fi) => {
+      if (f.gable) return;
+      const { a, b } = edgeFrame(skeleton.eave, f.edge);
+      pushFacet(fi, new THREE.Vector3(a[0], 0, a[1]), new THREE.Vector3(b[0], 0, b[1]), f.verts.map(v => new THREE.Vector3(...skeleton.nodes[v])));
+    });
+  } else if (isLShape && localWallPoly && localEavePoly && reflexIndex !== undefined) {
     const V = getCanonicalLPolygon(localWallPoly, reflexIndex);
     const E = getCanonicalLPolygon(localEavePoly, reflexIndex);
     const { rJunc, rEnd1, rEnd2 } = computeLRidgeNodes(V, E, ridgeHeight, isHip);
@@ -2734,6 +3035,7 @@ export function create3DRoofTilesGeometry(options: {
   // Build 3D tile models on each slope
   for (const slope of slopes) {
     const { slopeIdx, origin, uDir, vDir, nDir, slopeLen, hwEave, getHalfWidthAt } = slope;
+    const firstVertex = positions.length / 3;
 
     const to3D = (u: number, s: number, zn: number): [number, number, number] => [
       origin[0] + u * uDir[0] + s * vDir[0] + zn * nDir[0],
@@ -3212,6 +3514,76 @@ export function create3DRoofTilesGeometry(options: {
         }
       }
     }
+
+    if (slope.clip) {
+      // Trim the tiles to this facet: pieces wholly on it stay as they are; pieces crossing a
+      // hip, valley or ridge are cut along it (against each triangle of the facet, so facets
+      // that aren't convex work too); the rest go.
+      const clip = slope.clip;
+      const facet = THREE.ShapeUtils.triangulateShape(clip.map(([cu, cs]) => new THREE.Vector2(cu, cs)), [])
+        .map(t => t.map(k => clip[k]))
+        .map(t => ((t[1][0] - t[0][0]) * (t[2][1] - t[0][1]) - (t[1][1] - t[0][1]) * (t[2][0] - t[0][0]) < 0 ? [t[0], t[2], t[1]] : t));
+      const inside = (pu: number, ps: number) => {
+        let hit = false;
+        for (let a = 0, b = clip.length - 1; a < clip.length; b = a++) {
+          const [ua, sa] = clip[a], [ub, sb] = clip[b];
+          if ((sa > ps) !== (sb > ps) && pu < ((ub - ua) * (ps - sa)) / (sb - sa) + ua) hit = !hit;
+        }
+        return hit;
+      };
+      type Vtx = { p: number[]; n: number[]; uv: number[]; c: number[]; u: number; s: number };
+      const vtx = (i: number): Vtx => {
+        const p = positions.slice(i * 3, i * 3 + 3);
+        const dx = p[0] - origin[0], dy = p[1] - origin[1], dz = p[2] - origin[2];
+        return {
+          p, n: normals.slice(i * 3, i * 3 + 3), uv: uvs.slice(i * 2, i * 2 + 2), c: colors.slice(i * 3, i * 3 + 3),
+          u: dx * uDir[0] + dy * uDir[1] + dz * uDir[2], s: dx * vDir[0] + dy * vDir[1] + dz * vDir[2],
+        };
+      };
+      const mix = (a: Vtx, b: Vtx, t: number): Vtx => ({
+        p: a.p.map((v, k) => v + (b.p[k] - v) * t), n: a.n, c: a.c,
+        uv: a.uv.map((v, k) => v + (b.uv[k] - v) * t), u: a.u + (b.u - a.u) * t, s: a.s + (b.s - a.s) * t,
+      });
+      const out: Vtx[] = [];
+      const last = positions.length / 3;
+      for (let t = firstVertex; t < last; t += 3) {
+        const tri = [vtx(t), vtx(t + 1), vtx(t + 2)];
+        // On the eave line itself counts as on the facet.
+        if (tri.every(v => inside(v.u, Math.max(v.s, 1e-4)))) { out.push(...tri); continue; }
+        for (const piece of facet) {
+          let poly = tri;
+          for (let e = 0; e < 3 && poly.length; e++) {
+            const [ua, sa] = piece[e], [ub, sb] = piece[(e + 1) % 3];
+            // Inside is to the left of a → b (the piece is counter-clockwise in u, s).
+            const side = (v: Vtx) => (ub - ua) * (Math.max(v.s, 1e-4) - sa) - (sb - sa) * (v.u - ua);
+            const next: Vtx[] = [];
+            for (let k = 0; k < poly.length; k++) {
+              const cur = poly[k], nxt = poly[(k + 1) % poly.length];
+              const dc = side(cur), dn = side(nxt);
+              if (dc >= 0) next.push(cur);
+              if ((dc >= 0) !== (dn >= 0)) next.push(mix(cur, nxt, dc / (dc - dn)));
+            }
+            poly = next;
+          }
+          for (let k = 1; k + 1 < poly.length; k++) out.push(poly[0], poly[k], poly[k + 1]);
+        }
+      }
+      if (slope.keepPlan) {
+        const keep = slope.keepPlan;
+        const kept: Vtx[] = [];
+        for (let k = 0; k < out.length; k += 3) {
+          const cx = (out[k].p[0] + out[k + 1].p[0] + out[k + 2].p[0]) / 3, cz = (out[k].p[2] + out[k + 1].p[2] + out[k + 2].p[2]) / 3;
+          if (keep(cx, cz)) kept.push(out[k], out[k + 1], out[k + 2]);
+        }
+        out.length = 0;
+        for (const v of kept) out.push(v);
+      }
+      positions.length = firstVertex * 3; normals.length = firstVertex * 3; uvs.length = firstVertex * 2; colors.length = firstVertex * 3;
+      for (const v of out) {
+        positions.push(v.p[0], v.p[1], v.p[2]); normals.push(v.n[0], v.n[1], v.n[2]);
+        uvs.push(v.uv[0], v.uv[1]); colors.push(v.c[0], v.c[1], v.c[2]);
+      }
+    }
   }
 
   geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -3220,6 +3592,14 @@ export function create3DRoofTilesGeometry(options: {
   geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
   return geom;
+}
+
+/** A flat roof facet to tile: its outline (roof-local) and its eave (lowest, level) edge a → b. */
+export interface TileFacet {
+  a: THREE.Vector3;
+  b: THREE.Vector3;
+  pts: THREE.Vector3[];
+  keepPlan?: (x: number, z: number) => boolean;
 }
 
 export interface RoofAssemblyUpdateParams {
@@ -3311,14 +3691,17 @@ export function updateRoofAssembly(
     ? Math.max(0.06, Math.min(0.50, Number(params.fasciaHeight.toFixed(2))))
     : (roofData.fasciaHeight ?? 0.18);
 
-  const tileShape = params.tileShape || targetRoof.roofTileData?.shape || 'none';
-  const tileSize = params.tileSize ?? targetRoof.roofTileData?.size ?? 0.35;
-  const tileColor = params.tileColor || targetRoof.roofTileData?.color || targetRoof.color || '#991b1b';
+  // Tile settings live on the roof once it has been edited, and on its tiles part before that.
+  const tileData = targetRoof.roofTileData
+    ?? allShapes.find(s => s.parentShapeId === roofId && s.tags?.includes('roof-tiles'))?.roofTileData;
+  const tileShape = params.tileShape || tileData?.shape || 'none';
+  const tileSize = params.tileSize ?? tileData?.size ?? 0.35;
+  const tileColor = params.tileColor || tileData?.color || targetRoof.color || '#991b1b';
   const randomizeColor = params.randomizeColor !== undefined 
     ? params.randomizeColor 
-    : Boolean(targetRoof.roofTileData?.randomizeColor);
-  const colorPalette = params.colorPalette || targetRoof.roofTileData?.colorPalette || DEFAULT_ROOF_TILE_SETTINGS.colorPalette;
-  const seed = params.seed ?? targetRoof.roofTileData?.seed ?? 42;
+    : Boolean(tileData?.randomizeColor);
+  const colorPalette = params.colorPalette || tileData?.colorPalette || DEFAULT_ROOF_TILE_SETTINGS.colorPalette;
+  const seed = params.seed ?? tileData?.seed ?? 42;
 
   const span = Math.min(width, depth);
   const pitchRad = Math.atan(clampedHeight / (span / 2 + eaveOverhang));
@@ -3410,7 +3793,7 @@ export function updateRoofAssembly(
     [width / 2, depth / 2],
     [-width / 2, depth / 2]
   ];
-  const localEavePoly = offsetPolygon2D(localWallPoly, eaveOverhang);
+  let localEavePoly = offsetPolygon2D(localWallPoly, eaveOverhang);
 
   let slopesGeom: THREE.BufferGeometry;
   let pedimentGeom: THREE.BufferGeometry | null = null;
@@ -3418,7 +3801,16 @@ export function updateRoofAssembly(
   let fasciaGeom: THREE.BufferGeometry;
   let soffitGeom: THREE.BufferGeometry;
 
-  if (isRectangular || !roofData.localWallPoly) {
+  const ext = roofData.extension as { kind: ExtensionKind; abut: { a: [number, number]; b: [number, number] }; houseWallThickness: number } | undefined;
+  const model = ext
+    ? extensionRoofModel(localWallPoly, ext.abut, { kind: ext.kind, overhang: eaveOverhang, wallThickness: ext.houseWallThickness, ridgeHeight: clampedHeight })
+    : skeletonRoofModel(localWallPoly, localEavePoly, { isHip, ridgeHeight: clampedHeight });
+  if (ext && model) localEavePoly = model.eave;
+  if (model) {
+    ({ slopesGeom, pedimentGeom, ridgeCapGeom, fasciaGeom, soffitGeom } = createSkeletonRoofParts(model, {
+      fasciaHeight, wallThickness: roofData.bounds?.wallThickness || 0.20,
+    }));
+  } else if (isRectangular || !roofData.localWallPoly) {
     slopesGeom = isHip
       ? createHipRoofSlopesGeometry(width, depth, clampedHeight, eaveOverhang)
       : createGableRoofSlopesGeometry(width, depth, clampedHeight, eaveOverhang);
@@ -3477,6 +3869,7 @@ export function updateRoofAssembly(
     reflexIndex,
     isGeneralPolygon: !(isRectangular || !roofData.localWallPoly) && !(isLShape && reflexIndex !== undefined),
     pitchAngleDeg,
+    skeleton: model,
   });
 
   const updatedRoofShape: Shape = {
@@ -3488,15 +3881,17 @@ export function updateRoofAssembly(
       ridgeHeight: clampedHeight,
       eaveOverhang,
       fasciaHeight,
-      pitchAngleDeg,
+      pitchAngleDeg: model ? Math.round(THREE.MathUtils.radToDeg(model.pitch) * 10) / 10 : pitchAngleDeg,
       localEavePoly,
+      skeleton: model ? roofModelData(model) : undefined,
+      buildVersion: model ? ROOF_BUILD_VERSION : roofData.buildVersion,
     },
     customData: {
       ...(targetRoof.customData || {}),
       ridgeHeight: clampedHeight,
       eaveOverhang,
       fasciaHeight,
-      pitchAngleDeg,
+      pitchAngleDeg: model ? Math.round(THREE.MathUtils.radToDeg(model.pitch) * 10) / 10 : pitchAngleDeg,
     },
     roofTileData: {
       shape: tileShape,

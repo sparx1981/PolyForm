@@ -207,6 +207,11 @@ export interface DormerMeshes {
   glass: THREE.BufferGeometry[];
   /** Plastered linings and ceiling, seen from inside the room. */
   lining: THREE.BufferGeometry[];
+  /** A flat dormer's roof covering (a dark membrane) and the lead-grey trim round its edges. */
+  membrane: THREE.BufferGeometry[];
+  trim: THREE.BufferGeometry[];
+  /** Ridge caps over a pitched dormer's tiles. */
+  caps: THREE.BufferGeometry[];
 }
 
 /** Triangles from a list of quads/triangles (each an array of points), both sides drawn by the viewer. */
@@ -236,7 +241,7 @@ export function dormerMeshes(L: DormerLayout): DormerMeshes {
   const tan = Math.tan(L.slope);
   const basis = new THREE.Matrix4().makeBasis(L.X, new THREE.Vector3(0, 1, 0), L.Z);
   const place = (g: THREE.BufferGeometry) => { g.applyMatrix4(basis); g.translate(L.origin.x, L.origin.y, L.origin.z); return g; };
-  const out: DormerMeshes = { walls: [], roofs: [], glass: [], lining: [] };
+  const out: DormerMeshes = { walls: [], roofs: [], glass: [], lining: [], membrane: [], trim: [], caps: [] };
 
   // Front wall round a window.
   const win = { w: w - 0.4, h: hf - 0.45, sill: 0.25 };
@@ -268,7 +273,11 @@ export function dormerMeshes(L: DormerLayout): DormerMeshes {
   const ex = w / 2 + EAVE;
   const back = depthRoof + 0.05;
   if (L.dormer.type === 'flat') {
-    out.roofs.push(box(2 * ex, 0.2, back + EAVE, 0, hf + 0.1, (back - EAVE) / 2));
+    // The deck, its membrane on top, and a lead-grey drip trim round the front and sides.
+    out.roofs.push(box(2 * ex, 0.18, back + EAVE, 0, hf + 0.09, (back - EAVE) / 2));
+    out.membrane.push(box(2 * ex - 0.02, 0.02, back + EAVE - 0.01, 0, hf + 0.19, (back - EAVE) / 2));
+    out.trim.push(box(2 * ex + 0.04, 0.07, 0.03, 0, hf + 0.165, -EAVE - 0.015));
+    for (const sx of [-1, 1]) out.trim.push(box(0.03, 0.07, back + EAVE, sx * (ex + 0.015), hf + 0.165, (back - EAVE) / 2));
   } else {
     const ridgeY = L.top;
     const ridgeFront = L.dormer.type === 'hipped' ? w / 2 : -EAVE;
@@ -277,6 +286,14 @@ export function dormerMeshes(L: DormerLayout): DormerMeshes {
       const rFront = new THREE.Vector3(0, ridgeY, ridgeFront), rBack = new THREE.Vector3(0, ridgeY, back);
       out.roofs.push(place(slab(sx < 0 ? [eFront, rFront, rBack, eBack] : [rFront, eFront, eBack, rBack], 0.06)));
     }
+    // A ridge cap over the tiles, sitting on both slopes.
+    const capW = 0.15, capDrop = capW * Math.tan(DORMER_PITCH), lift = 0.14;
+    const capFront = ridgeFront - (L.dormer.type === 'hipped' ? 0 : 0.02);
+    const cap = (x: number, y: number, z: number) => new THREE.Vector3(x, y + lift, z);
+    for (const sx of [-1, 1]) {
+      out.caps.push(place(surfaces([[cap(0, ridgeY, capFront), cap(sx * capW, ridgeY - capDrop, capFront), cap(sx * capW, ridgeY - capDrop, back), cap(0, ridgeY, back)]])));
+    }
+    out.caps.push(place(surfaces([[cap(-capW, ridgeY - capDrop, capFront), cap(capW, ridgeY - capDrop, capFront), cap(0, ridgeY, capFront)]])));
     if (L.dormer.type === 'hipped') {
       out.roofs.push(place(slab([new THREE.Vector3(-ex, eaveY, -EAVE), new THREE.Vector3(ex, eaveY, -EAVE), new THREE.Vector3(0, ridgeY, ridgeFront)], 0.06)));
     } else {
@@ -286,6 +303,43 @@ export function dormerMeshes(L: DormerLayout): DormerMeshes {
     }
   }
   return out;
+}
+
+/**
+ * A pitched dormer's roof planes, roof-local, for tiling: each with its eave edge a → b. Only
+ * tiles over the dormer (its opening, plus its own eaves) are kept; the rest of each plane runs
+ * on under the main roof. Flat dormers have none (they get a membrane).
+ */
+export function dormerRoofFacets(L: DormerLayout): { a: THREE.Vector3; b: THREE.Vector3; pts: THREE.Vector3[]; keepPlan: (x: number, z: number) => boolean }[] {
+  if (L.dormer.type === 'flat') return [];
+  const w = L.width, hf = L.height;
+  const basis = new THREE.Matrix4().makeBasis(L.X, new THREE.Vector3(0, 1, 0), L.Z).setPosition(L.origin);
+  const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyMatrix4(basis);
+  const eaveY = hf - EAVE * Math.tan(DORMER_PITCH);
+  const ex = w / 2 + EAVE, back = L.depthRoof + 0.05;
+  const ridgeFront = L.dormer.type === 'hipped' ? w / 2 : -EAVE;
+  const keepPlan = (x: number, z: number) => pointInPolygon([x, z], L.footprint) || distToOutline([x, z], L.footprint) < EAVE + 0.05;
+  const out = [-1, 1].map(sx => {
+    const eFront = at(sx * ex, eaveY, -EAVE), eBack = at(sx * ex, eaveY, back);
+    const rFront = at(0, L.top, ridgeFront), rBack = at(0, L.top, back);
+    return { a: eFront, b: eBack, pts: [eFront, eBack, rBack, rFront], keepPlan };
+  });
+  if (L.dormer.type === 'hipped') {
+    const a = at(-ex, eaveY, -EAVE), b = at(ex, eaveY, -EAVE);
+    out.push({ a, b, pts: [a, b, at(0, L.top, ridgeFront)], keepPlan });
+  }
+  return out;
+}
+
+function distToOutline(p: V2, poly: V2[]): number {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz || 1)));
+    best = Math.min(best, Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dz * t));
+  }
+  return best;
 }
 
 // --- Timber ------------------------------------------------------------------------------------
@@ -384,7 +438,7 @@ export function dormerOpenings(layouts: DormerLayout[], ridgeHeight: number) {
     if (p.dBack < p.dRidge - 0.1) header(p.dBack + rw / 2);
   }
 
-  const trimmable = (subTag: string) => (subTag.includes('rafter') || subTag.includes('noggin'))
+  const trimmable = (subTag: string) => (subTag.includes('rafter') || subTag.includes('noggin') || subTag.includes('purlin'))
     && !/hip-rafter|valley-rafter|ridge|dormer|trimmer|header/.test(subTag);
 
   const trim = (a: THREE.Vector3, b: THREE.Vector3, subTag: string): [THREE.Vector3, THREE.Vector3][] => {

@@ -20,6 +20,8 @@ import {
 } from '../types';
 import { WallOpening } from './archGeometry';
 import { dormerFrame, dormerOpenings, layoutsOf, type DormerLayout } from './dormers';
+import { frameSkeletonRoof } from './roofFraming';
+import type { RoofModel } from './roofSkeleton';
 import {
   STRUCTURAL_VALIDATION_RULES,
   DEFAULT_WALL_LAYER_STACK,
@@ -185,6 +187,8 @@ export function generateTimberFraming(
 
   const resultShapes: Shape[] = [];
   const validationMessages: string[] = [];
+  /** Plain-language notes about roof spans and supports, for the person framing the roof. */
+  const roofWarnings: string[] = [];
   const openingAssemblies: OpeningFrameAssembly[] = [];
   const instancedMembers: Record<TimberMemberKind, TimberMemberInstance[]> = {
     stud: [],
@@ -1227,7 +1231,16 @@ export function generateTimberFraming(
         }
       }
 
-      if (isLShape && localWallPoly && localEavePoly && reflexIndex !== undefined) {
+      // Roofs built from the straight skeleton carry it: frame them from it, like a cut roof.
+      const skeleton = roof.roofData?.skeleton as RoofModel | undefined;
+      if (skeleton?.faces?.length && skeleton.nodes?.length) {
+        const framing = frameSkeletonRoof(skeleton, { spacing: studSpacing });
+        for (const m of framing.members) addBeamSegment(m.name, m.a, m.b, m.width, m.depth, m.subTag);
+        for (const w of framing.warnings) {
+          const note = `${roof.name || 'Roof'}: ${w}`;
+          if (!roofWarnings.includes(note)) roofWarnings.push(note);
+        }
+      } else if (isLShape && localWallPoly && localEavePoly && reflexIndex !== undefined) {
         // =========================================================================
         // L-SHAPED CROSS-GABLE & CROSS-HIP ROOF FRAMING
         // =========================================================================
@@ -1919,7 +1932,7 @@ export function generateTimberFraming(
     structural_zone_depth_mm: 140,
     frame_depth_mm: Math.round((configuredMemberDepth || 0.14) * 1000),
     clamped_depths: [],
-    flagged_spans: [],
+    flagged_spans: roofWarnings,
     deferred_clashes: [],
     inserted_intermediate_posts: [],
     bom,
@@ -1934,7 +1947,7 @@ export function generateTimberFraming(
     wallStudCount,
     floorJoistCount,
     roofRafterCount,
-    validationMessages: [...validationMessages, ...validation.errors, ...validation.warnings],
+    validationMessages: [...validationMessages, ...roofWarnings, ...validation.errors, ...validation.warnings],
     openingAssemblies,
     instancedMembers,
     report,
@@ -1985,9 +1998,10 @@ export function generateTimberFrameForRoof(
 export function generateTimberFrameForBuilding(
   allShapes: Shape[],
   options?: TimberFrameOptions & { joistSpacing?: number; rafterSpacing?: number }
-): { members: Shape[]; totalCount: number; wallCount: number; floorCount: number; roofCount: number; openingAssemblies: OpeningFrameAssembly[] } {
+): { members: Shape[]; totalCount: number; wallCount: number; floorCount: number; roofCount: number; openingAssemblies: OpeningFrameAssembly[]; roofWarnings: string[] } {
   const res = generateTimberFraming(allShapes, options);
   return {
+    roofWarnings: res.report?.flagged_spans ?? [],
     members: res.shapes,
     totalCount: res.shapes.length,
     wallCount: res.wallStudCount,

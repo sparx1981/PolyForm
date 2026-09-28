@@ -7,5 +7,6 @@ export default defineConfig({
     // The kernel must be deterministic run to run (§10.3), so no retries
     // masking a flaky result.
     retry: 0,
+    setupFiles: ['src/test/setupRoofSkeleton.ts'],
   },
 });

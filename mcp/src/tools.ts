@@ -7,6 +7,8 @@ import { PLANT_SPECIES_CATALOG } from '../../src/lib/plantLibrary';
 import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { FENCE_STYLES, WOOD_FINISHES } from '../../src/lib/fence/fenceTypes';
 import { buildRoofAssemblyForRoom } from '../../src/lib/archRoofGenerator';
+import { initRoofSkeleton } from '../../src/lib/roofSkeleton';
+import { buildRoofsForBuilding } from '../../src/lib/buildingRoofs';
 import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans, withStoryTags } from './plans';
@@ -337,7 +339,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('add_roof', {
     title: 'Add a roof',
-    description: 'Builds a full roof assembly (covering, gables or hips, ridge cap, fascia, soffits) over walls, as the app\'s roof tool does. It fits the footprint the walls enclose (rectangular, L-shaped or other) and sits on the tallest wall. By default it uses every wall and replaces any existing roof.',
+    description: 'Builds a full roof assembly (covering, gables or hips, ridge cap, fascia, soffits) over walls, as the app\'s roof tool does. It fits the footprint the walls enclose (any shape). By default it roofs the whole building storey by storey (the main roof on the top storey, and a lean-to on any part of a lower storey that sticks out beyond the one above) and replaces any existing roof; with walls given, it roofs just those.',
     inputSchema: {
       model: modelRef,
       roof_type: z.enum(['gable', 'hip', 'parapet']).default('gable'),
@@ -349,11 +351,11 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       replace_existing: z.boolean().default(true),
     },
     annotations: WRITE,
-  }, safe(async (a) => change(a.model, `Added a ${a.roof_type} roof`, shapes => {
+  }, safe(async (a) => (await initRoofSkeleton(), change(a.model, `Added a ${a.roof_type} roof`, shapes => {
     const walls = a.walls ? a.walls.map(ref => findShape(shapes, ref)) : shapes.filter(s => s.type === 'wall');
     if (!walls.length || walls.some(w => w.type !== 'wall')) throw new ToolError('A roof needs walls to sit on; add a room or walls first.');
     const parapet = a.roof_type === 'parapet';
-    const assembly = buildRoofAssemblyForRoom(walls, {
+    const params = {
       roofType: a.roof_type,
       pitchAngleDeg: parapet ? 0 : a.pitch_deg,
       usePitchAngle: !parapet,
@@ -361,11 +363,15 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       color: a.color ?? (parapet ? '#475569' : '#991b1b'),
       fasciaColor: '#ffffff',
       tileShape: a.tiles,
-    }, shapes);
-    if (!assembly) throw new ToolError('Those walls do not enclose a footprint a roof can cover.');
+    };
+    // Over every wall: storey by storey, like the app's roof button (the main roof on the top
+    // storey, and a lean-to on any part of a lower storey that sticks out beyond the one above).
+    const building = a.walls ? null : buildRoofsForBuilding(shapes, params);
+    const made = building?.shapes ?? buildRoofAssemblyForRoom(walls, params, shapes)?.allShapes;
+    if (!made) throw new ToolError('Those walls do not enclose a footprint a roof can cover.');
     const kept = a.replace_existing ? shapes.filter(s => !isRoofShape(s)) : shapes;
-    return { shapes: [...kept, ...assembly.allShapes], made: assembly.allShapes };
-  })));
+    return { shapes: [...kept, ...made], made };
+  }))));
 
   server.registerTool('add_stairs', {
     title: 'Add stairs',

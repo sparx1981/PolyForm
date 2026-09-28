@@ -3,8 +3,12 @@ import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop } from 'lucide-react';
-import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
+import { buildRoofShapeForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
+import { describeRoofs, roofWholeBuilding } from '../lib/buildingRoofs';
+
+/** The roof framing's span and support checks, added to the timber message when there are any. */
+const roofCheckNote = (warnings: string[] = []) => (warnings.length ? ` Roof checks: ${warnings.join(' ')}` : '');
 import { WallJustification } from '../tools/inference/types';
 import { NumberField, SectionLabel, EmptyState, Chip } from './ui/Surface';
 import { DEFAULT_TIMBER_FRAME_PARAMS, STRUCTURAL_VALIDATION_RULES } from '../constants/timberFrameDefaults';
@@ -140,27 +144,20 @@ export const ToolModifierPalette: React.FC = () => {
       setMeasurements('No walls found. Draw a closed room to generate a roof.');
       return;
     }
-    const assembly = buildRoofAssemblyForRoom(wallShapes, { 
-      roofType, 
-      pitchAngleDeg: roofType === 'parapet' ? 0 : roofPitchAngle, 
+    const result = roofWholeBuilding(shapes, {
+      roofType,
+      pitchAngleDeg: roofType === 'parapet' ? 0 : roofPitchAngle,
       usePitchAngle: roofType !== 'parapet',
       eaveOverhang: roofType === 'parapet' ? 0 : roofOverhang,
       fasciaHeight: roofFasciaHeight,
       color: roofType === 'parapet' ? '#475569' : roofColor,
       fasciaColor: fasciaColor
-    }, shapes);
-    if (assembly) {
-      const isExistingRoof = (s: Shape) =>
-        s.type === 'roof' ||
-        s.tags?.some(t => t.startsWith('roof-') || t === 'roof') ||
-        s.name?.toLowerCase().includes('roof') ||
-        s.id.startsWith('roof_') ||
-        s.id.startsWith('tiles_roof_');
-      const nonRoofShapes = shapes.filter(s => !isExistingRoof(s));
-      setShapes([...nonRoofShapes, ...assembly.allShapes]);
+    });
+    if (result) {
+      setShapes(result.shapes);
       commitHistory();
-      if (setSelectedId) setSelectedId(assembly.roofShape.id);
-      setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly.`);
+      if (setSelectedId) setSelectedId(result.mainRoofId);
+      setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly${describeRoofs(result.roofs, result.notes)}`);
     }
   };
 
@@ -182,7 +179,7 @@ export const ToolModifierPalette: React.FC = () => {
       }
       setShapes([...remainingShapes, ...result.members]);
       commitHistory();
-      setMeasurements(`Updated Timber Frame construction (${result.members.length} members: studs, plates, headers, joists & rafters).`);
+      setMeasurements(`Updated Timber Frame construction (${result.members.length} members: studs, plates, headers, joists & rafters).` + roofCheckNote(result.roofWarnings));
       return;
     }
 
@@ -197,7 +194,7 @@ export const ToolModifierPalette: React.FC = () => {
     }
     result.members.forEach(m => addShape(m));
     commitHistory();
-    setMeasurements(`Added Timber Frame construction (${result.members.length} members: walls, floors & roof).`);
+    setMeasurements(`Added Timber Frame construction (${result.members.length} members: walls, floors & roof).` + roofCheckNote(result.roofWarnings));
   };
 
   // On a phone the palette lives in the settings sheet: full width, no dragging, no dock buttons.
@@ -1046,7 +1043,7 @@ export function TimberFrameModifierSection() {
 
     setShapes([...updatedArchShapes, ...result.members]);
     commitHistory();
-    setMeasurements(`Committed Timber Frame construction (${result.members.length} members: studs, plates, headers, sills, joists & rafters).`);
+    setMeasurements(`Committed Timber Frame construction (${result.members.length} members: studs, plates, headers, sills, joists & rafters).` + roofCheckNote(result.roofWarnings));
   };
 
   const handleAddTimberFrame = () => {
@@ -1097,7 +1094,7 @@ export function TimberFrameModifierSection() {
 
       setShapes([...updatedArchShapes, ...result.members]);
       commitHistory();
-      setMeasurements(`Updated Timber Frame construction (${result.members.length} members: studs, plates, headers, joists & rafters).`);
+      setMeasurements(`Updated Timber Frame construction (${result.members.length} members: studs, plates, headers, joists & rafters).` + roofCheckNote(result.roofWarnings));
       return;
     }
 
@@ -1127,7 +1124,7 @@ export function TimberFrameModifierSection() {
 
     setShapes([...updatedShapes, ...result.members]);
     commitHistory();
-    setMeasurements(`Added Timber Frame construction (${result.members.length} members: walls, floors & roof).`);
+    setMeasurements(`Added Timber Frame construction (${result.members.length} members: walls, floors & roof).` + roofCheckNote(result.roofWarnings));
   };
 
   return (

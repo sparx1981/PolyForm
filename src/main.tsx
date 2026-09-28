@@ -2,6 +2,10 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { initRoofSkeleton } from './lib/roofSkeleton';
+
+// Roofs are built from a straight skeleton (WebAssembly): start loading it straight away.
+void initRoofSkeleton();
 
 // Register Service Worker for CORS and Stability
 if ('serviceWorker' in navigator) {

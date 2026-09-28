@@ -33,6 +33,7 @@ import {
 } from '../lib/archRoofGenerator';
 import { Shape } from '../types';
 import { refreshRoofExtras } from '../lib/roofExtras';
+import { describeRoofs, rebuildExtensionRoof, roofWholeBuilding } from '../lib/buildingRoofs';
 import { RoofExtrasSection } from './RoofExtrasSection';
 
 export const RoofModifierSection: React.FC = () => {
@@ -427,7 +428,8 @@ export const RoofModifierSection: React.FC = () => {
       seed: seed,
     });
 
-    const assembly = buildRoofAssemblyForRoom(wallShapes, {
+    // The whole building: the main roof on the top storey and a roof on each extension below.
+    const result = roofWholeBuilding(shapes, {
       roofType,
       ridgeHeight: roofHeight,
       usePitchAngle: false,
@@ -440,38 +442,38 @@ export const RoofModifierSection: React.FC = () => {
       randomizeColor,
       colorPalette,
       seed,
-    }, shapes);
+    });
 
-    if (assembly) {
-      // Apply tile texture and tileData to roof shape
-      assembly.roofShape.textureUrl = tileTextureUrl;
-      assembly.roofShape.roofTileData = {
-        shape: tileShape,
-        size: tileSize,
-        color: tileColor,
-        randomizeColor: randomizeColor,
-        colorPalette: colorPalette,
-        seed: seed,
-      };
-
-      const isExistingRoof = (s: Shape) =>
-        s.type === 'roof' ||
-        s.tags?.some(t => t.startsWith('roof-') || t === 'roof') ||
-        s.name?.toLowerCase().includes('roof') ||
-        s.id.startsWith('roof_') ||
-        s.id.startsWith('tiles_roof_');
-      const nonRoofShapes = shapes.filter(s => !isExistingRoof(s));
-      const finalShapes = [...nonRoofShapes, ...assembly.allShapes];
+    if (result) {
+      const tileData = { shape: tileShape, size: tileSize, color: tileColor, randomizeColor, colorPalette, seed };
+      const roofIds = new Set(result.roofs.filter(r => r.roofData?.roofType !== 'parapet').map(r => r.id));
+      const finalShapes = result.shapes.map(s => (roofIds.has(s.id) ? { ...s, textureUrl: tileTextureUrl, roofTileData: tileData } : s));
       setShapes(finalShapes);
       commitHistory();
-      setSelectedId(assembly.roofShape.id);
+      setSelectedId(result.mainRoofId);
 
       if (hasTimberFraming) {
         commitUpdatedFraming(finalShapes);
       }
 
-      setMeasurements(`Replaced roof with ${roofType === 'hip' ? 'Hip' : roofType === 'parapet' ? 'Parapet' : 'Gable'} Roof (${roofHeight.toFixed(2)}m height).`);
+      setMeasurements(`Replaced roof with ${roofType === 'hip' ? 'Hip' : roofType === 'parapet' ? 'Parapet' : 'Gable'} Roof (${roofHeight.toFixed(2)}m height)${describeRoofs(result.roofs, result.notes)}`);
     }
+  };
+
+  // An extension's roof: switch between lean-to, pitched and flat.
+  const extensionSite = activeRoof?.roofData?.extensionSite;
+  const extensionKind: 'lean-to' | 'pitched' | 'flat' | null = extensionSite
+    ? (activeRoof?.roofData?.roofType === 'parapet' ? 'flat' : activeRoof?.roofData?.extension?.kind ?? 'lean-to')
+    : null;
+  const handleExtensionKind = (kind: 'lean-to' | 'pitched' | 'flat') => {
+    if (!activeRoof || kind === extensionKind) return;
+    const r = rebuildExtensionRoof(shapes, activeRoof.id, kind);
+    if (!r) return;
+    setShapes(r.shapes);
+    commitHistory();
+    setSelectedId(r.roofId);
+    if (hasTimberFraming) commitUpdatedFraming(r.shapes);
+    setMeasurements(`Extension roof is now ${kind === 'lean-to' ? 'a lean-to' : kind === 'pitched' ? 'pitched, meeting the house wall' : 'flat'}.${r.notes.length ? ` ${r.notes.join(' ')}` : ''}`);
   };
 
   return (
@@ -501,6 +503,22 @@ export const RoofModifierSection: React.FC = () => {
           </div>
         )}
       </div>
+
+      {extensionKind && (
+        <div className="space-y-1.5 rounded-lg bg-gray-50/70 dark:bg-gray-800/40 p-2.5 border border-gray-200/70 dark:border-gray-700/60">
+          <div className="font-semibold text-[11px] text-gray-700 dark:text-gray-200">Extension roof</div>
+          <div className="text-[9px] text-gray-400">This roof covers part of a storey that sticks out beyond the one above.</div>
+          <div className="flex gap-1">
+            {([['lean-to', 'Lean-to'], ['pitched', 'Pitched'], ['flat', 'Flat']] as const).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => handleExtensionKind(k)}
+                className={cn('flex-1 px-2 py-1 rounded text-[10px] font-semibold border',
+                  extensionKind === k ? 'bg-polyform-blue text-white border-polyform-blue' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700')}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 1. ROOF OVERALL HEIGHT SLIDER (Realistic Range: 0.60m to 4.50m) */}
       <div className="space-y-1.5 rounded-lg bg-gray-50/70 dark:bg-gray-800/40 p-2.5 border border-gray-200/70 dark:border-gray-700/60">
