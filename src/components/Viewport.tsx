@@ -5319,7 +5319,19 @@ function Scene() {
         return;
       }
 
-      if (key === ' ') {
+      // Keys a tool uses for itself while it's active don't also switch tools: X/Y/Z lock an axis
+      // in Move; Tab/J, T and H set a wall's justification, thickness and height; R and the
+      // arrow/bracket keys turn stairs; and L in Select switches between lasso and box selection
+      // (everywhere else L picks the Line tool).
+      const toolOwnsKey =
+        (activeTool === 'move' && (key === 'x' || key === 'y' || key === 'z'))
+        || (activeTool === 'wall' && (e.key === 'Tab' || key === 'j' || key === 't' || key === 'h'))
+        || ((activeTool === 'staircase' || activeTool === 'step') && key === 'r')
+        || ((activeTool === 'select' || activeTool === 'lasso') && key === 'l');
+
+      if (toolOwnsKey) {
+        // Handled by the tool-specific blocks below.
+      } else if (key === ' ') {
         e.preventDefault();
         setActiveTool('select');
       } else if (key === 'e') {
@@ -5397,8 +5409,8 @@ function Scene() {
         }
       }
 
-      // Toggle between Lasso & Marquee selection when 'L' key is pressed
-      if (key === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // In Select, L switches between lasso and box (marquee) selection
+      if (key === 'l' && (activeTool === 'select' || activeTool === 'lasso') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const target = e.target as HTMLElement;
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
           return;

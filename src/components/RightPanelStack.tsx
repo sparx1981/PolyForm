@@ -5001,6 +5001,10 @@ export default function RightPanelStack() {
               <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px] font-mono">Z</kbd>
             </div>
             <div className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+              <span className="text-gray-500">Wall</span>
+              <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px] font-mono">W</kbd>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
               <span className="text-gray-500">Undo</span>
               <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px] font-mono">Ctrl+Z</kbd>
             </div>

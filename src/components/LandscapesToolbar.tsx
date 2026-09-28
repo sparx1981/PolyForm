@@ -2500,7 +2500,6 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
             icon={<Mountain size={20} />}
             active={activeTool === 'terrain'}
             badge={existingTerrain ? "Active" : undefined}
-            hotkey="T"
             onClick={() => {
               setActiveTool('terrain');
               setActiveTier(prev => prev === 'terrain' && activeTool === 'terrain' ? null : 'terrain');
@@ -2521,7 +2520,6 @@ export default function LandscapesToolbar({ dock = 'left', panelOnly = false }: 
             icon={<Paintbrush size={20} />}
             active={activeTool === 'landscape_sculpt'}
             badge={landscapeSculptSettings.mode.toUpperCase()}
-            hotkey="S"
             onClick={() => {
               setActiveTool('landscape_sculpt');
               setActiveTier(prev => prev === 'sculpt' && activeTool === 'landscape_sculpt' ? null : 'sculpt');

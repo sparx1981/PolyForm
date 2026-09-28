@@ -651,7 +651,12 @@ export class DeveloperSDK implements SDK {
     extraSetters?: any
   ) {
     this.shapes = shapes;
-    this.setShapes = setShapes;
+    // Keep this.shapes in step with every change, so later commands in the same script see what
+    // earlier ones made (a roof on the room just created, a listRoofs after createRoof...).
+    this.setShapes = (next) => {
+      this.shapes = typeof next === 'function' ? next(this.shapes) : next;
+      setShapes(next);
+    };
     this.updateShapeColor = updateShapeColor;
     this.selectedId = selectedId;
     this.extraSetters = extraSetters || {};
@@ -918,7 +923,6 @@ export class DeveloperSDK implements SDK {
           return [];
         }
         this.setShapes(result.shapes);
-        this.shapes = result.shapes;
         this.log(`Roofed the building (${result.roofs.length} roof${result.roofs.length === 1 ? '' : 's'}).`);
         return result.roofs;
       },
@@ -2829,9 +2833,6 @@ export class DeveloperSDK implements SDK {
     this.setShapes(prev => prev.some(s => s.id === newShape.id)
       ? prev.map(s => s.id === newShape.id ? newShape : s)
       : [...prev, newShape]);
-    this.shapes = this.shapes.some(s => s.id === newShape.id)
-      ? this.shapes.map(s => s.id === newShape.id ? newShape : s)
-      : [...this.shapes, newShape];
     this.log(`Added object (${type}) ${newShape.id}.`);
     return newShape;
   }
@@ -2842,7 +2843,6 @@ export class DeveloperSDK implements SDK {
       ? list.map(s => s.id === shape.id ? shape : s)
       : [...list, shape];
     this.setShapes(prev => put(prev));
-    this.shapes = put(this.shapes);
     this.log(`Added ${shape.name ?? shape.type}.`);
     return shape;
   }
@@ -2856,7 +2856,6 @@ export class DeveloperSDK implements SDK {
       return next;
     };
     this.setShapes(prev => prev.map(apply));
-    this.shapes = this.shapes.map(apply);
   }
 
   toggleFloor(enabled: boolean): void {
