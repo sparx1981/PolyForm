@@ -383,6 +383,21 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'follow-me',
+    title: 'Follow Me (sweep a shape along a path)',
+    category: 'tools',
+    content: 'Follow Me sweeps a flat shape along a path, the way SketchUp does: a moulding round a slab, a gutter along an eave, a kerb along a road edge, a handrail, a pipe. The result is ordinary drawn geometry you can push/pull, paint and erase.',
+    steps: [
+      'Draw the path with Line or Arc (or use the edge of a face you already have).',
+      'Draw the profile - the cross-section - as a flat shape standing across the start of the path, facing along it. It does not have to touch the path.',
+      'Pick Follow Me (next to Extrude), then click the profile.',
+      'Hover the path: it lights up pink and the result shows as a blue wireframe. Hovering an edge uses the whole run of lines and arcs joined to it end to end; hovering a face goes all the way round its edge.',
+      'Click to make it. Corners are mitred like a picture frame; along arcs the result is smooth. Undo takes it back in one step.',
+      'If a bend is too tight for the size of the shape, or the shape lies flat along the path, the status bar says so and nothing is made.',
+      'Esc lets go of the profile so you can pick another.'
+    ]
+  },
+  {
     id: 'tape-measure-guides',
     title: 'Tape Measure and Guide Lines',
     category: 'tools',

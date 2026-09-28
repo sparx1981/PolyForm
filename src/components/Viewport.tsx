@@ -140,8 +140,9 @@ import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints, edgePoints } from '../lib/geometry/topology';
 import {
   axisSources, featureEdges, guideCrossings, guideOffset, guideSegment, guideSnapCandidates, isGuideShape,
-  makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource,
+  makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource, type V3,
 } from '../tools/tapeGuides';
+import { commitKernelFollowMe, outlineEdges, pathFromEdge, pathFromFace, previewFollowMe, type FollowMePath } from '../tools/kernelFollowMe';
 import { createPushPullBinding, commitKernelPushPull } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding, commitKernelFaceOffset } from '../tools/kernelFaceOffset';
@@ -155,7 +156,7 @@ import { buildSkp } from '../lib/export/skpExport';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
-import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
+import type { EdgeId, FaceId, Mat4, Vec3 } from '../lib/geometry/types';
 import { SunShadowRig } from './graphics/SunShadowRig';
 import { buildRoomAssembly, groundSlabFootprints, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
 import { InferenceEngine } from '../tools/inference/InferenceEngine';
@@ -1871,6 +1872,9 @@ function Scene() {
     if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
       return;
     }
+    // These tools handle their own clicks on the canvas (see their effects below): a click
+    // on a face there picks a profile, a path or a point, never the selection.
+    if (activeTool === 'followme' || activeTool === 'tape') return;
     if (activeTool === 'combine') {
       // Combine: each click adds (or removes) a whole shape or object, in order; the first leads.
       const group = groupContaining(kernelHost.graph, faceId);
@@ -5049,6 +5053,8 @@ function Scene() {
         setTapeStart(null);
         setTapeEnd(null);
         setTapeGuide(null);
+        setFollowMeProfile(null);
+        setFollowMeHover(null);
         awakenedRefPointsRef.current = [];
         setTypedLength('');
         setLastDrawTarget(null);
@@ -8493,6 +8499,7 @@ function Scene() {
     if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
       return;
     }
+    if (activeTool === 'followme') return; // Follow Me sweeps drawn shapes only; objects aren't picked
     
     const shape = shapes.find(s => s.id === id);
     let subFaceIndex: number | undefined = undefined;
@@ -10218,6 +10225,145 @@ function Scene() {
       frame = requestAnimationFrame(() => {
         frame = 0;
         if (lastMove) tapeMoveRef.current(lastMove);
+      });
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [activeTool, gl]);
+
+  // ---------------------------------------------------------------------------
+  // Follow Me: click the shape, then click the path - an edge (the whole run of lines and
+  // arcs through it) or a face (its outline, all the way round). Hovering the path shows it
+  // and the swept result as a wireframe. See tools/kernelFollowMe.ts.
+  // ---------------------------------------------------------------------------
+  const [followMeProfile, setFollowMeProfile] = useState<FaceId | null>(null);
+  const [followMeHover, setFollowMeHover] = useState<{ path: FollowMePath; pathSegments: [V3, V3][]; preview: [V3, V3][] | null; reason: string | null } | null>(null);
+
+  /** The drawn face and drawn edge under the pointer. */
+  const followMeProbe = (ev: PointerEvent, exclude: ReadonlySet<EdgeId>) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const px = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+    const size = { width: rect.width, height: rect.height };
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2((px.x / size.width) * 2 - 1, -(px.y / size.height) * 2 + 1), camera);
+    let face: FaceId | null = null;
+    for (const hit of rc.intersectObjects(scene.children, true)) {
+      const o = hit.object as THREE.Mesh & { isLine2?: boolean; isLineSegments2?: boolean };
+      if (!o.isMesh || o.isLine2 || o.isLineSegments2 || !o.visible) continue;
+      const mat = o.material as THREE.Material;
+      if (!Array.isArray(o.material) && mat.transparent && mat.opacity === 0) continue; // invisible catch planes
+      if (o.userData.isKernelGeometry && hit.faceIndex != null) face = (o.userData.faceOfTriangle as FaceId[])[hit.faceIndex] ?? null;
+      break;
+    }
+    const ids: EdgeId[] = [];
+    const sources: GuideSource[] = [];
+    for (const [id, edge] of kernelHost.graph.edges) {
+      if (edge.hidden || exclude.has(id)) continue;
+      const [a, b] = edgePoints(kernelHost.graph, edge);
+      ids.push(id);
+      sources.push({ a: new THREE.Vector3(a.x, a.y, a.z), b: new THREE.Vector3(b.x, b.y, b.z), endless: true, label: 'Edge' });
+    }
+    const pick = pickGuideSource(sources, px, camera, size);
+    return { face, edge: pick ? ids[sources.indexOf(pick.source)] ?? null : null };
+  };
+
+  const endFollowMe = () => {
+    setFollowMeProfile(null);
+    setFollowMeHover(null);
+  };
+
+  const followMeClickRef = useRef<(ev: PointerEvent) => void>(() => {});
+  followMeClickRef.current = (ev) => {
+    if (followMeProfile === null || !kernelHost.graph.faces.has(followMeProfile)) {
+      const { face } = followMeProbe(ev, new Set());
+      if (face === null) {
+        setMeasurements('Follow Me: click a flat shape you drew (the profile to sweep).');
+        return;
+      }
+      setFollowMeProfile(face);
+      setSelectedFaceIds([face]);
+      setMeasurements('Follow Me: now click the path - an edge, or a face to go round its edge. Esc to start again.');
+      return;
+    }
+    const hover = followMeHover;
+    if (!hover) {
+      setMeasurements('Follow Me: click an edge or a face to sweep along.');
+      return;
+    }
+    if (hover.reason) {
+      setMeasurements(`Follow Me: ${hover.reason}`);
+      return;
+    }
+    const r = commitKernelFollowMe(kernelHost, followMeProfile, hover.path);
+    if (!r.ok) {
+      setMeasurements(`Follow Me: ${r.reason}`);
+      return;
+    }
+    recordAction(actionLabel('Follow Me'));
+    bumpKernel();
+    setSelectedFaceIds([]);
+    endFollowMe();
+    setMeasurements('Follow Me: done. Click another shape to sweep again.');
+  };
+
+  const followMeMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  followMeMoveRef.current = (ev) => {
+    if (followMeProfile === null || !kernelHost.graph.faces.has(followMeProfile)) return;
+    const outline = outlineEdges(kernelHost.graph, followMeProfile);
+    const { face, edge } = followMeProbe(ev, outline);
+    const path = edge !== null
+      ? pathFromEdge(kernelHost.graph, edge, outline)
+      : face !== null && face !== followMeProfile ? pathFromFace(kernelHost.graph, face) : null;
+    if (!path) {
+      if (followMeHover) setFollowMeHover(null);
+      return;
+    }
+    if (followMeHover && followMeHover.path.edges.length === path.edges.length && followMeHover.path.edges.every((e, i) => e === path.edges[i])) return;
+    const v = (p: { x: number; y: number; z: number }): V3 => [p.x, p.y, p.z];
+    const pathSegments: [V3, V3][] = [];
+    for (let i = 0; i + 1 < path.points.length; i++) pathSegments.push([v(path.points[i]!), v(path.points[i + 1]!)]);
+    if (path.closed && path.points.length > 2) pathSegments.push([v(path.points[path.points.length - 1]!), v(path.points[0]!)]);
+    const preview = previewFollowMe(kernelHost, followMeProfile, path);
+    const ok = 'segments' in preview;
+    setFollowMeHover({
+      path,
+      pathSegments,
+      preview: ok ? preview.segments.map(([a, b]) => [v(a), v(b)] as [V3, V3]) : null,
+      reason: ok ? null : preview.reason,
+    });
+    setMeasurements(ok ? 'Follow Me: click to sweep along this path.' : `Follow Me: ${preview.reason}`);
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'followme') {
+      endFollowMe();
+      return;
+    }
+    setMeasurements('Follow Me: click a flat shape you drew (the profile to sweep), then the path.');
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => { if (ev.button === 0) down = { x: ev.clientX, y: ev.clientY }; };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      if (isClick) followMeClickRef.current(ev);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (lastMove) followMeMoveRef.current(lastMove);
       });
     };
     el.addEventListener('pointerdown', onDown);
@@ -12175,6 +12321,15 @@ function Scene() {
           </group>
         );
       })()}
+      {/* Follow Me: the path under the pointer, and the sweep it would make */}
+      {activeTool === 'followme' && followMeHover && (
+        <group>
+          <Line segments points={followMeHover.pathSegments.flat()} color="#d946ef" lineWidth={4} depthTest={false} renderOrder={20} raycast={() => null} />
+          {followMeHover.preview && followMeHover.preview.length > 0 && (
+            <Line segments points={followMeHover.preview.flat()} color="#0891b2" lineWidth={1.5} depthTest={false} renderOrder={19} raycast={() => null} />
+          )}
+        </group>
+      )}
       {activeTool === 'arc' && arcStep === 1 && arcStart && arcEnd && (
         <group>
           <Line

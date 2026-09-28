@@ -18,7 +18,7 @@ import {
   Move, 
   RotateCw, 
   Maximize, 
-  ArrowUpFromLine, 
+  ArrowUpFromLine, Route, 
   Search,
   MoreHorizontal,
   Sparkles,
@@ -743,6 +743,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <div className={horizontal ? "h-8 w-px bg-gray-200 mx-1" : "w-8 h-px bg-gray-200 my-1"} />
       
       <ToolButton tool="pushpull" icon={<ArrowUpFromLine size={20} />} label="Extrude (P)" />
+      <ToolButton tool="followme" icon={<Route size={20} />} label="Follow Me" />
       <ToolButton tool="offset" icon={<Layers size={20} />} label="Offset" />
       <ToolButton tool="combine" icon={<Combine size={20} />} label="Combine: merge, subtract or intersect flat shapes or 3D objects" />
       <div 

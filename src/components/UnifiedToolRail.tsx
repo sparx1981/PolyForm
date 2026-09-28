@@ -26,7 +26,7 @@ import {
   Move, 
   RotateCw, 
   Maximize, 
-  ArrowUpFromLine, 
+  ArrowUpFromLine, Route, 
   Search,
   Orbit,
   Hand,
@@ -772,6 +772,16 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'pushpull',
           onClick: (s) => s.setActiveTool('pushpull'),
           keywords: ['push', 'pull', 'extrude', 'extrude face', 'elevation']
+        },
+        {
+          id: 'followme',
+          tool: 'followme',
+          label: 'Follow Me',
+          subtitle: 'Sweep a flat shape along a path: mouldings, gutters, kerbs, handrails, pipes',
+          icon: <Route size={19} />,
+          isActive: (s) => s.activeTool === 'followme',
+          onClick: (s) => s.setActiveTool('followme'),
+          keywords: ['follow me', 'sweep', 'path', 'moulding', 'gutter', 'kerb', 'handrail', 'pipe', 'lathe']
         },
         {
           id: 'offset',
