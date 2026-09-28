@@ -16,10 +16,12 @@ import { type HeightTile, decodeTerrariumPixels, terrariumTileUrl } from './terr
 import type { SiteIO } from './site';
 import { loadLidar } from './lidar';
 
-const OVERPASS_ENDPOINTS = [
+/** Public Overpass servers, tried in turn (the main one is often busy). */
+export const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
 ];
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 30000): Promise<Response> {
@@ -52,22 +54,35 @@ async function fetchHeightTile(t: { x: number; y: number; z: number }): Promise<
   return { ...t, heights: decodeTerrariumPixels(await imagePixels(await res.blob())) };
 }
 
+/** An Overpass answer, if it is one (a busy server answers with an HTML or XML error page). */
+async function overpassJson(res: Response): Promise<{ elements?: unknown[] }> {
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json().catch(() => null);
+  if (!json || !Array.isArray(json.elements)) throw new Error('not a map answer');
+  return json;
+}
+
+/**
+ * Buildings from OpenStreetMap: through the app's relay first (api/overpass, which tries each
+ * public server in turn from the server side, where a busy server's missing CORS header doesn't
+ * matter, and caches the answer), then straight to each server from the browser.
+ */
 async function fetchOverpass(query: string): Promise<{ elements?: unknown[] }> {
-  let lastError: unknown = null;
+  const errors: string[] = [];
+  try {
+    return await overpassJson(await fetchWithTimeout(`/api/overpass?data=${encodeURIComponent(query)}`, {}, 60000));
+  } catch (err) {
+    errors.push(`relay: ${err instanceof Error ? err.message : String(err)}`);
+  }
   for (const url of OVERPASS_ENDPOINTS) {
     try {
-      const res = await fetchWithTimeout(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      return await overpassJson(await fetchWithTimeout(`${url}?data=${encodeURIComponent(query)}`, {}, 20000));
     } catch (err) {
-      lastError = err;
+      errors.push(`${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  throw lastError instanceof Error ? lastError : new Error('map service unavailable');
+  console.warn('[WorldView] OpenStreetMap buildings failed:', errors);
+  throw new Error('the OpenStreetMap servers are busy or unreachable');
 }
 
 /**

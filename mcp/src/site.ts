@@ -2,6 +2,7 @@ import { decode } from 'fast-png';
 import type { SiteIO } from '../../src/lib/worldSite/site';
 import { decodeTerrariumPixels, terrariumTileUrl } from '../../src/lib/worldSite/terrain';
 import { loadLidar } from '../../src/lib/worldSite/lidar';
+import { OVERPASS_ENDPOINTS } from '../../src/lib/worldSite/fetchSite';
 
 // The server's way of fetching a World View site's data (the app's is src/lib/worldSite/fetchSite.ts):
 // the same free services, with the height tiles' PNGs decoded here rather than on a canvas.
@@ -34,7 +35,7 @@ export function pngRgba(bytes: Uint8Array): Uint8Array {
   return out;
 }
 
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+const OVERPASS = OVERPASS_ENDPOINTS;
 
 export const nodeSiteIO: SiteIO = {
   heightTiles: tiles => Promise.all(tiles.map(async t => {
