@@ -5,6 +5,7 @@ import { Line } from '@react-three/drei';
 import type { Shape } from '../../types';
 import { useApp } from '../../AppContext';
 import { groundUnderRay } from '../../lib/terrain/groundRay';
+import { acceptsTypedKey, formatTyped, parseTypedLength } from '../../tools/typedEntry';
 import { arcPoint, bulgeThrough, denseOutline, stepAnchor, type Vec2 } from '../../lib/patio/patioGeometry';
 import type { PatioData } from '../../lib/patio/patioTypes';
 import { wallFaces, type WallFace } from '../../lib/patio/patioPlacement';
@@ -91,7 +92,7 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
   paused: boolean;
 }) {
   const { gl, camera, raycaster } = useThree();
-  const { shapes, setMeasurements } = useApp();
+  const { shapes, setMeasurements, unit } = useApp();
   const faces = useMemo(() => wallFaces(shapes), [shapes]);
   // Buildings, fences and other patios the outline can close against.
   const targets = useMemo(() => buildCloseTargets(shapes, groundAt), [shapes, groundAt]);
@@ -164,8 +165,10 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
   // The listeners below are attached once. They read everything that changes between renders
   // through this ref: the app's callbacks are recreated on every app render, and re-attaching
   // the listeners between a press and its release used to lose the click entirely.
-  const latest = useRef({ groundPoint, onCommit, faces, paused, targets });
-  latest.current = { groundPoint, onCommit, faces, paused, targets };
+  const latest = useRef({ groundPoint, onCommit, faces, paused, targets, cursor, unit, setMeasurements });
+  latest.current = { groundPoint, onCommit, faces, paused, targets, cursor, unit, setMeasurements };
+  // A typed length for the next edge (see tools/typedEntry.ts), towards the cursor.
+  const typedRef = useRef('');
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -248,6 +251,33 @@ export function PatioDrawTool({ groundAt, onCommit, paused }: {
     const dblclick = () => finish();
     const key = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement)?.tagName === 'INPUT') return;
+      const d0 = draftRef.current;
+      const typed = typedRef.current;
+      if (d0.points.length > 0 && !event.ctrlKey && !event.metaKey && !event.altKey && acceptsTypedKey(event.key, typed)) {
+        event.preventDefault();
+        typedRef.current = event.key === 'Backspace' ? typed.slice(0, -1) : typed + event.key;
+        latest.current.setMeasurements(typedRef.current ? `Typed: ${typedRef.current}   (Enter for the next corner that far along · Esc to clear)` : '');
+        return;
+      }
+      if (typed && event.key === 'Escape') {
+        typedRef.current = '';
+        latest.current.setMeasurements('');
+        return;
+      }
+      if (typed && event.key === 'Enter') {
+        event.preventDefault();
+        typedRef.current = '';
+        const len = parseTypedLength(typed, latest.current.unit);
+        if (len === null || len <= 0) { latest.current.setMeasurements('Type a length, e.g. 3.5 or 3500mm.'); return; }
+        const last = d0.points[d0.points.length - 1]!.p;
+        const towards = latest.current.cursor?.p ?? [last[0] + 1, last[1]];
+        const dx = towards[0] - last[0], dz = towards[1] - last[1];
+        const n = Math.hypot(dx, dz) || 1;
+        const next: Vec2 = [last[0] + (n > 1e-9 ? dx / n : 1) * len, last[1] + (n > 1e-9 ? dz / n : 0) * len];
+        setDraft({ points: [...d0.points, { p: next }], bulges: d0.bulges.slice(), through: null });
+        latest.current.setMeasurements(`Edge: ${formatTyped(len, latest.current.unit)}. Type the next length, click, or press Enter to finish.`);
+        return;
+      }
       if (event.key === 'Tab' && ghostRef.current.count > 1) {
         // The other way round the building (or the next alternative).
         event.preventDefault();

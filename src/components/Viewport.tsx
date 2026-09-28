@@ -133,9 +133,9 @@ import { analyzeWallConversion, buildWallShapes, captureFaces, floorFacesWithin,
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
-import { createPushPullBinding } from '../tools/kernelPushPull';
+import { createPushPullBinding, commitKernelPushPull } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
-import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
+import { createFaceOffsetBinding, commitKernelFaceOffset } from '../tools/kernelFaceOffset';
 import { createChamferBinding } from '../tools/kernelChamfer';
 import { createFilletBinding } from '../tools/kernelFillet';
 import { FaceOffsetPreview } from './FaceOffsetPreview';
@@ -163,6 +163,10 @@ import { BezierTool } from '../tools/bezier/BezierTool';
 import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
 import { tessellateEntireCurve, tessellateBezierSpan } from '../tools/bezier/tessellate';
 import { checkSelfIntersection, projectToPlane } from '../lib/planarPolygon';
+import {
+  acceptsTypedKey, drawingBasis, formatTyped, parseTypedAngle, parseTypedFactor, parseTypedLength, parseTypedRectangle,
+  parseTypedSides, parseTypedVector, pointAlong, rectangleRing, regularRing,
+} from '../tools/typedEntry';
 import { commitBezierSurface, type BezierKnotInput } from '../tools/bezier/bezierSurface';
 import { BezierKnot, BezierCurveState } from '../tools/bezier/types';
 import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
@@ -2260,7 +2264,7 @@ function Scene() {
 
   const handleGroupTransformEnd = useCallback(() => {
     groupTransformActiveRef.current = false;
-    groupTransformBindingRef.current.commit();
+    if (groupTransformBindingRef.current.commit()) offerGroupTransformAdjust();
     setGroupTransformPreview(null);
   }, []);
 
@@ -3162,6 +3166,14 @@ function Scene() {
           recordAction(actionLabel('Offset tool'), { sdk: `sdk.drawing.offset(${offsetSession.faceId}, ${JSON.stringify(distance)});` });
         }
         const ok = faceOffsetRef.current.commit();
+        if (ok && offsetSession) {
+          const offsetFace = offsetSession.faceId;
+          offerKernelAdjust('offset', 'Offset distance', typed => {
+            const d = lengthOrError(typed, true);
+            if (typeof d === 'string') return d;
+            return () => commitKernelFaceOffset(kernelHost, offsetFace, inDragDirection(d, distance));
+          });
+        }
         setFaceOffsetPreview(null);
         setMeasurements(ok || Math.abs(distance) < 1e-3 ? '' : 'That offset is larger than the shape allows, so nothing was changed.');
       };
@@ -3217,10 +3229,19 @@ function Scene() {
     const finish = () => {
       removeListeners();
       const pushed = pushPullRef.current.session;
+      const pushedFace = pushed?.faceId;
+      const pushedDistance = pushed?.distance ?? 0;
       if (pushed) {
         recordAction(actionLabel('Push/Pull tool'), { sdk: `sdk.drawing.pushPull(${pushed.faceId}, ${JSON.stringify(pushed.distance)});` });
       }
-      pushPullRef.current.commit();
+      if (pushPullRef.current.commit() && pushedFace !== undefined) {
+        // Type a distance now to redo it exactly (a minus sign pushes the other way).
+        offerKernelAdjust('pushpull', 'Extrude distance', typed => {
+          const d = lengthOrError(typed, true);
+          if (typeof d === 'string') return d;
+          return () => commitKernelPushPull(kernelHost, pushedFace, inDragDirection(d, pushedDistance));
+        });
+      }
       setPushPullPreview(null);
       setMeasurements('');
     };
@@ -3559,6 +3580,16 @@ function Scene() {
   // reads the current value instead of whatever was current when the
   // effect last re-ran.
   const typedLengthRef = useRef(typedLength);
+  /** The step just done, adjustable with a typed value (see the typed-values block below). */
+  const lastTypedStepRef = useRef<{ tool: string; stillLatest: () => boolean; apply: (typed: string) => string | null } | null>(null);
+  const typedWantedRef = useRef<() => boolean>(() => false);
+  const typedEnterRef = useRef<(typed: string) => boolean>(() => false);
+  useEffect(() => {
+    // A typed value belongs to one tool's step: switching tools drops both.
+    lastTypedStepRef.current = null;
+    typedLengthRef.current = '';
+    setTypedLength('');
+  }, [activeTool]);
   const drawingStartRef = useRef(drawingStart);
   const drawingNormalRef = useRef(drawingNormal);
   const drawingStepRef = useRef(drawingStep);
@@ -3889,36 +3920,21 @@ function Scene() {
     };
   }, []);
 
+  /** Rectangle's width/depth boxes (status bar), after a single click: in the display unit, as a drawn surface. */
   const finalizeRectangleInput = () => {
     if (!rectangleInputState.active || !rectangleInputState.startPoint) return;
-    
-    const w = parseFloat(rectangleInputState.width) || 0;
-    const d = parseFloat(rectangleInputState.depth) || 0;
-    
-    if (w > 0 && d > 0) { const normal = rectangleInputState.normal ? new THREE.Vector3(rectangleInputState.normal.x, rectangleInputState.normal.y, rectangleInputState.normal.z) : new THREE.Vector3(0, 1, 0); const up = new THREE.Vector3(0, 1, 0); if (Math.abs(normal.dot(up)) > 0.99) { up.set(0, 0, 1); } const tangent = new THREE.Vector3().crossVectors(normal, up).normalize(); const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize(); const start = new THREE.Vector3(rectangleInputState.startPoint.x, rectangleInputState.startPoint.y, rectangleInputState.startPoint.z);
-      
-      const centerX = start.clone().add(tangent.clone().multiplyScalar(w / 2)).add(bitangent.clone().multiplyScalar(d / 2));
-      centerX.add(normal.clone().multiplyScalar(0.005));
-      
-      const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-      
-      const newShape: Shape = {
-        id: Math.random().toString(36).substr(2, 9),
-        type: 'rect',
-        position: [centerX.x, centerX.y, centerX.z],
-        quaternion: [quat.x, quat.y, quat.z, quat.w],
-        args: [w, 0.01, d],
-        color: activeMaterial,
-        roughness: activePBR.roughness,
-        metalness: activePBR.metalness,
-        opacity: activePBR.opacity
-      };
-      
-      addShape(newShape);
-      commitHistory();
-      recordAction(actionLabel(`Rectangle tool: ${w} x ${d}`));
+    const size = parseTypedRectangle(`${rectangleInputState.width},${rectangleInputState.depth}`, unit);
+    if (size) {
+      const n = rectangleInputState.normal;
+      const normal = n ? new THREE.Vector3(n.x, n.y, n.z) : new THREE.Vector3(0, 1, 0);
+      const p = rectangleInputState.startPoint;
+      const start = new THREE.Vector3(p.x, p.y, p.z);
+      const ring = rectangleRing(start, normal, size.x, size.y);
+      commitKernelRing('rectangle', 'Rectangle', ring, shapeRingRemaker('rectangle', start, normal, ring));
+    } else if (rectangleInputState.width || rectangleInputState.depth) {
+      setMeasurements('Enter a width and a depth, each not 0.');
+      return;
     }
-    
     setRectangleInputState({ active: false, startPoint: null, width: '', depth: '' });
   };
 
@@ -4906,18 +4922,15 @@ function Scene() {
         }
       }
 
-      // Numeric length entry while drawing a line or shape (familiar CAD-style inference)
-      if (['line', 'circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStartRef.current && !e.ctrlKey && !e.metaKey) {
-        if (/^[0-9.sS]$/.test(e.key)) {
-          e.preventDefault();
-          setTypedLength(prev => prev + e.key);
-          return;
-        }
-        if (e.key === 'Backspace' && typedLengthRef.current.length > 0) {
-          e.preventDefault();
-          setTypedLength(prev => prev.slice(0, -1));
-          return;
-        }
+      // Typed value (see tools/typedEntry.ts): while drawing, between chain clicks, or right after
+      // a step. It shows in the status bar; Enter applies it, Escape clears it.
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && typedWantedRef.current() && acceptsTypedKey(e.key, typedLengthRef.current)) {
+        e.preventDefault();
+        const next = e.key === 'Backspace' ? typedLengthRef.current.slice(0, -1) : typedLengthRef.current + e.key;
+        typedLengthRef.current = next;
+        setTypedLength(next);
+        setMeasurements(next ? `Typed: ${next}   (Enter to apply · Esc to clear)` : '');
+        return;
       }
 
       // Delete the current selection. Placed after the numeric-length
@@ -4994,6 +5007,14 @@ function Scene() {
       }
 
       // Escape
+      if (e.key === 'Escape' && typedLengthRef.current) {
+        e.preventDefault();
+        typedLengthRef.current = '';
+        setTypedLength('');
+        setMeasurements('');
+        return;
+      }
+
       if (e.key === 'Escape') {
         if (activeTool === 'wall' && wallVertices.length > 0) {
           diagLog('TOOL', 'Wall drawing cancelled', { vertexCount: wallVertices.length });
@@ -5079,6 +5100,12 @@ function Scene() {
         const previewShape = previewShapeRef.current;
         const bezierKnots = bezierKnotsRef.current;
         const activeSplineDraft = activeSplineDraftRef.current;
+        if (typedLength.trim() && typedEnterRef.current(typedLength.trim())) {
+          e.preventDefault();
+          typedLengthRef.current = '';
+          setTypedLength('');
+          return;
+        }
         if (activeTool === 'bezier') {
           e.preventDefault();
           if (typedLength.trim()) {
@@ -5131,56 +5158,14 @@ function Scene() {
           finalizeFenceChain();
           return;
         }
-        if (activeTool === 'line' && drawingStart && drawingNormal && typedLength.trim() && lastDrawTarget) {
-          e.preventDefault();
-          const raw = parseFloat(typedLength);
-          if (!isNaN(raw) && raw > 0) {
-            const worldLen = unit === 'mm' ? raw / 1000 : unit === 'cm' ? raw / 100 : raw;
-            const dir = new THREE.Vector3().subVectors(lastDrawTarget, drawingStart);
-            if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
-            dir.normalize();
-            const endPoint = drawingStart.clone().add(dir.clone().multiplyScalar(worldLen));
-            const linePos = drawingStart.clone().lerp(endPoint, 0.5).add(drawingNormal.clone().multiplyScalar(0.01));
-            const quatLine2 = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-            addShape({
-              id: Math.random().toString(36).substr(2, 9),
-              type: 'line',
-              position: [linePos.x, linePos.y, linePos.z],
-              quaternion: [quatLine2.x, quatLine2.y, quatLine2.z, quatLine2.w],
-              args: [0.01, 0.01, worldLen, 8],
-              color: activeMaterial,
-              roughness: activePBR.roughness,
-              metalness: activePBR.metalness,
-              opacity: activePBR.opacity
-            } as Shape);
-            setDrawingStart(null);
-            setDrawingNormal(null);
-            setDrawingOnId(null);
-            setPreviewShape(null);
-            setDrawingStep(0);
-            setTypedLength('');
-            setSnapIndicator(null);
-            setLastDrawTarget(null);
-          }
-          return;
-        }
-
-        if (['circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStep === 1 && drawingStart && drawingNormal && typedLength.trim()) {
+        // Primitives (objects): a typed radius while dragging. Line and the shape tools are handled
+        // by typedEnterRef above, through the same kernel paths as the mouse.
+        if (['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStep === 1 && drawingStart && drawingNormal && typedLength.trim()) {
           e.preventDefault();
 
-          if (activeTool === 'polygon' && typedLength.toLowerCase().endsWith('s')) {
-            const sides = parseInt(typedLength.slice(0, -1), 10);
-            if (!isNaN(sides) && sides >= 3) {
-              setPolygonSides(Math.min(64, Math.max(3, sides)));
-              setTypedLength('');
-              setMeasurements(`Polygon sides set to ${Math.min(64, Math.max(3, sides))}`);
-              return;
-            }
-          }
-
-          const raw = parseFloat(typedLength);
-          if (!isNaN(raw) && raw > 0) {
-            const worldRadius = unit === 'mm' ? raw / 1000 : unit === 'cm' ? raw / 100 : raw;
+          const typedRadius = parseTypedLength(typedLength, unit);
+          if (typedRadius !== null && typedRadius > 0) {
+            const worldRadius = typedRadius;
 
             const up = new THREE.Vector3(0, 1, 0);
             if (Math.abs(drawingNormal.dot(up)) > 0.99) { up.set(0, 0, 1); }
@@ -5193,13 +5178,7 @@ function Scene() {
 
             let newShape: { type: string; position: [number, number, number]; quaternion: [number, number, number, number]; args: number[] } | null = null;
 
-            if (activeTool === 'circle') {
-              newShape = { type: 'circle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, 32] };
-            } else if (activeTool === 'polygon') {
-              newShape = { type: 'circle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, polygonSides || 6] };
-            } else if (activeTool === 'triangle') {
-              newShape = { type: 'triangle', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, worldRadius, 0.01, 3] };
-            } else if (activeTool === 'sphere') {
+            if (activeTool === 'sphere') {
               newShape = { type: 'sphere', position: [drawingStart.x, drawingStart.y, drawingStart.z], quaternion: [0, 0, 0, 1], args: [worldRadius, 32, 32] };
             } else if (activeTool === 'cone') {
               newShape = { type: 'cone', position: [offsetPos.x, offsetPos.y, offsetPos.z], quaternion: quatArray, args: [worldRadius, 0.01, 32] };
@@ -5218,8 +5197,9 @@ function Scene() {
                 setTypedLength('');
                 setDrawingStep(2);
               } else {
+                const typedId = Math.random().toString(36).substr(2, 9);
                 addShape({
-                  id: Math.random().toString(36).substr(2, 9),
+                  id: typedId,
                   type: newShape.type as any,
                   position: newShape.position,
                   quaternion: newShape.quaternion,
@@ -5229,6 +5209,7 @@ function Scene() {
                   metalness: activePBR.metalness,
                   opacity: activePBR.opacity
                 } as Shape);
+                offerPrimitiveAdjust(typedId, newShape.type, drawingStart.clone(), drawingNormal.clone());
                 setDrawingStart(null);
                 setDrawingNormal(null);
                 setDrawingOnId(null);
@@ -5245,9 +5226,9 @@ function Scene() {
 
         if (['cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && drawingStep === 2 && previewShape && drawingStart && drawingNormal && typedLength.trim()) {
           e.preventDefault();
-          const rawH = parseFloat(typedLength);
-          if (!isNaN(rawH) && rawH > 0) {
-            const worldHeight = unit === 'mm' ? rawH / 1000 : unit === 'cm' ? rawH / 100 : rawH;
+          const typedHeight = parseTypedLength(typedLength, unit);
+          if (typedHeight !== null && typedHeight > 0) {
+            const worldHeight = typedHeight;
             const newArgs2 = [...previewShape.args];
             let newPos2 = [...previewShape.position] as [number, number, number];
 
@@ -5263,8 +5244,9 @@ function Scene() {
             }
             // dome: height drag is a no-op in this app (matches mouse-drag behavior), commit as-is
 
+            const heightId = Math.random().toString(36).substr(2, 9);
             addShape({
-              id: Math.random().toString(36).substr(2, 9),
+              id: heightId,
               type: previewShape.type as any,
               position: newPos2,
               quaternion: previewShape.quaternion,
@@ -5274,6 +5256,7 @@ function Scene() {
               metalness: activePBR.metalness,
               opacity: activePBR.opacity
             } as Shape);
+            offerPrimitiveAdjust(heightId, previewShape.type, drawingStart.clone(), drawingNormal.clone());
 
             setDrawingStart(null);
             setDrawingNormal(null);
@@ -5678,31 +5661,7 @@ function Scene() {
         wallChainShapeIdsRef.current = [];
         diagLog("TOOL", "Wall started at point", { pos: [p.x, p.y, p.z] });
       } else {
-        if (!pointToPlace) pointToPlace = e.point.clone();
-
-        // Enforce coplanarity with initial wall vertex
-        if (wallVertices.length > 0) {
-          pointToPlace.y = wallVertices[0].y;
-        }
-
-        // Enforce: Interior wall vertices must remain inside the room
-        if (wallJustification === 'interior') {
-          if (!isPointInsideRoom(pointToPlace)) {
-            setMeasurements('Interior walls cannot extend outside the room boundary.');
-            return;
-          }
-        }
-
-        const prev = wallVertices[wallVertices.length - 1];
-        if (prev.distanceTo(pointToPlace) >= 0.10) {
-          const newSegment = createWallSegment(prev, pointToPlace);
-          if (newSegment) wallChainShapeIdsRef.current.push(newSegment.id);
-          setWallVertices(prevVerts => [...prevVerts, pointToPlace]);
-          diagLog("TOOL", "Wall segment placed", { 
-            from: [prev.x, prev.y, prev.z], 
-            to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] 
-          });
-        }
+        placeWallPoint(pointToPlace ?? e.point.clone());
       }
       return;
     }
@@ -5756,20 +5715,7 @@ function Scene() {
         diagLog("TOOL", `${activeTool} started at point`, { pos: [p.x, p.y, p.z] });
         setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
       } else {
-        if (!pointToPlace) pointToPlace = e.point.clone();
-        const prev = fenceVertices[fenceVertices.length - 1];
-        if (prev.distanceTo(pointToPlace) >= 0.15) {
-          // Railings are placed section by section; fences are one run that grows with each click.
-          if (activeTool === 'railing') createFenceRailingSegment(prev, pointToPlace, activeTool);
-          const nextVerts = [...fenceVertices, pointToPlace];
-          if (activeTool === 'fence') commitFenceRun(nextVerts, false);
-          setFenceVertices(nextVerts);
-          diagLog("TOOL", `${activeTool} segment placed`, { 
-            from: [prev.x, prev.y, prev.z], 
-            to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] 
-          });
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: ${nextVerts.length} points placed · Click next point · Double-click/Enter to finish.`);
-        }
+        placeFencePoint(pointToPlace ?? e.point.clone());
       }
       return;
     }
@@ -8361,10 +8307,7 @@ function Scene() {
           lineTo = lmid.clone().addScaledVector(ldir, llen / 2);
         }
 
-        recordAction(actionLabel('Line tool'), {
-          sdk: `sdk.drawing.line(${JSON.stringify([lineFrom.x, lineFrom.y, lineFrom.z])}, ${JSON.stringify([lineTo.x, lineTo.y, lineTo.z])});`,
-        });
-        lineBinding.commitDrag(lineFrom, lineTo);
+        commitKernelLine(lineFrom, lineTo);
         kernelLineEndsRef.current = null;
       } else if (
         previewShape &&
@@ -8387,14 +8330,17 @@ function Scene() {
         const ring = kernelRingRef.current;
         kernelRingRef.current = null;
         // One shape, one undo step; its new faces are marked as isolated shapes so push/pull
-        // keeps them isolated too (see KernelLineHost.commitIsolatedShape).
-        recordAction(actionLabel(`${previewShape.type === 'rect' ? 'Rectangle' : previewShape.type === 'circle' ? 'Circle' : 'Triangle'} tool`), {
-          sdk: `sdk.drawing.shape(${JSON.stringify(ring.map(p => [p.x, p.y, p.z]))});`,
-        });
-        if (kernelHost.commitIsolatedShape(ring.map(p => ({ x: p.x, y: p.y, z: p.z })))) bumpKernel();
+        // keeps them isolated too (see KernelLineHost.commitIsolatedShape). A typed size right
+        // after redraws it at that size.
+        const ringTool = activeTool in RING_TOOLS ? activeTool : previewShape.type === 'rect' ? 'rectangle' : previewShape.type === 'triangle' ? 'triangle' : 'circle';
+        commitKernelRing(ringTool, RING_TOOLS[ringTool] ?? 'Shape', ring, shapeRingRemaker(ringTool, drawingStart.clone(), drawingNormal.clone(), ring));
       } else if (previewShape) {
+        const primitiveId = Math.random().toString(36).substr(2, 9);
+        if (['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(previewShape.type)) {
+          offerPrimitiveAdjust(primitiveId, previewShape.type, drawingStart.clone(), drawingNormal.clone());
+        }
         addShape({
-          id: Math.random().toString(36).substr(2, 9),
+          id: primitiveId,
           type: previewShape.type,
           position: previewShape.position,
           quaternion: previewShape.quaternion,
@@ -9286,6 +9232,9 @@ function Scene() {
     }
   };
 
+  /** Where the object was when the gizmo was grabbed, for adjusting the move with a typed value. */
+  const transformStartRef = useRef<{ id: string; position: [number, number, number]; quaternion: [number, number, number, number]; scale: [number, number, number] } | null>(null);
+
   const handleTransformChangeEnd = () => {
     isDraggingRef.current = false;
     const sId = selectedIdRef.current;
@@ -9356,6 +9305,8 @@ function Scene() {
         }
         
         recordAction(actionLabel(`Move/rotate/scale ${sId}`));
+        const start = transformStartRef.current;
+        if (start && start.id === sId) offerTransformAdjust(sId, activeTool, start, { position, quaternion, scale });
       }
     }
     captureDiagnosticData();
@@ -9839,6 +9790,357 @@ function Scene() {
       camera.updateProjectionMatrix();
     }
   }, [camera, effectiveCameraNear, effectiveCameraFar]);
+
+  // ─── Typed values (see tools/typedEntry.ts) ───────────────────────────────────
+  // Type a number and press Enter to make the step exact: while dragging, between the clicks of a
+  // wall / fence / pond / railing chain, or right after letting go (which redoes the step you just
+  // did at that size). Each tool that can be adjusted afterwards leaves a TypedStep behind.
+  const latestShapesRef = useRef(shapes);
+  latestShapesRef.current = shapes;
+  const unitRef = useRef(unit);
+  unitRef.current = unit;
+
+  /** A kernel step is still the latest one while the kernel's undo stack hasn't moved. */
+  const kernelGuard = () => {
+    const id = kernelHost.topUndoId;
+    return () => kernelHost.topUndoId === id;
+  };
+  /** Undo the last kernel step and commit it again with new terms (back to the old one if that fails). */
+  const redoKernelStep = (commit: () => boolean): boolean => {
+    if (!kernelHost.undo()) return false;
+    const ok = commit();
+    if (!ok) kernelHost.redo();
+    bumpKernel();
+    return ok;
+  };
+  /** A typed size keeps the drag's direction; a minus sign reverses it. */
+  const inDragDirection = (value: number, dragged: number) => (dragged < 0 ? -value : value);
+
+  /** Leaves an adjustable kernel step: `remake` turns a typed value into the new commit, or an error. */
+  const offerKernelAdjust = (tool: string, what: string, remake: (typed: string) => (() => boolean) | string) => {
+    lastTypedStepRef.current = {
+      tool,
+      stillLatest: kernelGuard(),
+      apply: typed => {
+        const commit = remake(typed);
+        if (typeof commit === 'string') return commit;
+        recordAction(actionLabel(`${what} set to ${typed}`));
+        if (!redoKernelStep(commit)) return `Could not change the ${what.toLowerCase()} to ${typed}.`;
+        offerKernelAdjust(tool, what, remake);
+        setMeasurements(`${what}: ${typed}`);
+        return null;
+      },
+    };
+  };
+
+  /** Leaves an adjustable object: `change` turns a typed value into the object's new fields, or an error. */
+  const offerShapeAdjust = (tool: string, id: string, what: string, change: (shape: Shape, typed: string) => Partial<Shape> | string) => {
+    lastTypedStepRef.current = {
+      tool,
+      stillLatest: () => latestShapesRef.current.some(s => s.id === id),
+      apply: typed => {
+        const shape = latestShapesRef.current.find(s => s.id === id);
+        if (!shape) return 'That object is gone.';
+        const patch = change(shape, typed);
+        if (typeof patch === 'string') return patch;
+        recordAction(actionLabel(`${what} set to ${typed}`));
+        setShapes(prev => updateTimberFramesIfPresent(applyStairwellHolesToSlabs(prev.map(s => (s.id === id ? { ...s, ...patch } : s)))));
+        commitHistory();
+        setMeasurements(`${what}: ${typed}`);
+        return null;
+      },
+    };
+  };
+
+  const lengthOrError = (typed: string, allowNegative = false): number | string => {
+    const v = parseTypedLength(typed, unitRef.current);
+    if (v === null || (!allowNegative && v <= 0) || v === 0) return 'Type a length, e.g. 2.5, 300mm or 8\'6".';
+    return v;
+  };
+
+  /** A line, as the Line tool draws it, left adjustable to a typed length. */
+  const commitKernelLine = (from: THREE.Vector3, to: THREE.Vector3) => {
+    recordAction(actionLabel('Line tool'), {
+      sdk: `sdk.drawing.line(${JSON.stringify([from.x, from.y, from.z])}, ${JSON.stringify([to.x, to.y, to.z])});`,
+    });
+    if (!lineBinding.commitDrag(from, to)) return;
+    offerKernelAdjust('line', 'Line length', typed => {
+      const len = lengthOrError(typed);
+      if (typeof len === 'string') return len;
+      const end = pointAlong(from, to, len);
+      return () => lineBinding.commitDrag(from, end);
+    });
+  };
+
+  /** A whole shape (Rectangle / Circle / Polygon / Triangle) as one isolated ring, left adjustable. */
+  const commitKernelRing = (tool: string, label: string, ring: THREE.Vector3[], remakeRing: (typed: string) => THREE.Vector3[] | string) => {
+    recordAction(actionLabel(`${label} tool`), { sdk: `sdk.drawing.shape(${JSON.stringify(ring.map(p => [p.x, p.y, p.z]))});` });
+    if (!kernelHost.commitIsolatedShape(ring.map(p => ({ x: p.x, y: p.y, z: p.z })))) return;
+    bumpKernel();
+    offerKernelAdjust(tool, `${label} size`, typed => {
+      const next = remakeRing(typed);
+      if (typeof next === 'string') return next;
+      return () => kernelHost.commitIsolatedShape(next.map(p => ({ x: p.x, y: p.y, z: p.z }))) !== null;
+    });
+  };
+
+  /** The ring a shape tool draws from its centre (or corner) and size. */
+  const shapeRingRemaker = (tool: string, start: THREE.Vector3, normal: THREE.Vector3, ring: THREE.Vector3[]) => {
+    if (tool === 'rectangle') {
+      const { tangent, bitangent } = drawingBasis(normal);
+      const sx = Math.sign(ring[1]!.clone().sub(ring[0]!).dot(tangent)) || 1;
+      const sy = Math.sign(ring[3]!.clone().sub(ring[0]!).dot(bitangent)) || 1;
+      return (typed: string) => {
+        const size = parseTypedRectangle(typed, unitRef.current);
+        if (!size) return 'Type width,depth - e.g. 4,3 or 4000,3000.';
+        return rectangleRing(start, normal, sx * Math.abs(size.x), sy * Math.abs(size.y));
+      };
+    }
+    let radius = ring[0]!.distanceTo(start);
+    let sides = ring.length;
+    return (typed: string) => {
+      const n = tool === 'polygon' ? parseTypedSides(typed) : null;
+      if (n !== null) sides = n;
+      else {
+        const r = lengthOrError(typed);
+        if (typeof r === 'string') return tool === 'polygon' ? 'Type a radius (e.g. 1.5) or a number of sides (e.g. 8s).' : r;
+        radius = Math.abs(r);
+      }
+      return regularRing(start, normal, radius, sides);
+    };
+  };
+
+  /** A primitive object (sphere, cone...) left adjustable: its radius, or its height if it has one. */
+  const offerPrimitiveAdjust = (id: string, type: string, base: THREE.Vector3, normal: THREE.Vector3) => {
+    const hasHeight = type === 'cone' || type === 'pyramid' || type === 'donut';
+    offerShapeAdjust(type, id, hasHeight ? (type === 'donut' ? 'Tube' : 'Height') : 'Radius', (shape, typed) => {
+      const v = lengthOrError(typed);
+      if (typeof v === 'string') return v;
+      const args = Array.isArray(shape.args) ? [...shape.args] : [];
+      if (!hasHeight) {
+        args[0] = v;
+        return { args };
+      }
+      args[1] = v;
+      if (type === 'donut') return { args };
+      const c = base.clone().addScaledVector(normal, v / 2);
+      return { args, position: [c.x, c.y, c.z] };
+    });
+  };
+
+  /** Wall chain: the next corner, as a click would place it. */
+  const placeWallPoint = (pointToPlace: THREE.Vector3) => {
+    if (wallVertices.length > 0) pointToPlace.y = wallVertices[0].y;
+    if (wallJustification === 'interior' && !isPointInsideRoom(pointToPlace)) {
+      setMeasurements('Interior walls cannot extend outside the room boundary.');
+      return;
+    }
+    const prev = wallVertices[wallVertices.length - 1];
+    if (prev.distanceTo(pointToPlace) < 0.10) return;
+    const newSegment = createWallSegment(prev, pointToPlace);
+    if (newSegment) wallChainShapeIdsRef.current.push(newSegment.id);
+    setWallVertices(prevVerts => [...prevVerts, pointToPlace]);
+    diagLog('TOOL', 'Wall segment placed', { from: [prev.x, prev.y, prev.z], to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] });
+  };
+
+  /** Fence / railing / pond chain: the next point, as a click would place it. */
+  const placeFencePoint = (pointToPlace: THREE.Vector3) => {
+    const prev = fenceVertices[fenceVertices.length - 1];
+    if (prev.distanceTo(pointToPlace) < 0.15) return;
+    // Railings are placed section by section; fences are one run that grows with each click.
+    if (activeTool === 'railing') createFenceRailingSegment(prev, pointToPlace, activeTool);
+    const nextVerts = [...fenceVertices, pointToPlace];
+    if (activeTool === 'fence') commitFenceRun(nextVerts, false);
+    setFenceVertices(nextVerts);
+    diagLog('TOOL', `${activeTool} segment placed`, { from: [prev.x, prev.y, prev.z], to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] });
+    setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: ${nextVerts.length} points placed · Click next point, or type a length and press Enter · Enter to finish`);
+  };
+
+  /** Ends a drag-drawing gesture whose result was committed from a typed value. */
+  const endDrawing = () => {
+    kernelRingRef.current = null;
+    kernelLineEndsRef.current = null;
+    setDrawingStart(null);
+    setDrawingNormal(null);
+    setDrawingOnId(null);
+    setPreviewShape(null);
+    setDrawingStep(0);
+    setSnapIndicator(null);
+    setLastDrawTarget(null);
+    setTrackingGuide(null);
+  };
+
+  const RING_TOOLS: Record<string, string> = { rectangle: 'Rectangle', circle: 'Circle', polygon: 'Polygon', triangle: 'Triangle' };
+
+  /** A moved, turned or resized object: type a distance (or <x,y,z> / [x,y,z]), an angle or a factor. */
+  function offerTransformAdjust(
+    id: string, tool: string,
+    start: { position: [number, number, number]; quaternion: [number, number, number, number]; scale: [number, number, number] },
+    end: { position: [number, number, number]; quaternion: [number, number, number, number]; scale: [number, number, number] },
+  ) {
+    if (tool === 'move') {
+      const from = new THREE.Vector3(...start.position);
+      const dir = new THREE.Vector3(...end.position).sub(from);
+      offerShapeAdjust('move', id, 'Move', (_shape, typed) => {
+        const vector = parseTypedVector(typed, unitRef.current);
+        if (vector) {
+          const p = vector.kind === 'relative' ? from.clone().add(vector.v) : vector.v;
+          return { position: [p.x, p.y, p.z] };
+        }
+        const len = lengthOrError(typed, true);
+        if (typeof len === 'string') return 'Type a distance, an offset <x, y, z> or a point [x, y, z].';
+        if (dir.lengthSq() < 1e-10) return 'Drag it a little first to show the direction, then type the distance.';
+        const p = from.clone().addScaledVector(dir.clone().normalize(), len);
+        return { position: [p.x, p.y, p.z] };
+      });
+    } else if (tool === 'rotate') {
+      const q0 = new THREE.Quaternion(...start.quaternion);
+      const delta = new THREE.Quaternion(...end.quaternion).multiply(q0.clone().invert());
+      const angle = 2 * Math.acos(Math.min(1, Math.abs(delta.w)));
+      const axis = angle > 1e-6
+        ? new THREE.Vector3(delta.x, delta.y, delta.z).normalize().multiplyScalar(delta.w < 0 ? -1 : 1)
+        : new THREE.Vector3(0, 1, 0);
+      offerShapeAdjust('rotate', id, 'Rotation', (_shape, typed) => {
+        const deg = parseTypedAngle(typed);
+        if (deg === null) return 'Type an angle in degrees, e.g. 90 or 45deg.';
+        const q = new THREE.Quaternion().setFromAxisAngle(axis, THREE.MathUtils.degToRad(deg)).multiply(q0);
+        return { quaternion: [q.x, q.y, q.z, q.w], rotation: undefined };
+      });
+    } else if (tool === 'scale') {
+      const ratio = end.scale.map((v, i) => v / (start.scale[i] || 1));
+      const changed = ratio.map(r => Math.abs(r - 1) > 1e-3);
+      const uniform = !changed.some(Boolean);
+      offerShapeAdjust('scale', id, 'Scale', (_shape, typed) => {
+        const f = parseTypedFactor(typed);
+        if (f === null) return 'Type a scale factor, e.g. 2 or 0.5.';
+        return { scale: start.scale.map((v, i) => (uniform || changed[i] ? v * f : v)) as [number, number, number] };
+      });
+    }
+  }
+
+  /** A moved, turned or resized drawn group: the same, redone in the kernel. */
+  function offerGroupTransformAdjust() {
+    const last = groupTransformBindingRef.current.lastCommitted;
+    if (!last) return;
+    const binding = groupTransformBindingRef.current;
+    const redo = (apply: () => void) => () => { binding.begin(last.faces, last.pivot); apply(); return binding.commit(); };
+    if (last.kind === 'translate' && last.params.delta) {
+      const d = new THREE.Vector3(last.params.delta.x, last.params.delta.y, last.params.delta.z);
+      offerKernelAdjust('move', 'Move', typed => {
+        const vector = parseTypedVector(typed, unitRef.current);
+        let v: THREE.Vector3;
+        if (vector?.kind === 'relative') v = vector.v;
+        else if (vector) return 'Drawn geometry moves by an offset: type <x, y, z> or a distance.';
+        else {
+          const len = lengthOrError(typed, true);
+          if (typeof len === 'string') return 'Type a distance or an offset <x, y, z>.';
+          if (d.lengthSq() < 1e-10) return 'Drag it a little first to show the direction, then type the distance.';
+          v = d.clone().normalize().multiplyScalar(len);
+        }
+        return redo(() => binding.updateTranslate({ x: v.x, y: v.y, z: v.z }));
+      });
+    } else if (last.kind === 'rotate' && last.params.axis) {
+      const axis = last.params.axis;
+      const sense = (last.params.radians ?? 0) < 0 ? -1 : 1;
+      offerKernelAdjust('rotate', 'Rotation', typed => {
+        const deg = parseTypedAngle(typed);
+        if (deg === null) return 'Type an angle in degrees, e.g. 90.';
+        return redo(() => binding.updateRotate(axis, sense * THREE.MathUtils.degToRad(deg)));
+      });
+    } else if (last.kind === 'scale' && last.params.factor) {
+      const f0 = last.params.factor;
+      const changed = [f0.x, f0.y, f0.z].map(v => Math.abs(v - 1) > 1e-3);
+      const uniform = !changed.some(Boolean);
+      offerKernelAdjust('scale', 'Scale', typed => {
+        const f = parseTypedFactor(typed);
+        if (f === null) return 'Type a scale factor, e.g. 2 or 0.5.';
+        const pick = (i: number) => (uniform || changed[i] ? f : 1);
+        return redo(() => binding.updateScale({ x: pick(0), y: pick(1), z: pick(2) }));
+      });
+    }
+  }
+
+  typedWantedRef.current = () => {
+    if (lastTypedStepRef.current?.tool === activeTool) return true;
+    if (drawingStart && (activeTool === 'line' || activeTool in RING_TOOLS
+      || ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool))) return true;
+    if (activeTool === 'wall' && wallVertices.length > 0) return true;
+    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) return true;
+    if (activeTool === 'bezier' && bezierKnots.length > 0) return true;
+    return false;
+  };
+
+  /** Enter with a typed value: returns true when it was used (or refused with a message). */
+  typedEnterRef.current = (typed: string) => {
+    const u = unitRef.current;
+    const fail = (message: string) => { setMeasurements(message); return true; };
+
+    // While a drag is still held down.
+    if (drawingStart && drawingNormal) {
+      if (activeTool === 'line') {
+        const len = lengthOrError(typed);
+        if (typeof len === 'string') return fail(len);
+        const from = drawingStart.clone();
+        const to = pointAlong(from, lastDrawTarget ?? from.clone().add(drawingBasis(drawingNormal).tangent), len);
+        endDrawing();
+        commitKernelLine(from, to);
+        setMeasurements(`Length: ${formatTyped(len, u)}`);
+        return true;
+      }
+      if (activeTool in RING_TOOLS) {
+        const start = drawingStart.clone();
+        const normal = drawingNormal.clone();
+        if (activeTool === 'polygon') {
+          const sides = parseTypedSides(typed);
+          if (sides !== null) { setPolygonSides(sides); setMeasurements(`Polygon sides set to ${sides}`); return true; }
+        }
+        const current = kernelRingRef.current ?? (activeTool === 'rectangle'
+          ? rectangleRing(start, normal, 1, 1)
+          : regularRing(start, normal, 1, activeTool === 'circle' ? 32 : activeTool === 'triangle' ? 3 : Math.min(64, Math.max(3, polygonSides || 6))));
+        const ring = shapeRingRemaker(activeTool, start, normal, current)(typed);
+        if (typeof ring === 'string') return fail(ring);
+        endDrawing();
+        commitKernelRing(activeTool, RING_TOOLS[activeTool]!, ring, shapeRingRemaker(activeTool, start, normal, ring));
+        return true;
+      }
+      return false; // the primitives' own typed sizes (below in the keydown handler)
+    }
+
+    // Between the clicks of a chain: the next point, that far towards the cursor.
+    if (activeTool === 'wall' && wallVertices.length > 0) {
+      const len = lengthOrError(typed);
+      if (typeof len === 'string') return fail(len);
+      const last = wallVertices[wallVertices.length - 1];
+      const towards = wallCandidatePos ?? last.clone().add(new THREE.Vector3(1, 0, 0));
+      const flat = new THREE.Vector3(towards.x, last.y, towards.z);
+      placeWallPoint(pointAlong(last, flat, len));
+      return true;
+    }
+    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+      const len = lengthOrError(typed);
+      if (typeof len === 'string') return fail(len);
+      const last = fenceVertices[fenceVertices.length - 1];
+      const towards = fenceCandidatePos ?? last.clone().add(new THREE.Vector3(1, 0, 0));
+      const next = pointAlong(last, new THREE.Vector3(towards.x, last.y, towards.z), len);
+      // Along the ground: the point sits on the ground there, as a click would.
+      if (activeTool !== 'railing') next.y = towards.y;
+      placeFencePoint(next);
+      return true;
+    }
+
+    // Right after a step: redo it at the typed size.
+    const step = lastTypedStepRef.current;
+    if (step && step.tool === activeTool) {
+      if (!step.stillLatest()) {
+        lastTypedStepRef.current = null;
+        return fail('Something else has changed since, so there is nothing to adjust. Draw again, then type.');
+      }
+      const error = step.apply(typed);
+      if (error) setMeasurements(error);
+      return true;
+    }
+    return false;
+  };
 
   return (
     <>
@@ -11234,7 +11536,17 @@ function Scene() {
             showX={!axisLock || axisLock === 'x'}
             showY={!axisLock || axisLock === 'y'}
             showZ={!axisLock || axisLock === 'z'}
-            onMouseDown={() => { isDraggingRef.current = true; }}
+            onMouseDown={() => {
+              isDraggingRef.current = true;
+              const grabbed = shapes.find(s => s.id === selectedId);
+              transformStartRef.current = grabbed ? {
+                id: grabbed.id,
+                position: [...grabbed.position] as [number, number, number],
+                quaternion: grabbed.quaternion ? [...grabbed.quaternion] as [number, number, number, number]
+                  : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(grabbed.rotation ?? [0, 0, 0]))).toArray() as [number, number, number, number],
+                scale: [...(grabbed.scale ?? [1, 1, 1])] as [number, number, number],
+              } : null;
+            }}
             onMouseUp={handleTransformChangeEnd}
             onObjectChange={handleTransformObjectChange}
             translationSnap={unit === 'm' ? 0.01 : 1}

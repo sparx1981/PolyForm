@@ -45,6 +45,16 @@ export interface GroupTransformSession {
    */
   matrix: Mat4;
   kind: TransformKind | null;
+  /** The drag's own terms (not just its matrix), so a typed value can redo it exactly. */
+  params?: { delta?: Vec3; factor?: Vec3; axis?: Vec3; radians?: number };
+}
+
+/** What the last committed group transform did: its faces, pivot, kind and terms. */
+export interface CommittedGroupTransform {
+  faces: FaceId[];
+  pivot: Vec3;
+  kind: TransformKind;
+  params: NonNullable<GroupTransformSession['params']>;
 }
 
 export interface GroupTransformBinding {
@@ -54,6 +64,8 @@ export interface GroupTransformBinding {
   updateRotate: (axis: Vec3, radians: number) => void;
   /** Applies the pending matrix. Returns false when nothing was committed. */
   commit: () => boolean;
+  /** The last transform committed, for adjusting it with a typed value. */
+  readonly lastCommitted: CommittedGroupTransform | null;
   cancel: () => void;
   readonly active: boolean;
   readonly session: GroupTransformSession | null;
@@ -66,8 +78,12 @@ export function createGroupTransformBinding(
   bumpKernel: () => void,
 ): GroupTransformBinding {
   let session: GroupTransformSession | null = null;
+  let lastCommitted: CommittedGroupTransform | null = null;
 
   return {
+    get lastCommitted() {
+      return lastCommitted;
+    },
     get active() {
       return session !== null;
     },
@@ -85,6 +101,7 @@ export function createGroupTransformBinding(
       if (!session) return;
       session.kind = 'translate';
       session.matrix = translation(delta);
+      session.params = { delta };
     },
 
     updateScale(factor) {
@@ -100,12 +117,14 @@ export function createGroupTransformBinding(
       };
       session.kind = 'scale';
       session.matrix = scalePivotMatrix(session.pivot, safe);
+      session.params = { factor: safe };
     },
 
     updateRotate(axis, radians) {
       if (!session) return;
       session.kind = 'rotate';
       session.matrix = rotatePivotMatrix(session.pivot, axis, radians);
+      session.params = { axis, radians };
     },
 
     commit() {
@@ -113,7 +132,7 @@ export function createGroupTransformBinding(
         session = null;
         return false;
       }
-      const { faces, matrix } = session;
+      const { faces, matrix, pivot, kind, params } = session;
       session = null;
 
       const before = snapshot(host.graph);
@@ -122,6 +141,7 @@ export function createGroupTransformBinding(
         const touched: Set<EdgeId> = edgesToRederive(host.graph, faces);
         derive(host.graph, touched, host.deriveOptions);
         host.recordUndo(before);
+        lastCommitted = { faces: [...faces], pivot, kind, params: params ?? {} };
         bumpKernel();
         return true;
       } catch {

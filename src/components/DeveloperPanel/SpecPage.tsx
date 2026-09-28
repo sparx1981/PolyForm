@@ -776,6 +776,8 @@ export const SHORTCUTS: ShortcutRow[] = [
   { key: 'H (Wall)', action: 'Cycle wall height (2.4 / 2.8 / 3.2 m)' },
   { key: 'C or Enter (Wall)', action: 'Close the walls into a room' },
   { key: 'R, arrows, [ ] (Stairs)', action: 'Turn stairs 90° (Shift: 15°)' },
+  { key: 'Type a value, then Enter', action: 'Make the step exact - while dragging, between chain clicks, or just after: a length (2.5, 300mm, 8\'6"), width,depth, 8s sides, an angle, a factor, or <x,y,z>' },
+  { key: 'Escape (while typing)', action: 'Clear the typed value' },
   { key: 'Enter', action: 'Finish the current drawing' },
   { key: 'Escape', action: 'Cancel the current drawing' },
   { key: 'Delete / Backspace', action: 'Delete the selection' },
