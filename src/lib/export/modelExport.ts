@@ -37,7 +37,7 @@ type Tag = 'model' | 'kernel' | 'excluded' | null;
 
 function tagOf(o: THREE.Object3D): Tag {
   const u = o.userData ?? {};
-  if (u.isGrass || u.isFlowers || u.type === 'light') return 'excluded';
+  if (u.isGrass || u.isFlowers || u.type === 'light' || u.isSectionCap) return 'excluded';
   if (u.isKernelGeometry) return 'kernel';
   if (u.isShape || typeof u.id === 'string' || Array.isArray(u.plantIds) || Array.isArray(u.presentationTimber)) return 'model';
   return null;
@@ -50,6 +50,12 @@ function ownerOf(o: THREE.Object3D): { tag: Tag; ownerId: string | null } {
     if (tag) return { tag, ownerId: typeof p.userData?.id === 'string' ? p.userData.id : null };
   }
   return { tag: null, ownerId: null };
+}
+
+/** Whether an object is part of the model (a shape, drawn geometry or a batch), not a helper. */
+export function isModelObject(o: THREE.Object3D): boolean {
+  const { tag } = ownerOf(o);
+  return tag === 'model' || tag === 'kernel';
 }
 
 function isShown(o: THREE.Object3D): boolean {

@@ -383,6 +383,20 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'section-planes',
+    title: 'Section Planes (slice the model to see inside)',
+    category: 'tools',
+    content: 'A section plane slices the model so you can see inside - a plan cut through a floor, or a cut through a wall to see the rooms behind it. Cut walls show a solid dark fill, like a drawing. Unlike the camera\'s depth clipping, a section plane stays where you put it as you orbit, cuts only the model (not the grid or sky), and is saved with the model.',
+    steps: [
+      'Pick Section Plane (next to Follow Me) and hover a wall, floor or any face: an orange square lines up with it.',
+      'Click to place it. It cuts straight away, keeping the side away from you. The orange arrows point into the part that stays.',
+      'To move it, drag its orange square with the Section Plane tool - it slides along its own direction. Or select it and type a distance under "Move along its direction".',
+      'Select a plane (Select tool, click its square) to flip which side is cut away, or turn its cut off and on. You can keep several planes; one cuts at a time, and turning one on turns the others off.',
+      'While a plane is cutting, clicks go straight through the part that is cut away, so you can draw and edit inside.',
+      'Delete a plane like any object: select it and press Delete.'
+    ]
+  },
+  {
     id: 'follow-me',
     title: 'Follow Me (sweep a shape along a path)',
     category: 'tools',

@@ -142,6 +142,10 @@ import {
   axisSources, featureEdges, guideCrossings, guideOffset, guideSegment, guideSnapCandidates, isGuideShape,
   makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource, type V3,
 } from '../tools/tapeGuides';
+import { SectionCutter } from './SectionCutter';
+import { SectionPlaneMesh } from './SectionPlaneMesh';
+import { activeSection, dragDistance, isSectionShape, moveSection, sectionOnFace, type SectionArgs } from '../tools/sectionPlanes';
+import { usePresentation } from '../lib/presentation/store';
 import { commitKernelFollowMe, outlineEdges, pathFromEdge, pathFromFace, previewFollowMe, type FollowMePath } from '../tools/kernelFollowMe';
 import { createPushPullBinding, commitKernelPushPull } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
@@ -151,7 +155,7 @@ import { createFilletBinding } from '../tools/kernelFillet';
 import { FaceOffsetPreview } from './FaceOffsetPreview';
 import { ChamferPreview } from './ChamferPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
-import { buildExportScene, collectModelItems, downloadBlob, exportFileName } from '../lib/export/modelExport';
+import { buildExportScene, collectModelItems, downloadBlob, exportFileName, isModelObject } from '../lib/export/modelExport';
 import { buildSkp } from '../lib/export/skpExport';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
@@ -1874,7 +1878,7 @@ function Scene() {
     }
     // These tools handle their own clicks on the canvas (see their effects below): a click
     // on a face there picks a profile, a path or a point, never the selection.
-    if (activeTool === 'followme' || activeTool === 'tape') return;
+    if (activeTool === 'followme' || activeTool === 'tape' || activeTool === 'section') return;
     if (activeTool === 'combine') {
       // Combine: each click adds (or removes) a whole shape or object, in order; the first leads.
       const group = groupContaining(kernelHost.graph, faceId);
@@ -5055,6 +5059,7 @@ function Scene() {
         setTapeGuide(null);
         setFollowMeProfile(null);
         setFollowMeHover(null);
+        setSectionHover(null);
         awakenedRefPointsRef.current = [];
         setTypedLength('');
         setLastDrawTarget(null);
@@ -8499,7 +8504,7 @@ function Scene() {
     if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
       return;
     }
-    if (activeTool === 'followme') return; // Follow Me sweeps drawn shapes only; objects aren't picked
+    if (activeTool === 'followme' || activeTool === 'section') return; // these tools pick faces themselves, not objects
     
     const shape = shapes.find(s => s.id === id);
     let subFaceIndex: number | undefined = undefined;
@@ -10377,6 +10382,155 @@ function Scene() {
     };
   }, [activeTool, gl]);
 
+  // ---------------------------------------------------------------------------
+  // Section Plane tool: hover a face to line a plane up with it, click to place it (it becomes
+  // the active cut). Drag an existing plane's square to slide it along its direction.
+  // See tools/sectionPlanes.ts and SectionCutter.tsx.
+  // ---------------------------------------------------------------------------
+  const { active: presentationActive } = usePresentation();
+  const activeSectionArgs = useMemo(() => activeSection(shapes)?.args ?? null, [shapes]);
+  const [sectionHover, setSectionHover] = useState<SectionArgs | null>(null);
+  const sectionDragRef = useRef<{ id: string; start: SectionArgs; from: THREE.Vector3; distance: number } | null>(null);
+
+  /** What the Section tool is pointing at: a placed plane's square, or a face of the model. */
+  const sectionProbe = (ev: PointerEvent) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1), camera);
+    for (const hit of rc.intersectObjects(scene.children, true)) {
+      const o = hit.object as THREE.Mesh & { isLine2?: boolean; isLineSegments2?: boolean };
+      if (!o.isMesh || o.isLine2 || o.isLineSegments2) continue;
+      if (o.userData.isSectionPlaneQuad && o.userData.sectionId) return { ray: rc.ray, plane: o.userData.sectionId as string, point: hit.point, face: null };
+      if (!isModelObject(o) || !hit.face) continue;
+      const normal = hit.face.normal.clone().transformDirection(o.matrixWorld);
+      return { ray: rc.ray, plane: null, point: hit.point, face: normal };
+    }
+    return { ray: rc.ray, plane: null, point: null, face: null };
+  };
+
+  /** A plane square big enough to cover the model. */
+  const sectionSize = () => {
+    const box = new THREE.Box3();
+    for (const item of collectModelItems(scene)) {
+      item.geometry.computeBoundingBox();
+      for (const m of item.matrices) box.union(item.geometry.boundingBox!.clone().applyMatrix4(m));
+    }
+    return box.isEmpty() ? 6 : Math.min(200, Math.max(2, box.getSize(new THREE.Vector3()).length() * 1.1));
+  };
+
+  const sectionDownRef = useRef<(ev: PointerEvent) => boolean>(() => false);
+  sectionDownRef.current = (ev) => {
+    const probe = sectionProbe(ev);
+    if (!probe.plane || !probe.point) return false;
+    const shape = shapes.find(sh => sh.id === probe.plane);
+    if (!shape) return false;
+    const start = shape.args as SectionArgs;
+    sectionDragRef.current = { id: shape.id, start, from: probe.point.clone(), distance: 0 };
+    const controls = scene.userData.controls;
+    if (controls) controls.enabled = false;
+    setSectionHover(null);
+    setMeasurements('Section: drag to slide the plane; let go to place it.');
+    return true;
+  };
+
+  const sectionMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  sectionMoveRef.current = (ev) => {
+    const drag = sectionDragRef.current;
+    if (drag) {
+      const rect = gl.domElement.getBoundingClientRect();
+      const rc = new THREE.Raycaster();
+      rc.setFromCamera(new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1), camera);
+      drag.distance = dragDistance(drag.from, new THREE.Vector3(...drag.start.normal), rc.ray);
+      const moved = moveSection(drag.start, drag.distance);
+      // Live, without an undo step per frame: the one step is added when the drag ends.
+      setShapesSilent(prev => prev.map(sh => (sh.id === drag.id ? { ...sh, args: moved, position: moved.point } : sh)));
+      setMeasurements(`Section moved ${formatValue(drag.distance, unit, 2)}`);
+      return;
+    }
+    const probe = sectionProbe(ev);
+    if (probe.face && probe.point) {
+      setSectionHover(sectionOnFace(probe.point, probe.face, camera.position, sectionSize()));
+      setMeasurements('Section: click to cut here. Drag a placed plane to move it.');
+    } else {
+      setSectionHover(null);
+      setMeasurements(probe.plane ? 'Section: drag to slide this plane along its direction.' : 'Section: point at a wall, floor or other face.');
+    }
+  };
+
+  const sectionUpRef = useRef<(ev: PointerEvent, isClick: boolean) => void>(() => {});
+  sectionUpRef.current = (ev, isClick) => {
+    const drag = sectionDragRef.current;
+    if (drag) {
+      sectionDragRef.current = null;
+      const controls = scene.userData.controls;
+      if (controls) controls.enabled = true;
+      const moved = moveSection(drag.start, drag.distance);
+      setShapes(prev => prev.map(sh => (sh.id === drag.id ? { ...sh, args: moved, position: moved.point } : sh)));
+      commitHistory();
+      recordAction(actionLabel('Move section plane'));
+      return;
+    }
+    if (!isClick) return;
+    const probe = sectionProbe(ev);
+    if (!probe.face || !probe.point) return;
+    const args = sectionOnFace(probe.point, probe.face, camera.position, sectionSize());
+    const id = Math.random().toString(36).substr(2, 9);
+    const count = shapes.filter(isSectionShape).length;
+    setShapes(prev => [
+      // One section cuts at a time: the new one takes over.
+      ...prev.map(sh => (isSectionShape(sh) && (sh.args as SectionArgs).active ? { ...sh, args: { ...(sh.args as SectionArgs), active: false } } : sh)),
+      { id, name: `Section ${count + 1}`, type: 'measurement', position: args.point, args, color: '#f97316' } as Shape,
+    ]);
+    commitHistory();
+    recordAction(actionLabel('Add section plane'));
+    setSectionHover(null);
+    setMeasurements('Section placed. Drag its square to move it; select it to flip it or turn it off.');
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'section') {
+      setSectionHover(null);
+      return;
+    }
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => {
+      if (ev.button !== 0) return;
+      down = { x: ev.clientX, y: ev.clientY };
+      sectionDownRef.current(ev);
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      sectionUpRef.current(ev, isClick);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (lastMove) sectionMoveRef.current(lastMove);
+      });
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      if (frame) cancelAnimationFrame(frame);
+      if (sectionDragRef.current) {
+        sectionDragRef.current = null;
+        const controls = scene.userData.controls;
+        if (controls) controls.enabled = true;
+      }
+    };
+  }, [activeTool, gl]);
+
   typedWantedRef.current = () => {
     if (lastTypedStepRef.current?.tool === activeTool) return true;
     if (activeTool === 'tape' && tapeGuide) return true;
@@ -10519,6 +10673,8 @@ function Scene() {
       />
       <ShareMainScene />
       <PresentationDriver />
+      {/* The active section plane cuts the model (presentation mode does its own cuts). */}
+      <SectionCutter section={presentationActive ? null : activeSectionArgs} />
       <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />
       
       {godRaysEnabled && (
@@ -10965,6 +11121,14 @@ function Scene() {
 
         if (!isVisible) return null;
 
+        if (isSectionShape(shape)) {
+          const sectionId = shape.id;
+          return (
+            <SectionPlaneMesh key={shape.id} id={shape.id} args={shape.args as SectionArgs} selected={selectedId === shape.id}
+              pickable={activeTool === 'section' || activeTool === 'select'}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(sectionId); setSelectedIds([sectionId]); } : undefined} />
+          );
+        }
         // Guides hide together (Scene Helpers > Guides).
         if (isGuideShape(shape) && !guidesVisible) return null;
         if (shape.type === 'measurement' && (shape.args as any)?.kind === 'guide') {
@@ -12321,6 +12485,8 @@ function Scene() {
           </group>
         );
       })()}
+      {/* Section tool: where a click would place a plane */}
+      {activeTool === 'section' && sectionHover && <SectionPlaneMesh args={sectionHover} preview />}
       {/* Follow Me: the path under the pointer, and the sweep it would make */}
       {activeTool === 'followme' && followMeHover && (
         <group>

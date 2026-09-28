@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AutoLightingPanel } from './AutoLightingPanel';
 import { actionLabel } from '../lib/macroRecorder';
 import { SiteBuildingFields } from './WorldSiteControls';
+import { SectionPlaneFields } from './SectionPlaneFields';
+import { isSectionShape } from '../tools/sectionPlanes';
 import { TextEntityFields } from './TextEntityFields';
 import { WeatherControls } from './graphics/WeatherControls';
 import { PlainFinishPicker } from './PlainFinishPicker';
@@ -951,6 +953,8 @@ export default function RightPanelStack() {
                 {selectedShape.textData && (selectedShape.type === 'text' || selectedShape.type === 'text3d') && (
                   <TextEntityFields shape={selectedShape} />
                 )}
+
+                {isSectionShape(selectedShape) && <SectionPlaneFields shape={selectedShape} />}
 
                 {selectedShape.type === 'site_building' && selectedShape.siteBuildingData && (
                   <SiteBuildingFields shape={selectedShape} />

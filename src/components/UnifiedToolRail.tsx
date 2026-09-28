@@ -26,7 +26,7 @@ import {
   Move, 
   RotateCw, 
   Maximize, 
-  ArrowUpFromLine, Route, 
+  ArrowUpFromLine, Route, Slice, 
   Search,
   Orbit,
   Hand,
@@ -782,6 +782,16 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'followme',
           onClick: (s) => s.setActiveTool('followme'),
           keywords: ['follow me', 'sweep', 'path', 'moulding', 'gutter', 'kerb', 'handrail', 'pipe', 'lathe']
+        },
+        {
+          id: 'section',
+          tool: 'section',
+          label: 'Section Plane',
+          subtitle: 'Slice the model to see inside: click a wall or floor to cut along it',
+          icon: <Slice size={19} />,
+          isActive: (s) => s.activeTool === 'section',
+          onClick: (s) => s.setActiveTool('section'),
+          keywords: ['section', 'cut', 'slice', 'plan cut', 'section plane', 'see inside']
         },
         {
           id: 'offset',
