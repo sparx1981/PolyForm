@@ -15,14 +15,10 @@ import { type LatLng, parseLatLng, ukPostcode } from './geo';
 import { type HeightTile, decodeTerrariumPixels, terrariumTileUrl } from './terrain';
 import type { SiteIO } from './site';
 import { loadLidar } from './lidar';
+import { OVERPASS_SERVERS, OverpassError, raceOverpass } from './overpassRace';
 
-/** Public Overpass servers, tried in turn (the main one is often busy). */
-export const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-];
+/** Public Overpass servers (kept here too for older imports). */
+export const OVERPASS_ENDPOINTS = OVERPASS_SERVERS;
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 30000): Promise<Response> {
   const ctrl = new AbortController();
@@ -63,23 +59,21 @@ async function overpassJson(res: Response): Promise<{ elements?: unknown[] }> {
 }
 
 /**
- * Buildings from OpenStreetMap: through the app's relay first (api/overpass, which tries each
- * public server in turn from the server side, where a busy server's missing CORS header doesn't
- * matter, and caches the answer), then straight to each server from the browser.
+ * Buildings from OpenStreetMap: through the app's relay first (api/overpass races the public
+ * servers from the server side, where a busy server's missing CORS header doesn't matter, and
+ * caches the answer), then by racing the servers straight from the browser.
  */
 async function fetchOverpass(query: string): Promise<{ elements?: unknown[] }> {
   const errors: string[] = [];
   try {
-    return await overpassJson(await fetchWithTimeout(`/api/overpass?data=${encodeURIComponent(query)}`, {}, 60000));
+    return await overpassJson(await fetchWithTimeout(`/api/overpass?data=${encodeURIComponent(query)}`, {}, 30000));
   } catch (err) {
     errors.push(`relay: ${err instanceof Error ? err.message : String(err)}`);
   }
-  for (const url of OVERPASS_ENDPOINTS) {
-    try {
-      return await overpassJson(await fetchWithTimeout(`${url}?data=${encodeURIComponent(query)}`, {}, 20000));
-    } catch (err) {
-      errors.push(`${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
-    }
+  try {
+    return JSON.parse(await raceOverpass(query, { deadline: 25000 }));
+  } catch (err) {
+    errors.push(...(err instanceof OverpassError ? err.details : [String(err)]));
   }
   console.warn('[WorldView] OpenStreetMap buildings failed:', errors);
   throw new Error('the OpenStreetMap servers are busy or unreachable');
