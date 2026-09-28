@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import type { MeshBVH } from 'three-mesh-bvh';
+
+/** What the player collides with: the model's MeshBVH, or it together with the closed doors (see doors.ts). */
+export type Collider = Pick<MeshBVH, 'shapecast' | 'raycastFirst'>;
 import { isFloorSurface } from '../portalNavigation';
 import {
   PLAYER_HEIGHT,
@@ -86,7 +89,7 @@ const contactPool: ContactInfo[] = Array.from({ length: 8 }, () => ({ direction:
  * corrected position (spec §7.5's "Collision resolve" - the standard
  * three-mesh-bvh capsule pattern).
  */
-function resolveCapsuleCollisions(bvh: MeshBVH, feet: THREE.Vector3, height = PLAYER_HEIGHT): ResolveResult {
+function resolveCapsuleCollisions(bvh: Collider, feet: THREE.Vector3, height = PLAYER_HEIGHT): ResolveResult {
   _segment.start.set(feet.x, feet.y + CAPSULE_RADIUS, feet.z);
   _segment.end.set(feet.x, feet.y + Math.max(height, CAPSULE_RADIUS * 2) - CAPSULE_RADIUS, feet.z);
 
@@ -136,7 +139,7 @@ function resolveCapsuleCollisions(bvh: MeshBVH, feet: THREE.Vector3, height = PL
  * without a significant push-out (a low ceiling, or a spot too close to a
  * wall to actually stand in).
  */
-export function checkCapsuleFits(bvh: MeshBVH, feetPoint: THREE.Vector3): boolean {
+export function checkCapsuleFits(bvh: Collider, feetPoint: THREE.Vector3): boolean {
   const testFeet = feetPoint.clone();
   const { totalPush } = resolveCapsuleCollisions(bvh, testFeet);
   return totalPush <= MAX_STEP_HEIGHT;
@@ -169,7 +172,7 @@ export interface StepInput {
 
 const _standTest = new THREE.Vector3();
 /** Whether a full-height capsule fits where the crouched player is (nothing low overhead). */
-function hasHeadroomToStand(bvh: MeshBVH, feet: THREE.Vector3): boolean {
+function hasHeadroomToStand(bvh: Collider, feet: THREE.Vector3): boolean {
   _standTest.copy(feet);
   // Anything overhead pushes the full-height capsule out of place (a surface cutting right
   // through it can push it either way); resting on the floor moves it by a hair at most.
@@ -184,7 +187,7 @@ function hasHeadroomToStand(bvh: MeshBVH, feet: THREE.Vector3): boolean {
  * grounded substep it's available for; callers should have already
  * one-shot-consumed it from their input source before calling this.
  */
-export function stepPlayer(state: PlayerState, input: StepInput, rawDt: number, bvh: MeshBVH, bounds: PhysicsBounds): void {
+export function stepPlayer(state: PlayerState, input: StepInput, rawDt: number, bvh: Collider, bounds: PhysicsBounds): void {
   const clampedDt = Math.min(rawDt, MAX_FRAME_DT);
   const substepDt = clampedDt / PHYSICS_SUBSTEPS;
   if (input.crouch) {
@@ -335,7 +338,7 @@ interface StepUpResult {
 const STEP_UP_PROBE_DISTANCE = CAPSULE_RADIUS + 0.1;
 
 /** See spec §7.5 "Step-up assist". Lifts, probes forward past the blocking contact, resolves, then confirms with a downward raycast that the landing is a real, close-enough floor before accepting it. */
-function tryStepUp(bvh: MeshBVH, preMoveFeet: THREE.Vector3, wishDir: THREE.Vector3, height = PLAYER_HEIGHT): StepUpResult | null {
+function tryStepUp(bvh: Collider, preMoveFeet: THREE.Vector3, wishDir: THREE.Vector3, height = PLAYER_HEIGHT): StepUpResult | null {
   const dirLengthSq = wishDir.x * wishDir.x + wishDir.z * wishDir.z;
   if (dirLengthSq < 1e-8) return null;
   const invLen = STEP_UP_PROBE_DISTANCE / Math.sqrt(dirLengthSq);

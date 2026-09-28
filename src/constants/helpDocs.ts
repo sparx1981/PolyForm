@@ -73,9 +73,10 @@ export const HELP_DOCS: HelpTopic[] = [
       'Click a spot on the floor or another walkable surface to start walking there.',
       'Move with WASD or the arrow keys, look around with the mouse, press Space to jump, hold Shift to sprint and hold C to crouch (you stay crouched under low ceilings until there is room to stand).',
       'Almost everything you draw or place blocks movement - walls, floors, basic shapes, drawn geometry, trees, and more - so you can walk into, stand on, or jump onto whatever you\'ve modeled; you can also climb stairs and small steps automatically.',
-      'Doors, small plants/shrubs, scale-reference figures and dimension annotations are always walk-through.',
+      'Closed doors block the way: look at a door and press E to open it, and press E again to close it. Archways are always open.',
+      'Small plants/shrubs, scale-reference figures and dimension annotations are always walk-through.',
       'Press Esc to exit Walk Mode and return to your previous tool. Losing mouse focus (e.g. alt-tab) pauses instead of exiting.',
-      'On touch devices, use the on-screen joystick to move, drag to look around, and the Jump/Crouch/Exit buttons.',
+      'On touch devices, use the on-screen joystick to move, drag to look around, and the Jump/Crouch/Door/Exit buttons (Door opens or closes the door you are looking at).',
       'Adjust Movement Speed and Mouse Sensitivity in the Tool Modifier panel while Walk Mode is active.'
     ]
   },

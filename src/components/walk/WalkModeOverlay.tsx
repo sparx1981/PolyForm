@@ -58,7 +58,7 @@ export default function WalkModeOverlay() {
       {walkModePhase === 'walking' && hudVisible && !isTouchDevice && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
           <div className="bg-gray-900/80 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg border border-gray-700 text-center">
-            WASD to move · Mouse to look · Space to jump · Shift to sprint · C to crouch · Esc to exit
+            WASD to move · Mouse to look · Space to jump · Shift to sprint · C to crouch · E to open a door · Esc to exit
           </div>
         </div>
       )}
@@ -212,6 +212,17 @@ function TouchControls({ bridge }: { bridge: ReturnType<typeof useApp>['walkBrid
         }}
       >
         Crouch
+      </button>
+
+      <button
+        className="absolute bottom-48 right-8 w-16 h-16 rounded-full bg-white/15 border border-white/40 text-white text-xs font-semibold"
+        style={{ pointerEvents: 'auto' }}
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          bridge.requestToggleDoor?.();
+        }}
+      >
+        Door
       </button>
 
       <button

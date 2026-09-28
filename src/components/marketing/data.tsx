@@ -176,7 +176,7 @@ export const FEATURE_SECTIONS: FeatureSection[] = [
     id: 'walk', icon: Footprints, title: 'Walk through it',
     body: 'Walk Mode puts you inside at eye level, with gravity and collision, so you can climb the stairs and stand on the deck.',
     items: [
-      it('Walk Mode', 'WASD', 'Space to jump, Shift to sprint, C to crouch, Esc to exit.'),
+      it('Walk Mode', 'WASD', 'Space to jump, Shift to sprint, C to crouch, E to open a door, Esc to exit.'),
       it('Look Around', '', 'Turn the camera without moving.'),
       it('Portal Navigation', '', 'Jump between points in the model.'),
       it('Camera Depth Clipping', '', 'Near and far clipping planes.'),

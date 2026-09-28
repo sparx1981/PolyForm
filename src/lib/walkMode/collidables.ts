@@ -9,7 +9,8 @@ import type { Shape } from '../../types';
  * whatever the user draws is something they can walk into, stand on, or
  * jump onto without it needing its own entry here first. Only things
  * that would make walking through the model actively worse are excluded:
- * doors (you'd otherwise have to open every one), small plants/shrubs
+ * doors (closed ones get their own collider, see doors.ts, so opening one
+ * doesn't rebuild the whole world), small plants/shrubs
  * (walking around every bush would be tedious - full trees still block),
  * scale-reference figures (decorative, not real geometry), and dimension
  * annotations (not geometry at all).

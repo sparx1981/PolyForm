@@ -22,6 +22,9 @@ import {
 import { lockLossClassifier } from '../../lib/walkMode/lockLossClassifier';
 import type { WalkBridge } from '../../lib/walkMode/inputState';
 import { isFloorSurface, extractYawFromQuaternion, buildPortalOrientation } from '../../lib/portalNavigation';
+import { DoorOpener } from '../../lib/presentation/doors';
+import { buildClosedDoorCollider, combineColliders, doorInView } from '../../lib/walkMode/doors';
+import type { MeshBVH } from 'three-mesh-bvh';
 
 interface SavedCameraState {
   fov: number;
@@ -84,6 +87,69 @@ export default function WalkModeController({
   const markerRef = useRef<THREE.Mesh>(null);
   const markerMaterialRef = useRef<THREE.MeshBasicMaterial>(null);
   const exitingRef = useRef(false);
+  // Doors: E opens or closes the one in view. Closed doors block the way (their own small
+  // collider beside the model's, so opening one doesn't rebuild the whole collision world).
+  const doorOpenerRef = useRef(new DoorOpener());
+  const openDoorsRef = useRef(new Map<string, THREE.Mesh | null>());
+  const doorColliderRef = useRef<MeshBVH | null>(null);
+  const shapesRef = useRef(shapes);
+  shapesRef.current = shapes;
+
+  const rebuildDoorCollider = useCallback(() => {
+    doorColliderRef.current?.geometry.dispose();
+    doorColliderRef.current = buildClosedDoorCollider(shapesRef.current, new Set(openDoorsRef.current.keys()));
+  }, []);
+
+  const toggleDoorInView = useCallback(() => {
+    if (phaseRef.current !== 'walking') return;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    const door = doorInView(new THREE.Ray(camera.position.clone(), forward), shapesRef.current);
+    if (!door) return;
+    // The door's own mesh, to swing its leaves (the same opener presentation mode uses).
+    let mesh: THREE.Mesh | null = null;
+    scene.traverse(o => {
+      if (!mesh && o.userData?.isShape && o.userData.id === door.id && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh;
+    });
+    const opening = !openDoorsRef.current.has(door.id);
+    if (mesh) {
+      const [w = 0.9, h = 2.1] = Array.isArray(door.args) ? (door.args as number[]) : [];
+      doorOpenerRef.current.toggle(mesh, { width: w, height: h }, door.archStyle, camera.position);
+    }
+    if (opening) openDoorsRef.current.set(door.id, mesh);
+    else openDoorsRef.current.delete(door.id);
+    rebuildDoorCollider();
+  }, [camera, scene, rebuildDoorCollider]);
+
+  useEffect(() => {
+    bridge.requestToggleDoor = toggleDoorInView;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyE' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (phaseRef.current !== 'walking') return;
+      e.preventDefault();
+      toggleDoorInView();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      bridge.requestToggleDoor = null;
+    };
+  }, [bridge, toggleDoorInView]);
+
+  // Doors come back shut when walking ends; a door deleted or moved gets a fresh collider.
+  useEffect(() => {
+    for (const id of [...openDoorsRef.current.keys()]) {
+      if (!shapes.some(s => s.id === id)) openDoorsRef.current.delete(id);
+    }
+    rebuildDoorCollider();
+  }, [shapes, rebuildDoorCollider]);
+
+  useEffect(() => () => {
+    doorOpenerRef.current.dispose();
+    openDoorsRef.current.clear();
+    doorColliderRef.current?.geometry.dispose();
+    doorColliderRef.current = null;
+  }, []);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -391,6 +457,14 @@ export default function WalkModeController({
 
   // --- Per-frame: placement marker while placing, physics + camera while walking.
   useFrame((_, rawDt) => {
+    doorOpenerRef.current.update(Math.min(rawDt, 0.1));
+    // A door the viewport redrew (an edit) is shown shut again: make it block again too.
+    let doorsChanged = false;
+    for (const [id, mesh] of openDoorsRef.current) {
+      if (mesh && !doorOpenerRef.current.isOpen(mesh)) { openDoorsRef.current.delete(id); doorsChanged = true; }
+    }
+    if (doorsChanged) rebuildDoorCollider();
+
     if (phase === 'placing') {
       const marker = markerRef.current;
       const mat = markerMaterialRef.current;
@@ -440,7 +514,7 @@ export default function WalkModeController({
       playerState,
       { move, jumpRequested, cameraYaw, speed, crouch },
       rawDt,
-      world.bvh,
+      combineColliders(world.bvh, doorColliderRef.current),
       { min: world.bounds.min, max: world.bounds.max }
     );
 

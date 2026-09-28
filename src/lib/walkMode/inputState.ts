@@ -156,9 +156,11 @@ export interface WalkBridge {
   requestResume: (() => void) | null;
   /** Set by WalkModeController; the overlay's touch Exit button calls this. */
   requestExit: (() => void) | null;
+  /** Set by WalkModeController; opens or closes the door in view (the touch Door button). */
+  requestToggleDoor: (() => void) | null;
   buildInfo: { triangleCount: number; buildTimeMs: number } | null;
 }
 
 export function createWalkBridge(): WalkBridge {
-  return { inputState: new WalkInputState(), requestResume: null, requestExit: null, buildInfo: null };
+  return { inputState: new WalkInputState(), requestResume: null, requestExit: null, requestToggleDoor: null, buildInfo: null };
 }
