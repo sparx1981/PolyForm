@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { newShapeIdPart } from './shapeIds';
 import { buildRoofModel, edgeFrame, facePlan, isCurveCrease, roofHeightAt, type RoofModel } from './roofSkeleton';
 import { extensionRoofModel, type ExtensionKind } from './extensionRoof';
 import { Shape } from '../types';
@@ -1976,7 +1977,7 @@ export function buildRoofAssemblyForRoom(
 
   const isHip = params.roofType === 'hip';
   const isParapet = params.roofType === 'parapet';
-  const roofId = `roof_${Math.random().toString(36).substr(2, 9)}`;
+  const roofId = `roof_${newShapeIdPart()}`;
 
   // Convert world polygon to local coordinates centered at (centerX, centerZ)
   const localWallPoly: [number, number][] = worldPoly.map(([x, z]) => [x - centerX, z - centerZ]);
@@ -2044,7 +2045,7 @@ export function buildRoofAssemblyForRoom(
     };
 
     const copingShape: Shape = {
-      id: `coping_${Math.random().toString(36).substr(2, 9)}`,
+      id: `coping_${newShapeIdPart()}`,
       name: `Parapet Coping Stones Cap`,
       type: 'custom',
       position: [centerX, topY, centerZ],
@@ -2060,7 +2061,7 @@ export function buildRoofAssemblyForRoom(
 
     // The roof deck is its own part, so it can be painted apart from the parapet.
     const deckShape: Shape = {
-      id: `deck_${Math.random().toString(36).substr(2, 9)}`,
+      id: `deck_${newShapeIdPart()}`,
       name: 'Roof Deck',
       type: 'custom',
       position: [centerX, topY, centerZ],
@@ -2205,7 +2206,7 @@ export function buildRoofAssemblyForRoom(
   let pedimentShape: Shape | undefined;
   if (!isHip && pedimentGeom) {
     pedimentShape = {
-      id: `pediment_${Math.random().toString(36).substr(2, 9)}`,
+      id: `pediment_${newShapeIdPart()}`,
       name: `Gable Pediment Infill Walls`,
       type: 'custom',
       position: [centerX, topY, centerZ],
@@ -2223,7 +2224,7 @@ export function buildRoofAssemblyForRoom(
 
   // 3. Apex Ridge Capping
   const ridgeCapShape: Shape = {
-    id: `ridgecap_${Math.random().toString(36).substr(2, 9)}`,
+    id: `ridgecap_${newShapeIdPart()}`,
     name: `Apex Ridge Capping`,
     type: 'custom',
     position: [centerX, topY, centerZ],
@@ -2240,7 +2241,7 @@ export function buildRoofAssemblyForRoom(
 
   // 4. Fascias & Bargeboards
   const fasciaShape: Shape = {
-    id: `fascia_${Math.random().toString(36).substr(2, 9)}`,
+    id: `fascia_${newShapeIdPart()}`,
     name: `Fascias & Bargeboards`,
     type: 'custom',
     position: [centerX, topY, centerZ],
@@ -2257,7 +2258,7 @@ export function buildRoofAssemblyForRoom(
 
   // 5. Soffit Under-Eaves Panels
   const soffitShape: Shape = {
-    id: `soffit_${Math.random().toString(36).substr(2, 9)}`,
+    id: `soffit_${newShapeIdPart()}`,
     name: `Soffits & Eaves Panels`,
     type: 'custom',
     position: [centerX, topY, centerZ],
@@ -2492,7 +2493,7 @@ export function buildCeilingSlabForRoom(
   const localPoly: [number, number][] = worldPoly.map(([x, z]) => [x - centerX, z - centerZ]);
 
   const slabShape: Shape = {
-    id: Math.random().toString(36).substr(2, 9),
+    id: newShapeIdPart(),
     name: `Floor Slab (${bounds.width.toFixed(1)}m × ${bounds.depth.toFixed(1)}m)`,
     type: 'poly',
     position: [centerX, topY + slabThickness / 2, centerZ],
@@ -2564,7 +2565,7 @@ export function buildNextFloorLevel(
   const oldToNewWallIdMap = new Map<string, string>();
 
   for (const w of sourceWalls) {
-    const newId = Math.random().toString(36).substr(2, 9);
+    const newId = newShapeIdPart();
     oldToNewWallIdMap.set(w.id, newId);
 
     const newWall: Shape = {
@@ -2589,7 +2590,7 @@ export function buildNextFloorLevel(
       const targetWallId = oldToNewWallIdMap.get(op.hostWallId!)!;
       const newOp: Shape = {
         ...op,
-        id: Math.random().toString(36).substr(2, 9),
+        id: newShapeIdPart(),
         name: `${op.type === 'door' ? 'Door' : 'Window'} St-${nextStory}`,
         position: [op.position[0], op.position[1] + wallH, op.position[2]],
         hostWallId: targetWallId,
@@ -3758,7 +3759,7 @@ export function updateRoofAssembly(
     });
     if (!hasDeckPart) {
       updatedShapes.push({
-        id: `deck_${Math.random().toString(36).substr(2, 9)}`,
+        id: `deck_${newShapeIdPart()}`,
         name: 'Roof Deck',
         type: 'custom',
         position: [...targetRoof.position] as [number, number, number],

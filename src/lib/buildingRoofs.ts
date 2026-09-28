@@ -280,6 +280,26 @@ export function roofWholeBuilding(shapes: Shape[], params: RoofParams): { shapes
   return { shapes: [...shapes.filter(s => !isExistingRoofPart(s)), ...made], roofs, mainRoofId: main.id, notes };
 }
 
+/** The tile look the Roof panel gives pitched roofs: its texture and the settings it was made from. */
+export interface RoofTileLook {
+  textureUrl?: string;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Roofs the whole building (as roofWholeBuilding), then gives every pitched roof the Roof
+ * panel's tile look. What the roof buttons and sdk.architecture.roofBuilding both run.
+ */
+export function roofBuilding(shapes: Shape[], params: RoofParams, tiles?: RoofTileLook): ReturnType<typeof roofWholeBuilding> {
+  const result = roofWholeBuilding(shapes, params);
+  if (!result || !tiles) return result;
+  const roofIds = new Set(result.roofs.filter(r => r.roofData?.roofType !== 'parapet').map(r => r.id));
+  return {
+    ...result,
+    shapes: result.shapes.map(s => (roofIds.has(s.id) ? { ...s, textureUrl: tiles.textureUrl, roofTileData: tiles.data } : s)),
+  };
+}
+
 /** "and a lean-to on the extension" etc., for the roof buttons' message. */
 export function describeRoofs(roofs: Shape[], notes: string[]): string {
   const ext = roofs.filter(r => r.roofData?.extension || (r.roofData?.roofType === 'parapet' && roofs.length > 1 && r !== roofs[0]));

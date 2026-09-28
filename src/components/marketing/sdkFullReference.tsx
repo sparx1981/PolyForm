@@ -89,6 +89,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('createRoof', 'sdk.architecture.createRoof({ roofType?, width, depth, ridgeHeight?, pitchAngleDeg?, … })', 'Shape', 'Create a parametric roof (gable, hip or parapet flat).'),
       m('updateRoof', 'sdk.architecture.updateRoof(roofId, { height?, eaveOverhang?, fasciaHeight?, tileShape?, … })', 'void', "Update an existing roof's height, overhang, fascia and tiles."),
       m('listRoofs', 'sdk.architecture.listRoofs()', 'Shape[]', 'List every roof in the model.'),
+      m('roofBuilding', 'sdk.architecture.roofBuilding({ roofType, pitchAngleDeg?, ridgeHeight?, eaveOverhang?, tileShape?, … })', 'Shape[]', 'Roof the whole building as the Roof buttons do: the main roof on the top storey and a roof on each extension, replacing existing roofs.'),
       m('createStairs', 'sdk.architecture.createStairs({ style?, width?, height?, length?, numSteps?, … })', 'Shape', 'Create a parametric staircase flight.'),
       m('createRailing', 'sdk.architecture.createRailing({ length?, height?, position?, color? })', 'Shape', 'Create a safety railing.'),
       m('createRoom', 'sdk.architecture.createRoom({ width, length, height?, wallThickness?, … })', '{ roomId, wallShapes, floorShape?, ceilingShape? }', 'Create a room: its walls, floor and ceiling.'),

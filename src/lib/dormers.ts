@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { newShapeIdPart } from './shapeIds';
 import type { Shape } from '../types';
 import { RoofSurface, eavePolygon, facingEdge, roofEdges, wallPolygon, type Edge, type Facing, type V2 } from './roofSurface';
 
@@ -93,7 +94,7 @@ export function evenlySpaced(roof: Shape, count: number, facing: Facing, base: P
       const along = edge.length / 2 + (k - (count - 1) / 2) * step;
       return {
         ...DORMER_DEFAULTS, ...base,
-        id: `d${k + 1}-${Math.random().toString(36).slice(2, 7)}`,
+        id: `d${k + 1}-${newShapeIdPart().slice(0, 5)}`,
         x: +(edge.a[0] + edge.u[0] * along + inward[0] * (overhang + 0.7)).toFixed(3),
         z: +(edge.a[1] + edge.u[1] * along + inward[1] * (overhang + 0.7)).toFixed(3),
       };

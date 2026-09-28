@@ -5,7 +5,10 @@ import { cn } from '../lib/utils';
 import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop } from 'lucide-react';
 import { buildRoofShapeForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
-import { describeRoofs, roofWholeBuilding } from '../lib/buildingRoofs';
+import { describeRoofs, roofBuilding } from '../lib/buildingRoofs';
+import { captureShapeIds } from '../lib/shapeIds';
+import { actionLabel } from '../lib/macroRecorder';
+
 
 /** The roof framing's span and support checks, added to the timber message when there are any. */
 const roofCheckNote = (warnings: string[] = []) => (warnings.length ? ` Roof checks: ${warnings.join(' ')}` : '');
@@ -59,7 +62,8 @@ export const ToolModifierPalette: React.FC = () => {
     kernelHost,
     addShape,
     commitHistory,
-    setMeasurements
+    setMeasurements,
+    recordAction
   } = useApp();
 
   // Roof parametric customization state
@@ -144,7 +148,7 @@ export const ToolModifierPalette: React.FC = () => {
       setMeasurements('No walls found. Draw a closed room to generate a roof.');
       return;
     }
-    const result = roofWholeBuilding(shapes, {
+    const roofParams: RoofParams = {
       roofType,
       pitchAngleDeg: roofType === 'parapet' ? 0 : roofPitchAngle,
       usePitchAngle: roofType !== 'parapet',
@@ -152,10 +156,14 @@ export const ToolModifierPalette: React.FC = () => {
       fasciaHeight: roofFasciaHeight,
       color: roofType === 'parapet' ? '#475569' : roofColor,
       fasciaColor: fasciaColor
-    });
+    };
+    const { result, ids } = captureShapeIds(() => roofBuilding(shapes, roofParams));
     if (result) {
       setShapes(result.shapes);
       commitHistory();
+      recordAction(actionLabel(`Roof the building (${roofType})`), {
+        sdk: `sdk.architecture.roofBuilding(${JSON.stringify(roofParams)}, ${JSON.stringify({ ids })});`,
+      });
       if (setSelectedId) setSelectedId(result.mainRoofId);
       setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip' : 'Gable'} Roof assembly${describeRoofs(result.roofs, result.notes)}`);
     }

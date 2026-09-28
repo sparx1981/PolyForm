@@ -3,6 +3,8 @@ import { Shape, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, C
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
+import { roofBuilding, type RoofTileLook } from '../lib/buildingRoofs';
+import { withShapeIds } from '../lib/shapeIds';
 import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
 import { commitKernelPushPull } from '../tools/kernelPushPull';
 import { commitKernelFaceOffset } from '../tools/kernelFaceOffset';
@@ -135,6 +137,7 @@ import {
   RoofType,
   updateRoofAssembly,
   RoofAssemblyUpdateParams,
+  type RoofParams,
 } from '../lib/archRoofGenerator';
 import { RoofTileShape, ROOF_TILE_SHAPES } from '../lib/roofTileGenerator';
 import {
@@ -266,6 +269,12 @@ export interface SDK {
     }) => Shape;
     updateRoof: (roofId: string, params: Partial<RoofAssemblyUpdateParams>) => void;
     listRoofs: () => Shape[];
+    /**
+     * Roofs the whole building, as the Roof buttons do: the main roof on the top storey and a
+     * roof on each extension below, replacing any existing roofs. `options.tiles` gives pitched
+     * roofs the Roof panel's tile look; `options.ids` reuses recorded object ids.
+     */
+    roofBuilding: (params: RoofParams, options?: { tiles?: RoofTileLook; ids?: string[] }) => Shape[];
     createStairs: (args: {
       style?: StairStyleType;
       width?: number;
@@ -900,6 +909,18 @@ export class DeveloperSDK implements SDK {
 
       listRoofs: (): Shape[] => {
         return this.shapes.filter(s => s.type === 'roof' || (s.tags && s.tags.includes('roof')));
+      },
+
+      roofBuilding: (params: RoofParams, options: { tiles?: RoofTileLook; ids?: string[] } = {}): Shape[] => {
+        const result = withShapeIds(options.ids ?? [], () => roofBuilding(this.shapes, params, options.tiles));
+        if (!result) {
+          this.log('No roof made: draw a closed room of walls first.');
+          return [];
+        }
+        this.setShapes(result.shapes);
+        this.shapes = result.shapes;
+        this.log(`Roofed the building (${result.roofs.length} roof${result.roofs.length === 1 ? '' : 's'}).`);
+        return result.roofs;
       },
 
       createStairs: (args: {

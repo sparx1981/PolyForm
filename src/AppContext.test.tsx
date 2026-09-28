@@ -504,3 +504,40 @@ describe('AppProvider action recorder: tool commands', () => {
     expect(code).toContain('sdk.drawing.applyChanges(');
   });
 });
+
+describe('AppProvider action recorder: roofs', () => {
+  it('records roofing the building as one roofBuilding line that replays with the same ids', async () => {
+    const { DeveloperSDK } = await import('./services/developerService');
+    const { roofBuilding } = await import('./lib/buildingRoofs');
+    const { captureShapeIds } = await import('./lib/shapeIds');
+    const { result } = renderApp();
+    // A 6 x 4 room of walls to roof.
+    let walls: Shape[] = [];
+    const builder = new DeveloperSDK([], (n: any) => { walls = typeof n === 'function' ? n(walls) : n; }, vi.fn(), null, {});
+    builder.architecture.createRoom({ width: 6, length: 4, height: 2.8 });
+    act(() => { result.current.setShapes(walls); });
+    const start = result.current.shapes;
+
+    act(() => { result.current.setIsRecording(true); });
+    const params = { roofType: 'gable' as const, pitchAngleDeg: 35, usePitchAngle: true, color: '#991b1b', tileShape: 'none' as const };
+    act(() => {
+      const { result: built, ids } = captureShapeIds(() => roofBuilding(result.current.shapes, params));
+      expect(built).not.toBeNull();
+      result.current.setShapes(built!.shapes);
+      result.current.recordAction('// Roof the building (gable)', {
+        sdk: `sdk.architecture.roofBuilding(${JSON.stringify(params)}, ${JSON.stringify({ ids })});`,
+      });
+    });
+    act(() => { result.current.setIsRecording(false); });
+
+    const code = result.current.recordedCode;
+    expect(code).toContain('sdk.architecture.roofBuilding(');
+    expect(code).not.toContain('addObject');
+
+    let shapes = start;
+    const sdk = new DeveloperSDK(shapes, (n: any) => { shapes = typeof n === 'function' ? n(shapes) : n; }, vi.fn(), null, {});
+    new Function('sdk', code)(sdk);
+    const { normalizeForScript } = await import('./lib/macroRecorder');
+    expect(normalizeForScript(shapes)).toEqual(normalizeForScript(result.current.shapes));
+  });
+});

@@ -33,7 +33,10 @@ import {
 } from '../lib/archRoofGenerator';
 import { Shape } from '../types';
 import { refreshRoofExtras } from '../lib/roofExtras';
-import { describeRoofs, rebuildExtensionRoof, roofWholeBuilding } from '../lib/buildingRoofs';
+import { describeRoofs, rebuildExtensionRoof, roofBuilding } from '../lib/buildingRoofs';
+import type { RoofParams } from '../lib/archRoofGenerator';
+import { captureShapeIds } from '../lib/shapeIds';
+import { actionLabel } from '../lib/macroRecorder';
 import { RoofExtrasSection } from './RoofExtrasSection';
 
 export const RoofModifierSection: React.FC = () => {
@@ -46,7 +49,8 @@ export const RoofModifierSection: React.FC = () => {
     theme, 
     setMeasurements, 
     commitHistory, 
-    commitUpdatedFraming 
+    commitUpdatedFraming,
+    recordAction
   } = useApp();
 
   // 1. Identify Target Roof
@@ -429,7 +433,7 @@ export const RoofModifierSection: React.FC = () => {
     });
 
     // The whole building: the main roof on the top storey and a roof on each extension below.
-    const result = roofWholeBuilding(shapes, {
+    const roofParams: RoofParams = {
       roofType,
       ridgeHeight: roofHeight,
       usePitchAngle: false,
@@ -442,14 +446,17 @@ export const RoofModifierSection: React.FC = () => {
       randomizeColor,
       colorPalette,
       seed,
-    });
+    };
+    const tiles = { textureUrl: tileTextureUrl, data: { shape: tileShape, size: tileSize, color: tileColor, randomizeColor, colorPalette, seed } };
+    const { result, ids } = captureShapeIds(() => roofBuilding(shapes, roofParams, tiles));
 
     if (result) {
-      const tileData = { shape: tileShape, size: tileSize, color: tileColor, randomizeColor, colorPalette, seed };
-      const roofIds = new Set(result.roofs.filter(r => r.roofData?.roofType !== 'parapet').map(r => r.id));
-      const finalShapes = result.shapes.map(s => (roofIds.has(s.id) ? { ...s, textureUrl: tileTextureUrl, roofTileData: tileData } : s));
+      const finalShapes = result.shapes;
       setShapes(finalShapes);
       commitHistory();
+      recordAction(actionLabel(`Roof the building (${roofType})`), {
+        sdk: `sdk.architecture.roofBuilding(${JSON.stringify(roofParams)}, ${JSON.stringify({ tiles, ids })});`,
+      });
       setSelectedId(result.mainRoofId);
 
       if (hasTimberFraming) {

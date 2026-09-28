@@ -22,8 +22,11 @@ import { useApp } from '../AppContext';
 import { ToolType, Shape } from '../types';
 import { cn } from '../lib/utils';
 import { FlyoutPortal } from './ui/FlyoutPortal';
-import { buildRoofShapeForRoom, buildNextFloorLevel } from '../lib/archRoofGenerator';
-import { describeRoofs, roofWholeBuilding } from '../lib/buildingRoofs';
+import { buildRoofShapeForRoom, buildNextFloorLevel, type RoofParams } from '../lib/archRoofGenerator';
+import { describeRoofs, roofBuilding } from '../lib/buildingRoofs';
+import { captureShapeIds } from '../lib/shapeIds';
+import { actionLabel } from '../lib/macroRecorder';
+
 import { SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 
 /** Same pattern as LeftToolbar's own FlyoutSideContext — a context rather
@@ -112,7 +115,8 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
     commitHistory,
     setMeasurements,
     activeScaleFigureCharacter,
-    activeScaleFigureHeight
+    activeScaleFigureHeight,
+    recordAction
   } = useApp();
 
   const currentScaleChar = SCALE_FIGURE_CHARACTERS.find(c => c.id === activeScaleFigureCharacter) || SCALE_FIGURE_CHARACTERS[0];
@@ -163,17 +167,21 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
       setMeasurements('No walls found. Draw a closed room to generate a roof.');
       return;
     }
-    const result = roofWholeBuilding(shapes, {
+    const roofParams: RoofParams = {
       roofType,
       pitchAngleDeg: roofType === 'parapet' ? 0 : 35,
       usePitchAngle: roofType !== 'parapet',
       color: roofType === 'parapet' ? '#475569' : '#991b1b',
       fasciaColor: '#ffffff',
       tileShape: 'none',
-    });
+    };
+    const { result, ids } = captureShapeIds(() => roofBuilding(shapes, roofParams));
     if (result) {
       setShapes(result.shapes);
       commitHistory();
+      recordAction(actionLabel(`Roof the building (${roofType})`), {
+        sdk: `sdk.architecture.roofBuilding(${JSON.stringify(roofParams)}, ${JSON.stringify({ ids })});`,
+      });
       if (setSelectedId) setSelectedId(result.mainRoofId);
       setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip Roof' : 'Gable Roof'} assembly${describeRoofs(result.roofs, result.notes)}`);
     }
