@@ -21,6 +21,49 @@ import type { KernelArcHost } from './kernelArcHost';
  */
 export const ISOLATED_SHAPE_KEY = 'isolatedShape';
 
+/**
+ * Extrudes a kernel face by `distance` as one transaction and one undo entry. Shared by the
+ * Push/Pull tool and `sdk.drawing.pushPull`, so a script does exactly what the tool does.
+ * The caller refreshes the view (bumpKernel).
+ */
+export function commitKernelPushPull(host: KernelArcHost, faceId: FaceId, distance: number): boolean {
+  if (Math.abs(distance) < host.tolerances.MIN_EDGE_LENGTH) return false;
+  const before = snapshot(host.graph);
+  try {
+    // A face drawn by Rectangle/Circle/Triangle carries this marker
+    // (set once, right when the ring closes — see Viewport.tsx) so
+    // that EXTRUDING it stays consistent with how it was drawn: its
+    // own new geometry (the far cap, the side walls) must also stay
+    // isolated from unrelated geometry it happens to cross in 3D
+    // space, or the fix at the flat-drawing stage is undone the
+    // moment the shape is pushed/pulled — confirmed directly as the
+    // actual cause of a second, overlapping extruded shape visibly
+    // losing a wedge where it crossed the first one. A face without
+    // the marker (drawn with Line/Arc, or a plain rectangle before
+    // this existed) keeps the ordinary sticky behaviour untouched —
+    // this check is additive, not a change to the default.
+    const face = host.graph.faces.get(faceId);
+    const isIsolated = face?.attributes.custom?.[ISOLATED_SHAPE_KEY] === true;
+    const r = pushPull(
+      { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex },
+      faceId,
+      distance,
+      { tolerances: host.tolerances, ...(isIsolated ? { insertFn: insertIsolatedEdge } : {}) },
+    );
+    if (!r.ok) {
+      restore(host.graph, before);
+      return false;
+    }
+    derive(host.graph, r.touched, host.deriveOptions);
+    host.recordUndo(before);
+    return true;
+  } catch {
+    restore(host.graph, before);
+    host.reindex();
+    return false;
+  }
+}
+
 export interface PushPullSession {
   readonly faceId: FaceId;
   readonly grabPoint: Vec3;
@@ -92,41 +135,9 @@ export function createPushPullBinding(
       session = null;
       if (Math.abs(distance) < host.tolerances.MIN_EDGE_LENGTH) return false;
 
-      const before = snapshot(host.graph);
-      try {
-        // A face drawn by Rectangle/Circle/Triangle carries this marker
-        // (set once, right when the ring closes — see Viewport.tsx) so
-        // that EXTRUDING it stays consistent with how it was drawn: its
-        // own new geometry (the far cap, the side walls) must also stay
-        // isolated from unrelated geometry it happens to cross in 3D
-        // space, or the fix at the flat-drawing stage is undone the
-        // moment the shape is pushed/pulled — confirmed directly as the
-        // actual cause of a second, overlapping extruded shape visibly
-        // losing a wedge where it crossed the first one. A face without
-        // the marker (drawn with Line/Arc, or a plain rectangle before
-        // this existed) keeps the ordinary sticky behaviour untouched —
-        // this check is additive, not a change to the default.
-        const face = host.graph.faces.get(faceId);
-        const isIsolated = face?.attributes.custom?.[ISOLATED_SHAPE_KEY] === true;
-        const r = pushPull(
-          { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex },
-          faceId,
-          distance,
-          { tolerances: host.tolerances, ...(isIsolated ? { insertFn: insertIsolatedEdge } : {}) },
-        );
-        if (!r.ok) {
-          restore(host.graph, before);
-          return false;
-        }
-        derive(host.graph, r.touched, host.deriveOptions);
-        host.recordUndo(before);
-        bumpKernel();
-        return true;
-      } catch {
-        restore(host.graph, before);
-        host.reindex();
-        return false;
-      }
+      const ok = commitKernelPushPull(host, faceId, distance);
+      if (ok) bumpKernel();
+      return ok;
     },
 
     cancel() {

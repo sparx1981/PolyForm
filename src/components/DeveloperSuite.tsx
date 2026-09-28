@@ -120,6 +120,8 @@ export function DeveloperSuite() {
     activeStory,
     setActiveStory,
     setGraphicsSettings,
+    kernelHost,
+    bumpKernel,
     setAmbientOcclusionEnabled,
     setSunIntensity,
     setLightPosition,
@@ -269,7 +271,9 @@ export function DeveloperSuite() {
         setLandscapeRoadSettings,
         activeStory,
         setActiveStory,
-        setGraphicsSettings
+        setGraphicsSettings,
+        kernelHost,
+        bumpKernel
       }
     );
   }, [
@@ -297,7 +301,7 @@ export function DeveloperSuite() {
     setEdgeLinesThickness, undo, redo, selectionFilter, setSelectionFilter,
     selectionShapeMode, setSelectionShapeMode, setShadowsEnabled,
     setGridEnabled, setAxisIndicatorEnabled, setMiniAxisIndicatorEnabled, setFloorEnabled, setFloorColor, setAmbientOcclusionEnabled,
-    activeStory, setActiveStory, setGraphicsSettings,
+    activeStory, setActiveStory, setGraphicsSettings, kernelHost, bumpKernel,
     setSunIntensity, setLightPosition, setAnimateSun, setSunSpeed,
     setNotes, setAllNotesVisible, customToolbars, setCustomToolbars,
     basicToolbarExtensions, setBasicToolbarExtensions,

@@ -249,6 +249,20 @@ export const SDK_REFERENCE: SdkTag[] = [
     ],
   },
   {
+    id: 'drawing', title: 'drawing',
+    description: 'Drawn geometry: lines, arcs and surfaces, and push/pull on their faces. Points are [x, y, z] in metres. Faces are numbered, and the same steps on the same drawing give the same numbers.',
+    methods: [
+      m('line', 'sdk.drawing.line(from, to)', 'number[]', 'Draw a line (the Line tool). Lines that close a loop make a face.'),
+      m('arc', 'sdk.drawing.arc({ centre, radius, sweep, normal?, startAngle?, segments? })', 'number[]', 'Draw an arc (the Arc tool). Angles are in radians; normal defaults to up.'),
+      m('surface', 'sdk.drawing.surface(points)', 'number[]', 'Draw a flat surface from its corners (as Rectangle, Circle and Polygon do); returns its face numbers.'),
+      m('pushPull', 'sdk.drawing.pushPull(faceId, distance)', 'boolean', 'Extrude a face along its normal (the Push/Pull tool). Negative pushes in.'),
+      m('paint', 'sdk.drawing.paint(faceIds, color)', 'void', 'Paint faces a colour.'),
+      m('erase', 'sdk.drawing.erase(faceIds)', 'void', 'Delete faces and the edges only they use.'),
+      m('listFaces', 'sdk.drawing.listFaces()', '{ id, label, color, hidden, area, holes }[]', 'List every drawn face.'),
+      m('applyChanges', 'sdk.drawing.applyChanges(changes)', 'void', 'Apply a recorded change set exactly. The action recorder writes these for drawing steps.'),
+    ],
+  },
+  {
     id: 'worldView', title: 'worldView',
     description: 'The Google Maps overlay under the model.',
     methods: [

@@ -527,3 +527,46 @@ describe('DeveloperSDK', () => {
 function THREEDegToRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
+
+describe('DeveloperSDK drawing', () => {
+  async function makeDrawingSdk() {
+    const { KernelArcHost } = await import('../tools/kernelArcHost');
+    const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } });
+    const bumpKernel = vi.fn();
+    const sdk = new DeveloperSDK([], vi.fn(), vi.fn(), null, { kernelHost: host, bumpKernel });
+    return { sdk, host, bumpKernel };
+  }
+
+  it('draws a surface, pushes it into a solid, paints and erases it', async () => {
+    const { sdk, host, bumpKernel } = await makeDrawingSdk();
+    const faces = sdk.drawing.surface([[0, 0, 0], [3, 0, 0], [3, 0, 2], [0, 0, 2]]);
+    expect(faces).toHaveLength(1);
+    expect(sdk.drawing.listFaces()[0]!.area).toBeCloseTo(6);
+    expect(sdk.drawing.pushPull(faces[0]!, 1)).toBe(true);
+    expect(host.graph.faces.size).toBe(6);
+    const all = sdk.drawing.listFaces().map(f => f.id);
+    sdk.drawing.paint(all, '#aa3300');
+    expect(sdk.drawing.listFaces().every(f => f.color === '#aa3300')).toBe(true);
+    sdk.drawing.erase(all);
+    expect(host.graph.faces.size).toBe(0);
+    expect(bumpKernel).toHaveBeenCalled();
+  });
+
+  it('draws lines and arcs, closing a face from lines', async () => {
+    const { sdk, host } = await makeDrawingSdk();
+    sdk.drawing.line([0, 0, 0], [1, 0, 0]);
+    sdk.drawing.line({ x: 1, y: 0, z: 0 }, [1, 0, 1]);
+    sdk.drawing.line([1, 0, 1], [0, 0, 1]);
+    sdk.drawing.line([0, 0, 1], [0, 0, 0]);
+    expect(host.graph.faces.size).toBe(1);
+    const edges = sdk.drawing.arc({ centre: [5, 0, 5], radius: 1, sweep: Math.PI });
+    expect(edges.length).toBeGreaterThan(1);
+  });
+
+  it('says so instead of throwing when no drawing is available', () => {
+    const onLog = vi.fn();
+    const sdk = new DeveloperSDK([], vi.fn(), vi.fn(), null, { onLog });
+    expect(sdk.drawing.surface([[0, 0, 0], [1, 0, 0], [1, 0, 1]])).toEqual([]);
+    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('Drawing is not available'));
+  });
+});

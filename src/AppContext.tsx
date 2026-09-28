@@ -28,6 +28,7 @@ import { defaultGraphicsSettings, normalizeGraphicsSettings } from './lib/graphi
 import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
 import { legacyEnvironmentState } from './lib/assets/legacyAdapter';
 import { readAssetProjectState } from './lib/assets/projectCodec';
+import { captureKernelState, diffKernelStates, type KernelState } from './lib/geometry/graphPatch';
 import { diffShapesToSdk, diffSettingsToSdk, actionLabel, sdkLiteral, type RecordedSetting } from './lib/macroRecorder';
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -1445,23 +1446,42 @@ console.log("Created rectangle:", myRect.id);`);
     if (lines.length === 0) return;
     setRecordedCode(prev => prev + lines.join('\n') + '\n');
   };
+  // Drawn geometry lives in the kernel, not in shapes: it is compared the same way and written
+  // as sdk.drawing.applyChanges. Captured only when the kernel may have changed (its revision
+  // or undo stack moved), since capturing reads the whole drawing.
+  const kernelBaselineRef = useRef<{ key: string; state: KernelState } | null>(null);
+  const latestKernelRevisionRef = useRef(kernelRevision);
+  latestKernelRevisionRef.current = kernelRevision;
+  const kernelChangeKey = () => `${latestKernelRevisionRef.current}:${kernelHost.topUndoId}:${kernelHost.topRedoId}`;
   const flushRecordedChanges = () => {
     const baseline = recordBaselineRef.current;
     if (!baseline) return;
+    const lines: string[] = [];
     const current = latestShapesRef.current;
-    if (baseline === current) return;
-    const lines = diffShapesToSdk(baseline, current);
+    if (baseline !== current) {
+      lines.push(...diffShapesToSdk(baseline, current));
+      recordBaselineRef.current = current;
+    }
+    const kernelBaseline = kernelBaselineRef.current;
+    const key = kernelChangeKey();
+    if (kernelBaseline && kernelBaseline.key !== key) {
+      const state = captureKernelState(kernelHost.graph);
+      const patch = diffKernelStates(kernelBaseline.state, state);
+      if (patch) lines.push(`sdk.drawing.applyChanges(${sdkLiteral(patch)});`);
+      kernelBaselineRef.current = { key, state };
+    }
     if (lines.length > 0) lastRecordedSettingRef.current = null;
     appendRecorded(lines);
-    recordBaselineRef.current = current;
   };
   useEffect(() => {
     isRecordingRef.current = isRecording;
     if (isRecording) {
       recordBaselineRef.current = latestShapesRef.current;
+      kernelBaselineRef.current = { key: kernelChangeKey(), state: captureKernelState(kernelHost.graph) };
     } else if (recordBaselineRef.current) {
       flushRecordedChanges();
       recordBaselineRef.current = null;
+      kernelBaselineRef.current = null;
     }
   }, [isRecording]);
   // Written once an action settles, so a drag records one move rather than every frame.
@@ -1469,7 +1489,7 @@ console.log("Created rectangle:", myRect.id);`);
     if (!isRecording) return;
     const timer = setTimeout(flushRecordedChanges, 400);
     return () => clearTimeout(timer);
-  }, [shapes, isRecording]);
+  }, [shapes, kernelRevision, isRecording]);
 
   /** Records a setting change, replacing the previous line if it set the same setting. */
   const recordSetting = (key: string, line: string) => {

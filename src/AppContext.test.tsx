@@ -406,3 +406,45 @@ describe('AppProvider action recorder', () => {
     expect(result.current.recordedCode).toBe('');
   });
 });
+
+describe('AppProvider action recorder: drawn geometry', () => {
+  it('records drawing and push/pull, and the script rebuilds the same drawing with the same face ids', async () => {
+    const { DeveloperSDK } = await import('./services/developerService');
+    const { KernelArcHost } = await import('./tools/kernelArcHost');
+    const { captureKernelState } = await import('./lib/geometry/graphPatch');
+    const { result } = renderApp();
+
+    act(() => { result.current.setIsRecording(true); });
+    let faces: number[] = [];
+    act(() => {
+      const r = result.current.kernelHost.commitIsolatedRing([
+        { x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 0, z: 3 }, { x: 0, y: 0, z: 3 },
+      ]);
+      faces = r.faces;
+      result.current.bumpKernel();
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 450)); });
+    act(() => { result.current.recordAction('// Push/pull'); });
+    act(() => {
+      const sdk = new DeveloperSDK([], () => {}, () => {}, null,
+        { kernelHost: result.current.kernelHost, bumpKernel: result.current.bumpKernel });
+      expect(sdk.drawing.pushPull(faces[0]!, 2.5)).toBe(true);
+    });
+    act(() => { result.current.setIsRecording(false); });
+
+    const code = result.current.recordedCode;
+    expect(code.match(/sdk\.drawing\.applyChanges/g)).toHaveLength(2);
+
+    const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } });
+    const sdk = new DeveloperSDK([], () => {}, () => {}, null, { kernelHost: host, bumpKernel: () => {} });
+    new Function('sdk', code)(sdk);
+    const replayed = captureKernelState(host.graph);
+    const original = captureKernelState(result.current.kernelHost.graph);
+    expect(JSON.stringify([...replayed.records.faces.values()])).toBe(JSON.stringify([...original.records.faces.values()]));
+    expect(replayed.nextId).toEqual(original.nextId);
+    // The isolation marker survives, so pushing the replayed face behaves like the original.
+    expect(host.graph.faces.get(faces[0] as any)?.attributes.custom.isolatedShape).toBe(true);
+    // Replay is one undo step per recorded change.
+    expect(host.undo()).toBe(true);
+  });
+});

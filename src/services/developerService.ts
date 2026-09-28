@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { Shape, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
+import type { KernelArcHost } from '../tools/kernelArcHost';
+import { commitKernelPushPull } from '../tools/kernelPushPull';
+import { deleteGroupFacesAndEdges, paintFaces, faceSummaries } from '../tools/kernelSelection';
+import { applyKernelPatch, type KernelPatch } from '../lib/geometry/graphPatch';
+import { DEFAULT_SEGMENTS } from '../lib/geometry/curve';
+import type { FaceId, Vec3 } from '../lib/geometry/types';
 
 export interface RoofConfigDefaults {
   roofType?: RoofType;
@@ -174,6 +180,9 @@ function geometryToData(geom: THREE.BufferGeometry | null | undefined): {
     colors: geom.attributes.color?.array ? Array.from(geom.attributes.color.array) : undefined,
   };
 }
+
+/** A point for sdk.drawing: [x, y, z] or { x, y, z }, in metres (y is up). */
+export type DrawingPoint = [number, number, number] | { x: number; y: number; z: number };
 
 export interface SDK {
   // Primitives & Core Shapes
@@ -543,6 +552,20 @@ export interface SDK {
     setAltitude: (altitude: number) => void;
   };
 
+  // Drawing Subsystem - drawn geometry (the geometry kernel): lines, arcs and surfaces
+  // drawn with Line / Arc / Rectangle / Circle / Polygon, and push/pull on their faces.
+  // Faces are numbered; the same steps on the same drawing give the same numbers.
+  drawing: {
+    line: (from: DrawingPoint, to: DrawingPoint) => number[];
+    arc: (spec: { centre: DrawingPoint; normal?: DrawingPoint; radius: number; startAngle?: number; sweep: number; segments?: number }) => number[];
+    surface: (points: DrawingPoint[]) => number[];
+    pushPull: (faceId: number, distance: number) => boolean;
+    erase: (faceIds: number[]) => void;
+    paint: (faceIds: number[], color: string) => void;
+    listFaces: () => { id: number; label: string; color: string | null; hidden: boolean; area: number; holes: number }[];
+    applyChanges: (changes: KernelPatch) => void;
+  };
+
   // Convenient Top-Level Aliases
   createRoof: (args: any) => Shape;
   updateRoof: (roofId: string, params: any) => void;
@@ -585,6 +608,7 @@ export class DeveloperSDK implements SDK {
   public outliner: any;
   public blockKit: any;
   public worldView: any;
+  public drawing: SDK['drawing'];
   public toolbars: any;
 
   // Configuration Defaults
@@ -2091,6 +2115,75 @@ export class DeveloperSDK implements SDK {
     // ─────────────────────────────────────────────────────────────
     // WORLDVIEW SUBSYSTEM
     // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // DRAWING SUBSYSTEM (geometry kernel)
+    // ─────────────────────────────────────────────────────────────
+    const toVec = (p: DrawingPoint): Vec3 => Array.isArray(p) ? { x: p[0], y: p[1], z: p[2] } : { x: p.x, y: p.y, z: p.z };
+    const kernel = (): KernelArcHost | null => {
+      const host = this.extraSetters.kernelHost as KernelArcHost | undefined;
+      if (!host) this.log('Drawing is not available here.');
+      return host ?? null;
+    };
+    const changed = () => this.extraSetters.bumpKernel?.();
+    this.drawing = {
+      line: (from, to) => {
+        const host = kernel();
+        if (!host) return [];
+        const r = host.commitSegment(toVec(from), toVec(to));
+        if (!r.ok) this.log(`Line not drawn: ${r.reason ?? 'rejected'}.`);
+        changed();
+        return [...r.edges];
+      },
+      arc: ({ centre, normal = [0, 1, 0], radius, startAngle = 0, sweep, segments = DEFAULT_SEGMENTS }) => {
+        const host = kernel();
+        if (!host) return [];
+        const r = host.commitArc({ centre: toVec(centre), normal: toVec(normal), radius, startAngle, sweep, segments }, {});
+        if (!r.ok) this.log(`Arc not drawn: ${r.reason}.`);
+        changed();
+        return r.ok ? [...r.edges] : [];
+      },
+      surface: (points) => {
+        const host = kernel();
+        if (!host) return [];
+        const r = host.commitIsolatedRing(points.map(toVec));
+        if (!r.ok) this.log(`Surface not drawn: ${r.reason ?? 'rejected'}.`);
+        changed();
+        return r.faces;
+      },
+      pushPull: (faceId, distance) => {
+        const host = kernel();
+        if (!host) return false;
+        const ok = commitKernelPushPull(host, faceId as FaceId, distance);
+        if (!ok) this.log(`Push/pull of face ${faceId} did nothing.`);
+        changed();
+        return ok;
+      },
+      erase: (faceIds) => {
+        const host = kernel();
+        if (!host) return;
+        host.transact(() => { deleteGroupFacesAndEdges(host.graph, faceIds as FaceId[]); return true; });
+        host.refreshIndex();
+        changed();
+      },
+      paint: (faceIds, color) => {
+        const host = kernel();
+        if (!host) return;
+        host.transact(() => paintFaces(host.graph, faceIds as FaceId[], color) > 0);
+        changed();
+      },
+      listFaces: () => {
+        const host = kernel();
+        return host ? faceSummaries(host.graph).map(f => ({ ...f, id: f.id as number })) : [];
+      },
+      applyChanges: (changes) => {
+        const host = kernel();
+        if (!host) return;
+        host.transact(() => { applyKernelPatch(host.graph, changes); return true; });
+        host.refreshIndex();
+        changed();
+      },
+    };
+
     this.worldView = {
       importMap: (args: { lat: number, lng: number, zoom?: number, altitude?: number, radius?: number }) => {
         if (this.extraSetters.setWorldViewLocation) this.extraSetters.setWorldViewLocation({ lat: args.lat, lng: args.lng });
