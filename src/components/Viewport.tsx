@@ -73,6 +73,7 @@ import {
   createStepGeometry, 
   createStaircaseGeometry 
 } from '../lib/archGeometry';
+import { openingCutsWall, openingSpanOnWall } from '../lib/wallOpeningSpan';
 import {
   scanSceneForTargetHeight,
   calculateParametricStairs,
@@ -1008,52 +1009,32 @@ function ArchGeometry({ shape, shapes = [] }: { shape: Shape; shapes?: Shape[] }
           if (s.type !== 'door' && s.type !== 'window') continue;
           if (s.hidden) continue;
 
-          const sPos = new THREE.Vector3(...s.position);
           const sArgs = Array.isArray(s.args) ? s.args : [1, 1, 1];
           const sWidth = sArgs[0] || (s.type === 'door' ? 0.9 : 1.2);
           const sHeight = sArgs[1] || (s.type === 'door' ? 2.1 : 1.2);
           const sDepth = sArgs[2] || (s.type === 'door' ? 0.15 : 0.12);
 
-          const isHosted = s.hostWallId === shape.id;
-          const localPos = sPos.clone().sub(wallPos).applyQuaternion(invWallQuat);
-
-          // The opening's width runs along its own direction, which on a curved wall (many
-          // short straight pieces) is not this piece's: take the stretch of it that crosses
-          // this piece, so a window spanning several pieces is cut through all of them.
-          const openingQuat = s.quaternion
-            ? new THREE.Quaternion(...s.quaternion)
-            : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(s.rotation || [0, 0, 0])));
-          const along = new THREE.Vector3(1, 0, 0).applyQuaternion(openingQuat).multiplyScalar(sWidth / 2);
-          const endA = sPos.clone().sub(along).sub(wallPos).applyQuaternion(invWallQuat);
-          const endB = sPos.clone().add(along).sub(wallPos).applyQuaternion(invWallQuat);
-          const [lo, hi] = endA.x <= endB.x ? [endA, endB] : [endB, endA];
-          const fp = shape.wallMiterFootprint;
-          const wallMin = fp ? Math.min(-wallLength / 2, ...fp.map(p => p[0])) : -wallLength / 2;
-          const wallMax = fp ? Math.max(wallLength / 2, ...fp.map(p => p[0])) : wallLength / 2;
-          const overlapMin = Math.max(lo.x, wallMin), overlapMax = Math.min(hi.x, wallMax);
-          // How far the opening is from this piece's centre plane where they overlap.
-          const t = hi.x - lo.x > 1e-6 ? ((overlapMin + overlapMax) / 2 - lo.x) / (hi.x - lo.x) : 0.5;
-          const zAt = lo.z + (hi.z - lo.z) * Math.min(1, Math.max(0, t));
-          const inX = overlapMax - overlapMin > 0.01;
-          const inY = Math.abs(localPos.y) <= wallHeight / 2 + 0.5;
-          const inZ = Math.abs(zAt) <= wallThick / 2 + 0.35;
-
-          if ((isHosted && inX) || (inX && inY && inZ)) {
+          // The stretch of the opening that crosses this piece, so a window spanning several
+          // pieces of a curved wall is cut through all of them.
+          const span = openingSpanOnWall(shape, s);
+          if (span && openingCutsWall(shape, s, span)) {
             // A porthole's round frame doesn't match the rectangular hole
             // every other style uses - cut a round hole via CSG below
             // instead, so the reveal around the ring is the wall's own
             // material (and recolors with the wall) rather than a separate
             // rectangular cutout with mismatched corners.
             if (s.type === 'window' && s.archStyle === 'porthole') {
+              const sPos = new THREE.Vector3(...s.position);
+              const localPos = sPos.sub(wallPos).applyQuaternion(invWallQuat);
               portholeWindows.push({ localX: localPos.x, localY: localPos.y, radius: Math.min(sWidth, sHeight) / 2 });
               continue;
             }
             openings.push({
               id: s.id,
               type: s.type,
-              localX: (lo.x + hi.x) / 2,
-              localY: localPos.y,
-              width: hi.x - lo.x,
+              localX: span.localX,
+              localY: span.localY,
+              width: span.width,
               height: sHeight,
               depth: sDepth
             });

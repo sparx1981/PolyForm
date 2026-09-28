@@ -801,6 +801,8 @@ export function generateFloorTimberFrameFromContract(
     effectiveDepthMm = sz.structuralZoneDepthMm;
   }
   const snapped = snapToStandardTimberSize(effectiveDepthMm, 47);
+  // The nearest standard size may be deeper than the zone: never let it poke out of the floor.
+  if (snapped.standardDepthMm > sz.structuralZoneDepthMm) snapped.standardDepthMm = sz.structuralZoneDepthMm;
   const joistWidthM = snapped.standardWidthMm / 1000;
   const joistDepthM = snapped.standardDepthMm / 1000;
   const joistSpacingM = (options.joistSpacingMm ?? DEFAULT_FLOOR_JOIST_SPACING_MM) / 1000;
@@ -935,7 +937,13 @@ export function generateFloorTimberFrameFromContract(
 
     const center = pStart.clone().add(pEnd).multiplyScalar(0.5);
     if (subTag !== 'timber-rim-joist') {
-      if (!isPointInsidePolygon(center.x, center.z, boundary2D)) {
+      // Both ends too: on a curved or slanted edge a member centred inside can still run out
+      // past the floor's edge (and show through the slab or the wall face).
+      if (
+        !isPointInsidePolygon(center.x, center.z, boundary2D) ||
+        !isPointInsidePolygon(pStart.x, pStart.z, boundary2D) ||
+        !isPointInsidePolygon(pEnd.x, pEnd.z, boundary2D)
+      ) {
         return;
       }
     }

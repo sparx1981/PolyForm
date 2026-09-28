@@ -19,6 +19,7 @@ import {
   RoofToolOutput,
 } from '../types';
 import { WallOpening } from './archGeometry';
+import { openingCutsWall, openingSpanOnWall } from './wallOpeningSpan';
 import { dormerFrame, dormerOpenings, layoutsOf, type DormerLayout } from './dormers';
 import { frameSkeletonRoof } from './roofFraming';
 import type { RoofModel } from './roofSkeleton';
@@ -51,8 +52,12 @@ import {
   getCanonicalLPolygon,
   computeLRidgeNodes,
   extractRoomFootprintPolygon,
+  insetPolygon2D,
   offsetPolygon2D,
 } from './archRoofGenerator';
+
+/** How far floor framing stays in from the edge of the slab it sits in. */
+const FLOOR_EDGE_INSET_M = 0.01;
 
 export {
   validateWallToolOutput,
@@ -234,22 +239,18 @@ export function generateTimberFraming(
 
       // Collect openings hosted on this wall or intersecting it
       const wallOpenings: Array<{ id?: string; localX: number; localY: number; width: number; height: number; type: string }> = [];
+      // An opening wider than the piece it sits on (a bi-fold across a curved wall) crosses the
+      // neighbouring pieces too: each piece frames the stretch of it that crosses it, measured
+      // the same way the wall's hole is cut.
       openingShapes.forEach(op => {
-        const opPos = new THREE.Vector3(...op.position);
         const opArgs = Array.isArray(op.args) ? op.args : [0.9, 2.1, 0.15];
-        const isHosted = op.hostWallId === wall.id;
-        const localPos = opPos.clone().sub(wallPos).applyQuaternion(invWallQuat);
-
-        const inX = Math.abs(localPos.x) <= wallLength / 2 + 0.2;
-        const inY = Math.abs(localPos.y) <= wallHeight / 2 + 0.5;
-        const inZ = Math.abs(localPos.z) <= wallThick / 2 + 0.35;
-
-        if (isHosted || (inX && inY && inZ)) {
+        const span = openingSpanOnWall(wall, op);
+        if (span && openingCutsWall(wall, op, span)) {
           wallOpenings.push({
             id: op.id,
-            localX: localPos.x,
-            localY: localPos.y,
-            width: opArgs[0] || (op.type === 'door' ? 0.9 : 1.2),
+            localX: span.localX,
+            localY: span.localY,
+            width: span.width,
             height: opArgs[1] || (op.type === 'door' ? 2.1 : 1.2),
             type: op.type
           });
@@ -559,10 +560,18 @@ export function generateTimberFraming(
       const usableHeight = Math.max(0.05, wallHeight - plateThick * 3); // between sole plate and double top plate
       const studCenterY = -halfH + plateThick + usableHeight / 2;
 
+      // An opening that runs on past a wall end into the next piece leaves no end stud there:
+      // it would stand in the middle of the doorway.
+      const endInOpening = (x0: number, x1: number) => wallOpenings.some(op =>
+        op.localX - op.width / 2 < x1 && op.localX + op.width / 2 > x0);
       // Start stud at left end (set back by endSetbackM from wall edge)
-      addTimberMember('End Stud (Left)', -framedHalfL + studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
+      if (!endInOpening(-framedHalfL, -framedHalfL + studWidth)) {
+        addTimberMember('End Stud (Left)', -framedHalfL + studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
+      }
       // End stud at right end (set back by endSetbackM from wall edge)
-      addTimberMember('End Stud (Right)', framedHalfL - studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
+      if (!endInOpening(framedHalfL - studWidth, framedHalfL)) {
+        addTimberMember('End Stud (Right)', framedHalfL - studWidth / 2, studCenterY, 0, studWidth, usableHeight, timberDepth, 'timber-stud');
+      }
 
       // Intermediate regular studs along wall
       let currentX = -framedHalfL + studSpacing;
@@ -645,26 +654,32 @@ export function generateTimberFraming(
         const leftJackX = Math.max(-framedHalfL + studWidth / 2, opLeft - studWidth / 2);
         const rightJackX = Math.min(framedHalfL - studWidth / 2, opRight + studWidth / 2);
 
-        addTimberMember(
-          `Jack Stud Left (Opening ${opIdx + 1})`,
-          leftJackX,
-          jackBottom + jackHeight / 2,
-          0,
-          studWidth,
-          jackHeight,
-          timberDepth,
-          'timber-jack-stud'
-        );
-        addTimberMember(
-          `Jack Stud Right (Opening ${opIdx + 1})`,
-          rightJackX,
-          jackBottom + jackHeight / 2,
-          0,
-          studWidth,
-          jackHeight,
-          timberDepth,
-          'timber-jack-stud'
-        );
+        // An opening edge that lies on the next wall piece is framed there, not here.
+        const edgeTol = 0.005;
+        if (opLeft > -framedHalfL + edgeTol) {
+          addTimberMember(
+            `Jack Stud Left (Opening ${opIdx + 1})`,
+            leftJackX,
+            jackBottom + jackHeight / 2,
+            0,
+            studWidth,
+            jackHeight,
+            timberDepth,
+            'timber-jack-stud'
+          );
+        }
+        if (opRight < framedHalfL - edgeTol) {
+          addTimberMember(
+            `Jack Stud Right (Opening ${opIdx + 1})`,
+            rightJackX,
+            jackBottom + jackHeight / 2,
+            0,
+            studWidth,
+            jackHeight,
+            timberDepth,
+            'timber-jack-stud'
+          );
+        }
 
         // King Studs (Full height flanking the opening)
         // If opening is flush with corner (-framedHalfL), wall end stud acts as king stud.
@@ -694,8 +709,15 @@ export function generateTimberFraming(
         }
 
         // Structural Lintel Header Beam spanning opening width at resolved header depth
-        const lintelSpan = Math.min(framedWallLength, opW + studWidth * 2);
-        const lintelCenterX = Math.max(-framedHalfL + lintelSpan / 2, Math.min(framedHalfL - lintelSpan / 2, op.localX));
+        // Only the stretch of the opening on this piece (it may run on into the next one).
+        const lintelL = Math.max(-framedHalfL, opLeft - studWidth);
+        const lintelR = Math.min(framedHalfL, opRight + studWidth);
+        const lintelSpan = Math.max(0.01, lintelR - lintelL);
+        const lintelCenterX = (lintelL + lintelR) / 2;
+        // Cripples and the sill cover the stretch of the opening on this piece too.
+        const onL = Math.max(opLeft, -framedHalfL);
+        const onR = Math.min(opRight, framedHalfL);
+        const onW = Math.max(0, onR - onL);
         addTimberMember(
           `Structural Lintel (Opening ${opIdx + 1})`,
           lintelCenterX,
@@ -710,9 +732,9 @@ export function generateTimberFraming(
         // Cripple Studs above Header up to Top Plate
         const topCrippleHeight = (halfH - plateThick * 2) - (opTop + headerDepth);
         if (topCrippleHeight > 0.1) {
-          const numCripples = Math.max(1, Math.floor(opW / studSpacing));
+          const numCripples = Math.max(1, Math.floor(onW / studSpacing));
           for (let c = 1; c <= numCripples; c++) {
-            const cX = opLeft + (opW * c) / (numCripples + 1);
+            const cX = onL + (onW * c) / (numCripples + 1);
             if (cX >= -framedHalfL + studWidth && cX <= framedHalfL - studWidth) {
               addTimberMember(
                 `Top Cripple Stud`,
@@ -732,10 +754,10 @@ export function generateTimberFraming(
         if (op.type === 'window') {
           addTimberMember(
             `Rough Sill Plate`,
-            op.localX,
+            (onL + onR) / 2,
             opBottom - plateThick / 2,
             0,
-            opW,
+            onW,
             plateThick,
             timberDepth,
             'timber-sill'
@@ -743,9 +765,9 @@ export function generateTimberFraming(
 
           const botCrippleHeight = (opBottom - plateThick) - (-halfH + plateThick);
           if (botCrippleHeight > 0.1) {
-            const numBotCripples = Math.max(1, Math.floor(opW / studSpacing));
+            const numBotCripples = Math.max(1, Math.floor(onW / studSpacing));
             for (let c = 1; c <= numBotCripples; c++) {
-              const cX = opLeft + (opW * c) / (numBotCripples + 1);
+              const cX = onL + (onW * c) / (numBotCripples + 1);
               if (cX >= -framedHalfL + studWidth && cX <= framedHalfL - studWidth) {
                 addTimberMember(
                   `Bottom Cripple Stud`,
@@ -806,7 +828,50 @@ export function generateTimberFraming(
     interface FloorLevelData {
       floorY: number;
       polygon: [number, number][]; // 2D footprint polygon in world coordinates
+      /** The floor / ceiling slab the joists sit inside, when there is one: its top and underside. */
+      slab?: { bottom: number; top: number };
     }
+
+    // A slab's outline in plan (world x, z) and its top and underside.
+    const slabExtent = (slab: Shape): { polygon: [number, number][]; bottom: number; top: number } | null => {
+      const pos = new THREE.Vector3(...slab.position);
+      if (slab.type === 'poly' && slab.args && typeof slab.args === 'object' && !Array.isArray(slab.args)) {
+        const polyArgs = slab.args as { vertices?: [number, number][]; height?: number };
+        if (!polyArgs.vertices || polyArgs.vertices.length < 3) return null;
+        const q = slab.quaternion
+          ? new THREE.Quaternion(...slab.quaternion)
+          : slab.rotation
+            ? new THREE.Quaternion().setFromEuler(new THREE.Euler(...slab.rotation))
+            : new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+        // Only a flat slab: its extrusion must run up and down.
+        const up = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+        if (Math.abs(up.y) < 0.99) return null;
+        const h = Math.max(0, polyArgs.height ?? 0);
+        const polygon = polyArgs.vertices.map(([u, v]) => {
+          const w = new THREE.Vector3(u, v, 0).applyQuaternion(q).add(pos);
+          return [w.x, w.z] as [number, number];
+        });
+        return { polygon, bottom: pos.y - h / 2, top: pos.y + h / 2 };
+      }
+      if (slab.type === 'box') {
+        const args = Array.isArray(slab.args) ? slab.args : [6.0, 0.2, 6.0];
+        const halfW = (args[0] || 6.0) / 2;
+        const h = args[1] || 0.2;
+        const halfD = (args[2] || 6.0) / 2;
+        const q = new THREE.Quaternion(...(slab.quaternion || [0, 0, 0, 1]));
+        const polygon = ([[-halfW, -halfD], [halfW, -halfD], [halfW, halfD], [-halfW, halfD]] as [number, number][]).map(([x, z]) => {
+          const w = new THREE.Vector3(x, 0, z).applyQuaternion(q).add(pos);
+          return [w.x, w.z] as [number, number];
+        });
+        return { polygon, bottom: pos.y - h / 2, top: pos.y + h / 2 };
+      }
+      return null;
+    };
+    const slabExtents = allSlabs
+      .filter(s => !s.hidden)
+      .map(s => ({ shape: s, extent: slabExtent(s) }))
+      .filter((e): e is { shape: Shape; extent: NonNullable<ReturnType<typeof slabExtent>> } => !!e.extent && e.extent.top - e.extent.bottom > 0.02);
+    const usedSlabs = new Set<string>();
 
     const floorLevels: FloorLevelData[] = [];
 
@@ -821,48 +886,54 @@ export function generateTimberFraming(
       wallsByElevation.get(baseY)!.push(wall);
     });
 
-    // For each level with walls, extract closed room footprint polygon
+    // For each level with walls, frame the floor slab that level stands on (the ground slab
+    // below the walls, or an upper floor laid between them), so the joists are hidden inside
+    // it: the same outline and the same thickness. With no slab, fall back to the walls' outline.
     wallsByElevation.forEach((wallsOnLevel, baseY) => {
-      if (wallsOnLevel.length >= 3) {
-        const fp = extractRoomFootprintPolygon(wallsOnLevel, allShapes);
-        if (fp && fp.polygon && fp.polygon.length >= 3) {
-          floorLevels.push({
-            floorY: baseY,
-            polygon: fp.polygon
-          });
-        }
+      if (wallsOnLevel.length < 3) return;
+      const exactBase = wallsOnLevel.reduce((sum, w) => {
+        const h = Array.isArray(w.args) ? (w.args[1] || 2.8) : 2.8;
+        return sum + (w.position[1] - h / 2);
+      }, 0) / wallsOnLevel.length;
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      wallsOnLevel.forEach(w => {
+        minX = Math.min(minX, w.position[0]); maxX = Math.max(maxX, w.position[0]);
+        minZ = Math.min(minZ, w.position[2]); maxZ = Math.max(maxZ, w.position[2]);
+      });
+      const tol = 0.06;
+      const slab = slabExtents.find(({ shape, extent }) => {
+        if (usedSlabs.has(shape.id)) return false;
+        const atLevel = Math.abs(extent.top - exactBase) < tol || Math.abs(extent.bottom - exactBase) < tol;
+        if (!atLevel) return false;
+        const cx = extent.polygon.reduce((acc, p) => acc + p[0], 0) / extent.polygon.length;
+        const cz = extent.polygon.reduce((acc, p) => acc + p[1], 0) / extent.polygon.length;
+        return cx >= minX - 0.75 && cx <= maxX + 0.75 && cz >= minZ - 0.75 && cz <= maxZ + 0.75;
+      });
+      if (slab) {
+        usedSlabs.add(slab.shape.id);
+        floorLevels.push({ floorY: baseY, polygon: slab.extent.polygon, slab: { bottom: slab.extent.bottom, top: slab.extent.top } });
+        return;
+      }
+      const fp = extractRoomFootprintPolygon(wallsOnLevel, allShapes);
+      if (fp && fp.polygon && fp.polygon.length >= 3) {
+        // That outline may be the walls' outside face (a slab from another storey drawn to
+        // it): pull it in by half a wall so the rim joists can't show on the outside.
+        const avgThick = wallsOnLevel.reduce((sum, w) => sum + (Array.isArray(w.args) ? (w.args[2] || 0.2) : 0.2), 0) / wallsOnLevel.length;
+        floorLevels.push({
+          floorY: baseY,
+          polygon: insetPolygon2D(fp.polygon, avgThick / 2)
+        });
       }
     });
 
-    // 2. Check explicit poly or box slabs that may not have walls
-    allSlabs.forEach(slab => {
-      const slabY = Math.round(slab.position[1] * 10) / 10;
+    // 2. Slabs with no walls standing on them (a deck, a mezzanine): frame them too.
+    slabExtents.forEach(({ shape, extent }) => {
+      if (usedSlabs.has(shape.id)) return;
+      const slabY = Math.round(shape.position[1] * 10) / 10;
       const alreadyHasLevel = floorLevels.some(fl => Math.abs(fl.floorY - slabY) < 0.3);
-
       if (!alreadyHasLevel) {
-        if (slab.type === 'poly' && slab.args && typeof slab.args === 'object') {
-          const polyArgs = slab.args as { vertices?: [number, number][] };
-          if (polyArgs.vertices && polyArgs.vertices.length >= 3) {
-            const worldPoly: [number, number][] = polyArgs.vertices.map(([vx, vz]) => [
-              slab.position[0] + vx,
-              slab.position[2] + vz
-            ]);
-            floorLevels.push({ floorY: slabY, polygon: worldPoly });
-          }
-        } else if (slab.type === 'box') {
-          const args = Array.isArray(slab.args) ? slab.args : [6.0, 0.2, 6.0];
-          const bw = args[0] || 6.0;
-          const bd = args[2] || 6.0;
-          const halfW = bw / 2;
-          const halfD = bd / 2;
-          const rectPoly: [number, number][] = [
-            [slab.position[0] - halfW, slab.position[2] - halfD],
-            [slab.position[0] + halfW, slab.position[2] - halfD],
-            [slab.position[0] + halfW, slab.position[2] + halfD],
-            [slab.position[0] - halfW, slab.position[2] + halfD],
-          ];
-          floorLevels.push({ floorY: slabY, polygon: rectPoly });
-        }
+        usedSlabs.add(shape.id);
+        floorLevels.push({ floorY: slabY, polygon: extent.polygon, slab: { bottom: extent.bottom, top: extent.top } });
       }
     });
 
@@ -945,13 +1016,28 @@ export function generateTimberFraming(
         const wallsBelow = (wallsByElevation.get(Math.round((floorY - 2.8) * 10) / 10) || []).map(w => w.id);
         const wallsAbove = (wallsByElevation.get(Math.round(floorY * 10) / 10) || []).map(w => w.id);
 
+        // Joists live inside the slab: its outline pulled in a little (so the rim joists never
+        // sit flush with the slab's edge or the wall face above it) and its thickness less a
+        // hair top and bottom. With no slab, the joists sit under the floor level.
+        const slabDepthMm = level.slab ? Math.round((level.slab.top - level.slab.bottom) * 1000) : 0;
+        const inSlab = level.slab && slabDepthMm >= 60;
+        const coverMm = 2.5;
+        const boundaryY = inSlab ? (level.slab!.top + level.slab!.bottom) / 2 : floorY - 0.135;
+        const boundaryPoly = inSlab ? insetPolygon2D(polygon, FLOOR_EDGE_INSET_M) : polygon;
+
         floorContracts.push({
           floor_id: `floor-${flIdx}`,
           project_id: options.projectMetadata?.project_id || 'DEFAULT_PROJECT',
-          boundary: polygon.map(([x, z]) => [x, floorY, z]),
+          boundary: boundaryPoly.map(([x, z]) => [x, boundaryY, z]),
           span_direction: spanAlongZ ? [0, 0, 1] : [1, 0, 0],
-          total_depth: 270,
-          layer_stack: DEFAULT_FLOOR_LAYER_STACK,
+          total_depth: inSlab ? slabDepthMm : 270,
+          layer_stack: inSlab
+            ? [
+                { name: 'Slab Top Cover', thickness_mm: coverMm, material: 'Floor Slab', side: 'above' },
+                { name: 'Structural Zone (Joists)', thickness_mm: slabDepthMm - coverMm * 2, material: 'C24 Kiln-Dried Timber', side: 'structural', structural_zone: true },
+                { name: 'Slab Underside Cover', thickness_mm: coverMm, material: 'Floor Slab', side: 'below' },
+              ]
+            : DEFAULT_FLOOR_LAYER_STACK,
           openings: floorOpenings,
           supporting_wall_ids_below: wallsBelow,
           supporting_wall_ids_above: wallsAbove,
