@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-  Presentation, X, Hammer, PenLine, Tag, Route, MessageSquare, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2,
+  Presentation, X, Hammer, PenLine, Tag, Route, MessageSquare, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2, Footprints,
 } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
@@ -15,6 +15,10 @@ import { runShowcase, SHOWCASE_STEPS } from '../../lib/presentation/showcase';
 import { modelledBounds } from '../Viewport';
 import { framing } from '../RenderView';
 import ShareWithClientDialog from './ShareWithClientDialog';
+import { findSiteGround } from '../../lib/worldSite/site';
+import { STREET_LIFE_LEVELS, withSiteSettings } from '../../lib/worldSite/streets';
+import { actionLabel } from '../../lib/macroRecorder';
+import type { StreetLifeLevel } from '../../types';
 
 /** Frames the whole building from a three-quarter view. */
 export function frameModel(shapes: { id: string; type: string }[]) {
@@ -77,7 +81,7 @@ export default function PresentationPanel() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [showcaseStep, setShowcaseStep] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | 'comments' | null>(null);
+  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | 'comments' | 'street' | null>(null);
   const unread = useUnreadComments();
   const { comments } = useDesignerComments();
   const abort = useRef<AbortController | null>(null);
@@ -109,6 +113,14 @@ export default function PresentationPanel() {
 
   const building = s.storeys > 0;
   const range = cutRange(s);
+  const site = findSiteGround(app.shapes)?.terrainData?.site;
+  const streetLevel: StreetLifeLevel = site?.streetLife ?? 'normal';
+  const setStreetLevel = (level: StreetLifeLevel) => {
+    if (level === streetLevel) return;
+    app.recordAction(actionLabel(`Street life: ${level}`), { sdk: `sdk.worldView.setStreetLife(${JSON.stringify(level)});` });
+    app.setShapes(prev => withSiteSettings(prev, { streetLife: level }));
+    app.commitHistory();
+  };
 
   const toggleRecord = async () => {
     try {
@@ -156,6 +168,21 @@ export default function PresentationPanel() {
         {open === 'tour' && <TourEditor />}
         {open === 'comments' && <Popover title="Client comments" hint="From your client page"><DesignerCommentsList /></Popover>}
         {open === 'stages' && <StageTimeline className="mb-2 mx-auto w-[min(560px,calc(100vw-16px))]" />}
+        {open === 'street' && site && (
+          <Popover title="Street life" hint="Moving cars and people, saved with the model">
+            <div className="flex gap-1">
+              {STREET_LIFE_LEVELS.map(l => (
+                <button key={l.id} onClick={() => setStreetLevel(l.id)}
+                  className={cn('flex-1 px-2 py-1 rounded-md text-xs font-semibold', streetLevel === l.id ? 'bg-polyform-blue text-white' : 'bg-white/10 text-white/80 hover:bg-white/20')}>
+                  {l.label}
+                </button>
+              ))}
+            </div>
+            {site.routes && site.routes.length === 0 && (
+              <p className="mt-2 text-[11px] text-white/60">No roads or paths on this site yet: draw routes from the World View panel.</p>
+            )}
+          </Popover>
+        )}
         {open === 'explode' && (
           <Popover title="Exploded view" hint={building ? 'Lift floors and roof apart' : 'Add walls to explode a building'}>
             <Slider label="Spread" value={s.explode} min={0} max={1} step={0.01} onChange={v => presentation.set({ explode: v })} format={v => `${Math.round(v * 100)}%`} />
@@ -198,6 +225,10 @@ export default function PresentationPanel() {
           }} disabled={!!showcaseStep} />
           <Tool icon={<ScanEye size={18} />} label="X-ray" active={s.xray} onClick={() => presentation.set({ xray: !s.xray })} disabled={!!showcaseStep} />
           <Tool icon={<RotateCw size={18} />} label="Orbit" active={app.autoOrbitEnabled} onClick={() => setOrbit(!app.autoOrbitEnabled)} disabled={!!showcaseStep} />
+          {site && (
+            <Tool icon={<Footprints size={18} />} label="Street" active={open === 'street' || streetLevel !== 'off'} onClick={() => setOpen(open === 'street' ? null : 'street')}
+              title="Moving cars and people on the imported site: off, quiet, normal or busy" />
+          )}
           <Divider />
           <Tool icon={<Tag size={18} />} label="Labels" active={open === 'labels'} onClick={() => setOpen(open === 'labels' ? null : 'labels')} disabled={!!showcaseStep} />
           <Tool icon={<Route size={18} />} label="Tour" active={open === 'tour'} onClick={() => setOpen(open === 'tour' ? null : 'tour')} disabled={!!showcaseStep} />

@@ -32,7 +32,7 @@ export type ToolType =
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
   | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'water' | 'patio' | 'protractor'
-  | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping'
+  | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping' | 'site_route'
   | 'block_picker'
   | CivilToolMode;
 
@@ -146,6 +146,33 @@ export interface WorldSiteInfo {
   lidarSource?: string;
   /** How far the LiDAR was slid (x, z metres) to line up with the map outlines. */
   lidarShift?: [number, number];
+  /**
+   * Where cars and people move: the map's roads and footpaths plus any the designer drew.
+   * Missing on sites imported before street life existed (they're fetched when first needed).
+   */
+  routes?: SiteRoute[];
+  /** How busy the street is when cars and people show (default 'normal'). */
+  streetLife?: StreetLifeLevel;
+  /** Also show moving cars and people in the editor, not only in presentations. */
+  streetLifeInEditor?: boolean;
+}
+
+export type StreetLifeLevel = 'off' | 'quiet' | 'normal' | 'busy';
+
+/** A line that cars ('road') or only people ('path') move along; never drawn itself. */
+export interface SiteRoute {
+  id: string;
+  kind: 'road' | 'path';
+  /** Plan points [x, z], metres in the model. */
+  points: [number, number][];
+  /** 'map' = from OpenStreetMap; 'drawn' = drawn by the designer. */
+  source: 'map' | 'drawn';
+  /** Road width, metres (pavements are either side). */
+  width?: number;
+  /** Cars go one way only, first point to last. */
+  oneway?: boolean;
+  /** People only walk on it, e.g. a pedestrian street; no pavements beside it. */
+  noPavement?: boolean;
 }
 
 /** An existing building on an imported site: its outline and how tall it is. */

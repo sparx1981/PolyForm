@@ -13,9 +13,17 @@ function house(id: number, cx: number, cz: number, w = 10) {
   return { type: 'way', id, tags: { building: 'house' }, geometry: pts.map(p => ({ lat: p.lat, lon: p.lng })) };
 }
 
+/** A street `x0..x1` metres east along `cz` metres south. */
+function street(id: number, tags: Record<string, string>, x0: number, x1: number, cz: number) {
+  const pts = [localToLatLng(origin, x0, cz), localToLatLng(origin, x1, cz)];
+  return { type: 'way', id, tags, geometry: pts.map(p => ({ lat: p.lat, lon: p.lng })) };
+}
+
 const siteIO: SiteIO = {
   heightTiles: async tiles => tiles.map(t => ({ ...t, heights: new Float32Array(256 * 256).fill(12) })),
-  overpass: async () => ({ elements: [house(1, 0, 0), house(2, 30, 0)] }),
+  overpass: async q => (q.includes('"highway"')
+    ? { elements: [street(10, { highway: 'residential' }, -60, 60, 20), street(11, { highway: 'footway' }, -30, 30, -20)] }
+    : { elements: [house(1, 0, 0), house(2, 30, 0)] }),
 };
 
 function harness(initial: Shape[] = []) {

@@ -670,6 +670,14 @@ export const TOOL_SECTIONS: Section[] = [
         tryItSnippet: 'console.log(sdk.worldView.getSite(), sdk.worldView.listBuildings().length);',
       },
       {
+        title: 'WorldView Street Life',
+        badges: ['ANIMATED', 'PRESENTATIONS'],
+        functional: 'Moving cars and people on an imported site. Cars drive the real roads, keeping to the side the country drives on. White figures walk footpaths and pavements, stand in pairs, and sit on benches in the model. The level is Off, Quiet, Normal or Busy, and it is saved with the model. They show in presentations and on the client page, and in the editor if that is turned on. Designers can draw extra walking or driving routes. Phones and tablets show half as many.',
+        implementation: 'Roads and paths come from OpenStreetMap highways through the api/overpass relay. They are clipped to the site and kept on the site ground as routes, relative to it. A two-way road becomes a loop down one side and back up the other. Pavements are offset lines beside ordinary roads. The plan is seeded, so it is the same every time. Cars on one loop share a speed and keep at least 14 m apart. Everything is drawn with instanced meshes: the body, thighs, shins and arms of every figure, and car bodies, cabins and wheels in muted colours. A walk cycle swings the limbs, and cars pitch with the ground. The route tool reuses the fence and water tools\' point drawing.',
+        source: 'src/lib/worldSite/streets.ts\nsrc/lib/worldSite/streetLife.ts\nsrc/components/SiteStreetLife.tsx\napi/overpass.ts',
+        tryItSnippet: "sdk.worldView.setStreetLife({ level: 'busy', inEditor: true }); console.log(sdk.worldView.listRoutes().length);",
+      },
+      {
         title: 'Depth Clipping',
         badges: ['SECTIONS'],
         functional: 'Near and far clipping planes to look inside a model.',

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Shape, TextData, WorldSiteInfo, SiteBuildingData, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
+import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
@@ -18,6 +18,7 @@ import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../lib/worl
 import { browserSiteIO, findPlace } from '../lib/worldSite/fetchSite';
 import { removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
 import { clampSiteSize } from '../lib/worldSite/geo';
+import { STREET_LIFE_LEVELS, withDrawnRoute, withoutRoutes } from '../lib/worldSite/streets';
 
 export interface RoofConfigDefaults {
   roofType?: RoofType;
@@ -617,6 +618,14 @@ export interface SDK {
     // Draw removed buildings as see-through ghosts, for before-and-after.
     showExisting: (show: boolean) => void;
     setGroundStyle: (style: 'plain' | 'satellite') => void;
+    // Moving cars and people on the site. A level ('off' | 'quiet' | 'normal' | 'busy'), and/or
+    // whether they also move in the editor (they always do in presentations unless 'off').
+    setStreetLife: (options: StreetLifeLevel | { level?: StreetLifeLevel; inEditor?: boolean }) => void;
+    // The site's routes: the map's roads and paths plus any drawn. Points are [x, z] metres.
+    listRoutes: () => SiteRoute[];
+    // A route of your own: 'path' for people, 'road' for cars. Returns its id (null without a site).
+    addRoute: (kind: 'path' | 'road', points: [number, number][]) => string | null;
+    removeRoute: (id: string) => boolean;
   };
 
   // Text Subsystem - flat text labels and solid 3D letters, as the Text tools place them.
@@ -2433,6 +2442,39 @@ export class DeveloperSDK implements SDK {
           return;
         }
         this.updateSite({ groundStyle: style });
+      },
+      setStreetLife: (options: StreetLifeLevel | { level?: StreetLifeLevel; inEditor?: boolean }) => {
+        const o = typeof options === 'string' ? { level: options } : options ?? {};
+        if (o.level !== undefined && !STREET_LIFE_LEVELS.some(l => l.id === o.level)) {
+          this.log(`worldView.setStreetLife: use 'off', 'quiet', 'normal' or 'busy'.`);
+          return;
+        }
+        this.updateSite({
+          ...(o.level !== undefined ? { streetLife: o.level } : {}),
+          ...(o.inEditor !== undefined ? { streetLifeInEditor: !!o.inEditor } : {}),
+        });
+      },
+      listRoutes: () => (findSiteGround(this.shapes)?.terrainData?.site?.routes ?? []).map(r => ({ ...r, points: r.points.map(p => [...p] as [number, number]) })),
+      addRoute: (kind: 'path' | 'road', points: [number, number][]) => {
+        if (!findSiteGround(this.shapes)) {
+          this.log('worldView.addRoute: import a 3D site first.');
+          return null;
+        }
+        if ((kind !== 'path' && kind !== 'road') || !Array.isArray(points) || points.length < 2) {
+          this.log(`worldView.addRoute: give 'path' or 'road' and at least two [x, z] points.`);
+          return null;
+        }
+        const id = `drawn-${Math.random().toString(36).slice(2, 9)}`;
+        this.setShapes(prev => withDrawnRoute(prev, kind, points.map(p => [Number(p[0]), Number(p[1])] as [number, number]), id));
+        return id;
+      },
+      removeRoute: (id: string) => {
+        if (!findSiteGround(this.shapes)?.terrainData?.site?.routes?.some(r => r.id === id)) {
+          this.log(`worldView.removeRoute: no route with id ${id}.`);
+          return false;
+        }
+        this.setShapes(prev => withoutRoutes(prev, [id]));
+        return true;
       },
     };
 
