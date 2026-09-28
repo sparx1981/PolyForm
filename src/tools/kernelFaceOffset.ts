@@ -41,6 +41,34 @@ export interface FaceOffsetBinding {
   projectToSessionPlane: (world: { x: number; y: number; z: number }) => Vec2 | null;
 }
 
+/**
+ * Offsets a face's boundary within its own plane by `distance` (negative shrinks, positive
+ * grows) as one undo step. Shared by the Offset tool and `sdk.drawing.offset`. The caller
+ * refreshes the view (bumpKernel).
+ */
+export function commitKernelFaceOffset(host: KernelArcHost, faceId: FaceId, distance: number): boolean {
+  if (Math.abs(distance) < host.tolerances.MIN_EDGE_LENGTH) return false;
+  const before = snapshot(host.graph);
+  try {
+    const result = insertFaceOffset(
+      { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex },
+      faceId,
+      distance,
+    );
+    if (!result.ok) {
+      restore(host.graph, before);
+      return false;
+    }
+    derive(host.graph, result.touched, host.deriveOptions);
+    host.recordUndo(before);
+    return true;
+  } catch {
+    restore(host.graph, before);
+    host.reindex();
+    return false;
+  }
+}
+
 export function createFaceOffsetBinding(
   host: KernelArcHost,
   bumpKernel: () => void,
@@ -92,26 +120,9 @@ export function createFaceOffsetBinding(
       basisCache = null;
       if (Math.abs(distance) < host.tolerances.MIN_EDGE_LENGTH) return false;
 
-      const before = snapshot(host.graph);
-      try {
-        const result = insertFaceOffset(
-          { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex },
-          faceId,
-          distance,
-        );
-        if (!result.ok) {
-          restore(host.graph, before);
-          return false;
-        }
-        derive(host.graph, result.touched, host.deriveOptions);
-        host.recordUndo(before);
-        bumpKernel();
-        return true;
-      } catch {
-        restore(host.graph, before);
-        host.reindex();
-        return false;
-      }
+      const ok = commitKernelFaceOffset(host, faceId, distance);
+      if (ok) bumpKernel();
+      return ok;
     },
 
     cancel() {

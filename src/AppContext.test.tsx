@@ -448,3 +448,59 @@ describe('AppProvider action recorder: drawn geometry', () => {
     expect(host.undo()).toBe(true);
   });
 });
+
+describe('AppProvider action recorder: tool commands', () => {
+  const settle = () => act(async () => { await new Promise(r => setTimeout(r, 450)); });
+
+  it('writes a tool\'s readable command when it reproduces the step exactly', async () => {
+    const { result } = renderApp();
+    act(() => { result.current.setIsRecording(true); });
+    // As the Rectangle tool does: offer the command, then draw.
+    const ring = [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 0, z: 1 }, { x: 0, y: 0, z: 1 }];
+    act(() => {
+      result.current.recordAction('// Rectangle tool', { sdk: `sdk.drawing.shape(${JSON.stringify(ring.map(p => [p.x, p.y, p.z]))});` });
+      result.current.kernelHost.commitIsolatedShape(ring);
+      result.current.bumpKernel();
+    });
+    await settle();
+    const faceId = [...result.current.kernelHost.graph.faces.keys()][0]!;
+    act(() => {
+      result.current.recordAction('// Push/Pull tool', { sdk: `sdk.drawing.pushPull(${faceId}, 1.5);` });
+    });
+    const { commitKernelPushPull } = await import('./tools/kernelPushPull');
+    act(() => { commitKernelPushPull(result.current.kernelHost, faceId, 1.5); result.current.bumpKernel(); });
+    // As the Water tool does: add the object, then offer the command.
+    const { buildWaterBody } = await import('./lib/siteBuilders');
+    const pond = buildWaterBody([], [[10, 0], [14, 0], [14, 3], [10, 3]], { id: 'pond-1', depth: 0.8 });
+    act(() => {
+      result.current.addShape(pond);
+      result.current.recordAction(`Add ${pond.name}`, {
+        sdk: `sdk.landscape.addPond([[10,0],[14,0],[14,3],[10,3]], ${JSON.stringify({ id: 'pond-1', name: pond.name, depth: 0.8, level: pond.position[1] })});`,
+      });
+    });
+    act(() => { result.current.setIsRecording(false); });
+
+    const code = result.current.recordedCode;
+    expect(code).toContain('sdk.drawing.shape([[0,0,0],[2,0,0],[2,0,1],[0,0,1]]);');
+    expect(code).toContain(`sdk.drawing.pushPull(${faceId}, 1.5);`);
+    expect(code).toContain('sdk.landscape.addPond(');
+    expect(code).not.toContain('applyChanges');
+    expect(code).not.toContain('addObject');
+    // addShape and the tool both label the pond; it appears once.
+    expect(code.match(/\/\/ Add Pond 1/g)).toHaveLength(1);
+  });
+
+  it('falls back to the exact change when a tool\'s command would not reproduce it', () => {
+    const { result } = renderApp();
+    act(() => { result.current.setIsRecording(true); });
+    act(() => {
+      result.current.recordAction('// Line tool', { sdk: 'sdk.drawing.line([0, 0, 0], [9, 0, 0]);' });
+      result.current.kernelHost.commitSegment({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
+      result.current.bumpKernel();
+    });
+    act(() => { result.current.setIsRecording(false); });
+    const code = result.current.recordedCode;
+    expect(code).not.toContain('sdk.drawing.line(');
+    expect(code).toContain('sdk.drawing.applyChanges(');
+  });
+});

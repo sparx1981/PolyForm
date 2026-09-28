@@ -56,9 +56,10 @@ describe('diffShapesToSdk', () => {
     expect(twice).toHaveLength(1);
   });
 
-  it('writes typed arrays as plain arrays and rounds floating-point noise', () => {
+  it('writes typed arrays as plain arrays and keeps full precision', () => {
     const lit = sdkLiteral({ positions: new Float32Array([0.5, 1]), x: 0.1 + 0.2, y: -0 });
-    expect(lit).toBe('{"positions":[0.5,1],"x":0.3,"y":0}');
+    expect(lit).toBe('{"positions":[0.5,1],"x":0.30000000000000004,"y":0}');
+    expect(JSON.parse(lit).x).toBe(0.1 + 0.2);
   });
 });
 

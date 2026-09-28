@@ -570,3 +570,51 @@ describe('DeveloperSDK drawing', () => {
     expect(onLog).toHaveBeenCalledWith(expect.stringContaining('Drawing is not available'));
   });
 });
+
+describe('DeveloperSDK tool commands', () => {
+  async function makeDrawingSdk() {
+    const { KernelArcHost } = await import('../tools/kernelArcHost');
+    const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } });
+    const sdk = new DeveloperSDK([], vi.fn(), vi.fn(), null, { kernelHost: host, bumpKernel: vi.fn() });
+    return { sdk, host };
+  }
+
+  it('shape draws a marked isolated surface; offset shrinks it inside its own plane', async () => {
+    const { sdk, host } = await makeDrawingSdk();
+    const faces = sdk.drawing.shape([[0, 0, 0], [4, 0, 0], [4, 0, 4], [0, 0, 4]]);
+    expect(faces).toHaveLength(1);
+    expect(host.graph.faces.get(faces[0] as any)?.attributes.custom.isolatedShape).toBe(true);
+    expect(sdk.drawing.offset(faces[0]!, -1)).toBe(true);
+    expect(host.graph.faces.size).toBe(2);
+  });
+
+  it('bezier draws a closed curve as a surface and keeps its knots', async () => {
+    const { sdk, host } = await makeDrawingSdk();
+    const faces = sdk.drawing.bezier({
+      knots: [
+        { point: [0, 0, 0], handleOut: [1, 0, -1] },
+        { point: [3, 0, 0], handleIn: [2, 0, -1], handleOut: [4, 0, 1] },
+        { point: [1.5, 0, 3] },
+      ],
+      resolution: 8,
+    });
+    expect(faces).toHaveLength(1);
+    expect((host.graph.faces.get(faces[0] as any)?.attributes.custom.bezier as any).knots).toHaveLength(3);
+  });
+
+  it('addFence, addPond and addPatio build the same objects as the connector, keeping a given id', () => {
+    let shapes: Shape[] = [];
+    const sdk = new DeveloperSDK(shapes, (next: any) => { shapes = typeof next === 'function' ? next(shapes) : next; }, vi.fn(), null, {});
+    const fence = sdk.landscape.addFence([[0, 0], [10, 0], [10, 5]], { id: 'f1', style: 'picket', height: 1, seed: 3 });
+    const pond = sdk.landscape.addPond([[20, 0], [24, 0], [24, 3], [20, 3]], { id: 'p1', depth: 1 });
+    const patio = sdk.landscape.addPatio([[30, 0], [34, 0], [34, 3], [30, 3]], { id: 'd1', kind: 'deck' });
+    expect(shapes.map(s => s.id)).toEqual(['f1', 'p1', 'd1']);
+    expect(fence.fenceData?.seed).toBe(3);
+    expect(fence.args).toEqual([15, 1]);
+    expect(pond.type).toBe('water');
+    expect(patio.patioData?.kind).toBe('deck');
+    // Adding again with the same id replaces rather than duplicates.
+    sdk.landscape.addFence([[0, 0], [5, 0]], { id: 'f1' });
+    expect(shapes.filter(s => s.id === 'f1')).toHaveLength(1);
+  });
+});

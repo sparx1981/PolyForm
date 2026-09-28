@@ -254,6 +254,37 @@ export class KernelLineHost implements LineToolHost {
   }
 
   /**
+   * A whole shape drawn as one gesture (Rectangle / Circle / Triangle): each side committed as
+   * an isolated segment, as one undo step, then every face it created marked as an isolated
+   * shape so extruding it stays isolated too (see kernelPushPull.ts). A face the ring merely
+   * shares an edge with (a deliberate snap onto another shape) is left as it was. Returns the
+   * new faces, or null when the first side was too short to draw.
+   */
+  commitIsolatedShape(ring: readonly Vec3[]): number[] | null {
+    if (ring.length < 3) return null;
+    const facesBefore = new Set(this.graph.faces.keys());
+    let ok = true;
+    this.beginBatch();
+    try {
+      for (let i = 0; ok && i < ring.length; i++) {
+        const result = this.commitIsolatedSegment(ring[i]!, ring[(i + 1) % ring.length]!);
+        // A zero-width drag: nothing worth committing.
+        if (!result.ok && i === 0) ok = false;
+      }
+    } finally {
+      this.endBatch();
+    }
+    if (!ok) return null;
+    const faces: number[] = [];
+    for (const [id, face] of this.graph.faces) {
+      if (facesBefore.has(id)) continue;
+      face.attributes.custom[ISOLATED_SHAPE_KEY] = true;
+      faces.push(id);
+    }
+    return faces;
+  }
+
+  /**
    * The same one-segment, one-transaction, one-undo-entry shape as
    * commitSegment, but using insertIsolatedEdge instead of insertEdge —
    * see that function's own doc comment for the full reasoning. Used by

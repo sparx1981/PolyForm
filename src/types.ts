@@ -565,7 +565,8 @@ export interface AppState {
   setContextMenu: (menu: { x: number, y: number, type: 'surface' | 'multi' | 'light' | 'kernel', data?: any, faceId?: any } | null) => void;
   undo: () => void;
   redo: () => void;
-  recordAction: (code: string) => void;
+  /** Adds a line to the action recording; `options.sdk` offers a readable command for the step (see macroVerify.ts). */
+  recordAction: (code: string, options?: { sdk?: string }) => void;
   // Developer Suite
   isDeveloperConsoleOpen: boolean;
   setIsDeveloperConsoleOpen: (open: boolean) => void;

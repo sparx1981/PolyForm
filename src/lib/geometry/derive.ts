@@ -645,9 +645,42 @@ export function regionsFor(
     }
 
 
-    // A lone edge, or one whose neighbours are all colinear with it, bounds
-    // nothing. Keep it in its own bucket so it is reported as stray rather
-    // than silently dropped.
+    // The middle piece of a straight side drawn in several pieces (a Bézier's
+    // straight span, a polygon with a click part-way along a side) only meets
+    // pieces of the same line, so it has no plane of its own there. Follow the
+    // line to its corners and take the planes found there: the whole line lies
+    // in each of them. Without this the piece is left out of every region and
+    // the face it bounds never forms.
+    if (found === 0) {
+      const seenEdges = new Set<EdgeId>([eid]);
+      const seenVertices = new Set<VertexId>();
+      const along: VertexId[] = [e.v0, e.v1];
+      while (along.length > 0 && seenVertices.size < 256) {
+        const vid = along.pop()!;
+        if (seenVertices.has(vid)) continue;
+        seenVertices.add(vid);
+        for (const otherId of getVertex(g, vid).edges) {
+          if (seenEdges.has(otherId)) continue;
+          seenEdges.add(otherId);
+          const other = g.edges.get(otherId);
+          if (!other) continue;
+          const [q0, q1] = edgePoints(g, other);
+          const odir = tryNormalize(sub(q1, q0));
+          if (!odir) continue;
+          const normal = tryNormalize(cross(dir, odir));
+          if (normal) {
+            put(planeKey({ point: p0, normal }, tolerances.COPLANARITY_TOLERANCE), eid);
+            found++;
+          } else {
+            along.push(other.v0 === vid ? other.v1 : other.v0);
+          }
+        }
+      }
+    }
+
+    // A lone edge, or a straight line with no corner anywhere, bounds nothing.
+    // Keep it in its own bucket so it is reported as stray rather than
+    // silently dropped.
     if (found === 0) put(`edge:${eid}`, eid);
   }
 

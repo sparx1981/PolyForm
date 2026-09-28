@@ -5,14 +5,15 @@ import type { Shape } from '../types';
 // model before and after each action and writes the exact change, so no tool can be missed and
 // a replay produces the same objects (same ids, so later steps find them again).
 
-/** Rounds away floating-point noise (0.30000000000000004) - a micrometre is far below anything visible. */
+/**
+ * Numbers are written at full precision: a replay has to land exactly where the user drew, or
+ * corners that met stop meeting. Only -0 is tidied (JSON writes it as 0 anyway).
+ */
 function tidyNumber(n: number): number {
-  if (!Number.isFinite(n)) return n;
-  const r = Math.round(n * 1e6) / 1e6;
-  return Object.is(r, -0) ? 0 : r;
+  return Object.is(n, -0) ? 0 : n;
 }
 
-/** Plain-JSON copy with typed arrays as arrays and tidy numbers; undefined fields are dropped. */
+/** Plain-JSON copy with typed arrays as arrays; undefined fields are dropped. */
 export function normalizeForScript(value: unknown): unknown {
   if (typeof value === 'number') return tidyNumber(value);
   if (value === null || typeof value !== 'object') return value;

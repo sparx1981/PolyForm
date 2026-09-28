@@ -130,7 +130,7 @@ import { analyzeWallConversion, buildWallShapes, captureFaces, floorFacesWithin,
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
-import { createPushPullBinding, ISOLATED_SHAPE_KEY } from '../tools/kernelPushPull';
+import { createPushPullBinding } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding } from '../tools/kernelFaceOffset';
 import { createChamferBinding } from '../tools/kernelChamfer';
@@ -159,6 +159,8 @@ import { InstancedTimberFraming } from './InstancedTimberFraming';
 import { BezierTool } from '../tools/bezier/BezierTool';
 import { KernelBezierHost } from '../tools/bezier/KernelBezierHost';
 import { tessellateEntireCurve, tessellateBezierSpan } from '../tools/bezier/tessellate';
+import { checkSelfIntersection, projectToPlane } from '../lib/planarPolygon';
+import { commitBezierSurface, type BezierKnotInput } from '../tools/bezier/bezierSurface';
 import { BezierKnot, BezierCurveState } from '../tools/bezier/types';
 import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 
@@ -908,39 +910,6 @@ function computeOffsetPolygon(points: Pt2[], distance: number): Pt2[] {
   }
   return result;
 }
-
-const checkSelfIntersection = (points: THREE.Vector2[]): boolean => {
-  const n = points.length;
-  if (n < 4) return false;
-  
-  const intersect = (p1: THREE.Vector2, p2: THREE.Vector2, p3: THREE.Vector2, p4: THREE.Vector2) => {
-    const denominator = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
-    if (denominator === 0) return false;
-    let ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / denominator;
-    let ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / denominator;
-    return (ua >= 0 && ua <= 1) && (ub >= 0 && ub <= 1);
-  };
-
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 2; j < n; j++) {
-      if (i === 0 && j === n - 1) continue;
-      if (intersect(points[i], points[(i + 1) % n], points[j], points[(j + 1) % n])) return true;
-    }
-  }
-  return false;
-};
-
-const projectToPlane = (vertices: THREE.Vector3[], origin: THREE.Vector3, normal: THREE.Vector3): THREE.Vector2[] => {
-  const up = new THREE.Vector3(0, 1, 0);
-  if (Math.abs(normal.dot(up)) > 0.99) up.set(0, 0, 1);
-  const tangent = new THREE.Vector3().crossVectors(normal, up).normalize();
-  const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
-  
-  return vertices.map(v => {
-    const diff = v.clone().sub(origin);
-    return new THREE.Vector2(diff.dot(tangent), diff.dot(bitangent));
-  });
-};
 
 const CAMERA_VIEWS: Record<string, { pos: [number, number, number], target: [number, number, number] }> = {
   perspective: { pos: [5, 5, 5], target: [0, 0, 0] },
@@ -3178,7 +3147,11 @@ function Scene() {
       };
       const finish = () => {
         removeListeners();
-        const distance = faceOffsetRef.current.session?.distance ?? 0;
+        const offsetSession = faceOffsetRef.current.session;
+        const distance = offsetSession?.distance ?? 0;
+        if (offsetSession) {
+          recordAction(actionLabel('Offset tool'), { sdk: `sdk.drawing.offset(${offsetSession.faceId}, ${JSON.stringify(distance)});` });
+        }
         const ok = faceOffsetRef.current.commit();
         setFaceOffsetPreview(null);
         setMeasurements(ok || Math.abs(distance) < 1e-3 ? '' : 'That offset is larger than the shape allows, so nothing was changed.');
@@ -3234,6 +3207,10 @@ function Scene() {
     };
     const finish = () => {
       removeListeners();
+      const pushed = pushPullRef.current.session;
+      if (pushed) {
+        recordAction(actionLabel('Push/Pull tool'), { sdk: `sdk.drawing.pushPull(${pushed.faceId}, ${JSON.stringify(pushed.distance)});` });
+      }
       pushPullRef.current.commit();
       setPushPullPreview(null);
       setMeasurements('');
@@ -3979,10 +3956,12 @@ function Scene() {
     // Flattened onto the drawing plane: clicks can land a hair above or below it (grid lines,
     // axes), and a surface only forms when every corner lies on one plane.
     const drawingPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal.clone().normalize(), origin);
-    const committed = kernelHost.commitIsolatedRing(polyVertices.map(v => {
+    const polyPoints = polyVertices.map(v => {
       const q = drawingPlane.projectPoint(v, new THREE.Vector3());
       return { x: q.x, y: q.y, z: q.z };
-    }));
+    });
+    recordAction(actionLabel('Polygon tool'), { sdk: `sdk.drawing.surface(${JSON.stringify(polyPoints.map(p => [p.x, p.y, p.z]))});` });
+    const committed = kernelHost.commitIsolatedRing(polyPoints);
     if (!committed.ok) {
       setConsoleOutput(prev => [...prev, `[ERROR] Could not create the shape: ${committed.reason ?? 'unknown error'}.`]);
       diagLog('ERROR', 'Poly failed: kernel commit', { reason: committed.reason });
@@ -4444,47 +4423,35 @@ function Scene() {
     while (currentKnots.length > 2 && currentKnots[currentKnots.length - 1].point.distanceTo(currentKnots[0].point) < 0.02) currentKnots = currentKnots.slice(0, -1);
     if (currentKnots.length < 2) return;
 
-    // Tessellate curve with resolution
-    const tessPts = tessellateEntireCurve(currentKnots, true, bezierResolution);
-    if (tessPts.length < 3) return;
-
-    // Flatten onto the drawing plane, then commit as a kernel surface like the other shape tools.
-    const origin = currentKnots[0].point.clone();
     const normal = (bezierActivePlane ? bezierActivePlane.normal.clone() : new THREE.Vector3(0, 1, 0)).normalize();
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, origin);
-    // A closed curve's tessellation ends back on its first point: drop that (and any repeated
-    // points), or the ring touches itself there and reads as crossing itself.
-    const ringPts = tessPts.map(p => plane.projectPoint(p, new THREE.Vector3()))
-      .filter((p, i, all) => i === 0 || p.distanceTo(all[i - 1]) > 1e-6);
-    while (ringPts.length > 3 && ringPts[ringPts.length - 1].distanceTo(ringPts[0]) < 1e-6) ringPts.pop();
-    if (checkSelfIntersection(projectToPlane(ringPts, origin, normal))) {
-      setMeasurements('A closed Bézier shape cannot cross itself.');
-      return;
-    }
-    const committed = kernelHost.commitIsolatedRing(ringPts.map(p => ({ x: p.x, y: p.y, z: p.z })));
-    if (!committed.ok) {
-      setMeasurements(`Could not create the Bézier surface: ${committed.reason ?? 'unknown error'}.`);
-      return;
-    }
-    // Keep the curve's knots on the surface, for editing the curve later.
-    const knots = currentKnots.map(k => ({
+    const knots: BezierKnotInput[] = currentKnots.map(k => ({
       point: [k.point.x, k.point.y, k.point.z],
       handleIn: k.handleIn ? [k.handleIn.x, k.handleIn.y, k.handleIn.z] : null,
       handleOut: k.handleOut ? [k.handleOut.x, k.handleOut.y, k.handleOut.z] : null,
       mode: k.mode,
     }));
-    for (const fid of committed.faces) {
-      const face = kernelHost.graph.faces.get(fid as FaceId);
-      if (face) face.attributes.custom.bezier = { knots, resolution: bezierResolution };
+    recordAction(actionLabel('Bézier tool'), {
+      sdk: `sdk.drawing.bezier(${JSON.stringify({ knots, resolution: bezierResolution, normal: [normal.x, normal.y, normal.z] })});`,
+    });
+    // Tessellated, flattened onto the drawing plane and committed as a kernel surface like the
+    // other shape tools, with the knots kept on the surface for editing the curve later.
+    const committed = commitBezierSurface(kernelHost, knots, bezierResolution, { x: normal.x, y: normal.y, z: normal.z });
+    if (!committed.ok) {
+      if (committed.reason === 'too few points') return;
+      setMeasurements(committed.reason === 'crosses itself'
+        ? 'A closed Bézier shape cannot cross itself.'
+        : `Could not create the Bézier surface: ${committed.reason ?? 'unknown error'}.`);
+      return;
     }
+    const ringCount = committed.points;
     bumpKernel();
     setActiveTool('select');
     setSelectedId(null);
     setSelectedIds([]);
     setSelectedFaceIds(committed.faces);
 
-    diagLog('SDK', 'Bézier closed loop surface created', { faces: committed.faces.length, vertexCount: ringPts.length });
-    setMeasurements(`Created Bézier surface (${ringPts.length} points) ready for Offset or Push/Pull.`);
+    diagLog('SDK', 'Bézier closed loop surface created', { faces: committed.faces.length, vertexCount: ringCount });
+    setMeasurements(`Created Bézier surface (${ringCount} points) ready for Offset or Push/Pull.`);
 
     setBezierKnots([]);
     setBezierActivePlane(null);
@@ -4636,7 +4603,12 @@ function Scene() {
     liveFenceIdRef.current = newShape.id;
     addShape(newShape);
     commitHistory();
-    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
+    recordAction(actionLabel(`Add ${newShape.name}`), {
+      sdk: `sdk.landscape.addFence(${JSON.stringify(vertices.map(v => [v.x, v.z]))}, ${JSON.stringify({
+        id: newShape.id, name: newShape.name, closed, style: settings.style, height: settings.height,
+        color: settings.color, finish: settings.finish, seed: newShape.fenceData!.seed,
+      })});`,
+    });
     diagLog('TOOL', 'Fence placed', { style: settings.style, points: vertices.length, closed, length });
   }, [fenceToolSettings, shapes, setShapes, unit, addShape, commitHistory, recordAction, diagLog]);
 
@@ -4686,7 +4658,11 @@ function Scene() {
     };
     addShape(newShape);
     commitHistory();
-    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
+    recordAction(actionLabel(`Add ${newShape.name}`), {
+      sdk: `sdk.landscape.addPond(${JSON.stringify(outline.map(p => [p.x, p.z]))}, ${JSON.stringify({
+        id: newShape.id, name: newShape.name, depth: waterToolSettings.depth, clarity: waterToolSettings.clarity, level,
+      })});`,
+    });
     diagLog('TOOL', `${kind} placed`, { points: vertices.length, level, extent });
   }, [shapes, waterToolSettings, addShape, commitHistory, recordAction, diagLog, setMeasurements]);
 
@@ -4740,7 +4716,7 @@ function Scene() {
     }
     const level = patioLevel(world, bulges, kind, settings.deckHeight, joinLevels, patioOriginalGround);
     const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === kind).length + 1;
-    const newShape = makePatioShape({
+    const patioInputs = {
       id: Math.random().toString(36).substr(2, 9),
       name: `${kind === 'deck' ? 'Deck' : 'Patio'} ${count}`,
       world,
@@ -4749,11 +4725,16 @@ function Scene() {
       wallEdges: world.map((_, i) => !!(alongWall[i] || alongTarget[i] || joinedByClosure?.[i])),
       kind,
       template: settings.template,
-    });
+    };
+    const newShape = makePatioShape(patioInputs);
     addShape(newShape);
     commitHistory();
     setSelectedId(newShape.id);
-    recordAction(actionLabel(`Add ${newShape.name || newShape.type}`));
+    recordAction(actionLabel(`Add ${newShape.name}`), {
+      sdk: `sdk.landscape.addPatio(${JSON.stringify(world)}, ${JSON.stringify({
+        id: patioInputs.id, name: patioInputs.name, kind, bulges, level, wallEdges: patioInputs.wallEdges, settings: settings.template,
+      })});`,
+    });
     diagLog('TOOL', `${newShape.name} placed`, { points: world.length, level, againstWall: joinLevels.length > 0, closedAlong: !!closure, trimmed: !!trimmed });
   }, [patioToolSettings, patioOriginalGround, shapes, addShape, commitHistory, setSelectedId, recordAction, diagLog, setMeasurements]);
 
@@ -8342,6 +8323,9 @@ function Scene() {
           lineTo = lmid.clone().addScaledVector(ldir, llen / 2);
         }
 
+        recordAction(actionLabel('Line tool'), {
+          sdk: `sdk.drawing.line(${JSON.stringify([lineFrom.x, lineFrom.y, lineFrom.z])}, ${JSON.stringify([lineTo.x, lineTo.y, lineTo.z])});`,
+        });
         lineBinding.commitDrag(lineFrom, lineTo);
         kernelLineEndsRef.current = null;
       } else if (
@@ -8364,41 +8348,12 @@ function Scene() {
         // for.
         const ring = kernelRingRef.current;
         kernelRingRef.current = null;
-        // Captured before the loop so the marking step below can tell a
-        // genuinely NEW face apart from a pre-existing one this ring
-        // merely happened to share its closing edge with (a deliberate
-        // snap onto an existing shape) — only the former should be
-        // marked. Marking a pre-existing, differently-drawn face here
-        // would silently change ITS OWN push/pull behaviour too, which
-        // the user never asked for.
-        const faceIdsBefore = new Set(kernelHost.graph.faces.keys());
-        let ok = ring.length >= 3;
-        // One shape, one undo step (not one per side).
-        kernelHost.beginBatch();
-        try {
-          for (let i = 0; ok && i < ring.length; i++) {
-            const result = lineBinding.commitIsolatedDrag(ring[i]!, ring[(i + 1) % ring.length]!);
-            if (!result.ok) {
-              // A zero-width drag: nothing worth committing.
-              if (i === 0) ok = false;
-            }
-          }
-        } finally {
-          kernelHost.endBatch();
-        }
-        // Mark every genuinely new face as an isolated shape, so
-        // push/pull's own insertFn option (see kernelPushPull.ts) keeps
-        // it consistent with how it was drawn once it's extruded —
-        // otherwise the new geometry an extrusion creates (the far cap,
-        // the side walls) would fall back to the ordinary sticky path
-        // and undo this fix the moment the shape is pushed/pulled, which
-        // is exactly what was still happening before this marker
-        // existed.
-        if (ok) {
-          for (const [fid, face] of kernelHost.graph.faces) {
-            if (!faceIdsBefore.has(fid)) face.attributes.custom[ISOLATED_SHAPE_KEY] = true;
-          }
-        }
+        // One shape, one undo step; its new faces are marked as isolated shapes so push/pull
+        // keeps them isolated too (see KernelLineHost.commitIsolatedShape).
+        recordAction(actionLabel(`${previewShape.type === 'rect' ? 'Rectangle' : previewShape.type === 'circle' ? 'Circle' : 'Triangle'} tool`), {
+          sdk: `sdk.drawing.shape(${JSON.stringify(ring.map(p => [p.x, p.y, p.z]))});`,
+        });
+        if (kernelHost.commitIsolatedShape(ring.map(p => ({ x: p.x, y: p.y, z: p.z })))) bumpKernel();
       } else if (previewShape) {
         addShape({
           id: Math.random().toString(36).substr(2, 9),

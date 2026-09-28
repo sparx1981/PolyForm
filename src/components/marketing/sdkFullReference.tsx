@@ -116,7 +116,7 @@ export const SDK_REFERENCE: SdkTag[] = [
   },
   {
     id: 'landscape', title: 'landscape',
-    description: 'Terrain, planting and site furniture.',
+    description: 'Terrain, planting, site furniture, fences, ponds and patios.',
     methods: [
       m('addPlant', 'sdk.landscape.addPlant(speciesId?, { position?, scale?, rotation?, variation?, color? })', 'Shape', 'Plant a tree, shrub or other species from the plant catalog.'),
       m('addSiteFurniture', "sdk.landscape.addSiteFurniture(type, { position?, rotation?, color?, … })", 'Shape', "Add a bench, lamp, fence run, rock or railing ('bench' | 'lamp' | 'fence' | 'rock' | 'railing')."),
@@ -130,6 +130,9 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('getSculptSettings', 'sdk.landscape.getSculptSettings()', 'object', 'Read the current sculpting brush settings.'),
       m('configureRoadSettings', 'sdk.landscape.configureRoadSettings({ width?, embankment?, roadColor?, curbHeight? })', 'void', 'Set the defaults for the path/road tool.'),
       m('getRoadSettings', 'sdk.landscape.getRoadSettings()', 'object', 'Read the current path/road settings.'),
+      m('addFence', 'sdk.landscape.addFence(points, { style?, height?, closed?, color?, finish?, seed? })', 'Shape', 'A fence run through ground points [x, z], as the Fence tool makes one.'),
+      m('addPond', 'sdk.landscape.addPond(points, { depth?, clarity?, level? })', 'Shape', 'A pond or lake filling an outline of ground points [x, z], as the Water tool makes one.'),
+      m('addPatio', "sdk.landscape.addPatio(points, { kind?, deckHeight?, level?, bulges?, settings? })", 'Shape', "A patio or deck over ground points [x, z], levelled with the house floor when drawn against a wall ('patio' or 'deck')."),
     ],
   },
   {
@@ -255,6 +258,9 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('line', 'sdk.drawing.line(from, to)', 'number[]', 'Draw a line (the Line tool). Lines that close a loop make a face.'),
       m('arc', 'sdk.drawing.arc({ centre, radius, sweep, normal?, startAngle?, segments? })', 'number[]', 'Draw an arc (the Arc tool). Angles are in radians; normal defaults to up.'),
       m('surface', 'sdk.drawing.surface(points)', 'number[]', 'Draw a flat surface from its corners (as Rectangle, Circle and Polygon do); returns its face numbers.'),
+      m('shape', 'sdk.drawing.shape(points)', 'number[]', 'Draw a closed shape side by side, as Rectangle, Circle and Triangle do; it stays separate from geometry it crosses.'),
+      m('bezier', 'sdk.drawing.bezier({ knots, resolution?, normal? })', 'number[]', 'Draw a closed Bézier curve as a surface (the Bézier tool). Each knot is { point, handleIn?, handleOut? }.'),
+      m('offset', 'sdk.drawing.offset(faceId, distance)', 'boolean', "Shrink (negative) or grow a face's outline within its own plane (the Offset tool)."),
       m('pushPull', 'sdk.drawing.pushPull(faceId, distance)', 'boolean', 'Extrude a face along its normal (the Push/Pull tool). Negative pushes in.'),
       m('paint', 'sdk.drawing.paint(faceIds, color)', 'void', 'Paint faces a colour.'),
       m('erase', 'sdk.drawing.erase(faceIds)', 'void', 'Delete faces and the edges only they use.'),

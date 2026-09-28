@@ -3,7 +3,10 @@ import { Shape, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, C
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
+import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
 import { commitKernelPushPull } from '../tools/kernelPushPull';
+import { commitKernelFaceOffset } from '../tools/kernelFaceOffset';
+import { commitBezierSurface, type BezierKnotInput } from '../tools/bezier/bezierSurface';
 import { deleteGroupFacesAndEdges, paintFaces, faceSummaries } from '../tools/kernelSelection';
 import { applyKernelPatch, type KernelPatch } from '../lib/geometry/graphPatch';
 import { DEFAULT_SEGMENTS } from '../lib/geometry/curve';
@@ -384,6 +387,12 @@ export interface SDK {
     getSculptSettings: () => any;
     configureRoadSettings: (settings: { width?: number; embankment?: boolean; roadColor?: string; curbHeight?: number }) => void;
     getRoadSettings: () => any;
+    /** A fence run through ground points [x, z], as the Fence tool makes one. */
+    addFence: (points: [number, number][], options?: FenceOptions) => Shape;
+    /** A pond or lake filling an outline of ground points [x, z], as the Water tool makes one. */
+    addPond: (points: [number, number][], options?: PondOptions) => Shape;
+    /** A patio or deck over an outline of ground points [x, z], as the Patio tool makes one. */
+    addPatio: (points: [number, number][], options?: PatioOptions) => Shape;
   };
 
   // Materials & PBR Subsystem
@@ -559,7 +568,10 @@ export interface SDK {
     line: (from: DrawingPoint, to: DrawingPoint) => number[];
     arc: (spec: { centre: DrawingPoint; normal?: DrawingPoint; radius: number; startAngle?: number; sweep: number; segments?: number }) => number[];
     surface: (points: DrawingPoint[]) => number[];
+    shape: (points: DrawingPoint[]) => number[];
+    bezier: (curve: { knots: BezierKnotInput[]; resolution?: number; normal?: DrawingPoint }) => number[];
     pushPull: (faceId: number, distance: number) => boolean;
+    offset: (faceId: number, distance: number) => boolean;
     erase: (faceIds: number[]) => void;
     paint: (faceIds: number[], color: string) => void;
     listFaces: () => { id: number; label: string; color: string | null; hidden: boolean; area: number; holes: number }[];
@@ -1510,7 +1522,11 @@ export class DeveloperSDK implements SDK {
 
       getRoadSettings: (): any => {
         return this.extraSetters.landscapeRoadSettings || {};
-      }
+      },
+
+      addFence: (points, options = {}) => this.placeBuilt(buildFence(this.shapes, points, options)),
+      addPond: (points, options = {}) => this.placeBuilt(buildWaterBody(this.shapes, points, options)),
+      addPatio: (points, options = {}) => this.placeBuilt(buildPatio(this.shapes, points, options)),
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -2150,6 +2166,30 @@ export class DeveloperSDK implements SDK {
         changed();
         return r.faces;
       },
+      shape: (points) => {
+        const host = kernel();
+        if (!host) return [];
+        const faces = host.commitIsolatedShape(points.map(toVec));
+        if (!faces) this.log('Shape not drawn: its first side is too short.');
+        changed();
+        return faces ?? [];
+      },
+      bezier: ({ knots, resolution = 24, normal = [0, 1, 0] }) => {
+        const host = kernel();
+        if (!host) return [];
+        const r = commitBezierSurface(host, knots, resolution, toVec(normal));
+        if (!r.ok) this.log(`Bézier surface not drawn: ${r.reason}.`);
+        changed();
+        return r.ok ? r.faces : [];
+      },
+      offset: (faceId, distance) => {
+        const host = kernel();
+        if (!host) return false;
+        const ok = commitKernelFaceOffset(host, faceId as FaceId, distance);
+        if (!ok) this.log(`Offset of face ${faceId} did nothing.`);
+        changed();
+        return ok;
+      },
       pushPull: (faceId, distance) => {
         const host = kernel();
         if (!host) return false;
@@ -2773,6 +2813,17 @@ export class DeveloperSDK implements SDK {
       : [...this.shapes, newShape];
     this.log(`Added object (${type}) ${newShape.id}.`);
     return newShape;
+  }
+
+  /** Adds (or, for an existing id, replaces) an object a builder made, and returns it. */
+  private placeBuilt(shape: Shape): Shape {
+    const put = (list: Shape[]) => list.some(s => s.id === shape.id)
+      ? list.map(s => s.id === shape.id ? shape : s)
+      : [...list, shape];
+    this.setShapes(prev => put(prev));
+    this.shapes = put(this.shapes);
+    this.log(`Added ${shape.name ?? shape.type}.`);
+    return shape;
   }
 
   updateObject(id: string, changes: Partial<Shape>): void {

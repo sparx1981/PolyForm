@@ -29,6 +29,7 @@ import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
 import { legacyEnvironmentState } from './lib/assets/legacyAdapter';
 import { readAssetProjectState } from './lib/assets/projectCodec';
 import { captureKernelState, diffKernelStates, type KernelState } from './lib/geometry/graphPatch';
+import { commandReproducesStep } from './lib/macroVerify';
 import { diffShapesToSdk, diffSettingsToSdk, actionLabel, sdkLiteral, type RecordedSetting } from './lib/macroRecorder';
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -1442,10 +1443,14 @@ console.log("Created rectangle:", myRect.id);`);
   // A slider sends a change on every tick; consecutive changes to one setting keep only the
   // last value, so the script says "set it to 0.8" once rather than fifty times.
   const lastRecordedSettingRef = useRef<{ key: string; line: string } | null>(null);
+  const lastRecordedLineRef = useRef('');
   const appendRecorded = (lines: string[]) => {
     if (lines.length === 0) return;
+    lastRecordedLineRef.current = lines[lines.length - 1]!;
     setRecordedCode(prev => prev + lines.join('\n') + '\n');
   };
+  // A readable command a tool offered for the step it is doing (see macroVerify.ts).
+  const pendingToolCommandRef = useRef<string | null>(null);
   // Drawn geometry lives in the kernel, not in shapes: it is compared the same way and written
   // as sdk.drawing.applyChanges. Captured only when the kernel may have changed (its revision
   // or undo stack moved), since capturing reads the whole drawing.
@@ -1456,19 +1461,32 @@ console.log("Created rectangle:", myRect.id);`);
   const flushRecordedChanges = () => {
     const baseline = recordBaselineRef.current;
     if (!baseline) return;
-    const lines: string[] = [];
+    let lines: string[] = [];
     const current = latestShapesRef.current;
     if (baseline !== current) {
       lines.push(...diffShapesToSdk(baseline, current));
       recordBaselineRef.current = current;
     }
     const kernelBaseline = kernelBaselineRef.current;
+    let kernelAfter = kernelBaseline?.state;
     const key = kernelChangeKey();
     if (kernelBaseline && kernelBaseline.key !== key) {
       const state = captureKernelState(kernelHost.graph);
       const patch = diffKernelStates(kernelBaseline.state, state);
       if (patch) lines.push(`sdk.drawing.applyChanges(${sdkLiteral(patch)});`);
       kernelBaselineRef.current = { key, state };
+      kernelAfter = state;
+    }
+    const offered = pendingToolCommandRef.current;
+    if (offered && lines.length > 0) {
+      pendingToolCommandRef.current = null;
+      if (kernelBaseline && kernelAfter && commandReproducesStep(offered, {
+        shapesBefore: baseline, shapesAfter: current, kernelBefore: kernelBaseline.state, kernelAfter,
+      }, { unit })) {
+        lines = [offered];
+      } else {
+        diagLog('RECORDER', 'Tool command did not reproduce its step; recorded the exact change instead', { command: offered.slice(0, 200) });
+      }
     }
     if (lines.length > 0) lastRecordedSettingRef.current = null;
     appendRecorded(lines);
@@ -1507,13 +1525,21 @@ console.log("Created rectangle:", myRect.id);`);
   };
 
   /** Adds a line to the recording: SDK code, or a comment naming what the user did. */
-  const recordAction = (code: string) => {
+  /**
+   * `options.sdk` is a readable SDK command for the step the tool is doing; it replaces the
+   * recorded change if it reproduces it exactly. A tool that edits the drawing (which changes
+   * at once, not on the next render) calls this before its edit.
+   */
+  const recordAction = (code: string, options?: { sdk?: string }) => {
     if (!isRecordingRef.current) return;
     lastRecordedSettingRef.current = null;
     // Changes from earlier actions go first, so each label sits above its own changes.
     flushRecordedChanges();
     const trimmed = code.trim();
-    appendRecorded([trimmed.startsWith('//') || trimmed.startsWith('sdk.') || trimmed.startsWith('const ') ? trimmed : actionLabel(trimmed)]);
+    const line = trimmed.startsWith('//') || trimmed.startsWith('sdk.') || trimmed.startsWith('const ') ? trimmed : actionLabel(trimmed);
+    // addShape labels every new object, and the tool that called it may label it again.
+    if (line !== lastRecordedLineRef.current) appendRecorded([line]);
+    if (options?.sdk) pendingToolCommandRef.current = options.sdk;
   };
 
   // Convert To Wall adds walls to Shape history and removes the source

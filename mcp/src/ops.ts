@@ -1,14 +1,11 @@
 import * as THREE from 'three';
 import type { Shape } from '../../src/types';
 import { DeveloperSDK } from '../../src/services/developerService';
-import { sampleTerrainElevation } from '../../src/lib/archRoomAssembly';
-import { defaultWaterLevel } from '../../src/lib/water/waterBody';
-import { fenceStyleInfo } from '../../src/lib/fence/fenceTypes';
 import type { FenceStyle } from '../../src/lib/fence/fenceTypes';
-import { DEFAULT_PATIO_TEMPLATE, type PatioKind, type PatioToolSettings } from '../../src/lib/patio/patioTypes';
-import { makePatioShape, patioGroundHelpers, patioLevel, patioWallEdges, terrainAt, wallFaces } from '../../src/lib/patio/patioPlacement';
+import type { PatioKind, PatioToolSettings } from '../../src/lib/patio/patioTypes';
 import { polygonArea, denseOutline, type Vec2 } from '../../src/lib/patio/patioGeometry';
 import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
+import { buildFence, buildPatio, buildWaterBody, originalGroundAt } from '../../src/lib/siteBuilders';
 import { ToolError } from './store';
 
 export type Vec3 = [number, number, number];
@@ -175,76 +172,26 @@ export function openingInWall(wall: Shape, kind: 'door' | 'window', opts: { alon
 
 /** Ground height at a point: the terrain there, or 0. */
 export function groundAt(shapes: Shape[]) {
-  return patioGroundHelpers(shapes, new Map(), sampleTerrainElevation).originalGround;
+  return originalGroundAt(shapes);
 }
 
-function outlineLength(points: Vec2[], closed: boolean) {
-  let length = 0;
-  for (let i = 1; i < points.length; i++) length += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-  if (closed && points.length > 2) length += Math.hypot(points[0][0] - points.at(-1)![0], points[0][1] - points.at(-1)![1]);
-  return length;
+/** Builder errors are the caller's input, so they reach Claude as tool errors. */
+function asToolError<T>(build: () => T): T {
+  try {
+    return build();
+  } catch (err) {
+    throw new ToolError(err instanceof Error ? err.message : String(err));
+  }
 }
 
 /** A fence run through ground points [x, z], as the fence tool makes one. */
 export function fenceRun(shapes: Shape[], points: Vec2[], opts: { closed?: boolean; style?: FenceStyle; height?: number; color?: string; finish?: string }): Shape {
-  if (points.length < 2) throw new ToolError('A fence needs at least 2 points.');
-  const closed = !!opts.closed && points.length > 2;
-  const style = opts.style ?? 'post-rail';
-  const height = opts.height ?? 1.25;
-  const color = opts.color ?? '#7a5a3a';
-  const cx = points.reduce((a, p) => a + p[0], 0) / points.length;
-  const cz = points.reduce((a, p) => a + p[1], 0) / points.length;
-  const length = outlineLength(points, closed);
-  const count = shapes.filter(s => s.type === 'fence').length + 1;
-  return {
-    id: newId(),
-    name: `${fenceStyleInfo(style).label} Fence ${count} (${round(length, 1)} m)`,
-    type: 'fence',
-    position: [cx, 0, cz],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1],
-    args: [length, height],
-    color,
-    fenceData: {
-      points: points.map(([x, z]) => [x - cx, z - cz] as Vec2),
-      closed,
-      style,
-      height,
-      seed: Math.floor(Math.random() * 12) + 1,
-      finish: (opts.finish ?? 'weathered') as any,
-      color,
-    },
-  };
+  return asToolError(() => buildFence(shapes, points, { ...opts, id: newId() }));
 }
 
 /** A pond or lake filling an outline of ground points, as the water tool makes one. */
 export function waterBody(shapes: Shape[], points: Vec2[], opts: { depth?: number; clarity?: string; level?: number }): Shape {
-  if (points.length < 3) throw new ToolError('A pond needs at least 3 points.');
-  const cx = points.reduce((a, p) => a + p[0], 0) / points.length;
-  const cz = points.reduce((a, p) => a + p[1], 0) / points.length;
-  const terrain = terrainAt(shapes, cx, cz);
-  const level = opts.level ?? (terrain
-    ? defaultWaterLevel(points.map(([x, z]) => ({ x, z })), (x, z) => sampleTerrainElevation(x, z, terrain))
-    : 0.02);
-  const xs = points.map(p => p[0]), zs = points.map(p => p[1]);
-  const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
-  const kind = extent > 30 ? 'Lake' : 'Pond';
-  return {
-    id: newId(),
-    name: `${kind} ${shapes.filter(s => s.type === 'water').length + 1}`,
-    type: 'water',
-    position: [cx, level, cz],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1],
-    args: [],
-    color: '#3d7a8c',
-    waterData: {
-      points: points.map(([x, z]) => [x - cx, z - cz] as Vec2),
-      depth: opts.depth ?? 1.2,
-      clarity: (opts.clarity ?? 'lake') as any,
-      dig: true,
-    },
-  };
+  return asToolError(() => buildWaterBody(shapes, points, { ...opts, id: newId() }));
 }
 
 /**
@@ -258,34 +205,7 @@ export function patioOrDeck(shapes: Shape[], points: Vec2[], opts: {
   level?: number;
   settings?: Partial<PatioToolSettings['template']>;
 }): Shape {
-  if (points.length < 3) throw new ToolError('A patio or deck needs at least 3 points.');
-  const bulges = points.map((_, i) => opts.bulges?.[i] ?? 0);
-  const faces = wallFaces(shapes);
-  const wallEdges = patioWallEdges(points, bulges, faces);
-  // A corner on a wall face takes that wall's floor level, as snapping does in the app.
-  const wallFloors = points.flatMap(p => faces.filter(f => {
-    const dx = f.b[0] - f.a[0], dz = f.b[1] - f.a[1], len2 = dx * dx + dz * dz;
-    const t = Math.max(0, Math.min(1, ((p[0] - f.a[0]) * dx + (p[1] - f.a[1]) * dz) / len2));
-    return Math.hypot(p[0] - f.a[0] - dx * t, p[1] - f.a[1] - dz * t) < 0.05;
-  }).map(f => f.floor));
-  // Walls stack on upper floors; the patio belongs to the floor nearest the ground there.
-  const ground = groundAt(shapes);
-  const groundHere = points.reduce((sum, [x, z]) => sum + ground(x, z), 0) / points.length;
-  const nearest = wallFloors.length
-    ? [wallFloors.reduce((best, f) => (Math.abs(f - groundHere) < Math.abs(best - groundHere) ? f : best))]
-    : [];
-  const level = opts.level ?? patioLevel(points, bulges, opts.kind, opts.deckHeight ?? 0.45, nearest, ground);
-  const count = shapes.filter(s => s.type === 'patio' && s.patioData?.kind === opts.kind).length + 1;
-  return makePatioShape({
-    id: newId(),
-    name: `${opts.kind === 'deck' ? 'Deck' : 'Patio'} ${count}`,
-    world: points,
-    bulges,
-    level,
-    wallEdges,
-    kind: opts.kind,
-    template: { ...DEFAULT_PATIO_TEMPLATE, ...opts.settings, lights: { ...DEFAULT_PATIO_TEMPLATE.lights, ...(opts.settings?.lights ?? {}) } },
-  });
+  return asToolError(() => buildPatio(shapes, points, { ...opts, id: newId() }));
 }
 
 /** Moves, turns or resizes an object. Rotation is about the vertical axis unless all three are given. */
