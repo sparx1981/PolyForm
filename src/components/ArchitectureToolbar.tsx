@@ -22,7 +22,8 @@ import { useApp } from '../AppContext';
 import { ToolType, Shape } from '../types';
 import { cn } from '../lib/utils';
 import { FlyoutPortal } from './ui/FlyoutPortal';
-import { buildRoofShapeForRoom, buildRoofAssemblyForRoom, buildNextFloorLevel } from '../lib/archRoofGenerator';
+import { buildRoofShapeForRoom, buildNextFloorLevel } from '../lib/archRoofGenerator';
+import { describeRoofs, roofWholeBuilding } from '../lib/buildingRoofs';
 import { SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 
 /** Same pattern as LeftToolbar's own FlyoutSideContext — a context rather
@@ -162,26 +163,19 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
       setMeasurements('No walls found. Draw a closed room to generate a roof.');
       return;
     }
-    const assembly = buildRoofAssemblyForRoom(wallShapes, { 
-      roofType, 
-      pitchAngleDeg: roofType === 'parapet' ? 0 : 35, 
-      usePitchAngle: roofType !== 'parapet', 
-      color: roofType === 'parapet' ? '#475569' : '#991b1b', 
+    const result = roofWholeBuilding(shapes, {
+      roofType,
+      pitchAngleDeg: roofType === 'parapet' ? 0 : 35,
+      usePitchAngle: roofType !== 'parapet',
+      color: roofType === 'parapet' ? '#475569' : '#991b1b',
       fasciaColor: '#ffffff',
       tileShape: 'none',
-    }, shapes);
-    if (assembly) {
-      const isExistingRoof = (s: Shape) =>
-        s.type === 'roof' ||
-        s.tags?.some(t => t.startsWith('roof-') || t === 'roof') ||
-        s.name?.toLowerCase().includes('roof') ||
-        s.id.startsWith('roof_') ||
-        s.id.startsWith('tiles_roof_');
-      const nonRoofShapes = shapes.filter(s => !isExistingRoof(s));
-      setShapes([...nonRoofShapes, ...assembly.allShapes]);
+    });
+    if (result) {
+      setShapes(result.shapes);
       commitHistory();
-      if (setSelectedId) setSelectedId(assembly.roofShape.id);
-      setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip Roof' : 'Gable Roof'} assembly.`);
+      if (setSelectedId) setSelectedId(result.mainRoofId);
+      setMeasurements(`Replaced roof with ${roofType === 'parapet' ? 'Parapet Roof' : roofType === 'hip' ? 'Hip Roof' : 'Gable Roof'} assembly${describeRoofs(result.roofs, result.notes)}`);
     }
   };
 

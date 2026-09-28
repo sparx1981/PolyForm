@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildRoofModel, edgeFrame, facePlan, isCurveCrease, roofHeightAt, type RoofModel } from './roofSkeleton';
+import { extensionRoofModel, type ExtensionKind } from './extensionRoof';
 import { Shape } from '../types';
 import { computeStairHoleForSlab } from './archStairwell';
 import { 
@@ -36,6 +37,13 @@ export interface RoofParams {
   randomizeColor?: boolean;
   colorPalette?: RoofTilePaletteItem[];
   seed?: number;
+  /** Roof this outline (world x/z on the wall centre lines, standing at topY) rather than working one out from the walls. */
+  footprint?: { polygon: [number, number][]; topY: number; wallThickness?: number };
+  /**
+   * A roof over an extension, meeting the house along `abut` (world x/z, the house wall's centre
+   * line). The rise at the house wall is kept to `maxRise` when given (to stay under windows).
+   */
+  extension?: { kind: ExtensionKind; abut: { a: [number, number]; b: [number, number] }; houseWallThickness: number; maxRise?: number };
 }
 
 export interface BuildingEnvelope {
@@ -1620,6 +1628,19 @@ export function createSkeletonRidgeCapGeometry(m: RoofModel): THREE.BufferGeomet
       const [lo, hi] = a[1] <= b[1] ? [a, b] : [b, a];
       addRidgeSaddle(addQuad, lo, hi, (fall[0] + fall[1]) / 2, 0.14, 0.035, e.kind === 'ridge' ? 0.03 : 0);
     }
+    // Lead flashing where the roof meets a house wall: up the wall, and down over the tiles.
+    for (const e of m.edges) {
+      if (e.kind !== 'wall') continue;
+      const a = m.nodes[e.a] as RoofPoint, b = m.nodes[e.b] as RoofPoint;
+      const f = m.faces[e.faces[0]];
+      if (f.gable) continue;
+      const inward = edgeFrame(m.eave, f.edge).inward;
+      const cosP = Math.cos(m.pitch), sinP = Math.sin(m.pitch);
+      const down = (p: RoofPoint, d: number): RoofPoint => [p[0] - inward[0] * d * cosP, p[1] - d * sinP + 0.03, p[2] - inward[1] * d * cosP];
+      const up = (p: RoofPoint, h: number): RoofPoint => [p[0] + inward[0] * 0.005, p[1] + h, p[2] + inward[1] * 0.005];
+      addQuad(down(a, 0.15), down(b, 0.15), up(b, 0.03), up(a, 0.03));
+      addQuad(up(a, 0.03), up(b, 0.03), up(b, 0.18), up(a, 0.18));
+    }
     // Where several curve facets meet at a point, a small round cap.
     const creases = new Map<number, number>();
     for (const e of m.edges) {
@@ -1917,12 +1938,28 @@ function safeExtractGeometryData(geom?: THREE.BufferGeometry | null): {
  * - Soffit Under-eaves Panels
  * Supports Rectangular, L-Shaped, and arbitrary non-rectangular buildings.
  */
+/** A footprint from a given outline (world x/z, wall centre lines), as extractRoomFootprintPolygon gives from walls. */
+function footprintFromOutline(o: { polygon: [number, number][]; topY: number; wallThickness?: number }): RoomFootprint | null {
+  if (o.polygon.length < 3) return null;
+  let a = 0;
+  for (let i = 0; i < o.polygon.length; i++) { const [x1, z1] = o.polygon[i], [x2, z2] = o.polygon[(i + 1) % o.polygon.length]; a += x1 * z2 - x2 * z1; }
+  const polygon = (a < 0 ? [...o.polygon].reverse() : o.polygon).map(p => [p[0], p[1]] as [number, number]);
+  const xs = polygon.map(p => p[0]), zs = polygon.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+  const bounds: BuildingEnvelope = {
+    minX, maxX, minZ, maxZ, width: maxX - minX, depth: maxZ - minZ, centerX: (minX + maxX) / 2, centerZ: (minZ + maxZ) / 2,
+    topY: o.topY, wallThickness: o.wallThickness ?? 0.2,
+  };
+  const isRectangular = polygon.length === 4 && Math.abs(a) / 2 >= 0.92 * bounds.width * bounds.depth;
+  return { polygon, topY: o.topY, centerX: bounds.centerX, centerZ: bounds.centerZ, isRectangular, isLShape: false, bounds, reflexIndex: undefined };
+}
+
 export function buildRoofAssemblyForRoom(
   roomWalls: Shape[],
   params: RoofParams,
   existingShapes: Shape[] = []
 ): RoofAssemblyResult | null {
-  const footprint = extractRoomFootprintPolygon(roomWalls, existingShapes);
+  const footprint = params.footprint ? footprintFromOutline(params.footprint) : extractRoomFootprintPolygon(roomWalls, existingShapes);
   if (!footprint) return null;
 
   const { polygon: worldPoly, isRectangular, isLShape, reflexIndex, centerX, centerZ, topY, bounds } = footprint;
@@ -1943,7 +1980,12 @@ export function buildRoofAssemblyForRoom(
 
   // Convert world polygon to local coordinates centered at (centerX, centerZ)
   const localWallPoly: [number, number][] = worldPoly.map(([x, z]) => [x - centerX, z - centerZ]);
-  const localEavePoly: [number, number][] = offsetPolygon2D(localWallPoly, isParapet ? 0 : eaveOverhang);
+  let localEavePoly: [number, number][] = offsetPolygon2D(localWallPoly, isParapet ? 0 : eaveOverhang);
+  const extension = params.extension && !isParapet ? {
+    kind: params.extension.kind,
+    abut: { a: [params.extension.abut.a[0] - centerX, params.extension.abut.a[1] - centerZ] as [number, number], b: [params.extension.abut.b[0] - centerX, params.extension.abut.b[1] - centerZ] as [number, number] },
+    houseWallThickness: params.extension.houseWallThickness,
+  } : null;
 
   if (isParapet) {
     const parapetH = params.parapetHeight ?? 0.60;
@@ -2048,10 +2090,19 @@ export function buildRoofAssemblyForRoom(
 
   // Any outline, rectangles included, gets its roof from the straight skeleton; the older
   // builders below are only used if that isn't available.
-  const model = skeletonRoofModel(localWallPoly, localEavePoly, {
-    isHip,
-    ...(params.usePitchAngle && params.pitchAngleDeg ? { pitchDeg: params.pitchAngleDeg } : { ridgeHeight: ridgeH }),
-  });
+  const rise = params.usePitchAngle && params.pitchAngleDeg ? { pitchDeg: params.pitchAngleDeg } : { ridgeHeight: ridgeH };
+  let model: RoofModel | null;
+  if (extension) {
+    const ext = (r: { pitchDeg?: number; ridgeHeight?: number }) => extensionRoofModel(localWallPoly, extension.abut,
+      { kind: extension.kind, overhang: eaveOverhang, wallThickness: extension.houseWallThickness, ...r });
+    model = ext(rise);
+    // Keep a lean-to's top under the windows above it.
+    const maxRise = params.extension?.maxRise;
+    if (model && maxRise !== undefined && model.ridgeHeight > maxRise) model = ext({ ridgeHeight: maxRise });
+    if (model) localEavePoly = model.eave;
+  } else {
+    model = skeletonRoofModel(localWallPoly, localEavePoly, { isHip, ...rise });
+  }
   if (model) {
     ridgeH = model.ridgeHeight;
     ({ slopesGeom, pedimentGeom, ridgeCapGeom, fasciaGeom, soffitGeom } = createSkeletonRoofParts(model, {
@@ -2105,7 +2156,9 @@ export function buildRoofAssemblyForRoom(
   // 1. Main Roof Slopes Shape
   const roofShape: Shape = {
     id: roofId,
-    name: `${isHip ? 'Hip' : 'Gable'} Roof (${width.toFixed(1)}m × ${depth.toFixed(1)}m)`,
+    name: extension
+      ? `${extension.kind === 'lean-to' ? 'Lean-to' : 'Pitched'} Extension Roof (${width.toFixed(1)}m × ${depth.toFixed(1)}m)`
+      : `${isHip ? 'Hip' : 'Gable'} Roof (${width.toFixed(1)}m × ${depth.toFixed(1)}m)`,
     type: 'custom',
     position: [centerX, topY, centerZ],
     rotation: [0, 0, 0],
@@ -2128,6 +2181,7 @@ export function buildRoofAssemblyForRoom(
       worldWallPoly: worldPoly,
       bounds,
       ...(model ? { skeleton: roofModelData(model), buildVersion: ROOF_BUILD_VERSION } : {}),
+      ...(extension && model ? { extension } : {}),
     },
     customData: {
       roofType: params.roofType,
@@ -3739,7 +3793,7 @@ export function updateRoofAssembly(
     [width / 2, depth / 2],
     [-width / 2, depth / 2]
   ];
-  const localEavePoly = offsetPolygon2D(localWallPoly, eaveOverhang);
+  let localEavePoly = offsetPolygon2D(localWallPoly, eaveOverhang);
 
   let slopesGeom: THREE.BufferGeometry;
   let pedimentGeom: THREE.BufferGeometry | null = null;
@@ -3747,7 +3801,11 @@ export function updateRoofAssembly(
   let fasciaGeom: THREE.BufferGeometry;
   let soffitGeom: THREE.BufferGeometry;
 
-  const model = skeletonRoofModel(localWallPoly, localEavePoly, { isHip, ridgeHeight: clampedHeight });
+  const ext = roofData.extension as { kind: ExtensionKind; abut: { a: [number, number]; b: [number, number] }; houseWallThickness: number } | undefined;
+  const model = ext
+    ? extensionRoofModel(localWallPoly, ext.abut, { kind: ext.kind, overhang: eaveOverhang, wallThickness: ext.houseWallThickness, ridgeHeight: clampedHeight })
+    : skeletonRoofModel(localWallPoly, localEavePoly, { isHip, ridgeHeight: clampedHeight });
+  if (ext && model) localEavePoly = model.eave;
   if (model) {
     ({ slopesGeom, pedimentGeom, ridgeCapGeom, fasciaGeom, soffitGeom } = createSkeletonRoofParts(model, {
       fasciaHeight, wallThickness: roofData.bounds?.wallThickness || 0.20,

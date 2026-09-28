@@ -193,7 +193,11 @@ export function frameSkeletonRoof(m: RoofModel, opts: { spacing?: number } = {})
       if (isCurveCrease(m, e)) add('Radial Rafter', A, B, sizes.rafter, 'timber-common-rafter');
       else add('Hip Rafter', A, B, sizes.hip, 'timber-hip-rafter');
     } else if (e.kind === 'valley') add('Valley Rafter', A, B, sizes.valley, 'timber-valley-rafter');
-    else add('Verge Rafter', A, B, sizes.rafter, 'timber-rake-rafter');
+    else if (e.kind === 'wall') {
+      // Where a lean-to meets the house: a ledger bolted to the wall carries the rafters' tops.
+      const drop = dr / cos + 0.075;
+      add('Wall Plate (Ledger)', A.clone().setY(A.y - drop), B.clone().setY(B.y - drop), [0.075, 0.15], 'timber-wall-plate');
+    } else add('Verge Rafter', A, B, sizes.rafter, 'timber-rake-rafter');
   }
 
   // Rafters on each slope.

@@ -16,7 +16,7 @@
 import type { V2 } from './roofSurface';
 
 export type V3 = [number, number, number];
-export type RoofEdgeKind = 'ridge' | 'hip' | 'valley' | 'rake';
+export type RoofEdgeKind = 'ridge' | 'hip' | 'valley' | 'rake' | 'wall';
 
 export interface RoofFace {
   /** Index of the eave edge this face rises from (eave[edge] → eave[edge + 1]). */
