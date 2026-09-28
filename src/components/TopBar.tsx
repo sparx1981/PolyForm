@@ -727,18 +727,10 @@ export default function TopBar() {
   };
 
   const handleExport = (format: 'gltf' | 'stl' | 'skp') => {
-    if (format === 'skp') {
-      window.dispatchEvent(new CustomEvent('request-scene-raw', {
-        detail: {
-          callback: (scene: THREE.Scene) => {
-            SkpService.exportAsSKP(scene, currentModelName || 'Model');
-            diagLog('Export', 'Exported as SKP (via bridge)');
-          }
-        }
-      }));
-    } else {
-      window.dispatchEvent(new CustomEvent('export-scene-advanced', { detail: { format } }));
-    }
+    // Each exported piece is named after its object, and the file after the model.
+    const names = Object.fromEntries(shapes.filter(s => s.name).map(s => [s.id, s.name as string]));
+    window.dispatchEvent(new CustomEvent('export-scene-advanced', { detail: { format, modelName: currentModelName, names } }));
+    diagLog('Export', `Exported as ${format.toUpperCase()}`);
     setIsMenuOpen(false);
   };
 

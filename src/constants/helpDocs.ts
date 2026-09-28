@@ -386,12 +386,12 @@ export const HELP_DOCS: HelpTopic[] = [
     id: 'skp-import-export',
     title: 'SKP Support',
     category: 'advanced',
-    content: 'PolyForm provides high-fidelity bridge support for SKP files, allowing you to move designs between PolyForm and other SKP-compatible tools with minimal data loss.',
+    content: 'PolyForm opens and saves real SketchUp (.skp) files, so you can move designs between PolyForm and SketchUp.',
     steps: [
-      'Export to SKP: Go to the "Burger" menu, hover over "Export", and select "Export SKP". This packages your scene into an SKP-optimized format.',
-      'Importing elsewhere: Open your SKP-compatible tool and use its Import function to bring your PolyForm design into your workspace.',
-      'Import from SKP: In the same menu, click "Import SKP" to select a file from your computer and bring it into your current PolyForm scene as a custom object group.',
-      'Bridge Format: The system currently uses an industry-standard GLTF/JSON bridge for maximum compatibility across different SKP versions.'
+      'Export to SKP: open the menu, go to "Import / Export" and choose "Export SKP". You get a .skp file named after your model that SketchUp opens directly (it is saved in the SketchUp 2013-2020 format, which every newer SketchUp opens).',
+      'What you get in SketchUp: shapes you drew with Line, Rectangle, Push/Pull and the other drawing tools arrive as ordinary SketchUp faces, holes included. Each other object (a wall, a roof, the terrain, a plant) arrives as a group named after it, and batched trees and timber arrive as components, so every copy of a tree shares one definition. Colours and transparency come across as named materials; textures do not come across yet.',
+      'Import from SKP: in the same menu, click "Import SKP" to pick a .skp file from your computer. It comes into your scene as one object.',
+      'Other formats: "Export GLTF" and "Export STL" export the same model - just your design, without the grid, sky or lights - each piece exactly where it sits in the scene.'
     ]
   },
   {

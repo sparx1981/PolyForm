@@ -146,6 +146,8 @@ import { createFilletBinding } from '../tools/kernelFillet';
 import { FaceOffsetPreview } from './FaceOffsetPreview';
 import { ChamferPreview } from './ChamferPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
+import { buildExportScene, collectModelItems, downloadBlob, exportFileName } from '../lib/export/modelExport';
+import { buildSkp } from '../lib/export/skpExport';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
@@ -3727,47 +3729,38 @@ function Scene() {
 
   useEffect(() => {
     const handleExportAdvanced = (e: any) => {
-      const { format } = e.detail;
-      const exportScene = new THREE.Scene();
-      scene.traverse((child: any) => {
-        if (child.isMesh && (child.userData?.isShape || child.userData?.id)) {
-          const clone = child.clone();
-          clone.applyMatrix4(child.matrixWorld);
-          exportScene.add(clone);
-        } else if (child.isInstancedMesh) {
-          const count = child.count || 0;
-          const instMatrix = new THREE.Matrix4();
-          for (let i = 0; i < count; i++) {
-            child.getMatrixAt(i, instMatrix);
-            const m = new THREE.Mesh(child.geometry.clone(), child.material);
-            m.applyMatrix4(instMatrix);
-            m.applyMatrix4(child.matrixWorld);
-            exportScene.add(m);
-          }
-        }
-      });
+      const { format, modelName, names } = e.detail as { format: 'gltf' | 'stl' | 'skp'; modelName?: string | null; names?: Record<string, string> };
+      // Just the model - drawn geometry included, grid/sky/lights/previews left out - each
+      // piece once, at its world position (see lib/export/modelExport.ts).
+      const items = collectModelItems(scene, id => names?.[id]);
+      if (items.length === 0) {
+        alert('There is nothing in the model to export yet.');
+        return;
+      }
 
+      if (format === 'skp') {
+        try {
+          const { bytes, faces, skipped } = buildSkp(items, kernelHost.graph);
+          downloadBlob(new Blob([bytes], { type: 'application/octet-stream' }), exportFileName(modelName, 'skp'));
+          console.log(`[Export] SketchUp file written: ${faces} faces${skipped ? `, ${skipped} tiny slivers left out` : ''}`);
+        } catch (err) {
+          console.error('[Export] SketchUp export failed', err);
+          alert(`Couldn't write the SketchUp file: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return;
+      }
+
+      const exportScene = buildExportScene(items);
       if (format === 'stl') {
-        const exporter = new STLExporter();
-        const result = exporter.parse(exportScene);
-        const blob = new Blob([result], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'model.stl';
-        link.click();
+        const result = new STLExporter().parse(exportScene, { binary: true });
+        downloadBlob(new Blob([result], { type: 'application/octet-stream' }), exportFileName(modelName, 'stl'));
       } else {
         const exporter = new GLTFExporter();
         exporter.parse(
           exportScene,
           (gltf) => {
             const output = JSON.stringify(gltf, null, 2);
-            const blob = new Blob([output], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'model.gltf';
-            link.click();
+            downloadBlob(new Blob([output], { type: 'application/json' }), exportFileName(modelName, 'gltf'));
           },
           (error) => {
             console.error('An error happened during export', error);

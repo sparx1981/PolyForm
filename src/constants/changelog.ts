@@ -11,6 +11,9 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Existing buildings can be selected, re-heighted, deleted and put back. Deleted ones can be shown as see-through ghosts for before-and-after views. The ground can be plain or show the satellite photo.',
       'LiDAR for imported sites: in England (Environment Agency, 1 m) and the Netherlands (AHN, 0.5 m) the ground is now the surveyed ground, and every existing building gets its measured height and a fitted roof (flat, lean-to, gable, hipped or pyramid). The survey is lined up with the map outlines automatically. Buildings the survey shows as open ground are flagged "Check height". In the USA, 3DEP gives 1 m ground. Typing a new height keeps a fitted roof\'s pitch.',
       'The imported site is left out of the bill of materials and presentation build-ups, and is saved with the model. Scripts can do all of this through sdk.worldView (importArea, listBuildings, removeBuilding, restoreBuilding, setBuildingHeight, showExisting, setGroundStyle, getSite), and Claude can through the new import_site connector tool.',
+      'Export SKP now saves a real SketchUp file that SketchUp opens directly (it used to save a glTF file with a .skp name). Drawn shapes arrive as SketchUp faces with their holes, each object as a named group, batched trees and timber as shared components, with your colours as named materials.',
+      'Fixed Export GLTF and Export STL leaving out everything drawn with Line, Rectangle, Push/Pull and the other drawing tools.',
+      'Fixed exported objects landing in the wrong place (further from the origin than in the scene, and turned or scaled twice). Exports now also leave out light markers and tool previews, name the file after your model, and STL files are saved in the smaller binary form.',
     ],
   },
   {
