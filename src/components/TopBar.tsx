@@ -536,8 +536,8 @@ export default function TopBar() {
               updatedAt: serverTimestamp(),
               createdAt: serverTimestamp(),
               isPublic: false,
+              // No `password` field: the rules reject it on the model document (the gate lives in models/{id}/secure).
               hasPassword: false,
-              password: ''
             });
             createdDocId = docRef.id;
             await updateDoc(doc(db, 'models', docRef.id), { id: docRef.id });
