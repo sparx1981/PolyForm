@@ -111,11 +111,6 @@ function isSmallDevice(): boolean {
 
 export interface SiteStreetLifeProps { ground: Shape; routes: SiteRoute[]; level: StreetLifeLevel; seats: Seat[]; }
 
-const tmp = {
-  base: new THREE.Matrix4(), joint: new THREE.Matrix4(), rot: new THREE.Matrix4(), knee: new THREE.Matrix4(), out: new THREE.Matrix4(),
-  q: new THREE.Quaternion(), e: new THREE.Euler(0, 0, 0, 'YXZ'), p: new THREE.Vector3(), s: new THREE.Vector3(),
-};
-
 export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeProps) {
   const site = ground.terrainData!.site!;
   const small = isSmallDevice();
@@ -145,7 +140,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
   const carRefs = useRef<(THREE.Group | null)[]>([]);
   const time = useRef(0);
   const q = useMemo(() => new THREE.Quaternion(), []);
-  const e = useMemo(() => new THREE.Euler(0, 0, 0, 'YXZ'), [ ]);
+  const e = useMemo(() => new THREE.Euler(0, 0, 0, 'YXZ'), []);
 
   useFrame((_, delta) => {
     time.current += Math.min(delta, 0.1);
