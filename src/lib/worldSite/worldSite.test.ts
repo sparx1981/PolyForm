@@ -220,7 +220,7 @@ describe('site', () => {
     expect(g.id).toBe(SITE_GROUND_ID);
     expect(g.type).toBe('terrain');
     expect(g.terrainData!.gridX).toBe(121);
-    expect(g.terrainData!.site).toMatchObject({ size: 120, address: 'Somewhere', groundStyle: 'plain', showRemoved: false });
+    expect(g.terrainData!.site).toMatchObject({ size: 120, address: 'Somewhere', groundStyle: 'satellite', showRemoved: false });
     expect(g.terrainData!.site!.elevation).toBeGreaterThan(0);
     expect(gridHeightAt(g.terrainData!, 0, 0)).toBeCloseTo(0, 3);
     expect(built.buildings).toHaveLength(1);

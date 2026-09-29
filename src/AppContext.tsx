@@ -1431,7 +1431,6 @@ console.log("Created rectangle:", myRect.id);`);
   // Service Worker
 
   // WorldView
-  const [isWorldViewOpen, setIsWorldViewOpen] = useState(false);
   const [worldViewLocation, setWorldViewLocation] = useState<{ lat: number, lng: number, address?: string }>({ lat: 51.5074, lng: -0.1278 }); // London default
   const [worldViewAltitude, setWorldViewAltitude] = useState(-0.1);
   const [worldViewRadius, setWorldViewRadius] = useState(100); // 100m default
@@ -2790,8 +2789,6 @@ console.log("Created rectangle:", myRect.id);`);
       activeBevelAmount,
       setActiveBevelAmount,
       // WorldView
-      isWorldViewOpen,
-      setIsWorldViewOpen,
       worldViewLocation,
       setWorldViewLocation,
       worldViewAltitude,

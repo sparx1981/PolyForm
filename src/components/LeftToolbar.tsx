@@ -132,7 +132,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     updateShapeColor,
     selectedId,
     setConsoleOutput,
-    setIsWorldViewOpen,
     isWorldViewActive,
     triggerFocusOnMap
   } = useApp();

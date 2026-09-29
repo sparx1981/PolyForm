@@ -8,9 +8,9 @@ import { ComponentsList } from './ComponentsList';
 import { isSectionShape } from '../tools/sectionPlanes';
 import { TextEntityFields } from './TextEntityFields';
 import { WeatherControls } from './graphics/WeatherControls';
-import { PlainFinishPicker } from './PlainFinishPicker';
+import { FinishSwatch } from './PlainFinishPicker';
+import { buildPbrList, filterPbrList } from '../lib/materials/pbrList';
 import { FLOCK_DEFAULTS } from './animations/FlockSystem';
-import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
 import { HeightMapPicker } from './graphics/HeightMapPicker';
 import * as THREE from 'three';
@@ -349,7 +349,7 @@ export default function RightPanelStack() {
   // cancel it if a dblclick follows within that window.
   const premadeClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editorAsset, setEditorAsset] = useState<AssetSummary | null>(null);
-  const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'premade' | 'ai'>('color');
+  const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'mytextures' | 'premade' | 'ai'>('color');
   const [hfToken, setHfTokenState] = useState<string>(() => HuggingFaceService.getToken());
   const setHfToken = (t: string) => { setHfTokenState(t); HuggingFaceService.setToken(t); };
   useEffect(() => { if (activeTab === 'ai') setHfTokenState(HuggingFaceService.getToken()); }, [activeTab]);
@@ -380,15 +380,9 @@ export default function RightPanelStack() {
     hasHeight: asset.hasHeight,
   })), [catalogMaterials]);
   const [premadeCategoryFilter, setPremadeCategoryFilter] = useState<string>('all');
-  const premadeCategories = useMemo(() => {
-    const seen = new Set<string>();
-    for (const mat of premadeMaterials) seen.add(mat.topCategory);
-    return Array.from(seen).sort((a, b) => a.localeCompare(b));
-  }, [premadeMaterials]);
-  const filteredPremadeMaterials = useMemo(
-    () => premadeCategoryFilter === 'all' ? premadeMaterials : premadeMaterials.filter(m => m.topCategory === premadeCategoryFilter),
-    [premadeMaterials, premadeCategoryFilter]
-  );
+  const pbrList = useMemo(() => buildPbrList(premadeMaterials), [premadeMaterials]);
+  const premadeCategories = pbrList.categories;
+  const pbrEntries = useMemo(() => filterPbrList(pbrList.entries, premadeCategoryFilter), [pbrList, premadeCategoryFilter]);
   const selectCatalogMaterial = (asset: AssetSummary) => {
     if (!isMaterialAssetId(asset.id)) return;
     const assetId = asset.id;
@@ -832,7 +826,8 @@ export default function RightPanelStack() {
     'railing',
     'timber-frame',
     'roof',
-    'lamp'
+    'lamp',
+    'worldview'
   ].includes(activeTool);
 
   if (allPanelsHidden) return null;
@@ -2481,7 +2476,6 @@ export default function RightPanelStack() {
             onToggle={() => togglePanel('materials')}
           >
             <div className="space-y-4">
-              <SurfaceDepthControls />
               <div className="grid grid-cols-5 gap-2">
                 {COLORS.map((color, idx) => (
                   <div 
@@ -2537,69 +2531,6 @@ export default function RightPanelStack() {
                   <Plus size={16} className="text-gray-400" />
                 </button>
               </div>
-
-              <PlainFinishPicker onPick={finish => {
-                setActiveMaterial(finish.color);
-                setActiveMaterialBindingId(null);
-                setActivePBR({ roughness: finish.roughness, metalness: finish.metalness, opacity: finish.opacity });
-                setActiveSurfaceDepth(null);
-                setActiveTool('paint');
-              }} activeColor={activeMaterial} />
-
-              {customMaterials.filter(m => m.type === 'texture').length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Textures</span>
-                    <span className="text-[9px] text-gray-400">{customMaterials.filter(m => m.type === 'texture').length} custom</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {customMaterials.filter(m => m.type === 'texture').map((m, i) => (
-                      <div 
-                        key={m.id || `custom-tex-${i}`}
-                        onClick={() => {
-                          setActiveMaterial(m.value);
-                          setActiveMaterialBindingId(null);
-                          if (m.pbr) setActivePBR(m.pbr);
-                          setActiveSurfaceDepth(m.surfaceDepth || null);
-                          setActiveTool('paint');
-                        }}
-                        className={cn(
-                          "group relative aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-105 bg-gray-100 dark:bg-gray-800",
-                          activeMaterial === m.value ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300 dark:border-gray-700"
-                        )}
-                        title={m.name || 'Custom Texture'}
-                      >
-                        <img 
-                          src={m.value} 
-                          alt={m.name || 'Texture'} 
-                          className="w-full h-full object-cover" 
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        {/* Fallback placeholder if image is broken or failed to load */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 p-1 text-center pointer-events-none -z-0">
-                          <ImageOff size={14} className="opacity-70 mb-0.5" />
-                          <span className="text-[7px] truncate max-w-full font-mono leading-none">{m.name || 'Broken'}</span>
-                        </div>
-                        {/* Remove texture action button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteMaterial(m);
-                          }}
-                          className="absolute top-0.5 right-0.5 p-1 bg-black/70 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-xs cursor-pointer"
-                          title="Remove texture"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
                 <span className="text-gray-500">Active:</span>
@@ -4652,13 +4583,22 @@ export default function RightPanelStack() {
                   Upload Texture
                 </button>
                 <button 
+                  onClick={() => setActiveTab('mytextures')}
+                  className={cn(
+                    "flex-1 py-3 text-sm font-medium transition-colors",
+                    activeTab === 'mytextures' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  My Textures
+                </button>
+                <button 
                   onClick={() => setActiveTab('premade')}
                   className={cn(
                     "flex-1 py-3 text-sm font-medium transition-colors",
                     activeTab === 'premade' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
                   )}
                 >
-                  Pre-Made PBRs
+                  PBR Materials
                 </button>
                 <button 
                   onClick={() => setActiveTab('ai')}
@@ -4768,6 +4708,55 @@ export default function RightPanelStack() {
                       </div>
                     )}
                   </div>
+                ) : activeTab === 'mytextures' ? (
+                  <div className="space-y-3">
+                    {customMaterials.filter(m => m.type === 'texture').length === 0 ? (
+                      <div className="py-10 text-center text-xs text-gray-400">
+                        No textures yet. Use the Upload Texture tab to add one.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-3">
+                        {customMaterials.filter(m => m.type === 'texture').map((m, i) => (
+                          <div
+                            key={m.id || `custom-tex-${i}`}
+                            onClick={() => {
+                              setActiveMaterial(m.value);
+                              setActiveMaterialBindingId(null);
+                              if (m.pbr) setActivePBR(m.pbr);
+                              setActiveSurfaceDepth(m.surfaceDepth || null);
+                              setActiveTool('paint');
+                              setIsAddMaterialOpen(false);
+                            }}
+                            className={cn(
+                              "group relative aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-105 bg-gray-100",
+                              activeMaterial === m.value ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300"
+                            )}
+                            title={m.name || 'Custom Texture'}
+                          >
+                            <img
+                              src={m.value}
+                              alt={m.name || 'Texture'}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                            />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-1 text-center pointer-events-none -z-0">
+                              <ImageOff size={14} className="opacity-70 mb-0.5" />
+                              <span className="text-[7px] truncate max-w-full font-mono leading-none">{m.name || 'Broken'}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteMaterial(m); }}
+                              className="absolute top-0.5 right-0.5 p-1 bg-black/70 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-xs cursor-pointer"
+                              title="Remove texture"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ) : activeTab === 'premade' ? (
                   <div className="space-y-3">
                     {premadeCategories.length > 0 && (
@@ -4798,31 +4787,56 @@ export default function RightPanelStack() {
                       </div>
                     )}
                   <div className="grid grid-cols-2 gap-4">
-                    {filteredPremadeMaterials.map((mat: any, i: number) => (
+                    {pbrEntries.map((entry, i) => entry.kind === 'finish' ? (
                       <button
                         type="button"
-                        key={mat.id || `premade-${mat.name || i}-${i}`}
+                        key={entry.key}
+                        onClick={() => {
+                          const finish = entry.finish;
+                          setActiveMaterial(finish.color);
+                          setActiveMaterialBindingId(null);
+                          setActivePBR({ roughness: finish.roughness, metalness: finish.metalness, opacity: finish.opacity });
+                          setActiveSurfaceDepth(null);
+                          setActiveTool('paint');
+                          setIsAddMaterialOpen(false);
+                        }}
+                        title={`${entry.name} — click to apply`}
+                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left"
+                      >
+                        <div className="aspect-square bg-gray-100 relative">
+                          <FinishSwatch finish={entry.finish} />
+                        </div>
+                        <div className="p-2">
+                          <div className="text-[10px] font-bold truncate">{entry.name}</div>
+                          <div className="text-[8px] text-gray-400 truncate">{entry.category}</div>
+                          <div className="text-[8px] text-gray-400">Plain finish</div>
+                        </div>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        key={entry.key || `premade-${i}`}
                         onClick={() => {
                           if (premadeClickTimer.current) clearTimeout(premadeClickTimer.current);
                           premadeClickTimer.current = setTimeout(() => {
                             premadeClickTimer.current = null;
-                            const asset = catalogMaterials.find(item => item.id === mat.id);
+                            const asset = catalogMaterials.find(item => item.id === entry.item.id);
                             if (asset) selectCatalogMaterial(asset);
                             setIsAddMaterialOpen(false);
                           }, 250);
                         }}
                         onDoubleClick={() => {
                           if (premadeClickTimer.current) { clearTimeout(premadeClickTimer.current); premadeClickTimer.current = null; }
-                          const asset = catalogMaterials.find(item => item.id === mat.id);
+                          const asset = catalogMaterials.find(item => item.id === entry.item.id);
                           if (asset) { setEditorAsset(asset); setIsAddMaterialOpen(false); }
                         }}
-                        title={`${mat.name} — click to apply, double-click to edit`}
+                        title={`${entry.name} — click to apply, double-click to edit`}
                         className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left"
                       >
                         <div className="aspect-square bg-gray-100 relative">
                           <img
-                            src={mat.texture}
-                            alt={mat.name}
+                            src={entry.item.texture}
+                            alt={entry.name}
                             loading="lazy"
                             decoding="async"
                             className="w-full h-full object-cover"
@@ -4832,9 +4846,9 @@ export default function RightPanelStack() {
                           </div>
                         </div>
                         <div className="p-2">
-                          <div className="text-[10px] font-bold truncate">{mat.name}</div>
-                          <div className="text-[8px] text-gray-400 truncate">{mat.category}</div>
-                          <div className="text-[8px] text-gray-400">Material library · CC0{mat.hasHeight ? ' · Height' : ''}</div>
+                          <div className="text-[10px] font-bold truncate">{entry.name}</div>
+                          <div className="text-[8px] text-gray-400 truncate">{entry.category}</div>
+                          <div className="text-[8px] text-gray-400">Material library · CC0{entry.item.hasHeight ? ' · Height' : ''}</div>
                         </div>
                       </button>
                     ))}
@@ -4849,7 +4863,7 @@ export default function RightPanelStack() {
                         The material catalog is temporarily unavailable. Custom uploads and colours remain available.
                       </div>
                     )}
-                    {!catalogLoading && !catalogFallback && premadeMaterials.length > 0 && filteredPremadeMaterials.length === 0 && (
+                    {!catalogLoading && !catalogFallback && pbrEntries.length === 0 && (
                       <div className="col-span-2 py-8 text-center text-xs text-gray-400">
                         No materials in this category.
                       </div>

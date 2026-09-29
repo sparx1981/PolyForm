@@ -44,7 +44,7 @@ describe('sdk.worldView sites', () => {
     expect(h.setWorldViewLocation).toHaveBeenCalledWith(expect.objectContaining({ lat: 51.5, lng: -0.12 }));
     expect(h.setIsWorldViewActive).toHaveBeenCalledWith(false);
     const sdk = h.sdk();
-    expect(sdk.worldView.getSite()).toMatchObject({ size: 80, elevation: 12, groundStyle: 'plain' });
+    expect(sdk.worldView.getSite()).toMatchObject({ size: 80, elevation: 12, groundStyle: 'satellite' });
     expect(sdk.worldView.listBuildings().map((b: { id: string; height: number }) => [b.id, b.height])).toEqual([['site-way-1', 6], ['site-way-2', 6]]);
   });
 

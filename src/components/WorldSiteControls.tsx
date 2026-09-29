@@ -44,13 +44,13 @@ function Toggle({ options, value, onChange }: { options: { id: string; label: st
 }
 
 /** The World View panel's "3D site" section. */
-export function WorldSiteSection() {
+export function WorldSiteSection({ hideTitle = false }: { hideTitle?: boolean } = {}) {
   const { shapes, worldViewLocation, setIsWorldViewActive, recordAction, setShapes, commitHistory, googleMapsApiKey, setActiveTool } = useApp();
   const change = useSiteChange();
   const ground = findSiteGround(shapes);
   const site = ground?.terrainData?.site;
   const [size, setSize] = useState(100);
-  const [style, setStyle] = useState<'plain' | 'satellite'>('plain');
+  const [style, setStyle] = useState<'plain' | 'satellite'>('satellite');
   const [status, setStatus] = useState<{ busy: boolean; message: string; warn?: boolean }>({ busy: false, message: '' });
   useEffect(() => { if (site) setStyle(site.groundStyle); }, [site?.groundStyle]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -91,11 +91,13 @@ export function WorldSiteSection() {
 
   const label = 'text-xs font-bold text-gray-400 uppercase tracking-wider';
   return (
-    <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-      <div className="flex items-center gap-2">
-        <Mountain size={14} className="text-polyform-blue" />
-        <span className={label}>3D Site</span>
-      </div>
+    <div className={hideTitle ? 'space-y-3' : 'space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800'}>
+      {!hideTitle && (
+        <div className="flex items-center gap-2">
+          <Mountain size={14} className="text-polyform-blue" />
+          <span className={label}>3D Site</span>
+        </div>
+      )}
       <p className="text-[10px] text-gray-400 leading-tight">
         Brings in the real ground (editable terrain) and existing buildings around the location above. Click a building to select it; delete it to design in its place.
       </p>

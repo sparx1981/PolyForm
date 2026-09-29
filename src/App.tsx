@@ -31,7 +31,6 @@ import PresentationPanel from './components/presentation/PresentationPanel';
 import ClientPresentationPage from './components/presentation/ClientPresentationPage';
 import { shareIdFromPath } from './lib/presentation/share';
 import AIQuery from './components/AIQuery';
-import WorldView from './components/WorldView';
 import AIGenerate from './components/AIGenerate';
 import Login from './components/Login';
 import Landing from './components/Landing';
@@ -559,7 +558,6 @@ function AppContent() {
       <AIRenderer />
       <AIGenerate />
       <AIQuery />
-      <WorldView />
       <Help />
       <AnimatePresence>
         {isMessagingOpen && !isMessagingDocked && <Messaging />}

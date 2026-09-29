@@ -133,7 +133,7 @@ export async function buildSite(io: SiteIO, req: SiteRequest): Promise<BuiltSite
     ...(lidarShift && (lidarShift[0] || lidarShift[1]) ? { lidarShift } : {}),
     buildingSource: BUILDING_SOURCE_NAME,
     importedAt: req.now ?? Date.now(),
-    groundStyle: req.groundStyle ?? 'plain',
+    groundStyle: req.groundStyle ?? 'satellite',
     showRemoved: false,
     ...(routes ? { routes } : {}),
   };

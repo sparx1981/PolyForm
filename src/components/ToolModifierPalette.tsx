@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop } from 'lucide-react';
+import WorldViewPanel from './WorldView';
+import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe } from 'lucide-react';
 import { buildRoofShapeForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { describeRoofs, roofBuilding } from '../lib/buildingRoofs';
@@ -98,6 +99,7 @@ export const ToolModifierPalette: React.FC = () => {
     'scale_figure',
     'clipping'
     , 'lamp'
+    , 'worldview'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -227,7 +229,7 @@ export const ToolModifierPalette: React.FC = () => {
       className={cn(
         "z-30 rounded-xl border shadow-xl overflow-hidden transition-all duration-300 flex flex-col",
         theme === 'dark' ? "bg-gray-900 border-gray-700 shadow-black/50" : "bg-white border-gray-200 shadow-xl",
-        embedded ? "relative w-full shadow-none border-none rounded-none max-h-full" : "fixed w-64 max-h-[calc(100vh-100px)]"
+        embedded ? "relative w-full shadow-none border-none rounded-none max-h-full" : (activeTool === 'worldview' ? "fixed w-80 max-h-[calc(100vh-100px)]" : "fixed w-64 max-h-[calc(100vh-100px)]")
       )}
     >
       <div 
@@ -248,6 +250,8 @@ export const ToolModifierPalette: React.FC = () => {
             <PersonStanding size={14} className="text-polyform-blue" />
           ) : activeTool === 'clipping' ? (
             <Crop size={14} className="text-sky-500" />
+          ) : activeTool === 'worldview' ? (
+            <Globe size={14} className="text-polyform-blue" />
           ) : activeTool === 'lamp' ? (
             <Zap size={14} className="text-amber-500" />
           ) : activeTool === 'bezier' ? (
@@ -258,7 +262,7 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-polyform-blue" />
           )}
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'worldview' ? 'WorldView Modifiers' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -290,6 +294,7 @@ export const ToolModifierPalette: React.FC = () => {
       {(!isCollapsed || embedded) && (
         <>
           <div className={cn("p-3 space-y-4 overflow-y-auto flex-1 select-text", !isPhone && "max-h-[calc(100vh-140px)]")}>
+        {activeTool === 'worldview' && <WorldViewPanel />}
         {activeTool === 'wall' && (
           <div className="space-y-3">
             {/* Justification Selector */}

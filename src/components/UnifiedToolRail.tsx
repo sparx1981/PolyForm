@@ -130,7 +130,6 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
     setShowAllDimensions,
     activeBevelType,
     setActiveBevelType,
-    setIsWorldViewOpen,
     isWorldViewActive,
     setIsAIRendererOpen,
     setIsAIQueryOpen,
@@ -1033,8 +1032,8 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           label: 'WorldView Geolocation',
           subtitle: 'Open satellite map & solar positioning',
           icon: <Globe size={19} />,
-          isActive: (s) => s.isWorldViewActive,
-          onClick: (s) => s.setIsWorldViewOpen(true),
+          isActive: (s) => s.activeTool === 'worldview' || s.isWorldViewActive,
+          onClick: (s) => s.setActiveTool('worldview'),
           keywords: ['worldview', 'globe', 'map', 'geolocation', 'sun', 'solar', 'architecture', 'site']
         },
         {
