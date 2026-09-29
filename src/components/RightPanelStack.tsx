@@ -1,3 +1,4 @@
+import { sliderToSunIntensity, sunIntensityToSlider } from '../lib/graphics/daylight';
 import { NoteCard } from './NoteCard';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AutoLightingPanel } from './AutoLightingPanel';
@@ -3829,9 +3830,10 @@ export default function RightPanelStack() {
                       <span>{sunIntensity.toFixed(1)}</span>
                     </div>
                     <input 
-                      type="range" min="0" max="50" step="0.1"
-                      value={sunIntensity}
-                      onChange={(e) => setSunIntensity(parseFloat(e.target.value))}
+                      type="range" min="0" max="1" step="0.005"
+                      value={sunIntensityToSlider(sunIntensity)}
+                      title="Middle is the standard sun. Left fades to night, right is brighter."
+                      onChange={(e) => setSunIntensity(Math.round(sliderToSunIntensity(parseFloat(e.target.value)) * 100) / 100)}
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>

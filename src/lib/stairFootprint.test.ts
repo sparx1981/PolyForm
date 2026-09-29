@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import type { Shape } from '../types';
-import { stairFootprintOnFloor } from './timberFrameGenerator';
+import { stairFootprintOnFloor, getArchFingerprint } from './timberFrameGenerator';
 
 const stair = (yaw: number, style = 'straight'): Shape => {
   const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
@@ -26,5 +26,21 @@ describe('stairFootprintOnFloor', () => {
   it('turns a flight that starts on the floor too', () => {
     const { w, d } = extent(stairFootprintOnFloor(stair(Math.PI / 2), 0));
     expect(w).toBeGreaterThan(d * 3);
+  });
+});
+
+describe('timber framing follows staircases', () => {
+  const wall = { id: 'w', type: 'wall', position: [0, 1.2, 0], args: [6, 2.4, 0.2] } as unknown as Shape;
+
+  it('is refreshed when a staircase is added, moved, turned, resized or removed', () => {
+    const base = getArchFingerprint([wall]);
+    const withStair = getArchFingerprint([wall, stair(0)]);
+    expect(withStair).not.toBe(base);
+    const moved = { ...stair(0), position: [5, 1.35, 3.5] } as Shape;
+    expect(getArchFingerprint([wall, moved])).not.toBe(withStair);
+    expect(getArchFingerprint([wall, stair(Math.PI / 2)])).not.toBe(withStair);
+    const taller = { ...stair(0), args: [1.0, 3.0, 4.0, 15] } as Shape;
+    expect(getArchFingerprint([wall, taller])).not.toBe(withStair);
+    expect(getArchFingerprint([wall, stair(0)])).toBe(withStair); // unchanged stays unchanged
   });
 });

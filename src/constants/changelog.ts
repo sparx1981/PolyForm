@@ -9,11 +9,12 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
     items: [
       'Floor slabs now rest against the internal face of the walls instead of stopping a few centimetres short. Slabs already in your models that were made the old way are moved out to the wall when the model opens.',
       'Shadows from lights you add (spot, point, projector and directional) are smoother: the stripes and noise on floors are gone, and the sun\'s shadow edge is less grainy.',
-      'A sun intensity of 0 now feels like night: the sky, ambient and environment light fade down (with a cool moonlight tint), so lights you place stand out. The default sun is unchanged.',
+      'Sun Intensity now has the standard sun in the middle of the slider. Moving left fades the sun, sky and ambient light gradually down to night (with a cool moonlight tint, so lights you place stand out); moving right makes it brighter.',
       'The Section Plane tool has a modifier panel: show or hide the orange plane (it keeps cutting), and choose the colour and opacity of the see-through lines on the cut-away side, down to fully transparent.',
       'Add Material: the tabs (Colour, Upload Texture, My Textures, PBR Materials, AI Generate) no longer get pushed out of view on the PBR Materials tab.',
       'Settings > Toolbars > Edit Toolbar Locations: toolbars can be dragged again, and an empty screen edge shows a labelled drop target while you drag.',
-      'Walk Mode: the floor framing under a floor now leaves the opening where a staircase actually is, including when the stair is turned, so you are no longer stopped by joists across the stairwell.',
+      'Walk Mode: the timber floor framing now updates when a staircase is added, moved, turned, resized or removed, and leaves the opening where the stair actually is, so you are no longer stopped by joists across the stairwell. For a model framed before this, nudge the stair or choose Update Timber Frame.',
+      'Toolbars: dropping a toolbar on the empty space under (or beside) a toolbar now stacks it there, instead of starting a new column.',
     ],
   },
   {

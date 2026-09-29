@@ -2117,11 +2117,15 @@ export function generateTimberFrameForBuilding(
  * Computes a geometric fingerprint of host architectural components (walls, openings, slabs, roofs).
  * If none of these have moved or changed dimension, timber framing does not need regeneration.
  */
-function getArchFingerprint(shapes: Shape[]): string {
+export function getArchFingerprint(shapes: Shape[]): string {
   const archShapes = shapes.filter(s =>
     !s.tags?.includes('timber-frame') &&
     !s.name?.toLowerCase().startsWith('timber ') &&
     (s.type === 'wall' || s.type === 'door' || s.type === 'window' ||
+      // Floor framing leaves an opening where a staircase comes through, so adding, moving,
+      // turning, resizing or removing a stair has to refresh the framing too; otherwise joists
+      // generated earlier stay across the stairwell (a barrier at head height on the stair).
+      s.type === 'staircase' ||
       s.tags?.includes('wall') || s.tags?.includes('floor') || s.tags?.includes('slab') ||
       // Roof shapes built by archRoofGenerator.ts are type 'custom' tagged
       // e.g. 'roof-structure'/'roof-assembly'/'roof-slopes', never the bare
@@ -2137,7 +2141,7 @@ function getArchFingerprint(shapes: Shape[]): string {
   // keeps the same ridge height) used to leave this fingerprint unchanged,
   // so framing generated for the OLD roof shape was never recomputed for
   // the new one.
-  return archShapes.map(s => `${s.id}:${s.type}:${s.position.map(p => p.toFixed(2)).join(',')}:${JSON.stringify(s.args)}:${(s.quaternion || []).map(q => q.toFixed(2)).join(',')}:${JSON.stringify(s.roofData || s.customData || null)}`).join('|');
+  return archShapes.map(s => `${s.id}:${s.type}:${s.position.map(p => p.toFixed(2)).join(',')}:${JSON.stringify(s.args)}:${(s.quaternion || []).map(q => q.toFixed(2)).join(',')}:${JSON.stringify(s.roofData || s.customData || null)}${s.type === 'staircase' ? `:${s.stairStyle ?? ''}:${JSON.stringify(s.parametricData?.targetHeight ?? null)}` : ''}`).join('|');
 }
 
 let lastArchFingerprint = '';

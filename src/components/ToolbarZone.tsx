@@ -136,7 +136,25 @@ export function ToolbarZone({ zone, layout, enabled, editMode, theme, draggedKey
       {lanes.map((keys, i) => (
         <React.Fragment key={keys.join('+')}>
           {strip(i)}
-          <div className={cn('flex shrink-0', horizontal ? 'flex-row w-full' : 'flex-col h-full overflow-y-auto overflow-x-hidden')}>
+          {/* The empty space after a lane's last toolbar is a target too: drop there to stack beneath it. */}
+          <div
+            className={cn('flex shrink-0 relative', horizontal ? 'flex-row w-full' : 'flex-col h-full overflow-y-auto overflow-x-hidden')}
+            onDragOver={dragging ? (e) => {
+              const last = keys[keys.length - 1]!;
+              if (draggedKey === last && keys.length === 1) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setHint({ kind: 'stack', key: last, position: 'after' });
+            } : undefined}
+            onDragLeave={dragging ? () => setHint(h => (h?.kind === 'stack' && h.key === keys[keys.length - 1] ? null : h)) : undefined}
+            onDrop={dragging ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const last = keys[keys.length - 1]!;
+              if (!draggedKey || draggedKey === last) return;
+              drop({ kind: 'stack', relativeTo: last, position: 'after' });
+            } : undefined}
+          >
             {keys.map(slot)}
           </div>
         </React.Fragment>
