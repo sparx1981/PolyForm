@@ -168,6 +168,11 @@ import {
   type InteriorFurnitureType,
   type FurnitureParams,
 } from '../lib/interiors/parametricFurniture';
+import {
+  commitReconstructionDraft,
+  validateReconstructionDraft,
+  type ReconstructionDraft,
+} from '../lib/reconstruction/draft';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
@@ -400,6 +405,15 @@ export interface SDK {
     getDoorDefaults: () => DoorConfigDefaults;
     configureWindowDefaults: (settings: WindowConfigDefaults) => void;
     getWindowDefaults: () => WindowConfigDefaults;
+  };
+
+  // Reconstruction Subsystem
+  reconstruction: {
+    validateDraft: (draft: ReconstructionDraft) => ReturnType<typeof validateReconstructionDraft>;
+    commitDraft: (
+      draft: ReconstructionDraft,
+      options?: { includeFurniture?: boolean },
+    ) => ReturnType<typeof commitReconstructionDraft>;
   };
 
   // Interior Design Subsystem
@@ -711,6 +725,7 @@ export class DeveloperSDK implements SDK {
 
   // Subsystems
   public architecture: any;
+  public reconstruction: any;
   public interiors: any;
   public landscape: any;
   public materials: any;
@@ -1469,6 +1484,28 @@ export class DeveloperSDK implements SDK {
       getWindowDefaults: (): WindowConfigDefaults => {
         return { ...this.windowDefaults };
       }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // RECONSTRUCTION SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.reconstruction = {
+      validateDraft: (draft: ReconstructionDraft) => validateReconstructionDraft(draft),
+
+      commitDraft: (draft: ReconstructionDraft, options?: { includeFurniture?: boolean }) => {
+        const result = commitReconstructionDraft(draft, options);
+        if (result.shapes.length) {
+          const ids = new Set(result.shapes.map(shape => shape.id));
+          this.setShapes(prev => [
+            ...prev.filter(shape => !ids.has(shape.id)),
+            ...result.shapes,
+          ]);
+        }
+        this.log(
+          `Reconstruction: accepted ${result.acceptedIds.length}, rejected ${result.rejectedIds.length}, warnings ${result.validation.warnings}.`
+        );
+        return result;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
