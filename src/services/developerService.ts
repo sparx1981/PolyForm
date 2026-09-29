@@ -173,6 +173,7 @@ import {
   validateReconstructionDraft,
   type ReconstructionDraft,
 } from '../lib/reconstruction/draft';
+import { checkModelHealth } from '../lib/reconstruction/modelHealth';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
@@ -414,6 +415,7 @@ export interface SDK {
       draft: ReconstructionDraft,
       options?: { includeFurniture?: boolean },
     ) => ReturnType<typeof commitReconstructionDraft>;
+    checkModelHealth: () => ReturnType<typeof checkModelHealth>;
   };
 
   // Interior Design Subsystem
@@ -1491,6 +1493,8 @@ export class DeveloperSDK implements SDK {
     // ─────────────────────────────────────────────────────────────
     this.reconstruction = {
       validateDraft: (draft: ReconstructionDraft) => validateReconstructionDraft(draft),
+
+      checkModelHealth: () => checkModelHealth(this.shapes),
 
       commitDraft: (draft: ReconstructionDraft, options?: { includeFurniture?: boolean }) => {
         const result = commitReconstructionDraft(draft, options);
