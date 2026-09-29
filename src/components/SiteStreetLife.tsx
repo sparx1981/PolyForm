@@ -10,21 +10,106 @@ import { browserSiteIO } from '../lib/worldSite/fetchSite';
 import { findSiteGround } from '../lib/worldSite/site';
 import { drivesOnLeft, parseStreets, routeTool, streetsQuery } from '../lib/worldSite/streets';
 import { BODY_TYPES, CAR_COLOURS, type Seat, gait, planStreetLife, pointOnLoop } from '../lib/worldSite/streetLife';
-import { createHumanGeometry, createCarGeometry, HUMAN } from '../lib/worldSite/streetLifeGeometry';
 
-const { hipY: HIP_Y, hipX: HIP_X, thighLength: THIGH, shoulderY: SHOULDER_Y, shoulderX: SHOULDER_X } = HUMAN;
+// Lightweight architectural entourage: deliberately simple, but with soft silhouettes and enough
+// detail to read as people and vehicles at normal WorldView distances. Everything remains instanced.
+
+/* ---------- Figures ---------- */
+
+const HIP_Y = 0.91, HIP_X = 0.105, THIGH = 0.43, SHOULDER_Y = 1.39, SHOULDER_X = 0.225;
+
+function capsuleHanging(radius: number, total: number): THREE.BufferGeometry {
+  const g = new THREE.CapsuleGeometry(radius, Math.max(0.01, total - radius * 2), 7, 14);
+  g.translate(0, -total / 2, 0);
+  return g;
+}
+
+function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const nonIndexed = parts.map(p => (p.index ? p.toNonIndexed() : p));
+  let count = 0;
+  for (const p of nonIndexed) count += p.attributes.position!.count;
+  const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3);
+  let o = 0;
+  for (const p of nonIndexed) {
+    pos.set(p.attributes.position!.array as Float32Array, o * 3);
+    nor.set(p.attributes.normal!.array as Float32Array, o * 3);
+    o += p.attributes.position!.count;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return g;
+}
+
+function figureGeometries() {
+  // Rounded anatomical masses follow the supplied silhouette: defined shoulders, narrower waist,
+  // natural pelvis and tapered limbs, while deliberately omitting facial/clothing micro-detail.
+  const head = new THREE.SphereGeometry(0.116, 18, 14);
+  head.scale(0.91, 1.08, 0.96);
+  head.translate(0, 1.665, 0.004);
+  const neck = new THREE.CylinderGeometry(0.052, 0.064, 0.115, 14);
+  neck.translate(0, 1.535, 0);
+  const chest = new THREE.SphereGeometry(0.25, 18, 12);
+  chest.scale(1.0, 1.12, 0.58);
+  chest.translate(0, 1.34, 0);
+  const waist = new THREE.SphereGeometry(0.175, 16, 12);
+  waist.scale(0.82, 1.18, 0.62);
+  waist.translate(0, 1.12, 0);
+  const pelvis = new THREE.SphereGeometry(0.19, 16, 12);
+  pelvis.scale(0.9, 0.78, 0.68);
+  pelvis.translate(0, 0.965, 0);
+  return {
+    body: mergeAll([head, neck, chest, waist, pelvis]),
+    thigh: capsuleHanging(0.086, THIGH + 0.045),
+    shin: capsuleHanging(0.067, 0.47),
+    arm: capsuleHanging(0.056, 0.62),
+  };
+}
+
+/** Build variety: [height scale, width scale]. */
 const BUILDS: [number, number][] = [[1, 1], [0.95, 0.92], [1.045, 1.06], [0.975, 1.1]];
 const PEOPLE_PALETTE = ['#315d7a', '#d08a32', '#58725b', '#b55d4c', '#65758b', '#d0a55b', '#6c6387', '#3f7b79'];
-const CAR_PALETTE = ['#e7e4dc', '#315d7a', '#c45545', '#d18a2e', '#607568', '#6a7180', '#b8b4aa', '#416f78'];
+const figureMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.82, metalness: 0, flatShading: false });
 
-const figureMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.78, metalness: 0, flatShading: false });
-const carBodyMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.42, metalness: 0.1, flatShading: false });
-const carGlassMaterial = new THREE.MeshStandardMaterial({ color: '#172c38', roughness: 0.18, metalness: 0.12, flatShading: false });
-const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#202529', roughness: 0.9, metalness: 0 });
-const hubMaterial = new THREE.MeshStandardMaterial({ color: '#a3aaad', roughness: 0.42, metalness: 0.28 });
-const headlightMaterial = new THREE.MeshStandardMaterial({ color: '#fff8df', emissive: '#ead9a7', emissiveIntensity: 0.32, roughness: 0.28 });
-const tailLightMaterial = new THREE.MeshStandardMaterial({ color: '#c33d38', emissive: '#7b1715', emissiveIntensity: 0.16, roughness: 0.35 });
-const grilleMaterial = new THREE.MeshStandardMaterial({ color: '#182026', roughness: 0.72, metalness: 0.12 });
+/* ---------- Cars ---------- */
+
+function carGeometries() {
+  const side = (pts: [number, number][], width: number, bevel = 0.055) => {
+    const shape = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v)));
+    const g = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 4 });
+    g.translate(0, 0, -width / 2);
+    g.rotateY(-Math.PI / 2);
+    g.computeVertexNormals();
+    return g;
+  };
+  // Soft contemporary crossover proportions. The glasshouse is inset so the body keeps a clear
+  // shoulder line and the windows read independently rather than as a dark upper body block.
+  const body = side([[-2.08, 0.31], [2.03, 0.31], [2.15, 0.49], [2.11, 0.7], [1.62, 0.82], [0.98, 0.91], [-1.5, 0.91], [-2.04, 0.75], [-2.13, 0.55]], 1.74, 0.065);
+  const cabin = side([[0.91, 0.94], [0.4, 1.39], [-0.91, 1.41], [-1.45, 0.94]], 1.48, 0.04);
+  const roof = new THREE.BoxGeometry(1.5, 0.065, 1.82, 2, 1, 3);
+  roof.translate(0, 1.405, -0.22);
+  const wheels: THREE.BufferGeometry[] = [];
+  const hubs: THREE.BufferGeometry[] = [];
+  for (const z of [-1.35, 1.32]) for (const x of [-0.84, 0.84]) {
+    const w = new THREE.CylinderGeometry(0.335, 0.335, 0.2, 20);
+    w.rotateZ(Math.PI / 2); w.translate(x, 0.34, z); wheels.push(w);
+    const h = new THREE.CylinderGeometry(0.17, 0.17, 0.212, 16);
+    h.rotateZ(Math.PI / 2); h.translate(x, 0.34, z); hubs.push(h);
+  }
+  const frontLights = new THREE.BoxGeometry(1.18, 0.1, 0.045, 3, 1, 1); frontLights.translate(0, 0.665, 2.115);
+  const rearLights = new THREE.BoxGeometry(1.2, 0.105, 0.045, 3, 1, 1); rearLights.translate(0, 0.675, -2.095);
+  return { body, cabin, roof, wheels: mergeAll(wheels), hubs: mergeAll(hubs), frontLights, rearLights };
+}
+
+const CAR_PALETTE = ['#e7e4dc', '#315d7a', '#c45545', '#d18a2e', '#607568', '#6a7180', '#b8b4aa', '#416f78'];
+const carBodyMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, metalness: 0.08, flatShading: false });
+const carGlassMaterial = new THREE.MeshStandardMaterial({ color: '#213746', roughness: 0.24, metalness: 0.08, flatShading: false });
+const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#252a2d', roughness: 0.92, metalness: 0 });
+const hubMaterial = new THREE.MeshStandardMaterial({ color: '#969da0', roughness: 0.55, metalness: 0.2 });
+const headlightMaterial = new THREE.MeshStandardMaterial({ color: '#fff5d8', emissive: '#d7c58e', emissiveIntensity: 0.28, roughness: 0.35 });
+const tailLightMaterial = new THREE.MeshStandardMaterial({ color: '#b63f3b', emissive: '#6b1616', emissiveIntensity: 0.12, roughness: 0.42 });
+
+/* ---------- Placement ---------- */
 
 export function benchSeats(shapes: Shape[]): Seat[] {
   const seats: Seat[] = [];
@@ -49,6 +134,8 @@ function isSmallDevice(): boolean {
   return short < 820 || (navigator.hardwareConcurrency ?? 8) <= 4;
 }
 
+/* ---------- Drawing ---------- */
+
 export interface SiteStreetLifeProps { ground: Shape; routes: SiteRoute[]; level: StreetLifeLevel; seats: Seat[]; }
 
 const tmp = {
@@ -59,41 +146,40 @@ const tmp = {
 export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeProps) {
   const site = ground.terrainData!.site!;
   const plan = useMemo(() => planStreetLife(routes, { level, leftHand: drivesOnLeft(site), small: isSmallDevice(), seats, seed: Math.round(site.lat * 1e4 + site.lng * 1e4) }), [routes, level, seats, site.lat, site.lng]);
-  const figure = useMemo(createHumanGeometry, []);
-  const car = useMemo(createCarGeometry, []);
+  const figure = useMemo(figureGeometries, []);
+  const car = useMemo(carGeometries, []);
   useEffect(() => () => { Object.values(figure).forEach(g => g.dispose()); Object.values(car).forEach(g => g.dispose()); }, [figure, car]);
 
   const t = ground.terrainData!;
   const [gx, gy, gz] = ground.position;
   const heightAt = (x: number, z: number) => gridHeightAt(t, x - gx, z - gz) + gy;
-  const people = plan.walkers.length + plan.standers.length + plan.sitters.length;
 
-  const bodyRef = useRef<THREE.InstancedMesh>(null), thighRef = useRef<THREE.InstancedMesh>(null), shinRef = useRef<THREE.InstancedMesh>(null);
-  const upperArmRef = useRef<THREE.InstancedMesh>(null), forearmRef = useRef<THREE.InstancedMesh>(null), handRef = useRef<THREE.InstancedMesh>(null), footRef = useRef<THREE.InstancedMesh>(null);
-  const carRef = useRef<THREE.InstancedMesh>(null), cabinRef = useRef<THREE.InstancedMesh>(null), roofRef = useRef<THREE.InstancedMesh>(null), windowsRef = useRef<THREE.InstancedMesh>(null), pillarsRef = useRef<THREE.InstancedMesh>(null);
-  const wheelRef = useRef<THREE.InstancedMesh>(null), hubRef = useRef<THREE.InstancedMesh>(null), frontLightRef = useRef<THREE.InstancedMesh>(null), rearLightRef = useRef<THREE.InstancedMesh>(null), grilleRef = useRef<THREE.InstancedMesh>(null);
+  const people = plan.walkers.length + plan.standers.length + plan.sitters.length;
+  const bodyRef = useRef<THREE.InstancedMesh>(null), thighRef = useRef<THREE.InstancedMesh>(null), shinRef = useRef<THREE.InstancedMesh>(null), armRef = useRef<THREE.InstancedMesh>(null);
+  const carRef = useRef<THREE.InstancedMesh>(null), cabinRef = useRef<THREE.InstancedMesh>(null), roofRef = useRef<THREE.InstancedMesh>(null), wheelRef = useRef<THREE.InstancedMesh>(null), hubRef = useRef<THREE.InstancedMesh>(null), frontLightRef = useRef<THREE.InstancedMesh>(null), rearLightRef = useRef<THREE.InstancedMesh>(null);
   const time = useRef(0);
 
   useLayoutEffect(() => {
+    const carMesh = carRef.current, personMesh = bodyRef.current;
     const c = new THREE.Color();
-    if (carRef.current) {
-      plan.cars.forEach((k, i) => carRef.current!.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
-      if (carRef.current.instanceColor) carRef.current.instanceColor.needsUpdate = true;
+    if (carMesh) {
+      plan.cars.forEach((k, i) => carMesh.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
+      if (carMesh.instanceColor) carMesh.instanceColor.needsUpdate = true;
     }
-    for (const ref of [roofRef, pillarsRef]) if (ref.current) {
-      plan.cars.forEach((k, i) => ref.current!.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
-      if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true;
+    if (roofRef.current) {
+      plan.cars.forEach((k, i) => roofRef.current!.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
+      if (roofRef.current.instanceColor) roofRef.current.instanceColor.needsUpdate = true;
     }
-    if (bodyRef.current) {
+    if (personMesh) {
       let i = 0;
-      for (const p of [...plan.walkers, ...plan.standers, ...plan.sitters]) bodyRef.current.setColorAt(i++, c.set(PEOPLE_PALETTE[p.body % PEOPLE_PALETTE.length]!));
-      if (bodyRef.current.instanceColor) bodyRef.current.instanceColor.needsUpdate = true;
+      for (const p of [...plan.walkers, ...plan.standers, ...plan.sitters]) personMesh.setColorAt(i++, c.set(PEOPLE_PALETTE[p.body % PEOPLE_PALETTE.length]!));
+      if (personMesh.instanceColor) personMesh.instanceColor.needsUpdate = true;
     }
   }, [plan, people]);
 
-  const limb = (mesh: THREE.InstancedMesh, index: number, jx: number, jy: number, angle: number, bend?: number, lowerLength = THIGH) => {
+  const limb = (mesh: THREE.InstancedMesh, index: number, jx: number, jy: number, angle: number, bend?: number) => {
     tmp.joint.makeTranslation(jx, jy, 0); tmp.rot.makeRotationX(-angle); tmp.out.multiplyMatrices(tmp.base, tmp.joint).multiply(tmp.rot);
-    if (bend !== undefined) { tmp.knee.makeTranslation(0, -lowerLength, 0); tmp.out.multiply(tmp.knee).multiply(tmp.rot.makeRotationX(bend)); }
+    if (bend !== undefined) { tmp.knee.makeTranslation(0, -THIGH, 0); tmp.out.multiply(tmp.knee).multiply(tmp.rot.makeRotationX(bend)); }
     mesh.setMatrixAt(index, tmp.out);
   };
 
@@ -103,10 +189,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     bodyRef.current!.setMatrixAt(i, tmp.base);
     limb(thighRef.current!, i * 2, -HIP_X, HIP_Y, legs[0]); limb(thighRef.current!, i * 2 + 1, HIP_X, HIP_Y, legs[1]);
     limb(shinRef.current!, i * 2, -HIP_X, HIP_Y, legs[0], knees[0]); limb(shinRef.current!, i * 2 + 1, HIP_X, HIP_Y, legs[1], knees[1]);
-    limb(footRef.current!, i * 2, -HIP_X, HIP_Y, legs[0], knees[0]); limb(footRef.current!, i * 2 + 1, HIP_X, HIP_Y, legs[1], knees[1]);
-    limb(upperArmRef.current!, i * 2, -SHOULDER_X, SHOULDER_Y, arms[0]); limb(upperArmRef.current!, i * 2 + 1, SHOULDER_X, SHOULDER_Y, arms[1]);
-    limb(forearmRef.current!, i * 2, -SHOULDER_X, SHOULDER_Y, arms[0], -arms[0] * 0.16, 0.31); limb(forearmRef.current!, i * 2 + 1, SHOULDER_X, SHOULDER_Y, arms[1], -arms[1] * 0.16, 0.31);
-    limb(handRef.current!, i * 2, -SHOULDER_X, SHOULDER_Y, arms[0], -arms[0] * 0.16, 0.61); limb(handRef.current!, i * 2 + 1, SHOULDER_X, SHOULDER_Y, arms[1], -arms[1] * 0.16, 0.61);
+    limb(armRef.current!, i * 2, -SHOULDER_X, SHOULDER_Y, arms[0]); limb(armRef.current!, i * 2 + 1, SHOULDER_X, SHOULDER_Y, arms[1]);
   };
 
   useFrame((_, delta) => {
@@ -120,44 +203,41 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
       }
       for (const [n, s] of plan.standers.entries()) { const sway = Math.sin(now * 0.8 + n) * 0.035; person(i++, s.x, heightAt(s.x, s.z), s.z, s.yaw + sway, s.child, s.body, [0.02, -0.02], [0.08 + sway, -0.05 - sway], [0.03, 0.03]); }
       for (const s of plan.sitters) person(i++, s.x, s.y - HIP_Y + 0.07, s.z, s.yaw, false, s.body, [Math.PI / 2, Math.PI / 2], [0.35, 0.35], [Math.PI / 2, Math.PI / 2]);
-      for (const m of [bodyRef, thighRef, shinRef, upperArmRef, forearmRef, handRef, footRef]) m.current!.instanceMatrix.needsUpdate = true;
+      for (const m of [bodyRef, thighRef, shinRef, armRef]) m.current!.instanceMatrix.needsUpdate = true;
     }
     if (plan.cars.length && carRef.current) {
       plan.cars.forEach((c, i) => {
         const loop = plan.carLoops[c.loop]!, d = c.start + now * c.speed, p = pointOnLoop(loop, d), front = pointOnLoop(loop, d + 1.4), back = pointOnLoop(loop, d - 1.4);
         const hf = heightAt(front.x, front.z), hb = heightAt(back.x, back.z);
         tmp.q.setFromEuler(tmp.e.set(-Math.atan2(hf - hb, 2.8), Math.atan2(p.dx, p.dz), 0)); tmp.base.compose(tmp.p.set(p.x, (hf + hb) / 2, p.z), tmp.q, tmp.s.set(1, 1, 1));
-        for (const m of [carRef, cabinRef, roofRef, windowsRef, pillarsRef, wheelRef, hubRef, frontLightRef, rearLightRef, grilleRef]) m.current!.setMatrixAt(i, tmp.base);
+        for (const m of [carRef, cabinRef, roofRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.setMatrixAt(i, tmp.base);
       });
-      for (const m of [carRef, cabinRef, roofRef, windowsRef, pillarsRef, wheelRef, hubRef, frontLightRef, rearLightRef, grilleRef]) m.current!.instanceMatrix.needsUpdate = true;
+      for (const m of [carRef, cabinRef, roofRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.instanceMatrix.needsUpdate = true;
     }
   });
 
+  // All entourage meshes explicitly participate in the existing WorldView shadow system.
   const shared = { frustumCulled: false, castShadow: true, receiveShadow: true, raycast: () => null } as const;
   return <group name="site-street-life" userData={{ isStreetLife: true }}>
     {people > 0 && <>
-      <instancedMesh ref={bodyRef} args={[figure.body, figureMaterial, people]} {...shared} />
-      <instancedMesh ref={thighRef} args={[figure.thigh, figureMaterial, people * 2]} {...shared} />
-      <instancedMesh ref={shinRef} args={[figure.shin, figureMaterial, people * 2]} {...shared} />
-      <instancedMesh ref={upperArmRef} args={[figure.upperArm, figureMaterial, people * 2]} {...shared} />
-      <instancedMesh ref={forearmRef} args={[figure.forearm, figureMaterial, people * 2]} {...shared} />
-      <instancedMesh ref={handRef} args={[figure.hand, figureMaterial, people * 2]} {...shared} />
-      <instancedMesh ref={footRef} args={[figure.foot, figureMaterial, people * 2]} {...shared} />
+      <instancedMesh key={`b${people}`} ref={bodyRef} args={[figure.body, figureMaterial, people]} {...shared} />
+      <instancedMesh key={`t${people}`} ref={thighRef} args={[figure.thigh, figureMaterial, people * 2]} {...shared} />
+      <instancedMesh key={`s${people}`} ref={shinRef} args={[figure.shin, figureMaterial, people * 2]} {...shared} />
+      <instancedMesh key={`a${people}`} ref={armRef} args={[figure.arm, figureMaterial, people * 2]} {...shared} />
     </>}
     {plan.cars.length > 0 && <>
-      <instancedMesh ref={carRef} args={[car.body, carBodyMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={cabinRef} args={[car.cabin, carBodyMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={roofRef} args={[car.roof, carBodyMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={windowsRef} args={[car.windows, carGlassMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={pillarsRef} args={[car.pillars, carBodyMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={wheelRef} args={[car.wheels, wheelMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={hubRef} args={[car.hubs, hubMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={frontLightRef} args={[car.frontLights, headlightMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={rearLightRef} args={[car.rearLights, tailLightMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh ref={grilleRef} args={[car.grille, grilleMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`c${plan.cars.length}`} ref={carRef} args={[car.body, carBodyMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`g${plan.cars.length}`} ref={cabinRef} args={[car.cabin, carGlassMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`r${plan.cars.length}`} ref={roofRef} args={[car.roof, carBodyMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`w${plan.cars.length}`} ref={wheelRef} args={[car.wheels, wheelMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`h${plan.cars.length}`} ref={hubRef} args={[car.hubs, hubMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`fl${plan.cars.length}`} ref={frontLightRef} args={[car.frontLights, headlightMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`rl${plan.cars.length}`} ref={rearLightRef} args={[car.rearLights, tailLightMaterial, plan.cars.length]} {...shared} />
     </>}
   </group>;
 }
+
+/* ---------- In the scene ---------- */
 
 const fetchingRoutes = new Set<string>();
 
@@ -166,6 +246,7 @@ export function SiteStreetLifeLayer({ shapes }: { shapes: Shape[] }) {
   const level: StreetLifeLevel = site?.streetLife ?? 'normal'; const show = !!site && level !== 'off' && (active || !!site.streetLifeInEditor);
   const benches = shapes.filter(s => s.type === 'bench'); const seatsKey = JSON.stringify(benches.map(b => [b.position, b.quaternion, b.rotation, b.args, b.scale, b.hidden]));
   const seats = useMemo(() => benchSeats(benches), [seatsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!show || !site || site.routes) return; const key = `${site.lat},${site.lng},${site.size}`; if (fetchingRoutes.has(key)) return; fetchingRoutes.add(key);
     const origin = { lat: site.lat, lng: site.lng };
@@ -174,6 +255,7 @@ export function SiteStreetLifeLayer({ shapes }: { shapes: Shape[] }) {
       setShapes(prev => prev.map(s => (s.terrainData?.site && s.terrainData.site.lat === site.lat && s.terrainData.site.lng === site.lng && !s.terrainData.site.routes ? { ...s, terrainData: { ...s.terrainData, site: { ...s.terrainData.site, routes } } } : s)));
     }).catch(err => console.warn('[WorldView] Streets for moving cars and people failed:', err)).finally(() => fetchingRoutes.delete(key));
   }, [show, site, setShapes]);
+
   const [gx, , gz] = ground?.position ?? [0, 0, 0];
   const routes = useMemo(() => (site?.routes ?? []).map(r => (gx || gz ? { ...r, points: r.points.map(([x, z]) => [x + gx, z + gz] as [number, number]) } : r)), [site?.routes, gx, gz]);
   if (!show || !ground || !routes.length) return null;
@@ -183,7 +265,7 @@ export function SiteStreetLifeLayer({ shapes }: { shapes: Shape[] }) {
 function groundLine(pts: [number, number][], groundAt: (x: number, z: number) => number, lift = 0.15) {
   const out: THREE.Vector3[] = [];
   pts.forEach(([x, z], i) => {
-    if (i > 0) { const [px, pz] = pts[i - 1]!; const steps = Math.floor(Math.hypot(x - px, z - pz) / 3); for (let k = 1; k < steps; k++) { const tt = k / steps, ix = px + (x - px) * tt, iz = pz + (z - pz) * tt; out.push(new THREE.Vector3(ix, groundAt(ix, iz) + lift, iz)); } }
+    if (i > 0) { const [px, pz] = pts[i - 1]!; const steps = Math.floor(Math.hypot(x - px, z - pz) / 3); for (let k = 1; k < steps; k++) { const t = k / steps, ix = px + (x - px) * t, iz = pz + (z - pz) * t; out.push(new THREE.Vector3(ix, groundAt(ix, iz) + lift, iz)); } }
     out.push(new THREE.Vector3(x, groundAt(x, z) + lift, z));
   });
   return out;
