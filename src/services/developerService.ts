@@ -162,6 +162,12 @@ import {
   createBenchGeometry,
   createRockGeometry,
 } from '../lib/landscapeGeometry';
+import {
+  createInteriorFurnitureShape,
+  interiorFurnitureCatalog,
+  type InteriorFurnitureType,
+  type FurnitureParams,
+} from '../lib/interiors/parametricFurniture';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
@@ -394,6 +400,18 @@ export interface SDK {
     getDoorDefaults: () => DoorConfigDefaults;
     configureWindowDefaults: (settings: WindowConfigDefaults) => void;
     getWindowDefaults: () => WindowConfigDefaults;
+  };
+
+  // Interior Design Subsystem
+  interiors: {
+    addFurniture: (type: InteriorFurnitureType, options?: {
+      position?: [number, number, number];
+      rotation?: number;
+      color?: string;
+      roomId?: string;
+      params?: FurnitureParams;
+    }) => Shape;
+    listCatalog: () => ReturnType<typeof interiorFurnitureCatalog>;
   };
 
   // Landscape & Site Planning Subsystem
@@ -693,6 +711,7 @@ export class DeveloperSDK implements SDK {
 
   // Subsystems
   public architecture: any;
+  public interiors: any;
   public landscape: any;
   public materials: any;
   public measurement: any;
@@ -1450,6 +1469,32 @@ export class DeveloperSDK implements SDK {
       getWindowDefaults: (): WindowConfigDefaults => {
         return { ...this.windowDefaults };
       }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // INTERIOR DESIGN SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.interiors = {
+      addFurniture: (type: InteriorFurnitureType, options?: {
+        position?: [number, number, number];
+        rotation?: number;
+        color?: string;
+        roomId?: string;
+        params?: FurnitureParams;
+      }): Shape => {
+        const shape = createInteriorFurnitureShape(type, {
+          position: options?.position,
+          rotationY: options?.rotation,
+          color: options?.color,
+          roomId: options?.roomId,
+          params: options?.params,
+        });
+        this.placeBuilt(shape);
+        this.log(`Added interior furniture: ${type} at [${shape.position.join(', ')}].`);
+        return shape;
+      },
+
+      listCatalog: () => interiorFurnitureCatalog(),
     };
 
     // ─────────────────────────────────────────────────────────────
