@@ -3,7 +3,8 @@ import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import WorldViewPanel from './WorldView';
-import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe } from 'lucide-react';
+import { SectionToolPanel } from './SectionToolPanel';
+import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe, Slice } from 'lucide-react';
 import { buildRoofShapeForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { describeRoofs, roofBuilding } from '../lib/buildingRoofs';
@@ -100,6 +101,7 @@ export const ToolModifierPalette: React.FC = () => {
     'clipping'
     , 'lamp'
     , 'worldview'
+    , 'section'
   ].includes(activeTool);
 
   if (!hasSettings) return null;
@@ -250,6 +252,8 @@ export const ToolModifierPalette: React.FC = () => {
             <PersonStanding size={14} className="text-polyform-blue" />
           ) : activeTool === 'clipping' ? (
             <Crop size={14} className="text-sky-500" />
+          ) : activeTool === 'section' ? (
+            <Slice size={14} className="text-sky-500" />
           ) : activeTool === 'worldview' ? (
             <Globe size={14} className="text-polyform-blue" />
           ) : activeTool === 'lamp' ? (
@@ -261,8 +265,8 @@ export const ToolModifierPalette: React.FC = () => {
           ) : (
             <Settings size={14} className="text-polyform-blue" />
           )}
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'worldview' ? 'WorldView Modifiers' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 dark:text-gray-100">
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'worldview' ? 'WorldView Modifiers' : activeTool === 'section' ? 'Section Plane Modifiers' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -295,6 +299,7 @@ export const ToolModifierPalette: React.FC = () => {
         <>
           <div className={cn("p-3 space-y-4 overflow-y-auto flex-1 select-text", !isPhone && "max-h-[calc(100vh-140px)]")}>
         {activeTool === 'worldview' && <WorldViewPanel />}
+        {activeTool === 'section' && <SectionToolPanel />}
         {activeTool === 'wall' && (
           <div className="space-y-3">
             {/* Justification Selector */}

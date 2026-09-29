@@ -798,8 +798,6 @@ export interface AppState {
   worldViewGoogleNudge: number;
   setWorldViewGoogleNudge: (metres: number) => void;
   setWorldViewRadius: (radius: number) => void;
-  worldViewMapType: 'satellite' | '3d';
-  setWorldViewMapType: (type: 'satellite' | '3d') => void;
   googleMapsApiKey: string;
   setGoogleMapsApiKey: (key: string) => void;
   isWorldViewActive: boolean;

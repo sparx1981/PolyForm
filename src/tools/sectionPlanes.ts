@@ -17,6 +17,7 @@
 
 import * as THREE from 'three';
 import type { Shape } from '../types';
+import { buildingKindWord, siteBuildingGroups } from '../lib/worldSite/siteGroups';
 
 export type V3 = [number, number, number];
 
@@ -30,6 +31,38 @@ export interface SectionArgs {
   active: boolean;
   /** Side of the square drawn to show the plane, metres. */
   size: number;
+  /** Layers (see `sectionLayers`) this plane leaves alone. Missing = it cuts everything. */
+  exempt?: string[];
+}
+
+/** A group of things a section can cut or leave alone. */
+export interface SectionLayer { id: string; label: string }
+
+/** Which layer a shape belongs to: the ground, an imported building by kind, or your own design. */
+export function sectionLayerOfShape(shape: Pick<Shape, 'type' | 'siteBuildingData'>): string {
+  if (shape.type === 'terrain') return 'ground';
+  if (shape.type === 'site_building') return `site:${buildingKindWord(shape.siteBuildingData?.kind).replace(/\s+/g, '-')}`;
+  return 'design';
+}
+
+/** The layers a section can be told to leave alone, for what is in the model now. */
+export function sectionLayers(shapes: readonly Shape[], overlayOn: boolean): SectionLayer[] {
+  const layers: SectionLayer[] = [];
+  if (shapes.some(s => s.type === 'terrain')) layers.push({ id: 'ground', label: 'Ground / terrain' });
+  if (overlayOn) layers.push({ id: 'overlay', label: 'Map overlay' });
+  for (const g of siteBuildingGroups(shapes)) layers.push({ id: `site:${g.key}`, label: `${g.label} (${g.shapes.length})` });
+  layers.push({ id: 'design', label: 'My design' });
+  return layers;
+}
+
+export const cutsLayer = (args: Pick<SectionArgs, 'exempt'>, layer: string): boolean => !args.exempt?.includes(layer);
+
+/** The section with one layer switched on or off. */
+export function withLayerCut(args: SectionArgs, layer: string, cut: boolean): SectionArgs {
+  const rest = (args.exempt ?? []).filter(l => l !== layer);
+  const exempt = cut ? rest : [...rest, layer];
+  const { exempt: _old, ...base } = args;
+  return exempt.length ? { ...base, exempt } : base;
 }
 
 export function isSectionShape(shape: Pick<Shape, 'type' | 'args'>): boolean {

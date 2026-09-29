@@ -18,7 +18,11 @@ export class SectionCut {
   private readonly clipped = new Set<THREE.Material>();
   private readonly caps = new Map<THREE.Mesh, THREE.Mesh>();
 
-  apply(scene: THREE.Object3D, plane: THREE.Plane): void {
+  /**
+   * `layerOf` names the layer a mesh belongs to (see tools/sectionPlanes.ts) and `exempt` the
+   * layers to leave alone; a mesh in an exempt layer is not clipped and gets no fill.
+   */
+  apply(scene: THREE.Object3D, plane: THREE.Plane, layerOf?: (mesh: THREE.Mesh) => string | null, exempt?: ReadonlySet<string>): void {
     if (this.capMaterial.clippingPlanes?.[0] !== plane) {
       this.capMaterial.clippingPlanes = [plane];
       this.capMaterial.needsUpdate = true;
@@ -26,8 +30,19 @@ export class SectionCut {
     const seen = new Set<THREE.Mesh>();
     scene.traverse(obj => {
       const mesh = obj as THREE.Mesh & { isLine2?: boolean; isLineSegments2?: boolean };
-      if (!mesh.isMesh || mesh.isLine2 || mesh.isLineSegments2 || mesh.userData.isSectionCap || !isModelObject(mesh)) return;
+      if (!mesh.isMesh || mesh.isLine2 || mesh.isLineSegments2 || mesh.userData.isSectionCap) return;
+      // The map overlay is flat and marks itself; everything else must be part of the model.
+      const overlay = mesh.userData.sectionLayer === 'overlay';
+      if (!overlay && !isModelObject(mesh)) return;
+      const layer = overlay ? 'overlay' : layerOf?.(mesh) ?? null;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (layer && exempt?.has(layer)) {
+        // Left alone: put back anything an earlier cut did to it.
+        for (const m of materials) {
+          if (m && this.clipped.has(m)) { m.clippingPlanes = null; m.needsUpdate = true; this.clipped.delete(m); }
+        }
+        return;
+      }
       for (const m of materials) {
         if (!m || (m.clippingPlanes?.length === 1 && m.clippingPlanes[0] === plane)) continue;
         m.clippingPlanes = [plane];
@@ -37,7 +52,7 @@ export class SectionCut {
       }
       const instanced = (mesh as THREE.InstancedMesh).isInstancedMesh;
       const geometry = mesh.geometry as THREE.BufferGeometry;
-      if (instanced || (geometry.getAttribute('position')?.count ?? 0) > CAP_VERTEX_LIMIT) return;
+      if (overlay || instanced || (geometry.getAttribute('position')?.count ?? 0) > CAP_VERTEX_LIMIT) return;
       seen.add(mesh);
       let cap = this.caps.get(mesh);
       if (!cap) {

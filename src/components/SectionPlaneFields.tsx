@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../AppContext';
 import type { Shape } from '../types';
 import { actionLabel } from '../lib/macroRecorder';
-import { flipSection, isSectionShape, moveSection, type SectionArgs } from '../tools/sectionPlanes';
+import { cutsLayer, flipSection, isSectionShape, moveSection, sectionLayers, withLayerCut, type SectionArgs } from '../tools/sectionPlanes';
 import { parseTypedLength } from '../tools/typedEntry';
 
 // Entity Info for a section plane: turn its cut on or off (one plane cuts at a time), flip
@@ -10,7 +10,7 @@ import { parseTypedLength } from '../tools/typedEntry';
 // undo step. Dragging the plane with the Section tool moves it too.
 
 export function SectionPlaneFields({ shape }: { shape: Shape }) {
-  const { setShapes, recordAction, unit } = useApp();
+  const { setShapes, recordAction, unit, shapes, isWorldViewActive } = useApp();
   const args = shape.args as SectionArgs;
   const [distance, setDistance] = useState('');
   const field = 'w-full px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-polyform-blue';
@@ -62,6 +62,20 @@ export function SectionPlaneFields({ shape }: { shape: Shape }) {
             onKeyDown={e => { if (e.key === 'Enter') move(); }} className={field} />
           <button className={button} onClick={move}>Move</button>
         </div>
+      </div>
+      <div className="space-y-1 pt-1">
+        <label className={label}>What this plane cuts</label>
+        <p className="text-[10px] text-gray-400 leading-tight">Untick anything the cut should leave whole.</p>
+        {sectionLayers(shapes, !!isWorldViewActive).map(layer => (
+          <label key={layer.id} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={cutsLayer(args, layer.id)}
+              onChange={e => change(`Section cuts ${layer.label}: ${e.target.checked ? 'on' : 'off'}`, s => (s.id === shape.id ? { ...s, args: withLayerCut(args, layer.id, e.target.checked) } : s))}
+            />
+            {layer.label}
+          </label>
+        ))}
       </div>
     </div>
   );

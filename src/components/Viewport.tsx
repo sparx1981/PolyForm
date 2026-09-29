@@ -3496,28 +3496,34 @@ function Scene() {
   // Show light helper if enabled
   useHelper(showLightsource ? directionalLightRef : null, THREE.DirectionalLightHelper, 1, 'yellow');
 
+  const sunPublishedAtRef = useRef(0);
   const lastCursorUpdateRef = useRef<number>(0);
   const lastTransformBroadcastRef = useRef<number>(0);
 
-  useFrame((state) => {
-    if (!animateSun) { sunAnimRef.current = null; } if (animateSun) {
-      // Orbit relative to sunOrbitCenter, not the origin — see
-      // AppContext's own comment on that state for why. radius/angle are
-      // computed relative to the centre, and the resulting position is
-      // offset back by that same centre, so picking a new centre
-      // re-centres the whole orbit around it instead of always circling
-      // [0,0,0].
+  useFrame((state, delta) => {
+    if (!animateSun) {
+      sunAnimRef.current = null;
+    } else {
+      // The sun circles sunOrbitCenter at the height and distance it already has. `delta` is the
+      // time since the last frame (asking the clock for it again here returns ~0, which is why
+      // this used to crawl), capped so a stalled tab doesn't make it jump.
       if (!sunAnimRef.current) {
         const dx = lightPosition[0] - sunOrbitCenter[0];
         const dz = lightPosition[2] - sunOrbitCenter[2];
-        sunAnimRef.current = { radius: Math.sqrt(dx * dx + dz * dz) || 10, angle: Math.atan2(dz, dx) };
-      } sunAnimRef.current.angle += state.clock.getDelta() * sunSpeed * 0.5;
-      const radius = sunAnimRef.current.radius; const time = sunAnimRef.current.angle;
-      setLightPosition([
-        sunOrbitCenter[0] + Math.cos(time) * radius,
-        lightPosition[1],
-        sunOrbitCenter[2] + Math.sin(time) * radius
-      ]);
+        sunAnimRef.current = { radius: Math.hypot(dx, dz) || 10, angle: Math.atan2(dz, dx) };
+      }
+      sunAnimRef.current.angle += Math.min(delta, 0.1) * sunSpeed * 0.5;
+      const { radius, angle } = sunAnimRef.current;
+      const x = sunOrbitCenter[0] + Math.cos(angle) * radius;
+      const z = sunOrbitCenter[2] + Math.sin(angle) * radius;
+      // Move the light itself every frame, but only publish the position ~10 times a second:
+      // it is app-wide state, and re-rendering everything 60 times a second made it stutter.
+      directionalLightRef.current?.position.set(x, lightPosition[1], z);
+      const now = performance.now();
+      if (now - sunPublishedAtRef.current > 100) {
+        sunPublishedAtRef.current = now;
+        setLightPosition([x, lightPosition[1], z]);
+      }
     }
 
     // Broadcast cursor position
@@ -10977,7 +10983,7 @@ function Scene() {
       <ShareMainScene />
       <PresentationDriver />
       {/* The active section plane cuts the model (presentation mode does its own cuts). */}
-      <SectionCutter section={presentationActive ? null : activeSectionArgs} />
+      <SectionCutter section={presentationActive ? null : activeSectionArgs} shapes={shapes} />
       <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />
       
       {godRaysEnabled && (
@@ -16750,6 +16756,7 @@ function RenderMapTexture({ lat, lng }: { lat: number, lng: number }) {
       rotation={[-Math.PI / 2, 0, 0]} 
       position={[0, worldViewAltitude - 0.01, 0]}
       receiveShadow
+      userData={{ sectionLayer: 'overlay' }}
     >
       <planeGeometry args={[tileSizeMeters, tileSizeMeters]} />
       <meshStandardMaterial 

@@ -11,6 +11,7 @@ import { WeatherControls } from './graphics/WeatherControls';
 import { FinishSwatch } from './PlainFinishPicker';
 import { MaterialPreview3D, type PreviewSpec } from './MaterialPreview3D';
 import { Fold } from './ui/Fold';
+import { siteBuildingGroups, siteGroundOf, siteShapeIds } from '../lib/worldSite/siteGroups';
 import { buildPbrList, filterPbrList } from '../lib/materials/pbrList';
 import { FLOCK_DEFAULTS } from './animations/FlockSystem';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
@@ -886,6 +887,8 @@ export default function RightPanelStack() {
   const [expandedOutlinerLevels, setExpandedOutlinerLevels] = React.useState<Set<string>>(new Set());
   const [expandedOutlinerRoofs, setExpandedOutlinerRoofs] = React.useState<Set<string>>(new Set());
   const [expandedOutlinerTimber, setExpandedOutlinerTimber] = React.useState<boolean>(false);
+  // Open/closed state of the 3D Site group and its subgroups ("site", "site:house", ...).
+  const [expandedSiteGroups, setExpandedSiteGroups] = React.useState<Set<string>>(new Set());
   const [expandedTimberSubgroups, setExpandedTimberSubgroups] = React.useState<Set<string>>(new Set());
   const [expandedOutlinerCivil, setExpandedOutlinerCivil] = React.useState<boolean>(true);
   const selectedLight = customLights.find(l => l.id === selectedLightId);
@@ -954,7 +957,8 @@ export default function RightPanelStack() {
     'timber-frame',
     'roof',
     'lamp',
-    'worldview'
+    'worldview',
+    'section'
   ].includes(activeTool);
 
   if (allPanelsHidden) return null;
@@ -1497,7 +1501,9 @@ export default function RightPanelStack() {
                 const timberIds = new Set(timberShapes.map(t => t.id));
 
                 // 4. Other standalone shapes
-                const handledIds = new Set([...wallIds, ...slabIds, ...roofIds, ...roofChildIds, ...timberIds]);
+                // The imported 3D site (ground and existing buildings) has its own group below.
+                const siteIds = siteShapeIds(shapes);
+                const handledIds = new Set([...wallIds, ...slabIds, ...roofIds, ...roofChildIds, ...timberIds, ...siteIds]);
                 const otherShapes = shapes.filter(s => !handledIds.has(s.id));
 
                 return (
@@ -2381,10 +2387,109 @@ export default function RightPanelStack() {
                       </div>
                     )}
 
+                    {/* 4b. THE IMPORTED 3D SITE: ground, and existing buildings by kind */}
+                    {siteIds.size > 0 && (() => {
+                      const ground = siteGroundOf(shapes);
+                      const buildingGroups = siteBuildingGroups(shapes);
+                      const everyShape = shapes.filter(sh => siteIds.has(sh.id));
+                      const toggleOpen = (key: string) => setExpandedSiteGroups(prev => {
+                        const next = new Set(prev);
+                        if (next.has(key)) next.delete(key); else next.add(key);
+                        return next;
+                      });
+                      const setHidden = (list: typeof shapes, hidden: boolean) => {
+                        const ids = new Set(list.map(sh => sh.id));
+                        setShapes(prev => prev.map(sh => (ids.has(sh.id) ? { ...sh, hidden } : sh)));
+                      };
+                      const header = (key: string, label: string, list: typeof shapes, depth: 0 | 1, icon: React.ReactNode) => {
+                        const open = expandedSiteGroups.has(key);
+                        const ids = list.map(sh => sh.id);
+                        const allSel = ids.length > 0 && ids.every(id => selectedIds.includes(id));
+                        const allHid = list.every(sh => sh.hidden);
+                        return (
+                          <div
+                            onClick={() => { setSelectedId(null); setSelectedIds(ids); }}
+                            className={cn(
+                              "flex items-center gap-1.5 py-1.5 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group select-none",
+                              depth === 0 ? "px-2" : "pl-6 pr-2",
+                              allSel && "bg-polyform-blue/10 text-polyform-blue font-semibold",
+                            )}
+                            title={`${label}: ${list.length} object${list.length === 1 ? '' : 's'}`}
+                          >
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleOpen(key); }}
+                              className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                              title={open ? 'Collapse' : 'Expand'}
+                            >
+                              <ChevronRight size={13} className={cn("transition-transform duration-200", open && "rotate-90")} />
+                            </button>
+                            {icon}
+                            <span className="flex-1 truncate text-xs font-semibold text-gray-700 dark:text-gray-200">{label}</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{list.length}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setHidden(list, !allHid); }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
+                              title={allHid ? 'Show all' : 'Hide all'}
+                            >
+                              {allHid ? <EyeOff size={13} /> : <Eye size={13} />}
+                            </button>
+                          </div>
+                        );
+                      };
+                      const row = (shape: (typeof shapes)[number], indent: string) => {
+                        const isSelected = selectedId === shape.id || selectedIds.includes(shape.id);
+                        return (
+                          <div
+                            key={shape.id}
+                            onClick={() => { setSelectedId(shape.id); setSelectedIds([shape.id]); }}
+                            className={cn(
+                              "flex items-center gap-2 py-1 pr-4 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group text-xs",
+                              indent,
+                              isSelected && "bg-polyform-blue/10 text-polyform-blue font-medium",
+                              shape.hidden && "opacity-40",
+                            )}
+                          >
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: shape.color || '#94a3b8' }} />
+                            <span className="flex-1 truncate">{shape.name || `${shape.type} (${shape.id.slice(0, 4)})`}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setShapes(prev => prev.map(sh => sh.id === shape.id ? { ...sh, hidden: !sh.hidden } : sh)); }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-polyform-blue p-0.5 shrink-0"
+                              title={shape.hidden ? 'Show' : 'Hide'}
+                            >
+                              {shape.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-0.5 shrink-0"
+                              title="Delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        );
+                      };
+                      return (
+                        <div className="mt-1.5 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-800/80 bg-gray-50/40 dark:bg-gray-800/20">
+                          {header('site', '3D Site', everyShape, 0, <Mountain size={13} className="text-polyform-blue shrink-0" />)}
+                          {expandedSiteGroups.has('site') && (
+                            <div className="pb-1">
+                              {ground && row(ground, 'pl-9')}
+                              {buildingGroups.map(g => (
+                                <div key={g.key}>
+                                  {header(`site:${g.key}`, g.label, g.shapes, 1, <Building2 size={13} className="text-gray-400 shrink-0" />)}
+                                  {expandedSiteGroups.has(`site:${g.key}`) && g.shapes.map(sh => row(sh, 'pl-14'))}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {/* 5. OTHER MODEL SHAPES & COMPONENTS */}
                     {otherShapes.length > 0 && (
                       <div className="space-y-0.5 mt-1.5">
-                        {(sortedLevels.length > 0 || roofShapes.length > 0 || timberShapes.length > 0) && (
+                        {(sortedLevels.length > 0 || roofShapes.length > 0 || timberShapes.length > 0 || siteIds.size > 0) && (
                           <div className="px-2 pt-2 pb-0.5 text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-gray-500">
                             Objects & Components ({otherShapes.length})
                           </div>
@@ -3724,7 +3829,6 @@ export default function RightPanelStack() {
               </SubSection>
 
               <SubSection title="Lighting">
-                <AutoLightingPanel />
                 <div className="space-y-3">
                   <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
                     <span className="text-[10px] font-bold text-gray-400 uppercase">See Light Source</span>
@@ -3773,6 +3877,20 @@ export default function RightPanelStack() {
                     </div>
                   )}
 
+                  <button
+                    onClick={() => setPickingSunCenter(true)}
+                    className={cn(
+                      "w-full text-[10px] font-bold uppercase tracking-wider py-1.5 rounded border transition-colors flex items-center justify-center gap-1.5",
+                      pickingSunCenter
+                        ? "bg-polyform-blue text-white border-polyform-blue"
+                        : (theme === 'dark' ? "border-gray-700 hover:bg-gray-700 text-gray-300" : "border-gray-200 hover:bg-gray-50 text-gray-600")
+                    )}
+                  >
+                    {pickingSunCenter ? 'Click anywhere in the viewport…' : 'Pick Sun Centre'}
+                  </button>
+                  <div className="text-[9px] text-gray-400 text-center -mt-1">
+                    The sun circles this point (now {sunOrbitCenter[0].toFixed(1)}, {sunOrbitCenter[2].toFixed(1)}). Pick it when your model is away from the origin.
+                  </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
                       <span>Sun Position X</span>
@@ -3780,6 +3898,8 @@ export default function RightPanelStack() {
                     </div>
                     <input 
                       type="range" min="-100" max="100" step="0.5"
+                      disabled={animateSun}
+                      title={animateSun ? 'The sun is circling; turn off Animate Sun Rotation to place it by hand' : undefined}
                       value={lightPosition[0]}
                       onChange={(e) => setLightPosition([parseFloat(e.target.value), lightPosition[1], lightPosition[2]])}
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
@@ -3804,24 +3924,12 @@ export default function RightPanelStack() {
                     </div>
                     <input 
                       type="range" min="-100" max="100" step="0.5"
+                      disabled={animateSun}
+                      title={animateSun ? 'The sun is circling; turn off Animate Sun Rotation to place it by hand' : undefined}
                       value={lightPosition[2]}
                       onChange={(e) => setLightPosition([lightPosition[0], lightPosition[1], parseFloat(e.target.value)])}
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
-                  </div>
-                  <button
-                    onClick={() => setPickingSunCenter(true)}
-                    className={cn(
-                      "w-full text-[10px] font-bold uppercase tracking-wider py-1.5 rounded border transition-colors flex items-center justify-center gap-1.5",
-                      pickingSunCenter
-                        ? "bg-polyform-blue text-white border-polyform-blue"
-                        : (theme === 'dark' ? "border-gray-700 hover:bg-gray-700 text-gray-300" : "border-gray-200 hover:bg-gray-50 text-gray-600")
-                    )}
-                  >
-                    {pickingSunCenter ? 'Click anywhere in the viewport…' : 'Pick Sun Centre'}
-                  </button>
-                  <div className="text-[9px] text-gray-400 text-center -mt-1">
-                    Orbit centre: {sunOrbitCenter[0].toFixed(1)}, {sunOrbitCenter[2].toFixed(1)}
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
@@ -3902,13 +4010,26 @@ export default function RightPanelStack() {
                   </button>
                 </div>
 
+                {/* The auto-placer is a way of making custom lights, so it lives with them. */}
+                <Fold title="Auto light" icon={<Sparkles size={13} className="text-gray-400" />} className="mb-2">
+                  <AutoLightingPanel />
+                </Fold>
+
                 <div className="space-y-3">
                   {customLights.map(light => (
                     <div key={light.id} className={cn(
                       "p-2 rounded border space-y-2",
+                      selectedLightId === light.id && "ring-2 ring-amber-500",
                       theme === 'dark' ? "bg-gray-700/50 border-gray-600" : "bg-gray-50 border-gray-200"
                     )}>
-                      {light.name && <p className="text-xs font-semibold">{light.name}</p>}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLightId(selectedLightId === light.id ? null : light.id)}
+                        className="w-full text-left text-xs font-semibold truncate hover:text-amber-600"
+                        title="Select this light in the model"
+                      >
+                        {light.name || (light.parentShapeId ? 'Fixture light' : 'Custom light')}
+                      </button>
                       <div className="flex items-center justify-between">
                         <select 
                           value={light.type}

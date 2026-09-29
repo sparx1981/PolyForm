@@ -1500,7 +1500,6 @@ console.log("Created rectangle:", myRect.id);`);
   // Google's photorealistic surroundings around the plain map overlay (no imported 3D site needed).
   const [worldViewGoogle, setWorldViewGoogle] = useState(false);
   const [worldViewGoogleNudge, setWorldViewGoogleNudge] = useState(0);
-  const [worldViewMapType, setWorldViewMapType] = useState<'satellite' | '3d'>('satellite');
   const [googleMapsApiKey, setGoogleMapsApiKeyState] = useState<string>(() => {
     try {
       const stored = localStorage.getItem('polyform_google_maps_api_key');
@@ -2865,8 +2864,6 @@ console.log("Created rectangle:", myRect.id);`);
       worldViewGoogleNudge,
       setWorldViewGoogleNudge,
       setWorldViewRadius,
-      worldViewMapType,
-      setWorldViewMapType,
       googleMapsApiKey,
       setGoogleMapsApiKey,
       isWorldViewActive,

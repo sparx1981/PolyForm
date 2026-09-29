@@ -53,4 +53,35 @@ describe('SectionCut', () => {
     cut.apply(s, plane);
     expect(wall.children).toHaveLength(0);
   });
+
+  it('leaves exempt layers whole, and cuts them again when they are no longer exempt', () => {
+    const { s, wall, drawn } = scene();
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial());
+    ground.userData = { isShape: true, id: 'ground' };
+    const overlay = new THREE.Mesh(new THREE.PlaneGeometry(5, 5), new THREE.MeshBasicMaterial());
+    overlay.userData = { sectionLayer: 'overlay' };
+    s.add(ground, overlay);
+    const layerOf = (m: THREE.Mesh) => (m === ground ? 'ground' : 'design');
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+    const cut = new SectionCut();
+
+    cut.apply(s, plane, layerOf, new Set(['ground', 'overlay']));
+    expect((ground.material as THREE.Material).clippingPlanes).toBeFalsy();
+    expect(ground.children.filter(c => c.userData.isSectionCap)).toHaveLength(0);
+    expect((overlay.material as THREE.Material).clippingPlanes).toBeFalsy();
+    expect((wall.material as THREE.Material).clippingPlanes).toEqual([plane]);
+    expect((drawn.material as THREE.Material).clippingPlanes).toEqual([plane]);
+
+    // The overlay is cut too when it is not exempt, but never gets a fill.
+    cut.apply(s, plane, layerOf, new Set(['ground']));
+    expect((overlay.material as THREE.Material).clippingPlanes).toEqual([plane]);
+    expect(overlay.children).toHaveLength(0);
+
+    // Un-exempting the ground cuts it; exempting it again puts it back.
+    cut.apply(s, plane, layerOf, new Set());
+    expect((ground.material as THREE.Material).clippingPlanes).toEqual([plane]);
+    cut.apply(s, plane, layerOf, new Set(['ground']));
+    expect((ground.material as THREE.Material).clippingPlanes).toBeFalsy();
+    expect(ground.children.filter(c => c.userData.isSectionCap)).toHaveLength(0); // its fill goes too
+  });
 });

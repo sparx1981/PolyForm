@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   activeSection, clippingPlaneOf, dragDistance, dropCutAway, flipSection, isSectionShape, moveSection,
-  sectionOnFace, setSectionPickPlane, type SectionArgs,
+  cutsLayer, sectionLayerOfShape, sectionLayers, sectionOnFace, setSectionPickPlane, withLayerCut, type SectionArgs,
 } from './sectionPlanes';
 import type { Shape } from '../types';
 
@@ -83,5 +83,36 @@ describe('picking through a cut', () => {
     expect(ray.intersectObject(near).length).toBe(0);
     setSectionPickPlane(null);
     expect(ray.intersectObjects(scene.children, true).map(h => h.object)).toEqual([helper, near, far]);
+  });
+});
+
+describe('what a section cuts', () => {
+  const site = (id: string, kind?: string) => ({ id, type: 'site_building', siteBuildingData: { kind } } as unknown as Shape);
+  const ground = { id: 'g', type: 'terrain' } as Shape;
+  const box = { id: 'b', type: 'box' } as Shape;
+
+  it('puts each shape in a layer', () => {
+    expect(sectionLayerOfShape(ground)).toBe('ground');
+    expect(sectionLayerOfShape(site('1', 'house'))).toBe('site:house');
+    expect(sectionLayerOfShape(site('2', 'semidetached_house'))).toBe('site:semidetached-house');
+    expect(sectionLayerOfShape(site('3'))).toBe('site:building');
+    expect(sectionLayerOfShape(box)).toBe('design');
+  });
+
+  it('lists only the layers that are in the model', () => {
+    const layers = sectionLayers([ground, site('1', 'house'), site('2', 'house'), site('3', 'garage'), box], true);
+    expect(layers.map(l => l.id)).toEqual(['ground', 'overlay', 'site:house', 'site:garage', 'design']);
+    expect(layers.find(l => l.id === 'site:house')!.label).toBe('Existing house (2)');
+    expect(sectionLayers([box], false).map(l => l.id)).toEqual(['design']);
+  });
+
+  it('switches a layer off and on', () => {
+    const cutsAll = section();
+    expect(cutsLayer(cutsAll, 'ground')).toBe(true);
+    const noGround = withLayerCut(cutsAll, 'ground', false);
+    expect(cutsLayer(noGround, 'ground')).toBe(false);
+    expect(cutsLayer(noGround, 'design')).toBe(true);
+    const again = withLayerCut(noGround, 'ground', true);
+    expect(again.exempt).toBeUndefined();
   });
 });
