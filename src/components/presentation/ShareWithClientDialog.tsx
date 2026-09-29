@@ -26,7 +26,9 @@ const EFFECT_LABELS: { key: keyof ClientEffects; label: string }[] = [
  * page with the 3D model, floor plans and quantities. The link shows a snapshot, so later edits
  * only reach the client when the designer presses Update.
  */
+import { useModalA11y } from '../ui/useModalA11y';
 export default function ShareWithClientDialog({ onClose }: { onClose: () => void }) {
+  const dialogRef = useModalA11y<HTMLDivElement>(true, onClose);
   const app = useApp();
   const { user, currentModelId, currentModelName } = app;
   const shapes = app.shapes as Shape[];
@@ -152,7 +154,7 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
   const allRooms = plans.flatMap(p => p.rooms.map(r => ({ level: p.level, room: r })));
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-3"
+    <div ref={dialogRef} className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-3"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label="Share with client">
       <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl text-slate-800">
         <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3 border-b border-slate-100">

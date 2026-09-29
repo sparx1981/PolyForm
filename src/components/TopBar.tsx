@@ -948,7 +948,7 @@ export default function TopBar() {
         <div className="relative" ref={profileRef}>
           <button 
             onClick={() => setIsProfileOpen(!isProfileOpen)}
-            className="flex items-center gap-2 p-1 hover:bg-white/10 rounded-full transition-colors"
+            aria-label="Account menu" title="Account" aria-haspopup="menu" className="flex items-center gap-2 p-1 hover:bg-white/10 rounded-full transition-colors"
           >
             <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/20">
               {user?.photoURL ? (

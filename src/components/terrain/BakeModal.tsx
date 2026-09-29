@@ -48,6 +48,8 @@ function buildTerrainBufferGeometry(terrainShape: Shape | undefined): THREE.Buff
   return defaultGeo;
 }
 
+import { useModalA11y } from '../ui/useModalA11y';
+
 export default function BakeModal() {
   const { 
     isBakeModalOpen, 
@@ -65,6 +67,8 @@ export default function BakeModal() {
   const [exportFormat, setExportFormat] = useState<'mesh' | 'glb' | 'obj'>('mesh');
   const [bakingInProgress, setBakingInProgress] = useState<boolean>(false);
   const [bakeCompleted, setBakeCompleted] = useState<boolean>(false);
+
+  const dialogRef = useModalA11y<HTMLDivElement>(isBakeModalOpen, () => setIsBakeModalOpen(false));
 
   if (!isBakeModalOpen) return null;
 
@@ -177,7 +181,7 @@ export default function BakeModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Bake terrain to model" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <motion.div 
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}

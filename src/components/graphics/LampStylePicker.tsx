@@ -6,6 +6,7 @@ import type { Shape } from '../../types';
 
 type Category = LampStyleDef['category'];
 
+import { useModalA11y } from '../ui/useModalA11y';
 export function LampStylePicker({ isOpen, targetShape, onClose, onApplyStyle, theme = 'light' }: {
   isOpen: boolean; targetShape: Shape | null; onClose: () => void; onApplyStyle: (styleId: string) => void; theme?: 'light' | 'dark';
 }) {
@@ -16,11 +17,13 @@ export function LampStylePicker({ isOpen, targetShape, onClose, onApplyStyle, th
   const [category, setCategory] = useState<Category>(() => findLampStyle(currentStyleId).category);
   useEffect(() => { if (isOpen) setCategory(findLampStyle(currentStyleId).category); }, [isOpen, currentStyleId]);
 
+  const dialogRef = useModalA11y<HTMLDivElement>(isOpen && !!targetShape, onClose);
+
   if (!isOpen || !targetShape) return null;
   const visibleStyles = LAMP_STYLES.filter(s => s.category === category);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Choose a light fixture style" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
         className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-lg shadow-xl p-4 space-y-4 ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}
         onClick={e => e.stopPropagation()}

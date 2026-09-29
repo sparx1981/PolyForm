@@ -79,8 +79,10 @@ import { cn } from '../lib/utils';
  * });
  */
 
+import { useModalA11y } from './ui/useModalA11y';
 export default function AIRenderer() {
   const { isAIRendererOpen, setIsAIRendererOpen } = useApp();
+  const dialogRef = useModalA11y<HTMLDivElement>(isAIRendererOpen, () => setIsAIRendererOpen(false));
   const [prompt, setPrompt] = useState('');
   const [isRendering, setIsRendering] = useState(false);
   const [resultImage, setResultImage] = useState<string | null>(null);
@@ -148,7 +150,7 @@ export default function AIRenderer() {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Render with AI" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
