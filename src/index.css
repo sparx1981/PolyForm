@@ -85,3 +85,15 @@
     color: var(--color-gray-500);
   }
 }
+
+/* Dark theme: keys and the brand blue, both too dim on dark surfaces without help. */
+:where(.dark) kbd {
+  background-color: var(--color-gray-700);
+  border-color: var(--color-gray-600);
+  color: var(--color-gray-100);
+}
+@layer utilities {
+  :where(.dark) .text-polyform-blue:not([class*="dark:text-"]) {
+    color: #5fb0e8;
+  }
+}

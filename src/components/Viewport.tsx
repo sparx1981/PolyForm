@@ -16478,7 +16478,7 @@ export default function Viewport() {
                   "px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1",
                   selectionShapeMode === 'lasso'
                     ? "bg-polyform-blue text-white shadow-xs"
-                    : "text-gray-500 hover:text-gray-800 dark:hover:text-white"
+                    : "text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
                 )}
                 title="Lasso: Draw a custom loop around shapes or surfaces (Hotkey: L)"
               >
@@ -16494,7 +16494,7 @@ export default function Viewport() {
                   "px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1",
                   selectionShapeMode === 'marquee'
                     ? "bg-polyform-blue text-white shadow-xs"
-                    : "text-gray-500 hover:text-gray-800 dark:hover:text-white"
+                    : "text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
                 )}
                 title="Marquee: Drag a rectangular window (Hotkey: L)"
               >

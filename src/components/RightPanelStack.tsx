@@ -4612,7 +4612,7 @@ export default function RightPanelStack() {
                   placeholder="Invite by email..."
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="flex-1 px-2 py-1.5 bg-white border border-gray-200 rounded text-[10px] outline-none focus:border-polyform-blue shadow-inner"
+                  className="flex-1 px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 dark:text-gray-100 rounded text-[10px] outline-none focus:border-polyform-blue shadow-inner"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleInvite(inviteEmail);
@@ -4760,7 +4760,7 @@ export default function RightPanelStack() {
                   />
                 ))}
                 {notes.length === 0 && (
-                  <div className="text-center py-8 px-4 text-gray-400 text-[10px] bg-gray-50 rounded-lg border border-dashed border-gray-200 flex flex-col items-center gap-2">
+                  <div className="text-center py-8 px-4 text-gray-400 text-[10px] bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-200 dark:border-gray-600 flex flex-col items-center gap-2">
                     <StickyNote size={16} className="text-gray-300" />
                     <span>No notes yet. Click <span className="font-bold text-gray-500">Add New Note</span>, then click a spot on the model.</span>
                   </div>

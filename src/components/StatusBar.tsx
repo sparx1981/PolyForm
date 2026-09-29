@@ -63,7 +63,7 @@ const defaultVal = unit === 'mm' ? '0.0 mm' : unit === 'cm' ? '0.00 cm' : '0.000
 const quotaLocked = isQuotaLocked();
 
 return (
-<footer className="h-8 bg-white border-t border-gray-200 flex items-center justify-between px-3 text-[11px] text-gray-600 z-50">
+<footer className="h-8 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between px-3 text-[11px] text-gray-600 dark:text-gray-300 z-50">
 <div className="flex items-center gap-4">
 <div className="flex items-center gap-1.5">
 <MousePointer2 size={12} className="text-polyform-blue" />
@@ -75,7 +75,7 @@ return (
 </span>
 </div>
 
-<div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+<div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-4">
 {quotaLocked ? (
 <div className="flex items-center gap-1.5 text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-100">
 <ShieldAlert size={12} />
@@ -128,7 +128,7 @@ title="Your work is not being saved yet. Use the menu (top-left) and choose Save
 
 <div className="flex items-center gap-4">
 {activeTool === 'rectangle' && (
-<div className="flex items-center gap-2 border-l border-gray-200 pl-4 h-full">
+<div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-4 h-full">
 <div className="flex items-center gap-1.5 px-2 bg-neutral-800 rounded border border-neutral-700 shadow-inner">
 <span className="text-[9px] font-bold text-neutral-400 uppercase">X (Width)</span>
 <input
@@ -157,7 +157,7 @@ className="w-12 bg-transparent border-none outline-none text-right font-mono tex
 </div>
 )}
 {activeTool === 'zoom' && (
-<div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+<div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-4">
 <span className="uppercase font-semibold text-gray-400">Zoom Level</span>
 <div className="bg-neutral-800 border border-neutral-700 px-2 py-0.5 min-w-[60px] text-right font-mono text-white rounded">
 {(zoom || 1.0).toFixed(2)}x
@@ -172,7 +172,7 @@ title="Set current camera as default"
 </button>
 </div>
 )}
-<div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+<div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-4">
 <span className="uppercase font-semibold text-gray-400">Measurements</span>
 <div className="bg-neutral-800 border border-neutral-700 px-2 py-0.5 min-w-[100px] text-right font-mono text-white rounded">
 {measurements || defaultVal}

@@ -308,7 +308,7 @@ export default function LoginActivity() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
-          className="w-full max-w-7xl max-h-[88vh] bg-white rounded-xl shadow-modus-4 border border-gray-200 flex flex-col overflow-hidden"
+          className="w-full max-w-7xl max-h-[88vh] bg-white dark:bg-gray-900 dark:text-gray-100 rounded-xl shadow-modus-4 border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div>
@@ -358,9 +358,9 @@ export default function LoginActivity() {
                 <>
                   <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-gray-100 bg-gray-light">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                      <span className="px-2.5 py-1 rounded-md bg-white border border-gray-200">Total <span className="text-polyform-dark-blue">{loginSummary.total}</span></span>
-                      <span className="px-2.5 py-1 rounded-md bg-white border border-gray-200 flex items-center gap-1"><CheckCircle2 size={13} className="text-polyform-green" /> Success <span className="text-polyform-green">{loginSummary.success}</span></span>
-                      <span className="px-2.5 py-1 rounded-md bg-white border border-gray-200 flex items-center gap-1"><XCircle size={13} className="text-polyform-red" /> Failed <span className="text-polyform-red">{loginSummary.failure}</span></span>
+                      <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">Total <span className="text-polyform-dark-blue">{loginSummary.total}</span></span>
+                      <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center gap-1"><CheckCircle2 size={13} className="text-polyform-green" /> Success <span className="text-polyform-green">{loginSummary.success}</span></span>
+                      <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center gap-1"><XCircle size={13} className="text-polyform-red" /> Failed <span className="text-polyform-red">{loginSummary.failure}</span></span>
                     </div>
 
                     <div className="ml-auto flex flex-wrap items-center gap-2">

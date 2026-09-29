@@ -840,7 +840,7 @@ export default function TopBar() {
                 exit={{ opacity: 0, x: -10 }}
                 className={isPhone
                   ? "fixed left-0 right-0 top-10 bottom-0 overflow-y-auto bg-white shadow-modus-4 border-t border-gray-200 py-2 text-gray-700 z-[200]"
-                  : "absolute left-0 top-full mt-2 w-56 bg-white rounded-lg shadow-modus-4 border border-gray-200 py-2 text-gray-700"}
+                  : "absolute left-0 top-full mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-modus-4 border border-gray-200 dark:border-gray-700 py-2 text-gray-700 dark:text-gray-200"}
               >
                 <MenuButton icon={<FilePlus size={16} />} label="New" onClick={handleNew} />
                 <MenuButton icon={<FolderOpen size={16} />} label="Open File..." onClick={handleOpenLocalFile} />
@@ -966,7 +966,7 @@ export default function TopBar() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-modus-4 border border-gray-200 py-3 text-gray-700"
+                className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-modus-4 border border-gray-200 dark:border-gray-700 py-3 text-gray-700 dark:text-gray-200"
               >
                 <div className="px-4 pb-3 border-b border-gray-100">
                   <div className="font-semibold truncate">{user?.displayName || 'User'}</div>
@@ -1576,7 +1576,7 @@ function MenuButton({ icon, label, onClick, className }: { icon: React.ReactNode
 function VisibilityToggle({ label, isVisible, onToggle }: { label: string, isVisible: boolean, onToggle: () => void }) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="text-xs text-gray-600">{label}</span>
+      <span className="text-xs text-gray-600 dark:text-gray-300">{label}</span>
       <button 
         onClick={onToggle}
         className={cn(
