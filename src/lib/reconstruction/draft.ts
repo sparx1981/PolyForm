@@ -144,6 +144,9 @@ export function validateReconstructionDraft(
 
   const byWall = new Map(draft.walls.map(w => [w.id, w]));
   for (const opening of draft.openings ?? []) {
+    if (confidenceOf(opening.confidence) < low) {
+      issues.push({ severity: 'warning', code: 'low-confidence', entityId: opening.id, message: 'Opening confidence is low and should be reviewed.' });
+    }
     const host = byWall.get(opening.wallId);
     if (!host) {
       issues.push({ severity: 'error', code: 'opening-host-missing', entityId: opening.id, message: 'Opening host wall does not exist.' });
@@ -155,9 +158,6 @@ export function validateReconstructionDraft(
       issues.push({ severity: 'error', code: 'opening-invalid', entityId: opening.id, message: 'Opening dimensions/position are invalid.' });
     } else if (opening.width > wallLength(host) - 0.1) {
       issues.push({ severity: 'error', code: 'opening-too-wide', entityId: opening.id, message: 'Opening is wider than its host wall.' });
-    }
-    if (confidenceOf(opening.confidence) < low) {
-      issues.push({ severity: 'warning', code: 'low-confidence', entityId: opening.id, message: 'Opening confidence is low and should be reviewed.' });
     }
   }
 
