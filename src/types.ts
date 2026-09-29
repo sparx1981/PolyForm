@@ -33,7 +33,7 @@ export type ToolType =
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
   | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'water' | 'patio' | 'protractor'
   | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping' | 'site_route'
-  | 'block_picker' | 'worldview'
+  | 'block_picker' | 'worldview' | 'arealabel' | 'leader'
   | CivilToolMode;
 
 export type ToolMode = ToolType | CivilToolMode;

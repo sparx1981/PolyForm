@@ -129,6 +129,8 @@ import { loadAssetManifest } from '../lib/assets/catalog';
 import { chooseTier } from '../lib/assets/materialResolver';
 import { EnvironmentManager } from '../lib/assets/environmentManager';
 import { useManagedBindingTextures } from '../lib/assets/useManagedBindingTextures';
+import { DimensionMark, LeaderMark, AreaMark } from './AnnotationMarks';
+import { makeDimensionArgs, measureFace, isDimensionShape, isAreaLabelShape, isLeaderShape, type AreaLabelArgs, type DimensionArgs, type LeaderArgs } from '../tools/annotations';
 import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
@@ -1887,7 +1889,7 @@ function Scene() {
     }
     // These tools handle their own clicks on the canvas (see their effects below): a click
     // on a face there picks a profile, a path or a point, never the selection.
-    if (activeTool === 'followme' || activeTool === 'tape' || activeTool === 'section') return;
+    if (activeTool === 'followme' || activeTool === 'tape' || activeTool === 'section' || activeTool === 'dimensions' || activeTool === 'leader') return;
     if (activeTool === 'combine') {
       // Combine: each click adds (or removes) a whole shape or object, in order; the first leads.
       const group = groupContaining(kernelHost.graph, faceId);
@@ -2882,6 +2884,23 @@ function Scene() {
       // separate click path from a Shape mesh's onPointerDown.
       if (!event.point) return false;
       pickSunCenter(event.point);
+      return true;
+    }
+    if (activeTool === 'arealabel') {
+      if (!event.point) return false;
+      const measured = measureFace(kernelHost.graph, faceId);
+      if (!measured) { setMeasurements('Could not measure that face.'); return true; }
+      const face = kernelHost.graph.faces.get(faceId);
+      const n = face?.plane.normal;
+      const lift = 0.05;
+      const anchor: [number, number, number] = [event.point.x, event.point.y, event.point.z];
+      const args: AreaLabelArgs = {
+        kind: 'area', faceId, anchor,
+        position: n ? [anchor[0] + n.x * lift, anchor[1] + n.y * lift, anchor[2] + n.z * lift] : anchor,
+        area: measured.area, perimeter: measured.perimeter,
+      };
+      addShape({ id: Math.random().toString(36).substr(2, 9), name: 'Area label', type: 'measurement', position: anchor, args, color: '#10b981' } as Shape);
+      setMeasurements(`Area ${measured.area.toFixed(2)} m². The label updates if the face changes.`);
       return true;
     }
     if (activeTool === 'note') {
@@ -5993,7 +6012,7 @@ function Scene() {
     }
 
     // The Tape Measure has its own pointer handling on the canvas (see the tape effect below).
-    if (activeTool === 'tape') return;
+    if (activeTool === 'tape' || activeTool === 'dimensions' || activeTool === 'leader') return;
     if (activeTool === 'arc') {
       e.stopPropagation();
       const tool = arcToolRef.current!;
@@ -10318,6 +10337,126 @@ function Scene() {
   }, [activeTool, gl]);
 
   // ---------------------------------------------------------------------------
+  // Dimension and Leader Label (see tools/annotations.ts). Dimension: click two points, then
+  // move out to where the line should sit and click. Leader: click what to point at, click
+  // where the text goes, type it. Both use the Tape Measure's picking, so corners snap.
+  // ---------------------------------------------------------------------------
+  const [dimDraft, setDimDraft] = useState<{ start: THREE.Vector3; end: THREE.Vector3 | null; cursor: THREE.Vector3; offset: THREE.Vector3 } | null>(null);
+  const [leaderDraft, setLeaderDraft] = useState<{ target: THREE.Vector3; anchor: THREE.Vector3 | null; cursor: THREE.Vector3; typing: boolean; text: string } | null>(null);
+
+  const annotationPoint = (ev: PointerEvent) => {
+    const probe = tapeProbe(ev, true);
+    const point = probe.pick?.onCorner ? tapeCorner(probe.pick) : probe.point;
+    return { point, probe };
+  };
+
+  const annotationClickRef = useRef<(ev: PointerEvent) => void>(() => {});
+  annotationClickRef.current = (ev) => {
+    if (leaderDraft?.typing) return;
+    const { point } = annotationPoint(ev);
+    if (!point) return;
+    if (activeTool === 'dimensions') {
+      if (!dimDraft) {
+        setDimDraft({ start: point, end: null, cursor: point, offset: new THREE.Vector3() });
+        setMeasurements('Click the second point.');
+      } else if (!dimDraft.end) {
+        if (point.distanceTo(dimDraft.start) < 1e-4) { setMeasurements('Pick a second point away from the first.'); return; }
+        setDimDraft({ ...dimDraft, end: point, cursor: point });
+        setMeasurements('Move out to where the dimension line goes, then click.');
+      } else {
+        const t = (v: THREE.Vector3): [number, number, number] => [v.x, v.y, v.z];
+        const args = makeDimensionArgs(t(dimDraft.start), t(dimDraft.end), t(dimDraft.offset));
+        addShape({
+          id: Math.random().toString(36).substr(2, 9), name: `Dimension ${formatValue(args.distance, unit, 2)}`, type: 'measurement',
+          position: t(dimDraft.start), args, color: '#0284c7',
+        } as Shape);
+        setMeasurements(`Dimension placed: ${formatValue(args.distance, unit, 2)}`);
+        setDimDraft(null);
+      }
+    } else if (activeTool === 'leader') {
+      if (!leaderDraft) {
+        setLeaderDraft({ target: point, anchor: null, cursor: point, typing: false, text: '' });
+        setMeasurements('Click where the text should go.');
+      } else if (!leaderDraft.anchor) {
+        setLeaderDraft({ ...leaderDraft, anchor: point, typing: true });
+        setMeasurements('Type the label, then press Enter. Esc cancels.');
+      }
+    }
+  };
+
+  const annotationMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  annotationMoveRef.current = (ev) => {
+    if (activeTool === 'dimensions' && dimDraft) {
+      const { point, probe } = annotationPoint(ev);
+      if (!point) return;
+      if (!dimDraft.end) {
+        setDimDraft({ ...dimDraft, cursor: point });
+        setMeasurements(`Distance: ${formatValue(dimDraft.start.distanceTo(point), unit, 2)}`);
+      } else {
+        const dir = dimDraft.end.clone().sub(dimDraft.start).normalize();
+        const offset = guideOffset(dimDraft.start, dir, probe.ray, probe.modelPoint);
+        setDimDraft({ ...dimDraft, offset });
+        setMeasurements(`Dimension ${formatValue(dimDraft.start.distanceTo(dimDraft.end), unit, 2)} - click to place`);
+      }
+    } else if (activeTool === 'leader' && leaderDraft && !leaderDraft.anchor) {
+      const { point } = annotationPoint(ev);
+      if (point) setLeaderDraft({ ...leaderDraft, cursor: point });
+    }
+  };
+
+  const commitLeader = () => {
+    if (!leaderDraft?.anchor) return;
+    const text = leaderDraft.text.trim();
+    if (!text) { setLeaderDraft(null); return; }
+    const t = (v: THREE.Vector3): [number, number, number] => [v.x, v.y, v.z];
+    const args: LeaderArgs = { kind: 'leader', target: t(leaderDraft.target), anchor: t(leaderDraft.anchor), text };
+    addShape({
+      id: Math.random().toString(36).substr(2, 9), name: `Label: ${text.slice(0, 24)}`, type: 'measurement',
+      position: args.anchor, args, color: '#f59e0b',
+    } as Shape);
+    setLeaderDraft(null);
+    setMeasurements('Label placed.');
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'dimensions' && activeTool !== 'leader') {
+      setDimDraft(null);
+      setLeaderDraft(null);
+      return;
+    }
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => { if (ev.button === 0) down = { x: ev.clientX, y: ev.clientY }; };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      if (isClick) annotationClickRef.current(ev);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; if (lastMove) annotationMoveRef.current(lastMove); });
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') { setDimDraft(null); setLeaderDraft(null); }
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      window.removeEventListener('keydown', onKey);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [activeTool, gl]);
+
+  // ---------------------------------------------------------------------------
   // Follow Me: click the shape, then click the path - an edge (the whole run of lines and
   // arcs through it) or a face (its outline, all the way round). Hovering the path shows it
   // and the swept result as a wireframe. See tools/kernelFollowMe.ts.
@@ -11241,6 +11380,24 @@ function Scene() {
             <Line key={shape.id} points={[g.start, g.end]} dashed dashSize={0.3} gapSize={0.2}
               color={isSel ? '#FFFFFF' : (shape.color || '#0e7490')} lineWidth={isSel ? 2.5 : 1.5}
               onClick={(e: any) => { if (activeTool !== 'select') return; e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }} />
+          );
+        }
+        if (isDimensionShape(shape)) {
+          return (
+            <DimensionMark key={shape.id} args={shape.args as DimensionArgs} unit={unit} selected={selectedId === shape.id} color={shape.color}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(shape.id); setSelectedIds([shape.id]); } : undefined} />
+          );
+        }
+        if (isLeaderShape(shape)) {
+          return (
+            <LeaderMark key={shape.id} args={shape.args as LeaderArgs} selected={selectedId === shape.id} color={shape.color}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(shape.id); setSelectedIds([shape.id]); } : undefined} />
+          );
+        }
+        if (isAreaLabelShape(shape)) {
+          return (
+            <AreaMark key={shape.id} args={shape.args as AreaLabelArgs} graph={kernelHost.graph} unit={unit} selected={selectedId === shape.id}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(shape.id); setSelectedIds([shape.id]); } : undefined} />
           );
         }
         if (shape.type === 'measurement' && (shape.args as any)?.kind === 'protractor') {
@@ -12560,6 +12717,33 @@ function Scene() {
       )}
 
       {/* Measuring Tape Preview (in-progress) */}
+      {activeTool === 'dimensions' && dimDraft && (
+        dimDraft.end
+          ? <DimensionMark args={makeDimensionArgs([dimDraft.start.x, dimDraft.start.y, dimDraft.start.z], [dimDraft.end.x, dimDraft.end.y, dimDraft.end.z], [dimDraft.offset.x, dimDraft.offset.y, dimDraft.offset.z])} unit={unit} selected={false} />
+          : <Line points={[dimDraft.start.toArray(), dimDraft.cursor.toArray()]} color="#0284c7" lineWidth={1.5} dashed dashSize={0.15} gapSize={0.1} depthTest={false} renderOrder={20} raycast={() => null} />
+      )}
+      {activeTool === 'leader' && leaderDraft && (
+        <>
+          <Line points={[leaderDraft.target.toArray(), (leaderDraft.anchor ?? leaderDraft.cursor).toArray()]} color="#f59e0b" lineWidth={1.5} depthTest={false} renderOrder={20} raycast={() => null} />
+          {leaderDraft.typing && leaderDraft.anchor && (
+            <Html position={leaderDraft.anchor} center occlude={false} zIndexRange={[60, 70]}>
+              <input
+                autoFocus
+                value={leaderDraft.text}
+                onChange={(e) => setLeaderDraft({ ...leaderDraft, text: e.target.value })}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') commitLeader();
+                  if (e.key === 'Escape') setLeaderDraft(null);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                placeholder="Label text"
+                className="w-40 px-2 py-1 text-xs rounded border border-amber-500 bg-white text-gray-900 shadow-lg outline-none"
+              />
+            </Html>
+          )}
+        </>
+      )}
       {tapeStart && tapeEnd && (
         <group>
           <Line

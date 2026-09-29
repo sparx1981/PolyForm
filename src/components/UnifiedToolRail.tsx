@@ -39,6 +39,7 @@ import {
   Globe,
   Combine,
   Ruler,
+  MessageSquare,
   ToggleLeft,
   ToggleRight,
   Maximize2,
@@ -847,6 +848,36 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'tape',
           onClick: (s) => s.setActiveTool('tape'),
           keywords: ['tape', 'measure', 'ruler', 'dimension', 'distance']
+        },
+        {
+          id: 'dimensions',
+          tool: 'dimensions',
+          label: 'Dimension',
+          subtitle: 'Click two points, then move out and click to place a dimension line that stays in the model',
+          icon: <Ruler size={19} strokeWidth={2.75} />,
+          isActive: (s) => s.activeTool === 'dimensions',
+          onClick: (s) => s.setActiveTool('dimensions'),
+          keywords: ['dimension', 'measure', 'annotation', 'length', 'distance', 'drawing']
+        },
+        {
+          id: 'arealabel',
+          tool: 'arealabel',
+          label: 'Area Label',
+          subtitle: 'Click a face to label its area and perimeter; it updates when the face changes',
+          icon: <Square size={19} />,
+          isActive: (s) => s.activeTool === 'arealabel',
+          onClick: (s) => s.setActiveTool('arealabel'),
+          keywords: ['area', 'label', 'perimeter', 'room', 'square metres', 'annotation']
+        },
+        {
+          id: 'leader',
+          tool: 'leader',
+          label: 'Leader Label',
+          subtitle: 'Click what to point at, click where the text goes, then type it',
+          icon: <MessageSquare size={19} />,
+          isActive: (s) => s.activeTool === 'leader',
+          onClick: (s) => s.setActiveTool('leader'),
+          keywords: ['leader', 'callout', 'label', 'pointer', 'annotation', 'text']
         },
         {
           id: 'protractor',

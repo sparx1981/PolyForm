@@ -442,6 +442,19 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'dimensions-labels',
+    title: 'Dimensions, Area Labels and Leader Labels',
+    category: 'tools',
+    content: 'Annotations that stay in the model, unlike the Tape Measure\'s quick check. They are saved, undone and deleted like any object.',
+    steps: [
+      'Dimension: pick Dimension, click two points (corners snap), then move out to where the line should sit and click. It is drawn like a drawing dimension, with extension lines back to the points and a tick at each end. Esc cancels.',
+      'Area Label: pick Area Label and click a drawn face. The label shows its area and perimeter and updates when you push/pull, resize or redraw the face. If the face is deleted it shows the last reading, dimmed.',
+      'Leader Label: pick Leader Label, click what to point at, click where the text should go, type it and press Enter. A line joins the text to the point.',
+      'Select any of them with Select and press Delete to remove it. Show All Dimensions (left toolbar) still labels every object automatically.',
+      'Placed dimensions stay where you put them. If you move the geometry afterwards, move or redraw the dimension.'
+    ]
+  },
+  {
     id: 'tape-measure-guides',
     title: 'Tape Measure and Guide Lines',
     category: 'tools',
