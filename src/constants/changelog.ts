@@ -7,6 +7,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'September 29, 2026',
     items: [
+      'Sun Intensity now runs 0 to 100: 0 is night, 50 is ordinary daylight and 100 is a bright sun that still looks natural. New models start at 40. Models you saved keep the same light (a sun that was 1.0 now reads 50). Scripts still set the sun with sdk.setSunSettings({ intensity }), where 1.0 is ordinary daylight.',
       'Stairs now check where they go. They may touch a wall but not pass through one, and there must be room to step off at the top: the preview turns red with the reason when they clash, an orange patch shows the space at the top that needs to be clear (green when it is), and a click there does nothing until you move or turn them.',
       'Placing a dormer is no longer guesswork. While you place one, green dots on the roof show every spot where a dormer of that size and type fits, its outline follows the pointer (green fits, red doesn\'t) and the status bar says why it can\'t go where you are pointing (off the roof, across a hip or the ridge, no eave below, and so on).',
       'The Roof modifier panel now follows the app\'s own light or dark setting like the other panels (it had been picking up the computer\'s dark mode, which made Replace / Generate Roof, Roof extras and Advanced Trim & Eaves dark on dark or grey on grey). The same fix applies to every panel that uses the dark styles.',

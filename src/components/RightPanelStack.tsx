@@ -1,4 +1,5 @@
 import { NoteCard } from './NoteCard';
+import { sliderToSun, sunToSlider } from '../lib/graphics/daylight';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AutoLightingPanel } from './AutoLightingPanel';
 import { actionLabel } from '../lib/macroRecorder';
@@ -3934,12 +3935,13 @@ export default function RightPanelStack() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
                       <span>Sun Intensity</span>
-                      <span>{sunIntensity.toFixed(1)}</span>
+                      <span>{Math.round(sunToSlider(sunIntensity))}</span>
                     </div>
                     <input 
-                      type="range" min="0" max="50" step="0.1"
-                      value={sunIntensity}
-                      onChange={(e) => setSunIntensity(parseFloat(e.target.value))}
+                      type="range" min="0" max="100" step="1"
+                      title="0 is night, 50 is ordinary daylight, 100 is a bright sun"
+                      value={Math.round(sunToSlider(sunIntensity))}
+                      onChange={(e) => setSunIntensity(sliderToSun(parseFloat(e.target.value)))}
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>

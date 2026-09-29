@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { DEFAULT_SUN } from './lib/graphics/daylight';
 import { buildProjectFile, parseProjectFile } from './lib/storage/projectFile';
 import { storageProviders, STORAGE_LABELS } from './lib/storage/registry';
 import { StorageAuthError, type ExternalFileRef } from './lib/storage/providers';
@@ -312,7 +313,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [pickingSunCenter, setPickingSunCenter] = useState(false);
   const [animateSun, setAnimateSun] = useState(false);
   const [sunSpeed, setSunSpeed] = useState(1.0);
-  const [sunIntensity, setSunIntensity] = useState(1.0);
+  const [sunIntensity, setSunIntensity] = useState(DEFAULT_SUN);
   const [shadowOpacity, setShadowOpacity] = useState(0.25);
   const [ambientOcclusionEnabled, setAmbientOcclusionEnabled] = useState(false);
   // Screen-space "sun shafts" through whatever occludes the sun (buildings, terrain,
@@ -2404,7 +2405,7 @@ console.log("Created rectangle:", myRect.id);`);
     setGridEnabled(true);
     setAxisIndicatorEnabled(true);
     setMiniAxisIndicatorEnabled(true);
-    setSunIntensity(1.0);
+    setSunIntensity(DEFAULT_SUN);
     setLightPosition([5, 5, 5]);
     setActiveTool('select');
     setCutFillMetrics({
