@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MaterialPreview3D } from './MaterialPreview3D';
 import { loadAssetManifest } from '../lib/assets/catalog';
 import { resolveMaterial } from '../lib/assets/materialResolver';
 import { isMaterialAssetId, type AssetManifest, type AssetSummary, type MaterialInstance } from '../lib/assets/types';
@@ -66,14 +67,15 @@ export function MaterialEditorDialog({ asset, instance, onSave, onClose }: Props
   );
 
   return <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/60 p-4" role="presentation" onKeyDown={event => { if (event.key === 'Escape') onClose(); }}>
-    <div role="dialog" aria-modal="true" aria-label={`Edit ${asset.name}`} className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
+    <div role="dialog" aria-modal="true" aria-label={`Edit ${asset.name}`} className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
       <div className="flex items-start justify-between gap-3 border-b pb-3">
         <div><h2 className="font-semibold text-lg text-gray-900">{asset.name}</h2><p className="text-xs text-gray-500">Material library · CC0 · project material instance</p></div>
         <button type="button" onClick={onClose} aria-label="Close material editor" className="text-gray-600 hover:text-gray-900">✕</button>
       </div>
       {error && <p role="alert" className="py-4 text-sm text-red-600">{error}</p>}
       {!error && !draft && <p className="py-4 text-sm text-gray-500">Loading PBR properties…</p>}
-      {draft && <div className="space-y-4 pt-4">
+      {draft && <div className="grid gap-5 pt-4 md:grid-cols-[minmax(0,1fr)_16rem]">
+       <div className="space-y-4 min-w-0 md:order-first">
         <div className="flex gap-4">
           <img src={asset.thumbnailUrl} alt="" className="h-24 w-24 rounded object-cover" />
           <div className="text-xs text-gray-600">
@@ -107,6 +109,11 @@ export function MaterialEditorDialog({ asset, instance, onSave, onClose }: Props
           <button type="button" onClick={onClose} className="rounded border px-4 py-2 text-xs">Cancel</button>
           <button type="button" onClick={() => onSave(draft)} className="rounded bg-blue-700 px-4 py-2 text-xs font-semibold text-white">Save material</button>
         </div>
+       </div>
+       <div className="md:order-last md:sticky md:top-0 self-start">
+        <MaterialPreview3D spec={{ label: asset.name, library: { asset, instance: draft } }} />
+        <p className="mt-2 text-[10px] text-gray-400 leading-tight">Live: the sliders change the preview as you move them. Drag it to turn it.</p>
+       </div>
       </div>}
     </div>
   </div>;

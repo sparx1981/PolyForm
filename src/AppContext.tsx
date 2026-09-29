@@ -7,12 +7,24 @@ import { RENDER_MODE, CLIENT_PAGE } from './lib/renderMode';
 import { normalizePresentationContent } from './lib/presentation/content';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, PresentationContent, EMPTY_PRESENTATION_CONTENT, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
+import { defaultLanes, type ToolbarLayout } from './lib/toolbarLayout';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAUSE_MS, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import { undoWallConversion, redoWallConversion, type WallConversionUndoLink } from './tools/kernelConvertToWall';
 import type { FaceId } from './lib/geometry/types';
-import { serializeGraph, deserializeGraph } from './lib/geometry/serialize';
+import { serializeGraph, deserializeGraph, type SerializedGraph } from './lib/geometry/serialize';
+import { applyGroupEdit, isGroupShape, shapeMatrix, transformSerializedGraph } from './tools/kernelGroups';
+import type { HostHistory } from './tools/kernelLineHost';
+
+/** A group open for editing: what was set aside, and where the group sits. */
+interface GroupEditState {
+  shapeId: string;
+  name: string;
+  mainGraph: SerializedGraph;
+  mainHistory: HostHistory;
+  matrix: number[];
+}
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
@@ -30,6 +42,7 @@ import { legacyEnvironmentState } from './lib/assets/legacyAdapter';
 import { readAssetProjectState } from './lib/assets/projectCodec';
 import { captureKernelState, diffKernelStates, type KernelState } from './lib/geometry/graphPatch';
 import { commandReproducesStep } from './lib/macroVerify';
+import { isGuideShape } from './tools/tapeGuides';
 import { diffShapesToSdk, diffSettingsToSdk, actionLabel, sdkLiteral, type RecordedSetting } from './lib/macroRecorder';
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -124,9 +137,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     g.components = next.components;
     g.nextId = next.nextId;
     kernelHostRef.current!.reindex();
+    // A new document: any group being edited belonged to the old one.
+    groupEditRef.current = null;
+    setGroupEdit(null);
     setSelectedFaceIds([]);
     setKernelRevision(r => r + 1);
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Editing inside a group or component (tools/kernelGroups.ts). The group's faces are loaded
+  // into the kernel, placed where the group sits, so every drawing tool works on them; the
+  // model's own drawn geometry and its undo history are set aside until the group is closed,
+  // when the edited faces go back into the group (and every copy of a component).
+  // ---------------------------------------------------------------------------
+  const groupEditRef = useRef<GroupEditState | null>(null);
+  const [groupEdit, setGroupEdit] = useState<{ shapeId: string; name: string; mainGraph: SerializedGraph } | null>(null);
+
+  /** Swaps the kernel graph's contents, keeping the object and its history. */
+  const swapKernelGraph = (data: unknown) => {
+    const next = deserializeGraph(data as never);
+    const g = kernelHostRef.current!.graph;
+    g.vertices = next.vertices;
+    g.edges = next.edges;
+    g.loops = next.loops;
+    g.faces = next.faces;
+    g.curves = next.curves;
+    g.components = next.components;
+    g.nextId = next.nextId;
+    kernelHostRef.current!.refreshIndex();
+    setSelectedFaceIds([]);
+    setKernelRevision(r => r + 1);
+  };
+
+  /** The model's own drawn geometry, for saving: never a group's inside that's open for editing. */
+  const documentKernel = () => groupEditRef.current?.mainGraph ?? serializeGraph(kernelHostRef.current!.graph);
 
   // Console handle for driving the kernel by hand.
   //
@@ -484,6 +528,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [unit, setUnit] = useState<'mm' | 'cm' | 'm'>('m');
   const [allNotesVisible, setAllNotesVisible] = useState(true);
+  /** Guide lines (Tape Measure and Protractor) shown and snapped to. */
+  const [guidesVisible, setGuidesVisible] = useState(true);
   const [showCollaboratorCursors, setShowCollaboratorCursors] = useState(true);
 
   // Sync scripts with Firestore (Optimized: One-time fetch with cache)
@@ -697,6 +743,25 @@ console.log("Created rectangle:", myRect.id);`);
     });
   };
 
+  // AI Toolbar (Enabled by default, persisted across sessions)
+  const [isAIToolbarEnabled, setIsAIToolbarEnabledState] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_ai_toolbar');
+      if (stored !== null) return stored === 'true';
+    } catch (e) {}
+    return true;
+  });
+
+  const setIsAIToolbarEnabled = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsAIToolbarEnabledState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_ai_toolbar', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   // Toolbar Layout Mode ('classic' | 'unified', default 'classic')
   const [layoutMode, setLayoutModeState] = useState<'classic' | 'unified'>(() => {
     try {
@@ -722,8 +787,8 @@ console.log("Created rectangle:", myRect.id);`);
    * the same way a desktop app like Word or Excel lets you drag a
    * toolbar to reposition it. Persisted the same way layoutMode is.
    */
-  const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera'];
-  const ALL_TOOLBAR_KEYS: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera'];
+  const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera', 'ai'];
+  const ALL_TOOLBAR_KEYS: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera', 'ai'];
   const [toolbarOrder, setToolbarOrderState] = useState<ToolbarKey[]>(() => {
     try {
       const stored = localStorage.getItem('polyform_toolbar_order');
@@ -739,12 +804,8 @@ console.log("Created rectangle:", myRect.id);`);
           new Set(parsed).size === parsed.length &&
           parsed.every((k) => ALL_TOOLBAR_KEYS.includes(k))
         ) {
-          if (parsed.length === ALL_TOOLBAR_KEYS.length) {
-            return parsed as ToolbarKey[];
-          }
-          if (parsed.length === ALL_TOOLBAR_KEYS.length - 1 && !parsed.includes('camera')) {
-            return [...parsed, 'camera'] as ToolbarKey[];
-          }
+          // A permutation saved before a toolbar existed: keep its order, add the newer ones at the end.
+          return [...(parsed as ToolbarKey[]), ...ALL_TOOLBAR_KEYS.filter((k) => !parsed.includes(k))];
         }
       }
     } catch (e) {}
@@ -777,6 +838,7 @@ console.log("Created rectangle:", myRect.id);`);
     architecture: 'left',
     landscapes: 'left',
     camera: 'left',
+    ai: 'left',
   };
   const [toolbarDocks, setToolbarDocksState] = useState<Record<ToolbarKey, DockZone>>(() => {
     try {
@@ -793,6 +855,7 @@ console.log("Created rectangle:", myRect.id);`);
             architecture: parsed.architecture,
             landscapes: parsed.landscapes,
             camera: isValidZone(parsed.camera) ? parsed.camera : 'left',
+            ai: isValidZone(parsed.ai) ? parsed.ai : 'left',
           };
         }
       }
@@ -807,6 +870,47 @@ console.log("Created rectangle:", myRect.id);`);
       const next = typeof val === 'function' ? val(prev) : val;
       try {
         localStorage.setItem('polyform_toolbar_docks', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  /** Which lane of its dock each classic-layout toolbar sits in (toolbars sharing a lane stack). */
+  const [toolbarLanes, setToolbarLanesState] = useState<Record<ToolbarKey, number>>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_toolbar_lanes');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === 'object' && ALL_TOOLBAR_KEYS.every((k) => Number.isInteger(parsed[k]) && parsed[k] >= 0)) {
+          return Object.fromEntries(ALL_TOOLBAR_KEYS.map((k) => [k, parsed[k]])) as Record<ToolbarKey, number>;
+        }
+      }
+    } catch (e) {}
+    return defaultLanes(toolbarOrder);
+  });
+
+  /** Moves toolbars: order, edge and lane change together, as one saved layout. */
+  const setToolbarLayout = (layout: ToolbarLayout) => {
+    setToolbarOrder(layout.order);
+    setToolbarDocks(layout.docks);
+    setToolbarLanesState(layout.lanes);
+    try {
+      localStorage.setItem('polyform_toolbar_lanes', JSON.stringify(layout.lanes));
+    } catch (e) {}
+  };
+
+  /** Toolbars can only be dragged (and show their grips) while this is on. Off by default. */
+  const [isToolbarEditMode, setIsToolbarEditModeState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('polyform_toolbar_edit') === 'true';
+    } catch (e) {}
+    return false;
+  });
+  const setIsToolbarEditMode = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsToolbarEditModeState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_toolbar_edit', String(next));
       } catch (e) {}
       return next;
     });
@@ -924,11 +1028,13 @@ console.log("Created rectangle:", myRect.id);`);
             miniAxisIndicatorEnabled,
             floorEnabled,
             allNotesVisible,
+            guidesVisible,
             defaultCameraPosition,
             defaultCameraTarget,
             isArchitectureToolbarEnabled,
             isLandscapesToolbarEnabled,
             isCameraToolbarEnabled,
+            isAIToolbarEnabled,
             layoutMode,
             updatedAt: Date.now()
           }, { merge: true });
@@ -941,7 +1047,7 @@ console.log("Created rectangle:", myRect.id);`);
       const timeout = setTimeout(saveSettings, 30000); // 30s debounce for settings
       return () => clearTimeout(timeout);
     }
-  }, [theme, unit, gridEnabled, axisIndicatorEnabled, miniAxisIndicatorEnabled, floorEnabled, allNotesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, layoutMode, user?.uid]);
+  }, [theme, unit, gridEnabled, axisIndicatorEnabled, miniAxisIndicatorEnabled, floorEnabled, allNotesVisible, guidesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, isAIToolbarEnabled, layoutMode, user?.uid]);
 
   // Load user settings
   const lastSettingsLoad = useRef<number>(0);
@@ -963,6 +1069,7 @@ console.log("Created rectangle:", myRect.id);`);
           if (data.miniAxisIndicatorEnabled !== undefined) setMiniAxisIndicatorEnabled(data.miniAxisIndicatorEnabled);
           if (data.floorEnabled !== undefined) setFloorEnabled(data.floorEnabled);
           if (data.allNotesVisible !== undefined) setAllNotesVisible(data.allNotesVisible);
+          if (data.guidesVisible !== undefined) setGuidesVisible(data.guidesVisible);
           // Deliberately NOT loading data.defaultCameraPosition/
           // defaultCameraTarget here on cold start — confirmed as the
           // actual cause of "click File New has a different zoom level
@@ -986,6 +1093,9 @@ console.log("Created rectangle:", myRect.id);`);
           }
           if (data.isCameraToolbarEnabled !== undefined) {
             setIsCameraToolbarEnabled(Boolean(data.isCameraToolbarEnabled));
+          }
+          if (data.isAIToolbarEnabled !== undefined) {
+            setIsAIToolbarEnabled(Boolean(data.isAIToolbarEnabled));
           }
           if (data.layoutMode === 'classic' || data.layoutMode === 'unified') {
             setLayoutMode(data.layoutMode);
@@ -1225,7 +1335,7 @@ console.log("Created rectangle:", myRect.id);`);
           const text = buildProjectFile({
             name: currentModelName ?? undefined, shapes, tags, scenes, customMaterials, graphicsSettings, animations,
             notes, customLights, presentationContent, timberFrameParams, terrainModifiers, environment, materialBindings,
-            kernel: serializeGraph(kernelHost.graph), assetSchemaVersion: 1, assetCatalogRelease: '2026-09-18-pilot-r1',
+            kernel: documentKernel(), assetSchemaVersion: 1, assetCatalogRelease: '2026-09-18-pilot-r1',
           });
           const next = await storageProviders[external.provider].update(external, text);
           externalRef.current = next;
@@ -1295,7 +1405,7 @@ console.log("Created rectangle:", myRect.id);`);
           // this it is never persisted, and because the provider does not
           // unmount when you switch documents it also leaks between them:
           // the previous model's surfaces appear in the next one.
-          kernel: serializeGraph(kernelHost.graph),
+          kernel: documentKernel(),
         };
         const stateToPush = cleanData({
           ...(user?.uid ? await offloadModelForSave(content, user.uid, firebaseGeometryIO) : content),
@@ -1384,10 +1494,12 @@ console.log("Created rectangle:", myRect.id);`);
   // Service Worker
 
   // WorldView
-  const [isWorldViewOpen, setIsWorldViewOpen] = useState(false);
   const [worldViewLocation, setWorldViewLocation] = useState<{ lat: number, lng: number, address?: string }>({ lat: 51.5074, lng: -0.1278 }); // London default
   const [worldViewAltitude, setWorldViewAltitude] = useState(-0.1);
   const [worldViewRadius, setWorldViewRadius] = useState(100); // 100m default
+  // Google's photorealistic surroundings around the plain map overlay (no imported 3D site needed).
+  const [worldViewGoogle, setWorldViewGoogle] = useState(false);
+  const [worldViewGoogleNudge, setWorldViewGoogleNudge] = useState(0);
   const [worldViewMapType, setWorldViewMapType] = useState<'satellite' | '3d'>('satellite');
   const [googleMapsApiKey, setGoogleMapsApiKeyState] = useState<string>(() => {
     try {
@@ -1450,7 +1562,7 @@ console.log("Created rectangle:", myRect.id);`);
     setRecordedCode(prev => prev + lines.join('\n') + '\n');
   };
   // A readable command a tool offered for the step it is doing (see macroVerify.ts).
-  const pendingToolCommandRef = useRef<string | null>(null);
+  const pendingToolCommandRef = useRef<{ sdk: string; unchecked?: boolean } | null>(null);
   // Drawn geometry lives in the kernel, not in shapes: it is compared the same way and written
   // as sdk.drawing.applyChanges. Captured only when the kernel may have changed (its revision
   // or undo stack moved), since capturing reads the whole drawing.
@@ -1477,10 +1589,13 @@ console.log("Created rectangle:", myRect.id);`);
       kernelBaselineRef.current = { key, state };
       kernelAfter = state;
     }
-    const offered = pendingToolCommandRef.current;
+    const pending = pendingToolCommandRef.current;
+    const offered = pending?.sdk;
     if (offered && lines.length > 0) {
       pendingToolCommandRef.current = null;
-      if (kernelBaseline && kernelAfter && commandReproducesStep(offered, {
+      if (pending.unchecked) {
+        lines = [offered];
+      } else if (kernelBaseline && kernelAfter && commandReproducesStep(offered, {
         shapesBefore: baseline, shapesAfter: current, kernelBefore: kernelBaseline.state, kernelAfter,
       }, { unit })) {
         lines = [offered];
@@ -1528,9 +1643,11 @@ console.log("Created rectangle:", myRect.id);`);
   /**
    * `options.sdk` is a readable SDK command for the step the tool is doing; it replaces the
    * recorded change if it reproduces it exactly. A tool that edits the drawing (which changes
-   * at once, not on the next render) calls this before its edit.
+   * at once, not on the next render) calls this before its edit. `options.unchecked` is for a
+   * command that can't be re-run to check it (one that downloads data, like importing a site):
+   * it is recorded as given.
    */
-  const recordAction = (code: string, options?: { sdk?: string }) => {
+  const recordAction = (code: string, options?: { sdk?: string; unchecked?: boolean }) => {
     if (!isRecordingRef.current) return;
     lastRecordedSettingRef.current = null;
     // Changes from earlier actions go first, so each label sits above its own changes.
@@ -1539,7 +1656,7 @@ console.log("Created rectangle:", myRect.id);`);
     const line = trimmed.startsWith('//') || trimmed.startsWith('sdk.') || trimmed.startsWith('const ') ? trimmed : actionLabel(trimmed);
     // addShape labels every new object, and the tool that called it may label it again.
     if (line !== lastRecordedLineRef.current) appendRecorded([line]);
-    if (options?.sdk) pendingToolCommandRef.current = options.sdk;
+    if (options?.sdk) pendingToolCommandRef.current = { sdk: options.sdk, unchecked: options.unchecked };
   };
 
   // Convert To Wall adds walls to Shape history and removes the source
@@ -1564,7 +1681,7 @@ console.log("Created rectangle:", myRect.id);`);
     const newHistory = history.slice(0, historyIndex + 1);
     const entry = [...newShapes];
     const pending = pendingWallConversionRef.current;
-    if (pending && pending.wallIds.every(id => entry.some(s => s.id === id))) {
+    if (pending && pending.wallIds.every(id => entry.some(s => s.id === id)) && (pending.goneIds ?? []).every(id => !entry.some(s => s.id === id))) {
       wallConversionLinks.set(entry, pending);
       // History starts empty and its first entry can never be undone, so a
       // conversion in a model with no Shape edits yet (drawn geometry lives
@@ -2057,6 +2174,61 @@ console.log("Created rectangle:", myRect.id);`);
     recordAction(actionLabel(`Delete ${id}`));
   };
 
+  /** Opens a group or component to edit its inside (double-click it). */
+  const enterGroupEdit = (shapeId: string) => {
+    if (groupEditRef.current) exitGroupEdit();
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape || !isGroupShape(shape)) return;
+    const host = kernelHostRef.current!;
+    const matrix = shapeMatrix(shape);
+    groupEditRef.current = {
+      shapeId,
+      name: shape.name || (shape.componentId ? 'Component' : 'Group'),
+      mainGraph: serializeGraph(host.graph),
+      mainHistory: host.takeHistory(),
+      matrix: matrix.toArray(),
+    };
+    swapKernelGraph(transformSerializedGraph(shape.kernelGraph as SerializedGraph, matrix));
+    setSelectedId(null);
+    setSelectedIds([]);
+    setGroupEdit({ shapeId, name: groupEditRef.current.name, mainGraph: groupEditRef.current.mainGraph });
+    recordAction(actionLabel(`Edit ${groupEditRef.current.name}`));
+  };
+
+  /** Closes the open group: its edited faces go back into it (and into every copy of a component). */
+  const exitGroupEdit = () => {
+    const edit = groupEditRef.current;
+    if (!edit) return;
+    const host = kernelHostRef.current!;
+    const inverse = new THREE.Matrix4().fromArray(edit.matrix).invert();
+    const local = transformSerializedGraph(serializeGraph(host.graph), inverse);
+    groupEditRef.current = null;
+    swapKernelGraph(edit.mainGraph);
+    host.putHistory(edit.mainHistory);
+    setGroupEdit(null);
+    const shape = shapes.find(s => s.id === edit.shapeId);
+    if (!shape) return;
+    if (local.faces.length === 0) {
+      // Everything inside was erased: the group goes too.
+      handleSetShapes(prev => prev.filter(s => s.id !== shape.id));
+      return;
+    }
+    if (JSON.stringify(local) === JSON.stringify(shape.kernelGraph)) return;
+    handleSetShapes(prev => applyGroupEdit(prev, shape, local)); // one undo step
+    recordAction(actionLabel(`Finish editing ${edit.name}`));
+  };
+
+  /** Removes every guide line (Tape Measure and Protractor) as one undo step. */
+  const deleteAllGuides = () => {
+    const ids = new Set(shapes.filter(isGuideShape).map(s => s.id));
+    if (ids.size === 0) return 0;
+    handleSetShapes(prev => prev.filter(s => !ids.has(s.id)));
+    setSelectedIds(prev => prev.filter(sid => !ids.has(sid)));
+    if (selectedId && ids.has(selectedId)) setSelectedId(null);
+    recordAction(actionLabel(`Delete ${ids.size} guides`));
+    return ids.size;
+  };
+
   /**
    * The single, shared duplicate implementation — previously
    * Viewport.tsx's own right-click "Duplicate Object" and the
@@ -2365,7 +2537,7 @@ console.log("Created rectangle:", myRect.id);`);
     terrainModifiers,
     environment,
     materialBindings,
-    kernel: serializeGraph(kernelHost.graph),
+    kernel: documentKernel(),
     assetSchemaVersion: 1,
     assetCatalogRelease: '2026-09-18-pilot-r1',
   });
@@ -2508,6 +2680,10 @@ console.log("Created rectangle:", myRect.id);`);
       registerWallConversionUndo,
       addShape,
       removeShape,
+      deleteAllGuides,
+      groupEdit,
+      enterGroupEdit,
+      exitGroupEdit,
       updateShapeColor,
       updateShapeDimensions,
       isAIRendererOpen,
@@ -2679,13 +2855,15 @@ console.log("Created rectangle:", myRect.id);`);
       activeBevelAmount,
       setActiveBevelAmount,
       // WorldView
-      isWorldViewOpen,
-      setIsWorldViewOpen,
       worldViewLocation,
       setWorldViewLocation,
       worldViewAltitude,
       setWorldViewAltitude,
       worldViewRadius,
+      worldViewGoogle,
+      setWorldViewGoogle,
+      worldViewGoogleNudge,
+      setWorldViewGoogleNudge,
       setWorldViewRadius,
       worldViewMapType,
       setWorldViewMapType,
@@ -2709,6 +2887,8 @@ console.log("Created rectangle:", myRect.id);`);
       setPlacingNoteId,
       allNotesVisible,
       setAllNotesVisible,
+      guidesVisible,
+      setGuidesVisible,
       // Collaboration
       isCollaborationOpen,
       setIsCollaborationOpen,
@@ -2752,12 +2932,18 @@ console.log("Created rectangle:", myRect.id);`);
       setIsLandscapesToolbarEnabled,
       isCameraToolbarEnabled,
       setIsCameraToolbarEnabled,
+      isAIToolbarEnabled,
+      setIsAIToolbarEnabled,
       layoutMode,
       setLayoutMode,
       toolbarOrder,
       setToolbarOrder,
       toolbarDocks,
       setToolbarDocks,
+      toolbarLanes,
+      setToolbarLayout,
+      isToolbarEditMode,
+      setIsToolbarEditMode,
       landscapeSculptSettings,
       setLandscapeSculptSettings,
       landscapeRoadSettings,

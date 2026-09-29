@@ -656,10 +656,26 @@ export const TOOL_SECTIONS: Section[] = [
       {
         title: 'WorldView',
         badges: ['GOOGLE MAPS'],
-        functional: 'Lays a map under the model at an address or coordinates, covering 50-450 m.',
+        functional: 'Lays a flat satellite map under the model at an address or coordinates, covering 50-450 m.',
         implementation: 'A Google Maps overlay at the origin, under the model.',
         source: 'src/components/Viewport.tsx',
         tryItSnippet: 'sdk.worldView.importMap({ lat: 51.5007, lng: -0.1246, zoom: 18 });',
+      },
+      {
+        title: 'WorldView 3D Site',
+        badges: ['REAL TERRAIN', 'EXISTING BUILDINGS'],
+        functional: 'Brings in a real place, up to 200 m square, from an address, postcode or coordinates. You get its ground as an editable terrain and its existing buildings as white models. Buildings can be selected, re-heighted, deleted (with ghosts for before and after) or put back. The ground can be plain or satellite. It is left out of the BOM and the build-up.',
+        implementation: 'Ground comes from Terrain Tiles (AWS open data) on a 1 m grid, with the centre at y = 0. National LiDAR replaces it where available: Environment Agency 1 m in England, AHN 0.5 m in the Netherlands, USGS 3DEP ground in the USA. Buildings come from OpenStreetMap via the Overpass API. Where there is a LiDAR surface model (England, Netherlands), it is slid up to 6 m to line up with the outlines. Each building then gets its measured height and a best-fit basic roof (flat, lean-to, gable, hip, pyramid); a building the survey shows as open ground is flagged "check height". Elsewhere heights are the map\'s, then floors x 3 m, then an estimate. Each building is a site_building object. The satellite picture is a Google Static Map framed to the site, built at draw time so the key is never saved. LiDAR requests that browsers can\'t make go through the api/lidar-proxy relay.',
+        source: 'src/lib/worldSite\nsrc/components/WorldSiteControls.tsx\nsrc/components/SiteBuildingMesh.tsx\napi/lidar-proxy.ts',
+        tryItSnippet: 'console.log(sdk.worldView.getSite(), sdk.worldView.listBuildings().length);',
+      },
+      {
+        title: 'WorldView Street Life',
+        badges: ['ANIMATED', 'PRESENTATIONS'],
+        functional: 'Moving cars and people on an imported site. Cars drive the real roads, keeping to the side the country drives on. White figures walk footpaths and pavements, stand in pairs, and sit on benches in the model. The level is Off, Quiet, Normal or Busy, and it is saved with the model. They show in presentations and on the client page, and in the editor if that is turned on. Designers can draw extra walking or driving routes. Phones and tablets show half as many.',
+        implementation: 'Roads and paths come from OpenStreetMap highways through the api/overpass relay. They are clipped to the site and kept on the site ground as routes, relative to it. A two-way road becomes a loop down one side and back up the other. Pavements are offset lines beside ordinary roads. The plan is seeded, so it is the same every time. Cars on one loop share a speed and keep at least 14 m apart. Everything is drawn with instanced meshes: the body, thighs, shins and arms of every figure, and car bodies, cabins and wheels in muted colours. A walk cycle swings the limbs, and cars pitch with the ground. The route tool reuses the fence and water tools\' point drawing.',
+        source: 'src/lib/worldSite/streets.ts\nsrc/lib/worldSite/streetLife.ts\nsrc/components/SiteStreetLife.tsx\napi/overpass.ts',
+        tryItSnippet: "sdk.worldView.setStreetLife({ level: 'busy', inEditor: true }); console.log(sdk.worldView.listRoutes().length);",
       },
       {
         title: 'Depth Clipping',

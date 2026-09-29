@@ -123,7 +123,7 @@ export function HeightMapPicker({ value, onChange, sourceTextureUrl }: {
     <div className="flex gap-1 border-b pb-1" role="tablist">
       {([['presets', 'Patterns'], ['texture', 'From texture'], ['upload', 'Upload image']] as [Mode, string][]).map(([key, label]) => (
         <button key={key} role="tab" aria-selected={mode === key}
-          className={`px-2 py-1 rounded-t ${mode === key ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
+          className={`px-2.5 py-1 rounded-t text-xs font-medium transition-colors ${mode === key ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600'}`}
           onClick={() => setMode(key)}>{label}</button>
       ))}
     </div>

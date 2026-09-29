@@ -2,6 +2,16 @@ import { NoteCard } from './NoteCard';
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, Suspense } from 'react';
 import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
 import { TextMesh } from './TextMesh';
+import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
+import { GoogleTilesLayer } from './GoogleTilesLayer';
+import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
+import { buildingLook, overlayTileMeters } from '../lib/worldSite/googleTiles';
+import { siteEditSets } from '../lib/worldSite/siteEdits';
+import { gridHeightAt } from '../lib/worldSite/terrain';
+import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
+import { routeTool, withDrawnRoute } from '../lib/worldSite/streets';
+import { removedBuildings } from '../lib/worldSite/buildings';
+import { findSiteGround, siteSatelliteUrl } from '../lib/worldSite/site';
 import { TextPlacementDialog } from './TextPlacementDialog';
 import { setTextPlacement } from '../lib/textPlacement';
 import PresentationDriver from './presentation/PresentationDriver';
@@ -93,7 +103,7 @@ import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { getBlockPart, buildBlockGeometry, primaryStudDirection, STUD_UNIT, BRICK_HEIGHT, PLATE_HEIGHT, BlockPart } from '../lib/blockKitGeometry';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
-import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier, ToolType } from '../types';
+import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier, ToolType, type WorldSiteInfo } from '../types';
 import CutFillVolumeOverlay from './terrain/CutFillVolumeOverlay';
 import RoadSplineOverlay from './terrain/RoadSplineOverlay';
 import ParametricPadOverlay from './terrain/ParametricPadOverlay';
@@ -116,7 +126,6 @@ import { findLampStyle } from '../lib/lampStyles';
 import { KernelGeometry, type KernelFaceBinding } from './KernelGeometry';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { useLineBinding } from '../tools/lineToolBinding';
-import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { runtimeImageUrl, useMaterialBindings } from '../lib/assets/useMaterialBindings';
 import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
@@ -125,7 +134,8 @@ import { loadAssetManifest } from '../lib/assets/catalog';
 import { chooseTier } from '../lib/assets/materialResolver';
 import { EnvironmentManager } from '../lib/assets/environmentManager';
 import { useManagedBindingTextures } from '../lib/assets/useManagedBindingTextures';
-import { rankSnap } from '../tools/tuning';
+import { DimensionMark, LeaderMark, AreaMark } from './AnnotationMarks';
+import { makeDimensionArgs, measureFace, isDimensionShape, isAreaLabelShape, isLeaderShape, type AreaLabelArgs, type DimensionArgs, type LeaderArgs } from '../tools/annotations';
 import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
@@ -134,7 +144,25 @@ import { planCurvedMerge, isCurvedPiece, type MergeResult, type MergeRejection }
 import { analyzeWallConversion, buildWallShapes, captureFaces, floorFacesWithin, graphSignature, heightWarnings, outerRing, planWithThickness, type WallConversionPlan, type WallConversionRejection } from '../tools/kernelConvertToWall';
 import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/divideSurface';
 import { derive } from '../lib/geometry/derive';
-import { loopVertexIds, getVertex, loopPoints } from '../lib/geometry/topology';
+import { loopVertexIds, getVertex, loopPoints, edgePoints } from '../lib/geometry/topology';
+import {
+  axisSources, featureEdges, guideCrossings, guideOffset, guideSegment, isGuideShape,
+  makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource, type V3,
+} from '../tools/tapeGuides';
+import { SectionCutter } from './SectionCutter';
+import { DIRECTIONAL_SHADOW, POINT_SHADOW, SPOT_SHADOW } from '../lib/graphics/shadowQuality';
+import { NIGHT_AMBIENT_COLOR, NIGHT_BACKGROUND, daylightFactor, scaleForDaylight } from '../lib/graphics/daylight';
+import { SectionPlaneMesh } from './SectionPlaneMesh';
+import { activeSection, dragDistance, isSectionShape, moveSection, sectionLook, sectionOnFace, type SectionArgs } from '../tools/sectionPlanes';
+import { usePresentation } from '../lib/presentation/store';
+import { explodeGroup, isGroupShape, makeGroup, makeUnique } from '../tools/kernelGroups';
+import {
+  axisLock as makeAxisLock, computeSnap, edgeLock, SnapMemory, type AxisName, type HoverEdge, type SnapGuide, type SnapInput, type SnapKind, type SnapLine, type SnapResult,
+} from '../tools/snapEngine';
+import { ArcTool, type ArcToolState } from '../tools/arcTool';
+import { arcPointAt } from '../lib/geometry/curve';
+import { KernelGroupMesh } from './KernelGroupMesh';
+import { commitKernelFollowMe, outlineEdges, pathFromEdge, pathFromFace, previewFollowMe, type FollowMePath } from '../tools/kernelFollowMe';
 import { createPushPullBinding, commitKernelPushPull } from '../tools/kernelPushPull';
 import { PushPullPreview } from './PushPullPreview';
 import { createFaceOffsetBinding, commitKernelFaceOffset } from '../tools/kernelFaceOffset';
@@ -143,13 +171,14 @@ import { createFilletBinding } from '../tools/kernelFillet';
 import { FaceOffsetPreview } from './FaceOffsetPreview';
 import { ChamferPreview } from './ChamferPreview';
 import { createGroupTransformBinding } from '../tools/kernelGroupTransform';
+import { buildExportScene, collectModelItems, downloadBlob, exportFileName, isModelObject } from '../lib/export/modelExport';
+import { buildSkp } from '../lib/export/skpExport';
 import { GroupTransformPreview } from './GroupTransformPreview';
 import { LassoOverlay } from './LassoOverlay';
 import { boundsOfFaces } from '../lib/geometry/grouptransform';
-import type { FaceId, Mat4, Vec3 } from '../lib/geometry/types';
+import type { EdgeId, FaceId, Mat4, Vec3 } from '../lib/geometry/types';
 import { SunShadowRig } from './graphics/SunShadowRig';
 import { buildRoomAssembly, groundSlabFootprints, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
-import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
 import { applyStairwellHolesToSlabs, computeHolesForSlab } from '../lib/archStairwell';
@@ -1531,7 +1560,12 @@ function Scene() {
     setSunOrbitCenter,
     isWorldViewActive,
     worldViewLocation,
+    worldViewAltitude: overlayAltitude,
+    worldViewRadius: overlayRadius,
+    worldViewGoogle,
+    worldViewGoogleNudge,
     worldViewAltitude,
+    googleMapsApiKey,
     selectedIds,
     currentModelId,
     setSelectedIds,
@@ -1688,7 +1722,11 @@ function Scene() {
     setWalkModePhase,
     walkMovementSpeed,
     walkMouseSensitivity,
-    walkBridgeRef
+    walkBridgeRef,
+    guidesVisible,
+    groupEdit,
+    enterGroupEdit,
+    exitGroupEdit,
   } = useApp();
 
   const usedMaterialBindings = useMemo(() => {
@@ -1768,6 +1806,8 @@ function Scene() {
    */
   const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
+  /** The last distance pushed (signed along the face's normal), and when a bare click last landed, for double-click repeat. */
+  const lastPushPullRef = useRef<{ distance: number | null; clickAt: number }>({ distance: null, clickAt: 0 });
   const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
   const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
   const filletRef = useRef(createFilletBinding(kernelHost, bumpKernel));
@@ -1860,6 +1900,9 @@ function Scene() {
     if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
       return;
     }
+    // These tools handle their own clicks on the canvas (see their effects below): a click
+    // on a face there picks a profile, a path or a point, never the selection.
+    if (activeTool === 'followme' || activeTool === 'tape' || activeTool === 'section' || activeTool === 'dimensions' || activeTool === 'leader') return;
     if (activeTool === 'combine') {
       // Combine: each click adds (or removes) a whole shape or object, in order; the first leads.
       const group = groupContaining(kernelHost.graph, faceId);
@@ -2383,11 +2426,18 @@ function Scene() {
   // measurement so its line + label stay visible after the second click.
   const [tapeStart, setTapeStart] = useState<THREE.Vector3 | null>(null);
   const [tapeEnd, setTapeEnd] = useState<THREE.Vector3 | null>(null);
+  // A guide being pulled off an edge, guide or axis (see tools/tapeGuides.ts): the line it's
+  // parallel to, and how far off it the pointer has moved it.
+  const [tapeGuide, setTapeGuide] = useState<{ linePoint: THREE.Vector3; dir: THREE.Vector3; offset: THREE.Vector3; label: string } | null>(null);
+  // The edge a click would pull a guide off, highlighted under the pointer.
+  const [tapeHover, setTapeHover] = useState<GuideSource | null>(null);
+  // Guides the drawing tools snap to, and where they cross.
+  const guideSegments = useMemo(
+    () => (guidesVisible ? shapes.filter(s => !s.hidden).map(guideSegment).filter((g): g is [THREE.Vector3, THREE.Vector3] => g !== null) : []),
+    [shapes, guidesVisible],
+  );
+  const guideCrossingPoints = useMemo(() => guideCrossings(guideSegments), [guideSegments]);
   const [lastMeasurement, setLastMeasurement] = useState<{ start: [number, number, number]; end: [number, number, number]; distance: number } | null>(null);
-  const [arcStart, setArcStart] = useState<THREE.Vector3 | null>(null);
-  const [arcEnd, setArcEnd] = useState<THREE.Vector3 | null>(null);
-  const [arcBulge, setArcBulge] = useState<THREE.Vector3 | null>(null);
-  const [arcStep, setArcStep] = useState<0 | 1 | 2>(0);
   const [offsetPreviewPoints, setOffsetPreviewPoints] = useState<THREE.Vector3[] | null>(null);
   const [offsetPreviewDistance, setOffsetPreviewDistance] = useState<number>(0);
   const [offsetFaceKey, setOffsetFaceKey] = useState<number | null>(null);
@@ -2849,6 +2899,23 @@ function Scene() {
       pickSunCenter(event.point);
       return true;
     }
+    if (activeTool === 'arealabel') {
+      if (!event.point) return false;
+      const measured = measureFace(kernelHost.graph, faceId);
+      if (!measured) { setMeasurements('Could not measure that face.'); return true; }
+      const face = kernelHost.graph.faces.get(faceId);
+      const n = face?.plane.normal;
+      const lift = 0.05;
+      const anchor: [number, number, number] = [event.point.x, event.point.y, event.point.z];
+      const args: AreaLabelArgs = {
+        kind: 'area', faceId, anchor,
+        position: n ? [anchor[0] + n.x * lift, anchor[1] + n.y * lift, anchor[2] + n.z * lift] : anchor,
+        area: measured.area, perimeter: measured.perimeter,
+      };
+      addShape({ id: Math.random().toString(36).substr(2, 9), name: 'Area label', type: 'measurement', position: anchor, args, color: '#10b981' } as Shape);
+      setMeasurements(`Area ${measured.area.toFixed(2)} m². The label updates if the face changes.`);
+      return true;
+    }
     if (activeTool === 'note') {
       // Mirrors the identical Shape-mesh case in handleMeshPointerDown —
       // this one covers a click landing on KERNEL geometry instead, which
@@ -3170,6 +3237,22 @@ function Scene() {
     const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
     if (!grab) return false;
 
+    // Double-click repeats the last distance on the face under the pointer (Ctrl: as a copy).
+    const native = (event as { nativeEvent?: { ctrlKey?: boolean; metaKey?: boolean } }).nativeEvent;
+    const pressCopy = !!(native?.ctrlKey || native?.metaKey);
+    const last = lastPushPullRef.current;
+    if (last.distance !== null && last.clickAt > 0 && Date.now() - last.clickAt < 400) {
+      lastPushPullRef.current = { ...last, clickAt: 0 };
+      if (commitKernelPushPull(kernelHost, faceId, last.distance, { copy: pressCopy })) {
+        bumpKernel();
+        recordAction(actionLabel('Push/Pull tool'), { sdk: `sdk.drawing.pushPull(${faceId}, ${JSON.stringify(last.distance)});` });
+        setMeasurements(`Repeated ${formatValue(Math.abs(last.distance), unit, 2)}`);
+      } else {
+        setMeasurements('Could not repeat the push/pull on that face.');
+      }
+      return true;
+    }
+
     pushPullRef.current.begin(faceId, { x: grab.x, y: grab.y, z: grab.z });
     setMeasurements('Drag to push or pull, then release.');
 
@@ -3208,21 +3291,27 @@ function Scene() {
       window.removeEventListener('pointerup', finish);
       activeDragCleanupsRef.current.delete(removeListeners);
     };
-    const finish = () => {
+    const finish = (ev?: PointerEvent) => {
       removeListeners();
       const pushed = pushPullRef.current.session;
       const pushedFace = pushed?.faceId;
       const pushedDistance = pushed?.distance ?? 0;
+      // Ctrl held on release pushes a copy: the face stays and the extrusion stacks on it.
+      const copy = !!(ev && (ev.ctrlKey || ev.metaKey)) || pressCopy;
       if (pushed) {
         recordAction(actionLabel('Push/Pull tool'), { sdk: `sdk.drawing.pushPull(${pushed.faceId}, ${JSON.stringify(pushed.distance)});` });
       }
-      if (pushPullRef.current.commit() && pushedFace !== undefined) {
+      if (pushPullRef.current.commit({ copy }) && pushedFace !== undefined) {
+        lastPushPullRef.current = { distance: pushedDistance, clickAt: 0 };
         // Type a distance now to redo it exactly (a minus sign pushes the other way).
         offerKernelAdjust('pushpull', 'Extrude distance', typed => {
           const d = lengthOrError(typed, true);
           if (typeof d === 'string') return d;
-          return () => commitKernelPushPull(kernelHost, pushedFace, inDragDirection(d, pushedDistance));
+          return () => commitKernelPushPull(kernelHost, pushedFace, inDragDirection(d, pushedDistance), { copy });
         });
+      } else if (pushed && Math.abs(pushedDistance) < kernelHost.tolerances.MIN_EDGE_LENGTH) {
+        // A click with no drag: a second click straight after repeats the last distance.
+        lastPushPullRef.current = { ...lastPushPullRef.current, clickAt: Date.now() };
       }
       setPushPullPreview(null);
       setMeasurements('');
@@ -3462,7 +3551,10 @@ function Scene() {
   const [drawingStep, setDrawingStep] = useState<0 | 1 | 2>(0); // 0: idle, 1: base, 2: height
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
-  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
+  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: SnapKind; tooltip?: string; color?: string } | null>(null);
+  // Lines the snap engine wants drawn (the inference in force, the lock), and the edge under the pointer.
+  const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
+  const [snapHoverEdge, setSnapHoverEdge] = useState<HoverEdge | null>(null);
   // Kept fresh every render (not gated behind an effect's own dependency
   // list) so handleSetCamera below - defined once, early in this
   // component, and otherwise stuck with whatever effectiveCameraNear/Far
@@ -3486,7 +3578,6 @@ function Scene() {
     to: { position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number; near: number; target: THREE.Vector3 };
   } | null>(null);
   const [trackingGuide, setTrackingGuide] = useState<{ source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null>(null);
-  const awakenedRefPointsRef = useRef<Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; time: number; screenPos: { x: number; y: number } }>>([]);
   const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
 
@@ -3573,6 +3664,11 @@ function Scene() {
     setTypedLength('');
   }, [activeTool]);
   const drawingStartRef = useRef(drawingStart);
+  // Esc closes an open group when nothing is being drawn (read by the keydown handler).
+  const exitGroupEditRef = useRef(exitGroupEdit);
+  exitGroupEditRef.current = exitGroupEdit;
+  const groupEditOpenRef = useRef(false);
+  groupEditOpenRef.current = !!groupEdit;
   const drawingNormalRef = useRef(drawingNormal);
   const drawingStepRef = useRef(drawingStep);
   const activeSplineDraftRef = useRef(activeSplineDraft);
@@ -3723,47 +3819,40 @@ function Scene() {
 
   useEffect(() => {
     const handleExportAdvanced = (e: any) => {
-      const { format } = e.detail;
-      const exportScene = new THREE.Scene();
-      scene.traverse((child: any) => {
-        if (child.isMesh && (child.userData?.isShape || child.userData?.id)) {
-          const clone = child.clone();
-          clone.applyMatrix4(child.matrixWorld);
-          exportScene.add(clone);
-        } else if (child.isInstancedMesh) {
-          const count = child.count || 0;
-          const instMatrix = new THREE.Matrix4();
-          for (let i = 0; i < count; i++) {
-            child.getMatrixAt(i, instMatrix);
-            const m = new THREE.Mesh(child.geometry.clone(), child.material);
-            m.applyMatrix4(instMatrix);
-            m.applyMatrix4(child.matrixWorld);
-            exportScene.add(m);
-          }
-        }
-      });
+      const { format, modelName, names, components } = e.detail as {
+        format: 'gltf' | 'stl' | 'skp'; modelName?: string | null; names?: Record<string, string>; components?: Record<string, string>;
+      };
+      // Just the model - drawn geometry included, grid/sky/lights/previews left out - each
+      // piece once, at its world position (see lib/export/modelExport.ts).
+      const items = collectModelItems(scene, id => names?.[id], id => components?.[id]);
+      if (items.length === 0) {
+        alert('There is nothing in the model to export yet.');
+        return;
+      }
 
+      if (format === 'skp') {
+        try {
+          const { bytes, faces, skipped } = buildSkp(items, kernelHost.graph);
+          downloadBlob(new Blob([bytes], { type: 'application/octet-stream' }), exportFileName(modelName, 'skp'));
+          console.log(`[Export] SketchUp file written: ${faces} faces${skipped ? `, ${skipped} tiny slivers left out` : ''}`);
+        } catch (err) {
+          console.error('[Export] SketchUp export failed', err);
+          alert(`Couldn't write the SketchUp file: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return;
+      }
+
+      const exportScene = buildExportScene(items);
       if (format === 'stl') {
-        const exporter = new STLExporter();
-        const result = exporter.parse(exportScene);
-        const blob = new Blob([result], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'model.stl';
-        link.click();
+        const result = new STLExporter().parse(exportScene, { binary: true });
+        downloadBlob(new Blob([result], { type: 'application/octet-stream' }), exportFileName(modelName, 'stl'));
       } else {
         const exporter = new GLTFExporter();
         exporter.parse(
           exportScene,
           (gltf) => {
             const output = JSON.stringify(gltf, null, 2);
-            const blob = new Blob([output], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'model.gltf';
-            link.click();
+            downloadBlob(new Blob([output], { type: 'application/json' }), exportFileName(modelName, 'gltf'));
           },
           (error) => {
             console.error('An error happened during export', error);
@@ -4557,6 +4646,44 @@ function Scene() {
 
   // Terrains as drawn: ponds and lakes dig their basins on the fly (never saved into the terrain).
   const dugTerrains = useMemo(() => terrainsWithWaterBasins(shapes), [shapes]);
+  const siteGhosts = useMemo(() => {
+    const ground = findSiteGround(shapes);
+    return ground?.terrainData?.site?.showRemoved ? removedBuildings(ground.terrainData.siteExisting, shapes) : [];
+  }, [shapes]);
+
+  // The imported site's Google layer and building styling (WorldView > 3D Site).
+  const googleStatus = useGoogleTilesStatus();
+  const siteGround = useMemo(() => findSiteGround(shapes), [shapes]);
+  const siteInfo = siteGround?.terrainData?.site;
+  // Google's surroundings come with an imported 3D site, or on their own around the plain map overlay.
+  const overlaySite = useMemo<WorldSiteInfo>(() => ({
+    lat: worldViewLocation.lat, lng: worldViewLocation.lng, size: overlayTileMeters(worldViewLocation.lat, overlayRadius), elevation: 0,
+    terrainSource: '', buildingSource: '', importedAt: 0, groundStyle: 'satellite', showRemoved: false,
+    googleContext: true, googleGround: 'cutout', googleNudge: worldViewGoogleNudge,
+  }), [worldViewLocation.lat, worldViewLocation.lng, overlayRadius, worldViewGoogleNudge]);
+  const googleOnSite = !!siteInfo?.googleContext && !!siteGround;
+  const googleOnOverlay = !googleOnSite && isWorldViewActive && worldViewGoogle;
+  const googleLayer = googleOnSite && siteInfo && siteGround
+    ? { site: siteInfo, groundId: siteGround.id }
+    : googleOnOverlay ? { site: overlaySite, groundId: '' } : null;
+  const googleAsSite = !!googleLayer && googleLayer.site.googleGround === 'google' && googleStatus.state === 'showing';
+  // With Google standing in for the site, imported buildings nobody has touched are Google's to show.
+  const googleShownBuildings = useMemo(
+    () => (googleAsSite ? siteEditSets(shapes, siteGround?.terrainData?.siteExisting).untouched : new Set<string>()),
+    [googleAsSite, shapes, siteGround],
+  );
+  const googleGroundAt = useCallback((x: number, z: number) => {
+    // The plain map overlay is a flat picture at its altitude; an imported site has real ground heights.
+    if (googleOnOverlay) return overlayAltitude;
+    const t = siteGround?.terrainData;
+    if (!siteGround || !t) return 0;
+    return siteGround.position[1] + gridHeightAt(t, x - siteGround.position[0], z - siteGround.position[2]);
+  }, [siteGround, googleOnOverlay, overlayAltitude]);
+  const siteSatelliteForStyle = siteInfo?.styledBuildings ? siteSatelliteUrl(siteInfo, googleMapsApiKey || '') : null;
+  const siteStyleFor = (shape: Shape) => {
+    if (!siteInfo?.styledBuildings || !shape.siteBuildingData || googleAsSite) return undefined;
+    return { look: buildingLook(shape.siteBuildingData), satelliteUrl: siteSatelliteForStyle, size: siteInfo.size };
+  };
 
   /**
    * The fence tool builds one editable fence from the clicked path, live: it appears at the
@@ -4628,6 +4755,24 @@ function Scene() {
 
   /** Where a pointer ray meets the ground, for the fence and water tools (see groundUnderRay). */
   const pointerGround = (ray: THREE.Ray) => groundUnderRay(ray, waterPreviewGround);
+
+  /** The route tool adds a walking or driving route to the imported site (see lib/worldSite/streets.ts). */
+  const commitSiteRoute = useCallback((vertices: THREE.Vector3[], closed: boolean) => {
+    if (!findSiteGround(shapes)) {
+      setMeasurements('Routes belong to an imported 3D site: import one in World View first.');
+      return;
+    }
+    const pts = vertices.map(v => [+v.x.toFixed(2), +v.z.toFixed(2)] as [number, number]);
+    if (closed && pts.length > 2) pts.push([...pts[0]!]);
+    if (pts.length < 2) return;
+    const kind = routeTool.kind;
+    setShapes(prev => withDrawnRoute(prev, kind, pts));
+    commitHistory();
+    recordAction(actionLabel(kind === 'road' ? 'Add driving route' : 'Add walking route'), {
+      sdk: `sdk.worldView.addRoute(${JSON.stringify(kind)}, ${JSON.stringify(pts)});`,
+    });
+    setMeasurements(`${kind === 'road' ? 'Driving' : 'Walking'} route added. ${kind === 'road' ? 'Cars' : 'People'} use it when street life is shown.`);
+  }, [shapes, setShapes, commitHistory, recordAction, setMeasurements]);
 
   /** The water tool fills the clicked outline, digging a basin into the terrain under it. */
   const commitWaterBody = useCallback((vertices: THREE.Vector3[]) => {
@@ -4788,12 +4933,13 @@ function Scene() {
     if (activeTool === 'fence' && closed) commitFenceRun(fenceVertices, true);
     liveFenceIdRef.current = null;
     if (activeTool === 'water') commitWaterBody(fenceVertices);
+    if (activeTool === 'site_route') commitSiteRoute(fenceVertices, closed);
     setFenceVertices([]);
     setFencePlane(null);
     setFenceCandidatePos(null);
     setFenceHoveredVertex(null);
     setMeasurements('');
-  }, [setMeasurements, activeTool, commitFenceRun, commitWaterBody, fenceVertices]);
+  }, [setMeasurements, activeTool, commitFenceRun, commitWaterBody, commitSiteRoute, fenceVertices]);
 
   /** The first modelled surface under the cursor for the railing tool (not other railings), else the ground. */
   const railingSurfaceUnderCursor = (): THREE.Vector3 | null => {
@@ -4956,7 +5102,7 @@ function Scene() {
               finalizeWallChain();
             }
             return;
-          } else if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+          } else if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
             setFenceVertices(prev => prev.slice(0, -1));
             if (fenceVertices.length <= 1) {
               finalizeFenceChain();
@@ -4998,10 +5144,14 @@ function Scene() {
       }
 
       if (e.key === 'Escape') {
+        // Nothing in progress: Esc closes the group being edited.
+        if (groupEditOpenRef.current && !drawingStartRef.current && wallVertices.length === 0 && polyVertices.length === 0) {
+          exitGroupEditRef.current();
+        }
         if (activeTool === 'wall' && wallVertices.length > 0) {
           diagLog('TOOL', 'Wall drawing cancelled', { vertexCount: wallVertices.length });
         }
-        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
           diagLog('TOOL', `${activeTool} drawing cancelled`, { vertexCount: fenceVertices.length });
         }
         if (activeTool === 'poly' && polyVertices.length > 0) {
@@ -5029,7 +5179,12 @@ function Scene() {
         setFaceEditMode(null);
         setSnapIndicator(null);
         setTrackingGuide(null);
-        awakenedRefPointsRef.current = [];
+        setTapeStart(null);
+        setTapeEnd(null);
+        setTapeGuide(null);
+        setFollowMeProfile(null);
+        setFollowMeHover(null);
+        setSectionHover(null);
         setTypedLength('');
         setLastDrawTarget(null);
         setSelectedSurface(null);
@@ -5053,10 +5208,13 @@ function Scene() {
         setFenceCandidatePos(null);
         setFenceHoveredVertex(null);
         wallDragStartRef.current = null;
-        setArcStart(null);
-        setArcEnd(null);
-        setArcBulge(null);
-        setArcStep(0);
+        // The arc in progress (the tool stays selected), and any held snap lock.
+        if (arcToolRef.current && arcToolRef.current.current.phase !== 'inactive') setArcState(arcToolRef.current.escape());
+        arcPlaneRef.current = null;
+        arcFilletRef.current = [];
+        arcFilletChosenRef.current = false;
+        edgeLockRef.current = null;
+        shiftLineRef.current = null;
         setOffsetPreviewPoints(null);
         return;
       }
@@ -5135,7 +5293,7 @@ function Scene() {
           finalizeCivilRoadDraft();
           return;
         }
-        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+        if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
           e.preventDefault();
           finalizeFenceChain();
           return;
@@ -5269,7 +5427,14 @@ function Scene() {
         if (key === 'x') setAxisLock(prev => prev === 'x' ? null : 'x');
         if (key === 'y') setAxisLock(prev => prev === 'y' ? null : 'y');
         if (key === 'z') setAxisLock(prev => prev === 'z' ? null : 'z');
-      } else if (drawingStartRef.current && ['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && (key === 'x' || key === 'y' || key === 'z')) {
+      } else if (
+        (key === 'x' || key === 'y' || key === 'z') && (
+          (drawingStartRef.current && ['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool))
+          // Poly, Bézier and Arc keep their own points, not a drawing start: they lock once a point is placed.
+          || (['poly', 'bezier', 'arc'].includes(activeTool) && lastSnapFromRef.current !== null)
+        )
+      ) {
+        edgeLockRef.current = null;
         setAxisLock(prev => prev === key ? null : (key as 'x' | 'y' | 'z'));
         return;
       }
@@ -5475,8 +5640,13 @@ function Scene() {
     if (activeTool === 'bezier') {
       e.stopPropagation();
 
+      // What the pointer means: a corner, a crossing, a point on an edge, a line from the last
+      // knot (tools/snapEngine.ts), or its own position.
+      const clickSnap = snapCurve('bezier');
+
       // If clicking first knot -> finalize and close loop
-      if (bezierHoveredKnotIndex === 0 && bezierKnots.length >= 2) {
+      if ((bezierHoveredKnotIndex === 0 || clickSnap.kind === 'close') && bezierKnots.length >= 2) {
+        clearSnapLocks();
         closeBezierLoop();
         return;
       }
@@ -5500,6 +5670,9 @@ function Scene() {
           p = e.point ? e.point.clone() : new THREE.Vector3();
         }
       }
+
+      p = snappedOr(p, clickSnap);
+      clearSnapLocks();
 
       if (bezierKnots.length === 0) {
         const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p);
@@ -5525,14 +5698,20 @@ function Scene() {
 
     if (activeTool === 'poly') {
       e.stopPropagation();
-      
+
+      // What the pointer means (tools/snapEngine.ts): a corner, a crossing, a point on an edge,
+      // a line from the last vertex - or where it is.
+      const clickSnap = snapCurve('poly');
+
       // If clicking first vertex -> finalize
-      if (polyHoveredVertex === 0 && polyVertices.length >= 3) {
+      if ((polyHoveredVertex === 0 || clickSnap.kind === 'close') && polyVertices.length >= 3) {
+        clearSnapLocks();
         finalizePoly();
         return;
       }
-      
-      let pointToPlace = polyCandidatePos?.clone();
+
+      let pointToPlace = clickSnap.kind !== 'none' ? clickSnap.point.clone() : polyCandidatePos?.clone();
+      clearSnapLocks();
       
       if (polyVertices.length === 0) {
         // First vertex determines plane
@@ -5565,7 +5744,7 @@ function Scene() {
         setPolyPlane(plane);
         setPolyNormal(normal);
         setPolyPlaneOnId(onId);
-        setPolyVertices([p]);
+        setPolyVertices([snappedOr(p, clickSnap)]);
       } else if (polyPlane && polyNormal) {
         // Subsequent vertices
         if (!pointToPlace) pointToPlace = e.point.clone();
@@ -5648,7 +5827,7 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
+    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') {
       e.stopPropagation();
 
       // If clicking first vertex -> close loop & finalize
@@ -5695,7 +5874,7 @@ function Scene() {
         setFencePlane(plane);
         setFenceVertices([p]);
         diagLog("TOOL", `${activeTool} started at point`, { pos: [p.x, p.y, p.z] });
-        setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
+        setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'} Path: Click next point · Click start point to close loop · Double-click/Enter to finish.`);
       } else {
         placeFencePoint(pointToPlace ?? e.point.clone());
       }
@@ -5901,103 +6080,72 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'tape') {
-      e.stopPropagation();
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      // Any real surface counts, not just Shape-typed objects - a `userData.isShape`-only
-      // check silently ignored kernel-rendered geometry, terrain, landscape props, roads and
-      // every other non-Shape mesh, falling through to whatever ground-plane/generic point
-      // the underlying click handler happened to compute instead of the actual surface hit.
-      const shapeIntersect = intersects.find(i =>
-        !i.object.userData.isHelper && !i.object.userData.isPreview && !i.object.userData.isGizmo &&
-        (i.object.userData.isShape || i.object.userData.isKernelGeometry ||
-         ((i.object as any).isMesh && i.object.name !== 'previewMesh'))
-      );
-      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
-
-      if (!tapeStart) {
-        setTapeStart(point);
-        setTapeEnd(point);
-        setMeasurements('Click second point to measure.');
-      } else {
-        const distance = tapeStart.distanceTo(point);
-        addShape({
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'measurement',
-          position: [(tapeStart.x + point.x) / 2, (tapeStart.y + point.y) / 2, (tapeStart.z + point.z) / 2],
-          args: {
-            start: [tapeStart.x, tapeStart.y, tapeStart.z],
-            end: [point.x, point.y, point.z],
-            distance,
-          },
-          color: '#FFD700',
-        } as Shape);
-        setMeasurements(`Distance: ${formatValue(distance, unit, 2)}`);
-        setTapeStart(null);
-        setTapeEnd(null);
-      }
-      return;
-    }
+    // The Tape Measure has its own pointer handling on the canvas (see the tape effect below).
+    if (activeTool === 'tape' || activeTool === 'dimensions' || activeTool === 'leader') return;
     if (activeTool === 'arc') {
       e.stopPropagation();
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => (i.object.userData?.isShape || i.object.userData?.id) && i.object !== e.object);
-      let point: THREE.Vector3;
-      if (shapeIntersect) {
-        point = shapeIntersect.point.clone();
-      } else if (e.point) {
-        point = e.point.clone();
-      } else {
-        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const groundHit = new THREE.Vector3();
-        raycaster.ray.intersectPlane(groundPlane, groundHit);
-        point = groundHit;
-      }
-
-      if (arcStep === 0) {
-        setArcStart(point);
-        setArcEnd(point);
-        setArcStep(1);
-        setMeasurements(`Arc Start: (${point.x.toFixed(2)}, ${point.z.toFixed(2)}) — Click to set chord endpoint.`);
-      } else if (arcStep === 1) {
-        setArcEnd(point);
-        setArcBulge(point);
-        setArcStep(2);
-        setMeasurements('Click or drag to adjust arc curvature / bulge.');
-      } else if (arcStep === 2 && arcStart && arcEnd) {
-        let arcPts = computeArcPoints(arcStart, arcEnd, point);
-        if (!arcPts || arcPts.length < 2) {
-          // Linear fallback if perfectly collinear
-          arcPts = [arcStart.clone(), point.clone(), arcEnd.clone()];
+      const tool = arcToolRef.current!;
+      const phase = tool.current.phase;
+      if (phase === 'second') {
+        // Third click: the bulge (or nothing more to decide when tangent) - draw it.
+        const cursor = arcBulgeCursor();
+        if (cursor) tool.move(cursor);
+        const after = tool.click(cursor ?? new THREE.Vector3(tool.current.p1!.x, tool.current.p1!.y, tool.current.p1!.z));
+        setArcState(after);
+        if (after.lastError) setMeasurements(`Arc: ${after.lastError}`);
+        else if (after.phase === 'ready') {
+          arcPlaneRef.current = null;
+          arcFilletChosenRef.current = false;
+          arcFilletRef.current = [];
+          clearSnapLocks();
+          bumpKernel();
+          recordAction(actionLabel('Arc'));
+          setMeasurements('Arc drawn. Click to start another.');
         }
-        const newArcId = Math.random().toString(36).substr(2, 9);
-        const newArcShape: Shape = {
-          id: newArcId,
-          name: `Arc Line ${shapes.filter(s => s.type === 'arc').length + 1}`,
-          type: 'arc',
-          position: [0, 0, 0],
-          quaternion: [0, 0, 0, 1],
-          args: {
-            start: [arcStart.x, arcStart.y, arcStart.z],
-            end: [arcEnd.x, arcEnd.y, arcEnd.z],
-            through: [point.x, point.y, point.z],
-            points: arcPts.map(p => [p.x, p.y, p.z]),
-          },
-          color: activeMaterial || '#22c55e',
-        } as Shape;
-        addShape(newArcShape);
-        setSelectedId(newArcId);
-        setSelectedIds([newArcId]);
-        commitHistory();
-        setMeasurements(`Arc created (${formatValue(arcStart.distanceTo(arcEnd), unit, 2)} chord).`);
-        setArcStart(null);
-        setArcEnd(null);
-        setArcBulge(null);
-        setArcStep(0);
+        return;
       }
+      if (phase === 'first') {
+        // Second click: the other end of the chord.
+        const r = arcSnap();
+        const end = r.point;
+        const st = tool.current;
+        if (st.p0 && distance3(st.p0, end) < 1e-6) return;
+        tool.setFilletCorner(arcFilletChosenRef.current ? arcFilletRef.current.find(t => t.end.distanceTo(end) < 1e-6)?.corner ?? null : null);
+        const after = tool.click(end);
+        setArcState(after);
+        clearSnapLocks();
+        setMeasurements(tool.hasTangent
+          ? 'Tangent arc (cyan). Move to bulge, or click to draw it.'
+          : 'Move to bulge the arc; type a bulge (0.5) or a radius (2r) and press Enter; click to draw it.');
+        return;
+      }
+      // First click: the start. The plane comes from the face clicked, else the ground.
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const hit = intersects.find(i => (i.object.userData?.isShape || i.object.userData?.id || i.object.userData?.isKernelGeometry) && i.object !== e.object && i.face);
+      let normal = new THREE.Vector3(0, 1, 0);
+      let point = new THREE.Vector3();
+      if (hit && hit.face) {
+        normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+        point = hit.point.clone();
+      } else if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), point)) {
+        point = e.point ? e.point.clone() : new THREE.Vector3();
+      }
+      arcPlaneRef.current = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point);
+      const start = snapHere(snapCursor(arcPlaneRef.current), arcPlaneRef.current, null);
+      const p0 = start.kind === 'none' ? point : start.point.clone();
+      arcPlaneRef.current = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p0);
+      const after = tool.click(p0);
+      // The corners this start could round: if the end is put where the fillet meets the other
+      // edge, the arc is tangent to both and drawing it trims the corner.
+      arcFilletRef.current = kernelHost.filletTargets(p0).map(t => ({ corner: new THREE.Vector3(t.corner.x, t.corner.y, t.corner.z), end: new THREE.Vector3(t.end.x, t.end.y, t.end.z) }));
+      arcFilletChosenRef.current = false;
+      clearSnapLocks();
+      setArcState(after);
+      setMeasurements(tool.hasTangent
+        ? 'Arc starts tangent to the edge (cyan). Click the other end.'
+        : `Arc start. Click the other end${arcFilletRef.current.length ? ' - or the pink point to round the corner' : ''}.`);
       return;
     }
-
 
     if (activeTool === 'door' || activeTool === 'window') {
       e.stopPropagation();
@@ -6459,6 +6607,267 @@ function Scene() {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Snapping and inference (tools/snapEngine.ts): one function for Line, Arc, Bézier, Poly and
+  // the shape tools. It finds corners, crossings, points on edges and guides; directions from
+  // where you are drawing from; and holds a line when a lock is on.
+  //
+  // Locks (while a segment is being drawn): arrow keys hold an axis (Right red, Left green, Up
+  // blue) and the X / Y / Z keys do the same; Down holds a line parallel, then perpendicular, to
+  // the edge you are resting on; holding Shift keeps whatever inference is showing. A lock still
+  // snaps to corners and crossings on its line.
+  // ---------------------------------------------------------------------------
+  const snapMemoryRef = useRef(new SnapMemory(300));
+  const lastSnapRef = useRef<SnapResult | null>(null);
+  const lastSnapFromRef = useRef<THREE.Vector3 | null>(null);
+  const shiftLineRef = useRef<SnapLine | null>(null);
+  const edgeLockRef = useRef<{ mode: 'parallel' | 'perpendicular'; edge: HoverEdge } | null>(null);
+  const publishedSnapRef = useRef('');
+  const shapeSnapRef = useRef<{ shapes: Shape[]; points: NonNullable<SnapInput['extraPoints']> } | null>(null);
+  const axisLockRef = useRef(axisLock);
+  axisLockRef.current = axisLock;
+  const setMeasurementsRef = useRef(setMeasurements);
+  setMeasurementsRef.current = setMeasurements;
+  const AXES_NAMES: Record<AxisName, string> = { x: 'red axis', z: 'green axis', y: 'blue axis' };
+  const activeToolSnapRef = useRef(activeTool);
+  activeToolSnapRef.current = activeTool;
+
+  /** The corners, edge middles and centres of the model's objects (not its drawn geometry). */
+  const shapeSnapPoints = (): NonNullable<SnapInput['extraPoints']> => {
+    const cached = shapeSnapRef.current;
+    if (cached && cached.shapes === shapes) return cached.points;
+    const points: { point: THREE.Vector3; kind: 'endpoint' | 'midpoint' | 'center'; label?: string }[] = [];
+    for (const sh of shapes) {
+      if (sh.hidden) continue;
+      if (isGuideShape(sh)) {
+        const c = (sh.args as { kind?: string; centre?: [number, number, number] }).centre;
+        if ((sh.args as { kind?: string }).kind === 'protractor' && c) points.push({ point: new THREE.Vector3(...c), kind: 'endpoint', label: 'Guide centre' });
+        continue;
+      }
+      if (isSectionShape(sh)) continue;
+      const a = sh.args as { start?: [number, number, number]; end?: [number, number, number] } | undefined;
+      if (sh.type === 'measurement') {
+        if (a && Array.isArray(a.start) && Array.isArray(a.end)) {
+          const st = new THREE.Vector3(...a.start), en = new THREE.Vector3(...a.end);
+          points.push({ point: st, kind: 'endpoint' }, { point: en, kind: 'endpoint' }, { point: st.clone().lerp(en, 0.5), kind: 'midpoint' });
+        }
+        continue;
+      }
+      const obj = scene.getObjectByName(sh.id);
+      if (!obj) continue;
+      const box = new THREE.Box3().setFromObject(obj);
+      if (!isFinite(box.min.x) || !isFinite(box.max.x)) continue;
+      const corners: THREE.Vector3[] = [];
+      for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+      for (const c of corners) points.push({ point: c, kind: 'endpoint' });
+      for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+        const ca = corners[i]!, cb = corners[j]!;
+        if ([ca.x !== cb.x, ca.y !== cb.y, ca.z !== cb.z].filter(Boolean).length === 1) points.push({ point: ca.clone().lerp(cb, 0.5), kind: 'midpoint' });
+      }
+      const mid = box.getCenter(new THREE.Vector3());
+      for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) {
+        points.push({ point: new THREE.Vector3(mid.x + d[0] * (box.max.x - box.min.x) / 2, mid.y + d[1] * (box.max.y - box.min.y) / 2, mid.z + d[2] * (box.max.z - box.min.z) / 2), kind: 'center' });
+      }
+    }
+    shapeSnapRef.current = { shapes, points };
+    return points;
+  };
+
+  /** The snap for the pointer now. `from` is where the segment being drawn started. */
+  const snapHere = (cursor: THREE.Vector3, plane: THREE.Plane | null, from: THREE.Vector3 | null, opts: { closePoint?: THREE.Vector3 | null } = {}): SnapResult => {
+    const rect = gl.domElement.getBoundingClientRect();
+    let lockLine: SnapLine | null = null;
+    if (from) {
+      if (axisLockRef.current) lockLine = makeAxisLock(from, axisLockRef.current as AxisName);
+      else if (edgeLockRef.current) lockLine = edgeLock(from, edgeLockRef.current.edge, edgeLockRef.current.mode, plane);
+      else if (shiftLineRef.current) lockLine = shiftLineRef.current;
+    }
+    const result = computeSnap({
+      graph: kernelHost.graph, revision: kernelRevision, camera,
+      size: { width: rect.width, height: rect.height },
+      pointer: { x: ((mouse.x + 1) / 2) * rect.width, y: ((-mouse.y + 1) / 2) * rect.height },
+      ray: raycaster.ray, cursor, plane, from,
+      extraPoints: shapeSnapPoints(),
+      guides: guidesVisible ? guideSegments : [], guideCrossings: guidesVisible ? guideCrossingPoints : [],
+      memory: snapMemoryRef.current, lockLine, closePoint: opts.closePoint ?? null,
+    });
+    snapMemoryRef.current.update(result, performance.now());
+    lastSnapRef.current = result;
+    lastSnapFromRef.current = from;
+    return result;
+  };
+
+  /** Shows what the snap found: the marker and its name, the lines, the edge under the pointer. */
+  const publishSnap = (r: SnapResult | null) => {
+    const marker = r && r.kind !== 'none' ? (r.marker ?? r.point) : null;
+    const key = r
+      ? `${r.kind}|${r.label}|${marker ? marker.toArray().map(v => v.toFixed(3)).join(',') : ''}|${r.guides.map(g => `${g.a.toArray().map(v => v.toFixed(2))}>${g.b.toArray().map(v => v.toFixed(2))}${g.dashed}`).join(';')}|${r.hoverEdge ? `${r.hoverEdge.id}:${r.hoverEdge.a.toArray().map(v => v.toFixed(2))}` : ''}`
+      : '';
+    if (key === publishedSnapRef.current) return;
+    publishedSnapRef.current = key;
+    setSnapIndicator(marker && r ? { point: [marker.x, marker.y, marker.z], type: r.kind as SnapKind, tooltip: r.label, ...(r.line ? { color: r.line.color } : {}) } : null);
+    setSnapGuides(r ? r.guides : []);
+    setSnapHoverEdge(r ? r.hoverEdge : null);
+  };
+
+  const snapCursor = (plane: THREE.Plane | null): THREE.Vector3 => {
+    const hit = new THREE.Vector3();
+    if (plane && raycaster.ray.intersectPlane(plane, hit)) return hit;
+    return raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit) ? hit : raycaster.ray.at(50, new THREE.Vector3());
+  };
+
+  /** Where Poly, Bézier and Arc are drawing from, on what plane, and what would close them. */
+  const curveSnapContext = (tool: string): { from: THREE.Vector3 | null; plane: THREE.Plane | null; closePoint: THREE.Vector3 | null } => {
+    if (tool === 'poly') {
+      return { from: polyVertices.length ? polyVertices[polyVertices.length - 1]! : null, plane: polyPlane, closePoint: polyVertices.length >= 3 ? polyVertices[0]! : null };
+    }
+    if (tool === 'bezier') {
+      return { from: bezierKnots.length ? bezierKnots[bezierKnots.length - 1]!.point : null, plane: bezierActivePlane, closePoint: bezierKnots.length >= 2 ? bezierKnots[0]!.point : null };
+    }
+    const st = arcToolRef.current?.current;
+    if (tool === 'arc' && st && st.phase === 'first' && st.p0) {
+      return { from: new THREE.Vector3(st.p0.x, st.p0.y, st.p0.z), plane: arcPlaneRef.current, closePoint: null };
+    }
+    return { from: null, plane: tool === 'arc' ? arcPlaneRef.current : null, closePoint: null };
+  };
+
+  /** The snap for Poly, Bézier or Arc now (and shown). */
+  const snapCurve = (tool: string): SnapResult => {
+    const ctx = curveSnapContext(tool);
+    const r = snapHere(snapCursor(ctx.plane), ctx.plane, ctx.from, { closePoint: ctx.closePoint });
+    publishSnap(r);
+    return r;
+  };
+  /** A click's point: the snapped one when the snap found something, else what the tool had. */
+  const snappedOr = (raw: THREE.Vector3, r: SnapResult): THREE.Vector3 => (r.kind === 'none' ? raw : r.point.clone());
+
+  // Locks are for one segment: drop them when the tool changes or a point is placed.
+  const clearSnapLocks = () => {
+    edgeLockRef.current = null;
+    shiftLineRef.current = null;
+    setAxisLock(null);
+  };
+  useEffect(() => {
+    clearSnapLocks();
+    snapMemoryRef.current.clear();
+    lastSnapRef.current = null;
+    lastSnapFromRef.current = null;
+    publishSnap(null);
+  }, [activeTool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const ARROW_TOOLS = ['line', 'poly', 'bezier', 'arc', 'rectangle', 'circle', 'triangle'];
+    const SHIFT_TOOLS = ['line', 'poly', 'bezier', 'arc'];
+    const editing = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
+    const onDown = (ev: KeyboardEvent) => {
+      if (editing(ev.target)) return;
+      const tool = activeToolSnapRef.current;
+      if (ev.key === 'Shift') {
+        // Hold what the pointer is inferring for as long as Shift is down.
+        const line = lastSnapRef.current?.line;
+        if (!ev.repeat && line && lastSnapFromRef.current && SHIFT_TOOLS.includes(tool)) shiftLineRef.current = line;
+        return;
+      }
+      if (!ARROW_TOOLS.includes(tool) || !lastSnapFromRef.current || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      const axisFor: Record<string, AxisName> = { ArrowRight: 'x', ArrowLeft: 'z', ArrowUp: 'y' };
+      const axis = axisFor[ev.key];
+      if (axis) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        edgeLockRef.current = null;
+        const already = axisLockRef.current === axis;
+        setAxisLock(already ? null : axis);
+        setMeasurementsRef.current(already ? 'Lock released.' : `Locked to the ${AXES_NAMES[axis]}. Press the same arrow (or Esc) to release; corners and crossings on the line still snap.`);
+        return;
+      }
+      if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        // Off -> parallel to the edge rested on -> perpendicular to it -> off.
+        setAxisLock(null);
+        const cur = edgeLockRef.current;
+        if (cur?.mode === 'parallel') edgeLockRef.current = { mode: 'perpendicular', edge: cur.edge };
+        else if (cur) edgeLockRef.current = null;
+        else {
+          const edge = snapMemoryRef.current.edge ?? lastSnapRef.current?.hoverEdge ?? null;
+          edgeLockRef.current = edge ? { mode: 'parallel', edge } : null;
+        }
+        setMeasurementsRef.current(
+          edgeLockRef.current?.mode === 'parallel' ? 'Locked parallel to the edge. Press Down again for perpendicular.'
+            : edgeLockRef.current?.mode === 'perpendicular' ? 'Locked perpendicular to the edge. Press Down again to release.'
+            : 'Rest the pointer on an edge for a moment, then press Down to lock parallel to it.',
+        );
+      }
+    };
+    const onUp = (ev: KeyboardEvent) => { if (ev.key === 'Shift') shiftLineRef.current = null; };
+    window.addEventListener('keydown', onDown, true);
+    window.addEventListener('keyup', onUp, true);
+    return () => {
+      window.removeEventListener('keydown', onDown, true);
+      window.removeEventListener('keyup', onUp, true);
+    };
+  }, []);
+
+  // The Arc tool (tools/arcTool.ts): chord, then bulge, tangent to the edge it starts on.
+  const arcToolRef = useRef<ArcTool | null>(null);
+  const arcPlaneRef = useRef<THREE.Plane | null>(null);
+  const arcFilletRef = useRef<{ corner: THREE.Vector3; end: THREE.Vector3 }[]>([]);
+  const arcFilletChosenRef = useRef(false);
+  const [arcState, setArcState] = useState<ArcToolState | null>(null);
+  if (!arcToolRef.current) arcToolRef.current = new ArcTool(kernelHost, undefined, unit);
+  const distance3 = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+  /** The snap for the arc's chord ends, with the pink "round this corner" point taking priority. */
+  const arcSnap = (): SnapResult => {
+    const r = snapCurve('arc');
+    arcFilletChosenRef.current = false;
+    const st = arcToolRef.current!.current;
+    if (st.phase !== 'first' || arcFilletRef.current.length === 0) return r;
+    const rect = gl.domElement.getBoundingClientRect();
+    const px = { x: ((mouse.x + 1) / 2) * rect.width, y: ((-mouse.y + 1) / 2) * rect.height };
+    for (const t of arcFilletRef.current) {
+      const v = t.end.clone().project(camera);
+      if (v.z >= 1) continue;
+      const d = Math.hypot(((v.x + 1) / 2) * rect.width - px.x, ((-v.y + 1) / 2) * rect.height - px.y);
+      if (d > 14) continue;
+      arcFilletChosenRef.current = true;
+      const over: SnapResult = { ...r, point: t.end.clone(), marker: t.end.clone(), kind: 'fillet', label: 'Round the corner (tangent to both edges)', guides: [], line: null };
+      publishSnap(over);
+      return over;
+    }
+    return r;
+  };
+
+  /** Where the pointer is, for bulging the arc: on the plane it is drawn in (or one facing the camera through the chord). */
+  const arcBulgeCursor = (): THREE.Vector3 | null => {
+    const st = arcToolRef.current!.current;
+    if (!st.p0 || !st.p1) return null;
+    const p0 = new THREE.Vector3(st.p0.x, st.p0.y, st.p0.z), p1 = new THREE.Vector3(st.p1.x, st.p1.y, st.p1.z);
+    let plane = arcPlaneRef.current;
+    if (!plane || Math.abs(plane.distanceToPoint(p0)) > 1e-4 || Math.abs(plane.distanceToPoint(p1)) > 1e-4) {
+      const c = p1.clone().sub(p0).normalize();
+      const view = raycaster.ray.direction.clone();
+      const n = view.sub(c.clone().multiplyScalar(view.dot(c)));
+      if (n.lengthSq() < 1e-9) return null;
+      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), p0);
+    }
+    const hit = new THREE.Vector3();
+    return raycaster.ray.intersectPlane(plane, hit) ? hit : null;
+  };
+
+  // Start and stop the arc tool with the toolbar tool.
+  useEffect(() => {
+    const tool = arcToolRef.current!;
+    if (activeTool === 'arc') setArcState(tool.activate('twoPoint'));
+    else { tool.deactivate(); setArcState(null); }
+    arcPlaneRef.current = null;
+    arcFilletRef.current = [];
+    arcFilletChosenRef.current = false;
+  }, [activeTool]);
+
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     // See handlePointerDown's identical guard - Walk Mode's own placement
     // hover lives entirely in WalkModeController.
@@ -6534,31 +6943,24 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'tape' && tapeStart) {
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i =>
-        !i.object.userData.isHelper && !i.object.userData.isPreview && !i.object.userData.isGizmo &&
-        (i.object.userData.isShape || i.object.userData.isKernelGeometry ||
-         ((i.object as any).isMesh && i.object.name !== 'previewMesh'))
-      );
-      const point = (shapeIntersect ? shapeIntersect.point : e.point).clone();
-      setTapeEnd(point);
-      setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
-    }
-    if (activeTool === 'arc' && arcStep === 1 && arcStart) {
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData?.isShape || i.object.userData?.id);
-      const point = shapeIntersect ? shapeIntersect.point.clone() : (e.point ? e.point.clone() : new THREE.Vector3());
-      setArcEnd(point);
-      setMeasurements(`Arc Chord: ${formatValue(arcStart.distanceTo(point), unit, 2)} (Click to set endpoint)`);
-    }
-
-    if (activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd) {
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData?.isShape || i.object.userData?.id);
-      const point = shapeIntersect ? shapeIntersect.point.clone() : (e.point ? e.point.clone() : new THREE.Vector3());
-      setArcBulge(point);
-      setMeasurements(`Arc Curvature: Adjust bulge & click to place`);
+    if (activeTool === 'arc') {
+      const tool = arcToolRef.current!;
+      const phase = tool.current.phase;
+      if (phase === 'second') {
+        publishSnap(null);
+        const cursor = arcBulgeCursor();
+        if (cursor) {
+          const st = tool.move(cursor);
+          setArcState(st);
+          if (st.preview) {
+            const r = st.preview.radius;
+            setMeasurements(`Arc: radius ${formatValue(r, unit, 2)}${st.tangentActive ? ' (tangent)' : st.halfCircle ? ' (half circle)' : ''} - click to draw`);
+          }
+        }
+      } else {
+        const r = arcSnap();
+        if (phase === 'first') setArcState(tool.move(r.point));
+      }
     }
 
     if (activeTool === 'offset') {
@@ -6615,7 +7017,9 @@ function Scene() {
         const ray = raycaster.ray;
         const target = new THREE.Vector3();
         if (ray.intersectPlane(plane, target)) {
-          let finalPos = target.clone();
+          // The shared snap: corners, crossings, points on an edge, lines from the last knot.
+          const bezierSnap = isDraggingBezierHandle ? null : snapCurve('bezier');
+          let finalPos = bezierSnap ? snappedOr(target.clone(), bezierSnap) : target.clone();
           setBezierCandidatePos(finalPos);
 
           if (isDraggingBezierHandle) {
@@ -6640,16 +7044,11 @@ function Scene() {
                 : (cam.top - cam.bottom) / ((cam.zoom || 1) * pixels);
               const closeReach = Math.max(0.05, 12 * metresPerPixel);
               bezierToolRef.current.setCloseReach(closeReach);
-              if (d < closeReach) {
+              if (d < closeReach || bezierSnap?.kind === 'close') {
                 setBezierHoveredKnotIndex(0);
-                setSnapIndicator({
-                  point: [origin.x, origin.y + 0.05, origin.z],
-                  type: 'endpoint',
-                  tooltip: '🟢 Start point · Click, press Enter or double-click to close the shape'
-                });
+                setMeasurements('Start point: click, press Enter or double-click to close the shape');
               } else {
                 setBezierHoveredKnotIndex(null);
-                setSnapIndicator(null);
               }
             }
           }
@@ -6661,45 +7060,19 @@ function Scene() {
       if (ray.intersectPlane(polyPlane, target)) {
         let finalPos = target.clone();
         
-        // Basic snapping
-        if (!e.shiftKey) {
-          const snapThreshold = 0.5;
-          let snapTarget: THREE.Vector3 | null = null;
-          let bestDist = snapThreshold;
-
-          // Snap to existing vertices in current poly
-          if (polyVertices.length > 0) {
-            const d = finalPos.distanceTo(polyVertices[0]);
-            const startSnapThreshold = 0.8; // Stronger snap for start point
-            if (d < startSnapThreshold) {
-              snapTarget = polyVertices[0].clone();
-              bestDist = d;
-              setPolyHoveredVertex(0);
-            } else {
-              setPolyHoveredVertex(null);
-            }
-          }
-
-          // Snap to other shapes' origins (simplified snapping)
-          if (!snapTarget) {
-            shapes.forEach(sh => {
-              const shPos = new THREE.Vector3(...sh.position);
-              const d = finalPos.distanceTo(shPos);
-              if (d < bestDist) {
-                snapTarget = shPos.clone();
-                bestDist = d;
-              }
-            });
-          }
-
-          if (snapTarget) finalPos = snapTarget;
-        }
+        // The shared snap (tools/snapEngine.ts), in screen pixels: corners, crossings, points on
+        // an edge, lines from the last vertex, the start point to close on.
+        const polySnap = snapCurve('poly');
+        finalPos = snappedOr(finalPos, polySnap);
+        setPolyHoveredVertex(polyVertices.length >= 3 && polySnap.kind === 'close' ? 0 : null);
 
         setPolyCandidatePos(finalPos);
       }
     }
 
     if (activeTool === 'wall') {
+      // The 90° lock: on by default, and Shift frees it. With the lock off in the tool's settings it behaves as if Shift were held.
+      const wallFreeAngle = e.shiftKey || wallToolSettings?.lockRightAngles === false;
       let basePlaneY = ((activeStory || 1) - 1) * 2.8;
       if (!wallPlane) {
         const intersects = raycaster.intersectObjects(scene.children, true);
@@ -6746,7 +7119,7 @@ function Scene() {
          }
 
         // 2. Default to 90-degree orthogonal angles, allow free angle if Shift is held down
-        if (!e.shiftKey && wallVertices.length > 0 && !isClosingLoop) {
+        if (!wallFreeAngle && wallVertices.length > 0 && !isClosingLoop) {
           const lastVertex = wallVertices[wallVertices.length - 1];
           const dx = target.x - lastVertex.x;
           const dz = target.z - lastVertex.z;
@@ -6891,7 +7264,7 @@ function Scene() {
               tooltip: 'Attached to Intersecting Wall (Pass-through Prevented)'
             });
           }
-        } else if (!e.shiftKey && wallVertices.length === 0) {
+        } else if (!wallFreeAngle && wallVertices.length === 0) {
           // Snap to existing walls (interior face / centerline) or shape origins on any story level
           let bestDist = 0.65;
           let snapTarget: THREE.Vector3 | null = null;
@@ -6951,7 +7324,7 @@ function Scene() {
             setSnapIndicator(null);
           }
           setTrackingGuide(null);
-        } else if (e.shiftKey) {
+        } else if (wallFreeAngle) {
           setSnapIndicator(null);
           setTrackingGuide(null);
         }
@@ -6963,7 +7336,7 @@ function Scene() {
         } else if (wallVertices.length > 0) {
           const lastVertex = wallVertices[wallVertices.length - 1];
           const dist = lastVertex.distanceTo(finalPos);
-          const angleMode = e.shiftKey ? 'Free Angle' : '90° Locked';
+          const angleMode = wallFreeAngle ? 'Free Angle' : '90° Locked';
           const tMm = ((wallToolSettings?.thickness || 0.2) * 1000).toFixed(0);
           const hM = (wallToolSettings?.height || 2.8).toFixed(2);
           const justStr = (wallJustification || 'exterior').toUpperCase();
@@ -6978,7 +7351,7 @@ function Scene() {
       }
     }
 
-    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') {
+    if (activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') {
       const plane = fencePlane || new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
       const target = new THREE.Vector3();
       // Fences and ponds follow the ground. Railings stand on whatever is under the cursor
@@ -7021,9 +7394,9 @@ function Scene() {
         if (fenceVertices.length > 0) {
           const lastVertex = fenceVertices[fenceVertices.length - 1];
           const dist = lastVertex.distanceTo(finalPos);
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'}: Section ${formatValue(dist, unit, 2)} (${fenceVertices.length} placed) · Click next point · Double-click/Enter to finish`);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'}: Section ${formatValue(dist, unit, 2)} (${fenceVertices.length} placed) · Click next point · Double-click/Enter to finish`);
         } else {
-          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'}: Click terrain or ground to start drawing path`);
+          setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'}: Click terrain or ground to start drawing path`);
         }
       }
     }
@@ -7361,41 +7734,12 @@ function Scene() {
     //
     // That is why a rectangle is easy — each line starts where you can see the
     // last one — while joining two parallel lines is fiddly at both ends.
-    if (!drawingStart && KERNEL_SNAP_TOOLS.includes(activeTool)) {
-      const hoverRect = gl.domElement.getBoundingClientRect();
-      const hoverMouseX = ((mouse.x + 1) / 2) * hoverRect.width;
-      const hoverMouseY = ((-mouse.y + 1) / 2) * hoverRect.height;
-      // Per-kind radii, not one radius for everything. Every edge contributes
-      // a midpoint and every face a centre, so a single generous radius makes
-      // the cursor nearly always inside SOMETHING and snapping feels twitchy.
-      let bestPoint: THREE.Vector3 | null = null;
-      let bestType: 'endpoint' | 'midpoint' | 'center' = 'endpoint';
-      let bestRank = Infinity;
-
-      for (const kp of collectKernelSnapPoints(kernelHost.graph)) {
-        const v = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
-        const projected = v.clone().project(camera);
-        if (projected.z >= 1.0) continue;
-        const sx = ((projected.x + 1) / 2) * hoverRect.width;
-        const sy = ((-projected.y + 1) / 2) * hoverRect.height;
-        const rank = rankSnap(kp.kind, Math.hypot(sx - hoverMouseX, sy - hoverMouseY));
-        if (rank < bestRank) {
-          bestRank = rank;
-          bestPoint = v;
-          bestType = kp.kind;
-        }
-      }
-
-      setSnapIndicator(
-        bestPoint
-          ? {
-              point: [bestPoint.x, bestPoint.y, bestPoint.z],
-              type: bestType,
-              tooltip:
-                bestType === 'endpoint' ? 'Endpoint' : bestType === 'midpoint' ? 'Midpoint' : 'Center',
-            }
-          : null,
-      );
+    if (!drawingStart && KERNEL_SNAP_TOOLS.includes(activeTool) && !['poly', 'bezier', 'arc'].includes(activeTool)) {
+      // Before the first click: where a shape or line could start (corners, crossings, points on
+      // an edge or a guide). No plane yet, so the ground stands in for the pointer's position.
+      publishSnap(snapHere(snapCursor(null), null, null));
+    } else if ((activeTool === 'poly' && polyVertices.length === 0) || (activeTool === 'bezier' && bezierKnots.length === 0)) {
+      snapCurve(activeTool);
     }
 
     if (drawingStart && drawingNormal) {
@@ -7433,193 +7777,12 @@ function Scene() {
         const tangent = new THREE.Vector3().crossVectors(drawingNormal, up).normalize();
         const bitangent = new THREE.Vector3().crossVectors(drawingNormal, tangent).normalize();
 
-        // Collect geometric candidate points
-        const candidates: Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; screenDist: number; label?: string }> = [];
-        shapes.forEach(sh => {
-          if (sh.type === 'measurement' && sh.args?.kind === 'protractor') {
-            // Guide lines: snap onto the nearest point along the guide, and to its centre.
-            const gStart = new THREE.Vector3(...(sh.args.start as [number, number, number]));
-            const gEnd = new THREE.Vector3(...(sh.args.end as [number, number, number]));
-            const onGuide = new THREE.Line3(gStart, gEnd).closestPointToPoint(target, true, new THREE.Vector3());
-            for (const [p, label] of [[onGuide, 'On guide'], [new THREE.Vector3(...(sh.args.centre as [number, number, number])), 'Guide centre']] as const) {
-              const pr = projectToScreen(p);
-              if (pr.inFront) candidates.push({ point: p.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) + (label === 'On guide' ? 4 : 0), label });
-            }
-            return;
-          }
-          if (sh.type === 'measurement') {
-            if (sh.args && Array.isArray(sh.args.start) && Array.isArray(sh.args.end)) {
-              const mStart = new THREE.Vector3(sh.args.start[0], sh.args.start[1], sh.args.start[2]);
-              const mEnd = new THREE.Vector3(sh.args.end[0], sh.args.end[1], sh.args.end[2]);
-              const mMid = mStart.clone().lerp(mEnd, 0.5);
-              [
-                { p: mStart, t: 'endpoint' as const },
-                { p: mEnd, t: 'endpoint' as const },
-                { p: mMid, t: 'midpoint' as const }
-              ].forEach(({ p, t }) => {
-                const pr = projectToScreen(p);
-                if (pr.inFront) {
-                  const sd = Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY);
-                  candidates.push({ point: p.clone(), type: t, screenDist: sd });
-                }
-              });
-            }
-            return;
-          }
-          const obj = scene.getObjectByName(sh.id);
-          if (!obj) return;
-          const box = new THREE.Box3().setFromObject(obj);
-          if (!isFinite(box.min.x) || !isFinite(box.max.x)) return;
-          const xs = [box.min.x, box.max.x], ys = [box.min.y, box.max.y], zs = [box.min.z, box.max.z];
-          const corners: THREE.Vector3[] = [];
-          xs.forEach(x => ys.forEach(y => zs.forEach(z => corners.push(new THREE.Vector3(x, y, z)))));
-          corners.forEach(c => {
-            const pr = projectToScreen(c);
-            if (pr.inFront) {
-              candidates.push({ point: c.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
-            }
-          });
-          for (let ci = 0; ci < 8; ci++) {
-            for (let cj = ci + 1; cj < 8; cj++) {
-              const a = corners[ci], b = corners[cj];
-              const diffs = [a.x !== b.x, a.y !== b.y, a.z !== b.z].filter(Boolean).length;
-              if (diffs === 1) {
-                const mid = a.clone().lerp(b, 0.5);
-                const pr = projectToScreen(mid);
-                if (pr.inFront) {
-                  candidates.push({ point: mid, type: 'midpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
-                }
-              }
-            }
-          }
-          const faceCenters: THREE.Vector3[] = [
-            new THREE.Vector3(box.min.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3(box.max.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z),
-          ];
-          faceCenters.forEach(fc => {
-            const pr = projectToScreen(fc);
-            if (pr.inFront) {
-              candidates.push({ point: fc, type: 'center', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
-            }
-          });
-        });
-
-        // Kernel geometry is a separate representation from `shapes`, so the
-        // pass above cannot see it. Feed its points into the SAME candidate
-        // list rather than adding a second snapping mechanism. §4.2
-        for (const kp of collectKernelSnapPoints(kernelHost.graph)) {
-          const kv = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
-          const pr = projectToScreen(kv);
-          if (!pr.inFront) continue;
-          const rank = rankSnap(kp.kind, Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY));
-          if (!Number.isFinite(rank)) continue;
-          candidates.push({ point: kv, type: kp.kind, screenDist: rank });
-        }
-
-        // Evaluate snap target
-        candidates.sort((a, b) => a.screenDist - b.screenDist);
-        const snapRadiusPx = 18.0;
-        const bestCandidate = candidates.length > 0 && candidates[0].screenDist <= snapRadiusPx ? candidates[0] : null;
-
-        // Awaken reference points when hovered
-        if (bestCandidate) {
-          const existingIdx = awakenedRefPointsRef.current.findIndex(p => p.point.distanceTo(bestCandidate.point) < 0.05);
-          if (existingIdx >= 0) {
-            awakenedRefPointsRef.current[existingIdx].time = performance.now();
-          } else {
-            awakenedRefPointsRef.current.push({
-              point: bestCandidate.point.clone(),
-              type: bestCandidate.type,
-              time: performance.now(),
-              screenPos: { x: mouseScreenX, y: mouseScreenY }
-            });
-            if (awakenedRefPointsRef.current.length > 2) {
-              awakenedRefPointsRef.current.shift();
-            }
-          }
-        }
-
-        let currentGuide: { source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null = null;
-        let snapHit: { point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null = null;
-
-        if (bestCandidate && !axisLock) {
-          // Direct Snap to candidate point projected onto the drawing plane
-          const projectedToPlane = new THREE.Vector3();
-          plane.projectPoint(bestCandidate.point, projectedToPlane);
-          target.copy(projectedToPlane);
-          snapHit = {
-            point: bestCandidate.point.clone(),
-            type: bestCandidate.type,
-            tooltip: bestCandidate.label ?? (bestCandidate.type === 'endpoint' ? 'Endpoint' : bestCandidate.type === 'midpoint' ? 'Midpoint' : 'Center')
-          };
-        } else if (!axisLock && awakenedRefPointsRef.current.length > 0) {
-          // Cardinal alignment inference tracking rays from awakened reference points
-          let bestAlignmentDist = 14.0;
-          let alignedTarget: THREE.Vector3 | null = null;
-
-          for (const ref of awakenedRefPointsRef.current) {
-            const Q = ref.point;
-            const Q_plane = new THREE.Vector3();
-            plane.projectPoint(Q, Q_plane);
-
-            const diffQ = target.clone().sub(Q_plane);
-            const distTangent = diffQ.dot(tangent);
-            const distBitangent = diffQ.dot(bitangent);
-
-            // Ray 1: Along Tangent through Q (Red Axis on ground)
-            const ptOnRay1 = Q_plane.clone().addScaledVector(tangent, distTangent);
-            const pr1 = projectToScreen(ptOnRay1);
-            if (pr1.inFront) {
-              const d1 = Math.hypot(pr1.x - mouseScreenX, pr1.y - mouseScreenY);
-              if (d1 < bestAlignmentDist) {
-                bestAlignmentDist = d1;
-                alignedTarget = ptOnRay1;
-                currentGuide = {
-                  source: [Q.x, Q.y, Q.z],
-                  target: [ptOnRay1.x, ptOnRay1.y, ptOnRay1.z],
-                  color: '#ef4444',
-                  label: 'From Point on Red Axis'
-                };
-              }
-            }
-
-            // Ray 2: Along Bitangent through Q (Green Axis)
-            const ptOnRay2 = Q_plane.clone().addScaledVector(bitangent, distBitangent);
-            const pr2 = projectToScreen(ptOnRay2);
-            if (pr2.inFront) {
-              const d2 = Math.hypot(pr2.x - mouseScreenX, pr2.y - mouseScreenY);
-              if (d2 < bestAlignmentDist) {
-                bestAlignmentDist = d2;
-                alignedTarget = ptOnRay2;
-                currentGuide = {
-                  source: [Q.x, Q.y, Q.z],
-                  target: [ptOnRay2.x, ptOnRay2.y, ptOnRay2.z],
-                  color: '#22c55e',
-                  label: 'From Point on Green Axis'
-                };
-              }
-            }
-          }
-
-          if (alignedTarget) {
-            target.copy(alignedTarget);
-          }
-        }
-
-        if (axisLock) {
-          const axisVec = axisLock === 'x' ? new THREE.Vector3(1, 0, 0) : axisLock === 'y' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
-          const delta = target.clone().sub(drawingStart);
-          const projLength = delta.dot(axisVec);
-          target.copy(drawingStart.clone().addScaledVector(axisVec, projLength));
-          snapHit = null;
-        }
-
-        setSnapIndicator(snapHit ? { point: [snapHit.point.x, snapHit.point.y, snapHit.point.z], type: snapHit.type, tooltip: snapHit.tooltip } : null);
-        setTrackingGuide(currentGuide);
+        // One shared snap (tools/snapEngine.ts): points, crossings, directions from where the
+        // line started, and the locks (arrows, X / Y / Z, Shift).
+        const snap = snapHere(target, plane, drawingStart);
+        target.copy(snap.point);
+        publishSnap(snap);
+        setTrackingGuide(null);
         setLastDrawTarget(target.clone());
 
         // Step 1: Base Dimensions
@@ -8382,7 +8545,6 @@ function Scene() {
       setPreviewShape(null);
       setDrawingStep(0);
       setTrackingGuide(null);
-      awakenedRefPointsRef.current = [];
     }
 
     if (pushPullState) {
@@ -8464,6 +8626,15 @@ function Scene() {
       finalizeWallChain();
       return;
     }
+    // Double-click a group or component to edit inside it.
+    if (activeTool === 'select') {
+      const target = shapes.find(sh => sh.id === id);
+      if (target && isGroupShape(target)) {
+        enterGroupEdit(id);
+        setMeasurements(`Editing ${target.name ?? 'the group'}: draw and edit as usual. Press Esc (with nothing drawing) or Close to finish.`);
+        return;
+      }
+    }
     if (activeTool === 'select' && (wallRunInfo.runOf.get(id)?.length ?? 1) > 1) {
       // Double-click a piece of a wall run: just that piece.
       setSelectedId(id);
@@ -8497,6 +8668,7 @@ function Scene() {
     if ((window as any).__polyformLassoIgnoreClickUntil && Date.now() < (window as any).__polyformLassoIgnoreClickUntil) {
       return;
     }
+    if (activeTool === 'followme' || activeTool === 'section') return; // these tools pick faces themselves, not objects
     
     const shape = shapes.find(s => s.id === id);
     let subFaceIndex: number | undefined = undefined;
@@ -9137,7 +9309,7 @@ function Scene() {
       setSelectedIds([shape.id]);
     } else if (activeTool === 'tape' || activeTool === 'teleport') {
       handlePointerDown(e);
-    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
+    } else if (['poly', 'rectangle', 'circle', 'polygon', 'line', 'arc', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'site_route', 'lamp', 'bench', 'rock', 'block_picker'].includes(activeTool)) {
       handlePointerDown(e);
     }
   };
@@ -9935,7 +10107,7 @@ function Scene() {
     if (activeTool === 'fence') commitFenceRun(nextVerts, false);
     setFenceVertices(nextVerts);
     diagLog('TOOL', `${activeTool} segment placed`, { from: [prev.x, prev.y, prev.z], to: [pointToPlace.x, pointToPlace.y, pointToPlace.z] });
-    setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : 'Railing'} Path: ${nextVerts.length} points placed · Click next point, or type a length and press Enter · Enter to finish`);
+    setMeasurements(`${activeTool === 'fence' ? 'Fence' : activeTool === 'water' ? 'Water outline' : activeTool === 'site_route' ? (routeTool.kind === 'road' ? 'Driving route' : 'Walking route') : 'Railing'} Path: ${nextVerts.length} points placed · Click next point, or type a length and press Enter · Enter to finish`);
   };
 
   /** Ends a drag-drawing gesture whose result was committed from a typed value. */
@@ -10042,12 +10214,619 @@ function Scene() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Tape Measure: measure between two points, or pull a guide off an edge, a guide or an axis
+  // (see tools/tapeGuides.ts). Handled on the canvas itself, so every surface - and empty
+  // space - behaves the same.
+  // ---------------------------------------------------------------------------
+  const TAPE_GUIDE_COLOR = '#0e7490';
+  /** Meshes denser than this don't offer their edges to the tape (terrain, plants). */
+  const TAPE_EDGE_TRIANGLE_LIMIT = 20000;
+
+  /** What's under the pointer for the Tape Measure. */
+  const tapeProbe = (ev: PointerEvent, withPick: boolean) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const px = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+    const size = { width: rect.width, height: rect.height };
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2((px.x / size.width) * 2 - 1, -(px.y / size.height) * 2 + 1), camera);
+    const isModel = (o: THREE.Object3D) => {
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) {
+        const u = p.userData ?? {};
+        if (u.type === 'light') return false;
+        if (u.isShape || u.isKernelGeometry || typeof u.id === 'string') return true;
+      }
+      return false;
+    };
+    let surface: THREE.Intersection | undefined;
+    let model: THREE.Intersection | undefined;
+    for (const hit of rc.intersectObjects(scene.children, true)) {
+      const o = hit.object as THREE.Mesh & { isLine2?: boolean; isLineSegments2?: boolean };
+      if (!o.isMesh || o.isLine2 || o.isLineSegments2 || o.name === 'previewMesh'
+        || o.userData.isHelper || o.userData.isPreview || o.userData.isGizmo) continue;
+      if (!surface) surface = hit;
+      if (isModel(o)) { model = hit; break; }
+    }
+    // Nothing under the pointer: the ground.
+    const point = surface?.point.clone() ?? rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+
+    let pick: ReturnType<typeof pickGuideSource> = null;
+    if (withPick) {
+      const sources: GuideSource[] = [...axisSources()];
+      for (const [a, b] of guideSegments) sources.push({ a, b, endless: true, label: 'Guide' });
+      for (const edge of kernelHost.graph.edges.values()) {
+        if (edge.hidden) continue;
+        const [a, b] = edgePoints(kernelHost.graph, edge);
+        sources.push({ a: new THREE.Vector3(a.x, a.y, a.z), b: new THREE.Vector3(b.x, b.y, b.z), endless: false, label: 'Edge' });
+      }
+      const mesh = model?.object as THREE.Mesh | undefined;
+      if (mesh && !mesh.userData.isKernelGeometry && !(mesh as THREE.InstancedMesh).isInstancedMesh) {
+        const g = mesh.geometry as THREE.BufferGeometry;
+        const triangles = (g.index ? g.index.count : g.getAttribute('position')?.count ?? 0) / 3;
+        if (triangles <= TAPE_EDGE_TRIANGLE_LIMIT) sources.push(...featureEdges(mesh));
+      }
+      pick = pickGuideSource(sources, px, camera, size);
+    }
+    return { ray: rc.ray, point, modelPoint: model?.point.clone() ?? null, pick };
+  };
+
+  /** The corner of a picked edge nearest the pointer. */
+  const tapeCorner = (pick: NonNullable<ReturnType<typeof pickGuideSource>>) =>
+    (pick.point.distanceTo(pick.source.a) <= pick.point.distanceTo(pick.source.b) ? pick.source.a : pick.source.b).clone();
+
+  const commitTapeGuide = (draft: NonNullable<typeof tapeGuide>, offset: THREE.Vector3) => {
+    const distance = offset.length();
+    if (distance < 1e-4) {
+      setMeasurements('Move away from the line first (or type a distance), then click.');
+      return;
+    }
+    const guideAt = (o: THREE.Vector3, d: number): Partial<Shape> => {
+      const p = draft.linePoint.clone().add(o);
+      const args: GuideArgs = makeGuideArgs(p, draft.dir, d);
+      return { name: `Guide ${formatValue(d, unit, 2)}`, position: [p.x, p.y, p.z], args };
+    };
+    const id = Math.random().toString(36).substr(2, 9);
+    addShape({ id, type: 'measurement', color: TAPE_GUIDE_COLOR, ...guideAt(offset, distance) } as Shape);
+    setTapeGuide(null);
+    setMeasurements(`Guide placed ${formatValue(distance, unit, 2)} from the ${draft.label.toLowerCase()}. Type a distance and press Enter to change it.`);
+    offerShapeAdjust('tape', id, 'Guide distance', (_shape, typed) => {
+      const len = lengthOrError(typed, true);
+      if (typeof len === 'string') return len;
+      const o = offsetAtDistance(offset, draft.dir, len);
+      return o ? guideAt(o, Math.abs(len)) : 'Could not tell which side to put the guide on.';
+    });
+  };
+
+  const tapeClickRef = useRef<(ev: PointerEvent) => void>(() => {});
+  tapeClickRef.current = (ev) => {
+    if (tapeGuide) {
+      commitTapeGuide(tapeGuide, tapeGuide.offset);
+      return;
+    }
+    const probe = tapeProbe(ev, true);
+    const pick = probe.pick;
+    if (tapeStart) {
+      const point = pick?.onCorner ? tapeCorner(pick) : probe.point;
+      if (!point) return;
+      const distance = tapeStart.distanceTo(point);
+      addShape({
+        id: Math.random().toString(36).substr(2, 9),
+        type: 'measurement',
+        position: [(tapeStart.x + point.x) / 2, (tapeStart.y + point.y) / 2, (tapeStart.z + point.z) / 2],
+        args: {
+          start: [tapeStart.x, tapeStart.y, tapeStart.z],
+          end: [point.x, point.y, point.z],
+          distance,
+        },
+        color: '#FFD700',
+      } as Shape);
+      setMeasurements(`Distance: ${formatValue(distance, unit, 2)}`);
+      setTapeStart(null);
+      setTapeEnd(null);
+      return;
+    }
+    // The body of an edge, a guide or an axis: pull a guide off it.
+    if (pick && !pick.onCorner) {
+      const dir = pick.source.b.clone().sub(pick.source.a).normalize();
+      setTapeGuide({ linePoint: pick.point.clone(), dir, offset: new THREE.Vector3(), label: pick.source.label });
+      setTapeHover(null);
+      setMeasurements(`Move away from the ${pick.source.label.toLowerCase()} and click to place a guide parallel to it, or type a distance and press Enter. Esc cancels.`);
+      return;
+    }
+    // A corner or anywhere else: measure from there.
+    const start = pick?.onCorner ? tapeCorner(pick) : probe.point;
+    if (!start) return;
+    setTapeStart(start);
+    setTapeEnd(start);
+    setMeasurements('Click second point to measure.');
+  };
+
+  const tapeMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  tapeMoveRef.current = (ev) => {
+    if (tapeGuide) {
+      const probe = tapeProbe(ev, false);
+      const offset = guideOffset(tapeGuide.linePoint, tapeGuide.dir, probe.ray, probe.modelPoint);
+      setTapeGuide({ ...tapeGuide, offset });
+      setMeasurements(`Guide: ${formatValue(offset.length(), unit, 2)}   (click to place · type a distance · Esc cancels)`);
+      return;
+    }
+    const probe = tapeProbe(ev, true);
+    const pick = probe.pick;
+    if (tapeStart) {
+      const point = pick?.onCorner ? tapeCorner(pick) : probe.point;
+      if (!point) return;
+      setTapeEnd(point);
+      setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
+      return;
+    }
+    const hover = pick && !pick.onCorner ? pick.source : null;
+    const same = (x: GuideSource | null, y: GuideSource | null) =>
+      x === y || (!!x && !!y && x.a.equals(y.a) && x.b.equals(y.b));
+    if (!same(hover, tapeHover)) setTapeHover(hover);
+    setMeasurements(hover
+      ? `${hover.label}: click, then move away to place a guide parallel to it`
+      : pick?.onCorner ? 'Corner: click to measure from here' : 'Click to start measuring, or click an edge to pull a guide off it');
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'tape') {
+      setTapeGuide(null);
+      setTapeHover(null);
+      setTapeStart(null);
+      setTapeEnd(null);
+      return;
+    }
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => { if (ev.button === 0) down = { x: ev.clientX, y: ev.clientY }; };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      // A press that moved is a drag of the view, not a click.
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      if (isClick) tapeClickRef.current(ev);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (lastMove) tapeMoveRef.current(lastMove);
+      });
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [activeTool, gl]);
+
+  // ---------------------------------------------------------------------------
+  // Dimension and Leader Label (see tools/annotations.ts). Dimension: click two points, then
+  // move out to where the line should sit and click. Leader: click what to point at, click
+  // where the text goes, type it. Both use the Tape Measure's picking, so corners snap.
+  // ---------------------------------------------------------------------------
+  const [dimDraft, setDimDraft] = useState<{ start: THREE.Vector3; end: THREE.Vector3 | null; cursor: THREE.Vector3; offset: THREE.Vector3 } | null>(null);
+  const [leaderDraft, setLeaderDraft] = useState<{ target: THREE.Vector3; anchor: THREE.Vector3 | null; cursor: THREE.Vector3; typing: boolean; text: string } | null>(null);
+
+  const annotationPoint = (ev: PointerEvent) => {
+    const probe = tapeProbe(ev, true);
+    const point = probe.pick?.onCorner ? tapeCorner(probe.pick) : probe.point;
+    return { point, probe };
+  };
+
+  const annotationClickRef = useRef<(ev: PointerEvent) => void>(() => {});
+  annotationClickRef.current = (ev) => {
+    if (leaderDraft?.typing) return;
+    const { point } = annotationPoint(ev);
+    if (!point) return;
+    if (activeTool === 'dimensions') {
+      if (!dimDraft) {
+        setDimDraft({ start: point, end: null, cursor: point, offset: new THREE.Vector3() });
+        setMeasurements('Click the second point.');
+      } else if (!dimDraft.end) {
+        if (point.distanceTo(dimDraft.start) < 1e-4) { setMeasurements('Pick a second point away from the first.'); return; }
+        setDimDraft({ ...dimDraft, end: point, cursor: point });
+        setMeasurements('Move out to where the dimension line goes, then click.');
+      } else {
+        const t = (v: THREE.Vector3): [number, number, number] => [v.x, v.y, v.z];
+        const args = makeDimensionArgs(t(dimDraft.start), t(dimDraft.end), t(dimDraft.offset));
+        addShape({
+          id: Math.random().toString(36).substr(2, 9), name: `Dimension ${formatValue(args.distance, unit, 2)}`, type: 'measurement',
+          position: t(dimDraft.start), args, color: '#0284c7',
+        } as Shape);
+        setMeasurements(`Dimension placed: ${formatValue(args.distance, unit, 2)}`);
+        setDimDraft(null);
+      }
+    } else if (activeTool === 'leader') {
+      if (!leaderDraft) {
+        setLeaderDraft({ target: point, anchor: null, cursor: point, typing: false, text: '' });
+        setMeasurements('Click where the text should go.');
+      } else if (!leaderDraft.anchor) {
+        setLeaderDraft({ ...leaderDraft, anchor: point, typing: true });
+        setMeasurements('Type the label, then press Enter. Esc cancels.');
+      }
+    }
+  };
+
+  const annotationMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  annotationMoveRef.current = (ev) => {
+    if (activeTool === 'dimensions' && dimDraft) {
+      const { point, probe } = annotationPoint(ev);
+      if (!point) return;
+      if (!dimDraft.end) {
+        setDimDraft({ ...dimDraft, cursor: point });
+        setMeasurements(`Distance: ${formatValue(dimDraft.start.distanceTo(point), unit, 2)}`);
+      } else {
+        const dir = dimDraft.end.clone().sub(dimDraft.start).normalize();
+        const offset = guideOffset(dimDraft.start, dir, probe.ray, probe.modelPoint);
+        setDimDraft({ ...dimDraft, offset });
+        setMeasurements(`Dimension ${formatValue(dimDraft.start.distanceTo(dimDraft.end), unit, 2)} - click to place`);
+      }
+    } else if (activeTool === 'leader' && leaderDraft && !leaderDraft.anchor) {
+      const { point } = annotationPoint(ev);
+      if (point) setLeaderDraft({ ...leaderDraft, cursor: point });
+    }
+  };
+
+  const commitLeader = () => {
+    if (!leaderDraft?.anchor) return;
+    const text = leaderDraft.text.trim();
+    if (!text) { setLeaderDraft(null); return; }
+    const t = (v: THREE.Vector3): [number, number, number] => [v.x, v.y, v.z];
+    const args: LeaderArgs = { kind: 'leader', target: t(leaderDraft.target), anchor: t(leaderDraft.anchor), text };
+    addShape({
+      id: Math.random().toString(36).substr(2, 9), name: `Label: ${text.slice(0, 24)}`, type: 'measurement',
+      position: args.anchor, args, color: '#f59e0b',
+    } as Shape);
+    setLeaderDraft(null);
+    setMeasurements('Label placed.');
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'dimensions' && activeTool !== 'leader') {
+      setDimDraft(null);
+      setLeaderDraft(null);
+      return;
+    }
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => { if (ev.button === 0) down = { x: ev.clientX, y: ev.clientY }; };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      if (isClick) annotationClickRef.current(ev);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; if (lastMove) annotationMoveRef.current(lastMove); });
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') { setDimDraft(null); setLeaderDraft(null); }
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      window.removeEventListener('keydown', onKey);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [activeTool, gl]);
+
+  // ---------------------------------------------------------------------------
+  // Follow Me: click the shape, then click the path - an edge (the whole run of lines and
+  // arcs through it) or a face (its outline, all the way round). Hovering the path shows it
+  // and the swept result as a wireframe. See tools/kernelFollowMe.ts.
+  // ---------------------------------------------------------------------------
+  const [followMeProfile, setFollowMeProfile] = useState<FaceId | null>(null);
+  const [followMeHover, setFollowMeHover] = useState<{ path: FollowMePath; pathSegments: [V3, V3][]; preview: [V3, V3][] | null; reason: string | null } | null>(null);
+
+  /** The drawn face and drawn edge under the pointer. */
+  const followMeProbe = (ev: PointerEvent, exclude: ReadonlySet<EdgeId>) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const px = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+    const size = { width: rect.width, height: rect.height };
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2((px.x / size.width) * 2 - 1, -(px.y / size.height) * 2 + 1), camera);
+    let face: FaceId | null = null;
+    for (const hit of rc.intersectObjects(scene.children, true)) {
+      const o = hit.object as THREE.Mesh & { isLine2?: boolean; isLineSegments2?: boolean };
+      if (!o.isMesh || o.isLine2 || o.isLineSegments2 || !o.visible) continue;
+      const mat = o.material as THREE.Material;
+      if (!Array.isArray(o.material) && mat.transparent && mat.opacity === 0) continue; // invisible catch planes
+      if (o.userData.isKernelGeometry && hit.faceIndex != null) face = (o.userData.faceOfTriangle as FaceId[])[hit.faceIndex] ?? null;
+      break;
+    }
+    const ids: EdgeId[] = [];
+    const sources: GuideSource[] = [];
+    for (const [id, edge] of kernelHost.graph.edges) {
+      if (edge.hidden || exclude.has(id)) continue;
+      const [a, b] = edgePoints(kernelHost.graph, edge);
+      ids.push(id);
+      sources.push({ a: new THREE.Vector3(a.x, a.y, a.z), b: new THREE.Vector3(b.x, b.y, b.z), endless: true, label: 'Edge' });
+    }
+    const pick = pickGuideSource(sources, px, camera, size);
+    return { face, edge: pick ? ids[sources.indexOf(pick.source)] ?? null : null };
+  };
+
+  const endFollowMe = () => {
+    setFollowMeProfile(null);
+    setFollowMeHover(null);
+  };
+
+  const followMeClickRef = useRef<(ev: PointerEvent) => void>(() => {});
+  followMeClickRef.current = (ev) => {
+    if (followMeProfile === null || !kernelHost.graph.faces.has(followMeProfile)) {
+      const { face } = followMeProbe(ev, new Set());
+      if (face === null) {
+        setMeasurements('Follow Me: click a flat shape you drew (the profile to sweep).');
+        return;
+      }
+      setFollowMeProfile(face);
+      setSelectedFaceIds([face]);
+      setMeasurements('Follow Me: now click the path - an edge, or a face to go round its edge. Esc to start again.');
+      return;
+    }
+    const hover = followMeHover;
+    if (!hover) {
+      setMeasurements('Follow Me: click an edge or a face to sweep along.');
+      return;
+    }
+    if (hover.reason) {
+      setMeasurements(`Follow Me: ${hover.reason}`);
+      return;
+    }
+    const r = commitKernelFollowMe(kernelHost, followMeProfile, hover.path);
+    if (!r.ok) {
+      setMeasurements(`Follow Me: ${r.reason}`);
+      return;
+    }
+    recordAction(actionLabel('Follow Me'));
+    bumpKernel();
+    setSelectedFaceIds([]);
+    endFollowMe();
+    setMeasurements('Follow Me: done. Click another shape to sweep again.');
+  };
+
+  const followMeMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  followMeMoveRef.current = (ev) => {
+    if (followMeProfile === null || !kernelHost.graph.faces.has(followMeProfile)) return;
+    const outline = outlineEdges(kernelHost.graph, followMeProfile);
+    const { face, edge } = followMeProbe(ev, outline);
+    const path = edge !== null
+      ? pathFromEdge(kernelHost.graph, edge, outline)
+      : face !== null && face !== followMeProfile ? pathFromFace(kernelHost.graph, face) : null;
+    if (!path) {
+      if (followMeHover) setFollowMeHover(null);
+      return;
+    }
+    if (followMeHover && followMeHover.path.edges.length === path.edges.length && followMeHover.path.edges.every((e, i) => e === path.edges[i])) return;
+    const v = (p: { x: number; y: number; z: number }): V3 => [p.x, p.y, p.z];
+    const pathSegments: [V3, V3][] = [];
+    for (let i = 0; i + 1 < path.points.length; i++) pathSegments.push([v(path.points[i]!), v(path.points[i + 1]!)]);
+    if (path.closed && path.points.length > 2) pathSegments.push([v(path.points[path.points.length - 1]!), v(path.points[0]!)]);
+    const preview = previewFollowMe(kernelHost, followMeProfile, path);
+    const ok = 'segments' in preview;
+    setFollowMeHover({
+      path,
+      pathSegments,
+      preview: ok ? preview.segments.map(([a, b]) => [v(a), v(b)] as [V3, V3]) : null,
+      reason: ok ? null : preview.reason,
+    });
+    setMeasurements(ok ? 'Follow Me: click to sweep along this path.' : `Follow Me: ${preview.reason}`);
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'followme') {
+      endFollowMe();
+      return;
+    }
+    setMeasurements('Follow Me: click a flat shape you drew (the profile to sweep), then the path.');
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => { if (ev.button === 0) down = { x: ev.clientX, y: ev.clientY }; };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      if (isClick) followMeClickRef.current(ev);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (lastMove) followMeMoveRef.current(lastMove);
+      });
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [activeTool, gl]);
+
+  // ---------------------------------------------------------------------------
+  // Section Plane tool: hover a face to line a plane up with it, click to place it (it becomes
+  // the active cut). Drag an existing plane's square to slide it along its direction.
+  // See tools/sectionPlanes.ts and SectionCutter.tsx.
+  // ---------------------------------------------------------------------------
+  const { active: presentationActive } = usePresentation();
+  const activeSectionArgs = useMemo(() => activeSection(shapes)?.args ?? null, [shapes]);
+  // Cool moonlight tint on the ambient light as the sun goes down (white by day).
+  const nightAmbientColor = useMemo(
+    () => new THREE.Color('#ffffff').lerp(new THREE.Color(NIGHT_AMBIENT_COLOR), 1 - daylightFactor(sunIntensity)),
+    [sunIntensity],
+  );
+  const [sectionHover, setSectionHover] = useState<SectionArgs | null>(null);
+  const sectionDragRef = useRef<{ id: string; start: SectionArgs; from: THREE.Vector3; distance: number } | null>(null);
+
+  /** What the Section tool is pointing at: a placed plane's square, or a face of the model. */
+  const sectionProbe = (ev: PointerEvent) => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1), camera);
+    for (const hit of rc.intersectObjects(scene.children, true)) {
+      const o = hit.object as THREE.Mesh & { isLine2?: boolean; isLineSegments2?: boolean };
+      if (!o.isMesh || o.isLine2 || o.isLineSegments2) continue;
+      if (o.userData.isSectionPlaneQuad && o.userData.sectionId) return { ray: rc.ray, plane: o.userData.sectionId as string, point: hit.point, face: null };
+      if (!isModelObject(o) || !hit.face) continue;
+      const normal = hit.face.normal.clone().transformDirection(o.matrixWorld);
+      return { ray: rc.ray, plane: null, point: hit.point, face: normal };
+    }
+    return { ray: rc.ray, plane: null, point: null, face: null };
+  };
+
+  /** A plane square big enough to cover the model. */
+  const sectionSize = () => {
+    const box = new THREE.Box3();
+    for (const item of collectModelItems(scene)) {
+      item.geometry.computeBoundingBox();
+      for (const m of item.matrices) box.union(item.geometry.boundingBox!.clone().applyMatrix4(m));
+    }
+    return box.isEmpty() ? 6 : Math.min(200, Math.max(2, box.getSize(new THREE.Vector3()).length() * 1.1));
+  };
+
+  const sectionDownRef = useRef<(ev: PointerEvent) => boolean>(() => false);
+  sectionDownRef.current = (ev) => {
+    const probe = sectionProbe(ev);
+    if (!probe.plane || !probe.point) return false;
+    const shape = shapes.find(sh => sh.id === probe.plane);
+    if (!shape) return false;
+    const start = shape.args as SectionArgs;
+    sectionDragRef.current = { id: shape.id, start, from: probe.point.clone(), distance: 0 };
+    const controls = scene.userData.controls;
+    if (controls) controls.enabled = false;
+    setSectionHover(null);
+    setMeasurements('Section: drag to slide the plane; let go to place it.');
+    return true;
+  };
+
+  const sectionMoveRef = useRef<(ev: PointerEvent) => void>(() => {});
+  sectionMoveRef.current = (ev) => {
+    const drag = sectionDragRef.current;
+    if (drag) {
+      const rect = gl.domElement.getBoundingClientRect();
+      const rc = new THREE.Raycaster();
+      rc.setFromCamera(new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1), camera);
+      drag.distance = dragDistance(drag.from, new THREE.Vector3(...drag.start.normal), rc.ray);
+      const moved = moveSection(drag.start, drag.distance);
+      // Live, without an undo step per frame: the one step is added when the drag ends.
+      setShapesSilent(prev => prev.map(sh => (sh.id === drag.id ? { ...sh, args: moved, position: moved.point } : sh)));
+      setMeasurements(`Section moved ${formatValue(drag.distance, unit, 2)}`);
+      return;
+    }
+    const probe = sectionProbe(ev);
+    if (probe.face && probe.point) {
+      setSectionHover(sectionOnFace(probe.point, probe.face, camera.position, sectionSize()));
+      setMeasurements('Section: click to cut here. Drag a placed plane to move it.');
+    } else {
+      setSectionHover(null);
+      setMeasurements(probe.plane ? 'Section: drag to slide this plane along its direction.' : 'Section: point at a wall, floor or other face.');
+    }
+  };
+
+  const sectionUpRef = useRef<(ev: PointerEvent, isClick: boolean) => void>(() => {});
+  sectionUpRef.current = (ev, isClick) => {
+    const drag = sectionDragRef.current;
+    if (drag) {
+      sectionDragRef.current = null;
+      const controls = scene.userData.controls;
+      if (controls) controls.enabled = true;
+      const moved = moveSection(drag.start, drag.distance);
+      setShapes(prev => prev.map(sh => (sh.id === drag.id ? { ...sh, args: moved, position: moved.point } : sh)));
+      recordAction(actionLabel('Move section plane'));
+      return;
+    }
+    if (!isClick) return;
+    const probe = sectionProbe(ev);
+    if (!probe.face || !probe.point) return;
+    // A new plane looks like the ones already placed (plane shown or hidden, x-ray line style).
+    const args: SectionArgs = { ...sectionOnFace(probe.point, probe.face, camera.position, sectionSize()), ...sectionLook(shapes) };
+    const id = Math.random().toString(36).substr(2, 9);
+    const count = shapes.filter(isSectionShape).length;
+    setShapes(prev => [
+      // One section cuts at a time: the new one takes over.
+      ...prev.map(sh => (isSectionShape(sh) && (sh.args as SectionArgs).active ? { ...sh, args: { ...(sh.args as SectionArgs), active: false } } : sh)),
+      { id, name: `Section ${count + 1}`, type: 'measurement', position: args.point, args, color: '#f97316' } as Shape,
+    ]);
+    recordAction(actionLabel('Add section plane'));
+    setSectionHover(null);
+    setMeasurements('Section placed. Drag its square to move it; select it to flip it or turn it off.');
+  };
+
+  useEffect(() => {
+    if (activeTool !== 'section') {
+      setSectionHover(null);
+      return;
+    }
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    let frame = 0;
+    let lastMove: PointerEvent | null = null;
+    const onDown = (ev: PointerEvent) => {
+      if (ev.button !== 0) return;
+      down = { x: ev.clientX, y: ev.clientY };
+      sectionDownRef.current(ev);
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.button !== 0 || !down) return;
+      const isClick = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 5;
+      down = null;
+      sectionUpRef.current(ev, isClick);
+    };
+    const onMove = (ev: PointerEvent) => {
+      lastMove = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (lastMove) sectionMoveRef.current(lastMove);
+      });
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      if (frame) cancelAnimationFrame(frame);
+      if (sectionDragRef.current) {
+        sectionDragRef.current = null;
+        const controls = scene.userData.controls;
+        if (controls) controls.enabled = true;
+      }
+    };
+  }, [activeTool, gl]);
+
   typedWantedRef.current = () => {
     if (lastTypedStepRef.current?.tool === activeTool) return true;
+    if (activeTool === 'tape' && tapeGuide) return true;
+    if (activeTool === 'arc' && arcState && arcState.phase !== 'ready' && arcState.phase !== 'inactive') return true;
     if (drawingStart && (activeTool === 'line' || activeTool in RING_TOOLS
       || ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool))) return true;
     if (activeTool === 'wall' && wallVertices.length > 0) return true;
-    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) return true;
+    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) return true;
     if (activeTool === 'bezier' && bezierKnots.length > 0) return true;
     return false;
   };
@@ -10088,6 +10867,38 @@ function Scene() {
       return false; // the primitives' own typed sizes (below in the keydown handler)
     }
 
+    // The arc: a bulge (0.5, 300mm), a radius (2r), or a segment count (12s) for the arc being drawn.
+    if (activeTool === 'arc' && arcToolRef.current) {
+      const tool = arcToolRef.current;
+      const before = tool.current;
+      if (before.phase === 'first' && !/s$/i.test(typed)) return fail('Set the other end of the chord first, then type a bulge or a radius (2r). 12s sets the number of segments.');
+      for (const ch of typed) tool.type(ch);
+      const after = tool.enter();
+      setArcState(after);
+      if (after.lastError) return fail(`Arc: ${after.lastError}`);
+      if (after.phase === 'ready') {
+        arcPlaneRef.current = null;
+        arcFilletRef.current = [];
+        clearSnapLocks();
+        bumpKernel();
+        recordAction(actionLabel('Arc'));
+        setMeasurements(`Arc drawn (${typed}).`);
+      } else {
+        setMeasurements(`Arc segments: ${after.segments}`);
+      }
+      return true;
+    }
+
+    // A guide being pulled: place it that far from its line, on the side the pointer is.
+    if (activeTool === 'tape' && tapeGuide) {
+      const len = lengthOrError(typed, true);
+      if (typeof len === 'string') return fail(len);
+      const offset = offsetAtDistance(tapeGuide.offset, tapeGuide.dir, len);
+      if (!offset) return fail('Move the pointer to the side the guide should go, then type the distance.');
+      commitTapeGuide(tapeGuide, offset);
+      return true;
+    }
+
     // Between the clicks of a chain: the next point, that far towards the cursor.
     if (activeTool === 'wall' && wallVertices.length > 0) {
       const len = lengthOrError(typed);
@@ -10098,7 +10909,7 @@ function Scene() {
       placeWallPoint(pointAlong(last, flat, len));
       return true;
     }
-    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water') && fenceVertices.length > 0) {
+    if ((activeTool === 'fence' || activeTool === 'railing' || activeTool === 'water' || activeTool === 'site_route') && fenceVertices.length > 0) {
       const len = lengthOrError(typed);
       if (typeof len === 'string') return fail(len);
       const last = fenceVertices[fenceVertices.length - 1];
@@ -10164,7 +10975,10 @@ function Scene() {
       
       <Fog />
       
-      <ambientLight intensity={(skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity)} />
+      <ambientLight
+        intensity={(skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity) * scaleForDaylight(daylightFactor(sunIntensity))}
+        color={nightAmbientColor}
+      />
       <directionalLight 
         ref={directionalLightRef}
         position={lightPosition} 
@@ -10173,6 +10987,8 @@ function Scene() {
       />
       <ShareMainScene />
       <PresentationDriver />
+      {/* The active section plane cuts the model (presentation mode does its own cuts). */}
+      <SectionCutter section={presentationActive ? null : activeSectionArgs} />
       <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />
       
       {godRaysEnabled && (
@@ -10313,7 +11129,7 @@ function Scene() {
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {(placingLightId || placingAnimationId || ['text', 'text3d', 'terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
+      {(placingLightId || placingAnimationId || ['text', 'text3d', 'terrain', 'poly', 'bezier', 'rectangle', 'circle', 'polygon', 'arc', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'wall', 'door', 'window', 'step', 'staircase', 'scale_figure', 'landscape_sculpt', 'landscape_mask', 'landscape_road', 'landscape_zone', 'landscape_plot', 'landscape_form', 'landscape_embed', 'landscape_texture', 'tree', 'bush', 'fence', 'railing', 'water', 'site_route', 'lamp', 'bench', 'rock', 'road', 'pad-rect', 'pad-circle', 'striping', 'block_picker', 'teleport'].includes(activeTool)) && (
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -0.01, 0]} 
@@ -10517,6 +11333,17 @@ function Scene() {
         <RenderMapTexture lat={worldViewLocation.lat} lng={worldViewLocation.lng} />
       )}
 
+      {/* Buildings deleted from an imported site, drawn as ghosts when "show existing" is on. */}
+      {siteGhosts.length > 0 && <SiteGhosts removed={siteGhosts} />}
+
+      {/* Moving cars and people on an imported site (presentations, or the editor if turned on). */}
+      <SiteStreetLifeLayer shapes={shapes} />
+
+      {/* Google's Photorealistic 3D Tiles around the site: a viewing layer (WorldView > 3D Site). */}
+      {googleLayer && googleMapsApiKey && (
+        <GoogleTilesLayer site={googleLayer.site} apiKey={googleMapsApiKey} shapes={shapes} existing={siteGround?.terrainData?.siteExisting} kernelRevision={kernelRevision} groundAt={googleGroundAt} />
+      )}
+
       {/*
         Toast render moved to the outer Viewport() function — see
         showToast's own doc comment above for why this can't render here.
@@ -10555,6 +11382,11 @@ function Scene() {
         edgeLineWidth={edgeLinesThickness}
         bindingFor={kernelBindingFor}
       />
+
+      {/* Editing inside a group: the rest of the drawing, set aside, shown faded. */}
+      {groupEdit && (
+        <KernelGroupMesh shape={{ kernelGraph: groupEdit.mainGraph } as Shape} groupProps={{}} opacity={0.25} />
+      )}
 
       <LassoOverlay getSceneObjectById={getSceneObjectById} />
 
@@ -10604,6 +11436,8 @@ function Scene() {
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;
+        // Google's own ground stands in for the editable one once it is actually showing (its data still drives heights).
+        if (googleLayer?.site.googleGround === 'google' && googleStatus.state === 'showing' && shape.id === googleLayer.groundId) return null;
         if (batchedPlantIds.has(shape.id)) return null;
         if (shape.tags?.includes('timber-frame') || shape.id.startsWith('tf-')) {
           // Rendered via InstancedTimberFraming for batch instancing performance
@@ -10616,6 +11450,43 @@ function Scene() {
 
         if (!isVisible) return null;
 
+        if (isSectionShape(shape)) {
+          const sectionId = shape.id;
+          return (
+            <SectionPlaneMesh key={shape.id} id={shape.id} args={shape.args as SectionArgs} selected={selectedId === shape.id}
+              pickable={activeTool === 'section' || activeTool === 'select'}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(sectionId); setSelectedIds([sectionId]); } : undefined} />
+          );
+        }
+        // Guides hide together (Scene Helpers > Guides).
+        if (isGuideShape(shape) && !guidesVisible) return null;
+        if (shape.type === 'measurement' && (shape.args as any)?.kind === 'guide') {
+          const g = shape.args as GuideArgs;
+          const isSel = selectedId === shape.id;
+          return (
+            <Line key={shape.id} points={[g.start, g.end]} dashed dashSize={0.3} gapSize={0.2}
+              color={isSel ? '#FFFFFF' : (shape.color || '#0e7490')} lineWidth={isSel ? 2.5 : 1.5}
+              onClick={(e: any) => { if (activeTool !== 'select') return; e.stopPropagation(); setSelectedId(shape.id); setSelectedIds([shape.id]); }} />
+          );
+        }
+        if (isDimensionShape(shape)) {
+          return (
+            <DimensionMark key={shape.id} args={shape.args as DimensionArgs} unit={unit} selected={selectedId === shape.id} color={shape.color}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(shape.id); setSelectedIds([shape.id]); } : undefined} />
+          );
+        }
+        if (isLeaderShape(shape)) {
+          return (
+            <LeaderMark key={shape.id} args={shape.args as LeaderArgs} selected={selectedId === shape.id} color={shape.color}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(shape.id); setSelectedIds([shape.id]); } : undefined} />
+          );
+        }
+        if (isAreaLabelShape(shape)) {
+          return (
+            <AreaMark key={shape.id} args={shape.args as AreaLabelArgs} graph={kernelHost.graph} unit={unit} selected={selectedId === shape.id}
+              onSelect={activeTool === 'select' ? () => { setSelectedId(shape.id); setSelectedIds([shape.id]); } : undefined} />
+          );
+        }
         if (shape.type === 'measurement' && (shape.args as any)?.kind === 'protractor') {
           return (
             <ProtractorMeasurement key={shape.id} args={shape.args as ProtractorArgs} selected={selectedId === shape.id}
@@ -10810,24 +11681,6 @@ function Scene() {
           onContextMenu: (e: any) => handleContextMenu(e, shape.id),
           onPointerDown: (e: any) => handleMeshPointerDown(e, shape),
           onPointerMove: (e: any) => {
-            if (activeTool === 'tape' && tapeStart) {
-              const point = e.point.clone();
-              setTapeEnd(point);
-              setMeasurements(`Distance: ${formatValue(tapeStart.distanceTo(point), unit, 2)}`);
-              return;
-            }
-            if (activeTool === 'arc' && arcStep === 1 && arcStart) {
-              const point = e.point.clone();
-              setArcEnd(point);
-              setMeasurements(`Arc Chord: ${formatValue(arcStart.distanceTo(point), unit, 2)} (Click to set endpoint)`);
-              return;
-            }
-            if (activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd) {
-              const point = e.point.clone();
-              setArcBulge(point);
-              setMeasurements(`Arc Curvature: Adjust bulge & click to place`);
-              return;
-            }
             if (activeTool === 'deform' && e.buttons === 1) {
               e.stopPropagation();
               const { radius, strength, direction } = deformationSettings;
@@ -11184,6 +12037,14 @@ function Scene() {
           );
         }
 
+        if (shape.type === 'site_building' && shape.siteBuildingData) {
+          return (
+            <SiteBuildingMesh key={shape.id} shape={shape} meshProps={meshProps}
+              selected={selectedId === shape.id || selectedIds.includes(shape.id)}
+              style={siteStyleFor(shape)} ghost={googleShownBuildings.has(shape.id)} />
+          );
+        }
+
         if ((shape.type === 'text' || shape.type === 'text3d') && shape.textData) {
           return <TextMesh key={shape.id} shape={shape} meshProps={meshProps} selectionHighlight={selectionHighlight} />;
         }
@@ -11200,6 +12061,16 @@ function Scene() {
               />
             );
           }
+        }
+
+        if (isGroupShape(shape)) {
+          // Open for editing: its faces are in the drawing kernel right now.
+          if (groupEdit?.shapeId === shape.id) return null;
+          return (
+            <KernelGroupMesh key={shape.id} shape={shape} groupProps={meshProps}
+              showEdges={edgeLinesEnabled} edgeColor={edgeLinesColor} edgeOpacity={edgeLinesOpacity}
+              edgeLineWidth={edgeLinesThickness} bindingFor={kernelBindingFor} />
+          );
         }
 
         if ((shape.type === 'box' || shape.type === 'rect') && shape.bevelAmount) {
@@ -11359,7 +12230,11 @@ function Scene() {
             ) :
             (() => {
               const isTerrainHeatmap = shape.type === 'terrain' && !!shape.terrainData?.shadingMode && shape.terrainData.shadingMode !== 'default';
-              const resolvedTexUrl = !isTerrainHeatmap ? (
+              const site = shape.type === 'terrain' ? shape.terrainData?.site : undefined;
+              const resolvedTexUrl = isTerrainHeatmap ? '' : site ? (
+                // Imported ground: plain white-model grey, or the satellite picture of exactly this site.
+                site.groundStyle === 'satellite' ? (siteSatelliteUrl(site, googleMapsApiKey || '') ?? '') : ''
+              ) : !isTerrainHeatmap ? (
                 (shape.type === 'terrain')
                   ? (isTextureUrl(shape.terrainData?.textureUrl) ? shape.terrainData!.textureUrl! : (isTextureUrl(shape.color) ? shape.color : (shape.terrainData?.textureUrl || 'lush_grass')))
                   : (isTextureUrl(shape.textureUrl) ? shape.textureUrl! : (isTextureUrl(shape.color) ? shape.color : ''))
@@ -11795,16 +12670,29 @@ function Scene() {
         );
       })}
 
+      {/* Inference lines: the direction in force, a held lock, and the edge under the pointer */}
+      {snapGuides.map((g, i) => (
+        <Line key={`snap-guide-${i}`} points={[g.a.toArray(), g.b.toArray()]} color={g.color} lineWidth={g.dashed ? 1.5 : 2}
+          dashed={g.dashed} dashSize={0.25} gapSize={0.15} depthTest={false} renderOrder={18} raycast={() => null} />
+      ))}
+      {snapHoverEdge && KERNEL_SNAP_TOOLS.includes(activeTool) && (
+        <Line points={[snapHoverEdge.a.toArray(), snapHoverEdge.b.toArray()]} color="#f59e0b" lineWidth={3} depthTest={false} renderOrder={17} raycast={() => null} />
+      )}
+
       {/* Inference Locking: snap indicator */}
       {snapIndicator && (
         <Html position={snapIndicator.point} center occlude={false} zIndexRange={[50, 60]}>
           <div className="flex flex-col items-center gap-1 pointer-events-none -translate-y-4">
-            <div
-              className={cn(
-                'w-2.5 h-2.5 shadow-lg',
-                snapIndicator.type === 'endpoint' ? 'bg-green-400 rotate-45 border border-green-600' : snapIndicator.type === 'midpoint' ? 'bg-cyan-400 rounded-full border border-cyan-600' : 'bg-fuchsia-400 rounded-full border border-fuchsia-600 ring-2 ring-fuchsia-200'
-              )}
-            />
+            {(() => {
+              const t = snapIndicator.type;
+              const base = 'w-2.5 h-2.5 shadow-lg';
+              if (t === 'endpoint' || t === 'close' || t === 'origin') return <div className={cn(base, 'bg-green-400 rotate-45 border border-green-600')} />;
+              if (t === 'midpoint') return <div className={cn(base, 'bg-cyan-400 rounded-full border border-cyan-600')} />;
+              if (t === 'center') return <div className={cn(base, 'bg-fuchsia-400 rounded-full border border-fuchsia-600 ring-2 ring-fuchsia-200')} />;
+              if (t === 'edge' || t === 'guide') return <div className={cn(base, 'bg-red-500 border border-red-700')} />;
+              if (t === 'intersection') return <div className={cn(base, 'bg-green-500 border border-green-800 ring-2 ring-green-200')} />;
+              return <div className={cn(base, 'rounded-full border border-white/70')} style={{ backgroundColor: snapIndicator.color ?? '#a855f7' }} />;
+            })()}
             <div className="bg-black/80 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap shadow border border-white/20">
               {snapIndicator.tooltip || (snapIndicator.type === 'endpoint' ? 'Endpoint' : snapIndicator.type === 'midpoint' ? 'Midpoint' : 'Center')}
             </div>
@@ -11887,7 +12775,8 @@ function Scene() {
       )}
 
       {/* Inference Locking: axis-lock guide line */}
-      {axisLock && drawingStart && (
+      {/* The Move tool's axis line; the drawing tools' locks are drawn by the snap engine (snapGuides). */}
+      {axisLock && drawingStart && activeTool === 'move' && (
         <Line
           points={[
             [drawingStart.x - (axisLock === 'x' ? 500 : 0), drawingStart.y - (axisLock === 'y' ? 500 : 0), drawingStart.z - (axisLock === 'z' ? 500 : 0)],
@@ -11916,6 +12805,33 @@ function Scene() {
       )}
 
       {/* Measuring Tape Preview (in-progress) */}
+      {activeTool === 'dimensions' && dimDraft && (
+        dimDraft.end
+          ? <DimensionMark args={makeDimensionArgs([dimDraft.start.x, dimDraft.start.y, dimDraft.start.z], [dimDraft.end.x, dimDraft.end.y, dimDraft.end.z], [dimDraft.offset.x, dimDraft.offset.y, dimDraft.offset.z])} unit={unit} selected={false} />
+          : <Line points={[dimDraft.start.toArray(), dimDraft.cursor.toArray()]} color="#0284c7" lineWidth={1.5} dashed dashSize={0.15} gapSize={0.1} depthTest={false} renderOrder={20} raycast={() => null} />
+      )}
+      {activeTool === 'leader' && leaderDraft && (
+        <>
+          <Line points={[leaderDraft.target.toArray(), (leaderDraft.anchor ?? leaderDraft.cursor).toArray()]} color="#f59e0b" lineWidth={1.5} depthTest={false} renderOrder={20} raycast={() => null} />
+          {leaderDraft.typing && leaderDraft.anchor && (
+            <Html position={leaderDraft.anchor} center occlude={false} zIndexRange={[60, 70]}>
+              <input
+                autoFocus
+                value={leaderDraft.text}
+                onChange={(e) => setLeaderDraft({ ...leaderDraft, text: e.target.value })}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') commitLeader();
+                  if (e.key === 'Escape') setLeaderDraft(null);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                placeholder="Label text"
+                className="w-40 px-2 py-1 text-xs rounded border border-amber-500 bg-white text-gray-900 shadow-lg outline-none"
+              />
+            </Html>
+          )}
+        </>
+      )}
       {tapeStart && tapeEnd && (
         <group>
           <Line
@@ -11934,61 +12850,60 @@ function Scene() {
           </Html>
         </group>
       )}
-      {activeTool === 'arc' && arcStep === 1 && arcStart && arcEnd && (
+      {/* Tape Measure: the edge a click would pull a guide off */}
+      {activeTool === 'tape' && tapeHover && !tapeGuide && !tapeStart && (
+        <Line points={[tapeHover.a.toArray(), tapeHover.b.toArray()]} color="#d946ef" lineWidth={4} depthTest={false} renderOrder={20} raycast={() => null} />
+      )}
+      {/* Tape Measure: the guide being pulled, and how far it is from its line */}
+      {tapeGuide && (() => {
+        const at = tapeGuide.linePoint.clone().add(tapeGuide.offset);
+        const reach = 100;
+        const a = at.clone().addScaledVector(tapeGuide.dir, -reach);
+        const b = at.clone().addScaledVector(tapeGuide.dir, reach);
+        return (
+          <group>
+            <Line points={[a.toArray(), b.toArray()]} color={TAPE_GUIDE_COLOR} lineWidth={1.5} dashed dashSize={0.3} gapSize={0.2} raycast={() => null} />
+            <Line points={[tapeGuide.linePoint.toArray(), at.toArray()]} color="#d946ef" lineWidth={1.5} raycast={() => null} />
+            <Html position={tapeGuide.linePoint.clone().lerp(at, 0.5).toArray()} center occlude={false}>
+              <div className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded whitespace-nowrap shadow-lg border border-cyan-500/50 pointer-events-none">
+                {formatValue(tapeGuide.offset.length(), unit, 2)}
+              </div>
+            </Html>
+          </group>
+        );
+      })()}
+      {/* Section tool: where a click would place a plane */}
+      {activeTool === 'section' && sectionHover && <SectionPlaneMesh args={{ ...sectionHover, showPlane: true }} preview />}
+      {/* Follow Me: the path under the pointer, and the sweep it would make */}
+      {activeTool === 'followme' && followMeHover && (
         <group>
-          <Line
-            points={[[arcStart.x, arcStart.y, arcStart.z], [arcEnd.x, arcEnd.y, arcEnd.z]]}
-            color='#38bdf8'
-            lineWidth={3}
-          />
-          <mesh position={[arcStart.x, arcStart.y, arcStart.z]}>
-            <sphereGeometry args={[0.06, 16, 16]} />
-            <meshBasicMaterial color="#38bdf8" />
-          </mesh>
-          <mesh position={[arcEnd.x, arcEnd.y, arcEnd.z]}>
-            <sphereGeometry args={[0.06, 16, 16]} />
-            <meshBasicMaterial color="#38bdf8" />
-          </mesh>
-          <Html position={[(arcStart.x + arcEnd.x) / 2, (arcStart.y + arcEnd.y) / 2 + 0.2, (arcStart.z + arcEnd.z) / 2]} center>
-            <div className="bg-black/80 text-cyan-300 font-mono text-[10px] px-1.5 py-0.5 rounded shadow pointer-events-none whitespace-nowrap">
-              Chord: {formatValue(arcStart.distanceTo(arcEnd), unit, 2)}
-            </div>
-          </Html>
+          <Line segments points={followMeHover.pathSegments.flat()} color="#d946ef" lineWidth={4} depthTest={false} renderOrder={20} raycast={() => null} />
+          {followMeHover.preview && followMeHover.preview.length > 0 && (
+            <Line segments points={followMeHover.preview.flat()} color="#0891b2" lineWidth={1.5} depthTest={false} renderOrder={19} raycast={() => null} />
+          )}
         </group>
       )}
-
-      {activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd && arcBulge && (() => {
-        let previewPts = computeArcPoints(arcStart, arcEnd, arcBulge);
-        if (!previewPts || previewPts.length < 2) {
-          previewPts = [arcStart, arcBulge, arcEnd];
+      {/* Arc: the chord, and the arc it will make (cyan when tangent, pink when it rounds a corner) */}
+      {activeTool === 'arc' && arcState && arcState.p0 && (() => {
+        const p0 = arcState.p0!;
+        const end = arcState.p1 ?? arcState.cursor;
+        const color = arcFilletChosenRef.current ? '#d946ef' : arcState.tangentActive ? '#06b6d4' : '#22c55e';
+        const spec = arcState.preview;
+        const pts: [number, number, number][] = [];
+        if (spec) {
+          const n = Math.max(8, spec.segments * 2);
+          for (let i = 0; i <= n; i++) { const q = arcPointAt(spec, i / n); pts.push([q.x, q.y, q.z]); }
         }
         return (
           <group>
-            <Line
-              points={previewPts.map(p => [p.x, p.y, p.z])}
-              color='#22c55e'
-              lineWidth={3.5}
-            />
-            {/* Guide line to bulge control point */}
-            <Line
-              points={[[arcStart.x, arcStart.y, arcStart.z], [arcBulge.x, arcBulge.y, arcBulge.z], [arcEnd.x, arcEnd.y, arcEnd.z]]}
-              color='#eab308'
-              lineWidth={1}
-              dashed
-              dashScale={10}
-            />
-            <mesh position={[arcStart.x, arcStart.y, arcStart.z]}>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshBasicMaterial color="#22c55e" />
-            </mesh>
-            <mesh position={[arcEnd.x, arcEnd.y, arcEnd.z]}>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshBasicMaterial color="#22c55e" />
-            </mesh>
-            <mesh position={[arcBulge.x, arcBulge.y, arcBulge.z]}>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshBasicMaterial color="#eab308" />
-            </mesh>
+            {end && <Line points={[[p0.x, p0.y, p0.z], [end.x, end.y, end.z]]} color="#38bdf8" lineWidth={1.5} dashed dashSize={0.2} gapSize={0.15} depthTest={false} raycast={() => null} />}
+            {pts.length > 1 && <Line points={pts} color={color} lineWidth={3.5} depthTest={false} renderOrder={19} raycast={() => null} />}
+            <mesh position={[p0.x, p0.y, p0.z]}><sphereGeometry args={[0.06, 16, 16]} /><meshBasicMaterial color={color} /></mesh>
+            {arcState.p1 && <mesh position={[arcState.p1.x, arcState.p1.y, arcState.p1.z]}><sphereGeometry args={[0.06, 16, 16]} /><meshBasicMaterial color={color} /></mesh>}
+            {/* The corners this start could round: put the other end on a pink point */}
+            {arcState.phase === 'first' && arcFilletRef.current.map((t, i) => (
+              <mesh key={i} position={t.end.toArray()}><sphereGeometry args={[0.07, 16, 16]} /><meshBasicMaterial color="#d946ef" /></mesh>
+            ))}
           </group>
         );
       })()}
@@ -12326,6 +13241,10 @@ function Scene() {
           front={patioToolSettings.template.balcony?.front ?? 'curve'} />
       )}
 
+      {activeTool === 'site_route' && (
+        <RouteDrawPreview shapes={shapes} vertices={fenceVertices} candidate={fenceCandidatePos} groundAt={waterPreviewGround} />
+      )}
+
       {/* Fence / Railing Path Drawing Preview */}
       {activeTool === 'water' && (
         <WaterDrawPreview vertices={fenceVertices} candidate={fenceCandidatePos} closing={fenceHoveredVertex === 0} groundAt={waterPreviewGround} />
@@ -12466,9 +13385,12 @@ function EnvironmentLighting() {
     skyboxRotation,
     theme,
     environment,
+    sunIntensity,
   } = useApp();
   const { gl, scene } = useThree();
   const { assets: environmentAssets } = useAssetCatalog('hdri');
+  // Sun at 0 means night: the sky, environment and hemisphere light all fade down with it.
+  const daylight = scaleForDaylight(daylightFactor(sunIntensity));
   const managerRef = useRef<EnvironmentManager | null>(null);
 
   useEffect(() => {
@@ -12509,6 +13431,15 @@ function EnvironmentLighting() {
     scene.environmentIntensity = environmentIntensity;
   }, [skyboxRotation, environmentIntensity, scene, skybox]);
 
+  // Set every frame rather than once: the environment loads (and re-applies its own intensities)
+  // whenever it likes, and the sun can change at any time.
+  useFrame(() => {
+    const sceneWithIntensity = scene as THREE.Scene & { environmentIntensity: number; backgroundIntensity: number };
+    const usingAsset = !!environment.ref;
+    sceneWithIntensity.environmentIntensity = (usingAsset ? environment.intensity : environmentIntensity) * daylight;
+    sceneWithIntensity.backgroundIntensity = (usingAsset ? environment.backgroundIntensity : 1) * daylight;
+  });
+
   // Hardware fallback detection
   const isHDRSupported = gl.capabilities.isWebGL2;
   
@@ -12519,13 +13450,13 @@ function EnvironmentLighting() {
     return null;
   }, [skybox]);
 
-  if (environment.ref) return <hemisphereLight intensity={0.25} groundColor="#444444" />;
+  if (environment.ref) return <hemisphereLight intensity={0.25 * daylight} groundColor="#444444" />;
 
   if (skybox === 'none' || !isHDRSupported) {
     return (
       <>
-        {skybox === 'none' ? <color attach="background" args={[theme === 'light' ? '#e5e5e5' : '#2B2B2B']} /> : null}
-        <hemisphereLight intensity={0.5} groundColor="#444444" />
+        {skybox === 'none' ? <color attach="background" args={[new THREE.Color(theme === 'light' ? '#e5e5e5' : '#2B2B2B').lerp(new THREE.Color(NIGHT_BACKGROUND), 1 - daylightFactor(sunIntensity)).getStyle()]} /> : null}
+        <hemisphereLight intensity={0.5 * daylight} groundColor="#444444" />
       </>
     );
   }
@@ -12770,6 +13701,7 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
       color={map ? "#ffffff" : baseColor} 
       intensity={light.intensity * (light.scale || 1)} 
       castShadow={shadowsEnabled}
+      {...SPOT_SHADOW}
       target-position={light.target || [0, 0, 0]}
       distance={(light.distance || 50) * (light.scale || 1)}
       angle={light.angle || Math.PI / 3}
@@ -12842,6 +13774,7 @@ function CustomLightComponent({
           intensity={light.intensity * (light.scale || 1)} 
           distance={(light.distance || 50) * (light.scale || 1)}
           castShadow={shadowsEnabled}
+          {...POINT_SHADOW}
         />
       )}
       {light.type === 'directional' && (
@@ -12850,6 +13783,7 @@ function CustomLightComponent({
           color={baseColor} 
           intensity={light.intensity * (light.scale || 1)} 
           castShadow={shadowsEnabled}
+          {...DIRECTIONAL_SHADOW}
           target={lightTarget}
         />
       )}
@@ -12859,6 +13793,7 @@ function CustomLightComponent({
           color={baseColor} 
           intensity={light.intensity * (light.scale || 1)} 
           castShadow={shadowsEnabled}
+          {...SPOT_SHADOW}
           target={lightTarget}
           distance={(light.distance || 50) * (light.scale || 1)}
           angle={light.angle || Math.PI / 3}
@@ -13638,7 +14573,10 @@ export default function Viewport() {
     setIsToolModifierDocked,
     setActiveTool,
     kernelRevision,
-    registerWallConversionUndo
+    registerWallConversionUndo,
+    enterGroupEdit,
+    exitGroupEdit,
+    groupEdit,
   } = useApp();
   // Local to Viewport() now, alongside the dialog itself (moved from
   // Scene() — see AppContext.tsx's own doc comment on `placingNotePos`).
@@ -13747,6 +14685,96 @@ export default function Viewport() {
    * past) a wall, fence or another patio are pulled onto it, closing the gaps
    * a hand-traced outline can leave.
    */
+  // ---------------------------------------------------------------------------
+  // Groups and components (tools/kernelGroups.ts): right-click menu entries.
+  // ---------------------------------------------------------------------------
+  const menuButton = cn(
+    "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors",
+    theme === 'dark' ? "hover:bg-gray-700" : "hover:bg-gray-100",
+  );
+
+  /** Drawn faces -> one object (a group, or the first copy of a new component). */
+  const makeKernelGroup = (faceIds: number[], component: boolean) => {
+    const count = shapes.filter(s => s.type === 'kernel_group' && (component ? !!s.componentId : !s.componentId)).length;
+    const made = makeGroup(kernelHost, faceIds as FaceId[], { component, name: `${component ? 'Component' : 'Group'} ${count + 1}` });
+    if (!made) return;
+    registerWallConversionUndo(made.link);
+    setShapes(prev => [...prev, made.shape]);
+    setSelectedFaceIds([]);
+    setSelectedId(made.shape.id);
+    setSelectedIds([made.shape.id]);
+    bumpKernel();
+    recordAction(actionLabel(component ? 'Make Component' : 'Make Group'));
+    setMeasurements(`${made.shape.name}: move, copy and tag it as one object. Double-click it to edit inside.`);
+  };
+
+  const kernelGroupMenuItems = (faceIds: number[]) => (
+    <>
+      <button className={menuButton} onClick={() => { makeKernelGroup(faceIds, false); setContextMenu(null); }}>
+        Make Group
+      </button>
+      <button className={menuButton} onClick={() => { makeKernelGroup(faceIds, true); setContextMenu(null); }}>
+        Make Component
+      </button>
+    </>
+  );
+
+  // The toolbar's Make Component button: the selected drawn faces become a component.
+  const makeKernelGroupRef = useRef(makeKernelGroup);
+  makeKernelGroupRef.current = makeKernelGroup;
+  useEffect(() => {
+    if (activeTool !== 'component') return;
+    if (selectedFaceIds.length > 0) makeKernelGroupRef.current(selectedFaceIds, true);
+    else setMeasurements('Make Component: select some drawn faces first (or right-click them > Make Component).');
+    setActiveTool('select');
+  }, [activeTool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const groupObjectMenuItems = (shapeId: string) => {
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape || !isGroupShape(shape)) return null;
+    const kind = shape.componentId ? 'Component' : 'Group';
+    return (
+      <>
+        <button className={menuButton} onClick={() => { setContextMenu(null); enterGroupEdit(shape.id); }}>
+          Edit {kind}
+        </button>
+        <button className={menuButton} onClick={() => {
+          setContextMenu(null);
+          const link = explodeGroup(kernelHost, shape);
+          if (!link) return;
+          registerWallConversionUndo(link);
+          setShapes(prev => prev.filter(s => s.id !== shape.id));
+          setSelectedId(null);
+          setSelectedIds([]);
+          bumpKernel();
+          recordAction(actionLabel(`Explode ${shape.name ?? kind}`));
+          setMeasurements(`${shape.name ?? kind} exploded back into drawn faces.`);
+        }}>
+          Explode
+        </button>
+        {shape.componentId ? (
+          <button className={menuButton} onClick={() => {
+            setContextMenu(null);
+            setShapes(prev => prev.map(s => (s.id === shape.id ? makeUnique(s) : s)));
+            recordAction(actionLabel('Make Unique'));
+            setMeasurements('This copy is now its own component: editing it no longer changes the others.');
+          }}>
+            Make Unique
+          </button>
+        ) : (
+          <button className={menuButton} onClick={() => {
+            setContextMenu(null);
+            setShapes(prev => prev.map(s => (s.id === shape.id ? { ...s, componentId: Math.random().toString(36).substr(2, 9), componentName: s.name ?? 'Component' } : s)));
+            recordAction(actionLabel('Make Component'));
+            setMeasurements('Now a component: copies you make of it share their inside.');
+          }}>
+            Make Component
+          </button>
+        )}
+      </>
+    );
+  };
+
   const patioSnapMenuItem = (shapeId: string) => {
     const patio = shapes.find(s => s.id === shapeId);
     if (!patio || patio.type !== 'patio' || !patio.patioData || patio.patioData.kind === 'balcony') return null;
@@ -14042,6 +15070,18 @@ export default function Viewport() {
         >
           <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-xl border border-gray-700 max-w-md text-center">
             {viewportToast}
+          </div>
+        </div>
+      )}
+
+      {/* Editing inside a group or component */}
+      {groupEdit && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[999]">
+          <div className="flex items-center gap-3 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-xl border border-gray-700">
+            <span>Editing <strong>{groupEdit.name}</strong>{shapes.find(s => s.id === groupEdit.shapeId)?.componentId ? ' - every copy will change' : ''}</span>
+            <button onClick={() => exitGroupEdit()} className="px-2 py-0.5 rounded bg-polyform-blue hover:opacity-90 text-xs font-medium">
+              Close
+            </button>
           </div>
         </div>
       )}
@@ -14849,6 +15889,7 @@ export default function Viewport() {
                   </div>
                 </div>
               ))}
+              {Array.isArray(contextMenu.data) && contextMenu.data.length > 0 && kernelGroupMenuItems(contextMenu.data)}
               {(() => {
                 // Merge / Subtract / Intersect when the menu covers two or more shapes.
                 const groups = orderedShapeGroups(kernelHost.graph, contextMenu.data);
@@ -14944,6 +15985,7 @@ export default function Viewport() {
               })()}
               {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && curvedMergeMenuItems(contextMenu.data[0])}
               {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && patioSnapMenuItem(contextMenu.data[0])}
+              {Array.isArray(contextMenu.data) && contextMenu.data.length === 1 && groupObjectMenuItems(contextMenu.data[0])}
               <button 
                 onClick={() => {
                   const groupId = Math.random().toString(36).substr(2, 9);

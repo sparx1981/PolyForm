@@ -32,7 +32,7 @@ const OFFLOAD_SIZE_THRESHOLD = 40000;
 const IMAGE_MARKER_PREFIX = 'pf-blob:';
 const IMAGE_SIZE_THRESHOLD = 20000;
 const TERRAIN_MARKER = '__offloadedArraysDocId';
-const TERRAIN_ARRAYS = ['heights', 'baseHeights', 'masks'] as const;
+const TERRAIN_ARRAYS = ['heights', 'baseHeights', 'masks', 'siteExisting'] as const;
 const TERRAIN_SIZE_THRESHOLD = 150000;
 
 export interface GeometryOffloadIO {
@@ -232,6 +232,18 @@ export async function offloadLargeGeometryForSave(
         const terrainData = await offloadTerrain(shape.terrainData, uid, io);
         if (terrainData !== shape.terrainData) shape = { ...shape, terrainData };
       }
+      // A group's drawn geometry (tools/kernelGroups.ts) goes the same way. The documents are
+      // keyed by content, so every copy of a component stores its geometry once.
+      if (shape.kernelGraph && !(shape.kernelGraph as any)[OFFLOAD_MARKER]) {
+        const text = JSON.stringify(shape.kernelGraph);
+        if (text.length > OFFLOAD_SIZE_THRESHOLD) {
+          try {
+            shape = { ...shape, kernelGraph: { [OFFLOAD_MARKER]: await store(io, uid, 'g', text) } };
+          } catch {
+            // Saved inline instead, as for geometryData below.
+          }
+        }
+      }
       if (!shape.geometryData || (shape.geometryData as any)[OFFLOAD_MARKER]) return shape;
       const serialized = JSON.stringify(shape.geometryData);
       if (serialized.length <= OFFLOAD_SIZE_THRESHOLD) return shape;
@@ -265,6 +277,14 @@ export async function hydrateOffloadedGeometry(
       if (terrain && shape.terrainData) {
         const terrainData = await hydrateTerrain(shape.terrainData, io);
         if (terrainData !== shape.terrainData) shape = { ...shape, terrainData };
+      }
+      const graphDocId = geometry ? (shape.kernelGraph as any)?.[OFFLOAD_MARKER] : undefined;
+      if (graphDocId) {
+        try {
+          shape = { ...shape, kernelGraph: JSON.parse(await io.fetch(graphDocId)) };
+        } catch {
+          // Left as the marker: the group shows nothing until this can be retried.
+        }
       }
       const docId = geometry ? (shape.geometryData as any)?.[OFFLOAD_MARKER] : undefined;
       if (!docId) return shape;

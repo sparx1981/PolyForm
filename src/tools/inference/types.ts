@@ -63,6 +63,8 @@ export interface WallToolSettings {
   thickness?: number;
   height?: number;
   justification?: WallJustification;
+  /** Keep new walls at right angles to the last one (hold Shift to break the lock). Default true; off = as if Shift were always held. */
+  lockRightAngles?: boolean;
 }
 
 export const DEFAULT_WALL_SETTINGS: WallToolSettings = {
@@ -77,4 +79,5 @@ export const DEFAULT_WALL_SETTINGS: WallToolSettings = {
   thickness: 0.20,
   height: 2.80,
   justification: 'exterior',
+  lockRightAngles: true,
 };

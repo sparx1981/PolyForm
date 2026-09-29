@@ -6,13 +6,16 @@ import {
   registerClient, startAuthorization, verifyAccessToken, type OAuthConfig, type VerifiedGoogleUser,
 } from './oauth';
 import { errorPage, homePage, loginPage } from './pages';
-import { registerTools, type Renderer } from './tools';
+import { registerTools, type Renderer, type ToolContext } from './tools';
 import type { ModelStore } from './store';
 
 export interface AppDeps {
   oauth: OAuthConfig;
   store: ModelStore;
   renderer?: Renderer;
+  /** World View data sources (tests pass stand-ins). */
+  siteIO?: ToolContext['siteIO'];
+  findPlace?: ToolContext['findPlace'];
   /** Checks a Firebase ID token from the sign-in page. */
   verifyIdToken: (idToken: string) => Promise<VerifiedGoogleUser>;
   firebaseWebConfig: object;
@@ -117,7 +120,7 @@ export function createApp(deps: AppDeps) {
         }
         if (req.method !== 'POST') return send(res, 405, { error: 'Use POST' }, 'application/json', { allow: 'POST' });
         const server = new McpServer({ name: 'polyform', version: '0.1.0' }, { instructions: INSTRUCTIONS });
-        registerTools(server, { caller, store: deps.store, renderer: deps.renderer });
+        registerTools(server, { caller, store: deps.store, renderer: deps.renderer, siteIO: deps.siteIO, findPlace: deps.findPlace });
         // Stateless: a fresh server per request, no sessions to keep between serverless calls.
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         res.on('close', () => { transport.close(); server.close(); });

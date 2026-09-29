@@ -20,6 +20,7 @@ import {
 } from '../types';
 import { WallOpening } from './archGeometry';
 import { openingCutsWall, openingSpanOnWall } from './wallOpeningSpan';
+import { computeStairHoleForSlab } from './archStairwell';
 import { dormerFrame, dormerOpenings, layoutsOf, type DormerLayout } from './dormers';
 import { frameSkeletonRoof } from './roofFraming';
 import type { RoofModel } from './roofSkeleton';
@@ -992,23 +993,14 @@ export function generateTimberFraming(
           Math.abs(s.position[1] - floorY) < 2.5
         );
         stairsOnLevel.forEach((st, sIdx) => {
-          const sArgs = Array.isArray(st.args) ? st.args : [1.0, 2.5, 3.0];
-          const sW = sArgs[0] || 1.0;
-          const sL = sArgs[2] || 2.5;
-          const sMinX = st.position[0] - sW / 2;
-          const sMaxX = st.position[0] + sW / 2;
-          const sMinZ = st.position[2] - sL / 2;
-          const sMaxZ = st.position[2] + sL / 2;
+          const boundary = stairFootprintOnFloor(st, floorY);
+          const xs = boundary.map(p => p[0]);
+          const zs = boundary.map(p => p[1]);
           floorOpenings.push({
             id: `stairwell-${flIdx}-${sIdx + 1}`,
             type: 'stairwell',
-            bounding_box: [sMinX, sMinZ, sMaxX, sMaxZ],
-            boundary: [
-              [sMinX, sMinZ],
-              [sMaxX, sMinZ],
-              [sMaxX, sMaxZ],
-              [sMinX, sMaxZ],
-            ],
+            bounding_box: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)],
+            boundary,
             stairwell_id: st.id,
           });
         });
@@ -2081,6 +2073,30 @@ export function generateTimberFrameForRoof(
 /**
  * Convenient wrapper returning members array and breakdown
  */
+/**
+ * Where a staircase passes through the floor at `floorY`, as a plan polygon [x, z][]. It follows
+ * the stair's own rotation and style (the same outline the floor slab's stairwell hole uses), so
+ * joists stop where the stair actually is: an axis-aligned box taken from the stair's width and
+ * length ignores how it is turned, leaving joists across the stair - a head-height barrier
+ * halfway up a flight that is turned a quarter turn.
+ */
+export function stairFootprintOnFloor(stair: Shape, floorY: number): [number, number][] {
+  const probeSlab = { id: 'probe', name: 'Floor Slab', type: 'box', position: [0, floorY - 0.1, 0], args: [1, 0.2, 1], tags: ['floor-slab'] } as unknown as Shape;
+  const hole = computeStairHoleForSlab(stair, probeSlab);
+  if (hole && hole.worldPolygon.length >= 3) return hole.worldPolygon;
+  // The stair starts on this floor rather than arriving at it: use its plain footprint, turned as placed.
+  const sArgs = Array.isArray(stair.args) ? stair.args : [1.0, 2.5, 3.0];
+  const hw = (sArgs[0] || 1.0) / 2;
+  const hl = (sArgs[2] || 2.5) / 2;
+  const quat = stair.quaternion
+    ? new THREE.Quaternion(...stair.quaternion)
+    : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(stair.rotation || [0, 0, 0])));
+  return ([[-hw, -hl], [hw, -hl], [hw, hl], [-hw, hl]] as [number, number][]).map(([x, z]) => {
+    const p = new THREE.Vector3(x, 0, z).applyQuaternion(quat);
+    return [stair.position[0] + p.x, stair.position[2] + p.z] as [number, number];
+  });
+}
+
 export function generateTimberFrameForBuilding(
   allShapes: Shape[],
   options?: TimberFrameOptions & { joistSpacing?: number; rafterSpacing?: number }

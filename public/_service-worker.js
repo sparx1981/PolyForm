@@ -1,7 +1,7 @@
 // Service Worker for WorldView Application
 // Handles CORS proxying, message stability, and resource caching
 
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.0';
 const CACHE_NAME = `worldview-cache-${VERSION}`;
 
 // Resources to cache on install (optional, focusing on stability first)
@@ -41,6 +41,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(handleAIRequest(event.request));
     return;
   }
+
+  // Other sites (map data, LiDAR, Firebase...) go straight to the network, untouched: re-fetching
+  // them here adds nothing, drops the page's own timeouts, and turns a real error into a
+  // misleading "408" from this worker.
+  if (url.origin !== self.location.origin) return;
 
   // Default fetch
   event.respondWith(fetch(event.request).catch(err => {

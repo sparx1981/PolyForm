@@ -26,7 +26,7 @@ import {
   Move, 
   RotateCw, 
   Maximize, 
-  ArrowUpFromLine, 
+  ArrowUpFromLine, Route, Slice, 
   Search,
   Orbit,
   Hand,
@@ -39,6 +39,8 @@ import {
   Globe,
   Combine,
   Ruler,
+  MessageSquare,
+  Camera,
   ToggleLeft,
   ToggleRight,
   Maximize2,
@@ -126,11 +128,11 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
     isArchitectureToolbarEnabled,
     isLandscapesToolbarEnabled,
     isCameraToolbarEnabled,
+    isAIToolbarEnabled,
     showAllDimensions,
     setShowAllDimensions,
     activeBevelType,
     setActiveBevelType,
-    setIsWorldViewOpen,
     isWorldViewActive,
     setIsAIRendererOpen,
     setIsAIQueryOpen,
@@ -241,7 +243,8 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
       basic: true,
       architecture: true,
       landscape: true,
-      camera: true
+      camera: true,
+      ai: true
     };
   });
 
@@ -262,8 +265,9 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
     if (isArchitectureToolbarEnabled) ids.push('architecture');
     if (isLandscapesToolbarEnabled) ids.push('landscape');
     if (isCameraToolbarEnabled) ids.push('camera');
+    if (isAIToolbarEnabled) ids.push('ai');
     return ids;
-  }, [isBasicToolbarEnabled, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled]);
+  }, [isBasicToolbarEnabled, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, isAIToolbarEnabled]);
 
   // Check if all sections are collapsed
   const allCollapsed = useMemo(() => {
@@ -774,6 +778,16 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           keywords: ['push', 'pull', 'extrude', 'extrude face', 'elevation']
         },
         {
+          id: 'followme',
+          tool: 'followme',
+          label: 'Follow Me',
+          subtitle: 'Sweep a flat shape along a path: mouldings, gutters, kerbs, handrails, pipes',
+          icon: <Route size={19} />,
+          isActive: (s) => s.activeTool === 'followme',
+          onClick: (s) => s.setActiveTool('followme'),
+          keywords: ['follow me', 'sweep', 'path', 'moulding', 'gutter', 'kerb', 'handrail', 'pipe', 'lathe']
+        },
+        {
           id: 'offset',
           tool: 'offset',
           label: 'Offset',
@@ -828,6 +842,36 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'tape',
           onClick: (s) => s.setActiveTool('tape'),
           keywords: ['tape', 'measure', 'ruler', 'dimension', 'distance']
+        },
+        {
+          id: 'dimensions',
+          tool: 'dimensions',
+          label: 'Dimension',
+          subtitle: 'Click two points, then move out and click to place a dimension line that stays in the model',
+          icon: <Ruler size={19} strokeWidth={2.75} />,
+          isActive: (s) => s.activeTool === 'dimensions',
+          onClick: (s) => s.setActiveTool('dimensions'),
+          keywords: ['dimension', 'measure', 'annotation', 'length', 'distance', 'drawing']
+        },
+        {
+          id: 'arealabel',
+          tool: 'arealabel',
+          label: 'Area Label',
+          subtitle: 'Click a face to label its area and perimeter; it updates when the face changes',
+          icon: <Square size={19} />,
+          isActive: (s) => s.activeTool === 'arealabel',
+          onClick: (s) => s.setActiveTool('arealabel'),
+          keywords: ['area', 'label', 'perimeter', 'room', 'square metres', 'annotation']
+        },
+        {
+          id: 'leader',
+          tool: 'leader',
+          label: 'Leader Label',
+          subtitle: 'Click what to point at, click where the text goes, then type it',
+          icon: <MessageSquare size={19} />,
+          isActive: (s) => s.activeTool === 'leader',
+          onClick: (s) => s.setActiveTool('leader'),
+          keywords: ['leader', 'callout', 'label', 'pointer', 'annotation', 'text']
         },
         {
           id: 'protractor',
@@ -900,33 +944,6 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'scale',
           onClick: (s) => s.setActiveTool('scale'),
           keywords: ['scale', 'resize', 'transform', 'stretch']
-        },
-        {
-          id: 'ai_query',
-          label: 'AI Query',
-          subtitle: 'Ask AI assistant about your model & scene',
-          icon: <Sparkles size={19} />,
-          isActive: () => false,
-          onClick: (s) => s.setIsAIQueryOpen(true),
-          keywords: ['ai', 'query', 'assistant', 'ask', 'chat']
-        },
-        {
-          id: 'ai_renderer',
-          label: 'AI Renderer',
-          subtitle: 'Generate photorealistic AI render from view',
-          icon: <Search size={19} />,
-          isActive: () => false,
-          onClick: (s) => s.setIsAIRendererOpen(true),
-          keywords: ['ai', 'render', 'photorealistic', 'image', 'picture']
-        },
-        {
-          id: 'ai_generate',
-          label: 'AI Generate',
-          subtitle: 'Generate 3D geometry from text prompt',
-          icon: <Wand2 size={19} />,
-          isActive: () => false,
-          onClick: (s) => s.setIsAIGenerateOpen(true),
-          keywords: ['ai', 'generate', 'create 3d', 'magic', 'prompt']
         },
         ...pinnedScripts.map(scriptId => {
           const script = developerScripts.find(s => s.id === scriptId);
@@ -1013,8 +1030,8 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           label: 'WorldView Geolocation',
           subtitle: 'Open satellite map & solar positioning',
           icon: <Globe size={19} />,
-          isActive: (s) => s.isWorldViewActive,
-          onClick: (s) => s.setIsWorldViewOpen(true),
+          isActive: (s) => s.activeTool === 'worldview' || s.isWorldViewActive,
+          onClick: (s) => s.setActiveTool('worldview'),
           keywords: ['worldview', 'globe', 'map', 'geolocation', 'sun', 'solar', 'architecture', 'site']
         },
         {
@@ -1129,6 +1146,16 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           keywords: ['walk', 'walkthrough', 'first person', 'fps', 'collision', 'gravity', 'jump']
         },
         {
+          id: 'section',
+          tool: 'section',
+          label: 'Section Plane',
+          subtitle: 'Slice the model to see inside: click a wall or floor to cut along it',
+          icon: <Slice size={19} />,
+          isActive: (s) => s.activeTool === 'section',
+          onClick: (s) => s.setActiveTool('section'),
+          keywords: ['section', 'cut', 'slice', 'plan cut', 'section plane', 'see inside']
+        },
+        {
           id: 'reset_camera',
           label: 'Reset Camera Position',
           subtitle: 'Return to default isometric framing',
@@ -1151,6 +1178,48 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
             }
           },
           keywords: ['camera', 'depth', 'clipping', 'frustum', 'near', 'far', 'plane', 'section']
+        }
+      ]
+    },
+    {
+      id: 'ai',
+      name: 'AI',
+      tools: [
+        {
+          id: 'ai_query',
+          label: 'AI Query',
+          subtitle: 'Ask AI assistant about your model & scene',
+          icon: <Sparkles size={19} />,
+          isActive: () => false,
+          onClick: (s) => s.setIsAIQueryOpen(true),
+          keywords: ['ai', 'query', 'assistant', 'ask', 'chat']
+        },
+        {
+          id: 'ai_renderer',
+          label: 'AI Renderer',
+          subtitle: 'Generate photorealistic AI render from view',
+          icon: <Search size={19} />,
+          isActive: () => false,
+          onClick: (s) => s.setIsAIRendererOpen(true),
+          keywords: ['ai', 'render', 'photorealistic', 'image', 'picture']
+        },
+        {
+          id: 'ai_generate',
+          label: 'AI Generate',
+          subtitle: 'Generate 3D geometry from text prompt',
+          icon: <Wand2 size={19} />,
+          isActive: () => false,
+          onClick: (s) => s.setIsAIGenerateOpen(true),
+          keywords: ['ai', 'generate', 'create 3d', 'magic', 'prompt']
+        },
+        {
+          id: 'photo_to_3d',
+          label: 'Photo to 3D (AI)',
+          subtitle: 'Turn a photo into a 3D model',
+          icon: <Camera size={19} />,
+          isActive: () => false,
+          onClick: () => window.dispatchEvent(new CustomEvent('polyform:photo-to-3d')),
+          keywords: ['ai', 'photo', 'image', '3d', 'convert', 'picture']
         }
       ]
     },
@@ -1417,6 +1486,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         if (category.id === 'architecture' && !isArchitectureToolbarEnabled) return false;
         if (category.id === 'landscape' && !isLandscapesToolbarEnabled) return false;
         if (category.id === 'camera' && !isCameraToolbarEnabled) return false;
+        if (category.id === 'ai' && !isAIToolbarEnabled) return false;
         return true;
       })
       .map(category => {
@@ -1432,7 +1502,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         };
       })
       .filter(category => category.tools.length > 0);
-  }, [toolCategories, isBasicToolbarEnabled, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, toolbarVisibility]);
+  }, [toolCategories, isBasicToolbarEnabled, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, isAIToolbarEnabled, toolbarVisibility]);
 
   // Filter tools based on search query
   const filteredCategories = useMemo(() => {
@@ -2039,7 +2109,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
     </>
   );
 
-  if (!isBasicToolbarEnabled && !isArchitectureToolbarEnabled && !isLandscapesToolbarEnabled && !isCameraToolbarEnabled) {
+  if (!isBasicToolbarEnabled && !isArchitectureToolbarEnabled && !isLandscapesToolbarEnabled && !isCameraToolbarEnabled && !isAIToolbarEnabled) {
     return null;
   }
 

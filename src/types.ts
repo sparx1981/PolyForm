@@ -16,7 +16,7 @@ import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
 // application, well outside the kernel — into that strict-mode kernel
 // compilation, which is where most of tsconfig.kernel.json's several
 // hundred errors were actually coming from.
-export type ToolbarKey = 'left' | 'architecture' | 'landscapes' | 'camera';
+export type ToolbarKey = 'left' | 'architecture' | 'landscapes' | 'camera' | 'ai';
 export type DockZone = 'left' | 'top' | 'bottom';
 
 export type CivilToolMode = 'terrain' | 'road' | 'pad-rect' | 'pad-circle' | 'striping';
@@ -32,8 +32,8 @@ export type ToolType =
   | 'wall' | 'door' | 'window' | 'step' | 'staircase'
   | 'landscape_plot' | 'landscape_form' | 'landscape_embed' | 'landscape_sculpt' | 'landscape_mask' | 'landscape_road' | 'landscape_zone' | 'landscape_texture'
   | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'water' | 'patio' | 'protractor'
-  | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping'
-  | 'block_picker'
+  | 'roof' | 'timber-frame' | 'scale_figure' | 'clipping' | 'site_route'
+  | 'block_picker' | 'worldview' | 'arealabel' | 'leader'
   | CivilToolMode;
 
 export type ToolMode = ToolType | CivilToolMode;
@@ -116,6 +116,132 @@ export interface TerrainData {
   topography?: string;
   grass?: GrassSettings;
   flowers?: WildflowerSettings;
+  /** Set on ground imported from a real place (World View): where it is and how it was made. */
+  site?: WorldSiteInfo;
+  /**
+   * The buildings that stood on an imported site when it was brought in, so ones you delete can
+   * be shown as see-through ghosts ("show existing") or put back. Saved with the height grids.
+   */
+  siteExisting?: SiteBuildingSnapshot[];
+}
+
+/** An imported real-world site: its place on Earth and the choices made when it came in. */
+export interface WorldSiteInfo {
+  lat: number;
+  lng: number;
+  /** Side of the square area, metres (at most 200). */
+  size: number;
+  address?: string;
+  /** Height above sea level of the site's centre, metres. The model's y = 0 is this height. */
+  elevation: number;
+  /** Where the ground heights came from, e.g. "Terrain Tiles (AWS)". */
+  terrainSource: string;
+  /** Where the buildings came from, e.g. "OpenStreetMap". */
+  buildingSource: string;
+  importedAt: number;
+  groundStyle: 'plain' | 'satellite';
+  /** Draw deleted buildings as ghosts. */
+  showRemoved: boolean;
+  /** The LiDAR survey used, if there was one (ground and/or building heights). */
+  lidarSource?: string;
+  /** How far the LiDAR was slid (x, z metres) to line up with the map outlines. */
+  lidarShift?: [number, number];
+  /**
+   * Where cars and people move: the map's roads and footpaths plus any the designer drew.
+   * Missing on sites imported before street life existed (they're fetched when first needed).
+   */
+  routes?: SiteRoute[];
+  /** How busy the street is when cars and people show (default 'normal'). */
+  streetLife?: StreetLifeLevel;
+  /** Also show moving cars and people in the editor, not only in presentations. */
+  streetLifeInEditor?: boolean;
+  /** Show Google's Photorealistic 3D Tiles around the site (a viewing layer, not editable). */
+  googleContext?: boolean;
+  /**
+   * With the Google layer on: 'cutout' (default) cuts it away over the site so the editable
+   * satellite ground shows there; 'google' hides the editable ground and stands the buildings on
+   * Google's mesh, with Google's own buildings flattened under them.
+   */
+  googleGround?: 'cutout' | 'google';
+  /** Metres to raise (+) or lower (-) the Google layer, on top of the automatic height match. */
+  googleNudge?: number;
+  /** Colour the editable buildings: satellite roofs, walls from the map's material or colour tags. */
+  styledBuildings?: boolean;
+}
+
+export type StreetLifeLevel = 'off' | 'quiet' | 'normal' | 'busy';
+
+/** A line that cars ('road') or only people ('path') move along; never drawn itself. */
+export interface SiteRoute {
+  id: string;
+  kind: 'road' | 'path';
+  /** Plan points [x, z], metres in the model. */
+  points: [number, number][];
+  /** 'map' = from OpenStreetMap; 'drawn' = drawn by the designer. */
+  source: 'map' | 'drawn';
+  /** Road width, metres (pavements are either side). */
+  width?: number;
+  /** Cars go one way only, first point to last. */
+  oneway?: boolean;
+  /** People only walk on it, e.g. a pedestrian street; no pavements beside it. */
+  noPavement?: boolean;
+}
+
+/** An existing building on an imported site: its outline and how tall it is. */
+export interface SiteBuildingData {
+  /** Where it came from, e.g. "osm:way/123456". */
+  sourceId: string;
+  /** Outline in plan, [x, z] metres relative to the shape's position. */
+  footprint: [number, number][];
+  holes?: [number, number][][];
+  /** Height of the top above the shape's position (its lowest ground point), metres. */
+  height: number;
+  /** Height of the underside above the shape's position, for canopies and overhangs. */
+  minHeight?: number;
+  /**
+   * 'lidar' = measured from a LiDAR survey; 'tagged' = a height given on the map (or typed in);
+   * 'levels' = floors x 3 m; 'estimated' = a guess from the building type.
+   */
+  heightSource: 'lidar' | 'tagged' | 'levels' | 'estimated';
+  /** A pitched roof fitted to LiDAR (none: flat top). */
+  roof?: SiteRoof;
+  /** The LiDAR survey shows open ground here (built since, or a wrong outline): height is the map's guess. */
+  heightCheck?: boolean;
+  levels?: number;
+  /** The map's building type, e.g. "house", "apartments". */
+  kind?: string;
+  /** What the map says the building is made of (OpenStreetMap tags), for styling. */
+  style?: SiteBuildingStyleTags;
+}
+
+/** Appearance tags from the map: colours are CSS colours or names, materials are OSM values. */
+export interface SiteBuildingStyleTags {
+  colour?: string;
+  material?: string;
+  roofColour?: string;
+  roofMaterial?: string;
+}
+
+/**
+ * A basic roof on an existing building. Its surface is the lowest of its planes at each point:
+ * height = a*x + b*z + c above the building's position, x/z in its own plan frame.
+ */
+export interface SiteRoof {
+  shape: 'flat' | 'skillion' | 'gable' | 'hip' | 'pyramid';
+  planes: [number, number, number][];
+  /** Lowest and highest points of the roof over the outline, above the building's position. */
+  eave: number;
+  ridge: number;
+  /** Roof pitch, degrees. */
+  pitch: number;
+}
+
+/** A building as it was imported (world position), kept for ghosts and restoring. */
+export interface SiteBuildingSnapshot {
+  id: string;
+  name: string;
+  position: [number, number, number];
+  data: SiteBuildingData;
 }
 
 const KNOWN_TEXTURE_IDS = new Set([
@@ -150,13 +276,23 @@ export interface TextData {
 export interface Shape {
   id: string;
   name?: string;
-  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio' | 'text' | 'text3d';
+  type: 'box' | 'rect' | 'circle' | 'line' | 'triangle' | 'prism' | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome' | 'cylinder' | 'custom' | 'poly' | 'bezier' | 'measurement' | 'arc' | 'wall' | 'door' | 'window' | 'step' | 'staircase' | 'terrain' | 'tree' | 'bush' | 'fence' | 'railing' | 'lamp' | 'bench' | 'rock' | 'roof' | 'scale_figure' | 'water' | 'patio' | 'text' | 'text3d' | 'site_building' | 'kernel_group';
   position: [number, number, number];
   rotation?: [number, number, number];
   quaternion?: [number, number, number, number];
   scale?: [number, number, number];
+  /**
+   * A group or component of drawn geometry (type 'kernel_group'): its faces, serialized, in the
+   * group's own frame. See tools/kernelGroups.ts.
+   */
+  kernelGraph?: unknown;
+  /** Copies of a component share this id (and their kernelGraph): editing one edits all. */
+  componentId?: string;
+  componentName?: string;
   args: any;
   terrainData?: TerrainData;
+  /** An existing building on an imported real-world site (World View). */
+  siteBuildingData?: SiteBuildingData;
   color: string;
   roughness?: number;
   metalness?: number;
@@ -460,6 +596,15 @@ export interface AppState {
   registerWallConversionUndo: (link: WallConversionUndoLink) => void;
   addShape: (shape: Shape) => void;
   removeShape: (id: string) => void;
+  /** Removes every guide line (Tape Measure and Protractor) as one undo step; returns how many. */
+  deleteAllGuides: () => number;
+  /** The group or component open for editing (its inside is in the kernel), if any. */
+  /** mainGraph: the model's own drawn geometry, set aside (shown faded) while the group is open. */
+  groupEdit: { shapeId: string; name: string; mainGraph: unknown } | null;
+  /** Opens a group or component to edit its inside. */
+  enterGroupEdit: (shapeId: string) => void;
+  /** Closes the open group, putting the edited faces back into it (and every copy of a component). */
+  exitGroupEdit: () => void;
   updateShapeColor: (id: string | string[], color: string, pbr?: { roughness: number, metalness: number, opacity: number }, surfaceDepth?: HeightMapValue | null) => void;
   updateShapeDimensions: (id: string, position: [number, number, number], args: any) => void;
   isAIRendererOpen: boolean;
@@ -580,7 +725,7 @@ export interface AppState {
   undo: () => void;
   redo: () => void;
   /** Adds a line to the action recording; `options.sdk` offers a readable command for the step (see macroVerify.ts). */
-  recordAction: (code: string, options?: { sdk?: string }) => void;
+  recordAction: (code: string, options?: { sdk?: string; unchecked?: boolean }) => void;
   // Developer Suite
   isDeveloperConsoleOpen: boolean;
   setIsDeveloperConsoleOpen: (open: boolean) => void;
@@ -635,8 +780,6 @@ export interface AppState {
   isToolModifierDocked: boolean;
   setIsToolModifierDocked: (docked: boolean | ((prev: boolean) => boolean)) => void;
   // WorldView
-  isWorldViewOpen: boolean;
-  setIsWorldViewOpen: (open: boolean) => void;
   // AI Generate
   isAIGenerateOpen: boolean;
   setIsAIGenerateOpen: (open: boolean) => void;
@@ -650,6 +793,10 @@ export interface AppState {
   worldViewAltitude: number;
   setWorldViewAltitude: (alt: number) => void;
   worldViewRadius: number;
+  worldViewGoogle: boolean;
+  setWorldViewGoogle: (on: boolean) => void;
+  worldViewGoogleNudge: number;
+  setWorldViewGoogleNudge: (metres: number) => void;
   setWorldViewRadius: (radius: number) => void;
   worldViewMapType: 'satellite' | '3d';
   setWorldViewMapType: (type: 'satellite' | '3d') => void;
@@ -673,6 +820,9 @@ export interface AppState {
   setPlacingNoteId: (id: string | null) => void;
   allNotesVisible: boolean;
   setAllNotesVisible: (visible: boolean) => void;
+  /** Guide lines (Tape Measure and Protractor) shown and snapped to. */
+  guidesVisible: boolean;
+  setGuidesVisible: (visible: boolean) => void;
   // Camera Defaults
   defaultCameraPosition: [number, number, number];
   setDefaultCameraPosition: (pos: [number, number, number]) => void;
@@ -736,6 +886,8 @@ export interface AppState {
   setIsArchitectureToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   isLandscapesToolbarEnabled: boolean;
   setIsLandscapesToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  isAIToolbarEnabled: boolean;
+  setIsAIToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   isCameraToolbarEnabled: boolean;
   setIsCameraToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   layoutMode: 'classic' | 'unified';
@@ -830,6 +982,13 @@ export interface AppState {
   setToolbarDocks: (
     val: Record<ToolbarKey, DockZone> | ((prev: Record<ToolbarKey, DockZone>) => Record<ToolbarKey, DockZone>),
   ) => void;
+  /** Which lane of its dock each classic toolbar sits in; toolbars sharing a lane stack. */
+  toolbarLanes: Record<ToolbarKey, number>;
+  /** Sets order, docks and lanes together (one saved layout). */
+  setToolbarLayout: (layout: import('./lib/toolbarLayout').ToolbarLayout) => void;
+  /** Classic toolbars show drag grips and can be moved only while this is on (default off). */
+  isToolbarEditMode: boolean;
+  setIsToolbarEditMode: (val: boolean | ((prev: boolean) => boolean)) => void;
   // Timber Frame Parametric State & Scoped Recompute
   timberFrameParams: TimberFrameParams;
   setTimberFrameParams: (params: TimberFrameParams | ((prev: TimberFrameParams) => TimberFrameParams)) => void;

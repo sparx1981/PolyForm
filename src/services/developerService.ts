@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Shape, TextData, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
+import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
@@ -14,6 +14,11 @@ import { deleteGroupFacesAndEdges, paintFaces, faceSummaries } from '../tools/ke
 import { applyKernelPatch, type KernelPatch } from '../lib/geometry/graphPatch';
 import { DEFAULT_SEGMENTS } from '../lib/geometry/curve';
 import type { FaceId, Vec3 } from '../lib/geometry/types';
+import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../lib/worldSite/site';
+import { browserSiteIO, findPlace } from '../lib/worldSite/fetchSite';
+import { removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
+import { clampSiteSize } from '../lib/worldSite/geo';
+import { STREET_LIFE_LEVELS, withDrawnRoute, withoutRoutes } from '../lib/worldSite/streets';
 
 export interface RoofConfigDefaults {
   roofType?: RoofType;
@@ -189,6 +194,38 @@ function geometryToData(geom: THREE.BufferGeometry | null | undefined): {
 }
 
 /** A point for sdk.drawing: [x, y, z] or { x, y, z }, in metres (y is up). */
+export interface SiteImportOptions {
+  /** Side of the square area in metres, 20 to 200 (default 100). */
+  size?: number;
+  groundStyle?: 'plain' | 'satellite';
+  /** false: bring in the ground only. */
+  buildings?: boolean;
+}
+
+export interface SiteImportResult {
+  lat: number;
+  lng: number;
+  address: string;
+  size: number;
+  buildings: number;
+  /** Anything that didn't load; the site is still usable. */
+  warnings: string[];
+}
+
+export interface SiteBuildingInfo {
+  id: string;
+  name: string;
+  /** Height of its top above its lowest ground, metres. */
+  height: number;
+  heightSource: SiteBuildingData['heightSource'];
+  /** A roof fitted from LiDAR; null for a flat top. */
+  roof: { shape: string; pitch: number; eave: number } | null;
+  /** The LiDAR shows open ground here: the height is the map's guess. */
+  heightCheck: boolean;
+  kind?: string;
+  position: [number, number, number];
+}
+
 export type DrawingPoint = [number, number, number] | { x: number; y: number; z: number };
 
 export interface SDK {
@@ -569,6 +606,32 @@ export interface SDK {
     setRadius: (radius: number) => void;
     setZoom: (zoom: number) => void;
     setAltitude: (altitude: number) => void;
+    // A real place in 3D: its ground (editable terrain) and existing buildings, from free map
+    // data. `place` is an address, a UK postcode, "lat, lng", or { lat, lng }. At most 200 m square.
+    // Importing again replaces the previous site. Resolves once the data is in the model.
+    importArea: (place: string | { lat: number; lng: number }, options?: SiteImportOptions) => Promise<SiteImportResult>;
+    getSite: () => WorldSiteInfo | null;
+    listBuildings: () => SiteBuildingInfo[];
+    removeBuilding: (id: string) => boolean;
+    restoreBuilding: (id: string) => boolean;
+    setBuildingHeight: (id: string, height: number) => boolean;
+    // Draw removed buildings as see-through ghosts, for before-and-after.
+    showExisting: (show: boolean) => void;
+    setGroundStyle: (style: 'plain' | 'satellite') => void;
+    // Google's Photorealistic 3D Tiles around the site (needs a Google Maps key with the Map
+    // Tiles API). ground: 'cutout' shows the editable ground over the site, 'google' uses Google's.
+    // nudge raises or lowers the layer, metres.
+    setGoogleContext: (on: boolean, options?: { ground?: 'cutout' | 'google'; nudge?: number }) => void;
+    // Style the site's buildings: satellite roofs, walls from the map's colour or material.
+    styleBuildings: (on: boolean) => void;
+    // Moving cars and people on the site. A level ('off' | 'quiet' | 'normal' | 'busy'), and/or
+    // whether they also move in the editor (they always do in presentations unless 'off').
+    setStreetLife: (options: StreetLifeLevel | { level?: StreetLifeLevel; inEditor?: boolean }) => void;
+    // The site's routes: the map's roads and paths plus any drawn. Points are [x, z] metres.
+    listRoutes: () => SiteRoute[];
+    // A route of your own: 'path' for people, 'road' for cars. Returns its id (null without a site).
+    addRoute: (kind: 'path' | 'road', points: [number, number][]) => string | null;
+    removeRoute: (id: string) => boolean;
   };
 
   // Text Subsystem - flat text labels and solid 3D letters, as the Text tools place them.
@@ -637,6 +700,18 @@ export class DeveloperSDK implements SDK {
   public outliner: any;
   public blockKit: any;
   public worldView: any;
+
+  /** Changes the imported site's settings (kept on its ground). */
+  private updateSite(changes: Partial<WorldSiteInfo>) {
+    const ground = findSiteGround(this.shapes);
+    if (!ground) {
+      this.log('worldView: there is no imported site - use worldView.importArea first.');
+      return;
+    }
+    this.setShapes(prev => prev.map(s => (s.id === ground.id && s.terrainData?.site
+      ? { ...s, terrainData: { ...s.terrainData, site: { ...s.terrainData.site, ...changes } } }
+      : s)));
+  }
   public drawing: SDK['drawing'];
   public text: SDK['text'];
   public toolbars: any;
@@ -2300,7 +2375,125 @@ export class DeveloperSDK implements SDK {
       setAltitude: (altitude: number) => {
         if (this.extraSetters.setWorldViewAltitude) this.extraSetters.setWorldViewAltitude(altitude);
         this.log(`Set world altitude to ${altitude}m.`);
-      }
+      },
+      importArea: async (place: string | { lat: number; lng: number }, options: SiteImportOptions = {}): Promise<SiteImportResult> => {
+        const found = typeof place === 'string'
+          ? await findPlace(place, this.extraSetters.googleMapsApiKey)
+          : { lat: place.lat, lng: place.lng, address: `${place.lat.toFixed(6)}, ${place.lng.toFixed(6)}` };
+        if (!found) {
+          this.log(`worldView.importArea: couldn't find "${place}".`);
+          throw new Error(`Couldn't find "${place}". Try a postcode, a full address or "lat, lng".`);
+        }
+        const size = clampSiteSize(options.size ?? 100);
+        const io: SiteIO = this.extraSetters.siteIO ?? browserSiteIO;
+        const built = await buildSite(io, {
+          origin: { lat: found.lat, lng: found.lng },
+          size,
+          address: found.address,
+          groundStyle: options.groundStyle,
+          skipBuildings: options.buildings === false,
+        });
+        this.setShapes(prev => replaceSite(prev, built));
+        this.extraSetters.setWorldViewLocation?.({ lat: found.lat, lng: found.lng, address: found.address });
+        // The flat map would sit inside the new ground.
+        this.extraSetters.setIsWorldViewActive?.(false);
+        this.log(`Imported a ${size} m site at ${found.address}: ${built.buildings.length} buildings.${built.warnings.length ? ` ${built.warnings.join(' ')}` : ''}`);
+        return { lat: found.lat, lng: found.lng, address: found.address, size, buildings: built.buildings.length, warnings: built.warnings };
+      },
+      getSite: () => findSiteGround(this.shapes)?.terrainData?.site ?? null,
+      listBuildings: () => this.shapes
+        .filter(s => s.type === 'site_building' && s.siteBuildingData)
+        .map(s => ({
+          id: s.id,
+          name: s.name ?? 'Existing building',
+          height: s.siteBuildingData!.height,
+          heightSource: s.siteBuildingData!.heightSource,
+          roof: s.siteBuildingData!.roof ? { shape: s.siteBuildingData!.roof.shape, pitch: s.siteBuildingData!.roof.pitch, eave: s.siteBuildingData!.roof.eave } : null,
+          heightCheck: !!s.siteBuildingData!.heightCheck,
+          kind: s.siteBuildingData!.kind,
+          position: [...s.position] as [number, number, number],
+        })),
+      removeBuilding: (id: string) => {
+        if (!this.shapes.some(s => s.id === id && s.type === 'site_building')) {
+          this.log(`worldView.removeBuilding: no existing building with id ${id}.`);
+          return false;
+        }
+        this.setShapes(prev => prev.filter(s => s.id !== id));
+        return true;
+      },
+      restoreBuilding: (id: string) => {
+        const ground = findSiteGround(this.shapes);
+        const snap = removedBuildings(ground?.terrainData?.siteExisting, this.shapes).find(b => b.id === id);
+        if (!snap) {
+          this.log(`worldView.restoreBuilding: ${id} isn't a removed building of this site.`);
+          return false;
+        }
+        this.setShapes(prev => [...prev, shapeFromSnapshot(snap)]);
+        return true;
+      },
+      setBuildingHeight: (id: string, height: number) => {
+        const shape = this.shapes.find(s => s.id === id && s.type === 'site_building' && s.siteBuildingData);
+        if (!shape || !(height > 0)) {
+          this.log(`worldView.setBuildingHeight: no existing building ${id}, or a height that isn't above 0.`);
+          return false;
+        }
+        const next = withBuildingHeight(shape.siteBuildingData!, height);
+        this.setShapes(prev => prev.map(s => (s.id === id ? { ...s, siteBuildingData: next } : s)));
+        return true;
+      },
+      showExisting: (show: boolean) => this.updateSite({ showRemoved: !!show }),
+      setGroundStyle: (style: 'plain' | 'satellite') => {
+        if (style !== 'plain' && style !== 'satellite') {
+          this.log(`worldView.setGroundStyle: use 'plain' or 'satellite'.`);
+          return;
+        }
+        this.updateSite({ groundStyle: style });
+      },
+      setGoogleContext: (on: boolean, options?: { ground?: 'cutout' | 'google'; nudge?: number }) => {
+        if (options?.ground !== undefined && options.ground !== 'cutout' && options.ground !== 'google') {
+          this.log(`worldView.setGoogleContext: ground is 'cutout' or 'google'.`);
+          return;
+        }
+        this.updateSite({
+          googleContext: !!on,
+          ...(options?.ground !== undefined ? { googleGround: options.ground } : {}),
+          ...(typeof options?.nudge === 'number' && Number.isFinite(options.nudge) ? { googleNudge: Math.max(-30, Math.min(30, options.nudge)) } : {}),
+        });
+      },
+      styleBuildings: (on: boolean) => this.updateSite({ styledBuildings: !!on }),
+      setStreetLife: (options: StreetLifeLevel | { level?: StreetLifeLevel; inEditor?: boolean }) => {
+        const o = typeof options === 'string' ? { level: options } : options ?? {};
+        if (o.level !== undefined && !STREET_LIFE_LEVELS.some(l => l.id === o.level)) {
+          this.log(`worldView.setStreetLife: use 'off', 'quiet', 'normal' or 'busy'.`);
+          return;
+        }
+        this.updateSite({
+          ...(o.level !== undefined ? { streetLife: o.level } : {}),
+          ...(o.inEditor !== undefined ? { streetLifeInEditor: !!o.inEditor } : {}),
+        });
+      },
+      listRoutes: () => (findSiteGround(this.shapes)?.terrainData?.site?.routes ?? []).map(r => ({ ...r, points: r.points.map(p => [...p] as [number, number]) })),
+      addRoute: (kind: 'path' | 'road', points: [number, number][]) => {
+        if (!findSiteGround(this.shapes)) {
+          this.log('worldView.addRoute: import a 3D site first.');
+          return null;
+        }
+        if ((kind !== 'path' && kind !== 'road') || !Array.isArray(points) || points.length < 2) {
+          this.log(`worldView.addRoute: give 'path' or 'road' and at least two [x, z] points.`);
+          return null;
+        }
+        const id = `drawn-${Math.random().toString(36).slice(2, 9)}`;
+        this.setShapes(prev => withDrawnRoute(prev, kind, points.map(p => [Number(p[0]), Number(p[1])] as [number, number]), id));
+        return id;
+      },
+      removeRoute: (id: string) => {
+        if (!findSiteGround(this.shapes)?.terrainData?.site?.routes?.some(r => r.id === id)) {
+          this.log(`worldView.removeRoute: no route with id ${id}.`);
+          return false;
+        }
+        this.setShapes(prev => withoutRoutes(prev, [id]));
+        return true;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────

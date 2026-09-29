@@ -48,6 +48,8 @@ interface MaterialRecord {
   original: THREE.Material | THREE.Material[];
   applied: THREE.Material | THREE.Material[];
   castShadow: boolean;
+  /** X-ray drops a door's or window's glass faces: the mesh shows `dropped` until restored. */
+  glassFree?: { original: THREE.BufferGeometry; dropped: THREE.BufferGeometry };
 }
 
 interface LightRecord {
@@ -57,6 +59,8 @@ interface LightRecord {
 }
 
 const AUX = 'presentationAux';
+/** Seconds the Sketch stage takes to draw the design. */
+const SKETCH_SECONDS = 7;
 const EPS = 1e-4;
 
 const PAPER = new THREE.Color('#f1ebdf');
@@ -100,6 +104,28 @@ function drawsSomething(material: THREE.Material | THREE.Material[]): boolean {
   return all.some(m => m.visible !== false && m.colorWrite !== false && !(m.transparent && m.opacity < 0.02));
 }
 
+/** True for a material that is already faint, like window glass or a helper overlay. */
+function isFaint(m: THREE.Material): boolean {
+  return m.transparent && m.opacity < 0.5;
+}
+
+/** A copy of `geometry` without the faces drawn with the given materials (its groups' materialIndex). */
+function withoutMaterials(geometry: THREE.BufferGeometry, drop: Set<number>): THREE.BufferGeometry | null {
+  if (!geometry.groups.length) return null;
+  const source = geometry.index ? geometry.index.array : null;
+  const total = geometry.index ? geometry.index.count : geometry.attributes.position.count;
+  const out: number[] = [];
+  for (const g of geometry.groups) {
+    if (drop.has(g.materialIndex ?? 0)) continue;
+    const end = Math.min(g.start + g.count, total);
+    for (let i = g.start; i < end; i++) out.push(source ? source[i] : i);
+  }
+  const clone = geometry.clone();
+  clone.setIndex(out);
+  clone.clearGroups();
+  return clone;
+}
+
 /** Glass and other see-through surfaces. */
 function isGlassy(material: THREE.Material | THREE.Material[]): boolean {
   const all = Array.isArray(material) ? material : [material];
@@ -131,6 +157,11 @@ export class PresentationEngine {
   private sinceMaterials = 0;
   private touched = false;
   private treeSketch: THREE.Group | null = null;
+  /** How much of the Sketch stage's pencil drawing has been drawn so far (0-1). */
+  private sketchT = 1;
+  private inSketch = false;
+  private sketchLines: { line: THREE.LineSegments; segments: number; start: number; span: number }[] = [];
+  private sketchEdgeCache = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
   private roomLights: THREE.Group | null = null;
   private lights = new Map<THREE.Light, LightRecord>();
   private envIntensity: number | null = null;
@@ -171,6 +202,8 @@ export class PresentationEngine {
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
   private readonly pencil = new THREE.LineBasicMaterial({ color: '#4d463e', transparent: true, opacity: 0.8 });
+  /** A second, fainter and slightly offset pass over each line, so the drawing looks hand-made. */
+  private readonly pencilSoft = new THREE.LineBasicMaterial({ color: '#6b6258', transparent: true, opacity: 0.4 });
   private readonly treePencil = new THREE.LineBasicMaterial({ color: '#6b6258', transparent: true, opacity: 0.9, depthWrite: false });
 
   constructor(private scene: THREE.Scene) {}
@@ -278,6 +311,7 @@ export class PresentationEngine {
     this.stageNow = ease(this.stageNow, state.active ? state.stage : 3, 7, 0.004);
     this.duskNow = ease(this.duskNow, state.active && state.dusk ? 1 : 0, 1.6, 0.003);
     const look = lookAt(this.stageNow);
+    this.advanceSketch(state.active, dt);
 
     const build = state.active ? state.build : 1;
     const moving = this.explodeNow > 0 || build < 1 || !look.furniture || !look.plants;
@@ -325,8 +359,12 @@ export class PresentationEngine {
     this.clayOver.emissive.copy(this.clay.color);
     this.clayOver.opacity = look.clayOver;
     this.pencil.opacity = look.pencil;
+    this.pencilSoft.opacity = look.pencil * 0.45;
+    this.drawSketch();
 
-    this.updateTreeSketch(state.active ? look.treeSketch : 0, look, camera);
+    // Trees are pencilled in last, once the building has been drawn.
+    const treesIn = this.sketchT >= 1 ? 1 : Math.min(1, Math.max(0, (this.sketchT - 0.75) / 0.25));
+    this.updateTreeSketch(state.active ? look.treeSketch * treesIn : 0, look, camera);
     this.updateGrass(state.active && !look.plants);
     this.updateBackground(state.active, look, xray);
     this.updateDusk();
@@ -421,7 +459,7 @@ export class PresentationEngine {
 
   private applyMaterials(xray: boolean, cut: boolean, look: Look) {
     const clip = cut ? this.planes : null;
-    for (const m of [this.ghost, this.ghostSlab, this.edgeMat, this.clay, this.groundClay, this.glass, this.clayOver, this.pencil]) {
+    for (const m of [this.ghost, this.ghostSlab, this.edgeMat, this.clay, this.groundClay, this.glass, this.clayOver, this.pencil, this.pencilSoft]) {
       if (m.clippingPlanes !== clip) { m.clippingPlanes = clip; m.needsUpdate = true; }
     }
     this.capMat.clippingPlanes = this.planes;
@@ -439,6 +477,16 @@ export class PresentationEngine {
         // New mesh, or React swapped its material since: (re)apply over what's there now.
         const original = mesh.material;
         const glassy = isGlassy(original) && !mesh.userData?.isWater;
+        // Already-faint surfaces (window glass, overlays) would read as solid panels once every
+        // shell surface is drawn as ghost, so x-ray leaves them out.
+        if (ghosted && !rec && glassy && !mesh.userData?.isWater) return;
+        let glassFree: MaterialRecord['glassFree'];
+        if (ghosted && Array.isArray(original) && !(mesh as THREE.InstancedMesh).isInstancedMesh) {
+          const faint = new Set<number>();
+          original.forEach((m, i) => { if (isFaint(m)) faint.add(i); });
+          const dropped = faint.size ? withoutMaterials(mesh.geometry, faint) : null;
+          if (dropped) { glassFree = { original: mesh.geometry, dropped }; mesh.geometry = dropped; }
+        }
         const instanced = (mesh as THREE.InstancedMesh).isInstancedMesh;
         let applied: THREE.Material | THREE.Material[];
         // A ghost or model material is one material, never an array: every face looks the same,
@@ -449,7 +497,7 @@ export class PresentationEngine {
         else if (modelLook) applied = glassy ? (look.glass && e.category === 'opening' ? this.glass : this.hidden) : e.category === 'terrain' ? this.groundClay : this.clay;
         else if (clipped) applied = Array.isArray(original) ? original.map(m => this.cutClone(m)) : this.cutClone(original);
         else applied = original;
-        this.materials.set(mesh, { original, applied, castShadow: rec?.castShadow ?? mesh.castShadow });
+        this.materials.set(mesh, { original, applied, castShadow: rec?.castShadow ?? mesh.castShadow, glassFree: rec?.glassFree ?? glassFree });
         mesh.material = applied;
         if (ghosted || applied === this.hidden || applied === this.glass) mesh.castShadow = false;
         if (rec) return;
@@ -458,7 +506,7 @@ export class PresentationEngine {
         if (ghosted && !instanced && small) this.addAux(mesh, new THREE.LineSegments(this.edgesFor(mesh.geometry), this.edgeMat));
         // Pencil outlines over the model.
         if (!ghosted && modelLook && look.pencil > 0 && !glassy && !instanced && small && e.category !== 'terrain') {
-          this.addAux(mesh, new THREE.LineSegments(this.edgesFor(mesh.geometry), this.pencil));
+          this.addSketchLines(mesh, e);
         }
         // Detailed → Built: the real materials show through a fading model layer.
         if (!ghosted && look.mode === 'fade' && !glassy && !instanced) {
@@ -476,6 +524,63 @@ export class PresentationEngine {
     }
   }
 
+  /** The stage timeline waits at Sketch until the drawing is finished. */
+  holdsSketch(stage: number): boolean {
+    return stage < 0.02 && (this.stageNow > 0.05 || this.sketchT < 1);
+  }
+
+  private advanceSketch(active: boolean, dt: number) {
+    if (!active) { this.sketchT = 1; this.inSketch = false; return; }
+    if (this.stageNow < 0.02 && !this.inSketch) { this.inSketch = true; this.sketchT = 0; }
+    else if (this.stageNow > 0.05) { this.inSketch = false; this.sketchT = 1; }
+    if (this.inSketch) this.sketchT = Math.min(1, this.sketchT + dt / SKETCH_SECONDS);
+  }
+
+  /** Reveals each part's pencil lines in build order, so the design is drawn stroke by stroke. */
+  private drawSketch() {
+    for (const s of this.sketchLines) {
+      const f = this.sketchT >= 1 ? 1 : Math.min(1, Math.max(0, (this.sketchT - s.start) / Math.max(0.02, s.span)));
+      s.line.geometry.setDrawRange(0, f >= 1 ? Infinity : Math.floor(s.segments * f) * 2);
+    }
+  }
+
+  /** The part's edges, ordered bottom-up so a pencil would plausibly travel through them. */
+  private sketchEdgesFor(geometry: THREE.BufferGeometry) {
+    let sorted = this.sketchEdgeCache.get(geometry);
+    if (sorted) return sorted;
+    const edges = this.edgesFor(geometry);
+    const pos = edges.attributes.position;
+    const n = pos.count / 2;
+    const order = Array.from({ length: n }, (_, i) => i);
+    const key = (i: number) => Math.round(Math.min(pos.getY(i * 2), pos.getY(i * 2 + 1)) * 20) * 1000 + (pos.getX(i * 2) + pos.getZ(i * 2));
+    order.sort((a, b) => key(a) - key(b));
+    const out = new Float32Array(n * 6);
+    order.forEach((src, dst) => {
+      for (let k = 0; k < 2; k++) {
+        out[dst * 6 + k * 3] = pos.getX(src * 2 + k);
+        out[dst * 6 + k * 3 + 1] = pos.getY(src * 2 + k);
+        out[dst * 6 + k * 3 + 2] = pos.getZ(src * 2 + k);
+      }
+    });
+    sorted = new THREE.BufferGeometry();
+    sorted.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    this.sketchEdgeCache.set(geometry, sorted);
+    return sorted;
+  }
+
+  private addSketchLines(mesh: THREE.Mesh, e: Entry) {
+    const geometry = this.sketchEdgesFor(mesh.geometry);
+    const slot = this.schedule.get(e.key) ?? { start: 0, span: 1 };
+    const segments = geometry.attributes.position.count / 2;
+    const main = new THREE.LineSegments(geometry, this.pencil);
+    const soft = new THREE.LineSegments(geometry, this.pencilSoft);
+    soft.position.set(0.012, 0.008, -0.006);
+    soft.rotation.z = 0.002;
+    this.addAux(mesh, main);
+    this.addAux(mesh, soft);
+    this.sketchLines.push({ line: main, segments, start: slot.start, span: slot.span });
+  }
+
   private addAux(parent: THREE.Object3D, child: THREE.Object3D) {
     parent.add(auxify(child));
     this.aux.push(child);
@@ -484,11 +589,16 @@ export class PresentationEngine {
   private restoreMaterials() {
     for (const [mesh, rec] of this.materials) {
       if (mesh.material === rec.applied) mesh.material = rec.original;
+      if (rec.glassFree) {
+        if (mesh.geometry === rec.glassFree.dropped) mesh.geometry = rec.glassFree.original;
+        rec.glassFree.dropped.dispose();
+      }
       mesh.castShadow = rec.castShadow;
     }
     this.materials.clear();
     for (const a of this.aux) a.removeFromParent();
     this.aux = [];
+    this.sketchLines = [];
   }
 
   // --- Pencil trees (Sketch to Detailed) -------------------------------------------------------
@@ -696,6 +806,7 @@ export class PresentationEngine {
     this.cutClones.forEach(c => c.dispose());
     this.cutClones.clear();
     this.edgeCache.forEach(g => g.dispose());
+    this.sketchEdgeCache.forEach(g => g.dispose());
     this.edgeCache.clear();
     this.entries.clear();
     this.explodeNow = 0;

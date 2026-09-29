@@ -165,6 +165,10 @@ export default function TopBar() {
       setIsLandscapesToolbarEnabled,
       isCameraToolbarEnabled,
       setIsCameraToolbarEnabled,
+      isAIToolbarEnabled,
+      setIsAIToolbarEnabled,
+      isToolbarEditMode,
+      setIsToolbarEditMode,
       layoutMode,
       setLayoutMode,
       terrainModifiers,
@@ -730,18 +734,12 @@ export default function TopBar() {
   };
 
   const handleExport = (format: 'gltf' | 'stl' | 'skp') => {
-    if (format === 'skp') {
-      window.dispatchEvent(new CustomEvent('request-scene-raw', {
-        detail: {
-          callback: (scene: THREE.Scene) => {
-            SkpService.exportAsSKP(scene, currentModelName || 'Model');
-            diagLog('Export', 'Exported as SKP (via bridge)');
-          }
-        }
-      }));
-    } else {
-      window.dispatchEvent(new CustomEvent('export-scene-advanced', { detail: { format } }));
-    }
+    // Each exported piece is named after its object, and the file after the model.
+    const names = Object.fromEntries(shapes.filter(s => s.name).map(s => [s.id, s.name as string]));
+    // Copies of a component go into a SketchUp file as one component placed several times.
+    const components = Object.fromEntries(shapes.filter(s => s.componentId).map(s => [s.id, s.componentId as string]));
+    window.dispatchEvent(new CustomEvent('export-scene-advanced', { detail: { format, modelName: currentModelName, names, components } }));
+    diagLog('Export', `Exported as ${format.toUpperCase()}`);
     setIsMenuOpen(false);
   };
 
@@ -849,6 +847,15 @@ export default function TopBar() {
     input.click();
     setIsMenuOpen(false);
   };
+
+  // The AI toolbar's Photo to 3D button asks for the same flow as the File menu's.
+  const photoTo3DRef = useRef(handlePhotoTo3D);
+  photoTo3DRef.current = handlePhotoTo3D;
+  useEffect(() => {
+    const onRequest = () => photoTo3DRef.current();
+    window.addEventListener('polyform:photo-to-3d', onRequest);
+    return () => window.removeEventListener('polyform:photo-to-3d', onRequest);
+  }, []);
 
   return (
     <header 
@@ -1364,6 +1371,21 @@ export default function TopBar() {
                       isVisible={isCameraToolbarEnabled}
                       onToggle={() => setIsCameraToolbarEnabled(!isCameraToolbarEnabled)}
                     />
+                    <VisibilityToggle 
+                      label="AI Toolbar"
+                      isVisible={isAIToolbarEnabled}
+                      onToggle={() => setIsAIToolbarEnabled(!isAIToolbarEnabled)}
+                    />
+                    <div className="mt-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40">
+                      <VisibilityToggle
+                        label="Edit Toolbar Locations"
+                        isVisible={isToolbarEditMode}
+                        onToggle={() => setIsToolbarEditMode(!isToolbarEditMode)}
+                      />
+                      <p className="text-[10px] text-gray-400 leading-tight px-1 pb-1">
+                        Classic layout only. Turn on to show the drag grips: drag a toolbar onto the top or bottom half of another to stack them in one column, or onto a strip between columns to give it its own. Turn off to lock them in place.
+                      </p>
+                    </div>
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">

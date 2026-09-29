@@ -293,7 +293,7 @@ export function InstancedTimberFraming({
   if (visibleTimberShapes.length === 0) return null;
 
   return (
-    <group name="instanced-timber-framing">
+    <group name="instanced-timber-framing" userData={{ sectionXray: true }}>
       {(Object.keys(kindBuckets) as TimberKind[]).map(kind => (
         <InstancedMeshGroup
           key={kind}

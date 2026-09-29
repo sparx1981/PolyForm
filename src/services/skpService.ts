@@ -1,44 +1,14 @@
 import * as THREE from 'three';
 // @ts-ignore
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
-// @ts-ignore
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { buildScene, toGLB } from 'openskp';
 
 /**
- * Service to handle SKP (.skp) file interactions.
- * Since native .skp parsing is proprietary, we use an industry-standard GLTF bridge
- * optimized for the .skp coordinate system and material structure.
+ * Opening SketchUp (.skp) files. Real .skp files are read natively with OpenSKP; older PolyForm
+ * "bridge" files (glTF saved with a .skp name) still open. Saving as .skp lives in
+ * lib/export/skpExport.ts.
  */
 export const SkpService = {
-  /**
-   * Exports the current scene as an SKP-optimized GLTF file.
-   */
-  exportAsSKP: (scene: THREE.Scene, filename: string) => {
-    const exporter = new GLTFExporter();
-
-    // Prepare scene for SKP compatibility (Unity/SKP axis alignment)
-    // The .skp format uses Z-up by default, Three.js uses Y-up.
-
-    exporter.parse(
-      scene,
-      (gltf: any) => {
-        const blob = new Blob([JSON.stringify(gltf)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename.endsWith('.skp') ? filename : `${filename}.skp.gltf`;
-        link.click();
-        URL.revokeObjectURL(url);
-        console.log('[SkpService] Exported scene for SKP');
-      },
-      (error: any) => {
-        console.error('[SkpService] Export failed:', error);
-      },
-      { binary: false, embedImages: true }
-    );
-  },
-
   /**
    * Imports an SKP file.
    * In a real production environment, this would involve a server-side conversion or a WASM bridge.

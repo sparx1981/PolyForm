@@ -20,6 +20,17 @@ beforeAll(async () => {
     verifyIdToken: async token => ({ uid: 'u1', email: token === 'good' ? 'me@example.com' : 'x@y.z', email_verified: true }),
     firebaseWebConfig: {},
     loginScript: async () => '/* login */',
+    // Flat ground 20 m above sea level and one 10 m square house at the site's centre.
+    siteIO: {
+      heightTiles: async tiles => tiles.map(t => ({ ...t, heights: new Float32Array(256 * 256).fill(20) })),
+      overpass: async () => ({
+        elements: [{
+          type: 'way', id: 7, tags: { building: 'house', 'building:levels': '2' },
+          geometry: [[-5, -5], [5, -5], [5, 5], [-5, 5], [-5, -5]].map(([x, z]) => ({ lat: 51.5 - z / 111319.49, lon: -0.12 + x / (111319.49 * Math.cos(51.5 * Math.PI / 180)) })),
+        }],
+      }),
+    },
+    findPlace: async text => (text === 'SW1A 1AA' ? { lat: 51.5, lng: -0.12, address: 'SW1A 1AA, London' } : null),
   });
   server = createServer((req, res) => void app(req, res));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -117,6 +128,29 @@ describe('connector over HTTP', () => {
     expect(undo.content[0].text).toMatch(/Undid: Deleted/);
     objects = parse(await client.callTool({ name: 'list_objects', arguments: { model: created.id } }));
     expect(objects.total).toBe(7);
+    await client.close();
+  });
+
+  it('imports a real site: editable ground plus existing buildings, replacing the last one', async () => {
+    const { token } = await signIn();
+    const client = await connect(token!);
+    const { id } = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Site test' } }));
+    const missing = await client.callTool({ name: 'import_site', arguments: { model: id, place: 'Nowhere at all' } }) as any;
+    expect(missing.isError).toBe(true);
+    const done = parse(await client.callTool({ name: 'import_site', arguments: { model: id, place: 'SW1A 1AA', size: 60 } }));
+    expect(done.done).toMatch(/60 × 60 m .* 1 existing buildings/);
+    let objects = parse(await client.callTool({ name: 'list_objects', arguments: { model: id } }));
+    expect(objects.total).toBe(2);
+    const house = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: 'site-way-7' } }));
+    expect(house.type).toBe('site_building');
+    const street = parse(await client.callTool({ name: 'set_street_life', arguments: {
+      model: id, level: 'busy', in_editor: true, add_routes: [{ kind: 'path', points: [[0, 0], [10, 5]] }],
+    } }));
+    expect(street.done).toMatch(/Street life busy, also in the editor; 0 driving and 1 walking routes/);
+    // A second import swaps the site rather than adding another.
+    await client.callTool({ name: 'import_site', arguments: { model: id, lat: 51.5, lng: -0.12, size: 40, buildings: false } });
+    objects = parse(await client.callTool({ name: 'list_objects', arguments: { model: id } }));
+    expect(objects.total).toBe(1);
     await client.close();
   });
 

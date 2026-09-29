@@ -61,7 +61,9 @@ export function timberPart(s: Pick<Shape, 'tags' | 'id'>): 'floorFrame' | 'frame
 export function categoryOf(s: Shape | undefined): PresentCategory {
   if (!s) return 'kernel';
   if (isTimber(s)) return timberPart(s);
-  if (s.type === 'terrain') return 'terrain';
+  // An imported site's existing buildings are context, like the ground: there from the start of a
+  // build-up, never exploded, cut or counted.
+  if (s.type === 'terrain' || s.type === 'site_building') return 'terrain';
   if (isRoof(s)) return 'roof';
   if (s.type === 'wall') return 'wall';
   if (s.type === 'door' || s.type === 'window') return 'opening';

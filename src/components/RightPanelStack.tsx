@@ -2,15 +2,21 @@ import { NoteCard } from './NoteCard';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AutoLightingPanel } from './AutoLightingPanel';
 import { actionLabel } from '../lib/macroRecorder';
+import { SiteBuildingFields } from './WorldSiteControls';
+import { SectionPlaneFields } from './SectionPlaneFields';
+import { ComponentsList } from './ComponentsList';
+import { isSectionShape } from '../tools/sectionPlanes';
 import { TextEntityFields } from './TextEntityFields';
 import { WeatherControls } from './graphics/WeatherControls';
-import { PlainFinishPicker } from './PlainFinishPicker';
+import { FinishSwatch } from './PlainFinishPicker';
+import { MaterialPreview3D, type PreviewSpec } from './MaterialPreview3D';
+import { Fold } from './ui/Fold';
+import { buildPbrList, filterPbrList } from '../lib/materials/pbrList';
 import { FLOCK_DEFAULTS } from './animations/FlockSystem';
-import { SurfaceDepthControls } from './graphics/SurfaceDepthControls';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
 import { HeightMapPicker } from './graphics/HeightMapPicker';
 import * as THREE from 'three';
-import { Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
+import { Pencil, Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/skpService';
 import { useApp } from '../AppContext';
@@ -28,7 +34,7 @@ import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc, getDoc, deleteDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc, getDoc, deleteDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 
 const COLORS = [
   '#ffffff', '#ef4444', '#f97316', '#f59e0b', 
@@ -212,6 +218,10 @@ export default function RightPanelStack() {
     setAxisIndicatorEnabled,
     miniAxisIndicatorEnabled,
     setMiniAxisIndicatorEnabled,
+    guidesVisible,
+    setGuidesVisible,
+    deleteAllGuides,
+    enterGroupEdit,
     floorEnabled,
     setFloorEnabled,
     floorColor,
@@ -321,7 +331,7 @@ export default function RightPanelStack() {
   const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame']);
 
   useEffect(() => {
-    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping'].includes(activeTool)) {
+    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping', 'section'].includes(activeTool)) {
       setOpenPanels(prev => prev.includes('toolModifiers') ? prev : [...prev, 'toolModifiers']);
     }
     if (activeTool === 'timber-frame') {
@@ -341,7 +351,7 @@ export default function RightPanelStack() {
   // cancel it if a dblclick follows within that window.
   const premadeClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editorAsset, setEditorAsset] = useState<AssetSummary | null>(null);
-  const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'premade' | 'ai'>('color');
+  const [activeTab, setActiveTab] = useState<'color' | 'texture' | 'mytextures' | 'premade' | 'ai'>('color');
   const [hfToken, setHfTokenState] = useState<string>(() => HuggingFaceService.getToken());
   const setHfToken = (t: string) => { setHfTokenState(t); HuggingFaceService.setToken(t); };
   useEffect(() => { if (activeTab === 'ai') setHfTokenState(HuggingFaceService.getToken()); }, [activeTab]);
@@ -372,15 +382,9 @@ export default function RightPanelStack() {
     hasHeight: asset.hasHeight,
   })), [catalogMaterials]);
   const [premadeCategoryFilter, setPremadeCategoryFilter] = useState<string>('all');
-  const premadeCategories = useMemo(() => {
-    const seen = new Set<string>();
-    for (const mat of premadeMaterials) seen.add(mat.topCategory);
-    return Array.from(seen).sort((a, b) => a.localeCompare(b));
-  }, [premadeMaterials]);
-  const filteredPremadeMaterials = useMemo(
-    () => premadeCategoryFilter === 'all' ? premadeMaterials : premadeMaterials.filter(m => m.topCategory === premadeCategoryFilter),
-    [premadeMaterials, premadeCategoryFilter]
-  );
+  const pbrList = useMemo(() => buildPbrList(premadeMaterials), [premadeMaterials]);
+  const premadeCategories = pbrList.categories;
+  const pbrEntries = useMemo(() => filterPbrList(pbrList.entries, premadeCategoryFilter), [pbrList, premadeCategoryFilter]);
   const selectCatalogMaterial = (asset: AssetSummary) => {
     if (!isMaterialAssetId(asset.id)) return;
     const assetId = asset.id;
@@ -402,10 +406,18 @@ export default function RightPanelStack() {
   // HeightMapPicker has something to derive a height map from as soon as it's ready,
   // without waiting on that handler's Firebase persistence step.
   const [newTextureDataUrl, setNewTextureDataUrl] = useState<string | undefined>(undefined);
+  // What the 3D preview in the Add Material dialog shows once a swatch's cube icon is clicked (else the live colour/upload).
+  const [previewPick, setPreviewPick] = useState<PreviewSpec | null>(null);
+  // A colour or texture of your own being edited in the Add Material dialog (null = making a new one), and the tab to go back to.
+  const [editingMaterial, setEditingMaterial] = useState<any | null>(null);
+  const [editReturnTab, setEditReturnTab] = useState<'color' | 'texture' | 'mytextures' | 'premade' | 'ai' | null>(null);
   useEffect(() => {
     if (!isAddMaterialOpen) {
       setNewMaterialSurfaceDepth(null);
       setNewTextureDataUrl(undefined);
+      setPreviewPick(null);
+      setEditingMaterial(null);
+      setEditReturnTab(null);
       if (premadeClickTimer.current) { clearTimeout(premadeClickTimer.current); premadeClickTimer.current = null; }
     }
   }, [isAddMaterialOpen]);
@@ -485,6 +497,123 @@ export default function RightPanelStack() {
   // is hidden, then run them again once one is shown - a
   // "Rendered more hooks than during the previous render" crash.
   const allPanelsHidden = panelVisibility['entity'] === false && panelVisibility['outliner'] === false && panelVisibility['materials'] === false && panelVisibility['styles'] === false && panelVisibility['tags'] === false && panelVisibility['scenes'] === false && panelVisibility['shadows'] === false && panelVisibility['components'] === false;
+
+  // The dialog's 3D preview: whatever swatch was picked with its cube icon, else the material being made.
+  const previewSpec: PreviewSpec | null = (() => {
+    if (previewPick) return previewPick;
+    const depth = newMaterialSurfaceDepth ?? undefined;
+    const common = {
+      roughness: pbrSettings.roughness, metalness: pbrSettings.metalness, opacity: pbrSettings.opacity,
+      ...(depth?.displacementMapUrl ? { heightMapUrl: depth.displacementMapUrl } : {}),
+      ...(depth?.normalMapUrl ? { normalMapUrl: depth.normalMapUrl } : {}),
+      ...(depth?.displacementScale !== undefined ? { depthScale: depth.displacementScale } : {}),
+    };
+    if (activeTab === 'color') return { label: `Colour ${newColor.toUpperCase()}`, color: newColor, ...common };
+    if (activeTab === 'texture' && newTextureDataUrl) return { label: 'Uploaded texture', textureUrl: newTextureDataUrl, color: '#ffffff', ...common };
+    if (activeTab === 'ai' && aiPreviewUrl) return { label: 'AI material', textureUrl: aiPreviewUrl, color: '#ffffff', ...common };
+    return null;
+  })();
+  /** The small cube button on a swatch: shows that material in the preview without applying it. */
+  const previewButton = (spec: PreviewSpec, className = '') => (
+    <button
+      type="button"
+      title="Preview in 3D"
+      aria-label={`Preview ${spec.label ?? 'material'} in 3D`}
+      onClick={(e) => { e.stopPropagation(); setPreviewPick(spec); }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      className={cn('absolute z-10 p-1 rounded-md bg-white/90 text-gray-600 shadow-sm border border-gray-200 hover:text-polyform-blue hover:border-polyform-blue transition-colors', className)}
+    >
+      <Box size={12} />
+    </button>
+  );
+  /** The small pencil on a swatch: says the material can be edited (double-click does the same). */
+  const editButton = (onEdit: () => void, className = '') => (
+    <button
+      type="button"
+      title="Edit material properties (or double-click)"
+      aria-label="Edit material properties"
+      onClick={(e) => { e.stopPropagation(); onEdit(); }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      className={cn('absolute z-10 p-1 rounded-md bg-white/90 text-gray-600 shadow-sm border border-gray-200 hover:text-polyform-blue hover:border-polyform-blue transition-colors', className)}
+    >
+      <Pencil size={12} />
+    </button>
+  );
+
+  /** Opens one of your own colours or textures for editing in the Add Material dialog. */
+  const beginEditCustom = (m: any) => {
+    // Coming from inside the dialog: remember the tab, and go back to it when done.
+    setEditReturnTab(isAddMaterialOpen ? activeTab : null);
+    setEditingMaterial(m);
+    setPreviewPick(null);
+    setPbrSettings({ roughness: 0.5, metalness: 0, opacity: 1, ...(m.pbr ?? {}) });
+    setNewMaterialSurfaceDepth(m.surfaceDepth ?? null);
+    if (m.type === 'color') {
+      setNewColor(m.value);
+      setActiveTab('color');
+    } else {
+      setNewTextureDataUrl(m.value);
+      setActiveTab('texture');
+    }
+    setIsAddMaterialOpen(true);
+  };
+
+  /** Leaves edit mode: back to the tab we came from, or closes the dialog if it was opened just for this. */
+  const endEdit = () => {
+    const back = editReturnTab;
+    setEditingMaterial(null);
+    setEditReturnTab(null);
+    setPreviewPick(null);
+    // Leave the "new material" fields clean for the next one.
+    setPbrSettings({ roughness: 0.5, metalness: 0, opacity: 1 });
+    setNewMaterialSurfaceDepth(null);
+    setNewTextureDataUrl(undefined);
+    setNewColor('#ffffff');
+    if (back) setActiveTab(back);
+    else setIsAddMaterialOpen(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingMaterial) return;
+    const updated = {
+      ...editingMaterial,
+      ...(editingMaterial.type === 'color' ? { value: newColor, name: `Color ${newColor}` } : {}),
+      pbr: pbrSettings,
+      surfaceDepth: newMaterialSurfaceDepth || undefined,
+    };
+    setCustomMaterials(prev => prev.map(m => (m.id === editingMaterial.id ? updated : m)));
+    // If it is the material in use, the paint bucket carries the new values.
+    if (activeMaterial === editingMaterial.value) {
+      setActiveMaterial(updated.value);
+      setActivePBR(pbrSettings);
+      setActiveSurfaceDepth(newMaterialSurfaceDepth);
+    }
+    endEdit();
+    if (user?.uid) {
+      try {
+        const snap = await getDocs(query(collection(db, 'materials'), where('userId', '==', user.uid)));
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.id === editingMaterial.id || d.id === editingMaterial.id || data.value === editingMaterial.value) {
+            void updateDoc(d.ref, { value: updated.value, name: updated.name, pbr: updated.pbr, surfaceDepth: updated.surfaceDepth ?? null }).catch(() => {});
+          }
+        });
+      } catch (err) {
+        console.warn('[Materials] Firestore update warning:', err);
+      }
+    }
+  };
+
+  /** The material in use (the "Active" swatch): a library material opens its editor, one of your own opens the dialog. */
+  const openEditActive = () => {
+    if (activeMaterialBindingId) {
+      const asset = catalogMaterials.find(a => a.id === activeMaterialBindingId);
+      if (asset) { setEditorAsset(asset); return; }
+    }
+    const mine = customMaterials.find(m => m.value === activeMaterial);
+    if (mine) beginEditCustom(mine);
+  };
+  const activeIsEditable = !!(activeMaterialBindingId && catalogMaterials.some(a => a.id === activeMaterialBindingId)) || customMaterials.some(m => m.value === activeMaterial);
 
   const handleAddColor = async () => {
     const materialId = Math.random().toString(36).substr(2, 9);
@@ -824,7 +953,8 @@ export default function RightPanelStack() {
     'railing',
     'timber-frame',
     'roof',
-    'lamp'
+    'lamp',
+    'worldview'
   ].includes(activeTool);
 
   if (allPanelsHidden) return null;
@@ -870,7 +1000,7 @@ export default function RightPanelStack() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Type</label>
-                    <div className="font-medium text-polyform-blue uppercase">{selectedShape.type}</div>
+                    <div className="font-medium text-polyform-blue uppercase">{selectedShape.type === 'kernel_group' ? (selectedShape.componentId ? 'Component' : 'Group') : selectedShape.type}</div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Volume</label>
@@ -946,6 +1076,26 @@ export default function RightPanelStack() {
 
                 {selectedShape.textData && (selectedShape.type === 'text' || selectedShape.type === 'text3d') && (
                   <TextEntityFields shape={selectedShape} />
+                )}
+
+                {isSectionShape(selectedShape) && <SectionPlaneFields shape={selectedShape} />}
+
+                {selectedShape.type === 'kernel_group' && (
+                  <div className="space-y-1">
+                    {selectedShape.componentId && (
+                      <div className="text-[10px] text-gray-400">
+                        Component <strong>{selectedShape.componentName || selectedShape.name}</strong>: {shapes.filter(s => s.componentId === selectedShape.componentId).length} copies share its inside.
+                      </div>
+                    )}
+                    <button onClick={() => enterGroupEdit(selectedShape.id)}
+                      className="w-full text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:border-polyform-blue transition-colors">
+                      Edit inside (or double-click it)
+                    </button>
+                  </div>
+                )}
+
+                {selectedShape.type === 'site_building' && selectedShape.siteBuildingData && (
+                  <SiteBuildingFields shape={selectedShape} />
                 )}
 
                 {!selectedShape.textData && (
@@ -2453,7 +2603,6 @@ export default function RightPanelStack() {
             onToggle={() => togglePanel('materials')}
           >
             <div className="space-y-4">
-              <SurfaceDepthControls />
               <div className="grid grid-cols-5 gap-2">
                 {COLORS.map((color, idx) => (
                   <div 
@@ -2482,13 +2631,24 @@ export default function RightPanelStack() {
                       setActiveSurfaceDepth(m.surfaceDepth || null);
                       setActiveTool('paint');
                     }}
+                    onDoubleClick={() => beginEditCustom(m)}
                     className={cn(
                       "group relative aspect-square rounded-sm border cursor-pointer transition-transform hover:scale-105",
                       activeMaterial === m.value ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300"
                     )}
                     style={{ backgroundColor: m.value }}
-                    title={m.name || m.value}
+                    title={`${m.name || m.value} - double-click to edit`}
                   >
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); beginEditCustom(m); }}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-white hover:bg-polyform-blue text-gray-600 hover:text-white border border-gray-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10 shadow-xs"
+                      title="Edit material properties"
+                      aria-label="Edit material properties"
+                    >
+                      <Pencil size={9} />
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -2510,70 +2670,11 @@ export default function RightPanelStack() {
                 </button>
               </div>
 
-              <PlainFinishPicker onPick={finish => {
-                setActiveMaterial(finish.color);
-                setActiveMaterialBindingId(null);
-                setActivePBR({ roughness: finish.roughness, metalness: finish.metalness, opacity: finish.opacity });
-                setActiveSurfaceDepth(null);
-                setActiveTool('paint');
-              }} activeColor={activeMaterial} />
-
-              {customMaterials.filter(m => m.type === 'texture').length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Textures</span>
-                    <span className="text-[9px] text-gray-400">{customMaterials.filter(m => m.type === 'texture').length} custom</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {customMaterials.filter(m => m.type === 'texture').map((m, i) => (
-                      <div 
-                        key={m.id || `custom-tex-${i}`}
-                        onClick={() => {
-                          setActiveMaterial(m.value);
-                          setActiveMaterialBindingId(null);
-                          if (m.pbr) setActivePBR(m.pbr);
-                          setActiveSurfaceDepth(m.surfaceDepth || null);
-                          setActiveTool('paint');
-                        }}
-                        className={cn(
-                          "group relative aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-105 bg-gray-100 dark:bg-gray-800",
-                          activeMaterial === m.value ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300 dark:border-gray-700"
-                        )}
-                        title={m.name || 'Custom Texture'}
-                      >
-                        <img 
-                          src={m.value} 
-                          alt={m.name || 'Texture'} 
-                          className="w-full h-full object-cover" 
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        {/* Fallback placeholder if image is broken or failed to load */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 p-1 text-center pointer-events-none -z-0">
-                          <ImageOff size={14} className="opacity-70 mb-0.5" />
-                          <span className="text-[7px] truncate max-w-full font-mono leading-none">{m.name || 'Broken'}</span>
-                        </div>
-                        {/* Remove texture action button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteMaterial(m);
-                          }}
-                          className="absolute top-0.5 right-0.5 p-1 bg-black/70 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-xs cursor-pointer"
-                          title="Remove texture"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <div
+                className={cn("flex items-center gap-2 pt-2 border-t border-gray-100", activeIsEditable && "cursor-pointer")}
+                onDoubleClick={activeIsEditable ? openEditActive : undefined}
+                title={activeIsEditable ? 'Double-click to edit this material' : undefined}
+              >
                 <span className="text-gray-500">Active:</span>
                 {activeMaterial.startsWith('#') ? (
                   <div className="w-6 h-6 rounded-sm border border-gray-300 shadow-sm" style={{ backgroundColor: activeMaterial }} />
@@ -2585,6 +2686,17 @@ export default function RightPanelStack() {
                 <span className="font-mono text-[10px] truncate max-w-[100px]">
                   {activeMaterial.startsWith('#') ? activeMaterial.toUpperCase() : 'TEXTURE'}
                 </span>
+                {activeIsEditable && (
+                  <button
+                    type="button"
+                    onClick={openEditActive}
+                    className="ml-auto p-1 rounded-md bg-white text-gray-600 border border-gray-200 hover:text-polyform-blue hover:border-polyform-blue transition-colors"
+                    title="Edit material properties (or double-click)"
+                    aria-label="Edit the active material"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                )}
               </div>
             </div>
           </Panel>
@@ -4234,6 +4346,33 @@ export default function RightPanelStack() {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
+                    <span title="Guide lines from the Tape Measure and Protractor. Hidden guides aren't snapped to.">Guides</span>
+                    <button
+                      onClick={() => setGuidesVisible(!guidesVisible)}
+                      className={cn(
+                        "w-8 h-4 rounded-full relative transition-colors",
+                        guidesVisible ? "bg-polyform-blue" : "bg-gray-300"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                        guidesVisible ? "left-4.5" : "left-0.5"
+                      )} />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const removed = deleteAllGuides();
+                      if (removed === 0) alert('There are no guides to delete.');
+                    }}
+                    className="w-full text-xs px-2 py-1 rounded border border-gray-300 hover:border-red-400 hover:text-red-500 transition-colors"
+                  >
+                    Delete All Guides
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <span>Scene Floor</span>
                     <button 
                       onClick={() => {
@@ -4304,6 +4443,10 @@ export default function RightPanelStack() {
                 className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-polyform-blue focus:border-polyform-blue outline-none"
               />
               <Search size={14} className="absolute left-2.5 top-2 text-gray-400" />
+            </div>
+            <div className="mt-3 space-y-1">
+              <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">In this model</div>
+              <ComponentsList />
             </div>
           </Panel>
         )}
@@ -4564,96 +4707,99 @@ export default function RightPanelStack() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-xl shadow-modus-4 w-full max-w-md overflow-hidden flex flex-col"
+              className="bg-white text-gray-800 rounded-xl shadow-modus-4 w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
             >
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-800">Add Material</h2>
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <h2 className="text-lg font-bold text-gray-800">{editingMaterial ? 'Edit Material' : 'Add Material'}</h2>
                 <button onClick={() => setIsAddMaterialOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
                   <X size={20} className="text-gray-500" />
                 </button>
               </div>
 
-              <div className="flex border-b border-gray-100">
-                <button 
-                  onClick={() => setActiveTab('color')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'color' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  Color Picker
-                </button>
-                <button 
-                  onClick={() => setActiveTab('texture')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'texture' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  Upload Texture
-                </button>
-                <button 
-                  onClick={() => setActiveTab('premade')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'premade' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  Pre-Made PBRs
-                </button>
-                <button 
-                  onClick={() => setActiveTab('ai')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-1",
-                    activeTab === 'ai' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  <Wand2 size={14} />
-                  AI Generate
-                </button>
+              {/* shrink-0: with tall tab content (PBR Materials) the tabs were squeezed out of view. */}
+              <div className="flex border-b border-gray-100 overflow-x-auto shrink-0" role="tablist">
+                {([
+                  ['color', 'Colour', null],
+                  ['texture', 'Upload Texture', null],
+                  ['mytextures', 'My Textures', null],
+                  ['premade', 'PBR Materials', null],
+                  ['ai', 'AI Generate', <Wand2 key="w" size={14} />],
+                ] as const).filter(([id]) => !editingMaterial || id === activeTab).map(([id, label, icon]) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    aria-selected={activeTab === id}
+                    onClick={() => { setActiveTab(id); setPreviewPick(null); }}
+                    className={cn(
+                      "px-5 py-3 text-sm font-medium whitespace-nowrap flex items-center gap-1.5 transition-colors",
+                      activeTab === id ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
+                    )}
+                  >
+                    {icon}{label}
+                  </button>
+                ))}
               </div>
 
-              <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-hidden">
+                <div className="md:w-72 shrink-0 p-5 border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50/60 order-first md:order-last">
+                  <MaterialPreview3D spec={previewSpec} />
+                  <p className="mt-2 text-[10px] text-gray-400 leading-tight">Drag to turn it. Height maps show as relief.</p>
+                </div>
+              <div className="p-6 overflow-y-auto min-h-[min(420px,50vh)] flex-1 min-w-0">
                 {activeTab === 'color' ? (
-                  <div className="space-y-6">
-                    <div className="flex flex-col items-center gap-4">
-                      <input 
-                        type="color" 
-                        value={newColor}
-                        onChange={(e) => setNewColor(e.target.value)}
-                        className="w-32 h-32 rounded-lg cursor-pointer border-4 border-gray-100 shadow-inner"
-                      />
-                      <div className="text-xl font-mono font-bold text-gray-700">{newColor.toUpperCase()}</div>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <input
+                          type="color"
+                          value={newColor}
+                          onChange={(e) => setNewColor(e.target.value)}
+                          className="w-28 h-28 rounded-lg cursor-pointer border-4 border-gray-100 shadow-inner"
+                        />
+                        {previewButton({ label: `Colour ${newColor.toUpperCase()}`, color: newColor, roughness: pbrSettings.roughness, metalness: pbrSettings.metalness, opacity: pbrSettings.opacity }, 'top-1 right-1')}
+                      </div>
+                      <div>
+                        <div className="text-xl font-mono font-bold text-gray-700">{newColor.toUpperCase()}</div>
+                        <p className="text-[11px] text-gray-400 leading-tight mt-1">Pick a colour, then add it to the palette. Open the sections below for finish and relief.</p>
+                      </div>
                     </div>
 
-                    <div className="space-y-4 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
-                      </div>
+                    <Fold title="PBR Settings" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
-                    </div>
+                    </Fold>
 
-                    <div className="space-y-2 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
-                      </div>
+                    <Fold title="Height Map (optional)" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <HeightMapPicker
                         value={newMaterialSurfaceDepth || {}}
                         onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
                       />
-                    </div>
+                    </Fold>
 
-                    <button 
-                      onClick={handleAddColor}
-                      className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all"
-                    >
-                      Add to Palette
-                    </button>
+                    {editingMaterial ? (
+                      <div className="flex gap-2">
+                        <button onClick={endEdit} className="flex-1 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-all">Cancel</button>
+                        <button onClick={handleSaveEdit} className="flex-1 py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all">Save changes</button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={handleAddColor}
+                        className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all"
+                      >
+                        Add to Palette
+                      </button>
+                    )}
                   </div>
                 ) : activeTab === 'texture' ? (
                   <div className="space-y-6">
+                    {editingMaterial ? (
+                      <div className="flex items-center gap-3">
+                        <img src={editingMaterial.value} alt="" className="h-20 w-20 rounded-lg object-cover border border-gray-200" referrerPolicy="no-referrer" />
+                        <div className="text-xs text-gray-500 leading-tight">
+                          <div className="font-semibold text-gray-700 text-sm">{editingMaterial.name || 'Texture'}</div>
+                          Change how it is finished below. To use a different image, add it again from Upload Texture.
+                        </div>
+                      </div>
+                    ) : (
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Texture File</label>
                       <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
@@ -4677,35 +4823,93 @@ export default function RightPanelStack() {
                       {removingBg && (
                         <div className="flex items-center gap-2 text-polyform-blue text-xs">
                           <Loader2 className="animate-spin" size={14} />
+ 
                           <span>Removing background&hellip;</span>
                         </div>
                       )}
                     </div>
+                    )}
 
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
-                      </div>
+                    <Fold title="PBR Settings" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
-                    </div>
+                    </Fold>
 
-                    <div className="space-y-2 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
-                      </div>
+                    <Fold title="Height Map (optional)" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <HeightMapPicker
                         value={newMaterialSurfaceDepth || {}}
                         onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
                         sourceTextureUrl={newTextureDataUrl}
                       />
-                    </div>
+                    </Fold>
 
                     {uploading && (
                       <div className="flex items-center justify-center gap-2 text-polyform-blue">
                         <Loader2 className="animate-spin" size={18} />
                         <span className="text-sm font-medium">Uploading...</span>
+                      </div>
+                    )}
+                    {editingMaterial && (
+                      <div className="flex gap-2">
+                        <button onClick={endEdit} className="flex-1 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-all">Cancel</button>
+                        <button onClick={handleSaveEdit} className="flex-1 py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all">Save changes</button>
+                      </div>
+                    )}
+                  </div>
+                ) : activeTab === 'mytextures' ? (
+                  <div className="space-y-3">
+                    {customMaterials.filter(m => m.type === 'texture').length === 0 ? (
+                      <div className="py-10 text-center text-xs text-gray-400">
+                        No textures yet. Use the Upload Texture tab to add one.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+                        {customMaterials.filter(m => m.type === 'texture').map((m, i) => (
+                          <div
+                            key={m.id || `custom-tex-${i}`}
+                            onClick={() => {
+                              setActiveMaterial(m.value);
+                              setActiveMaterialBindingId(null);
+                              if (m.pbr) setActivePBR(m.pbr);
+                              setActiveSurfaceDepth(m.surfaceDepth || null);
+                              setActiveTool('paint');
+                              setIsAddMaterialOpen(false);
+                            }}
+                            onDoubleClick={() => beginEditCustom(m)}
+                            className={cn(
+                              "group relative aspect-square rounded-sm border cursor-pointer overflow-hidden transition-transform hover:scale-105 bg-gray-100",
+                              activeMaterial === m.value ? "border-polyform-blue ring-1 ring-polyform-blue" : "border-gray-300"
+                            )}
+                            title={`${m.name || 'Custom Texture'} - click to use, double-click to edit`}
+                          >
+                            <img
+                              src={m.value}
+                              alt={m.name || 'Texture'}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                            />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-1 text-center pointer-events-none -z-0">
+                              <ImageOff size={14} className="opacity-70 mb-0.5" />
+                              <span className="text-[7px] truncate max-w-full font-mono leading-none">{m.name || 'Broken'}</span>
+                            </div>
+                            {previewButton({
+                              label: m.name || 'Texture', textureUrl: m.value, color: '#ffffff',
+                              ...(m.pbr ? { roughness: m.pbr.roughness, metalness: m.pbr.metalness, opacity: m.pbr.opacity } : {}),
+                              ...(m.surfaceDepth?.displacementMapUrl ? { heightMapUrl: m.surfaceDepth.displacementMapUrl } : {}),
+                              ...(m.surfaceDepth?.normalMapUrl ? { normalMapUrl: m.surfaceDepth.normalMapUrl } : {}),
+                              ...(m.surfaceDepth?.displacementScale !== undefined ? { depthScale: m.surfaceDepth.displacementScale } : {}),
+                            }, 'top-0.5 left-0.5')}
+                            {editButton(() => beginEditCustom(m), 'bottom-0.5 left-0.5')}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteMaterial(m); }}
+                              className="absolute top-0.5 right-0.5 p-1 bg-black/70 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-xs cursor-pointer"
+                              title="Remove texture"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -4738,60 +4942,100 @@ export default function RightPanelStack() {
                         ))}
                       </div>
                     )}
-                  <div className="grid grid-cols-2 gap-4">
-                    {filteredPremadeMaterials.map((mat: any, i: number) => (
-                      <button
-                        type="button"
-                        key={mat.id || `premade-${mat.name || i}-${i}`}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {pbrEntries.map((entry, i) => entry.kind === 'finish' ? (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) e.currentTarget.click(); }}
+                        key={entry.key}
+                        onClick={() => {
+                          const finish = entry.finish;
+                          setActiveMaterial(finish.color);
+                          setActiveMaterialBindingId(null);
+                          setActivePBR({ roughness: finish.roughness, metalness: finish.metalness, opacity: finish.opacity });
+                          setActiveSurfaceDepth(null);
+                          setActiveTool('paint');
+                          setIsAddMaterialOpen(false);
+                        }}
+                        title={`${entry.name} — click to apply`}
+                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left"
+                      >
+                        <div className="aspect-square bg-gray-100 relative">
+                          <FinishSwatch finish={entry.finish} />
+                          {previewButton({ label: entry.name, color: entry.finish.color, roughness: entry.finish.roughness, metalness: entry.finish.metalness, opacity: entry.finish.opacity }, 'top-1 right-1')}
+                        </div>
+                        <div className="p-2">
+                          <div className="text-[10px] font-bold truncate">{entry.name}</div>
+                          <div className="text-[8px] text-gray-400 truncate">{entry.category}</div>
+                          <div className="text-[8px] text-gray-400">Plain finish</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) e.currentTarget.click(); }}
+                        key={entry.key || `premade-${i}`}
                         onClick={() => {
                           if (premadeClickTimer.current) clearTimeout(premadeClickTimer.current);
                           premadeClickTimer.current = setTimeout(() => {
                             premadeClickTimer.current = null;
-                            const asset = catalogMaterials.find(item => item.id === mat.id);
+                            const asset = catalogMaterials.find(item => item.id === entry.item.id);
                             if (asset) selectCatalogMaterial(asset);
                             setIsAddMaterialOpen(false);
                           }, 250);
                         }}
                         onDoubleClick={() => {
                           if (premadeClickTimer.current) { clearTimeout(premadeClickTimer.current); premadeClickTimer.current = null; }
-                          const asset = catalogMaterials.find(item => item.id === mat.id);
-                          if (asset) { setEditorAsset(asset); setIsAddMaterialOpen(false); }
+                          const asset = catalogMaterials.find(item => item.id === entry.item.id);
+                          // The editor opens over this dialog, so closing it brings you straight back here.
+                          if (asset) setEditorAsset(asset);
                         }}
-                        title={`${mat.name} — click to apply, double-click to edit`}
+                        title={`${entry.name} — click to apply, double-click to edit`}
                         className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left"
                       >
                         <div className="aspect-square bg-gray-100 relative">
                           <img
-                            src={mat.texture}
-                            alt={mat.name}
+                            src={entry.item.texture}
+                            alt={entry.name}
                             loading="lazy"
                             decoding="async"
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                             <Plus size={24} className="text-white" />
                           </div>
+                          {(() => {
+                            const asset = catalogMaterials.find(item => item.id === entry.item.id);
+                            return asset ? (
+                              <>
+                                {previewButton({ label: entry.name, library: { asset } }, 'top-1 right-1')}
+                                {editButton(() => setEditorAsset(asset), 'top-1 left-1')}
+                              </>
+                            ) : previewButton({ label: entry.name, textureUrl: entry.item.texture, color: '#ffffff', roughness: 0.7, metalness: 0 }, 'top-1 right-1');
+                          })()}
                         </div>
                         <div className="p-2">
-                          <div className="text-[10px] font-bold truncate">{mat.name}</div>
-                          <div className="text-[8px] text-gray-400 truncate">{mat.category}</div>
-                          <div className="text-[8px] text-gray-400">Material library · CC0{mat.hasHeight ? ' · Height' : ''}</div>
+                          <div className="text-[10px] font-bold truncate">{entry.name}</div>
+                          <div className="text-[8px] text-gray-400 truncate">{entry.category}</div>
+                          <div className="text-[8px] text-gray-400">Material library · CC0{entry.item.hasHeight ? ' · Height' : ''}</div>
                         </div>
-                      </button>
+                      </div>
                     ))}
                     {catalogLoading && premadeMaterials.length === 0 && (
-                      <div className="col-span-2 py-12 text-center text-gray-400">
+                      <div className="col-span-full py-12 text-center text-gray-400">
                         <Loader2 size={24} className="animate-spin mx-auto mb-2" />
                         <span>Loading material library...</span>
                       </div>
                     )}
                     {!catalogLoading && catalogFallback && premadeMaterials.length === 0 && (
-                      <div className="col-span-2 py-8 text-center text-xs text-gray-400">
+                      <div className="col-span-full py-8 text-center text-xs text-gray-400">
                         The material catalog is temporarily unavailable. Custom uploads and colours remain available.
                       </div>
                     )}
-                    {!catalogLoading && !catalogFallback && premadeMaterials.length > 0 && filteredPremadeMaterials.length === 0 && (
-                      <div className="col-span-2 py-8 text-center text-xs text-gray-400">
+                    {!catalogLoading && !catalogFallback && pbrEntries.length === 0 && (
+                      <div className="col-span-full py-8 text-center text-xs text-gray-400">
                         No materials in this category.
                       </div>
                     )}
@@ -4854,24 +5098,16 @@ export default function RightPanelStack() {
                         <div className="aspect-square w-32 mx-auto rounded-lg overflow-hidden border-4 border-gray-100 shadow-inner">
                           <img src={aiPreviewUrl} alt="AI generated material" className="w-full h-full object-cover" />
                         </div>
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2">
-                            <Settings2 size={16} className="text-gray-400" />
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
-                          </div>
+                        <Fold title="PBR Settings" icon={<Settings2 size={14} className="text-gray-400" />}>
                           <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
-                        </div>
-                        <div className="space-y-2 pt-2 border-t border-gray-100">
-                          <div className="flex items-center gap-2">
-                            <Settings2 size={16} className="text-gray-400" />
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
-                          </div>
+                        </Fold>
+                        <Fold title="Height Map (optional)" icon={<Settings2 size={14} className="text-gray-400" />}>
                           <HeightMapPicker
                             value={newMaterialSurfaceDepth || {}}
                             onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
                             sourceTextureUrl={aiPreviewUrl}
                           />
-                        </div>
+                        </Fold>
                         <button
                           onClick={handleAddAIMaterial}
                           className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all"
@@ -4882,6 +5118,7 @@ export default function RightPanelStack() {
                     )}
                   </div>
                 )}
+              </div>
               </div>
             </motion.div>
           </div>

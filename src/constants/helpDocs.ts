@@ -173,6 +173,25 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'world-view-3d-site',
+    title: 'WorldView 3D Site (real terrain and buildings)',
+    category: 'features',
+    content: 'Bring a real place into your model, up to 200 m square. You get its ground as an editable terrain and its existing buildings as white models. Design in context: delete a building and draw your own in its place, then show the old one as a ghost for before and after.',
+    steps: [
+      'Open WorldView (the Globe icon) and search for an address, a UK postcode or "lat, lng". The pin marks the centre of the site.',
+      'Under 3D Site, choose the area (20 to 200 m square) and the ground: Plain (white model) or Satellite (the aerial photo, which needs a Google Maps key).',
+      'Click "Import 3D site". The centre of the site becomes ground level (y = 0), and north is towards the top of the plan. Importing again replaces the site; your own design stays.',
+      'The ground is an ordinary terrain: sculpt, flatten, dig and pave it with the landscape tools.',
+      'Click an existing building to select it. Entity Info shows its height and where that came from: measured, from its number of floors (3 m each), or estimated. Type a new height to correct it.',
+      'Delete a building (Delete key or "Remove building"), then draw your new design in its place. Tick "Show removed buildings as ghosts" to see what was there, or "Put back" to restore them.',
+      'Existing buildings and the imported ground are left out of the bill of materials and are there from the start of a presentation build-up.',
+      'Street life: moving cars and people. Cars drive the real roads, keeping to the side the country drives on. Plain white figures walk the footpaths and the pavements beside roads, a few stand chatting, and anyone can sit on benches you have added. They move in presentations and on the client page. Choose Off, Quiet, Normal or Busy under Street life in WorldView or with "Street" in presentation mode. Tick "Show moving cars and people while editing" to see them in the editor too. Phones and tablets show fewer.',
+      'Draw your own routes with "Draw walking route" (people, e.g. across a new garden) or "Draw driving route" (cars, e.g. a new drive). Click along the ground, then double-click or press Enter to finish. While drawing, all the site\'s routes show as lines: grey from the map, blue for walking, amber for driving. "Remove last drawn" and "Remove all drawn" take yours away.',
+      'LiDAR: in England and the Netherlands, the national LiDAR survey gives 1 m ground, each building\'s real height, and a basic roof (flat, lean-to, gable, hipped or pyramid). In the USA it gives 1 m ground only. A building the survey shows as open ground (newer than the survey, or a wrong outline) keeps the map\'s estimate and says "Check height".',
+      'Data: building outlines © OpenStreetMap contributors (ODbL). Ground heights: Terrain Tiles (AWS open data), about 3 m apart, smoothed onto a 1 m grid; LiDAR from the Environment Agency (Open Government Licence), AHN (CC0) and USGS 3DEP (public domain) where available.'
+    ]
+  },
+  {
     id: 'animations-scalable',
     title: 'Scalable Animations',
     category: 'features',
@@ -366,15 +385,125 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'snapping-inference',
+    title: 'Snapping, Inference and Locks',
+    category: 'tools',
+    content: 'Line, Arc, Bézier, Poly and the shape tools all snap the same way. Point the cursor near something and a marker names what it found; coloured lines show the direction you are lined up with. Ending a line exactly on another one splits both, and closed outlines become surfaces.',
+    steps: [
+      'Corners (green diamond), midpoints (cyan), face centres, the origin and guide points snap first. Where two edges or guides cross (green square) snaps too, and so does any point ON an edge or guide (red square) - that is how a line ends exactly on another and splits it.',
+      'Once you have started drawing, the cursor also lines up with directions from the start: along the red, green or blue axis; continuing an edge you are extending; and with anything you have rested on.',
+      'Rest the pointer on a corner for a moment and lines can then be taken from it (aligned with that corner along an axis). Rest it on an edge and the next segment can be parallel or perpendicular to it (pink). Where two lines meet, or a line meets an edge, that exact point is offered.',
+      'Locks: while drawing, press the Right arrow to lock the red axis, Left for green, Up for blue (the X, Y and Z keys do the same); press again or Esc to release. Press Down to lock parallel to the edge you rested on, again for perpendicular, again to release. Hold Shift to keep whatever direction is showing. A lock still snaps to corners, midpoints and crossings on its line, and to points lined up with them.',
+      'Arc: click the start, click the other end of the chord, then move to bulge it and click. Start on an edge and the arc is tangent to it (cyan). Start on a straight edge near a corner and a pink point appears on the other edge: put the end on it and the arc rounds the corner (tangent to both edges) and trims it. Type a bulge (0.5) or radius (2r) and press Enter, or 12s for the number of segments.',
+      'Bézier and Poly snap their points the same way; closing on the start point is offered in the same way for both.'
+    ]
+  },
+  {
+    id: 'groups-components',
+    title: 'Groups and Components',
+    category: 'tools',
+    content: 'A group turns shapes you drew into one object: it moves, turns, copies, hides and takes tags as a whole, and nothing you draw against it sticks to it or cuts into it. A component is a group whose copies share their inside: change one and they all change - handy for windows, chairs, fence panels or anything repeated.',
+    steps: [
+      'Select the drawn faces (click, Shift-click or drag a selection), right-click one and choose Make Group or Make Component. The Make Component button in the toolbar does the same for the selected faces.',
+      'Move, rotate, scale, copy and tag it like any other object. Copies of a component (Duplicate, or Copy in the Components panel) stay linked.',
+      'Double-click it (or Edit inside in Entity Info) to change what is inside: the rest of the drawing fades and every drawing tool works as usual. Press Esc or Close to finish. For a component, every copy updates.',
+      'Right-click a group > Explode turns it back into ordinary drawn faces, where it now stands. Right-click a component copy > Make Unique splits it off so it can be changed on its own; a group can become a component with Make Component.',
+      'The Components panel lists the components in the model with how many copies each has: rename one, place another copy, or select all its copies.',
+      'Undo takes back any of these in one step. Saving as .skp keeps components as real SketchUp components.'
+    ]
+  },
+  {
+    id: 'section-planes',
+    title: 'Section Planes (slice the model to see inside)',
+    category: 'tools',
+    content: 'A section plane slices the model so you can see inside - a plan cut through a floor, or a cut through a wall to see the rooms behind it. Cut walls show a solid dark fill, like a drawing. Unlike the camera\'s depth clipping, a section plane stays where you put it as you orbit, cuts only the model (not the grid or sky), and is saved with the model.',
+    steps: [
+      'Pick Section Plane (next to Follow Me) and hover a wall, floor or any face: an orange square lines up with it.',
+      'Click to place it. It cuts straight away, keeping the side away from you. The orange arrows point into the part that stays.',
+      'To move it, drag its orange square with the Section Plane tool - it slides along its own direction. Or select it and type a distance under "Move along its direction".',
+      'Select a plane (Select tool, click its square) to flip which side is cut away, or turn its cut off and on. You can keep several planes; one cuts at a time, and turning one on turns the others off.',
+      'While a plane is cutting, clicks go straight through the part that is cut away, so you can draw and edit inside.',
+      'Delete a plane like any object: select it and press Delete.'
+    ]
+  },
+  {
+    id: 'worldview-google-context',
+    title: 'WorldView: Google surroundings and styled buildings',
+    category: 'tools',
+    content: 'Two switches on an imported 3D site (WorldView > 3D Site > Look) change how the site looks without changing what you can edit.',
+    steps: [
+      'Google photorealistic surroundings: shows Google\'s 3D map around the site, in the editor, in presentations and on the client page. It needs a Google Maps API key with the Map Tiles API enabled, and shows Google\'s attribution. It is for looking at: it can\'t be edited, measured, snapped to or exported.',
+      'Cut out site: Google is cut away over the site, so the editable satellite ground and your buildings show there and Google fills in the rest. Google ground: the editable ground is hidden, your buildings stand on Google\'s ground, and Google\'s own buildings are pressed flat under them.',
+      'Google as the site: untouched buildings, trees and ground come from Google\'s photographs. Click a Google building to select the editable copy. Change, move, paint or delete it and Google\'s version is pressed flat where it stood, and the editable one shows. Anything new you draw presses Google flat under it too. Put back removed buildings returns Google\'s. Trees or ground beside a building are part of the same Google surface, so they stay, and the edge of the flattened patch can look rough.',
+      'The layer is matched to your site\'s ground height automatically; use the slider to raise or lower it if it looks off.',
+      'Style the buildings: the editable buildings get roofs cut from the satellite picture and walls from the map\'s colour or material (else a colour for the kind of building). A building you have painted keeps its own colour. Turn it off to go back to white.'
+    ]
+  },
+  {
+    id: 'extrude-solids',
+    title: 'Extrude on a solid (Push/Pull)',
+    category: 'tools',
+    content: 'Push/Pull changes the solid you have rather than adding a second one on top of it.',
+    steps: [
+      'Pull the top, end or side of a box: the face moves and the walls beside it stretch. The box keeps the same faces however many times you push.',
+      'Draw a rectangle on a face and push it out for a bump, or in for a recess. The face you started from goes, so there is no floor left inside.',
+      'Hold Ctrl when you let go to push a copy: the face stays and a new slab stacks on it, keeping the divider. Use this for floors.',
+      'Double-click a face to repeat the last distance on it (Ctrl for a copy). You can also type a distance right after pushing.',
+      'Pushing a face all the way through the other side is refused, and a free-standing shape still gets its base kept as before.'
+    ]
+  },
+  {
+    id: 'follow-me',
+    title: 'Follow Me (sweep a shape along a path)',
+    category: 'tools',
+    content: 'Follow Me sweeps a flat shape along a path, the way SketchUp does: a moulding round a slab, a gutter along an eave, a kerb along a road edge, a handrail, a pipe. The result is ordinary drawn geometry you can push/pull, paint and erase.',
+    steps: [
+      'Draw the path with Line or Arc (or use the edge of a face you already have).',
+      'Draw the profile - the cross-section - as a flat shape standing across the start of the path, facing along it. It does not have to touch the path.',
+      'Pick Follow Me (next to Extrude), then click the profile.',
+      'Hover the path: it lights up pink and the result shows as a blue wireframe. Hovering an edge uses the whole run of lines and arcs joined to it end to end; hovering a face goes all the way round its edge.',
+      'Click to make it. Corners are mitred like a picture frame; along arcs the result is smooth. Undo takes it back in one step.',
+      'If a bend is too tight for the size of the shape, or the shape lies flat along the path, the status bar says so and nothing is made.',
+      'Esc lets go of the profile so you can pick another.'
+    ]
+  },
+  {
+    id: 'dimensions-labels',
+    title: 'Dimensions, Area Labels and Leader Labels',
+    category: 'tools',
+    content: 'Annotations that stay in the model, unlike the Tape Measure\'s quick check. They are saved, undone and deleted like any object.',
+    steps: [
+      'Dimension: pick Dimension, click two points (corners snap), then move out to where the line should sit and click. It is drawn like a drawing dimension, with extension lines back to the points and a tick at each end. Esc cancels.',
+      'Area Label: pick Area Label and click a drawn face. The label shows its area and perimeter and updates when you push/pull, resize or redraw the face. If the face is deleted it shows the last reading, dimmed.',
+      'Leader Label: pick Leader Label, click what to point at, click where the text should go, type it and press Enter. A line joins the text to the point.',
+      'Select any of them with Select and press Delete to remove it. Show All Dimensions (left toolbar) still labels every object automatically.',
+      'Placed dimensions stay where you put them. If you move the geometry afterwards, move or redraw the dimension.'
+    ]
+  },
+  {
+    id: 'tape-measure-guides',
+    title: 'Tape Measure and Guide Lines',
+    category: 'tools',
+    content: 'The Tape Measure measures distances and places guide lines: dashed lines you draw against, like a builder\'s string line. The drawing tools snap onto guides and onto the points where two guides cross.',
+    steps: [
+      'Measure: pick the Tape Measure, click a corner or any point, then click a second point. The distance stays in the model as a yellow measurement.',
+      'Place a guide: click the middle of an edge (it lights up pink when you hover it), a guide, or the red, green or blue axis. Move away from it and click: a guide appears parallel to it at that distance. To be exact, type the distance (e.g. 2.5, 300mm or 8\'6") and press Enter.',
+      'Change the last guide: straight after placing one, type a new distance and press Enter. A minus sign puts it on the other side.',
+      'Build a grid: pull guides off other guides - for example every 3 m across a plot - and draw walls from crossing to crossing.',
+      'Esc cancels a guide or measurement in progress.',
+      'Hide or clear guides: Scene Helpers > Guides hides them all (hidden guides are not snapped to), and Delete All Guides removes every guide, including Protractor guides, in one step you can undo. To remove one guide, click it with the Select tool and press Delete.'
+    ]
+  },
+  {
     id: 'skp-import-export',
     title: 'SKP Support',
     category: 'advanced',
-    content: 'PolyForm provides high-fidelity bridge support for SKP files, allowing you to move designs between PolyForm and other SKP-compatible tools with minimal data loss.',
+    content: 'PolyForm opens and saves real SketchUp (.skp) files, so you can move designs between PolyForm and SketchUp.',
     steps: [
-      'Export to SKP: Go to the "Burger" menu, hover over "Export", and select "Export SKP". This packages your scene into an SKP-optimized format.',
-      'Importing elsewhere: Open your SKP-compatible tool and use its Import function to bring your PolyForm design into your workspace.',
-      'Import from SKP: In the same menu, click "Import SKP" to select a file from your computer and bring it into your current PolyForm scene as a custom object group.',
-      'Bridge Format: The system currently uses an industry-standard GLTF/JSON bridge for maximum compatibility across different SKP versions.'
+      'Export to SKP: open the menu, go to "Import / Export" and choose "Export SKP". You get a .skp file named after your model that SketchUp opens directly (it is saved in the SketchUp 2013-2020 format, which every newer SketchUp opens).',
+      'What you get in SketchUp: shapes you drew with Line, Rectangle, Push/Pull and the other drawing tools arrive as ordinary SketchUp faces, holes included. Each other object (a wall, a roof, the terrain, a plant) arrives as a group named after it, and batched trees and timber arrive as components, so every copy of a tree shares one definition. Colours and transparency come across as named materials; textures do not come across yet.',
+      'Import from SKP: in the same menu, click "Import SKP" to pick a .skp file from your computer. It comes into your scene as one object.',
+      'Other formats: "Export GLTF" and "Export STL" export the same model - just your design, without the grid, sky or lights - each piece exactly where it sits in the scene.'
     ]
   },
   {

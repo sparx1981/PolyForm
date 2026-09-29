@@ -194,4 +194,20 @@ describe('firestoreGeometryOffload', () => {
     expect(saved.updatedAt).toBe(sentinel);
     expect(await hydrateOffloadedModel(saved, io)).toEqual(state);
   });
+
+  it("stores a big group's drawn geometry once however many copies share it, and brings it back", async () => {
+    const graph = makeGeometryData(5000);
+    const shapes = ['a', 'b'].map(id => ({ id, type: 'kernel_group', position: [0, 0, 0], args: {}, color: '#fff', kernelGraph: graph, componentId: 'c1' })) as unknown as Shape[];
+    const docs = new Map<string, string>();
+    const io: GeometryOffloadIO = {
+      upload: vi.fn(async (docId: string, text: string) => { docs.set(docId, text); }),
+      fetch: vi.fn(async (docId: string) => docs.get(docId)!),
+    };
+    const saved = await offloadLargeGeometryForSave(shapes, 'uid1', io);
+    expect(JSON.stringify(saved).length).toBeLessThan(1000);
+    expect(docs.size).toBe(1); // keyed by content: one stored copy
+    const loaded = await hydrateOffloadedGeometry(saved, io);
+    expect(loaded.map(s => s.kernelGraph)).toEqual([graph, graph]);
+  });
 });
+

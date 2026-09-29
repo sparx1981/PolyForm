@@ -369,7 +369,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
 }
 
 function WorldViewToolButton() {
-  const { setIsWorldViewOpen, isWorldViewActive, theme, toolbarVisibility } = useApp();
+  const { setActiveTool, activeTool, isWorldViewActive, theme, toolbarVisibility } = useApp();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
   const flyoutSide = useContext(FlyoutSideContext);
@@ -381,7 +381,7 @@ function WorldViewToolButton() {
       <button
         ref={buttonRef}
         id="arch-worldview-btn"
-        onClick={() => setIsWorldViewOpen(true)}
+        onClick={() => setActiveTool(activeTool === 'worldview' ? 'select' : 'worldview')}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         className={cn(

@@ -7239,5 +7239,293 @@
     "groups": [
       "shared"
     ]
+  },
+  "ca57338f6": {
+    "value": "Real places: a 3D site (real ground and existing buildings, up to 200 m square), or the flat Google Maps overlay under the model.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf0ca36a5": {
+    "value": "importArea",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6ae83059": {
+    "value": "await sdk.worldView.importArea(place, { size?, groundStyle?, buildings? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c46472d9": {
+    "value": "Promise<{ lat, lng, address, size, buildings, warnings }>",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2d1b9948": {
+    "value": "Bring in a real place: its ground as an editable terrain and its existing buildings. place is an address, a UK postcode, \"lat, lng\" or { lat, lng }; size is 20-200 m (default 100). Replaces the previous site.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3c9a1b9c": {
+    "value": "getSite",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb91babfa": {
+    "value": "sdk.worldView.getSite()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8527fcd5": {
+    "value": "{ lat, lng, size, address, elevation, groundStyle, showRemoved, ... } | null",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf88c7950": {
+    "value": "The imported site, if there is one. elevation is the centre's height above sea level, which is y = 0 in the model.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce8fa01be": {
+    "value": "listBuildings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c45b530e8": {
+    "value": "sdk.worldView.listBuildings()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c22f2a71e": {
+    "value": "{ id, name, height, heightSource, roof, heightCheck, kind, position }[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8b86e47e": {
+    "value": "The existing buildings on the site. heightSource is lidar (measured by survey), tagged (given on the map or typed in), levels (floors x 3 m) or estimated. roof is the fitted roof ({ shape, pitch, eave }) or null for flat; heightCheck is true where the survey shows open ground.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3e26e48d": {
+    "value": "removeBuilding",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c293b2356": {
+    "value": "sdk.worldView.removeBuilding(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cffcd8fe2": {
+    "value": "Delete an existing building. It can still be shown as a ghost, or put back.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7d8414e9": {
+    "value": "restoreBuilding",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c72f8ad1c": {
+    "value": "sdk.worldView.restoreBuilding(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca5cf87f1": {
+    "value": "Put back a building you removed.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4d959008": {
+    "value": "setBuildingHeight",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7875bbdc": {
+    "value": "sdk.worldView.setBuildingHeight(id, height)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c641f6638": {
+    "value": "Correct an existing building's height, in metres above its lowest ground. A fitted roof moves with it and keeps its pitch.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca5411b81": {
+    "value": "showExisting",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8b59d926": {
+    "value": "sdk.worldView.showExisting(show)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8d323f0": {
+    "value": "Draw removed buildings as see-through ghosts, for before and after.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce4144a21": {
+    "value": "setGroundStyle",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c346bb9a8": {
+    "value": "sdk.worldView.setGroundStyle('plain' | 'satellite')",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c402c2670": {
+    "value": "Plain white-model ground, or the satellite picture (needs a Google Maps key).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c19bb9347": {
+    "value": "setGoogleContext",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c37339263": {
+    "value": "sdk.worldView.setGoogleContext(on, { ground?: 'cutout' | 'google', nudge?: metres })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5c5e8057": {
+    "value": "Show Google's Photorealistic 3D Tiles around the site (needs a Maps key with the Map Tiles API). 'cutout' keeps the editable ground over the site; 'google' uses Google's ground and presses its buildings flat under yours.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce92aa5c3": {
+    "value": "styleBuildings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c42a38150": {
+    "value": "sdk.worldView.styleBuildings(on)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb351ddbd": {
+    "value": "Colour the site's buildings: roofs from the satellite picture, walls from the map's colour or material.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9c12568e": {
+    "value": "setStreetLife",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3d100bd7": {
+    "value": "sdk.worldView.setStreetLife('off' | 'quiet' | 'normal' | 'busy' | { level?, inEditor? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc7df4b3f": {
+    "value": "Moving cars and people on the site: how busy, and whether they also move in the editor (they always do in presentations unless off).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c412119d3": {
+    "value": "listRoutes",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3ae90147": {
+    "value": "sdk.worldView.listRoutes()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8d6f400b": {
+    "value": "SiteRoute[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd0e0171e": {
+    "value": "The roads (cars) and paths (people) on the site: the map's and any drawn. Points are [x, z] metres.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc5f7d6f9": {
+    "value": "addRoute",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c662d7d7e": {
+    "value": "sdk.worldView.addRoute('path' | 'road', [[x, z], ...])",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3b097be1": {
+    "value": "string | null",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3e617e12": {
+    "value": "A route of your own: a walking path for people or a driving route for cars. Returns its id.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8ccfb2f6": {
+    "value": "removeRoute",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9cdff703": {
+    "value": "sdk.worldView.removeRoute(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5f83f5d4": {
+    "value": "Take a route away.",
+    "groups": [
+      "sdkFullReference"
+    ]
   }
 }

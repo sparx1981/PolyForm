@@ -12,6 +12,9 @@ import { pushPull, pushPullDistanceFromRay } from '../lib/geometry/pushpull';
 import { insertIsolatedEdge } from '../lib/geometry/insert';
 import { derive } from '../lib/geometry/derive';
 import { snapshot, restore } from '../lib/geometry/heal';
+import { classifyPushFace, COLLAPSE, distanceToNextFace, moveCap } from '../lib/geometry/pushpullSolid';
+import { removeFace } from '../lib/geometry/topology';
+import { scale as scaleVec } from '../lib/geometry/math';
 import type { KernelArcHost } from './kernelArcHost';
 
 /**
@@ -26,10 +29,33 @@ export const ISOLATED_SHAPE_KEY = 'isolatedShape';
  * Push/Pull tool and `sdk.drawing.pushPull`, so a script does exactly what the tool does.
  * The caller refreshes the view (bumpKernel).
  */
-export function commitKernelPushPull(host: KernelArcHost, faceId: FaceId, distance: number): boolean {
+export interface PushPullCommitOptions {
+  /**
+   * Push a copy: the face stays where it is and the extrusion stacks on it as a new segment
+   * (how floors are stacked). Without it, a face that is part of a solid moves the solid's walls
+   * with it instead of building a second slab.
+   */
+  readonly copy?: boolean;
+}
+
+export function commitKernelPushPull(host: KernelArcHost, faceId: FaceId, distance: number, options: PushPullCommitOptions = {}): boolean {
   if (Math.abs(distance) < host.tolerances.MIN_EDGE_LENGTH) return false;
   const before = snapshot(host.graph);
   try {
+    // A face that is part of a closed solid: move a cap, or consume an embedded face.
+    let kind = options.copy ? 'other' : classifyPushFace(host.graph, faceId, host.tolerances);
+    if (kind === 'cap') {
+      const moved = moveCap(host.graph, faceId, distance, host.tolerances, host.deriveOptions);
+      if (moved.ok) { host.recordUndo(before); return true; }
+      // Pushing a cap through the far side would leave nothing: refuse, and change nothing.
+      if (moved.reason === COLLAPSE) return false;
+      kind = 'other';
+    } else if (kind === 'embedded') {
+      const f = host.graph.faces.get(faceId);
+      const reach = f ? distanceToNextFace(host.graph, faceId, scaleVec(f.plane.normal, Math.sign(distance))) : null;
+      // A recess that would break through the far side is left to the ordinary push/pull.
+      if (reach !== null && Math.abs(distance) >= reach - host.tolerances.MIN_EDGE_LENGTH) kind = 'other';
+    }
     // A face drawn by Rectangle/Circle/Triangle carries this marker
     // (set once, right when the ring closes — see Viewport.tsx) so
     // that EXTRUDING it stays consistent with how it was drawn: its
@@ -55,6 +81,8 @@ export function commitKernelPushPull(host: KernelArcHost, faceId: FaceId, distan
       return false;
     }
     derive(host.graph, r.touched, host.deriveOptions);
+    // The face it grew from is no longer a boundary between solid and air: it goes.
+    if (kind === 'embedded') removeFace(host.graph, faceId);
     host.recordUndo(before);
     return true;
   } catch {
@@ -86,7 +114,7 @@ export interface PushPullBinding {
   /** Returns the live distance, for the measurement readout. */
   update: (ray: { origin: Vec3; direction: Vec3 }) => number | null;
   /** Applies the extrusion. Returns false when nothing was committed. */
-  commit: () => boolean;
+  commit: (options?: PushPullCommitOptions) => boolean;
   cancel: () => void;
   readonly active: boolean;
   readonly session: PushPullSession | null;
@@ -129,13 +157,13 @@ export function createPushPullBinding(
       return d;
     },
 
-    commit() {
+    commit(options) {
       if (!session) return false;
       const { faceId, distance } = session;
       session = null;
       if (Math.abs(distance) < host.tolerances.MIN_EDGE_LENGTH) return false;
 
-      const ok = commitKernelPushPull(host, faceId, distance);
+      const ok = commitKernelPushPull(host, faceId, distance, options);
       if (ok) bumpKernel();
       return ok;
     },

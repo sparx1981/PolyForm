@@ -317,25 +317,48 @@ describe('AppContext / useApp', () => {
     it('toolbarOrder falls back to the default when stored data is malformed', () => {
       localStorage.setItem('polyform_toolbar_order', JSON.stringify(['left', 'left', 'landscapes']));
       const { result } = renderApp();
-      expect(result.current.toolbarOrder).toEqual(['left', 'architecture', 'landscapes', 'camera']);
+      expect(result.current.toolbarOrder).toEqual(['left', 'architecture', 'landscapes', 'camera', 'ai']);
     });
 
     it('toolbarOrder accepts a valid stored permutation', () => {
-      localStorage.setItem('polyform_toolbar_order', JSON.stringify(['landscapes', 'left', 'architecture', 'camera']));
+      localStorage.setItem('polyform_toolbar_order', JSON.stringify(['landscapes', 'left', 'architecture', 'camera', 'ai']));
       const { result } = renderApp();
-      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera']);
+      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera', 'ai']);
     });
 
-    it('toolbarOrder appends camera to a pre-camera-toolbar stored permutation', () => {
+    it('toolbarOrder appends camera and ai to an older stored permutation', () => {
       localStorage.setItem('polyform_toolbar_order', JSON.stringify(['landscapes', 'left', 'architecture']));
       const { result } = renderApp();
-      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera']);
+      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera', 'ai']);
+    });
+
+    it('toolbarOrder appends ai to a pre-AI-toolbar stored permutation', () => {
+      localStorage.setItem('polyform_toolbar_order', JSON.stringify(['landscapes', 'left', 'architecture', 'camera']));
+      const { result } = renderApp();
+      expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera', 'ai']);
+    });
+
+    it('toolbar editing is off by default and remembered when turned on', () => {
+      const { result } = renderApp();
+      expect(result.current.isToolbarEditMode).toBe(false);
+      act(() => { result.current.setIsToolbarEditMode(true); });
+      expect(result.current.isToolbarEditMode).toBe(true);
+      expect(localStorage.getItem('polyform_toolbar_edit')).toBe('true');
+    });
+
+    it('every toolbar starts in its own lane, and setToolbarLayout saves a stacked layout', () => {
+      const { result } = renderApp();
+      expect(new Set(Object.values(result.current.toolbarLanes)).size).toBe(5);
+      const lanes = { ...result.current.toolbarLanes, ai: result.current.toolbarLanes.camera };
+      act(() => { result.current.setToolbarLayout({ order: result.current.toolbarOrder, docks: result.current.toolbarDocks, lanes }); });
+      expect(result.current.toolbarLanes.ai).toBe(result.current.toolbarLanes.camera);
+      expect(JSON.parse(localStorage.getItem('polyform_toolbar_lanes')!)).toEqual(lanes);
     });
 
     it('toolbarDocks falls back to the default when stored data has an invalid zone', () => {
       localStorage.setItem('polyform_toolbar_docks', JSON.stringify({ left: 'left', architecture: 'nowhere', landscapes: 'left' }));
       const { result } = renderApp();
-      expect(result.current.toolbarDocks).toEqual({ left: 'left', architecture: 'left', landscapes: 'left', camera: 'left' });
+      expect(result.current.toolbarDocks).toEqual({ left: 'left', architecture: 'left', landscapes: 'left', camera: 'left', ai: 'left' });
     });
 
     it('setToolbarDocks persists a valid update', () => {
