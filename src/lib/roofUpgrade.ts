@@ -3,6 +3,7 @@ import { ROOF_BUILD_VERSION, updateRoofAssembly } from './archRoofGenerator';
 import { refreshRoofExtras } from './roofExtras';
 import { roofWholeBuilding, storeysOf } from './buildingRoofs';
 import { initRoofSkeleton, roofSkeletonReady } from './roofSkeleton';
+import { alignSlabsToWalls } from './slabWallAlign';
 
 /** Pitched roofs built before the straight-skeleton roofs (they have no `buildVersion` yet). */
 export const roofsToUpgrade = (shapes: Shape[]) => shapes.filter(s =>
@@ -44,7 +45,9 @@ export function upgradeRoofs(shapes: Shape[]): Shape[] {
 }
 
 /** `upgradeRoofs`, once the roof skeleton code has loaded (it loads in the background at start). */
-export async function upgradeRoofsWhenReady(shapes: Shape[]): Promise<Shape[]> {
+export async function upgradeRoofsWhenReady(loaded: Shape[]): Promise<Shape[]> {
+  // Older floor slabs stop short of the walls' internal face; bring them out to it.
+  const shapes = alignSlabsToWalls(loaded);
   if (!roofsToUpgrade(shapes).length) return shapes;
   await initRoofSkeleton();
   return upgradeRoofs(shapes);

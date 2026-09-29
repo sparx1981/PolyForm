@@ -5,6 +5,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'September 29, 2026',
+    items: [
+      'Floor slabs now rest against the internal face of the walls instead of stopping a few centimetres short. Slabs already in your models that were made the old way are moved out to the wall when the model opens.',
+      'Shadows from lights you add (spot, point, projector and directional) are smoother: the stripes and noise on floors are gone, and the sun\'s shadow edge is less grainy.',
+      'A sun intensity of 0 now feels like night: the sky, ambient and environment light fade down (with a cool moonlight tint), so lights you place stand out. The default sun is unchanged.',
+      'The Section Plane tool has a modifier panel: show or hide the orange plane (it keeps cutting), and choose the colour and opacity of the see-through lines on the cut-away side, down to fully transparent.',
+      'Add Material: the tabs (Colour, Upload Texture, My Textures, PBR Materials, AI Generate) no longer get pushed out of view on the PBR Materials tab.',
+      'Settings > Toolbars > Edit Toolbar Locations: toolbars can be dragged again, and an empty screen edge shows a labelled drop target while you drag.',
+      'Walk Mode: the floor framing under a floor now leaves the opening where a staircase actually is, including when the stair is turned, so you are no longer stopped by joists across the stairwell.',
+    ],
+  },
+  {
     date: 'September 28, 2026',
     items: [
       'WorldView 3D Site: bring a real place into your model, up to 200 m square, from an address, UK postcode or coordinates. The ground arrives as an editable terrain with its real slopes, and the existing buildings as white models at their mapped heights (measured where the map has them, else floors x 3 m, else estimated from the kind of building).',
