@@ -11,16 +11,15 @@ import { findSiteGround } from '../lib/worldSite/site';
 import { drivesOnLeft, parseStreets, routeTool, streetsQuery } from '../lib/worldSite/streets';
 import { BODY_TYPES, CAR_COLOURS, type Seat, gait, planStreetLife, pointOnLoop } from '../lib/worldSite/streetLife';
 
-// Lightweight, deliberately stylised street entourage. The geometry stays procedural and instanced
-// so WorldView can remain lively without loading external assets or turning street life into the
-// visual focus of the model.
+// Lightweight architectural entourage: deliberately simple, but with soft silhouettes and enough
+// detail to read as people and vehicles at normal WorldView distances. Everything remains instanced.
 
 /* ---------- Figures ---------- */
 
 const HIP_Y = 0.91, HIP_X = 0.105, THIGH = 0.43, SHOULDER_Y = 1.39, SHOULDER_X = 0.225;
 
 function capsuleHanging(radius: number, total: number): THREE.BufferGeometry {
-  const g = new THREE.CapsuleGeometry(radius, Math.max(0.01, total - radius * 2), 3, 8);
+  const g = new THREE.CapsuleGeometry(radius, Math.max(0.01, total - radius * 2), 7, 14);
   g.translate(0, -total / 2, 0);
   return g;
 }
@@ -43,66 +42,72 @@ function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 }
 
 function figureGeometries() {
-  // Low-poly facets are intentional: more character than capsules, but still quiet at site scale.
-  const head = new THREE.IcosahedronGeometry(0.115, 1);
-  head.scale(0.9, 1.08, 0.94);
-  head.translate(0, 1.665, 0.005);
-  const neck = new THREE.CylinderGeometry(0.052, 0.062, 0.11, 7);
+  // Rounded anatomical masses follow the supplied silhouette: defined shoulders, narrower waist,
+  // natural pelvis and tapered limbs, while deliberately omitting facial/clothing micro-detail.
+  const head = new THREE.SphereGeometry(0.116, 18, 14);
+  head.scale(0.91, 1.08, 0.96);
+  head.translate(0, 1.665, 0.004);
+  const neck = new THREE.CylinderGeometry(0.052, 0.064, 0.115, 14);
   neck.translate(0, 1.535, 0);
-  const torso = new THREE.CylinderGeometry(0.185, 0.135, 0.48, 7);
-  torso.scale(1.12, 1, 0.64);
-  torso.translate(0, 1.285, 0);
-  const pelvis = new THREE.CylinderGeometry(0.135, 0.155, 0.2, 7);
-  pelvis.scale(1.02, 1, 0.72);
-  pelvis.translate(0, 0.985, 0);
+  const chest = new THREE.SphereGeometry(0.25, 18, 12);
+  chest.scale(1.0, 1.12, 0.58);
+  chest.translate(0, 1.34, 0);
+  const waist = new THREE.SphereGeometry(0.175, 16, 12);
+  waist.scale(0.82, 1.18, 0.62);
+  waist.translate(0, 1.12, 0);
+  const pelvis = new THREE.SphereGeometry(0.19, 16, 12);
+  pelvis.scale(0.9, 0.78, 0.68);
+  pelvis.translate(0, 0.965, 0);
   return {
-    body: mergeAll([head, neck, torso, pelvis]),
-    thigh: capsuleHanging(0.082, THIGH + 0.04),
-    shin: capsuleHanging(0.062, 0.47),
-    arm: capsuleHanging(0.052, 0.62),
+    body: mergeAll([head, neck, chest, waist, pelvis]),
+    thigh: capsuleHanging(0.086, THIGH + 0.045),
+    shin: capsuleHanging(0.067, 0.47),
+    arm: capsuleHanging(0.056, 0.62),
   };
 }
 
 /** Build variety: [height scale, width scale]. */
 const BUILDS: [number, number][] = [[1, 1], [0.95, 0.92], [1.045, 1.06], [0.975, 1.1]];
 const PEOPLE_PALETTE = ['#315d7a', '#d08a32', '#58725b', '#b55d4c', '#65758b', '#d0a55b', '#6c6387', '#3f7b79'];
-const figureMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.86, metalness: 0, flatShading: true });
+const figureMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.82, metalness: 0, flatShading: false });
 
 /* ---------- Cars ---------- */
 
 function carGeometries() {
-  const side = (pts: [number, number][], width: number, bevel = 0.035) => {
+  const side = (pts: [number, number][], width: number, bevel = 0.055) => {
     const shape = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v)));
-    const g = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 1, curveSegments: 1 });
+    const g = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 4 });
     g.translate(0, 0, -width / 2);
     g.rotateY(-Math.PI / 2);
     g.computeVertexNormals();
     return g;
   };
-  // A compact crossover silhouette: short overhangs, clear bonnet, rising shoulder and planted wheels.
-  const body = side([[-2.05, 0.31], [2.03, 0.31], [2.14, 0.5], [2.08, 0.72], [1.52, 0.84], [0.92, 0.91], [-1.55, 0.91], [-2.08, 0.72]], 1.72, 0.045);
-  const cabin = side([[0.92, 0.92], [0.43, 1.38], [-0.92, 1.4], [-1.48, 0.93]], 1.5, 0.025);
+  // Soft contemporary crossover proportions. The glasshouse is inset so the body keeps a clear
+  // shoulder line and the windows read independently rather than as a dark upper body block.
+  const body = side([[-2.08, 0.31], [2.03, 0.31], [2.15, 0.49], [2.11, 0.7], [1.62, 0.82], [0.98, 0.91], [-1.5, 0.91], [-2.04, 0.75], [-2.13, 0.55]], 1.74, 0.065);
+  const cabin = side([[0.91, 0.94], [0.4, 1.39], [-0.91, 1.41], [-1.45, 0.94]], 1.48, 0.04);
+  const roof = new THREE.BoxGeometry(1.5, 0.065, 1.82, 2, 1, 3);
+  roof.translate(0, 1.405, -0.22);
   const wheels: THREE.BufferGeometry[] = [];
   const hubs: THREE.BufferGeometry[] = [];
   for (const z of [-1.35, 1.32]) for (const x of [-0.84, 0.84]) {
-    const w = new THREE.CylinderGeometry(0.335, 0.335, 0.2, 12);
+    const w = new THREE.CylinderGeometry(0.335, 0.335, 0.2, 20);
     w.rotateZ(Math.PI / 2); w.translate(x, 0.34, z); wheels.push(w);
-    const h = new THREE.CylinderGeometry(0.17, 0.17, 0.212, 10);
+    const h = new THREE.CylinderGeometry(0.17, 0.17, 0.212, 16);
     h.rotateZ(Math.PI / 2); h.translate(x, 0.34, z); hubs.push(h);
   }
-  // Simple front/rear light bars make direction readable without tiny detailed meshes.
-  const frontLights = new THREE.BoxGeometry(1.16, 0.095, 0.035); frontLights.translate(0, 0.66, 2.12);
-  const rearLights = new THREE.BoxGeometry(1.2, 0.1, 0.035); rearLights.translate(0, 0.67, -2.09);
-  return { body, cabin, wheels: mergeAll(wheels), hubs: mergeAll(hubs), frontLights, rearLights };
+  const frontLights = new THREE.BoxGeometry(1.18, 0.1, 0.045, 3, 1, 1); frontLights.translate(0, 0.665, 2.115);
+  const rearLights = new THREE.BoxGeometry(1.2, 0.105, 0.045, 3, 1, 1); rearLights.translate(0, 0.675, -2.095);
+  return { body, cabin, roof, wheels: mergeAll(wheels), hubs: mergeAll(hubs), frontLights, rearLights };
 }
 
 const CAR_PALETTE = ['#e7e4dc', '#315d7a', '#c45545', '#d18a2e', '#607568', '#6a7180', '#b8b4aa', '#416f78'];
-const carBodyMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.62, metalness: 0.04, flatShading: true });
-const carGlassMaterial = new THREE.MeshStandardMaterial({ color: '#263b4a', roughness: 0.42, metalness: 0.08, flatShading: true });
-const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#252a2d', roughness: 0.95, metalness: 0 });
-const hubMaterial = new THREE.MeshStandardMaterial({ color: '#8b9295', roughness: 0.72, metalness: 0.12, flatShading: true });
-const headlightMaterial = new THREE.MeshStandardMaterial({ color: '#f1e7c7', emissive: '#b6a46f', emissiveIntensity: 0.18, roughness: 0.5 });
-const tailLightMaterial = new THREE.MeshStandardMaterial({ color: '#a9433e', roughness: 0.58 });
+const carBodyMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, metalness: 0.08, flatShading: false });
+const carGlassMaterial = new THREE.MeshStandardMaterial({ color: '#213746', roughness: 0.24, metalness: 0.08, flatShading: false });
+const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#252a2d', roughness: 0.92, metalness: 0 });
+const hubMaterial = new THREE.MeshStandardMaterial({ color: '#969da0', roughness: 0.55, metalness: 0.2 });
+const headlightMaterial = new THREE.MeshStandardMaterial({ color: '#fff5d8', emissive: '#d7c58e', emissiveIntensity: 0.28, roughness: 0.35 });
+const tailLightMaterial = new THREE.MeshStandardMaterial({ color: '#b63f3b', emissive: '#6b1616', emissiveIntensity: 0.12, roughness: 0.42 });
 
 /* ---------- Placement ---------- */
 
@@ -151,7 +156,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
 
   const people = plan.walkers.length + plan.standers.length + plan.sitters.length;
   const bodyRef = useRef<THREE.InstancedMesh>(null), thighRef = useRef<THREE.InstancedMesh>(null), shinRef = useRef<THREE.InstancedMesh>(null), armRef = useRef<THREE.InstancedMesh>(null);
-  const carRef = useRef<THREE.InstancedMesh>(null), cabinRef = useRef<THREE.InstancedMesh>(null), wheelRef = useRef<THREE.InstancedMesh>(null), hubRef = useRef<THREE.InstancedMesh>(null), frontLightRef = useRef<THREE.InstancedMesh>(null), rearLightRef = useRef<THREE.InstancedMesh>(null);
+  const carRef = useRef<THREE.InstancedMesh>(null), cabinRef = useRef<THREE.InstancedMesh>(null), roofRef = useRef<THREE.InstancedMesh>(null), wheelRef = useRef<THREE.InstancedMesh>(null), hubRef = useRef<THREE.InstancedMesh>(null), frontLightRef = useRef<THREE.InstancedMesh>(null), rearLightRef = useRef<THREE.InstancedMesh>(null);
   const time = useRef(0);
 
   useLayoutEffect(() => {
@@ -160,6 +165,10 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     if (carMesh) {
       plan.cars.forEach((k, i) => carMesh.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
       if (carMesh.instanceColor) carMesh.instanceColor.needsUpdate = true;
+    }
+    if (roofRef.current) {
+      plan.cars.forEach((k, i) => roofRef.current!.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
+      if (roofRef.current.instanceColor) roofRef.current.instanceColor.needsUpdate = true;
     }
     if (personMesh) {
       let i = 0;
@@ -201,12 +210,13 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
         const loop = plan.carLoops[c.loop]!, d = c.start + now * c.speed, p = pointOnLoop(loop, d), front = pointOnLoop(loop, d + 1.4), back = pointOnLoop(loop, d - 1.4);
         const hf = heightAt(front.x, front.z), hb = heightAt(back.x, back.z);
         tmp.q.setFromEuler(tmp.e.set(-Math.atan2(hf - hb, 2.8), Math.atan2(p.dx, p.dz), 0)); tmp.base.compose(tmp.p.set(p.x, (hf + hb) / 2, p.z), tmp.q, tmp.s.set(1, 1, 1));
-        for (const m of [carRef, cabinRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.setMatrixAt(i, tmp.base);
+        for (const m of [carRef, cabinRef, roofRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.setMatrixAt(i, tmp.base);
       });
-      for (const m of [carRef, cabinRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.instanceMatrix.needsUpdate = true;
+      for (const m of [carRef, cabinRef, roofRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.instanceMatrix.needsUpdate = true;
     }
   });
 
+  // All entourage meshes explicitly participate in the existing WorldView shadow system.
   const shared = { frustumCulled: false, castShadow: true, receiveShadow: true, raycast: () => null } as const;
   return <group name="site-street-life" userData={{ isStreetLife: true }}>
     {people > 0 && <>
@@ -218,6 +228,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     {plan.cars.length > 0 && <>
       <instancedMesh key={`c${plan.cars.length}`} ref={carRef} args={[car.body, carBodyMaterial, plan.cars.length]} {...shared} />
       <instancedMesh key={`g${plan.cars.length}`} ref={cabinRef} args={[car.cabin, carGlassMaterial, plan.cars.length]} {...shared} />
+      <instancedMesh key={`r${plan.cars.length}`} ref={roofRef} args={[car.roof, carBodyMaterial, plan.cars.length]} {...shared} />
       <instancedMesh key={`w${plan.cars.length}`} ref={wheelRef} args={[car.wheels, wheelMaterial, plan.cars.length]} {...shared} />
       <instancedMesh key={`h${plan.cars.length}`} ref={hubRef} args={[car.hubs, hubMaterial, plan.cars.length]} {...shared} />
       <instancedMesh key={`fl${plan.cars.length}`} ref={frontLightRef} args={[car.frontLights, headlightMaterial, plan.cars.length]} {...shared} />
