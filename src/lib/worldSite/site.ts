@@ -171,7 +171,8 @@ export function siteGroundShape(
 
 /** Whether a shape belongs to an imported site (its ground or one of its buildings). */
 export function isSiteShape(s: Shape): boolean {
-  return s.type === 'site_building' || (s.type === 'terrain' && !!s.terrainData?.site);
+  // Auto Street Light's lamps belong to the site too: they go when it goes.
+  return s.type === 'site_building' || (s.type === 'terrain' && !!s.terrainData?.site) || s.id.startsWith('auto-street-light-');
 }
 
 /** The model with the previous site (if any) swapped for a new one. */

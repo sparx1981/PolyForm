@@ -165,8 +165,10 @@ export interface WorldSiteInfo {
   googleGround?: 'cutout' | 'google';
   /** Metres to raise (+) or lower (-) the Google layer, on top of the automatic height match. */
   googleNudge?: number;
-  /** Colour the editable buildings: satellite roofs, walls from the map's material or colour tags. */
+  /** Colour the editable buildings: real wall and roof materials with generated windows and doors. */
   styledBuildings?: boolean;
+  /** Lamp posts along the roads and garden lights at some houses were placed by Auto Street Light. */
+  autoStreetLights?: boolean;
 }
 
 export type StreetLifeLevel = 'off' | 'quiet' | 'normal' | 'busy';

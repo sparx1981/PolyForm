@@ -19,6 +19,7 @@ import { browserSiteIO, findPlace } from '../lib/worldSite/fetchSite';
 import { removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
 import { clampSiteSize } from '../lib/worldSite/geo';
 import { STREET_LIFE_LEVELS, withDrawnRoute, withoutRoutes } from '../lib/worldSite/streets';
+import { applyAutoStreetLights } from '../lib/worldSite/streetLights';
 
 export interface RoofConfigDefaults {
   roofType?: RoofType;
@@ -627,6 +628,9 @@ export interface SDK {
     // Moving cars and people on the site. A level ('off' | 'quiet' | 'normal' | 'busy'), and/or
     // whether they also move in the editor (they always do in presentations unless 'off').
     setStreetLife: (options: StreetLifeLevel | { level?: StreetLifeLevel; inEditor?: boolean }) => void;
+    // Auto Street Light: lamp posts along the site's roads (LED, cobra head, double arm) and gate / path lights at
+    // some houses. Needs the roads loaded (turn on street life once). Off takes them away.
+    autoStreetLights: (on: boolean) => void;
     // The site's routes: the map's roads and paths plus any drawn. Points are [x, z] metres.
     listRoutes: () => SiteRoute[];
     // A route of your own: 'path' for people, 'road' for cars. Returns its id (null without a site).
@@ -2471,6 +2475,12 @@ export class DeveloperSDK implements SDK {
           ...(o.level !== undefined ? { streetLife: o.level } : {}),
           ...(o.inEditor !== undefined ? { streetLifeInEditor: !!o.inEditor } : {}),
         });
+      },
+      autoStreetLights: (on: boolean) => {
+        const site = findSiteGround(this.shapes)?.terrainData?.site;
+        if (!site) { this.log('worldView.autoStreetLights: import a 3D site first.'); return; }
+        if (on && !site.routes) { this.log('worldView.autoStreetLights: the roads are not loaded yet. Show street life once (setStreetLife) and try again.'); return; }
+        this.setShapes(prev => applyAutoStreetLights(prev, !!on));
       },
       listRoutes: () => (findSiteGround(this.shapes)?.terrainData?.site?.routes ?? []).map(r => ({ ...r, points: r.points.map(p => [...p] as [number, number]) })),
       addRoute: (kind: 'path' | 'road', points: [number, number][]) => {

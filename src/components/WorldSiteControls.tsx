@@ -9,7 +9,8 @@ import { buildSite, findSiteGround, isSiteShape, replaceSite } from '../lib/worl
 import { OSM_ATTRIBUTION, removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../lib/worldSite/geo';
 import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
-import { STREET_LIFE_LEVELS, routeTool, withSiteSettings, withoutRoutes } from '../lib/worldSite/streets';
+import { STREET_LIFE_LEVELS, parseStreets, routeTool, streetsQuery, withSiteSettings, withoutRoutes } from '../lib/worldSite/streets';
+import { applyAutoStreetLights } from '../lib/worldSite/streetLights';
 
 // World View's 3D site: bring in the real ground and existing buildings around the chosen place
 // (see lib/worldSite), then choose how the ground looks and whether removed buildings show as
@@ -262,6 +263,27 @@ function StreetLifeFields({ site, onDraw }: { site: WorldSiteInfo; onDraw: (kind
   const mapPaths = routes?.filter(r => r.source === 'map' && r.kind === 'path').length ?? 0;
   const drawn = routes?.filter(r => r.source === 'drawn') ?? [];
   const small = 'text-[10px] text-polyform-blue hover:underline flex items-center gap-1';
+  const [lightsBusy, setLightsBusy] = useState(false);
+  // The roads come from the map the first time they are needed (street life fetches them the same way).
+  const setAutoLights = async (on: boolean) => {
+    let fetched: typeof routes;
+    if (on && !site.routes) {
+      setLightsBusy(true);
+      try {
+        const origin = { lat: site.lat, lng: site.lng };
+        fetched = parseStreets(await browserSiteIO.overpass(streetsQuery(origin, site.size)), origin, site.size);
+      } catch (err) {
+        console.warn('[WorldView] Roads for street lights failed:', err);
+        setLightsBusy(false);
+        return;
+      }
+      setLightsBusy(false);
+    }
+    change(on ? 'Auto street lights' : 'Remove auto street lights', sdkCall('autoStreetLights', on), prev => {
+      const withRoutes = fetched ? prev.map(s => (s.terrainData?.site && !s.terrainData.site.routes ? { ...s, terrainData: { ...s.terrainData, site: { ...s.terrainData.site, routes: fetched } } } : s)) : prev;
+      return applyAutoStreetLights(withRoutes, on);
+    });
+  };
   return (
     <div className="space-y-2 pt-2 border-t border-gray-200/70 dark:border-gray-700/70">
       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Street life</span>
@@ -272,6 +294,13 @@ function StreetLifeFields({ site, onDraw }: { site: WorldSiteInfo; onDraw: (kind
           onChange={e => change(e.target.checked ? 'Show street life in the editor' : 'Hide street life in the editor',
             sdkCall('setStreetLife', { inEditor: e.target.checked }), prev => withSiteSettings(prev, { streetLifeInEditor: e.target.checked }))} />
         Enable Cars / People / Birds
+      </label>
+      <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+        <input type="checkbox" className="mt-0.5" checked={!!site.autoStreetLights} disabled={lightsBusy}
+          onChange={e => setAutoLights(e.target.checked)} />
+        <span>Auto Street Light{lightsBusy ? ' (loading roads…)' : ''}
+          <span className="block text-[10px] text-gray-400 leading-tight">Lamp posts along the roads (LED, cobra head, double arm) at realistic spacing, and gate and path lights at some houses. They are ordinary lamps you can edit or delete.</span>
+        </span>
       </label>
       <p className="text-[10px] text-gray-400 leading-tight">
         {routes

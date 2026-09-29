@@ -5,6 +5,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'September 29, 2026',
+    items: [
+      'Stairs now check where they go. They may touch a wall but not pass through one, and there must be room to step off at the top: the preview turns red with the reason when they clash, an orange patch shows the space at the top that needs to be clear (green when it is), and a click there does nothing until you move or turn them.',
+      'Placing a dormer is no longer guesswork. While you place one, green dots on the roof show every spot where a dormer of that size and type fits, its outline follows the pointer (green fits, red doesn\'t) and the status bar says why it can\'t go where you are pointing (off the roof, across a hip or the ridge, no eave below, and so on).',
+      'The Roof modifier panel now follows the app\'s own light or dark setting like the other panels (it had been picking up the computer\'s dark mode, which made Replace / Generate Roof, Roof extras and Advanced Trim & Eaves dark on dark or grey on grey). The same fix applies to every panel that uses the dark styles.',
+      'Grabbing the move, rotate or scale gizmo no longer counts as a click on whatever is behind it, so moving a light fixture no longer moves the surface it sits on.',
+      'Draw upright shapes with the arrow keys: before the first click of Rectangle, Circle, Polygon, Triangle or Arc, Up holds the drawing plane flat, Right holds it square to the red axis, Left square to the green axis and Down square to the edge under the pointer (rest on it first). A coloured square follows the pointer to show the plane; the same arrow or Esc releases it. After the first click the arrows hold a direction as before.',
+      'Cars / People / Birds (renamed from "Show moving cars and people while editing"): cars now take bends in smooth curves, slow down for them, turn round at road ends in a half circle, and indicate the way they are turning. Cars slow and stop for people in their way and queue behind each other, and people wait at the kerb for a car that is coming. Two flocks of birds fly over the site: a small flock wheeling about and geese crossing in a V; they go when the option is off.',
+      'Auto Street Light (under Street life in WorldView): places Modern LED cutoff lights on main roads (staggered), cobra heads on streets, double-arm cobra heads on wide roads, at realistic spacing and clear of junctions and buildings; some existing houses get a gate light (post-top acorn or Victorian) and solar or bollard path lights. They are ordinary lamps: edit or delete them, or untick to remove them all.',
+      'Lighting: Modern LED Cutoff lights are now a 2 m wide area light at intensity 100. A Track Light has all three lights on its model (a Double Cobra has one at each arm), where before only one worked. Auto light can now place track lights, pendants, chandeliers, office panels and high-bays as well as downlights: tick the fixtures you want and they are shared out between the rooms.',
+      'Tidied up: "Photorealistic surroundings" (was "Google photorealistic surroundings") and the extra explanatory lines under the Style the buildings, Photorealistic surroundings and Auto light settings are gone.',
+    ],
+  },
+  {
     date: 'September 28, 2026',
     items: [
       'WorldView 3D Site: bring a real place into your model, up to 200 m square, from an address, UK postcode or coordinates. The ground arrives as an editable terrain with its real slopes, and the existing buildings as white models at their mapped heights (measured where the map has them, else floors x 3 m, else estimated from the kind of building).',
