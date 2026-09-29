@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { useApp } from '../AppContext';
@@ -6,7 +6,7 @@ import { CustomToolbarDef, CustomToolbarItem } from '../types';
 import { DynamicIcon } from './ui/DynamicIcon';
 import { DeveloperSDK } from '../services/developerService';
 import { cn, runToolboxScript } from '../lib/utils';
-import { GripVertical, X, ChevronUp, ChevronDown, Sparkles, Loader2, PanelRightClose } from 'lucide-react';
+import { GripVertical, X, ChevronUp, ChevronDown, Loader2, PanelRightClose } from 'lucide-react';
 
 /** Small static 3D thumbnail of a toolbar tile's real geometry, so a "tile"
  * variant button can show an accurate preview instead of a flat color swatch. */

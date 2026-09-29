@@ -24,7 +24,7 @@
 import type { EdgeId, FaceId, Graph, Tolerances, Vec3, VertexId } from './types';
 import { getVertex, loopEdgeIds, loopPoints, removeFace } from './topology';
 import { add, distance, dot, normalize, scale, sub } from './math';
-import { insertEdge, insertIsolatedEdge, type InsertContext, type InsertResult } from './insert';
+import { insertEdge, type InsertContext, type InsertResult } from './insert';
 import { derive, flipFaceOrientation, reconcileOrientation } from './derive';
 
 export interface PushPullOptions {

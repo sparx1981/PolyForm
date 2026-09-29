@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { FolderOpen, Trash2, Plus, Loader2, Rotate3d } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../../firebase';

@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, X, Send, Minus, Maximize2, User, PanelRightClose } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 
 export default function Messaging() {

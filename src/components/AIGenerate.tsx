@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, Loader2, Wand2, AlertCircle, Box, Info } from 'lucide-react';
+import { X, Sparkles, Loader2, Wand2, AlertCircle, Box } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { GoogleGenAI, Type } from "@google/genai";
-import { cn, getGeminiApiKey } from '../lib/utils';
+import { getGeminiApiKey } from '../lib/utils';
 import { Shape } from '../types';
 
 export default function AIGenerate() {

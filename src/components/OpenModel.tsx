@@ -13,11 +13,8 @@ import {
   Trash2, 
   Copy, 
   Lock, 
-  Unlock, 
   ChevronRight,
-  Download,
   FolderOpen,
-  AlertCircle,
   Shield,
   ShieldAlert,
   Key,
@@ -26,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { db, handleFirestoreError, OperationType, isQuotaLocked, restoreFirestoreArraysAfterLoad, hydrateOffloadedModel, firebaseGeometryIO } from '../firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, orderBy, writeBatch, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, or, writeBatch, limit } from 'firebase/firestore';
 import { cn, safelyToDate } from '../lib/utils';
 import { SavedModel } from '../types';
 import { useModalA11y } from './ui/useModalA11y';

@@ -4,7 +4,7 @@
  * road markings presets, and real-time longitudinal grade warning badges.
  */
 
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { Html, Line } from '@react-three/drei';

@@ -22,7 +22,7 @@
  * are removed after derivation - the same "phantom lid" clean-up push/pull does for holes.
  */
 
-import type { EdgeId, FaceId, Graph, Tolerances, Vec3 } from './types';
+import type { EdgeId, FaceId, Tolerances, Vec3 } from './types';
 import { loopEdgeIds, loopPoints, removeEdge, removeFace, removeOrphanVertices } from './topology';
 import { interiorPointWithHoles, pointInPolygonWithHoles } from './polygon';
 import {

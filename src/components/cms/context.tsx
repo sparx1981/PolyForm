@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { COPY, copyKey, defaultContent, safeUrl, type SiteContent } from './model';
+import { createContext, useContext, useMemo } from 'react';
+import { COPY, copyKey, safeUrl, type SiteContent } from './model';
 
 export const CmsContext = createContext<SiteContent | null>(null);
 export const CmsProvider = CmsContext.Provider;

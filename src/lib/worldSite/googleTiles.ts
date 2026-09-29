@@ -7,7 +7,6 @@
  * styled buildings. The scene wiring is in components/GoogleTilesLayer.tsx.
  */
 
-import type { SiteBuildingData, SiteBuildingStyleTags } from '../../types';
 
 const WGS84_A = 6378137;
 const WGS84_F = 1 / 298.257223563;

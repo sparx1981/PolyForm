@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, PresentationContent, EMPTY_PRESENTATION_CONTENT, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
 import { defaultLanes, type ToolbarLayout } from './lib/toolbarLayout';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
-import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAUSE_MS, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
+import { db, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAUSE_MS, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
 import { undoWallConversion, redoWallConversion, type WallConversionUndoLink } from './tools/kernelConvertToWall';
 import type { FaceId } from './lib/geometry/types';
@@ -26,7 +26,7 @@ interface GroupEditState {
   mainHistory: HostHistory;
   matrix: number[];
 }
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, query, where, getDocs, or, setDoc, getDoc, orderBy, limit, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { applyStairwellHolesToSlabs } from './lib/archStairwell';
 import { flattenTerrainForFloorSlabs } from './lib/archRoomAssembly';
 import { updateTimberFramesIfPresent, generateTimberFrameForWall, generateTimberFrameForRoof, generateTimberFrameForBuilding } from './lib/timberFrameGenerator';

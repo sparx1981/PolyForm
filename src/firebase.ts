@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { initializeFirestore, doc, getDoc, setDoc, getDocFromServer, Bytes } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
 import { withGeometryCache, type GeometryOffloadIO } from './lib/firestoreGeometryOffload';
 import { chunkedBlobIO } from './lib/blobCodec';

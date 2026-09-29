@@ -1,6 +1,6 @@
 import { useCms } from '../cms/context';
 import { CmsLayout } from '../cms/Sections';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { SDK_METHOD_COUNT, SDK_REFERENCE, type SdkMethod, type SdkTag } from './sdkFullReference';
 import { Eyebrow, RouterLink, scrollToId, type Page } from './shared';

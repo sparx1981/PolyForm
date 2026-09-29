@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Pause, Play, Sun, Moon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { playStages, presentation, STAGES, usePresentation } from '../../lib/presentation/store';

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LAYER } from './ui/Surface';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Upload, Plus, AlertCircle, Globe, User, Users, Settings, Circle as CircleIcon, Square as SquareIcon, Box as BoxIcon, Triangle as TriangleIcon, Cone as ConeIcon, Pyramid as PyramidIcon, Torus as TorusIcon, CircleDot, MousePointer2, Eraser, PaintBucket, Move, ArrowUpFromLine, RotateCw, Maximize, CornerUpRight, Orbit, Hand, ZoomIn, Sparkles, Search, MoreHorizontal, Video, Image, Palette, Layers, Box, PenLine, Radio, Zap, Disc, Hexagon, FileCode, FileText, Scissors, Trees, Ruler, Compass, Eye, EyeOff, Copy, Group, Undo, Redo, Hammer, Building, Home, CheckCircle2, ChevronDown, RefreshCw, LayoutGrid, StickyNote, Lightbulb, SlidersHorizontal } from 'lucide-react';
+import { X, Play, Trash2, Save, FolderOpen, BookOpen, Terminal, Library as LibraryIcon, ChevronRight, Download, Plus, AlertCircle, Globe, User, Users, Box as BoxIcon, MousePointer2, ArrowUpFromLine, Maximize, ZoomIn, Sparkles, MoreHorizontal, Palette, Box, PenLine, Radio, Scissors, Trees, Ruler, Hammer, Building, Home, ChevronDown, LayoutGrid, StickyNote, SlidersHorizontal } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useApp } from '../AppContext';
 import { cn, runToolboxScript } from '../lib/utils';

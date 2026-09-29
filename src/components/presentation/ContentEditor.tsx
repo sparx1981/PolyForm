@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Crosshair, ChevronUp, ChevronDown, Eye, Camera } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';

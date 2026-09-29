@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import WorldViewPanel from './WorldView';
 import { SectionToolPanel } from './SectionToolPanel';
-import { Settings, Info, Zap, Move, RotateCw, RotateCcw, Maximize2, Scissors, Circle, MousePointer2, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Layers, Spline, Hexagon, Lasso, SquareDashed, CheckSquare, X, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe, Slice } from 'lucide-react';
-import { buildRoofShapeForRoom, buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
+import { Settings, Info, Zap, RotateCw, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Spline, Hexagon, Lasso, SquareDashed, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe, Slice } from 'lucide-react';
+import { buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { describeRoofs, roofBuilding } from '../lib/buildingRoofs';
 import { captureShapeIds } from '../lib/shapeIds';
@@ -15,9 +15,9 @@ import { actionLabel } from '../lib/macroRecorder';
 /** The roof framing's span and support checks, added to the timber message when there are any. */
 const roofCheckNote = (warnings: string[] = []) => (warnings.length ? ` Roof checks: ${warnings.join(' ')}` : '');
 import { WallJustification } from '../tools/inference/types';
-import { NumberField, SectionLabel, EmptyState, Chip } from './ui/Surface';
+import { NumberField, EmptyState, Chip } from './ui/Surface';
 import { DEFAULT_TIMBER_FRAME_PARAMS, STRUCTURAL_VALIDATION_RULES } from '../constants/timberFrameDefaults';
-import { TimberFrameParams, Shape } from '../types';
+import { TimberFrameParams } from '../types';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RoofModifierSection } from './RoofModifierSection';
 import { ScaleFigureModifierSection } from './ScaleFigureModifierSection';

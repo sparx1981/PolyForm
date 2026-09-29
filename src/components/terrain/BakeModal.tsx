@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useApp } from '../../AppContext';
 import { 
   X, 
@@ -8,17 +8,14 @@ import {
   Check, 
   CheckSquare, 
   Square, 
-  AlertCircle, 
   Sparkles, 
   FileCode2,
-  Box,
-  Cpu,
   HelpCircle,
   Mountain
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { motion, AnimatePresence } from 'motion/react';
-import { Shape, TerrainModifier, PadModifier, RoadModifier } from '../../types';
+import { motion } from 'motion/react';
+import { Shape, PadModifier, RoadModifier } from '../../types';
 import * as THREE from 'three';
 import { exportTerrainToGLB, exportTerrainToOBJ, downloadBlob, downloadText } from '../../lib/terrain/terrainExporter';
 import { applyPadGradingToTerrain } from '../../lib/terrain/padGeometry';

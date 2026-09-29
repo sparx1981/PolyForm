@@ -6,7 +6,7 @@ import {
   Zap, Compass, Eye, RefreshCw, FileCode, Folder, Save, Package, Wand2,
   Star, Flame, Lightbulb, PenTool, Layout, Grid, Shield, Activity, Move,
   RotateCw, Trash2, Edit, Plus, Minus, Info, Camera, Video, Bell, Music,
-  Heart, Bookmark, Square, Triangle, Hexagon, Spline, Disc, Compass as CompassIcon
+  Heart, Bookmark, Square, Triangle, Hexagon, Spline, Disc
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {

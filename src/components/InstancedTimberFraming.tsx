@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { presentation } from '../lib/presentation/store';
 import * as THREE from 'three';
 import { Shape, Tag } from '../types';

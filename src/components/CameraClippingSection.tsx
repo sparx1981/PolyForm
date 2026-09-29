@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
-import { RotateCcw, Crop } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 interface CameraClippingSectionProps {
   idPrefix?: string;

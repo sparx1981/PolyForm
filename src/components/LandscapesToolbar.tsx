@@ -47,7 +47,7 @@ import { bladesPerSquareMetre } from '../lib/terrain/bladeGrass';
 import { FenceControls } from './landscape/FenceControls';
 import { WaterControls } from './landscape/WaterControls';
 import { PatioControls } from './landscape/PatioControls';
-import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, TerrainModifier, Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../types';
+import { ToolType, RoadMarkingPreset, BatterFalloffType, ParkingAngle, PadModifier, RoadModifier, Shape, GrassSettings, DEFAULT_GRASS_SETTINGS, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../types';
 import { createTerrainShape, generateTerrainHeights, TopographyPreset } from '../lib/terrain/terrainFactory';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';

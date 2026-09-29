@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { LAMP_STYLES, findLampStyle, type LampStyleDef } from '../../lib/lampStyles';
 import { LampStyleThumbnail } from './LampStyleThumbnail';

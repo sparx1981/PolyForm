@@ -1,6 +1,6 @@
 import { useCms } from '../cms/context';
 import { CmsLayout } from '../cms/Sections';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ArrowDown, ArrowRight, Check, Copy, History, LayoutDashboard, PencilRuler, Sparkles } from 'lucide-react';
 import { CAPABILITY_GROUPS, HOW_IT_WORKS, SETUP_STEPS } from './data';
 import { Eyebrow, FloorPlanTile, MarketingVisual, RouterLink, scrollToId, type Page } from './shared';

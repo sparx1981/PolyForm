@@ -45,7 +45,7 @@
  */
 
 import type {
-  EdgeId, Face, FaceId, Graph, Plane, Tolerances, Vec3, VertexId,
+  EdgeId, Face, FaceId, Graph, Plane, Vec3, VertexId,
 } from './types';
 import {
   addFace, addLoop, defaultAttributes, getVertex, loopEdgeIds, loopVertexIds,

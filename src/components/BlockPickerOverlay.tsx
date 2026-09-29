@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../AppContext';
 import { getBlockPart, buildBlockGeometry } from '../lib/blockKitGeometry';

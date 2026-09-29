@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Building2, Car, Eye, Footprints, Mountain, RotateCcw, Trash2 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import type { Shape, WorldSiteInfo } from '../types';

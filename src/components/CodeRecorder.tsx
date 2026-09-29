@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Radio, Square, Play, Save, X, Trash2, Copy, Check } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';

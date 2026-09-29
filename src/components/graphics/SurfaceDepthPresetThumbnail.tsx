@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { AUTO_NORMAL_STRENGTH, heightCanvasToNormalCanvas, type SurfaceDepthPreset, type SurfaceDepthPresetParams } from '../../lib/graphics/proceduralSurface';

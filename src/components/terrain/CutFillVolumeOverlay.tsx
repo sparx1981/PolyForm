@@ -4,7 +4,7 @@
  * based on active civil terrain modifiers (pads, roads) evaluated against the terrain.
  */
 
-import React, { useMemo, useEffect, useRef, useState } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useApp } from '../../AppContext';

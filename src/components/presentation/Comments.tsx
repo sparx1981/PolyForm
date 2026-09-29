@@ -1,5 +1,5 @@
 import { conversationCard, conversationMeta, conversationText } from '../ui/conversationStyles';
-import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { MapPin, Send, Trash2, Loader2, Reply } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';

@@ -20,13 +20,12 @@
  */
 
 import type {
-  ContainerId, EdgeId, FaceId, Graph, Vec3, VertexId,
-} from '../lib/geometry/types';
+  ContainerId, EdgeId, FaceId, Graph, Vec3, } from '../lib/geometry/types';
 import {
-  add, closestPointOnSegment, cross, distance, dot, length, midpoint,
+  add, cross, distance, dot, length, midpoint,
   normalize, scale, segmentIntersection3D, sub, tryNormalize,
 } from '../lib/geometry/math';
-import { edgePoints, getVertex, loopPoints } from '../lib/geometry/topology';
+import { edgePoints, loopPoints } from '../lib/geometry/topology';
 
 /** Mirrors the engine's enum. Kept structural so this file does not import it. */
 export type InferenceKind =

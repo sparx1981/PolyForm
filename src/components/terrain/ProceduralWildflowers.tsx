@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Shape, TerrainModifier, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../../types';

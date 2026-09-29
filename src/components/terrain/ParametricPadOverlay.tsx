@@ -5,7 +5,7 @@
  * and provides transient previews during active pad placement.
  */
 
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { Html, Line } from '@react-three/drei';
 import { useApp } from '../../AppContext';

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Type } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { buildTextShape, TEXT_DEFAULTS } from '../lib/textShapes';

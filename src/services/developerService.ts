@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomLight, TerrainData, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
+import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
@@ -146,14 +146,13 @@ import {
   RoofAssemblyUpdateParams,
   type RoofParams,
 } from '../lib/archRoofGenerator';
-import { RoofTileShape, ROOF_TILE_SHAPES } from '../lib/roofTileGenerator';
+import { RoofTileShape } from '../lib/roofTileGenerator';
 import {
   createArchitecturalStaircaseGeometry,
   StairStyleType,
   StairStructureType,
   RailingModeType,
-  ALL_STAIR_STYLES,
-} from '../lib/archStairGenerator';
+  } from '../lib/archStairGenerator';
 import {
   createTreeGeometry,
   createBushGeometry,

@@ -21,10 +21,10 @@
 
 import type {
   Diagnostic, EdgeId, Face, FaceId, FaceSnapshot, Graph, Loop, Plane,
-  PlaneBasis, Tolerances, UVBasis, Vec2, Vec3, VertexId,
+  Tolerances, UVBasis, Vec2, Vec3, VertexId,
 } from './types';
 import {
-  addFace, addLoop, defaultAttributes, edgePoints, getEdge, getFace, getVertex,
+  addFace, addLoop, defaultAttributes, edgePoints, getFace, getVertex,
   loopEdgeIds, loopPoints, removeFace,
 } from './topology';
 import {

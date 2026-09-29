@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Html, Line } from '@react-three/drei';
 import type { Graph } from '../lib/geometry';
 import { formatValue } from '../lib/utils';

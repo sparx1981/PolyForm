@@ -12,9 +12,6 @@ import { useApp } from '../AppContext';
 import {
   evaluateLassoSelection,
   Point2D,
-  SelectionShapeMode,
-  SelectionFilter,
-  SelectionCriteria,
   LassoSelectionOptions,
 } from '../tools/lassoSelection';
 

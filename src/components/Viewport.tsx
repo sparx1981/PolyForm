@@ -48,7 +48,6 @@ import {
   useHelper, 
   Html, 
   RoundedBox, 
-  useTexture, 
   Line, 
   Edges,
   PerspectiveCamera, 
@@ -78,7 +77,6 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'; import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils';
 import { 
-  createWallGeometry, 
   createWallWithOpeningsGeometry,
   WallOpening,
   createDoorGeometry, 
@@ -105,7 +103,7 @@ import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { getBlockPart, buildBlockGeometry, primaryStudDirection, STUD_UNIT, BRICK_HEIGHT, PLATE_HEIGHT, BlockPart } from '../lib/blockKitGeometry';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
-import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier, ToolType, type WorldSiteInfo } from '../types';
+import { Shape, CustomLight, SceneNote, isTextureUrl, RoadModifier, PadModifier, ToolType, type WorldSiteInfo } from '../types';
 import CutFillVolumeOverlay from './terrain/CutFillVolumeOverlay';
 import RoadSplineOverlay from './terrain/RoadSplineOverlay';
 import ParametricPadOverlay from './terrain/ParametricPadOverlay';
@@ -121,7 +119,7 @@ import { getLandscapeCanvas, LANDSCAPE_TEXTURES } from '../lib/landscapeTextures
 import { getRoofTileCanvas } from '../lib/roofTileGenerator';
 import { cn, formatValue, safelyToDate } from '../lib/utils';
 import { Effects } from './Effects';
-import { ChevronRight, ChevronDown, X, CheckCircle2, StickyNote, Palette, Layers, Lasso, SquareDashed } from 'lucide-react';
+import { ChevronRight, X, StickyNote, Palette, Lasso, SquareDashed } from 'lucide-react';
 import StyleLibraryModal from './StyleLibraryModal';
 import { LampStylePicker } from './graphics/LampStylePicker';
 import { findLampStyle } from '../lib/lampStyles';
@@ -182,7 +180,7 @@ import type { EdgeId, FaceId, Mat4, Vec3 } from '../lib/geometry/types';
 import { SunShadowRig } from './graphics/SunShadowRig';
 import { buildRoomAssembly, groundSlabFootprints, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
 import { WallJustification } from '../tools/inference/types';
-import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
+import { getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
 import { applyStairwellHolesToSlabs, computeHolesForSlab } from '../lib/archStairwell';
 import { updateTimberFramesIfPresent } from '../lib/timberFrameGenerator';
 import { smoothstep, type PortalDestination } from '../lib/portalNavigation';
@@ -201,7 +199,7 @@ import {
   parseTypedSides, parseTypedVector, pointAlong, rectangleRing, regularRing,
 } from '../tools/typedEntry';
 import { commitBezierSurface, type BezierKnotInput } from '../tools/bezier/bezierSurface';
-import { BezierKnot, BezierCurveState } from '../tools/bezier/types';
+import { BezierKnot } from '../tools/bezier/types';
 import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 
 /** Tools whose START point should snap to kernel geometry on hover. §4.2 */

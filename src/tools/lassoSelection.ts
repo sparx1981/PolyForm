@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import type { Shape } from '../types';
-import type { Graph, FaceId, Vec3 } from '../lib/geometry/types';
+import type { Graph, FaceId } from '../lib/geometry/types';
 import { loopPoints } from '../lib/geometry/topology';
 
 export type SelectionShapeMode = 'lasso' | 'marquee';

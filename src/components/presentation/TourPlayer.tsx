@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Pause, Play, X } from 'lucide-react';
 import { cancelFlight, flyTo } from '../../lib/presentation/camera';
 import { canvasRef } from '../../lib/presentation/recorder';

@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useApp } from '../../AppContext';
 import { 
   TrendingUp, 
-  Layers, 
   Scale, 
   AlertTriangle, 
   CheckCircle2, 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp } from '../AppContext';
 import type { Shape, TextData } from '../types';
 import { editTextShape } from '../lib/textShapes';

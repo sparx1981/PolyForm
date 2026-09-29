@@ -5,24 +5,19 @@ import {
   LayerStackItem,
   FloorLayerStackItem,
   WallOpeningContract,
-  FloorOpeningContract,
   StairGeometry,
   WallToolOutput,
   RoofToolOutput,
   FloorToolOutput,
-  RoofPurlinContract,
-  RoofVoidClearanceZone,
   GenerationParamsSnapshot,
   IfcTimberClass,
   TimberMemberData,
-  JointLibraryEntry,
   BOMLine,
   BOMHardwareLine,
   TimberBOM,
   TimberValidationResult,
   TimberGenerationReport,
-  TimberMemberKind,
-} from '../types';
+  } from '../types';
 import {
   STANDARD_TIMBER_SIZES,
   STANDARD_PURCHASABLE_LENGTHS_MM,
@@ -31,18 +26,12 @@ import {
   HARDWARE_CLASH_CLEARANCE_MM,
   DEFAULT_ROUGH_OPENING_TOLERANCE_MM,
   MAX_NOGGING_INTERVAL_MM,
-  BEARING_TOLERANCE_MM,
   DEFAULT_PROJECT_METADATA,
   DEFAULT_WALL_LAYER_STACK,
-  DEFAULT_ROOF_LAYER_STACK,
-  DEFAULT_FLOOR_LAYER_STACK,
   DEFAULT_FLOOR_JOIST_SPACING_MM,
   DEFAULT_FLOOR_STRUTTING_INTERVAL_MM,
-  DEFAULT_HEADROOM_MIN_MM,
-  MIN_STRUT_ANGLE_DEG,
   MIN_VENTILATION_GAP_MM,
-  JOINT_LIBRARY,
-} from '../constants/timberFrameDefaults';
+  } from '../constants/timberFrameDefaults';
 
 // =============================================================================
 // 0. Trigger Model and Input Contract Validation (§0 & §0.4)

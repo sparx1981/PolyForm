@@ -1,4 +1,4 @@
-import { HelpCircle, MousePointer2, Camera, CloudCheck, CloudUpload, CloudOff, AlertTriangle, ShieldAlert, Cloud } from 'lucide-react';
+import { MousePointer2, Camera, CloudCheck, CloudUpload, CloudOff, AlertTriangle, ShieldAlert, Cloud } from 'lucide-react';
 import { useApp } from '../AppContext';
 
 // Per-tool status bar instructions. Every tool in ToolType should have an entry here so the

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import MarketingContent from './cms/MarketingContent';
 import { useCms } from './cms/context';
 import { isCmsAdmin } from './cms/access';

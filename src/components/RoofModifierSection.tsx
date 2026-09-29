@@ -20,16 +20,13 @@ import {
   ROOF_TILE_SHAPES, 
   RoofTileShape, 
   RoofTilePaletteItem, 
-  RoofTileSettings, 
   DEFAULT_ROOF_TILE_SETTINGS, 
   PRESET_ROOF_COLORS, 
   PRESET_ROOF_TEXTURES, 
   generateRoofTileTexture 
 } from '../lib/roofTileGenerator';
 import { 
-  buildRoofAssemblyForRoom, 
-  updateRoofAssembly,
-  updateRoofAssemblyHeight 
+  updateRoofAssembly 
 } from '../lib/archRoofGenerator';
 import { Shape } from '../types';
 import { refreshRoofExtras } from '../lib/roofExtras';

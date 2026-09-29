@@ -5,24 +5,17 @@ import {
   AppWindow, 
   Layers, 
   TrendingUp, 
-  X,
   Maximize2,
-  Settings2,
-  Info,
-  ChevronRight,
-  Plus,
   Home,
-  Check,
   Globe,
   Hammer,
   PersonStanding
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
-import { ToolType, Shape } from '../types';
+import { ToolType } from '../types';
 import { cn } from '../lib/utils';
 import { FlyoutPortal } from './ui/FlyoutPortal';
-import { buildRoofShapeForRoom, buildNextFloorLevel, type RoofParams } from '../lib/archRoofGenerator';
+import { buildNextFloorLevel, type RoofParams } from '../lib/archRoofGenerator';
 import { describeRoofs, roofBuilding } from '../lib/buildingRoofs';
 import { captureShapeIds } from '../lib/shapeIds';
 import { actionLabel } from '../lib/macroRecorder';

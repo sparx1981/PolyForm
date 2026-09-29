@@ -31,7 +31,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Sliders,
-  ZoomIn,
   Layout,
   Cloud,
   ShieldAlert

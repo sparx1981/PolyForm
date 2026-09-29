@@ -7,7 +7,6 @@ import {
   OpeningFrameAssembly,
   IfcTimberClass,
   TimberMemberData,
-  GenerationParamsSnapshot,
   TimberBOM,
   TimberValidationResult,
   TimberGenerationReport,
@@ -26,14 +25,10 @@ import { frameSkeletonRoof } from './roofFraming';
 import type { RoofModel } from './roofSkeleton';
 import {
   STRUCTURAL_VALIDATION_RULES,
-  DEFAULT_WALL_LAYER_STACK,
-  DEFAULT_ROOF_LAYER_STACK,
   DEFAULT_FLOOR_LAYER_STACK,
   DEFAULT_PROJECT_METADATA,
   COINCIDENCE_EPSILON_MM,
-  DEFAULT_ROUGH_OPENING_TOLERANCE_MM,
-  DEFAULT_FLOOR_JOIST_SPACING_MM,
-} from '../constants/timberFrameDefaults';
+  } from '../constants/timberFrameDefaults';
 import {
   computeStructuralZoneDepth,
   computeFloorStructuralZoneDepth,

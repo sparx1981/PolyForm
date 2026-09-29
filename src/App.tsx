@@ -12,7 +12,7 @@ import { AppProvider, useApp, type ToolbarKey, type DockZone } from './AppContex
 import { handleFirestoreError, OperationType, restoreFirestoreArraysAfterLoad, hydrateOffloadedModel, firebaseGeometryIO } from './firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { cn } from './lib/utils';
-import { PanelLeftClose, PanelRightClose, PanelRightOpen, HelpCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, ChevronUp, ChevronDown } from 'lucide-react';
 import TopBar from './components/TopBar';
 import LeftToolbar from './components/LeftToolbar';
 import ArchitectureToolbar from './components/ArchitectureToolbar';

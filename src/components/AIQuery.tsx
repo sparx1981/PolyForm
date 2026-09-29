@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, Sparkles, Loader2 } from 'lucide-react';
 import { useApp } from '../AppContext';

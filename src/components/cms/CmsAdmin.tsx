@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowLeft, FileText, Image, Layers, Link, Save, Sparkles, History, Plus, Eye, Upload, Undo2, Globe, Search, X } from 'lucide-react';
-import { COPY, applyProposal, defaultContent, newSection, pageNames, pagePaths, proposalValue, validateContent, validateProposal, type CmsPage, type Proposal, type Revision, type Section, type SectionKind, type SiteContent } from './model';
+import { COPY, applyProposal, newSection, pageNames, pagePaths, proposalValue, validateContent, validateProposal, type CmsPage, type Proposal, type Revision, type Section, type SectionKind, type SiteContent } from './model';
 import { loadDraft, publishDraft, saveDraft, uploadImage, watchHistory, watchPublished } from './service';
 import { CmsProvider } from './context';
 import MarketingPage from './MarketingPage';

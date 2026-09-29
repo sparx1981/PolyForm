@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../AppContext';
 
 const SAMPLE_INTERVAL_MS = 250;

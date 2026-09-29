@@ -18,7 +18,7 @@ import { FLOCK_DEFAULTS } from './animations/FlockSystem';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
 import { HeightMapPicker } from './graphics/HeightMapPicker';
 import * as THREE from 'three';
-import { Pencil, Box, BoxSelect, Building2, Camera, CheckCircle2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Send, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
+import { Pencil, Box, BoxSelect, Building2, ChevronDown, ChevronRight, Circle as CircleIcon, Clapperboard, Copy as CopyIcon, Crown, Eye, EyeOff, Hammer, Home, ImageOff, Info, KeyRound, Layers, ListTree, MessageSquare, Mountain, Palette, PenTool, Plus, RotateCcw, Route, Search, Settings, Settings2, Sparkles, Square as SquareIcon, StickyNote, Sun, Trash2, Upload, User, Users, Wand2, X } from 'lucide-react';
 import { cn, safelyToDate } from '../lib/utils';
 import { HuggingFaceService } from '../services/skpService';
 import { useApp } from '../AppContext';
@@ -26,17 +26,17 @@ import { faceSummaries, toggleFaceHidden, deleteFaceAndEdges, faceGroups, setGro
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import type { FaceId } from '../lib/geometry/types';
 import { usePhoneLayout } from '../lib/phoneLayout';
-import { ToolModifierPalette, TimberFrameModifierSection } from './ToolModifierPalette';
+import { ToolModifierPalette } from './ToolModifierPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 import Messaging from './Messaging';
-import { SceneAnimation, ChatMessage, Collaborator, Shape, PadModifier, HeightMapValue } from '../types';
+import { SceneAnimation, Shape, PadModifier, HeightMapValue } from '../types';
 import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
 import { isEnvironmentAssetId, isMaterialAssetId, type AssetSummary } from '../lib/assets/types';
 import { LANDSCAPE_TEXTURES } from '../lib/landscapeTextures';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage, db, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc, getDoc, deleteDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, doc, getDoc, deleteDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 
 const COLORS = [
   '#ffffff', '#ef4444', '#f97316', '#f59e0b', 

@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { Shape } from '../../types';
 import { SurfaceDepth } from '../../lib/graphics';
