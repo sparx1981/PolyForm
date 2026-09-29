@@ -226,7 +226,7 @@ function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) 
         <input type="checkbox" className="mt-0.5" checked={!!site.styledBuildings}
           onChange={e => change(e.target.checked ? 'Style site buildings' : 'Plain site buildings',
             sdkCall('styleBuildings', e.target.checked), withSite({ styledBuildings: e.target.checked }))} />
-        <span>Style the buildings<span className="block text-[10px] text-gray-400 leading-tight">Roofs from the satellite picture, walls from the map's colour or material (else the kind of building). A building you paint keeps its colour. Not used while Google is the site.</span></span>
+        <span>Style the buildings<span className="block text-[10px] text-gray-400 leading-tight">Brick, render, stone, concrete or metal walls with windows and doors, chosen from what the map says each building is (house, shop, office, tower, warehouse, church...). Roofs take the colour seen from above. A building you paint keeps its colour. Not used while Google is the site.</span></span>
       </label>
       <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
         <input type="checkbox" className="mt-0.5" checked={on} disabled={!hasKey}

@@ -5,9 +5,9 @@ import { OrbitControls } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Box, Circle } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { loadAssetManifest } from '../lib/assets/catalog';
+import { loadMaterialMaps, type LoadedMaterialMaps } from '../lib/assets/libraryTextures';
 import { resolveMaterial } from '../lib/assets/materialResolver';
-import { ManagedTextureManager, type TextureHandle } from '../lib/assets/textureManager';
+import { ManagedTextureManager } from '../lib/assets/textureManager';
 import { isMaterialAssetId, type AssetManifest, type AssetSummary, type MapSemantic, type MaterialInstance } from '../lib/assets/types';
 
 /** What the preview shows: a plain colour, a texture, or a library material, with the material's settings. */
@@ -60,54 +60,20 @@ function useLibraryMaps(asset: AssetSummary | undefined): { manifest: AssetManif
     setState({ manifest: null, textures: {} });
     if (!asset || !isMaterialAssetId(asset.id)) return;
     const controller = new AbortController();
-    const handles: TextureHandle[] = [];
-    let manager: ManagedTextureManager | null = null;
-    const loose: THREE.Texture[] = [];
-    void (async () => {
-      try {
-        const manifest = await loadAssetManifest(asset, controller.signal);
-        if (controller.signal.aborted) return;
-        manager = new ManagedTextureManager(gl);
-        const resolved = resolveMaterial({ ref: { assetId: asset.id as MaterialInstance['ref']['assetId'], revision: asset.revision } }, manifest, '1k');
-        // Show the material's numbers straight away; each map is added as it arrives.
-        setState({ manifest, textures: {} });
-        await Promise.all(RUNTIME_MAPS.map(async semantic => {
-          const variant = resolved.maps[semantic];
-          if (!variant) return;
-          const add = (texture: THREE.Texture) => {
-            if (!controller.signal.aborted) setState(prev => ({ manifest: prev.manifest, textures: { ...prev.textures, [semantic]: texture } }));
-          };
-          try {
-            // The compressed map, but not for ever: a slow decoder falls back to the plain image.
-            const handle = await Promise.race([
-              manager!.acquire(variant),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), 6000)),
-            ]);
-            if (controller.signal.aborted) { handle.release(); return; }
-            handles.push(handle);
-            add(handle.texture);
-          } catch (error) {
-            if (!variant.fallbackUrl) { console.warn(`[Material preview] Could not load ${semantic}`, error); return; }
-            try {
-              const texture = await new THREE.TextureLoader().setCrossOrigin('anonymous').loadAsync(variant.fallbackUrl);
-              texture.colorSpace = variant.encoding === 'srgb' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-              texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-              loose.push(texture);
-              add(texture);
-            } catch (fallbackError) {
-              console.warn(`[Material preview] Could not load ${semantic}`, fallbackError);
-            }
-          }
-        }));
-      } catch (error) {
-        if (!controller.signal.aborted) console.warn('[Material preview] Could not load the material', error);
-      }
-    })();
+    let loaded: LoadedMaterialMaps | null = null;
+    const manager = new ManagedTextureManager(gl);
+    void loadMaterialMaps(manager, asset, RUNTIME_MAPS, (semantic, texture) => {
+      if (!controller.signal.aborted) setState(prev => ({ manifest: prev.manifest, textures: { ...prev.textures, [semantic]: texture } }));
+    }, controller.signal).then(result => {
+      loaded = result;
+      // The numbers (roughness, relief ...) show as soon as the manifest is known.
+      if (!controller.signal.aborted) setState(prev => ({ manifest: result.manifest, textures: prev.textures }));
+      if (controller.signal.aborted) result.release();
+    }).catch(error => { if (!controller.signal.aborted) console.warn('[Material preview] Could not load the material', error); });
     return () => {
       controller.abort();
-      handles.forEach(h => h.release());
-      loose.forEach(t => t.dispose());
-      manager?.dispose();
+      loaded?.release();
+      manager.dispose();
     };
   }, [asset?.id, asset?.revision, gl]); // eslint-disable-line react-hooks/exhaustive-deps
   return state;

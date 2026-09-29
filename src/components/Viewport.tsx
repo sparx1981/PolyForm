@@ -5,7 +5,7 @@ import { TextMesh } from './TextMesh';
 import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
 import { GoogleTilesLayer } from './GoogleTilesLayer';
 import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
-import { buildingLook, overlayTileMeters } from '../lib/worldSite/googleTiles';
+import { overlayTileMeters } from '../lib/worldSite/googleTiles';
 import { siteEditSets } from '../lib/worldSite/siteEdits';
 import { gridHeightAt } from '../lib/worldSite/terrain';
 import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
@@ -4686,7 +4686,7 @@ function Scene() {
   const siteSatelliteForStyle = siteInfo?.styledBuildings ? siteSatelliteUrl(siteInfo, googleMapsApiKey || '') : null;
   const siteStyleFor = (shape: Shape) => {
     if (!siteInfo?.styledBuildings || !shape.siteBuildingData || googleAsSite) return undefined;
-    return { look: buildingLook(shape.siteBuildingData), satelliteUrl: siteSatelliteForStyle, size: siteInfo.size };
+    return { satelliteUrl: siteSatelliteForStyle, size: siteInfo.size };
   };
 
   /**

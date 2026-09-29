@@ -108,25 +108,6 @@ const NAMED: Record<string, string> = {
   silver: '#b9bcbf', tan: '#c8ad8a', pink: '#d9a9a0',
 };
 
-const WALL_MATERIALS: Record<string, string> = {
-  brick: '#a5573e', stone: '#b7ae9d', concrete: '#b8b8b4', glass: '#9db8c8', wood: '#a3794f', timber_framing: '#b59a72',
-  metal: '#9ea3a8', steel: '#9ea3a8', plaster: '#e9e2d3', render: '#e9e2d3', stucco: '#e9e2d3', cement_block: '#b0b0aa', tiles: '#b5654a',
-};
-
-const ROOF_MATERIALS: Record<string, string> = {
-  roof_tiles: '#a45a3d', tile: '#a45a3d', slate: '#5b6168', metal: '#9aa0a6', tin: '#9aa0a6', copper: '#6fa08a',
-  concrete: '#a9a9a5', glass: '#9db8c8', thatch: '#a89168', gravel: '#8f8f8a', tar_paper: '#4b4b4b', eternit: '#8d8d88', grass: '#7f9a65',
-};
-
-const BY_KIND: [RegExp, string][] = [
-  [/^(house|detached|semidetached_house|terrace|residential|bungalow|cabin|farm|static_caravan|houseboat)$/, '#a5573e'],
-  [/^(apartments|dormitory|hotel)$/, '#e2dccf'],
-  [/^(commercial|retail|office|supermarket|kiosk|bank)$/, '#c9c8c2'],
-  [/^(industrial|warehouse|hangar|factory|barn|shed|garage|garages|carport|greenhouse)$/, '#a3a8ac'],
-  [/^(church|chapel|cathedral|mosque|temple|synagogue|monastery|castle)$/, '#b7ae9d'],
-  [/^(school|university|college|hospital|civic|public|government|train_station)$/, '#c2a58a'],
-];
-
 /** A CSS colour for a map colour value: a #hex, or one of the common colour names. Null if unknown. */
 export function mapColour(value: string | undefined): string | null {
   if (!value) return null;
@@ -136,13 +117,3 @@ export function mapColour(value: string | undefined): string | null {
   return NAMED[v] ?? null;
 }
 
-export interface BuildingLook { wall: string; roof: string }
-
-/** Wall and roof colours for a building: the map's own colour or material if it has one, else a guess from its kind. */
-export function buildingLook(data: Pick<SiteBuildingData, 'kind' | 'style'>): BuildingLook {
-  const s: SiteBuildingStyleTags = data.style ?? {};
-  const wall = mapColour(s.colour) ?? (s.material ? WALL_MATERIALS[s.material] : undefined)
-    ?? BY_KIND.find(([re]) => re.test(data.kind ?? ''))?.[1] ?? '#dcd8cf';
-  const roof = mapColour(s.roofColour) ?? (s.roofMaterial ? ROOF_MATERIALS[s.roofMaterial] : undefined) ?? '#8a7a70';
-  return { wall, roof };
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildingLook, cutoutPlanes, ecef, estimateLift, mapColour, tilesToSiteMatrix } from './googleTiles';
+import { cutoutPlanes, ecef, estimateLift, mapColour, tilesToSiteMatrix } from './googleTiles';
 import { styleTags } from './buildings';
 
 /** Applies a column-major 4x4 to a point. */
@@ -73,18 +73,6 @@ describe('building looks', () => {
     expect(mapColour('#abc')).toBe('#aabbcc');
     expect(mapColour('Red')).toBe('#a94a3a');
     expect(mapColour('chartreuse-ish')).toBeNull();
-  });
-  it('prefers the map colour, then material, then kind', () => {
-    expect(buildingLook({ kind: 'house', style: { colour: 'white' } }).wall).toBe('#f2f0ea');
-    expect(buildingLook({ kind: 'house', style: { material: 'stone' } }).wall).toBe('#b7ae9d');
-    expect(buildingLook({ kind: 'house' }).wall).toBe('#a5573e');
-    expect(buildingLook({ kind: 'apartments' }).wall).toBe('#e2dccf');
-    expect(buildingLook({}).wall).toBe('#dcd8cf');
-  });
-  it('colours the roof from its tags', () => {
-    expect(buildingLook({ style: { roofMaterial: 'slate' } }).roof).toBe('#5b6168');
-    expect(buildingLook({ style: { roofColour: '#ff0000' } }).roof).toBe('#ff0000');
-    expect(buildingLook({}).roof).toBe('#8a7a70');
   });
   it('keeps only the appearance tags a building has', () => {
     expect(styleTags({ building: 'house' })).toBeUndefined();
