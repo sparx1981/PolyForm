@@ -63,8 +63,8 @@ export default function Help() {
                     className={cn(
                       "px-5 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2",
                       activeTab === tab.id 
-                        ? "bg-polyform-blue text-gray-900 dark:text-white shadow-lg shadow-polyform-blue/20 scale-105" 
-                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:text-white hover:bg-white/5"
+                        ? "bg-polyform-blue text-white shadow-lg shadow-polyform-blue/20 scale-105" 
+                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/5"
                     )}
                   >
                     {tab.icon}
@@ -119,7 +119,7 @@ export default function Help() {
                                 className={cn(
                                   "w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-between group",
                                   selectedTopicId === topic.id 
-                                    ? "bg-polyform-blue text-gray-900 dark:text-white shadow-lg shadow-polyform-blue/20" 
+                                    ? "bg-polyform-blue text-white shadow-lg shadow-polyform-blue/20" 
                                     : "text-gray-600 dark:text-gray-400 hover:bg-white/5 hover:text-gray-900 dark:text-white"
                                 )}
                               >
@@ -172,7 +172,7 @@ export default function Help() {
                           <div className="grid gap-4">
                             {selectedTopic.steps.map((step, i) => (
                               <div key={i} className="flex gap-5 p-6 bg-white/5 rounded-3xl border border-gray-300 dark:border-gray-700/50 backdrop-blur-sm group hover:border-polyform-blue/50 transition-colors">
-                                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-polyform-blue text-gray-900 dark:text-white flex items-center justify-center text-sm font-bold shadow-lg shadow-polyform-blue/20 group-hover:scale-110 transition-transform">
+                                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-polyform-blue text-white flex items-center justify-center text-sm font-bold shadow-lg shadow-polyform-blue/20 group-hover:scale-110 transition-transform">
                                   {i + 1}
                                 </span>
                                 <p className="text-base text-gray-200 leading-relaxed font-medium pt-0.5">

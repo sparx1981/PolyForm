@@ -57,13 +57,13 @@ function Metric({
   const down = change != null && change < 0;
 
   return (
-    <div className="min-w-[150px] flex-1 rounded-lg border border-gray-200 bg-white px-3.5 py-3">
+    <div className="min-w-[150px] flex-1 rounded-lg border border-gray-200 bg-white px-3.5 py-3 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600">
       <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
         <span className="text-polyform-blue">{icon}</span>
         {label}
       </div>
       <div className="mt-1.5 flex items-end gap-2">
-        <span className="text-xl font-bold text-polyform-dark-blue">{value.toLocaleString()}{suffix}</span>
+        <span className="text-xl font-bold text-polyform-dark-blue dark:text-sky-200">{value.toLocaleString()}{suffix}</span>
         <span className={cn(
           'mb-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold',
           up && 'text-polyform-green',
@@ -321,7 +321,7 @@ export default function LoginActivity() {
               type="button"
               onClick={() => setIsLoginActivityOpen(false)}
               aria-label="Close"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700"
             >
               <X size={18} />
             </button>
@@ -358,7 +358,7 @@ export default function LoginActivity() {
                 <>
                   <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-gray-100 bg-gray-light">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                      <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">Total <span className="text-polyform-dark-blue">{loginSummary.total}</span></span>
+                      <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">Total <span className="text-polyform-dark-blue dark:text-sky-200">{loginSummary.total}</span></span>
                       <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center gap-1"><CheckCircle2 size={13} className="text-polyform-green" /> Success <span className="text-polyform-green">{loginSummary.success}</span></span>
                       <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center gap-1"><XCircle size={13} className="text-polyform-red" /> Failed <span className="text-polyform-red">{loginSummary.failure}</span></span>
                     </div>
@@ -371,13 +371,13 @@ export default function LoginActivity() {
                           value={search}
                           onChange={e => setSearch(e.target.value)}
                           placeholder="Filter by email"
-                          className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue focus:border-transparent w-48"
+                          className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue focus:border-transparent w-48 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                         />
                       </div>
                       <select
                         value={statusFilter}
                         onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue"
+                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                       >
                         <option value="all">All outcomes</option>
                         <option value="success">Success only</option>
@@ -386,7 +386,7 @@ export default function LoginActivity() {
                       <select
                         value={methodFilter}
                         onChange={e => setMethodFilter(e.target.value as MethodFilter)}
-                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue"
+                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                       >
                         <option value="all">All methods</option>
                         <option value="google">Google</option>
@@ -404,7 +404,7 @@ export default function LoginActivity() {
                       <div className="p-8 text-center text-gray-500 text-sm">No login activity matches these filters.</div>
                     ) : (
                       <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-white border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">
+                        <thead className="sticky top-0 bg-white border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600">
                           <tr>
                             <Th label="When" active={sortKey === 'timestamp'} onClick={() => toggleLoginSort('timestamp')}><LoginSortIcon column="timestamp" /></Th>
                             <Th label="Email" active={sortKey === 'email'} onClick={() => toggleLoginSort('email')}><LoginSortIcon column="email" /></Th>
@@ -415,7 +415,7 @@ export default function LoginActivity() {
                         </thead>
                         <tbody>
                           {filtered.map(r => (
-                            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+                            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
                               <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.timestamp.getTime() > 0 ? r.timestamp.toLocaleString() : '—'}</td>
                               <td className="px-4 py-2.5 text-gray-800 font-medium truncate max-w-[220px]" title={r.email}>{r.email || '—'}</td>
                               <td className="px-4 py-2.5">
@@ -455,7 +455,7 @@ export default function LoginActivity() {
                       <select
                         value={periodDays}
                         onChange={e => setPeriodDays(Number(e.target.value) as PeriodDays)}
-                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue"
+                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                       >
                         <option value={7}>Last 7 days</option>
                         <option value={30}>Last 30 days</option>
@@ -464,7 +464,7 @@ export default function LoginActivity() {
                       <select
                         value={pageFilter}
                         onChange={e => setPageFilter(e.target.value as WebsitePageFilter)}
-                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue"
+                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                       >
                         <option value="all">All marketing pages</option>
                         {Object.entries(PAGE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
@@ -472,7 +472,7 @@ export default function LoginActivity() {
                       <select
                         value={deviceFilter}
                         onChange={e => setDeviceFilter(e.target.value as WebsiteDeviceFilter)}
-                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue"
+                        className="text-sm px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                       >
                         <option value="all">All devices</option>
                         <option value="desktop">Desktop</option>
@@ -486,7 +486,7 @@ export default function LoginActivity() {
                           value={websiteSearch}
                           onChange={e => setWebsiteSearch(e.target.value)}
                           placeholder="Filter path, referrer or visitor"
-                          className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue focus:border-transparent w-[250px] max-w-full"
+                          className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-polyform-blue focus:border-transparent w-[250px] max-w-full dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
                         />
                       </div>
                     </div>
@@ -501,7 +501,7 @@ export default function LoginActivity() {
                       <div className="p-8 text-center text-gray-500 text-sm">No website activity matches these filters.</div>
                     ) : (
                       <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-white border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">
+                        <thead className="sticky top-0 bg-white border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600">
                           <tr>
                             <Th label="When" active={websiteSortKey === 'timestamp'} onClick={() => toggleWebsiteSort('timestamp')}><WebsiteSortIcon column="timestamp" /></Th>
                             <Th label="Page" active={websiteSortKey === 'page'} onClick={() => toggleWebsiteSort('page')}><WebsiteSortIcon column="page" /></Th>
@@ -513,9 +513,9 @@ export default function LoginActivity() {
                         </thead>
                         <tbody>
                           {websiteFiltered.map(r => (
-                            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+                            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
                               <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.timestamp.getTime() > 0 ? r.timestamp.toLocaleString() : '—'}</td>
-                              <td className="px-4 py-2.5 font-semibold text-polyform-dark-blue">{PAGE_LABELS[r.page] || r.page}</td>
+                              <td className="px-4 py-2.5 font-semibold text-polyform-dark-blue dark:text-sky-200">{PAGE_LABELS[r.page] || r.page}</td>
                               <td className="px-4 py-2.5 text-gray-600 font-mono text-xs">{r.path}</td>
                               <td className="px-4 py-2.5 text-gray-600 capitalize">{r.device}</td>
                               <td className="px-4 py-2.5 text-gray-500 truncate max-w-[220px]" title={r.referrer || 'Direct'}>{r.referrer || 'Direct'}</td>

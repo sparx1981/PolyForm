@@ -27,7 +27,7 @@ export default function LookModeOverlay() {
         <div className="flex items-center gap-1.5">
           <span className="font-semibold text-gray-200">Look Tool:</span>
           <span className="text-gray-300">Click to lock mouse or drag to look</span>
-          <span className="text-gray-500 font-mono text-[10px]">· Esc to unlock</span>
+          <span className="text-gray-400 font-mono text-[10px]">· Esc to unlock</span>
         </div>
         <button
           type="button"
