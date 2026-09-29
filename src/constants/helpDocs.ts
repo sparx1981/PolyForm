@@ -385,6 +385,20 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'snapping-inference',
+    title: 'Snapping, Inference and Locks',
+    category: 'tools',
+    content: 'Line, Arc, Bézier, Poly and the shape tools all snap the same way. Point the cursor near something and a marker names what it found; coloured lines show the direction you are lined up with. Ending a line exactly on another one splits both, and closed outlines become surfaces.',
+    steps: [
+      'Corners (green diamond), midpoints (cyan), face centres, the origin and guide points snap first. Where two edges or guides cross (green square) snaps too, and so does any point ON an edge or guide (red square) - that is how a line ends exactly on another and splits it.',
+      'Once you have started drawing, the cursor also lines up with directions from the start: along the red, green or blue axis; continuing an edge you are extending; and with anything you have rested on.',
+      'Rest the pointer on a corner for a moment and lines can then be taken from it (aligned with that corner along an axis). Rest it on an edge and the next segment can be parallel or perpendicular to it (pink). Where two lines meet, or a line meets an edge, that exact point is offered.',
+      'Locks: while drawing, press the Right arrow to lock the red axis, Left for green, Up for blue (the X, Y and Z keys do the same); press again or Esc to release. Press Down to lock parallel to the edge you rested on, again for perpendicular, again to release. Hold Shift to keep whatever direction is showing. A lock still snaps to corners, midpoints and crossings on its line, and to points lined up with them.',
+      'Arc: click the start, click the other end of the chord, then move to bulge it and click. Start on an edge and the arc is tangent to it (cyan). Start on a straight edge near a corner and a pink point appears on the other edge: put the end on it and the arc rounds the corner (tangent to both edges) and trims it. Type a bulge (0.5) or radius (2r) and press Enter, or 12s for the number of segments.',
+      'Bézier and Poly snap their points the same way; closing on the start point is offered in the same way for both.'
+    ]
+  },
+  {
     id: 'groups-components',
     title: 'Groups and Components',
     category: 'tools',

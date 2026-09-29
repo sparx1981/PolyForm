@@ -121,7 +121,6 @@ import { findLampStyle } from '../lib/lampStyles';
 import { KernelGeometry, type KernelFaceBinding } from './KernelGeometry';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { useLineBinding } from '../tools/lineToolBinding';
-import { collectKernelSnapPoints } from '../tools/kernelSnapPoints';
 import { Button } from './ui/Surface';
 import { runtimeImageUrl, useMaterialBindings } from '../lib/assets/useMaterialBindings';
 import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
@@ -130,7 +129,6 @@ import { loadAssetManifest } from '../lib/assets/catalog';
 import { chooseTier } from '../lib/assets/materialResolver';
 import { EnvironmentManager } from '../lib/assets/environmentManager';
 import { useManagedBindingTextures } from '../lib/assets/useManagedBindingTextures';
-import { rankSnap } from '../tools/tuning';
 import { type FaceFinish, paintFace, paintFaces, setFaceSurfaceDepth, setFacesSurfaceDepth, deleteFaceAndEdges, deleteGroupFacesAndEdges, groupContaining, setGroupHidden, faceGroups, duplicateGroup, objectInfoSummary, type ObjectInfoSummary } from '../tools/kernelSelection';
 import { tessellateFace, mergeBuffers } from '../lib/geometry/tessellate';
 import { snapshot } from '../lib/geometry/heal';
@@ -141,7 +139,7 @@ import { divideRectangularFace, isSimpleRectangularFace } from '../lib/geometry/
 import { derive } from '../lib/geometry/derive';
 import { loopVertexIds, getVertex, loopPoints, edgePoints } from '../lib/geometry/topology';
 import {
-  axisSources, featureEdges, guideCrossings, guideOffset, guideSegment, guideSnapCandidates, isGuideShape,
+  axisSources, featureEdges, guideCrossings, guideOffset, guideSegment, isGuideShape,
   makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource, type V3,
 } from '../tools/tapeGuides';
 import { SectionCutter } from './SectionCutter';
@@ -149,6 +147,11 @@ import { SectionPlaneMesh } from './SectionPlaneMesh';
 import { activeSection, dragDistance, isSectionShape, moveSection, sectionOnFace, type SectionArgs } from '../tools/sectionPlanes';
 import { usePresentation } from '../lib/presentation/store';
 import { explodeGroup, isGroupShape, makeGroup, makeUnique } from '../tools/kernelGroups';
+import {
+  axisLock as makeAxisLock, computeSnap, edgeLock, SnapMemory, type AxisName, type HoverEdge, type SnapGuide, type SnapInput, type SnapKind, type SnapLine, type SnapResult,
+} from '../tools/snapEngine';
+import { ArcTool, type ArcToolState } from '../tools/arcTool';
+import { arcPointAt } from '../lib/geometry/curve';
 import { KernelGroupMesh } from './KernelGroupMesh';
 import { commitKernelFollowMe, outlineEdges, pathFromEdge, pathFromFace, previewFollowMe, type FollowMePath } from '../tools/kernelFollowMe';
 import { createPushPullBinding, commitKernelPushPull } from '../tools/kernelPushPull';
@@ -167,7 +170,6 @@ import { boundsOfFaces } from '../lib/geometry/grouptransform';
 import type { EdgeId, FaceId, Mat4, Vec3 } from '../lib/geometry/types';
 import { SunShadowRig } from './graphics/SunShadowRig';
 import { buildRoomAssembly, groundSlabFootprints, orientRoomWallsToExterior, computeOutwardWallNormal2D, computeWallCornerPoint, computeWallFaceCorner } from '../lib/archRoomAssembly';
-import { InferenceEngine } from '../tools/inference/InferenceEngine';
 import { WallJustification } from '../tools/inference/types';
 import { buildRoofShapeForRoom, buildNextFloorLevel, getRoomBoundingEnvelope } from '../lib/archRoofGenerator';
 import { applyStairwellHolesToSlabs, computeHolesForSlab } from '../lib/archStairwell';
@@ -2421,10 +2423,6 @@ function Scene() {
   );
   const guideCrossingPoints = useMemo(() => guideCrossings(guideSegments), [guideSegments]);
   const [lastMeasurement, setLastMeasurement] = useState<{ start: [number, number, number]; end: [number, number, number]; distance: number } | null>(null);
-  const [arcStart, setArcStart] = useState<THREE.Vector3 | null>(null);
-  const [arcEnd, setArcEnd] = useState<THREE.Vector3 | null>(null);
-  const [arcBulge, setArcBulge] = useState<THREE.Vector3 | null>(null);
-  const [arcStep, setArcStep] = useState<0 | 1 | 2>(0);
   const [offsetPreviewPoints, setOffsetPreviewPoints] = useState<THREE.Vector3[] | null>(null);
   const [offsetPreviewDistance, setOffsetPreviewDistance] = useState<number>(0);
   const [offsetFaceKey, setOffsetFaceKey] = useState<number | null>(null);
@@ -3499,7 +3497,10 @@ function Scene() {
   const [drawingStep, setDrawingStep] = useState<0 | 1 | 2>(0); // 0: idle, 1: base, 2: height
   const [tempBaseArgs, setTempBaseArgs] = useState<any>(null);
   const [axisLock, setAxisLock] = useState<'x' | 'y' | 'z' | null>(null);
-  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null>(null);
+  const [snapIndicator, setSnapIndicator] = useState<{ point: [number, number, number]; type: SnapKind; tooltip?: string; color?: string } | null>(null);
+  // Lines the snap engine wants drawn (the inference in force, the lock), and the edge under the pointer.
+  const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
+  const [snapHoverEdge, setSnapHoverEdge] = useState<HoverEdge | null>(null);
   // Kept fresh every render (not gated behind an effect's own dependency
   // list) so handleSetCamera below - defined once, early in this
   // component, and otherwise stuck with whatever effectiveCameraNear/Far
@@ -3523,7 +3524,6 @@ function Scene() {
     to: { position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number; near: number; target: THREE.Vector3 };
   } | null>(null);
   const [trackingGuide, setTrackingGuide] = useState<{ source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null>(null);
-  const awakenedRefPointsRef = useRef<Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; time: number; screenPos: { x: number; y: number } }>>([]);
   const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
 
@@ -5097,7 +5097,6 @@ function Scene() {
         setFollowMeProfile(null);
         setFollowMeHover(null);
         setSectionHover(null);
-        awakenedRefPointsRef.current = [];
         setTypedLength('');
         setLastDrawTarget(null);
         setSelectedSurface(null);
@@ -5121,10 +5120,13 @@ function Scene() {
         setFenceCandidatePos(null);
         setFenceHoveredVertex(null);
         wallDragStartRef.current = null;
-        setArcStart(null);
-        setArcEnd(null);
-        setArcBulge(null);
-        setArcStep(0);
+        // The arc in progress (the tool stays selected), and any held snap lock.
+        if (arcToolRef.current && arcToolRef.current.current.phase !== 'inactive') setArcState(arcToolRef.current.escape());
+        arcPlaneRef.current = null;
+        arcFilletRef.current = [];
+        arcFilletChosenRef.current = false;
+        edgeLockRef.current = null;
+        shiftLineRef.current = null;
         setOffsetPreviewPoints(null);
         return;
       }
@@ -5337,7 +5339,14 @@ function Scene() {
         if (key === 'x') setAxisLock(prev => prev === 'x' ? null : 'x');
         if (key === 'y') setAxisLock(prev => prev === 'y' ? null : 'y');
         if (key === 'z') setAxisLock(prev => prev === 'z' ? null : 'z');
-      } else if (drawingStartRef.current && ['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool) && (key === 'x' || key === 'y' || key === 'z')) {
+      } else if (
+        (key === 'x' || key === 'y' || key === 'z') && (
+          (drawingStartRef.current && ['rectangle', 'circle', 'line', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool))
+          // Poly, Bézier and Arc keep their own points, not a drawing start: they lock once a point is placed.
+          || (['poly', 'bezier', 'arc'].includes(activeTool) && lastSnapFromRef.current !== null)
+        )
+      ) {
+        edgeLockRef.current = null;
         setAxisLock(prev => prev === key ? null : (key as 'x' | 'y' | 'z'));
         return;
       }
@@ -5543,8 +5552,13 @@ function Scene() {
     if (activeTool === 'bezier') {
       e.stopPropagation();
 
+      // What the pointer means: a corner, a crossing, a point on an edge, a line from the last
+      // knot (tools/snapEngine.ts), or its own position.
+      const clickSnap = snapCurve('bezier');
+
       // If clicking first knot -> finalize and close loop
-      if (bezierHoveredKnotIndex === 0 && bezierKnots.length >= 2) {
+      if ((bezierHoveredKnotIndex === 0 || clickSnap.kind === 'close') && bezierKnots.length >= 2) {
+        clearSnapLocks();
         closeBezierLoop();
         return;
       }
@@ -5568,6 +5582,9 @@ function Scene() {
           p = e.point ? e.point.clone() : new THREE.Vector3();
         }
       }
+
+      p = snappedOr(p, clickSnap);
+      clearSnapLocks();
 
       if (bezierKnots.length === 0) {
         const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p);
@@ -5593,14 +5610,20 @@ function Scene() {
 
     if (activeTool === 'poly') {
       e.stopPropagation();
-      
+
+      // What the pointer means (tools/snapEngine.ts): a corner, a crossing, a point on an edge,
+      // a line from the last vertex - or where it is.
+      const clickSnap = snapCurve('poly');
+
       // If clicking first vertex -> finalize
-      if (polyHoveredVertex === 0 && polyVertices.length >= 3) {
+      if ((polyHoveredVertex === 0 || clickSnap.kind === 'close') && polyVertices.length >= 3) {
+        clearSnapLocks();
         finalizePoly();
         return;
       }
-      
-      let pointToPlace = polyCandidatePos?.clone();
+
+      let pointToPlace = clickSnap.kind !== 'none' ? clickSnap.point.clone() : polyCandidatePos?.clone();
+      clearSnapLocks();
       
       if (polyVertices.length === 0) {
         // First vertex determines plane
@@ -5633,7 +5656,7 @@ function Scene() {
         setPolyPlane(plane);
         setPolyNormal(normal);
         setPolyPlaneOnId(onId);
-        setPolyVertices([p]);
+        setPolyVertices([snappedOr(p, clickSnap)]);
       } else if (polyPlane && polyNormal) {
         // Subsequent vertices
         if (!pointToPlace) pointToPlace = e.point.clone();
@@ -5973,64 +5996,68 @@ function Scene() {
     if (activeTool === 'tape') return;
     if (activeTool === 'arc') {
       e.stopPropagation();
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => (i.object.userData?.isShape || i.object.userData?.id) && i.object !== e.object);
-      let point: THREE.Vector3;
-      if (shapeIntersect) {
-        point = shapeIntersect.point.clone();
-      } else if (e.point) {
-        point = e.point.clone();
-      } else {
-        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const groundHit = new THREE.Vector3();
-        raycaster.ray.intersectPlane(groundPlane, groundHit);
-        point = groundHit;
-      }
-
-      if (arcStep === 0) {
-        setArcStart(point);
-        setArcEnd(point);
-        setArcStep(1);
-        setMeasurements(`Arc Start: (${point.x.toFixed(2)}, ${point.z.toFixed(2)}) — Click to set chord endpoint.`);
-      } else if (arcStep === 1) {
-        setArcEnd(point);
-        setArcBulge(point);
-        setArcStep(2);
-        setMeasurements('Click or drag to adjust arc curvature / bulge.');
-      } else if (arcStep === 2 && arcStart && arcEnd) {
-        let arcPts = computeArcPoints(arcStart, arcEnd, point);
-        if (!arcPts || arcPts.length < 2) {
-          // Linear fallback if perfectly collinear
-          arcPts = [arcStart.clone(), point.clone(), arcEnd.clone()];
+      const tool = arcToolRef.current!;
+      const phase = tool.current.phase;
+      if (phase === 'second') {
+        // Third click: the bulge (or nothing more to decide when tangent) - draw it.
+        const cursor = arcBulgeCursor();
+        if (cursor) tool.move(cursor);
+        const after = tool.click(cursor ?? new THREE.Vector3(tool.current.p1!.x, tool.current.p1!.y, tool.current.p1!.z));
+        setArcState(after);
+        if (after.lastError) setMeasurements(`Arc: ${after.lastError}`);
+        else if (after.phase === 'ready') {
+          arcPlaneRef.current = null;
+          arcFilletChosenRef.current = false;
+          arcFilletRef.current = [];
+          clearSnapLocks();
+          bumpKernel();
+          recordAction(actionLabel('Arc'));
+          setMeasurements('Arc drawn. Click to start another.');
         }
-        const newArcId = Math.random().toString(36).substr(2, 9);
-        const newArcShape: Shape = {
-          id: newArcId,
-          name: `Arc Line ${shapes.filter(s => s.type === 'arc').length + 1}`,
-          type: 'arc',
-          position: [0, 0, 0],
-          quaternion: [0, 0, 0, 1],
-          args: {
-            start: [arcStart.x, arcStart.y, arcStart.z],
-            end: [arcEnd.x, arcEnd.y, arcEnd.z],
-            through: [point.x, point.y, point.z],
-            points: arcPts.map(p => [p.x, p.y, p.z]),
-          },
-          color: activeMaterial || '#22c55e',
-        } as Shape;
-        addShape(newArcShape);
-        setSelectedId(newArcId);
-        setSelectedIds([newArcId]);
-        commitHistory();
-        setMeasurements(`Arc created (${formatValue(arcStart.distanceTo(arcEnd), unit, 2)} chord).`);
-        setArcStart(null);
-        setArcEnd(null);
-        setArcBulge(null);
-        setArcStep(0);
+        return;
       }
+      if (phase === 'first') {
+        // Second click: the other end of the chord.
+        const r = arcSnap();
+        const end = r.point;
+        const st = tool.current;
+        if (st.p0 && distance3(st.p0, end) < 1e-6) return;
+        tool.setFilletCorner(arcFilletChosenRef.current ? arcFilletRef.current.find(t => t.end.distanceTo(end) < 1e-6)?.corner ?? null : null);
+        const after = tool.click(end);
+        setArcState(after);
+        clearSnapLocks();
+        setMeasurements(tool.hasTangent
+          ? 'Tangent arc (cyan). Move to bulge, or click to draw it.'
+          : 'Move to bulge the arc; type a bulge (0.5) or a radius (2r) and press Enter; click to draw it.');
+        return;
+      }
+      // First click: the start. The plane comes from the face clicked, else the ground.
+      const intersects = raycaster.intersectObjects(scene.children, true);
+      const hit = intersects.find(i => (i.object.userData?.isShape || i.object.userData?.id || i.object.userData?.isKernelGeometry) && i.object !== e.object && i.face);
+      let normal = new THREE.Vector3(0, 1, 0);
+      let point = new THREE.Vector3();
+      if (hit && hit.face) {
+        normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+        point = hit.point.clone();
+      } else if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), point)) {
+        point = e.point ? e.point.clone() : new THREE.Vector3();
+      }
+      arcPlaneRef.current = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point);
+      const start = snapHere(snapCursor(arcPlaneRef.current), arcPlaneRef.current, null);
+      const p0 = start.kind === 'none' ? point : start.point.clone();
+      arcPlaneRef.current = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p0);
+      const after = tool.click(p0);
+      // The corners this start could round: if the end is put where the fillet meets the other
+      // edge, the arc is tangent to both and drawing it trims the corner.
+      arcFilletRef.current = kernelHost.filletTargets(p0).map(t => ({ corner: new THREE.Vector3(t.corner.x, t.corner.y, t.corner.z), end: new THREE.Vector3(t.end.x, t.end.y, t.end.z) }));
+      arcFilletChosenRef.current = false;
+      clearSnapLocks();
+      setArcState(after);
+      setMeasurements(tool.hasTangent
+        ? 'Arc starts tangent to the edge (cyan). Click the other end.'
+        : `Arc start. Click the other end${arcFilletRef.current.length ? ' - or the pink point to round the corner' : ''}.`);
       return;
     }
-
 
     if (activeTool === 'door' || activeTool === 'window') {
       e.stopPropagation();
@@ -6492,6 +6519,267 @@ function Scene() {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Snapping and inference (tools/snapEngine.ts): one function for Line, Arc, Bézier, Poly and
+  // the shape tools. It finds corners, crossings, points on edges and guides; directions from
+  // where you are drawing from; and holds a line when a lock is on.
+  //
+  // Locks (while a segment is being drawn): arrow keys hold an axis (Right red, Left green, Up
+  // blue) and the X / Y / Z keys do the same; Down holds a line parallel, then perpendicular, to
+  // the edge you are resting on; holding Shift keeps whatever inference is showing. A lock still
+  // snaps to corners and crossings on its line.
+  // ---------------------------------------------------------------------------
+  const snapMemoryRef = useRef(new SnapMemory(300));
+  const lastSnapRef = useRef<SnapResult | null>(null);
+  const lastSnapFromRef = useRef<THREE.Vector3 | null>(null);
+  const shiftLineRef = useRef<SnapLine | null>(null);
+  const edgeLockRef = useRef<{ mode: 'parallel' | 'perpendicular'; edge: HoverEdge } | null>(null);
+  const publishedSnapRef = useRef('');
+  const shapeSnapRef = useRef<{ shapes: Shape[]; points: NonNullable<SnapInput['extraPoints']> } | null>(null);
+  const axisLockRef = useRef(axisLock);
+  axisLockRef.current = axisLock;
+  const setMeasurementsRef = useRef(setMeasurements);
+  setMeasurementsRef.current = setMeasurements;
+  const AXES_NAMES: Record<AxisName, string> = { x: 'red axis', z: 'green axis', y: 'blue axis' };
+  const activeToolSnapRef = useRef(activeTool);
+  activeToolSnapRef.current = activeTool;
+
+  /** The corners, edge middles and centres of the model's objects (not its drawn geometry). */
+  const shapeSnapPoints = (): NonNullable<SnapInput['extraPoints']> => {
+    const cached = shapeSnapRef.current;
+    if (cached && cached.shapes === shapes) return cached.points;
+    const points: { point: THREE.Vector3; kind: 'endpoint' | 'midpoint' | 'center'; label?: string }[] = [];
+    for (const sh of shapes) {
+      if (sh.hidden) continue;
+      if (isGuideShape(sh)) {
+        const c = (sh.args as { kind?: string; centre?: [number, number, number] }).centre;
+        if ((sh.args as { kind?: string }).kind === 'protractor' && c) points.push({ point: new THREE.Vector3(...c), kind: 'endpoint', label: 'Guide centre' });
+        continue;
+      }
+      if (isSectionShape(sh)) continue;
+      const a = sh.args as { start?: [number, number, number]; end?: [number, number, number] } | undefined;
+      if (sh.type === 'measurement') {
+        if (a && Array.isArray(a.start) && Array.isArray(a.end)) {
+          const st = new THREE.Vector3(...a.start), en = new THREE.Vector3(...a.end);
+          points.push({ point: st, kind: 'endpoint' }, { point: en, kind: 'endpoint' }, { point: st.clone().lerp(en, 0.5), kind: 'midpoint' });
+        }
+        continue;
+      }
+      const obj = scene.getObjectByName(sh.id);
+      if (!obj) continue;
+      const box = new THREE.Box3().setFromObject(obj);
+      if (!isFinite(box.min.x) || !isFinite(box.max.x)) continue;
+      const corners: THREE.Vector3[] = [];
+      for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+      for (const c of corners) points.push({ point: c, kind: 'endpoint' });
+      for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+        const ca = corners[i]!, cb = corners[j]!;
+        if ([ca.x !== cb.x, ca.y !== cb.y, ca.z !== cb.z].filter(Boolean).length === 1) points.push({ point: ca.clone().lerp(cb, 0.5), kind: 'midpoint' });
+      }
+      const mid = box.getCenter(new THREE.Vector3());
+      for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) {
+        points.push({ point: new THREE.Vector3(mid.x + d[0] * (box.max.x - box.min.x) / 2, mid.y + d[1] * (box.max.y - box.min.y) / 2, mid.z + d[2] * (box.max.z - box.min.z) / 2), kind: 'center' });
+      }
+    }
+    shapeSnapRef.current = { shapes, points };
+    return points;
+  };
+
+  /** The snap for the pointer now. `from` is where the segment being drawn started. */
+  const snapHere = (cursor: THREE.Vector3, plane: THREE.Plane | null, from: THREE.Vector3 | null, opts: { closePoint?: THREE.Vector3 | null } = {}): SnapResult => {
+    const rect = gl.domElement.getBoundingClientRect();
+    let lockLine: SnapLine | null = null;
+    if (from) {
+      if (axisLockRef.current) lockLine = makeAxisLock(from, axisLockRef.current as AxisName);
+      else if (edgeLockRef.current) lockLine = edgeLock(from, edgeLockRef.current.edge, edgeLockRef.current.mode, plane);
+      else if (shiftLineRef.current) lockLine = shiftLineRef.current;
+    }
+    const result = computeSnap({
+      graph: kernelHost.graph, revision: kernelRevision, camera,
+      size: { width: rect.width, height: rect.height },
+      pointer: { x: ((mouse.x + 1) / 2) * rect.width, y: ((-mouse.y + 1) / 2) * rect.height },
+      ray: raycaster.ray, cursor, plane, from,
+      extraPoints: shapeSnapPoints(),
+      guides: guidesVisible ? guideSegments : [], guideCrossings: guidesVisible ? guideCrossingPoints : [],
+      memory: snapMemoryRef.current, lockLine, closePoint: opts.closePoint ?? null,
+    });
+    snapMemoryRef.current.update(result, performance.now());
+    lastSnapRef.current = result;
+    lastSnapFromRef.current = from;
+    return result;
+  };
+
+  /** Shows what the snap found: the marker and its name, the lines, the edge under the pointer. */
+  const publishSnap = (r: SnapResult | null) => {
+    const marker = r && r.kind !== 'none' ? (r.marker ?? r.point) : null;
+    const key = r
+      ? `${r.kind}|${r.label}|${marker ? marker.toArray().map(v => v.toFixed(3)).join(',') : ''}|${r.guides.map(g => `${g.a.toArray().map(v => v.toFixed(2))}>${g.b.toArray().map(v => v.toFixed(2))}${g.dashed}`).join(';')}|${r.hoverEdge ? `${r.hoverEdge.id}:${r.hoverEdge.a.toArray().map(v => v.toFixed(2))}` : ''}`
+      : '';
+    if (key === publishedSnapRef.current) return;
+    publishedSnapRef.current = key;
+    setSnapIndicator(marker && r ? { point: [marker.x, marker.y, marker.z], type: r.kind as SnapKind, tooltip: r.label, ...(r.line ? { color: r.line.color } : {}) } : null);
+    setSnapGuides(r ? r.guides : []);
+    setSnapHoverEdge(r ? r.hoverEdge : null);
+  };
+
+  const snapCursor = (plane: THREE.Plane | null): THREE.Vector3 => {
+    const hit = new THREE.Vector3();
+    if (plane && raycaster.ray.intersectPlane(plane, hit)) return hit;
+    return raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit) ? hit : raycaster.ray.at(50, new THREE.Vector3());
+  };
+
+  /** Where Poly, Bézier and Arc are drawing from, on what plane, and what would close them. */
+  const curveSnapContext = (tool: string): { from: THREE.Vector3 | null; plane: THREE.Plane | null; closePoint: THREE.Vector3 | null } => {
+    if (tool === 'poly') {
+      return { from: polyVertices.length ? polyVertices[polyVertices.length - 1]! : null, plane: polyPlane, closePoint: polyVertices.length >= 3 ? polyVertices[0]! : null };
+    }
+    if (tool === 'bezier') {
+      return { from: bezierKnots.length ? bezierKnots[bezierKnots.length - 1]!.point : null, plane: bezierActivePlane, closePoint: bezierKnots.length >= 2 ? bezierKnots[0]!.point : null };
+    }
+    const st = arcToolRef.current?.current;
+    if (tool === 'arc' && st && st.phase === 'first' && st.p0) {
+      return { from: new THREE.Vector3(st.p0.x, st.p0.y, st.p0.z), plane: arcPlaneRef.current, closePoint: null };
+    }
+    return { from: null, plane: tool === 'arc' ? arcPlaneRef.current : null, closePoint: null };
+  };
+
+  /** The snap for Poly, Bézier or Arc now (and shown). */
+  const snapCurve = (tool: string): SnapResult => {
+    const ctx = curveSnapContext(tool);
+    const r = snapHere(snapCursor(ctx.plane), ctx.plane, ctx.from, { closePoint: ctx.closePoint });
+    publishSnap(r);
+    return r;
+  };
+  /** A click's point: the snapped one when the snap found something, else what the tool had. */
+  const snappedOr = (raw: THREE.Vector3, r: SnapResult): THREE.Vector3 => (r.kind === 'none' ? raw : r.point.clone());
+
+  // Locks are for one segment: drop them when the tool changes or a point is placed.
+  const clearSnapLocks = () => {
+    edgeLockRef.current = null;
+    shiftLineRef.current = null;
+    setAxisLock(null);
+  };
+  useEffect(() => {
+    clearSnapLocks();
+    snapMemoryRef.current.clear();
+    lastSnapRef.current = null;
+    lastSnapFromRef.current = null;
+    publishSnap(null);
+  }, [activeTool]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const ARROW_TOOLS = ['line', 'poly', 'bezier', 'arc', 'rectangle', 'circle', 'triangle'];
+    const SHIFT_TOOLS = ['line', 'poly', 'bezier', 'arc'];
+    const editing = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
+    const onDown = (ev: KeyboardEvent) => {
+      if (editing(ev.target)) return;
+      const tool = activeToolSnapRef.current;
+      if (ev.key === 'Shift') {
+        // Hold what the pointer is inferring for as long as Shift is down.
+        const line = lastSnapRef.current?.line;
+        if (!ev.repeat && line && lastSnapFromRef.current && SHIFT_TOOLS.includes(tool)) shiftLineRef.current = line;
+        return;
+      }
+      if (!ARROW_TOOLS.includes(tool) || !lastSnapFromRef.current || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      const axisFor: Record<string, AxisName> = { ArrowRight: 'x', ArrowLeft: 'z', ArrowUp: 'y' };
+      const axis = axisFor[ev.key];
+      if (axis) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        edgeLockRef.current = null;
+        const already = axisLockRef.current === axis;
+        setAxisLock(already ? null : axis);
+        setMeasurementsRef.current(already ? 'Lock released.' : `Locked to the ${AXES_NAMES[axis]}. Press the same arrow (or Esc) to release; corners and crossings on the line still snap.`);
+        return;
+      }
+      if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        // Off -> parallel to the edge rested on -> perpendicular to it -> off.
+        setAxisLock(null);
+        const cur = edgeLockRef.current;
+        if (cur?.mode === 'parallel') edgeLockRef.current = { mode: 'perpendicular', edge: cur.edge };
+        else if (cur) edgeLockRef.current = null;
+        else {
+          const edge = snapMemoryRef.current.edge ?? lastSnapRef.current?.hoverEdge ?? null;
+          edgeLockRef.current = edge ? { mode: 'parallel', edge } : null;
+        }
+        setMeasurementsRef.current(
+          edgeLockRef.current?.mode === 'parallel' ? 'Locked parallel to the edge. Press Down again for perpendicular.'
+            : edgeLockRef.current?.mode === 'perpendicular' ? 'Locked perpendicular to the edge. Press Down again to release.'
+            : 'Rest the pointer on an edge for a moment, then press Down to lock parallel to it.',
+        );
+      }
+    };
+    const onUp = (ev: KeyboardEvent) => { if (ev.key === 'Shift') shiftLineRef.current = null; };
+    window.addEventListener('keydown', onDown, true);
+    window.addEventListener('keyup', onUp, true);
+    return () => {
+      window.removeEventListener('keydown', onDown, true);
+      window.removeEventListener('keyup', onUp, true);
+    };
+  }, []);
+
+  // The Arc tool (tools/arcTool.ts): chord, then bulge, tangent to the edge it starts on.
+  const arcToolRef = useRef<ArcTool | null>(null);
+  const arcPlaneRef = useRef<THREE.Plane | null>(null);
+  const arcFilletRef = useRef<{ corner: THREE.Vector3; end: THREE.Vector3 }[]>([]);
+  const arcFilletChosenRef = useRef(false);
+  const [arcState, setArcState] = useState<ArcToolState | null>(null);
+  if (!arcToolRef.current) arcToolRef.current = new ArcTool(kernelHost, undefined, unit);
+  const distance3 = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+  /** The snap for the arc's chord ends, with the pink "round this corner" point taking priority. */
+  const arcSnap = (): SnapResult => {
+    const r = snapCurve('arc');
+    arcFilletChosenRef.current = false;
+    const st = arcToolRef.current!.current;
+    if (st.phase !== 'first' || arcFilletRef.current.length === 0) return r;
+    const rect = gl.domElement.getBoundingClientRect();
+    const px = { x: ((mouse.x + 1) / 2) * rect.width, y: ((-mouse.y + 1) / 2) * rect.height };
+    for (const t of arcFilletRef.current) {
+      const v = t.end.clone().project(camera);
+      if (v.z >= 1) continue;
+      const d = Math.hypot(((v.x + 1) / 2) * rect.width - px.x, ((-v.y + 1) / 2) * rect.height - px.y);
+      if (d > 14) continue;
+      arcFilletChosenRef.current = true;
+      const over: SnapResult = { ...r, point: t.end.clone(), marker: t.end.clone(), kind: 'fillet', label: 'Round the corner (tangent to both edges)', guides: [], line: null };
+      publishSnap(over);
+      return over;
+    }
+    return r;
+  };
+
+  /** Where the pointer is, for bulging the arc: on the plane it is drawn in (or one facing the camera through the chord). */
+  const arcBulgeCursor = (): THREE.Vector3 | null => {
+    const st = arcToolRef.current!.current;
+    if (!st.p0 || !st.p1) return null;
+    const p0 = new THREE.Vector3(st.p0.x, st.p0.y, st.p0.z), p1 = new THREE.Vector3(st.p1.x, st.p1.y, st.p1.z);
+    let plane = arcPlaneRef.current;
+    if (!plane || Math.abs(plane.distanceToPoint(p0)) > 1e-4 || Math.abs(plane.distanceToPoint(p1)) > 1e-4) {
+      const c = p1.clone().sub(p0).normalize();
+      const view = raycaster.ray.direction.clone();
+      const n = view.sub(c.clone().multiplyScalar(view.dot(c)));
+      if (n.lengthSq() < 1e-9) return null;
+      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), p0);
+    }
+    const hit = new THREE.Vector3();
+    return raycaster.ray.intersectPlane(plane, hit) ? hit : null;
+  };
+
+  // Start and stop the arc tool with the toolbar tool.
+  useEffect(() => {
+    const tool = arcToolRef.current!;
+    if (activeTool === 'arc') setArcState(tool.activate('twoPoint'));
+    else { tool.deactivate(); setArcState(null); }
+    arcPlaneRef.current = null;
+    arcFilletRef.current = [];
+    arcFilletChosenRef.current = false;
+  }, [activeTool]);
+
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     // See handlePointerDown's identical guard - Walk Mode's own placement
     // hover lives entirely in WalkModeController.
@@ -6567,20 +6855,24 @@ function Scene() {
       return;
     }
 
-    if (activeTool === 'arc' && arcStep === 1 && arcStart) {
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData?.isShape || i.object.userData?.id);
-      const point = shapeIntersect ? shapeIntersect.point.clone() : (e.point ? e.point.clone() : new THREE.Vector3());
-      setArcEnd(point);
-      setMeasurements(`Arc Chord: ${formatValue(arcStart.distanceTo(point), unit, 2)} (Click to set endpoint)`);
-    }
-
-    if (activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd) {
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      const shapeIntersect = intersects.find(i => i.object.userData?.isShape || i.object.userData?.id);
-      const point = shapeIntersect ? shapeIntersect.point.clone() : (e.point ? e.point.clone() : new THREE.Vector3());
-      setArcBulge(point);
-      setMeasurements(`Arc Curvature: Adjust bulge & click to place`);
+    if (activeTool === 'arc') {
+      const tool = arcToolRef.current!;
+      const phase = tool.current.phase;
+      if (phase === 'second') {
+        publishSnap(null);
+        const cursor = arcBulgeCursor();
+        if (cursor) {
+          const st = tool.move(cursor);
+          setArcState(st);
+          if (st.preview) {
+            const r = st.preview.radius;
+            setMeasurements(`Arc: radius ${formatValue(r, unit, 2)}${st.tangentActive ? ' (tangent)' : st.halfCircle ? ' (half circle)' : ''} - click to draw`);
+          }
+        }
+      } else {
+        const r = arcSnap();
+        if (phase === 'first') setArcState(tool.move(r.point));
+      }
     }
 
     if (activeTool === 'offset') {
@@ -6637,7 +6929,9 @@ function Scene() {
         const ray = raycaster.ray;
         const target = new THREE.Vector3();
         if (ray.intersectPlane(plane, target)) {
-          let finalPos = target.clone();
+          // The shared snap: corners, crossings, points on an edge, lines from the last knot.
+          const bezierSnap = isDraggingBezierHandle ? null : snapCurve('bezier');
+          let finalPos = bezierSnap ? snappedOr(target.clone(), bezierSnap) : target.clone();
           setBezierCandidatePos(finalPos);
 
           if (isDraggingBezierHandle) {
@@ -6662,16 +6956,11 @@ function Scene() {
                 : (cam.top - cam.bottom) / ((cam.zoom || 1) * pixels);
               const closeReach = Math.max(0.05, 12 * metresPerPixel);
               bezierToolRef.current.setCloseReach(closeReach);
-              if (d < closeReach) {
+              if (d < closeReach || bezierSnap?.kind === 'close') {
                 setBezierHoveredKnotIndex(0);
-                setSnapIndicator({
-                  point: [origin.x, origin.y + 0.05, origin.z],
-                  type: 'endpoint',
-                  tooltip: '🟢 Start point · Click, press Enter or double-click to close the shape'
-                });
+                setMeasurements('Start point: click, press Enter or double-click to close the shape');
               } else {
                 setBezierHoveredKnotIndex(null);
-                setSnapIndicator(null);
               }
             }
           }
@@ -6683,39 +6972,11 @@ function Scene() {
       if (ray.intersectPlane(polyPlane, target)) {
         let finalPos = target.clone();
         
-        // Basic snapping
-        if (!e.shiftKey) {
-          const snapThreshold = 0.5;
-          let snapTarget: THREE.Vector3 | null = null;
-          let bestDist = snapThreshold;
-
-          // Snap to existing vertices in current poly
-          if (polyVertices.length > 0) {
-            const d = finalPos.distanceTo(polyVertices[0]);
-            const startSnapThreshold = 0.8; // Stronger snap for start point
-            if (d < startSnapThreshold) {
-              snapTarget = polyVertices[0].clone();
-              bestDist = d;
-              setPolyHoveredVertex(0);
-            } else {
-              setPolyHoveredVertex(null);
-            }
-          }
-
-          // Snap to other shapes' origins (simplified snapping)
-          if (!snapTarget) {
-            shapes.forEach(sh => {
-              const shPos = new THREE.Vector3(...sh.position);
-              const d = finalPos.distanceTo(shPos);
-              if (d < bestDist) {
-                snapTarget = shPos.clone();
-                bestDist = d;
-              }
-            });
-          }
-
-          if (snapTarget) finalPos = snapTarget;
-        }
+        // The shared snap (tools/snapEngine.ts), in screen pixels: corners, crossings, points on
+        // an edge, lines from the last vertex, the start point to close on.
+        const polySnap = snapCurve('poly');
+        finalPos = snappedOr(finalPos, polySnap);
+        setPolyHoveredVertex(polyVertices.length >= 3 && polySnap.kind === 'close' ? 0 : null);
 
         setPolyCandidatePos(finalPos);
       }
@@ -7383,54 +7644,12 @@ function Scene() {
     //
     // That is why a rectangle is easy — each line starts where you can see the
     // last one — while joining two parallel lines is fiddly at both ends.
-    if (!drawingStart && KERNEL_SNAP_TOOLS.includes(activeTool)) {
-      const hoverRect = gl.domElement.getBoundingClientRect();
-      const hoverMouseX = ((mouse.x + 1) / 2) * hoverRect.width;
-      const hoverMouseY = ((-mouse.y + 1) / 2) * hoverRect.height;
-      // Per-kind radii, not one radius for everything. Every edge contributes
-      // a midpoint and every face a centre, so a single generous radius makes
-      // the cursor nearly always inside SOMETHING and snapping feels twitchy.
-      let bestPoint: THREE.Vector3 | null = null;
-      let bestType: 'endpoint' | 'midpoint' | 'center' = 'endpoint';
-      let bestRank = Infinity;
-
-      for (const kp of collectKernelSnapPoints(kernelHost.graph)) {
-        const v = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
-        const projected = v.clone().project(camera);
-        if (projected.z >= 1.0) continue;
-        const sx = ((projected.x + 1) / 2) * hoverRect.width;
-        const sy = ((-projected.y + 1) / 2) * hoverRect.height;
-        const rank = rankSnap(kp.kind, Math.hypot(sx - hoverMouseX, sy - hoverMouseY));
-        if (rank < bestRank) {
-          bestRank = rank;
-          bestPoint = v;
-          bestType = kp.kind;
-        }
-      }
-
-      // Guides: start a line on a guide, or where two guides cross.
-      let bestLabel: string | null = null;
-      for (const g of guideSnapCandidates(guideSegments, guideCrossingPoints, raycaster.ray, camera, hoverRect, { x: hoverMouseX, y: hoverMouseY })) {
-        const kind = g.label === 'Guide crossing' ? 'endpoint' as const : 'midpoint' as const;
-        const rank = rankSnap(kind, g.screenDist);
-        if (rank < bestRank) {
-          bestRank = rank;
-          bestPoint = g.point;
-          bestType = kind;
-          bestLabel = g.label;
-        }
-      }
-
-      setSnapIndicator(
-        bestPoint
-          ? {
-              point: [bestPoint.x, bestPoint.y, bestPoint.z],
-              type: bestType,
-              tooltip: bestLabel ??
-                (bestType === 'endpoint' ? 'Endpoint' : bestType === 'midpoint' ? 'Midpoint' : 'Center'),
-            }
-          : null,
-      );
+    if (!drawingStart && KERNEL_SNAP_TOOLS.includes(activeTool) && !['poly', 'bezier', 'arc'].includes(activeTool)) {
+      // Before the first click: where a shape or line could start (corners, crossings, points on
+      // an edge or a guide). No plane yet, so the ground stands in for the pointer's position.
+      publishSnap(snapHere(snapCursor(null), null, null));
+    } else if ((activeTool === 'poly' && polyVertices.length === 0) || (activeTool === 'bezier' && bezierKnots.length === 0)) {
+      snapCurve(activeTool);
     }
 
     if (drawingStart && drawingNormal) {
@@ -7468,202 +7687,12 @@ function Scene() {
         const tangent = new THREE.Vector3().crossVectors(drawingNormal, up).normalize();
         const bitangent = new THREE.Vector3().crossVectors(drawingNormal, tangent).normalize();
 
-        // Collect geometric candidate points
-        const candidates: Array<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; screenDist: number; label?: string }> = [];
-        shapes.forEach(sh => {
-          if (isGuideShape(sh)) {
-            // Guide lines (Tape Measure and Protractor): snap onto the nearest point along the
-            // guide, and to a protractor's centre. Hidden guides don't snap.
-            if (!guidesVisible || sh.hidden) return;
-            const [gStart, gEnd] = guideSegment(sh)!;
-            const onGuide = new THREE.Line3(gStart, gEnd).closestPointToPoint(target, true, new THREE.Vector3());
-            const points: [THREE.Vector3, string][] = [[onGuide, 'On guide']];
-            if (sh.args?.kind === 'protractor') points.push([new THREE.Vector3(...(sh.args.centre as [number, number, number])), 'Guide centre']);
-            for (const [p, label] of points) {
-              const pr = projectToScreen(p);
-              if (pr.inFront) candidates.push({ point: p.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) + (label === 'On guide' ? 4 : 0), label });
-            }
-            return;
-          }
-          if (sh.type === 'measurement') {
-            if (sh.args && Array.isArray(sh.args.start) && Array.isArray(sh.args.end)) {
-              const mStart = new THREE.Vector3(sh.args.start[0], sh.args.start[1], sh.args.start[2]);
-              const mEnd = new THREE.Vector3(sh.args.end[0], sh.args.end[1], sh.args.end[2]);
-              const mMid = mStart.clone().lerp(mEnd, 0.5);
-              [
-                { p: mStart, t: 'endpoint' as const },
-                { p: mEnd, t: 'endpoint' as const },
-                { p: mMid, t: 'midpoint' as const }
-              ].forEach(({ p, t }) => {
-                const pr = projectToScreen(p);
-                if (pr.inFront) {
-                  const sd = Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY);
-                  candidates.push({ point: p.clone(), type: t, screenDist: sd });
-                }
-              });
-            }
-            return;
-          }
-          const obj = scene.getObjectByName(sh.id);
-          if (!obj) return;
-          const box = new THREE.Box3().setFromObject(obj);
-          if (!isFinite(box.min.x) || !isFinite(box.max.x)) return;
-          const xs = [box.min.x, box.max.x], ys = [box.min.y, box.max.y], zs = [box.min.z, box.max.z];
-          const corners: THREE.Vector3[] = [];
-          xs.forEach(x => ys.forEach(y => zs.forEach(z => corners.push(new THREE.Vector3(x, y, z)))));
-          corners.forEach(c => {
-            const pr = projectToScreen(c);
-            if (pr.inFront) {
-              candidates.push({ point: c.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
-            }
-          });
-          for (let ci = 0; ci < 8; ci++) {
-            for (let cj = ci + 1; cj < 8; cj++) {
-              const a = corners[ci], b = corners[cj];
-              const diffs = [a.x !== b.x, a.y !== b.y, a.z !== b.z].filter(Boolean).length;
-              if (diffs === 1) {
-                const mid = a.clone().lerp(b, 0.5);
-                const pr = projectToScreen(mid);
-                if (pr.inFront) {
-                  candidates.push({ point: mid, type: 'midpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
-                }
-              }
-            }
-          }
-          const faceCenters: THREE.Vector3[] = [
-            new THREE.Vector3(box.min.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3(box.max.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z),
-            new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z),
-          ];
-          faceCenters.forEach(fc => {
-            const pr = projectToScreen(fc);
-            if (pr.inFront) {
-              candidates.push({ point: fc, type: 'center', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) });
-            }
-          });
-        });
-
-        // Where two guides cross: a corner you laid out with the Tape Measure.
-        for (const c of guideCrossingPoints) {
-          const pr = projectToScreen(c);
-          if (pr.inFront) candidates.push({ point: c.clone(), type: 'endpoint', screenDist: Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY) - 2, label: 'Guide crossing' });
-        }
-
-        // Kernel geometry is a separate representation from `shapes`, so the
-        // pass above cannot see it. Feed its points into the SAME candidate
-        // list rather than adding a second snapping mechanism. §4.2
-        for (const kp of collectKernelSnapPoints(kernelHost.graph)) {
-          const kv = new THREE.Vector3(kp.point.x, kp.point.y, kp.point.z);
-          const pr = projectToScreen(kv);
-          if (!pr.inFront) continue;
-          const rank = rankSnap(kp.kind, Math.hypot(pr.x - mouseScreenX, pr.y - mouseScreenY));
-          if (!Number.isFinite(rank)) continue;
-          candidates.push({ point: kv, type: kp.kind, screenDist: rank });
-        }
-
-        // Evaluate snap target
-        candidates.sort((a, b) => a.screenDist - b.screenDist);
-        const snapRadiusPx = 18.0;
-        const bestCandidate = candidates.length > 0 && candidates[0].screenDist <= snapRadiusPx ? candidates[0] : null;
-
-        // Awaken reference points when hovered
-        if (bestCandidate) {
-          const existingIdx = awakenedRefPointsRef.current.findIndex(p => p.point.distanceTo(bestCandidate.point) < 0.05);
-          if (existingIdx >= 0) {
-            awakenedRefPointsRef.current[existingIdx].time = performance.now();
-          } else {
-            awakenedRefPointsRef.current.push({
-              point: bestCandidate.point.clone(),
-              type: bestCandidate.type,
-              time: performance.now(),
-              screenPos: { x: mouseScreenX, y: mouseScreenY }
-            });
-            if (awakenedRefPointsRef.current.length > 2) {
-              awakenedRefPointsRef.current.shift();
-            }
-          }
-        }
-
-        let currentGuide: { source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null = null;
-        let snapHit: { point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; tooltip?: string } | null = null;
-
-        if (bestCandidate && !axisLock) {
-          // Direct Snap to candidate point projected onto the drawing plane
-          const projectedToPlane = new THREE.Vector3();
-          plane.projectPoint(bestCandidate.point, projectedToPlane);
-          target.copy(projectedToPlane);
-          snapHit = {
-            point: bestCandidate.point.clone(),
-            type: bestCandidate.type,
-            tooltip: bestCandidate.label ?? (bestCandidate.type === 'endpoint' ? 'Endpoint' : bestCandidate.type === 'midpoint' ? 'Midpoint' : 'Center')
-          };
-        } else if (!axisLock && awakenedRefPointsRef.current.length > 0) {
-          // Cardinal alignment inference tracking rays from awakened reference points
-          let bestAlignmentDist = 14.0;
-          let alignedTarget: THREE.Vector3 | null = null;
-
-          for (const ref of awakenedRefPointsRef.current) {
-            const Q = ref.point;
-            const Q_plane = new THREE.Vector3();
-            plane.projectPoint(Q, Q_plane);
-
-            const diffQ = target.clone().sub(Q_plane);
-            const distTangent = diffQ.dot(tangent);
-            const distBitangent = diffQ.dot(bitangent);
-
-            // Ray 1: Along Tangent through Q (Red Axis on ground)
-            const ptOnRay1 = Q_plane.clone().addScaledVector(tangent, distTangent);
-            const pr1 = projectToScreen(ptOnRay1);
-            if (pr1.inFront) {
-              const d1 = Math.hypot(pr1.x - mouseScreenX, pr1.y - mouseScreenY);
-              if (d1 < bestAlignmentDist) {
-                bestAlignmentDist = d1;
-                alignedTarget = ptOnRay1;
-                currentGuide = {
-                  source: [Q.x, Q.y, Q.z],
-                  target: [ptOnRay1.x, ptOnRay1.y, ptOnRay1.z],
-                  color: '#ef4444',
-                  label: 'From Point on Red Axis'
-                };
-              }
-            }
-
-            // Ray 2: Along Bitangent through Q (Green Axis)
-            const ptOnRay2 = Q_plane.clone().addScaledVector(bitangent, distBitangent);
-            const pr2 = projectToScreen(ptOnRay2);
-            if (pr2.inFront) {
-              const d2 = Math.hypot(pr2.x - mouseScreenX, pr2.y - mouseScreenY);
-              if (d2 < bestAlignmentDist) {
-                bestAlignmentDist = d2;
-                alignedTarget = ptOnRay2;
-                currentGuide = {
-                  source: [Q.x, Q.y, Q.z],
-                  target: [ptOnRay2.x, ptOnRay2.y, ptOnRay2.z],
-                  color: '#22c55e',
-                  label: 'From Point on Green Axis'
-                };
-              }
-            }
-          }
-
-          if (alignedTarget) {
-            target.copy(alignedTarget);
-          }
-        }
-
-        if (axisLock) {
-          const axisVec = axisLock === 'x' ? new THREE.Vector3(1, 0, 0) : axisLock === 'y' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
-          const delta = target.clone().sub(drawingStart);
-          const projLength = delta.dot(axisVec);
-          target.copy(drawingStart.clone().addScaledVector(axisVec, projLength));
-          snapHit = null;
-        }
-
-        setSnapIndicator(snapHit ? { point: [snapHit.point.x, snapHit.point.y, snapHit.point.z], type: snapHit.type, tooltip: snapHit.tooltip } : null);
-        setTrackingGuide(currentGuide);
+        // One shared snap (tools/snapEngine.ts): points, crossings, directions from where the
+        // line started, and the locks (arrows, X / Y / Z, Shift).
+        const snap = snapHere(target, plane, drawingStart);
+        target.copy(snap.point);
+        publishSnap(snap);
+        setTrackingGuide(null);
         setLastDrawTarget(target.clone());
 
         // Step 1: Base Dimensions
@@ -8426,7 +8455,6 @@ function Scene() {
       setPreviewShape(null);
       setDrawingStep(0);
       setTrackingGuide(null);
-      awakenedRefPointsRef.current = [];
     }
 
     if (pushPullState) {
@@ -10578,6 +10606,7 @@ function Scene() {
   typedWantedRef.current = () => {
     if (lastTypedStepRef.current?.tool === activeTool) return true;
     if (activeTool === 'tape' && tapeGuide) return true;
+    if (activeTool === 'arc' && arcState && arcState.phase !== 'ready' && arcState.phase !== 'inactive') return true;
     if (drawingStart && (activeTool === 'line' || activeTool in RING_TOOLS
       || ['sphere', 'cone', 'pyramid', 'donut', 'dome'].includes(activeTool))) return true;
     if (activeTool === 'wall' && wallVertices.length > 0) return true;
@@ -10620,6 +10649,28 @@ function Scene() {
         return true;
       }
       return false; // the primitives' own typed sizes (below in the keydown handler)
+    }
+
+    // The arc: a bulge (0.5, 300mm), a radius (2r), or a segment count (12s) for the arc being drawn.
+    if (activeTool === 'arc' && arcToolRef.current) {
+      const tool = arcToolRef.current;
+      const before = tool.current;
+      if (before.phase === 'first' && !/s$/i.test(typed)) return fail('Set the other end of the chord first, then type a bulge or a radius (2r). 12s sets the number of segments.');
+      for (const ch of typed) tool.type(ch);
+      const after = tool.enter();
+      setArcState(after);
+      if (after.lastError) return fail(`Arc: ${after.lastError}`);
+      if (after.phase === 'ready') {
+        arcPlaneRef.current = null;
+        arcFilletRef.current = [];
+        clearSnapLocks();
+        bumpKernel();
+        recordAction(actionLabel('Arc'));
+        setMeasurements(`Arc drawn (${typed}).`);
+      } else {
+        setMeasurements(`Arc segments: ${after.segments}`);
+      }
+      return true;
     }
 
     // A guide being pulled: place it that far from its line, on the side the pointer is.
@@ -11386,18 +11437,6 @@ function Scene() {
           onContextMenu: (e: any) => handleContextMenu(e, shape.id),
           onPointerDown: (e: any) => handleMeshPointerDown(e, shape),
           onPointerMove: (e: any) => {
-            if (activeTool === 'arc' && arcStep === 1 && arcStart) {
-              const point = e.point.clone();
-              setArcEnd(point);
-              setMeasurements(`Arc Chord: ${formatValue(arcStart.distanceTo(point), unit, 2)} (Click to set endpoint)`);
-              return;
-            }
-            if (activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd) {
-              const point = e.point.clone();
-              setArcBulge(point);
-              setMeasurements(`Arc Curvature: Adjust bulge & click to place`);
-              return;
-            }
             if (activeTool === 'deform' && e.buttons === 1) {
               e.stopPropagation();
               const { radius, strength, direction } = deformationSettings;
@@ -12386,16 +12425,29 @@ function Scene() {
         );
       })}
 
+      {/* Inference lines: the direction in force, a held lock, and the edge under the pointer */}
+      {snapGuides.map((g, i) => (
+        <Line key={`snap-guide-${i}`} points={[g.a.toArray(), g.b.toArray()]} color={g.color} lineWidth={g.dashed ? 1.5 : 2}
+          dashed={g.dashed} dashSize={0.25} gapSize={0.15} depthTest={false} renderOrder={18} raycast={() => null} />
+      ))}
+      {snapHoverEdge && KERNEL_SNAP_TOOLS.includes(activeTool) && (
+        <Line points={[snapHoverEdge.a.toArray(), snapHoverEdge.b.toArray()]} color="#f59e0b" lineWidth={3} depthTest={false} renderOrder={17} raycast={() => null} />
+      )}
+
       {/* Inference Locking: snap indicator */}
       {snapIndicator && (
         <Html position={snapIndicator.point} center occlude={false} zIndexRange={[50, 60]}>
           <div className="flex flex-col items-center gap-1 pointer-events-none -translate-y-4">
-            <div
-              className={cn(
-                'w-2.5 h-2.5 shadow-lg',
-                snapIndicator.type === 'endpoint' ? 'bg-green-400 rotate-45 border border-green-600' : snapIndicator.type === 'midpoint' ? 'bg-cyan-400 rounded-full border border-cyan-600' : 'bg-fuchsia-400 rounded-full border border-fuchsia-600 ring-2 ring-fuchsia-200'
-              )}
-            />
+            {(() => {
+              const t = snapIndicator.type;
+              const base = 'w-2.5 h-2.5 shadow-lg';
+              if (t === 'endpoint' || t === 'close' || t === 'origin') return <div className={cn(base, 'bg-green-400 rotate-45 border border-green-600')} />;
+              if (t === 'midpoint') return <div className={cn(base, 'bg-cyan-400 rounded-full border border-cyan-600')} />;
+              if (t === 'center') return <div className={cn(base, 'bg-fuchsia-400 rounded-full border border-fuchsia-600 ring-2 ring-fuchsia-200')} />;
+              if (t === 'edge' || t === 'guide') return <div className={cn(base, 'bg-red-500 border border-red-700')} />;
+              if (t === 'intersection') return <div className={cn(base, 'bg-green-500 border border-green-800 ring-2 ring-green-200')} />;
+              return <div className={cn(base, 'rounded-full border border-white/70')} style={{ backgroundColor: snapIndicator.color ?? '#a855f7' }} />;
+            })()}
             <div className="bg-black/80 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap shadow border border-white/20">
               {snapIndicator.tooltip || (snapIndicator.type === 'endpoint' ? 'Endpoint' : snapIndicator.type === 'midpoint' ? 'Midpoint' : 'Center')}
             </div>
@@ -12478,7 +12530,8 @@ function Scene() {
       )}
 
       {/* Inference Locking: axis-lock guide line */}
-      {axisLock && drawingStart && (
+      {/* The Move tool's axis line; the drawing tools' locks are drawn by the snap engine (snapGuides). */}
+      {axisLock && drawingStart && activeTool === 'move' && (
         <Line
           points={[
             [drawingStart.x - (axisLock === 'x' ? 500 : 0), drawingStart.y - (axisLock === 'y' ? 500 : 0), drawingStart.z - (axisLock === 'z' ? 500 : 0)],
@@ -12558,61 +12611,27 @@ function Scene() {
           )}
         </group>
       )}
-      {activeTool === 'arc' && arcStep === 1 && arcStart && arcEnd && (
-        <group>
-          <Line
-            points={[[arcStart.x, arcStart.y, arcStart.z], [arcEnd.x, arcEnd.y, arcEnd.z]]}
-            color='#38bdf8'
-            lineWidth={3}
-          />
-          <mesh position={[arcStart.x, arcStart.y, arcStart.z]}>
-            <sphereGeometry args={[0.06, 16, 16]} />
-            <meshBasicMaterial color="#38bdf8" />
-          </mesh>
-          <mesh position={[arcEnd.x, arcEnd.y, arcEnd.z]}>
-            <sphereGeometry args={[0.06, 16, 16]} />
-            <meshBasicMaterial color="#38bdf8" />
-          </mesh>
-          <Html position={[(arcStart.x + arcEnd.x) / 2, (arcStart.y + arcEnd.y) / 2 + 0.2, (arcStart.z + arcEnd.z) / 2]} center>
-            <div className="bg-black/80 text-cyan-300 font-mono text-[10px] px-1.5 py-0.5 rounded shadow pointer-events-none whitespace-nowrap">
-              Chord: {formatValue(arcStart.distanceTo(arcEnd), unit, 2)}
-            </div>
-          </Html>
-        </group>
-      )}
-
-      {activeTool === 'arc' && arcStep === 2 && arcStart && arcEnd && arcBulge && (() => {
-        let previewPts = computeArcPoints(arcStart, arcEnd, arcBulge);
-        if (!previewPts || previewPts.length < 2) {
-          previewPts = [arcStart, arcBulge, arcEnd];
+      {/* Arc: the chord, and the arc it will make (cyan when tangent, pink when it rounds a corner) */}
+      {activeTool === 'arc' && arcState && arcState.p0 && (() => {
+        const p0 = arcState.p0!;
+        const end = arcState.p1 ?? arcState.cursor;
+        const color = arcFilletChosenRef.current ? '#d946ef' : arcState.tangentActive ? '#06b6d4' : '#22c55e';
+        const spec = arcState.preview;
+        const pts: [number, number, number][] = [];
+        if (spec) {
+          const n = Math.max(8, spec.segments * 2);
+          for (let i = 0; i <= n; i++) { const q = arcPointAt(spec, i / n); pts.push([q.x, q.y, q.z]); }
         }
         return (
           <group>
-            <Line
-              points={previewPts.map(p => [p.x, p.y, p.z])}
-              color='#22c55e'
-              lineWidth={3.5}
-            />
-            {/* Guide line to bulge control point */}
-            <Line
-              points={[[arcStart.x, arcStart.y, arcStart.z], [arcBulge.x, arcBulge.y, arcBulge.z], [arcEnd.x, arcEnd.y, arcEnd.z]]}
-              color='#eab308'
-              lineWidth={1}
-              dashed
-              dashScale={10}
-            />
-            <mesh position={[arcStart.x, arcStart.y, arcStart.z]}>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshBasicMaterial color="#22c55e" />
-            </mesh>
-            <mesh position={[arcEnd.x, arcEnd.y, arcEnd.z]}>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshBasicMaterial color="#22c55e" />
-            </mesh>
-            <mesh position={[arcBulge.x, arcBulge.y, arcBulge.z]}>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshBasicMaterial color="#eab308" />
-            </mesh>
+            {end && <Line points={[[p0.x, p0.y, p0.z], [end.x, end.y, end.z]]} color="#38bdf8" lineWidth={1.5} dashed dashSize={0.2} gapSize={0.15} depthTest={false} raycast={() => null} />}
+            {pts.length > 1 && <Line points={pts} color={color} lineWidth={3.5} depthTest={false} renderOrder={19} raycast={() => null} />}
+            <mesh position={[p0.x, p0.y, p0.z]}><sphereGeometry args={[0.06, 16, 16]} /><meshBasicMaterial color={color} /></mesh>
+            {arcState.p1 && <mesh position={[arcState.p1.x, arcState.p1.y, arcState.p1.z]}><sphereGeometry args={[0.06, 16, 16]} /><meshBasicMaterial color={color} /></mesh>}
+            {/* The corners this start could round: put the other end on a pink point */}
+            {arcState.phase === 'first' && arcFilletRef.current.map((t, i) => (
+              <mesh key={i} position={t.end.toArray()}><sphereGeometry args={[0.07, 16, 16]} /><meshBasicMaterial color="#d946ef" /></mesh>
+            ))}
           </group>
         );
       })()}

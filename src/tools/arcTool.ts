@@ -51,6 +51,18 @@ export interface ArcToolHost {
    * endpoint. Supplied by the inference engine; drives tangency.
    */
   incomingEdgeDirection?(point: Vec3): Vec3 | null;
+  /**
+   * The direction to be tangent to at `point`, when it sits on an edge or a curve: at the free
+   * end of a line, the way in (`bothWays` false); part way along one, the line itself
+   * (`bothWays` true - which way the arc leaves is decided by where it goes). Preferred over
+   * `incomingEdgeDirection` when the host has it.
+   */
+  tangentAt?(point: Vec3): { dir: Vec3; bothWays: boolean } | null;
+  /**
+   * Commits an arc that rounds a corner and trims the corner away, as one step: the arc, and
+   * the two straight pieces between it and the corner, gone.
+   */
+  commitFillet?(spec: ArcSpec, anchors: { start: Vec3; end: Vec3 }, corner: Vec3): ArcCommitOutcome;
 }
 
 export interface ArcToolState {
@@ -91,6 +103,10 @@ export class ArcTool {
   private state: ArcToolState = EMPTY;
   private lastBulge: number | null = null;
   private tangentDirection: Vec3 | null = null;
+  /** The tangent came from an edge the start sits part way along: it runs both ways. */
+  private tangentBothWays = false;
+  /** Set when the arc is the fillet of a corner: committing trims the corner. */
+  private filletCorner: Vec3 | null = null;
 
   constructor(
     private readonly host: ArcToolHost,
@@ -109,6 +125,8 @@ export class ArcTool {
 
   activate(mode: ArcMode = 'twoPoint'): ArcToolState {
     this.tangentDirection = null;
+    this.tangentBothWays = false;
+    this.filletCorner = null;
     return this.set({ ...EMPTY, phase: 'ready', mode, segments: this.state.segments });
   }
 
@@ -118,11 +136,15 @@ export class ArcTool {
 
   deactivate(): ArcToolState {
     this.tangentDirection = null;
+    this.tangentBothWays = false;
+    this.filletCorner = null;
     return this.set(EMPTY);
   }
 
   escape(): ArcToolState {
     this.tangentDirection = null;
+    this.tangentBothWays = false;
+    this.filletCorner = null;
     return this.set({
       phase: 'ready', p0: null, p1: null, preview: null,
       fieldText: '', tangentActive: false, halfCircle: false, degradedToLine: false,
@@ -140,7 +162,14 @@ export class ArcTool {
 
       case 'ready': {
         // Acquire the tangency constraint at the moment the chord starts.
-        this.tangentDirection = this.host.incomingEdgeDirection?.(point) ?? null;
+        const tangent = this.host.tangentAt?.(point);
+        if (tangent) {
+          this.tangentDirection = tangent.dir;
+          this.tangentBothWays = tangent.bothWays;
+        } else {
+          this.tangentDirection = this.host.incomingEdgeDirection?.(point) ?? null;
+          this.tangentBothWays = false;
+        }
         return this.set({ phase: 'first', p0: point, cursor: point, degradedToLine: false });
       }
 
@@ -215,7 +244,10 @@ export class ArcTool {
     let bulge = bulgeDir ? dot(perp, bulgeDir) : 0;
 
     if (this.tangentDirection) {
-      const solved = this.solveTangent(p0, p1, chordDir, chordLen);
+      // Part way along an edge the line runs both ways: leave the way the chord goes.
+      let leaving = this.tangentDirection;
+      if (this.tangentBothWays && dot(scale(leaving, -1), chordDir) < 0) leaving = scale(leaving, -1);
+      const solved = this.solveTangent(p0, p1, chordDir, chordLen, leaving);
       if (solved.straight) {
         return { spec: null, tangentActive: false, halfCircle: false, straight: solved.straight };
       }
@@ -262,13 +294,14 @@ export class ArcTool {
     p1: Vec3,
     chordDir: Vec3,
     chordLen: number,
+    direction: Vec3,
   ): {
     bulgeDirection?: Vec3;
     bulge?: number;
     straight?: { from: Vec3; to: Vec3 };
     suppress?: boolean;
   } {
-    const t = normalize(scale(this.tangentDirection!, -1), 'arc tangent');
+    const t = normalize(scale(direction, -1), 'arc tangent');
     const c = cross(t, chordDir);
     const mag = length(c); // |t x chord| / (|t||chord|) — both unit, so a sine
 
@@ -297,6 +330,20 @@ export class ArcTool {
     return { bulgeDirection: signed, bulge };
   }
 
+  /**
+   * Marks the arc being drawn as the fillet of the corner at `corner` (null clears it). The
+   * caller has put the chord's end where the fillet meets the second edge, so the tangent arc
+   * is tangent to both; committing then trims the corner away.
+   */
+  setFilletCorner(corner: Vec3 | null): void {
+    this.filletCorner = corner;
+  }
+
+  /** True when the start point gave a tangent (the cyan cue). */
+  get hasTangent(): boolean {
+    return this.tangentDirection !== null;
+  }
+
   // -------------------------------------------------------------------------
   // Commit
   // -------------------------------------------------------------------------
@@ -311,6 +358,13 @@ export class ArcTool {
     }
 
     if (!solved.spec) return this.set({ lastError: 'arc is under-determined' });
+
+    const fillet = this.filletCorner;
+    if (fillet && this.host.commitFillet && this.state.p0 && this.state.p1 && this.state.mode === 'twoPoint') {
+      const r = this.host.commitFillet(solved.spec, { start: this.state.p0, end: this.state.p1 }, fillet);
+      if (!r.ok) return this.set({ lastError: r.reason ?? 'rejected' });
+      return this.escape();
+    }
 
     const outcome =
       this.state.mode === 'pie' && this.state.p0
