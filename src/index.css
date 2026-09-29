@@ -68,3 +68,20 @@
     @apply bg-polyform-blue text-white hover:bg-polyform-blue;
   }
 }
+
+/*
+ * Small grey labels (Tailwind gray-400, about 2.6:1 on white) were too faint to read in the light theme.
+ * In light surfaces they use gray-500 (4.8:1). Dark surfaces keep gray-400, which reads well there: the
+ * dark theme, and anything with a dark background of its own (tooltips, toasts, the measurements bar).
+ */
+@layer utilities {
+  .text-gray-400:not(:where(
+    .dark *,
+    [class~="bg-gray-900"] *, [class~="bg-gray-800"] *, [class~="bg-black"] *,
+    [class~="bg-neutral-900"] *, [class~="bg-neutral-800"] *, [class~="bg-slate-900"] *, [class~="bg-slate-800"] *, [class~="bg-zinc-900"] *,
+    [class~="bg-polyform-gray"] *, [class~="bg-polyform-dark-blue"] *, [class~="bg-polyform-blue"] *,
+    [class*="bg-black/"] *, [class*="bg-gray-900/"] *, [class*="bg-gray-800/"] *
+  )):not(:where([class~="bg-gray-900"], [class~="bg-gray-800"], [class~="bg-black"], [class~="bg-neutral-800"], [class~="bg-polyform-gray"])) {
+    color: var(--color-gray-500);
+  }
+}
