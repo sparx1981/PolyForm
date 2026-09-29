@@ -272,6 +272,7 @@ export interface SDK {
   setAmbientOcclusion: (enabled: boolean) => void;
   setAxisIndicator: (enabled: boolean) => void;
   setMiniAxisIndicator: (enabled: boolean) => void;
+  // intensity: 1 is ordinary daylight (50 on the Sun Intensity slider), 0 is night, about 2.2 is a bright sun.
   setSunSettings: (settings: { intensity?: number; position?: [number, number, number]; animate?: boolean; speed?: number }) => void;
   setGraphicsSettings: (settings: GraphicsSettings) => void;
   setZoom: (zoom: number) => void;

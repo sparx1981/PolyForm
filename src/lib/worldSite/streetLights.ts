@@ -18,8 +18,8 @@ type P = [number, number];
 
 export const STREET_LIGHT_PREFIX = 'auto-street-light-';
 export const STREET_LIGHT_TAG = 'auto-street-light';
-const MAX_ROAD_LIGHTS = 24;
-const MAX_HOUSE_LIGHTS = 12;
+const MAX_ROAD_LIGHTS = 16;
+const MAX_HOUSE_LIGHTS = 8;
 
 export interface PlannedLight {
   id: string;
