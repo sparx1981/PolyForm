@@ -427,6 +427,19 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'extrude-solids',
+    title: 'Extrude on a solid (Push/Pull)',
+    category: 'tools',
+    content: 'Push/Pull changes the solid you have rather than adding a second one on top of it.',
+    steps: [
+      'Pull the top, end or side of a box: the face moves and the walls beside it stretch. The box keeps the same faces however many times you push.',
+      'Draw a rectangle on a face and push it out for a bump, or in for a recess. The face you started from goes, so there is no floor left inside.',
+      'Hold Ctrl when you let go to push a copy: the face stays and a new slab stacks on it, keeping the divider. Use this for floors.',
+      'Double-click a face to repeat the last distance on it (Ctrl for a copy). You can also type a distance right after pushing.',
+      'Pushing a face all the way through the other side is refused, and a free-standing shape still gets its base kept as before.'
+    ]
+  },
+  {
     id: 'follow-me',
     title: 'Follow Me (sweep a shape along a path)',
     category: 'tools',

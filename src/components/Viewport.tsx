@@ -1795,6 +1795,8 @@ function Scene() {
    */
   const kernelRingRef = useRef<THREE.Vector3[] | null>(null);
   const pushPullRef = useRef(createPushPullBinding(kernelHost, bumpKernel));
+  /** The last distance pushed (signed along the face's normal), and when a bare click last landed, for double-click repeat. */
+  const lastPushPullRef = useRef<{ distance: number | null; clickAt: number }>({ distance: null, clickAt: 0 });
   const faceOffsetRef = useRef(createFaceOffsetBinding(kernelHost, bumpKernel));
   const chamferRef = useRef(createChamferBinding(kernelHost, bumpKernel));
   const filletRef = useRef(createFilletBinding(kernelHost, bumpKernel));
@@ -3224,6 +3226,22 @@ function Scene() {
     const grab = event.point ?? kernelHost.graph.faces.get(faceId)?.plane.point;
     if (!grab) return false;
 
+    // Double-click repeats the last distance on the face under the pointer (Ctrl: as a copy).
+    const native = (event as { nativeEvent?: { ctrlKey?: boolean; metaKey?: boolean } }).nativeEvent;
+    const pressCopy = !!(native?.ctrlKey || native?.metaKey);
+    const last = lastPushPullRef.current;
+    if (last.distance !== null && last.clickAt > 0 && Date.now() - last.clickAt < 400) {
+      lastPushPullRef.current = { ...last, clickAt: 0 };
+      if (commitKernelPushPull(kernelHost, faceId, last.distance, { copy: pressCopy })) {
+        bumpKernel();
+        recordAction(actionLabel('Push/Pull tool'), { sdk: `sdk.drawing.pushPull(${faceId}, ${JSON.stringify(last.distance)});` });
+        setMeasurements(`Repeated ${formatValue(Math.abs(last.distance), unit, 2)}`);
+      } else {
+        setMeasurements('Could not repeat the push/pull on that face.');
+      }
+      return true;
+    }
+
     pushPullRef.current.begin(faceId, { x: grab.x, y: grab.y, z: grab.z });
     setMeasurements('Drag to push or pull, then release.');
 
@@ -3262,21 +3280,27 @@ function Scene() {
       window.removeEventListener('pointerup', finish);
       activeDragCleanupsRef.current.delete(removeListeners);
     };
-    const finish = () => {
+    const finish = (ev?: PointerEvent) => {
       removeListeners();
       const pushed = pushPullRef.current.session;
       const pushedFace = pushed?.faceId;
       const pushedDistance = pushed?.distance ?? 0;
+      // Ctrl held on release pushes a copy: the face stays and the extrusion stacks on it.
+      const copy = !!(ev && (ev.ctrlKey || ev.metaKey)) || pressCopy;
       if (pushed) {
         recordAction(actionLabel('Push/Pull tool'), { sdk: `sdk.drawing.pushPull(${pushed.faceId}, ${JSON.stringify(pushed.distance)});` });
       }
-      if (pushPullRef.current.commit() && pushedFace !== undefined) {
+      if (pushPullRef.current.commit({ copy }) && pushedFace !== undefined) {
+        lastPushPullRef.current = { distance: pushedDistance, clickAt: 0 };
         // Type a distance now to redo it exactly (a minus sign pushes the other way).
         offerKernelAdjust('pushpull', 'Extrude distance', typed => {
           const d = lengthOrError(typed, true);
           if (typeof d === 'string') return d;
-          return () => commitKernelPushPull(kernelHost, pushedFace, inDragDirection(d, pushedDistance));
+          return () => commitKernelPushPull(kernelHost, pushedFace, inDragDirection(d, pushedDistance), { copy });
         });
+      } else if (pushed && Math.abs(pushedDistance) < kernelHost.tolerances.MIN_EDGE_LENGTH) {
+        // A click with no drag: a second click straight after repeats the last distance.
+        lastPushPullRef.current = { ...lastPushPullRef.current, clickAt: Date.now() };
       }
       setPushPullPreview(null);
       setMeasurements('');
