@@ -434,6 +434,7 @@ export const HELP_DOCS: HelpTopic[] = [
     steps: [
       'Google photorealistic surroundings: shows Google\'s 3D map around the site, in the editor, in presentations and on the client page. It needs a Google Maps API key with the Map Tiles API enabled, and shows Google\'s attribution. It is for looking at: it can\'t be edited, measured, snapped to or exported.',
       'Cut out site: Google is cut away over the site, so the editable satellite ground and your buildings show there and Google fills in the rest. Google ground: the editable ground is hidden, your buildings stand on Google\'s ground, and Google\'s own buildings are pressed flat under them.',
+      'Google as the site: untouched buildings, trees and ground come from Google\'s photographs. Click a Google building to select the editable copy. Change, move, paint or delete it and Google\'s version is pressed flat where it stood, and the editable one shows. Anything new you draw presses Google flat under it too. Put back removed buildings returns Google\'s. Trees or ground beside a building are part of the same Google surface, so they stay, and the edge of the flattened patch can look rough.',
       'The layer is matched to your site\'s ground height automatically; use the slider to raise or lower it if it looks off.',
       'Style the buildings: the editable buildings get roofs cut from the satellite picture and walls from the map\'s colour or material (else a colour for the kind of building). A building you have painted keeps its own colour. Turn it off to go back to white.'
     ]

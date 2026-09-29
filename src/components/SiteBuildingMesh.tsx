@@ -30,6 +30,7 @@ export function siteBuildingGeometry(data: SiteBuildingData): THREE.BufferGeomet
 
 const solid = new THREE.MeshStandardMaterial({ color: '#f1f0ec', roughness: 0.9, metalness: 0 });
 const selectedSolid = new THREE.MeshStandardMaterial({ color: '#f1f0ec', roughness: 0.9, metalness: 0, emissive: new THREE.Color('#0063A3'), emissiveIntensity: 0.45 });
+const invisible = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 const edges = new THREE.LineBasicMaterial({ color: '#8d8b85', transparent: true, opacity: 0.55 });
 const ghostSolid = new THREE.MeshBasicMaterial({ color: '#7aa7d6', transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
 const ghostEdges = new THREE.LineBasicMaterial({ color: '#3b82f6', transparent: true, opacity: 0.8 });
@@ -111,12 +112,14 @@ interface Props {
   showEdges?: boolean;
   /** Set when the site's buildings are styled. */
   style?: SiteStyle | undefined;
+  /** Google's own version of this building is showing: keep this one invisible but clickable. */
+  ghost?: boolean;
 }
 
 /** Has the building been given a plain colour of its own (so styling leaves it alone)? */
 const isPainted = (color: string | undefined) => !!color && color.toLowerCase() !== '#f1f0ec' && /^#[0-9a-f]{6}$/i.test(color);
 
-export function SiteBuildingMesh({ shape, meshProps, selected, showEdges = true, style }: Props) {
+export function SiteBuildingMesh({ shape, meshProps, selected, showEdges = true, style, ghost = false }: Props) {
   const { solidGeo, edgeGeo } = useSiteGeometry(shape.siteBuildingData);
   const satellite = useSatelliteTexture(style && !isPainted(shape.color) ? style.satelliteUrl : null);
   const styled = useMemo(() => (style && !isPainted(shape.color) ? makeStyledMaterial(style.look, style.size) : null), [style?.look.wall, style?.look.roof, style?.size, shape.color]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -136,6 +139,8 @@ export function SiteBuildingMesh({ shape, meshProps, selected, showEdges = true,
   }, [painted, shape.color]);
   useEffect(() => () => material?.dispose(), [material]);
   if (!solidGeo) return null;
+  // Google's version is showing: nothing is drawn, but the building can still be picked.
+  if (ghost && !selected) return <mesh {...meshProps} castShadow={false} receiveShadow={false} geometry={solidGeo} material={invisible} />;
   if (material) {
     material.emissive.set(selected ? '#0063A3' : '#000000');
     material.emissiveIntensity = selected ? 0.45 : 0;

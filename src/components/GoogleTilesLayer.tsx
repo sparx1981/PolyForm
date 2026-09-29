@@ -5,9 +5,10 @@ import { Html } from '@react-three/drei';
 import { TilesRenderer } from '3d-tiles-renderer/three';
 import { GoogleCloudAuthPlugin, GLTFExtensionsPlugin, TileFlatteningPlugin } from '3d-tiles-renderer/plugins';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import type { Shape, WorldSiteInfo } from '../types';
+import type { Shape, SiteBuildingSnapshot, WorldSiteInfo } from '../types';
 import { cutoutPlanes, estimateLift, tilesToSiteMatrix } from '../lib/worldSite/googleTiles';
 import { explainTileError, setGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
+import { growRing, siteEditSets, worldRing, type Ring } from '../lib/worldSite/siteEdits';
 
 // Google's Photorealistic 3D Tiles around an imported World View site (see
 // lib/worldSite/googleTiles.ts). A viewing layer only: it can't be picked, measured or exported.
@@ -20,37 +21,87 @@ const noRaycast = () => {};
 interface Props {
   site: WorldSiteInfo;
   apiKey: string;
-  buildings: Shape[];
+  /** Every shape in the model, and the imported buildings as they were (for pressing Google's flat where they were). */
+  shapes: Shape[];
+  existing: SiteBuildingSnapshot[] | undefined;
+  /** Changes when the drawn (kernel) geometry changes. */
+  kernelRevision: number;
   /** The editable ground's height (model y) at a plan point. */
   groundAt: (x: number, z: number) => number;
 }
 
 type TileMesh = THREE.Mesh & { userData: { pfRaycast?: THREE.Mesh['raycast'] } };
 
-/** Footprint of a site building as a flat triangle mesh at its base, in world coordinates. */
-function footprintGeometry(shape: Shape): THREE.BufferGeometry | null {
-  const data = shape.siteBuildingData;
-  if (!data || data.footprint.length < 3) return null;
-  const m = new THREE.Matrix4().compose(
-    new THREE.Vector3(...shape.position),
-    new THREE.Quaternion(...(shape.quaternion ?? [0, 0, 0, 1])),
-    new THREE.Vector3(...(shape.scale ?? [1, 1, 1])),
-  );
-  const world = (p: [number, number]) => new THREE.Vector3(p[0], 0, p[1]).applyMatrix4(m);
-  const outer = data.footprint.map(world);
-  const holes = (data.holes ?? []).filter(h => h.length >= 3).map(h => h.map(world));
-  const to2 = (v: THREE.Vector3) => new THREE.Vector2(v.x, v.z);
+/** Anything drawn in the model that is not a site building, the ground, or something that only stands on it. */
+const SKIP_TYPES = new Set(['terrain', 'measurement', 'text', 'text3d', 'tree', 'bush', 'rock', 'fence', 'railing', 'lamp', 'bench', 'water', 'scale_figure', 'site_building']);
+/** Give up on flattening under objects with more triangles than this in total (it would stall the tiles). */
+const MAX_FOOTPRINT_TRIANGLES = 40000;
+
+/** A flat triangle list [x,y,z...] for an outline (and holes), at the ground under each corner. */
+function ringTriangles(outer: Ring, holes: Ring[], groundAt: (x: number, z: number) => number, out: number[]): void {
+  const to2 = (p: [number, number]) => new THREE.Vector2(p[0], p[1]);
   const tri = THREE.ShapeUtils.triangulateShape(outer.map(to2), holes.map(h => h.map(to2)));
   const verts = [...outer, ...holes.flat()];
-  const position = new Float32Array(verts.length * 3);
-  verts.forEach((v, i) => position.set([v.x, v.y, v.z], i * 3));
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
-  geometry.setIndex(tri.flat());
-  return geometry;
+  for (const t of tri) for (const k of t) {
+    const v = verts[k]!;
+    out.push(v[0], groundAt(v[0], v[1]), v[1]);
+  }
 }
 
-export function GoogleTilesLayer({ site, apiKey, buildings, groundAt }: Props) {
+/** The plan outline of an imported building (edited or vanished), with a little margin. */
+function buildingTriangles(pos: [number, number, number], quat: [number, number, number, number] | undefined, scale: [number, number, number] | undefined,
+  footprint: [number, number][], holes: [number, number][][] | undefined, groundAt: (x: number, z: number) => number, out: number[]): void {
+  const outer = growRing(worldRing(footprint, pos, quat, scale), 0.4);
+  const inner = (holes ?? []).filter(h => h.length >= 3).map(h => growRing(worldRing(h, pos, quat, scale), -0.2));
+  ringTriangles(outer, inner, groundAt, out);
+}
+
+/** Everything the user has drawn or edited that Google's mesh should give way to, as flat triangles at ground level. */
+function collectFootprints(scene: THREE.Scene, shapes: Shape[], existing: SiteBuildingSnapshot[] | undefined, groundAt: (x: number, z: number) => number): Float32Array {
+  const out: number[] = [];
+  const { edited, vacated } = siteEditSets(shapes, existing);
+  for (const snap of vacated) buildingTriangles(snap.position, undefined, undefined, snap.data.footprint, snap.data.holes, groundAt, out);
+  for (const b of edited) {
+    const d = b.siteBuildingData;
+    if (d) buildingTriangles(b.position, b.quaternion, b.scale, d.footprint, d.holes, groundAt, out);
+  }
+  // Everything else, from what is actually on screen: walls, slabs, roofs and drawn faces.
+  const byId = new Map(shapes.map(s => [s.id, s]));
+  let budget = MAX_FOOTPRINT_TRIANGLES;
+  const v = new THREE.Vector3();
+  scene.traverse(o => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry || budget <= 0) return;
+    if (mesh.userData.isGoogleTile || mesh.userData.isHelper || mesh.userData.isPreview || mesh.userData.isGizmo) return;
+    let owner: THREE.Object3D | null = mesh;
+    let shapeId: string | undefined;
+    let kernel = false;
+    while (owner) {
+      if (owner.userData?.isKernelGeometry) kernel = true;
+      if (typeof owner.userData?.id === 'string' && byId.has(owner.userData.id)) { shapeId = owner.userData.id; break; }
+      owner = owner.parent;
+    }
+    if (!kernel) {
+      const sh = shapeId ? byId.get(shapeId) : undefined;
+      if (!sh || SKIP_TYPES.has(sh.type) || sh.hidden || sh.tags?.includes('world-site')) return;
+    }
+    const g = mesh.geometry;
+    const pos = g.getAttribute('position');
+    if (!pos) return;
+    const index = g.getIndex();
+    const count = index ? index.count : pos.count;
+    if (count / 3 > budget) return;
+    mesh.updateWorldMatrix(true, false);
+    for (let i = 0; i < count; i++) {
+      v.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(mesh.matrixWorld);
+      out.push(v.x, groundAt(v.x, v.z), v.z);
+    }
+    budget -= count / 3;
+  });
+  return new Float32Array(out);
+}
+
+export function GoogleTilesLayer({ site, apiKey, shapes, existing, kernelRevision, groundAt }: Props) {
   const { camera, gl, scene, invalidate } = useThree();
   const [tiles, setTiles] = useState<TilesRenderer | null>(null);
   const [autoLift, setAutoLift] = useState(0);
@@ -218,30 +269,43 @@ export function GoogleTilesLayer({ site, apiKey, buildings, groundAt }: Props) {
     invalidate();
   }, [tiles, cut, planes, invalidate]);
 
-  // In Google-ground mode, press Google's buildings flat under the editable ones.
-  const footprintKey = useMemo(
-    () => (cut ? '' : JSON.stringify([buildings.map(b => [b.id, b.position, b.quaternion, b.scale, b.siteBuildingData?.footprint, b.siteBuildingData?.holes]), lift, site.lat, site.lng, site.elevation])),
-    [cut, buildings, lift, site.lat, site.lng, site.elevation],
-  );
+  // In Google-site mode, press Google's mesh flat wherever the designer has taken over: edited or
+  // deleted imported buildings (where they stood and where they stand now) and anything new.
+  const shapesRef = useRef(shapes);
+  shapesRef.current = shapes;
+  const existingRef = useRef(existing);
+  existingRef.current = existing;
   useEffect(() => {
     const flatten = flattenRef.current;
     if (!tiles || !flatten) return;
-    for (const m of flatShapes.current) { if (flatten.hasShape(m)) flatten.deleteShape(m); m.geometry.dispose(); }
-    flatShapes.current = [];
-    if (cut) { invalidate(); return; }
-    const toLocal = new THREE.Matrix4().fromArray(tilesToSiteMatrix(site.lat, site.lng, site.elevation, lift)).invert();
-    const up = new THREE.Vector3(0, 1, 0).transformDirection(toLocal).normalize();
-    for (const b of buildings) {
-      const geometry = footprintGeometry(b);
-      if (!geometry) continue;
-      geometry.applyMatrix4(toLocal);
-      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-      // (The package's typings still show the old numeric signature.)
-      (flatten as unknown as { addShape(m: THREE.Mesh, d: THREE.Vector3, o: { threshold: number }): void }).addShape(mesh, up, { threshold: Infinity });
-      flatShapes.current.push(mesh);
-    }
-    invalidate();
-  }, [tiles, footprintKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    const clear = () => {
+      for (const m of flatShapes.current) { if (flatten.hasShape(m)) flatten.deleteShape(m); m.geometry.dispose(); }
+      flatShapes.current = [];
+    };
+    if (cut) { clear(); invalidate(); return; }
+    // Let the scene catch up with the edit first, and don't redo it on every frame of a drag.
+    const timer = setTimeout(() => {
+      try {
+        clear();
+        const positions = collectFootprints(scene, shapesRef.current, existingRef.current, groundAtRef.current);
+        if (positions.length >= 9) {
+          const toLocal = new THREE.Matrix4().fromArray(tilesToSiteMatrix(site.lat, site.lng, site.elevation, liftRef.current)).invert();
+          const up = new THREE.Vector3(0, 1, 0).transformDirection(toLocal).normalize();
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+          geometry.applyMatrix4(toLocal);
+          const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+          // (The package's typings still show the old numeric signature.)
+          (flatten as unknown as { addShape(m: THREE.Mesh, d: THREE.Vector3, o: { threshold: number }): void }).addShape(mesh, up, { threshold: Infinity });
+          flatShapes.current.push(mesh);
+        }
+      } catch (err) {
+        console.error('[Google 3D tiles] could not press the tiles flat under the edited buildings', err);
+      }
+      invalidate();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [tiles, cut, shapes, kernelRevision, lift, site.lat, site.lng, site.elevation, scene, invalidate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFrame(() => {
     if (!tiles) return;

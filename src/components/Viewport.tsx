@@ -6,6 +6,7 @@ import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
 import { GoogleTilesLayer } from './GoogleTilesLayer';
 import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
 import { buildingLook } from '../lib/worldSite/googleTiles';
+import { siteEditSets } from '../lib/worldSite/siteEdits';
 import { gridHeightAt } from '../lib/worldSite/terrain';
 import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
 import { routeTool, withDrawnRoute } from '../lib/worldSite/streets';
@@ -4649,9 +4650,11 @@ function Scene() {
   const siteGround = useMemo(() => findSiteGround(shapes), [shapes]);
   const siteInfo = siteGround?.terrainData?.site;
   const googleLayer = siteInfo?.googleContext && siteGround ? { site: siteInfo, groundId: siteGround.id } : null;
-  const googleBuildings = useMemo(
-    () => (googleLayer ? shapes.filter(s => s.type === 'site_building' && !!s.siteBuildingData && !s.hidden) : []),
-    [shapes, googleLayer?.site.googleContext], // eslint-disable-line react-hooks/exhaustive-deps
+  const googleAsSite = !!googleLayer && googleLayer.site.googleGround === 'google' && googleStatus.state === 'showing';
+  // With Google standing in for the site, imported buildings nobody has touched are Google's to show.
+  const googleShownBuildings = useMemo(
+    () => (googleAsSite ? siteEditSets(shapes, siteGround?.terrainData?.siteExisting).untouched : new Set<string>()),
+    [googleAsSite, shapes, siteGround],
   );
   const googleGroundAt = useCallback((x: number, z: number) => {
     const t = siteGround?.terrainData;
@@ -4660,7 +4663,7 @@ function Scene() {
   }, [siteGround]);
   const siteSatelliteForStyle = siteInfo?.styledBuildings ? siteSatelliteUrl(siteInfo, googleMapsApiKey || '') : null;
   const siteStyleFor = (shape: Shape) => {
-    if (!siteInfo?.styledBuildings || !shape.siteBuildingData) return undefined;
+    if (!siteInfo?.styledBuildings || !shape.siteBuildingData || googleAsSite) return undefined;
     return { look: buildingLook(shape.siteBuildingData), satelliteUrl: siteSatelliteForStyle, size: siteInfo.size };
   };
 
@@ -11311,7 +11314,7 @@ function Scene() {
 
       {/* Google's Photorealistic 3D Tiles around the site: a viewing layer (WorldView > 3D Site). */}
       {googleLayer && googleMapsApiKey && (
-        <GoogleTilesLayer site={googleLayer.site} apiKey={googleMapsApiKey} buildings={googleBuildings} groundAt={googleGroundAt} />
+        <GoogleTilesLayer site={googleLayer.site} apiKey={googleMapsApiKey} shapes={shapes} existing={siteGround?.terrainData?.siteExisting} kernelRevision={kernelRevision} groundAt={googleGroundAt} />
       )}
 
       {/*
@@ -12011,7 +12014,7 @@ function Scene() {
           return (
             <SiteBuildingMesh key={shape.id} shape={shape} meshProps={meshProps}
               selected={selectedId === shape.id || selectedIds.includes(shape.id)}
-              style={siteStyleFor(shape)} />
+              style={siteStyleFor(shape)} ghost={googleShownBuildings.has(shape.id)} />
           );
         }
 

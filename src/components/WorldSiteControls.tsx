@@ -213,7 +213,7 @@ function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) 
         <input type="checkbox" className="mt-0.5" checked={!!site.styledBuildings}
           onChange={e => change(e.target.checked ? 'Style site buildings' : 'Plain site buildings',
             sdkCall('styleBuildings', e.target.checked), withSite({ styledBuildings: e.target.checked }))} />
-        <span>Style the buildings<span className="block text-[10px] text-gray-400 leading-tight">Roofs from the satellite picture, walls from the map's colour or material (else the kind of building). A building you paint keeps its colour.</span></span>
+        <span>Style the buildings<span className="block text-[10px] text-gray-400 leading-tight">Roofs from the satellite picture, walls from the map's colour or material (else the kind of building). A building you paint keeps its colour. Not used while Google is the site.</span></span>
       </label>
       <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
         <input type="checkbox" className="mt-0.5" checked={on} disabled={!hasKey}
@@ -230,12 +230,12 @@ function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) 
               : status.state === 'off' ? 'Starting…'
               : status.message || 'Loading…'}
           </p>
-          <Toggle options={[{ id: 'cutout', label: 'Cut out site' }, { id: 'google', label: 'Google ground' }]} value={ground}
+          <Toggle options={[{ id: 'cutout', label: 'Cut out site' }, { id: 'google', label: 'Google as the site' }]} value={ground}
             onChange={id => id !== ground && change(`Google ground: ${id}`, sdkCall('setGoogleContext', true, { ground: id }), withSite({ googleGround: id as 'cutout' | 'google' }))} />
           <p className="text-[10px] text-gray-400 leading-tight">
             {ground === 'cutout'
-              ? 'The editable satellite ground shows over the site; Google fills in everything around it.'
-              : "Google's ground is used instead of the editable one, with its buildings pressed flat under yours."}
+              ? 'The editable satellite ground and buildings show over the site; Google fills in everything around it.'
+              : "Google shows the ground, trees and every building you haven't touched. Edit, move or delete a building and Google's is pressed flat where it stood, and yours takes over (new buildings and drawn shapes press it flat too). Click a Google building to select its editable copy."}
           </p>
           <NudgeSlider value={site.googleNudge ?? 0}
             onCommit={v => change(`Google layer height ${v} m`, sdkCall('setGoogleContext', true, { nudge: v }), withSite({ googleNudge: v }))} />
