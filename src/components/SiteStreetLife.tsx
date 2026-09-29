@@ -1,7 +1,7 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { Line } from '@react-three/drei';
+import { Line, useGLTF } from '@react-three/drei';
 import type { Shape, SiteRoute, StreetLifeLevel } from '../types';
 import { gridHeightAt } from '../lib/worldSite/terrain';
 import { useApp } from '../AppContext';
@@ -11,103 +11,76 @@ import { findSiteGround } from '../lib/worldSite/site';
 import { drivesOnLeft, parseStreets, routeTool, streetsQuery } from '../lib/worldSite/streets';
 import { BODY_TYPES, CAR_COLOURS, type Seat, gait, planStreetLife, pointOnLoop } from '../lib/worldSite/streetLife';
 
-// Lightweight architectural entourage: deliberately simple, but with soft silhouettes and enough
-// detail to read as people and vehicles at normal WorldView distances. Everything remains instanced.
+// WorldView street life uses real, lightweight CC0 entourage models rather than assembled
+// primitives. The models are intentionally stylised enough to sit behind the architecture, while
+// preserving recognisable human anatomy, clothing, glazing, lamps, wheels and vehicle proportions.
 
-/* ---------- Figures ---------- */
+const HUMAN_SCALE = 0.46;
+const HUMAN_FORWARD_YAW = 0;
+const PERSON_COLOURS = ['#315d7a', '#b75b4c', '#6b7659', '#c38a37', '#59697e', '#7b6486', '#397a78', '#b69762'];
+const CAR_PALETTE = ['#e8e5dd', '#315d7a', '#b64d43', '#c7832d', '#5d7568', '#67717d', '#b8b4aa', '#39717b'];
 
-const HIP_Y = 0.91, HIP_X = 0.105, THIGH = 0.43, SHOULDER_Y = 1.39, SHOULDER_X = 0.225;
+const HUMAN_URLS = {
+  maleWalk: '/assets/streetlife/people/male-walking.glb',
+  femaleWalk: '/assets/streetlife/people/female-walking.glb',
+  maleStand: '/assets/streetlife/people/male-standing.glb',
+  femaleStand: '/assets/streetlife/people/female-standing.glb',
+  sit: '/assets/streetlife/people/female-sitting.glb',
+} as const;
 
-function capsuleHanging(radius: number, total: number): THREE.BufferGeometry {
-  const g = new THREE.CapsuleGeometry(radius, Math.max(0.01, total - radius * 2), 7, 14);
-  g.translate(0, -total / 2, 0);
-  return g;
+const CAR_URLS = [
+  '/assets/streetlife/cars/family-sedan.glb',
+  '/assets/streetlife/cars/compact-wagon.glb',
+  '/assets/streetlife/cars/sport-coupe.glb',
+  '/assets/streetlife/cars/suv.glb',
+] as const;
+
+type StreetAssetKind = 'person' | 'car';
+
+function StreetAsset({ source, scale, tint, kind }: { source: THREE.Object3D; scale: number; tint?: string; kind: StreetAssetKind }) {
+  const object = useMemo(() => {
+    const clone = source.clone(true);
+    clone.traverse(child => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = true;
+      mesh.raycast = () => {};
+
+      const original = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const materials = original.filter(Boolean).map(material => {
+        const m = material.clone() as THREE.MeshStandardMaterial;
+        const name = (m.name || '').toLowerCase();
+
+        if (m.color && tint) {
+          if (kind === 'person' && name.includes('shirt')) m.color.set(tint);
+          if (kind === 'car' && !/(window|black|grey|gray|headlight|taillight|tail light|tyre|tire|wheel)/.test(name)) m.color.set(tint);
+        }
+        if (kind === 'car' && /window/.test(name)) {
+          m.roughness = 0.24;
+          m.metalness = 0.08;
+        } else if ('roughness' in m) {
+          m.roughness = Math.max(0.5, m.roughness ?? 0.7);
+        }
+        return m;
+      });
+      mesh.material = Array.isArray(mesh.material) ? materials : materials[0]!;
+    });
+    return clone;
+  }, [source, tint, kind]);
+
+  useEffect(() => () => {
+    object.traverse(child => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach(m => m?.dispose());
+    });
+  }, [object]);
+
+  return <primitive object={object} scale={scale} dispose={null} />;
 }
-
-function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const nonIndexed = parts.map(p => (p.index ? p.toNonIndexed() : p));
-  let count = 0;
-  for (const p of nonIndexed) count += p.attributes.position!.count;
-  const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3);
-  let o = 0;
-  for (const p of nonIndexed) {
-    pos.set(p.attributes.position!.array as Float32Array, o * 3);
-    nor.set(p.attributes.normal!.array as Float32Array, o * 3);
-    o += p.attributes.position!.count;
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  return g;
-}
-
-function figureGeometries() {
-  // Rounded anatomical masses follow the supplied silhouette: defined shoulders, narrower waist,
-  // natural pelvis and tapered limbs, while deliberately omitting facial/clothing micro-detail.
-  const head = new THREE.SphereGeometry(0.116, 18, 14);
-  head.scale(0.91, 1.08, 0.96);
-  head.translate(0, 1.665, 0.004);
-  const neck = new THREE.CylinderGeometry(0.052, 0.064, 0.115, 14);
-  neck.translate(0, 1.535, 0);
-  const chest = new THREE.SphereGeometry(0.25, 18, 12);
-  chest.scale(1.0, 1.12, 0.58);
-  chest.translate(0, 1.34, 0);
-  const waist = new THREE.SphereGeometry(0.175, 16, 12);
-  waist.scale(0.82, 1.18, 0.62);
-  waist.translate(0, 1.12, 0);
-  const pelvis = new THREE.SphereGeometry(0.19, 16, 12);
-  pelvis.scale(0.9, 0.78, 0.68);
-  pelvis.translate(0, 0.965, 0);
-  return {
-    body: mergeAll([head, neck, chest, waist, pelvis]),
-    thigh: capsuleHanging(0.086, THIGH + 0.045),
-    shin: capsuleHanging(0.067, 0.47),
-    arm: capsuleHanging(0.056, 0.62),
-  };
-}
-
-/** Build variety: [height scale, width scale]. */
-const BUILDS: [number, number][] = [[1, 1], [0.95, 0.92], [1.045, 1.06], [0.975, 1.1]];
-const PEOPLE_PALETTE = ['#315d7a', '#d08a32', '#58725b', '#b55d4c', '#65758b', '#d0a55b', '#6c6387', '#3f7b79'];
-const figureMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.82, metalness: 0, flatShading: false });
-
-/* ---------- Cars ---------- */
-
-function carGeometries() {
-  const side = (pts: [number, number][], width: number, bevel = 0.055) => {
-    const shape = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v)));
-    const g = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 4 });
-    g.translate(0, 0, -width / 2);
-    g.rotateY(-Math.PI / 2);
-    g.computeVertexNormals();
-    return g;
-  };
-  // Soft contemporary crossover proportions. The glasshouse is inset so the body keeps a clear
-  // shoulder line and the windows read independently rather than as a dark upper body block.
-  const body = side([[-2.08, 0.31], [2.03, 0.31], [2.15, 0.49], [2.11, 0.7], [1.62, 0.82], [0.98, 0.91], [-1.5, 0.91], [-2.04, 0.75], [-2.13, 0.55]], 1.74, 0.065);
-  const cabin = side([[0.91, 0.94], [0.4, 1.39], [-0.91, 1.41], [-1.45, 0.94]], 1.48, 0.04);
-  const roof = new THREE.BoxGeometry(1.5, 0.065, 1.82, 2, 1, 3);
-  roof.translate(0, 1.405, -0.22);
-  const wheels: THREE.BufferGeometry[] = [];
-  const hubs: THREE.BufferGeometry[] = [];
-  for (const z of [-1.35, 1.32]) for (const x of [-0.84, 0.84]) {
-    const w = new THREE.CylinderGeometry(0.335, 0.335, 0.2, 20);
-    w.rotateZ(Math.PI / 2); w.translate(x, 0.34, z); wheels.push(w);
-    const h = new THREE.CylinderGeometry(0.17, 0.17, 0.212, 16);
-    h.rotateZ(Math.PI / 2); h.translate(x, 0.34, z); hubs.push(h);
-  }
-  const frontLights = new THREE.BoxGeometry(1.18, 0.1, 0.045, 3, 1, 1); frontLights.translate(0, 0.665, 2.115);
-  const rearLights = new THREE.BoxGeometry(1.2, 0.105, 0.045, 3, 1, 1); rearLights.translate(0, 0.675, -2.095);
-  return { body, cabin, roof, wheels: mergeAll(wheels), hubs: mergeAll(hubs), frontLights, rearLights };
-}
-
-const CAR_PALETTE = ['#e7e4dc', '#315d7a', '#c45545', '#d18a2e', '#607568', '#6a7180', '#b8b4aa', '#416f78'];
-const carBodyMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, metalness: 0.08, flatShading: false });
-const carGlassMaterial = new THREE.MeshStandardMaterial({ color: '#213746', roughness: 0.24, metalness: 0.08, flatShading: false });
-const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#252a2d', roughness: 0.92, metalness: 0 });
-const hubMaterial = new THREE.MeshStandardMaterial({ color: '#969da0', roughness: 0.55, metalness: 0.2 });
-const headlightMaterial = new THREE.MeshStandardMaterial({ color: '#fff5d8', emissive: '#d7c58e', emissiveIntensity: 0.28, roughness: 0.35 });
-const tailLightMaterial = new THREE.MeshStandardMaterial({ color: '#b63f3b', emissive: '#6b1616', emissiveIntensity: 0.12, roughness: 0.42 });
 
 /* ---------- Placement ---------- */
 
@@ -145,95 +118,102 @@ const tmp = {
 
 export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeProps) {
   const site = ground.terrainData!.site!;
-  const plan = useMemo(() => planStreetLife(routes, { level, leftHand: drivesOnLeft(site), small: isSmallDevice(), seats, seed: Math.round(site.lat * 1e4 + site.lng * 1e4) }), [routes, level, seats, site.lat, site.lng]);
-  const figure = useMemo(figureGeometries, []);
-  const car = useMemo(carGeometries, []);
-  useEffect(() => () => { Object.values(figure).forEach(g => g.dispose()); Object.values(car).forEach(g => g.dispose()); }, [figure, car]);
+  const small = isSmallDevice();
+  const plan = useMemo(
+    () => planStreetLife(routes, { level, leftHand: drivesOnLeft(site), small, seats, seed: Math.round(site.lat * 1e4 + site.lng * 1e4) }),
+    [routes, level, seats, site.lat, site.lng, small],
+  );
+
+  const maleWalk = useGLTF(HUMAN_URLS.maleWalk).scene;
+  const femaleWalk = useGLTF(HUMAN_URLS.femaleWalk).scene;
+  const maleStand = useGLTF(HUMAN_URLS.maleStand).scene;
+  const femaleStand = useGLTF(HUMAN_URLS.femaleStand).scene;
+  const sitting = useGLTF(HUMAN_URLS.sit).scene;
+  const car0 = useGLTF(CAR_URLS[0]).scene;
+  const car1 = useGLTF(CAR_URLS[1]).scene;
+  const car2 = useGLTF(CAR_URLS[2]).scene;
+  const car3 = useGLTF(CAR_URLS[3]).scene;
+  const cars = [car0, car1, car2, car3];
 
   const t = ground.terrainData!;
   const [gx, gy, gz] = ground.position;
   const heightAt = (x: number, z: number) => gridHeightAt(t, x - gx, z - gz) + gy;
 
-  const people = plan.walkers.length + plan.standers.length + plan.sitters.length;
-  const bodyRef = useRef<THREE.InstancedMesh>(null), thighRef = useRef<THREE.InstancedMesh>(null), shinRef = useRef<THREE.InstancedMesh>(null), armRef = useRef<THREE.InstancedMesh>(null);
-  const carRef = useRef<THREE.InstancedMesh>(null), cabinRef = useRef<THREE.InstancedMesh>(null), roofRef = useRef<THREE.InstancedMesh>(null), wheelRef = useRef<THREE.InstancedMesh>(null), hubRef = useRef<THREE.InstancedMesh>(null), frontLightRef = useRef<THREE.InstancedMesh>(null), rearLightRef = useRef<THREE.InstancedMesh>(null);
+  const walkerRefs = useRef<(THREE.Group | null)[]>([]);
+  const standerRefs = useRef<(THREE.Group | null)[]>([]);
+  const sitterRefs = useRef<(THREE.Group | null)[]>([]);
+  const carRefs = useRef<(THREE.Group | null)[]>([]);
   const time = useRef(0);
-
-  useLayoutEffect(() => {
-    const carMesh = carRef.current, personMesh = bodyRef.current;
-    const c = new THREE.Color();
-    if (carMesh) {
-      plan.cars.forEach((k, i) => carMesh.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
-      if (carMesh.instanceColor) carMesh.instanceColor.needsUpdate = true;
-    }
-    if (roofRef.current) {
-      plan.cars.forEach((k, i) => roofRef.current!.setColorAt(i, c.set(CAR_PALETTE[k.color % CAR_COLOURS]!)));
-      if (roofRef.current.instanceColor) roofRef.current.instanceColor.needsUpdate = true;
-    }
-    if (personMesh) {
-      let i = 0;
-      for (const p of [...plan.walkers, ...plan.standers, ...plan.sitters]) personMesh.setColorAt(i++, c.set(PEOPLE_PALETTE[p.body % PEOPLE_PALETTE.length]!));
-      if (personMesh.instanceColor) personMesh.instanceColor.needsUpdate = true;
-    }
-  }, [plan, people]);
-
-  const limb = (mesh: THREE.InstancedMesh, index: number, jx: number, jy: number, angle: number, bend?: number) => {
-    tmp.joint.makeTranslation(jx, jy, 0); tmp.rot.makeRotationX(-angle); tmp.out.multiplyMatrices(tmp.base, tmp.joint).multiply(tmp.rot);
-    if (bend !== undefined) { tmp.knee.makeTranslation(0, -THIGH, 0); tmp.out.multiply(tmp.knee).multiply(tmp.rot.makeRotationX(bend)); }
-    mesh.setMatrixAt(index, tmp.out);
-  };
-
-  const person = (i: number, x: number, y: number, z: number, yaw: number, child: boolean, body: number, legs: [number, number], arms: [number, number], knees: [number, number]) => {
-    const [hs, ws] = BUILDS[body % BODY_TYPES]!; const k = child ? 0.62 : 1;
-    tmp.q.setFromEuler(tmp.e.set(0, yaw, 0)); tmp.base.compose(tmp.p.set(x, y, z), tmp.q, tmp.s.set(k * ws, k * hs, k * ws));
-    bodyRef.current!.setMatrixAt(i, tmp.base);
-    limb(thighRef.current!, i * 2, -HIP_X, HIP_Y, legs[0]); limb(thighRef.current!, i * 2 + 1, HIP_X, HIP_Y, legs[1]);
-    limb(shinRef.current!, i * 2, -HIP_X, HIP_Y, legs[0], knees[0]); limb(shinRef.current!, i * 2 + 1, HIP_X, HIP_Y, legs[1], knees[1]);
-    limb(armRef.current!, i * 2, -SHOULDER_X, SHOULDER_Y, arms[0]); limb(armRef.current!, i * 2 + 1, SHOULDER_X, SHOULDER_Y, arms[1]);
-  };
+  const q = useMemo(() => new THREE.Quaternion(), []);
+  const e = useMemo(() => new THREE.Euler(0, 0, 0, 'YXZ'), [ ]);
 
   useFrame((_, delta) => {
-    time.current += Math.min(delta, 0.1); const now = time.current;
-    if (people && bodyRef.current) {
-      let i = 0;
-      for (const w of plan.walkers) {
-        const loop = plan.walkLoops[w.loop]!, dist = w.start + now * w.speed, p = pointOnLoop(loop, dist), g = gait(dist, w.child ? 1.0 : 1.4);
-        const knee = (a: number) => 0.08 + Math.max(0, -a) * 0.85;
-        person(i++, p.x, heightAt(p.x, p.z) + g.bob, p.z, Math.atan2(p.dx, p.dz), w.child, w.body, [g.leftLeg, g.rightLeg], [g.leftArm, g.rightArm], [knee(g.leftLeg), knee(g.rightLeg)]);
-      }
-      for (const [n, s] of plan.standers.entries()) { const sway = Math.sin(now * 0.8 + n) * 0.035; person(i++, s.x, heightAt(s.x, s.z), s.z, s.yaw + sway, s.child, s.body, [0.02, -0.02], [0.08 + sway, -0.05 - sway], [0.03, 0.03]); }
-      for (const s of plan.sitters) person(i++, s.x, s.y - HIP_Y + 0.07, s.z, s.yaw, false, s.body, [Math.PI / 2, Math.PI / 2], [0.35, 0.35], [Math.PI / 2, Math.PI / 2]);
-      for (const m of [bodyRef, thighRef, shinRef, armRef]) m.current!.instanceMatrix.needsUpdate = true;
-    }
-    if (plan.cars.length && carRef.current) {
-      plan.cars.forEach((c, i) => {
-        const loop = plan.carLoops[c.loop]!, d = c.start + now * c.speed, p = pointOnLoop(loop, d), front = pointOnLoop(loop, d + 1.4), back = pointOnLoop(loop, d - 1.4);
-        const hf = heightAt(front.x, front.z), hb = heightAt(back.x, back.z);
-        tmp.q.setFromEuler(tmp.e.set(-Math.atan2(hf - hb, 2.8), Math.atan2(p.dx, p.dz), 0)); tmp.base.compose(tmp.p.set(p.x, (hf + hb) / 2, p.z), tmp.q, tmp.s.set(1, 1, 1));
-        for (const m of [carRef, cabinRef, roofRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.setMatrixAt(i, tmp.base);
-      });
-      for (const m of [carRef, cabinRef, roofRef, wheelRef, hubRef, frontLightRef, rearLightRef]) m.current!.instanceMatrix.needsUpdate = true;
-    }
+    time.current += Math.min(delta, 0.1);
+    const now = time.current;
+
+    plan.walkers.forEach((w, i) => {
+      const group = walkerRefs.current[i];
+      if (!group) return;
+      const loop = plan.walkLoops[w.loop]!;
+      const dist = w.start + now * w.speed;
+      const p = pointOnLoop(loop, dist);
+      const g = gait(dist, w.child ? 1.0 : 1.4);
+      group.position.set(p.x, heightAt(p.x, p.z) + 0.04 + g.bob * 0.35, p.z);
+      group.rotation.set(0, Math.atan2(p.dx, p.dz) + HUMAN_FORWARD_YAW, Math.sin(dist * 3.2) * 0.012);
+    });
+
+    plan.standers.forEach((s, i) => {
+      const group = standerRefs.current[i];
+      if (!group) return;
+      group.position.set(s.x, heightAt(s.x, s.z) + 0.04, s.z);
+      group.rotation.set(0, s.yaw + HUMAN_FORWARD_YAW + Math.sin(now * 0.7 + i) * 0.025, 0);
+    });
+
+    plan.sitters.forEach((s, i) => {
+      const group = sitterRefs.current[i];
+      if (!group) return;
+      group.position.set(s.x, s.y - 0.48, s.z);
+      group.rotation.set(0, s.yaw + HUMAN_FORWARD_YAW, 0);
+    });
+
+    plan.cars.forEach((car, i) => {
+      const group = carRefs.current[i];
+      if (!group) return;
+      const loop = plan.carLoops[car.loop]!;
+      const dist = car.start + now * car.speed;
+      const p = pointOnLoop(loop, dist);
+      const front = pointOnLoop(loop, dist + 1.4);
+      const back = pointOnLoop(loop, dist - 1.4);
+      const hf = heightAt(front.x, front.z);
+      const hb = heightAt(back.x, back.z);
+      const pitch = -Math.atan2(hf - hb, 2.8);
+      q.setFromEuler(e.set(pitch, Math.atan2(p.dx, p.dz), 0));
+      group.position.set(p.x, (hf + hb) / 2 + 0.01, p.z);
+      group.quaternion.copy(q);
+    });
   });
 
-  // All entourage meshes explicitly participate in the existing WorldView shadow system.
-  const shared = { frustumCulled: false, castShadow: true, receiveShadow: true, raycast: () => null } as const;
   return <group name="site-street-life" userData={{ isStreetLife: true }}>
-    {people > 0 && <>
-      <instancedMesh key={`b${people}`} ref={bodyRef} args={[figure.body, figureMaterial, people]} {...shared} />
-      <instancedMesh key={`t${people}`} ref={thighRef} args={[figure.thigh, figureMaterial, people * 2]} {...shared} />
-      <instancedMesh key={`s${people}`} ref={shinRef} args={[figure.shin, figureMaterial, people * 2]} {...shared} />
-      <instancedMesh key={`a${people}`} ref={armRef} args={[figure.arm, figureMaterial, people * 2]} {...shared} />
-    </>}
-    {plan.cars.length > 0 && <>
-      <instancedMesh key={`c${plan.cars.length}`} ref={carRef} args={[car.body, carBodyMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh key={`g${plan.cars.length}`} ref={cabinRef} args={[car.cabin, carGlassMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh key={`r${plan.cars.length}`} ref={roofRef} args={[car.roof, carBodyMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh key={`w${plan.cars.length}`} ref={wheelRef} args={[car.wheels, wheelMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh key={`h${plan.cars.length}`} ref={hubRef} args={[car.hubs, hubMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh key={`fl${plan.cars.length}`} ref={frontLightRef} args={[car.frontLights, headlightMaterial, plan.cars.length]} {...shared} />
-      <instancedMesh key={`rl${plan.cars.length}`} ref={rearLightRef} args={[car.rearLights, tailLightMaterial, plan.cars.length]} {...shared} />
-    </>}
+    {plan.walkers.map((w, i) => {
+      const source = w.body % 2 ? femaleWalk : maleWalk;
+      const scale = HUMAN_SCALE * (w.child ? 0.68 : 1);
+      return <group key={`walker-${i}`} ref={node => { walkerRefs.current[i] = node; }}>
+        <StreetAsset source={source} scale={scale} tint={PERSON_COLOURS[w.body % PERSON_COLOURS.length]} kind="person" />
+      </group>;
+    })}
+    {plan.standers.map((s, i) => {
+      const source = s.body % 2 ? femaleStand : maleStand;
+      const scale = HUMAN_SCALE * (s.child ? 0.68 : 1);
+      return <group key={`stander-${i}`} ref={node => { standerRefs.current[i] = node; }}>
+        <StreetAsset source={source} scale={scale} tint={PERSON_COLOURS[(s.body + 2) % PERSON_COLOURS.length]} kind="person" />
+      </group>;
+    })}
+    {plan.sitters.map((s, i) => <group key={`sitter-${i}`} ref={node => { sitterRefs.current[i] = node; }}>
+      <StreetAsset source={sitting} scale={HUMAN_SCALE} tint={PERSON_COLOURS[(s.body + 4) % PERSON_COLOURS.length]} kind="person" />
+    </group>)}
+    {plan.cars.map((car, i) => <group key={`car-${i}`} ref={node => { carRefs.current[i] = node; }}>
+      <StreetAsset source={cars[car.color % cars.length]!} scale={1} tint={CAR_PALETTE[car.color % CAR_PALETTE.length]} kind="car" />
+    </group>)}
   </group>;
 }
 
