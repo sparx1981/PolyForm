@@ -80,7 +80,7 @@
     [class~="bg-gray-900"] *, [class~="bg-gray-800"] *, [class~="bg-black"] *,
     [class~="bg-neutral-900"] *, [class~="bg-neutral-800"] *, [class~="bg-slate-900"] *, [class~="bg-slate-800"] *, [class~="bg-zinc-900"] *,
     [class~="bg-polyform-gray"] *, [class~="bg-polyform-dark-blue"] *, [class~="bg-polyform-blue"] *,
-    [class*="bg-black/"]:not(.inset-0) *, [class*="bg-gray-900/"]:not(.inset-0) *, [class*="bg-gray-800/"]:not(.inset-0) *
+    [class^="bg-black/"]:not(.inset-0) *, [class*=" bg-black/"]:not(.inset-0) *, [class^="bg-gray-900/"]:not(.inset-0) *, [class*=" bg-gray-900/"]:not(.inset-0) *, [class^="bg-gray-800/"]:not(.inset-0) *, [class*=" bg-gray-800/"]:not(.inset-0) *
   )):not(:where([class~="bg-gray-900"], [class~="bg-gray-800"], [class~="bg-black"], [class~="bg-neutral-800"], [class~="bg-polyform-gray"])) {
     color: var(--color-gray-500);
   }
