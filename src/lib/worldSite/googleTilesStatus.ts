@@ -9,14 +9,16 @@ export interface GoogleTilesStatus {
   message: string;
   /** Tiles on screen now. */
   tiles: number;
+  /** How far the tiles were moved to meet the site's ground, metres; null until measured. */
+  lift: number | null;
 }
 
-let current: GoogleTilesStatus = { state: 'off', message: '', tiles: 0 };
+let current: GoogleTilesStatus = { state: 'off', message: '', tiles: 0, lift: null };
 const listeners = new Set<() => void>();
 
 export function setGoogleTilesStatus(next: Partial<GoogleTilesStatus>): void {
   const merged = { ...current, ...next };
-  if (merged.state === current.state && merged.message === current.message && merged.tiles === current.tiles) return;
+  if (merged.state === current.state && merged.message === current.message && merged.tiles === current.tiles && merged.lift === current.lift) return;
   current = merged;
   listeners.forEach(l => l());
 }

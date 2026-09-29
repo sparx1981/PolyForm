@@ -182,7 +182,7 @@ export function WorldSiteSection({ hideTitle = false }: { hideTitle?: boolean } 
 }
 
 /** A slider that commits once, when let go, so one drag is one undo step. */
-function NudgeSlider({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+export function NudgeSlider({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
   const [v, setV] = useState(value);
   useEffect(() => setV(value), [value]);
   const commit = () => { if (v !== value) onCommit(v); };
@@ -200,12 +200,25 @@ function NudgeSlider({ value, onCommit }: { value: number; onCommit: (v: number)
   );
 }
 
+/** What the Google 3D layer is doing: loading, showing N tiles and how far it was moved to meet the ground, or why it failed. */
+export function GoogleStatusLine() {
+  const status = useGoogleTilesStatus();
+  const height = status.lift === null ? '' : ` Height matched to the ground (${status.lift > 0 ? '+' : ''}${status.lift.toFixed(1)} m).`;
+  return (
+    <p className={cn('text-[10px] leading-tight', status.state === 'error' ? 'text-red-500' : status.state === 'showing' ? 'text-emerald-600' : 'text-gray-400')}>
+      {status.state === 'error' ? status.message
+        : status.state === 'showing' ? `Showing ${status.tiles} Google tile${status.tiles === 1 ? '' : 's'}.${height}`
+        : status.state === 'off' ? 'Starting…'
+        : status.message || 'Loading…'}
+    </p>
+  );
+}
+
 /** How the imported site looks: Google's photorealistic surroundings, and styled buildings. */
 function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) {
   const change = useSiteChange();
   const on = !!site.googleContext;
   const ground = site.googleGround ?? 'cutout';
-  const status = useGoogleTilesStatus();
   return (
     <div className="space-y-2 pt-2 border-t border-gray-200/70 dark:border-gray-700/70">
       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Look</span>
@@ -224,12 +237,7 @@ function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) 
       {!hasKey && <p className="text-[10px] text-amber-600 leading-tight">Needs a Google Maps API key with the Map Tiles API enabled.</p>}
       {on && hasKey && (
         <div className="space-y-2 pl-6">
-          <p className={cn('text-[10px] leading-tight', status.state === 'error' ? 'text-red-500' : status.state === 'showing' ? 'text-emerald-600' : 'text-gray-400')}>
-            {status.state === 'error' ? status.message
-              : status.state === 'showing' ? `Showing ${status.tiles} Google tile${status.tiles === 1 ? '' : 's'}.`
-              : status.state === 'off' ? 'Starting…'
-              : status.message || 'Loading…'}
-          </p>
+          <GoogleStatusLine />
           <Toggle options={[{ id: 'cutout', label: 'Cut out site' }, { id: 'google', label: 'Google as the site' }]} value={ground}
             onChange={id => id !== ground && change(`Google ground: ${id}`, sdkCall('setGoogleContext', true, { ground: id }), withSite({ googleGround: id as 'cutout' | 'google' }))} />
           <p className="text-[10px] text-gray-400 leading-tight">

@@ -6,7 +6,7 @@ import GoogleMapReact from 'google-map-react';
 import { findPlace } from '../lib/worldSite/fetchSite';
 import { findSiteGround } from '../lib/worldSite/site';
 import { buildMap3DOptions, worldViewUnlocked } from '../lib/worldViewPanel';
-import { WorldSiteSection } from './WorldSiteControls';
+import { WorldSiteSection, GoogleStatusLine, NudgeSlider } from './WorldSiteControls';
 
 /**
  * WorldView's tool modifier panel: choose a place, then position the map, import its 3D site or
@@ -199,6 +199,10 @@ export default function WorldViewPanel() {
     worldViewMapType,
     setWorldViewMapType,
     googleMapsApiKey,
+    worldViewGoogle,
+    setWorldViewGoogle,
+    worldViewGoogleNudge,
+    setWorldViewGoogleNudge,
     shapes,
     theme,
   } = useApp();
@@ -212,6 +216,8 @@ export default function WorldViewPanel() {
   const isKeyMissing = !apiKey;
 
   const hasImportedSite = !!findSiteGround(shapes)?.terrainData?.site;
+  // With Google switched on for the imported site (3D Site > Look), that one is used instead.
+  const siteGoogleOn = !!findSiteGround(shapes)?.terrainData?.site?.googleContext;
   const unlocked = worldViewUnlocked({ address: worldViewLocation.address, overlayActive: isWorldViewActive, hasImportedSite });
   const toggle = (id: string) => setOpen(prev => ({ ...prev, [id]: !prev[id] }));
   const lockedHint = 'Enter an address or postcode first';
@@ -397,6 +403,21 @@ export default function WorldViewPanel() {
             Activating WorldView will render a 2D map plane beneath your 3D models at the specified altitude.
           </p>
         </div>
+        {isWorldViewActive && !siteGoogleOn && (
+          <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+            <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={worldViewGoogle} disabled={isKeyMissing}
+                onChange={e => setWorldViewGoogle(e.target.checked)} />
+              <span>Google photorealistic surroundings<span className="block text-[10px] text-gray-400 leading-tight">Google's 3D map around the overlay, cut away under it so the flat map stays visible. For looking at only. Needs a Maps key with the Map Tiles API.</span></span>
+            </label>
+            {worldViewGoogle && !isKeyMissing && (
+              <div className="space-y-2 pl-6">
+                <GoogleStatusLine />
+                <NudgeSlider value={worldViewGoogleNudge} onCommit={setWorldViewGoogleNudge} />
+              </div>
+            )}
+          </div>
+        )}
       </Section>
 
       {/* The real ground and buildings around the place */}

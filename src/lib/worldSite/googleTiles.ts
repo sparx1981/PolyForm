@@ -16,6 +16,12 @@ const DEG = Math.PI / 180;
 
 export type V3 = [number, number, number];
 
+/** The side, in metres, of the square map picture drawn for the map overlay at a latitude and coverage radius. */
+export function overlayTileMeters(lat: number, radius: number): number {
+  const zoom = Math.max(1, Math.min(20, Math.floor(Math.log2((156543.03392 * Math.cos(lat * DEG) * 640) / (radius * 2)))));
+  return (156543.03392 * Math.cos(lat * DEG)) / 2 ** zoom * 640;
+}
+
 /** Earth-centred, earth-fixed position (metres) of a latitude, longitude (degrees) and height above the ellipsoid. */
 export function ecef(lat: number, lng: number, height = 0): V3 {
   const la = lat * DEG, lo = lng * DEG;

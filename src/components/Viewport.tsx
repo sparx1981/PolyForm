@@ -5,7 +5,7 @@ import { TextMesh } from './TextMesh';
 import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
 import { GoogleTilesLayer } from './GoogleTilesLayer';
 import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
-import { buildingLook } from '../lib/worldSite/googleTiles';
+import { buildingLook, overlayTileMeters } from '../lib/worldSite/googleTiles';
 import { siteEditSets } from '../lib/worldSite/siteEdits';
 import { gridHeightAt } from '../lib/worldSite/terrain';
 import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
@@ -103,7 +103,7 @@ import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { getBlockPart, buildBlockGeometry, primaryStudDirection, STUD_UNIT, BRICK_HEIGHT, PLATE_HEIGHT, BlockPart } from '../lib/blockKitGeometry';
 import { PlantModelMesh } from './PlantModelMesh';
 import { useApp } from '../AppContext';
-import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier, ToolType } from '../types';
+import { Shape, CustomLight, SceneNote, SceneState, SceneAnimation, isTextureUrl, RoadModifier, PadModifier, TerrainModifier, ToolType, type WorldSiteInfo } from '../types';
 import CutFillVolumeOverlay from './terrain/CutFillVolumeOverlay';
 import RoadSplineOverlay from './terrain/RoadSplineOverlay';
 import ParametricPadOverlay from './terrain/ParametricPadOverlay';
@@ -1558,6 +1558,10 @@ function Scene() {
     setSunOrbitCenter,
     isWorldViewActive,
     worldViewLocation,
+    worldViewAltitude: overlayAltitude,
+    worldViewRadius: overlayRadius,
+    worldViewGoogle,
+    worldViewGoogleNudge,
     worldViewAltitude,
     googleMapsApiKey,
     selectedIds,
@@ -4649,7 +4653,17 @@ function Scene() {
   const googleStatus = useGoogleTilesStatus();
   const siteGround = useMemo(() => findSiteGround(shapes), [shapes]);
   const siteInfo = siteGround?.terrainData?.site;
-  const googleLayer = siteInfo?.googleContext && siteGround ? { site: siteInfo, groundId: siteGround.id } : null;
+  // Google's surroundings come with an imported 3D site, or on their own around the plain map overlay.
+  const overlaySite = useMemo<WorldSiteInfo>(() => ({
+    lat: worldViewLocation.lat, lng: worldViewLocation.lng, size: overlayTileMeters(worldViewLocation.lat, overlayRadius), elevation: 0,
+    terrainSource: '', buildingSource: '', importedAt: 0, groundStyle: 'satellite', showRemoved: false,
+    googleContext: true, googleGround: 'cutout', googleNudge: worldViewGoogleNudge,
+  }), [worldViewLocation.lat, worldViewLocation.lng, overlayRadius, worldViewGoogleNudge]);
+  const googleOnSite = !!siteInfo?.googleContext && !!siteGround;
+  const googleOnOverlay = !googleOnSite && isWorldViewActive && worldViewGoogle;
+  const googleLayer = googleOnSite && siteInfo && siteGround
+    ? { site: siteInfo, groundId: siteGround.id }
+    : googleOnOverlay ? { site: overlaySite, groundId: '' } : null;
   const googleAsSite = !!googleLayer && googleLayer.site.googleGround === 'google' && googleStatus.state === 'showing';
   // With Google standing in for the site, imported buildings nobody has touched are Google's to show.
   const googleShownBuildings = useMemo(
@@ -4657,10 +4671,12 @@ function Scene() {
     [googleAsSite, shapes, siteGround],
   );
   const googleGroundAt = useCallback((x: number, z: number) => {
+    // The plain map overlay is a flat picture at its altitude; an imported site has real ground heights.
+    if (googleOnOverlay) return overlayAltitude;
     const t = siteGround?.terrainData;
     if (!siteGround || !t) return 0;
     return siteGround.position[1] + gridHeightAt(t, x - siteGround.position[0], z - siteGround.position[2]);
-  }, [siteGround]);
+  }, [siteGround, googleOnOverlay, overlayAltitude]);
   const siteSatelliteForStyle = siteInfo?.styledBuildings ? siteSatelliteUrl(siteInfo, googleMapsApiKey || '') : null;
   const siteStyleFor = (shape: Shape) => {
     if (!siteInfo?.styledBuildings || !shape.siteBuildingData || googleAsSite) return undefined;

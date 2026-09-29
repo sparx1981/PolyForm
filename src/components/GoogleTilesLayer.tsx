@@ -109,6 +109,8 @@ export function GoogleTilesLayer({ site, apiKey, shapes, existing, kernelRevisio
   const [credits, setCredits] = useState<{ type: string; value: unknown }[]>([]);
   const flattenRef = useRef<TileFlatteningPlugin | null>(null);
   const flatShapes = useRef<THREE.Mesh[]>([]);
+  const siteSizeRef = useRef(site.size);
+  siteSizeRef.current = site.size;
   const groundAtRef = useRef(groundAt);
   groundAtRef.current = groundAt;
   const liftRef = useRef(0);
@@ -189,49 +191,57 @@ export function GoogleTilesLayer({ site, apiKey, shapes, existing, kernelRevisio
     t.addEventListener('needs-update', wake);
     t.addEventListener('tiles-load-end', wake);
 
-    // Match the tiles' ground to the site's once they have loaded.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let passes = 0;
+    // Match the tiles' ground to the site's. Google measures heights from the reference ellipsoid
+    // and the site from sea level, which differ by tens of metres, so the height is read off the
+    // tiles themselves: how high their lowest surface sits over the site's ground, at a grid of
+    // points. It repeats while more detailed tiles arrive, until two readings agree.
+    const ray = new THREE.Raycaster();
+    let lastReading: number | null = null;
+    let steady = 0;
+    let readings = 0;
     const align = () => {
-      timer = null;
-      const ray = new THREE.Raycaster();
-      const samples: { tiles: number; ground: number }[] = [];
-      const half = site.size * 0.4;
       const meshes: TileMesh[] = [];
-      t.activeTiles.forEach(tile => (tile as { engineData?: { scene?: THREE.Object3D } }).engineData?.scene?.traverse(o => { if ((o as TileMesh).isMesh) meshes.push(o as TileMesh); }));
+      t.forEachLoadedModel((root, tile) => {
+        if (!t.visibleTiles.has(tile)) return;
+        root.traverse(o => { if ((o as TileMesh).isMesh) meshes.push(o as TileMesh); });
+      });
       if (!meshes.length) return;
       t.group.updateMatrixWorld(true);
+      const samples: { tiles: number; ground: number }[] = [];
+      const half = siteSizeRef.current * 0.4;
       for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) {
         const x = (i / 3) * half, z = (j / 3) * half;
-        ray.set(new THREE.Vector3(x, 3000, z), new THREE.Vector3(0, -1, 0));
+        ray.set(new THREE.Vector3(x, 5000, z), new THREE.Vector3(0, -1, 0));
         let lowest = Infinity;
         for (const mesh of meshes) {
           const hits: THREE.Intersection[] = [];
           (mesh.userData.pfRaycast ?? THREE.Mesh.prototype.raycast).call(mesh, ray, hits);
           for (const h of hits) if (h.point.y < lowest) lowest = h.point.y;
         }
-        if (Number.isFinite(lowest)) samples.push({ tiles: lowest - liftRef.current + (site.googleNudge ?? 0), ground: groundAtRef.current(x, z) });
+        // What the tiles read with no lifting at all: where they are now, less the lift now applied.
+        if (Number.isFinite(lowest)) samples.push({ tiles: lowest - liftRef.current, ground: groundAtRef.current(x, z) });
       }
-      if (samples.length >= 8) {
-        setAutoLift(estimateLift(samples));
-        setAligned(true);
-      }
-      passes++;
+      if (samples.length < 6) return;
+      const auto = estimateLift(samples);
+      readings++;
+      steady = lastReading !== null && Math.abs(auto - lastReading) < 0.3 ? steady + 1 : 0;
+      lastReading = auto;
+      setAutoLift(auto);
+      setAligned(true);
+      setGoogleTilesStatus({ lift: auto });
     };
-    const scheduleAlign = () => {
-      if (passes >= 4 || timer) return;
-      timer = setTimeout(align, 700);
-    };
-    t.addEventListener('tiles-load-end', scheduleAlign);
-    // If it never settles, show the layer anyway.
+    // Every second until steady (or 60 readings), and whenever a batch of tiles finishes loading.
+    const interval = setInterval(() => { if (steady >= 2 || readings >= 60) return; align(); }, 1000);
+    const onLoadEnd = () => { steady = 0; };
+    t.addEventListener('tiles-load-end', onLoadEnd);
     const giveUp = setTimeout(() => setAligned(true), 12000);
 
     scene.add(t.group);
     setTiles(t);
     return () => {
       clearTimeout(giveUp);
-      setGoogleTilesStatus({ state: 'off', message: '', tiles: 0 });
-      if (timer) clearTimeout(timer);
+      clearInterval(interval);
+      setGoogleTilesStatus({ state: 'off', message: '', tiles: 0, lift: null });
       scene.remove(t.group);
       flattenRef.current = null;
       flatShapes.current = [];

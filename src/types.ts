@@ -793,6 +793,10 @@ export interface AppState {
   worldViewAltitude: number;
   setWorldViewAltitude: (alt: number) => void;
   worldViewRadius: number;
+  worldViewGoogle: boolean;
+  setWorldViewGoogle: (on: boolean) => void;
+  worldViewGoogleNudge: number;
+  setWorldViewGoogleNudge: (metres: number) => void;
   setWorldViewRadius: (radius: number) => void;
   worldViewMapType: 'satellite' | '3d';
   setWorldViewMapType: (type: 'satellite' | '3d') => void;
