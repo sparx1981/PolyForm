@@ -263,12 +263,19 @@ const PLANE_LOCK_COLOURS = { x: '#ef4444', z: '#22c55e', y: '#3b82f6', edge: '#f
 function PlaneLockGuide({ lock, cursor }: { lock: { key: 'x' | 'y' | 'z' | 'edge'; normal: [number, number, number] } | null; cursor: React.MutableRefObject<THREE.Vector3 | null> }) {
   const ref = React.useRef<THREE.Mesh>(null);
   const quaternion = React.useMemo(() => (lock ? new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...lock.normal).normalize()) : null), [lock]);
-  useFrame(() => {
+  const ray = React.useMemo(() => new THREE.Raycaster(), []);
+  const hit = React.useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera, pointer }) => {
     const m = ref.current;
     if (!m) return;
-    const c = cursor.current;
+    // Where the snap found the pointer; else where the pointer meets the ground, so the square always follows it.
+    let c = cursor.current;
+    if (!c) {
+      ray.setFromCamera(pointer, camera);
+      c = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit) ? hit : null;
+    }
     m.visible = !!c;
-    if (c) m.position.copy(c);
+    if (c) { m.position.copy(c); if (lock) m.position.y += (1 - Math.abs(lock.normal[1])) * 0.8; } // a standing square rests on the ground
   });
   if (!lock || !quaternion) return null;
   const colour = PLANE_LOCK_COLOURS[lock.key];
