@@ -40,7 +40,6 @@ export const RoofModifierSection: React.FC = () => {
   const { 
     shapes, 
     setShapes, 
-    addShape, 
     selectedId, 
     setSelectedId, 
     theme, 

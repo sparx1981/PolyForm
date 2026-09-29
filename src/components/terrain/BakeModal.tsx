@@ -58,8 +58,7 @@ export default function BakeModal() {
     addShape, 
     setConsoleOutput, 
     commitHistory,
-    setViewportToast,
-    cutFillMetrics
+    setViewportToast
   } = useApp();
 
   const [includeInspectionVolumes, setIncludeInspectionVolumes] = useState<boolean>(false);

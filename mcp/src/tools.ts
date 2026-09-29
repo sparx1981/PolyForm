@@ -16,6 +16,7 @@ import { svgToPng } from './raster';
 import { nodeSiteIO } from './site';
 import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../../src/lib/worldSite/site';
 import { withDrawnRoute, withSiteSettings, withoutRoutes } from '../../src/lib/worldSite/streets';
+import { applyAutoStreetLights } from '../../src/lib/worldSite/streetLights';
 import { findPlace } from '../../src/lib/worldSite/fetchSite';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../../src/lib/worldSite/geo';
 import {
@@ -458,11 +459,12 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('set_street_life', {
     title: 'Set street life',
-    description: 'Moving cars and people on the imported site (import_site first). Cars drive the real roads, keeping to the country\'s side; white figures walk the footpaths and pavements, and sit on any benches. They move in presentations and on the client page unless off; in_editor also shows them while editing. add_routes are extra routes of your own as [x, z] points in metres: kind "path" for people (e.g. across a new garden) or "road" for cars (e.g. a new drive).',
+    description: 'Moving cars, people and birds on the imported site (import_site first). Cars drive the real roads, keeping to the country\'s side, slow for bends, indicate and stop for people; white figures walk the footpaths and pavements, wait for cars, and sit on any benches; two flocks of birds fly overhead. They move in presentations and on the client page unless off; in_editor also shows them while editing. auto_street_lights places lamp posts along the roads (LED, cobra head, double arm) and gate and path lights at some houses, or removes them (needs the map\'s roads: show street life in the app once first). add_routes are extra routes of your own as [x, z] points in metres: kind "path" for people (e.g. across a new garden) or "road" for cars (e.g. a new drive).',
     inputSchema: {
       model: modelRef,
       level: z.enum(['off', 'quiet', 'normal', 'busy']).optional(),
       in_editor: z.boolean().optional(),
+      auto_street_lights: z.boolean().optional().describe('Place (true) or remove (false) Auto Street Light lamps along the roads and at some houses'),
       add_routes: z.array(z.object({
         kind: z.enum(['path', 'road']),
         points: z.array(z.tuple([z.number(), z.number()])).min(2),
@@ -480,12 +482,16 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       ...(a.level ? { streetLife: a.level } : {}),
       ...(a.in_editor !== undefined ? { streetLifeInEditor: a.in_editor } : {}),
     });
+    if (a.auto_street_lights !== undefined) {
+      if (a.auto_street_lights && !findSiteGround(next)!.terrainData!.site!.routes) throw new ToolError('The map\'s roads are not loaded yet. Open the model in PolyForm and show street life once, then try again.');
+      next = applyAutoStreetLights(next, a.auto_street_lights);
+    }
     const site = findSiteGround(next)!.terrainData!.site!;
     const routes = site.routes ?? [];
     return {
       shapes: next,
       made: [],
-      message: `Street life ${site.streetLife ?? 'normal'}${site.streetLifeInEditor ? ', also in the editor' : ''}; ${routes.filter(r => r.kind === 'road').length} driving and ${routes.filter(r => r.kind === 'path').length} walking routes${routes.length ? '' : ' (the app loads the map\'s roads and paths when it first shows street life)'}.`,
+      message: `Street life ${site.streetLife ?? 'normal'}${site.streetLifeInEditor ? ', also in the editor' : ''}${site.autoStreetLights ? ', with street lights' : ''}; ${routes.filter(r => r.kind === 'road').length} driving and ${routes.filter(r => r.kind === 'path').length} walking routes${routes.length ? '' : ' (the app loads the map\'s roads and paths when it first shows street life)'}.`,
     };
   })));
 

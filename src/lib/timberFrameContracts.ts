@@ -631,7 +631,6 @@ export function validateTimberAssembly(
     if (host.type === 'wall' || host.tags?.includes('wall')) {
       const args = Array.isArray(host.args) ? host.args : [3.0, 2.8, 0.2];
       const wallThick = args[2] || 0.2;
-      const wallHalfThick = wallThick / 2;
 
       const hostedMembers = members.filter(m => m.parentWallOrRoofId === host.id || m.id.includes(host.id));
       hostedMembers.forEach(m => {

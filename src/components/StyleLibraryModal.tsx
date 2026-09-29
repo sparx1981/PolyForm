@@ -753,7 +753,6 @@ export default function StyleLibraryModal({
   const isDoor = targetShapeOrFallback.type === 'door';
   const isStair = targetShapeOrFallback.type === 'staircase' || targetShapeOrFallback.type === 'step';
   const isWall = targetShapeOrFallback.type === 'wall';
-  const isWindow = !isDoor && !isStair && !isWall && !isScaleFigure;
 
   let styles: ArchStyleDef[] = [];
   let defaultStyleId = 'flush';

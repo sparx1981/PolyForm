@@ -53,7 +53,6 @@ export const ToolModifierPalette: React.FC = () => {
     setActiveStory,
     shapes,
     setShapes,
-    selectedId,
     setSelectedId,
     selectedIds,
     setSelectedIds,
@@ -227,13 +226,14 @@ export const ToolModifierPalette: React.FC = () => {
       }}
       style={!embedded ? {
         right: rightPanelVisible ? 320 : 16,
-        top: 80,
+        // Clear of the Collapse / Tools & Info button, which sits along the top of the canvas.
+        top: 120,
       } : {}}
       exit={{ x: 300, opacity: 0 }}
       className={cn(
         "z-30 rounded-xl border shadow-xl overflow-hidden transition-all duration-300 flex flex-col",
         theme === 'dark' ? "bg-gray-900 border-gray-700 shadow-black/50" : "bg-white border-gray-200 shadow-xl",
-        embedded ? "relative w-full shadow-none border-none rounded-none max-h-full" : (activeTool === 'worldview' ? "fixed w-80 max-h-[calc(100vh-100px)]" : "fixed w-64 max-h-[calc(100vh-100px)]")
+        embedded ? "relative w-full shadow-none border-none rounded-none max-h-full" : (activeTool === 'worldview' ? "fixed w-80 max-h-[calc(100vh-140px)]" : "fixed w-64 max-h-[calc(100vh-140px)]")
       )}
     >
       <div 
@@ -272,9 +272,6 @@ export const ToolModifierPalette: React.FC = () => {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="text-[9px] font-mono text-polyform-blue px-1.5 py-0.5 bg-polyform-blue/10 rounded">
-            {activeTool.toUpperCase()}
-          </div>
           {!embedded && (
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
@@ -299,7 +296,7 @@ export const ToolModifierPalette: React.FC = () => {
 
       {(!isCollapsed || embedded) && (
         <>
-          <div className={cn("p-3 space-y-4 overflow-y-auto flex-1 select-text", !isPhone && "max-h-[calc(100vh-140px)]")}>
+          <div className={cn("p-3 space-y-4 overflow-y-auto flex-1 select-text", !isPhone && "max-h-[calc(100vh-180px)]")}>
         {activeTool === 'worldview' && <WorldViewPanel />}
         {activeTool === 'section' && <SectionToolPanel />}
         {activeTool === 'wall' && (

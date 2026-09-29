@@ -73,13 +73,13 @@ export default function CmsAdmin({ onClose }: { onClose: () => void }) {
         <button disabled={!content || busy} onClick={() => setPreview(!preview)}><Eye size={16} />{preview ? 'Edit' : 'Preview'}</button>
         <button disabled={!dirty || busy} onClick={save}><Save size={16} />Save draft</button>
         <button className="cms-primary" disabled={!content || dirty || !revision || busy || !connected || JSON.stringify(content) === JSON.stringify(liveContent)} onClick={publish}><Globe size={16} />Publish</button>
-        <button onClick={close} aria-label="Close CMS"><X size={18} /></button>
+        <button className="cms-close-x" onClick={close} aria-label="Close CMS"><X size={18} /></button>
       </div>
     </header>
-    {(error || notice) && <div className={error ? 'cms-alert' : 'cms-notice'} role={error ? 'alert' : 'status'}>{error || notice}<button aria-label="Dismiss message" onClick={() => {setError('');setNotice('');}}><X size={15} /></button></div>}
+    {(error || notice) && (content || !error) && <div className={error ? 'cms-alert' : 'cms-notice'} role={error ? 'alert' : 'status'}>{error || notice}<button aria-label="Dismiss message" onClick={() => {setError('');setNotice('');}}><X size={15} /></button></div>}
     <div className="cms-shell"><aside className="cms-sidebar"><p className="cms-eyebrow">WORKSPACE</p>{TABS.map(t => <button key={t.id} className={tab === t.id && !preview ? 'active' : ''} onClick={() => {setTab(t.id);setPreview(false);}}><t.icon size={18} />{t.label}</button>)}<div className="cms-sidebar-bottom"><p>AI changes arrive as proposals.<br />You control what goes live.</p><button onClick={close}><ArrowLeft size={16} />Back to website</button></div></aside>
       <main ref={workspace} className="cms-workspace" aria-busy={busy}>
-        {!content ? <div className="cms-empty"><Layers size={36} /><h2>{busy ? 'Loading your content…' : 'Unable to load content'}</h2><p>CMS access requires the verified administrator account and the CMS database rules.</p><button disabled={busy} onClick={load}>Retry</button></div> : preview ? <>
+        {!content ? <div className="cms-empty"><Layers size={36} /><h2>{busy ? 'Loading your content…' : 'Unable to load content'}</h2><p>{!busy && error ? error : 'CMS access requires the verified administrator account and the CMS database rules.'}</p><button disabled={busy} onClick={load}>Retry</button></div> : preview ? <>
           <div className="cms-page-heading"><div><p className="cms-eyebrow">DRAFT PREVIEW · LINKS AND SIGN-IN DISABLED</p><h2>{pageNames[pageId] ?? page?.title ?? 'New page'}</h2></div><div className="cms-actions"><select aria-label="Preview page" value={pageId} onChange={e => setPageId(e.target.value)}>{content.pages.map(p => <option key={p.id} value={p.id}>{pageNames[p.id] ?? p.title ?? p.path}</option>)}</select><button onClick={() => setMobilePreview(!mobilePreview)}>{mobilePreview ? 'Desktop width' : 'Mobile width'}</button></div></div>
           <PreviewFrame mobile={mobilePreview}><CmsProvider value={content}><Header {...previewProps} /><MarketingPage id={pageId} go={previewProps.go} onLogin={() => {}} /><ClosingCTA page={previewProps.page} onLogin={() => {}} /><Footer {...previewProps} /></CmsProvider></PreviewFrame>
         </> : <>

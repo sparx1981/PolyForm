@@ -7,7 +7,7 @@ import { getGeminiApiKey } from '../lib/utils';
 import { Shape } from '../types';
 
 export default function AIGenerate() {
-  const { isAIGenerateOpen, setIsAIGenerateOpen, theme, addShape, recordAction, shapes } = useApp();
+  const { isAIGenerateOpen, setIsAIGenerateOpen, addShape, recordAction, shapes } = useApp();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);

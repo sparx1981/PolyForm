@@ -57,7 +57,7 @@ deform: 'Click and drag on the surface to deform it.',
 };
 
 export default function StatusBar() {
-const { measurements, setMeasurements, activeTool, unit, zoom, rectangleInputState, setRectangleInputState, syncStatus, syncErrorMessage, retrySync, isQuotaLocked } = useApp();
+const { measurements, activeTool, unit, zoom, rectangleInputState, setRectangleInputState, syncStatus, syncErrorMessage, retrySync, isQuotaLocked } = useApp();
 
 const defaultVal = unit === 'mm' ? '0.0 mm' : unit === 'cm' ? '0.00 cm' : '0.000 m';
 const quotaLocked = isQuotaLocked();

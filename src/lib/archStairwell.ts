@@ -627,16 +627,6 @@ export function applyStairwellHolesToSlabs(allShapes: Shape[]): Shape[] {
   return [...updatedShapes, ...generatedRailings];
 }
 
-function computeHoleCenter(hole: [number, number][]): [number, number] {
-  if (!hole || hole.length === 0) return [0, 0];
-  let sumU = 0, sumV = 0;
-  for (const [u, v] of hole) {
-    sumU += u;
-    sumV += v;
-  }
-  return [sumU / hole.length, sumV / hole.length];
-}
-
 /**
  * Dynamically computes all active stairwell cutouts for a given floor slab,
  * ensuring real-time reactivity whenever any staircase moves or changes style.

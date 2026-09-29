@@ -119,19 +119,12 @@ export default function TopBar() {
       panelVisibility,
       setPanelVisibility,
       tags,
-      setTags,
       scenes,
-      setScenes,
       customMaterials,
       graphicsSettings,
-      setGraphicsSettings,
-      setCustomMaterials,
       animations,
-      setAnimations,
       notes,
-      setNotes,
       customLights,
-      setCustomLights,
       presentationContent,
       getProjectState,
       applyProjectState,
@@ -145,12 +138,9 @@ export default function TopBar() {
       setActiveDeveloperTab,
       unit,
       setUnit,
-      swReady,
       defaultCameraPosition,
       setDefaultCameraPosition,
       defaultCameraTarget,
-      setDefaultCameraTarget,
-      isDiagnosticLogOpen,
       setIsDiagnosticLogOpen,
       setIsLoginActivityOpen,
       diagLog,
@@ -172,18 +162,8 @@ export default function TopBar() {
       setLayoutMode,
       terrainModifiers,
       kernelHost,
-      skybox,
-      setSkybox,
-      skyboxBlur,
-      setSkyboxBlur,
-      skyboxRotation,
-      setSkyboxRotation,
-      environmentIntensity,
-      setEnvironmentIntensity,
       environment,
-      setEnvironment,
-      materialBindings,
-      setMaterialBindings
+      materialBindings
     } = appApi;
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -711,25 +691,6 @@ export default function TopBar() {
     fetchModels();
     setIsSavedModelsOpen(true);
     setIsMenuOpen(false);
-  };
-
-  const deleteModel = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this model?')) return;
-    try {
-      await deleteDoc(doc(db, 'models', id));
-      setSavedModels(prev => prev.filter(m => m.id !== id));
-      if (currentModelId === id) {
-        setCurrentModelId(null);
-        setCurrentModelName(null);
-      }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `models/${id}`);
-    }
-  };
-
-  const loadModel = (model: any) => {
-    applySavedModelToAppState(model, appApi);
-    setIsSavedModelsOpen(false);
   };
 
   const handleExport = (format: 'gltf' | 'stl' | 'skp') => {

@@ -220,7 +220,6 @@ const KERNEL_SNAP_TOOLS: string[] = [
 // last character, since prior keystrokes land on a node that's about to be discarded. Using
 // stable, module-level references fixes it.
 const _polyformBodyPortalRef: { current: HTMLElement | null } = { current: typeof document !== 'undefined' ? document.body : null };
-const _polyformNoteZIndexRange: [number, number] = [1000, 2000];
 const _polyformTextureCache = new Map<string, THREE.Texture>();
 const _polyformTextureLoader = new THREE.TextureLoader();
 _polyformTextureLoader.setCrossOrigin('anonymous');
@@ -914,46 +913,6 @@ const tryAutoDivideOnLineCrossing = (p1: THREE.Vector3, p2: THREE.Vector3, world
   return null;
 };
 
-// Poly tool helpers
-const computeArcPoints = (p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, segments: number = 32): THREE.Vector3[] | null => {
-  const a = p1.clone().sub(p0);
-  const b = p2.clone().sub(p0);
-  const axb = a.clone().cross(b);
-  const axbLenSq = axb.lengthSq();
-  if (axbLenSq < 1e-8) return null;
-  const aLenSq = a.lengthSq();
-  const bLenSq = b.lengthSq();
-  const term1 = axb.clone().cross(a).multiplyScalar(bLenSq);
-  const term2 = b.clone().cross(axb).multiplyScalar(aLenSq);
-  const center = p0.clone().add(term1.add(term2).multiplyScalar(1 / (2 * axbLenSq)));
-  const radius = center.distanceTo(p0);
-  if (radius < 1e-6) return null;
-  const u = p0.clone().sub(center).normalize();
-  const w = axb.clone().normalize();
-  const v = w.clone().cross(u).normalize();
-  const angleOf = (p: THREE.Vector3) => {
-    const vec = p.clone().sub(center);
-    return Math.atan2(vec.dot(v), vec.dot(u));
-  };
-  const normalizeAngle = (ang: number) => {
-    let a2 = ang % (Math.PI * 2);
-    if (a2 < 0) a2 += Math.PI * 2;
-    return a2;
-  };
-  const a1n = normalizeAngle(angleOf(p1));
-  const a2n = normalizeAngle(angleOf(p2));
-  let sweep = a1n;
-  if (!(a2n > 0 && a2n < a1n)) {
-    sweep = a1n - Math.PI * 2;
-  }
-  const pts: THREE.Vector3[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = (i / segments) * sweep;
-    pts.push(center.clone().add(u.clone().multiplyScalar(radius * Math.cos(t))).add(v.clone().multiplyScalar(radius * Math.sin(t))));
-  }
-  return pts;
-};
-
 type Pt2 = { x: number; y: number };
 
 function pointInPolygon2D(pt: Pt2, poly: Pt2[]): boolean {
@@ -1603,8 +1562,6 @@ function Scene() {
     isDeveloperConsoleOpen,
     shapes, 
     setShapes,
-    duplicateObject,
-    duplicateMultiple,
     setShapesSilent,
     commitHistory,
     addShape, 
@@ -1618,14 +1575,11 @@ function Scene() {
     activePBR,
     activeSurfaceDepth,
     updateShapeColor,
-    updateShapeDimensions,
     setMeasurements,
     setViewportToast,
     setPlacingNotePos,
     unit,
     theme,
-    setRightPanelVisible,
-    setPanelVisibility,
     shadowsEnabled,
     showLightsource,
     lightPosition,
@@ -1648,75 +1602,48 @@ function Scene() {
     selectedSurface,
     setSelectedSurface,
     activeTagId,
-    setActiveTagId,
     tags,
-    setTags,
     recordAction,
-    scenes,
     setScenes,
     shadowOpacity,
-    setShadowOpacity,
     ambientOcclusionEnabled,
-    setAmbientOcclusionEnabled,
     godRaysEnabled,
     godRaysIntensity,
     activeBevelType,
-    setActiveBevelType,
     activeBevelAmount,
-    contextMenu,
     setContextMenu,
     undo,
     redo,
     skybox,
-    skyboxBlur,
-    setSkyboxBlur,
-    environmentIntensity,
-    skyboxRotation,
     sunIntensity,
-    setSunIntensity,
     customLights,
     setCustomLights,
     selectedLightId,
     setSelectedLightId,
     fogSettings,
-    setFogSettings,
     animateSun,
     sunSpeed,
     gridEnabled,
-    setGridEnabled,
     axisIndicatorEnabled,
     miniAxisIndicatorEnabled,
     floorEnabled,
-    setFloorEnabled,
     floorColor,
     placingLightId,
     setPlacingLightId,
-    animations,
     setAnimations,
     placingAnimationId,
     setPlacingAnimationId,
-    placingNoteId,
-    setPlacingNoteId,
     notes,
     setNotes,
     collaborators,
-    setCollaborators,
-    chatMessages,
-    setChatMessages,
     deformationSettings,
-    setDeformationSettings,
-    subtractCutterId,
-    setSubtractCutterId,
     subtractTargetId,
     setSubtractTargetId,
     kernelSubtractTarget,
     setKernelSubtractTarget,
-    selectionShapeMode,
     setSelectionShapeMode,
     showCollaboratorCursors,
     user,
-    setUser,
-    consoleOutput,
     setConsoleOutput,
     focusOnMapTrigger,
     allNotesVisible,
@@ -1727,26 +1654,19 @@ function Scene() {
     setZoom,
     rectangleInputState,
     setRectangleInputState,
-    syncStatus,
-    isDiagnosticLogOpen,
-    setIsDiagnosticLogOpen,
-    lastInteractionData,
     setLastInteractionData,
     diagLog,
     contactFrictionEnabled,
     contactFrictionStrength,
     autoOrbitEnabled,
     orbitRotationSpeed,
-    isAIGenerateOpen,
     edgeLinesEnabled,
     edgeLinesColor,
     edgeLinesOpacity,
     edgeLinesThickness,
     showAllDimensions,
     landscapeSculptSettings,
-    setLandscapeSculptSettings,
     landscapeRoadSettings,
-    setLandscapeRoadSettings,
     activePlantSpecies,
     activePlantVariation,
     activePlantScale,
@@ -1767,7 +1687,6 @@ function Scene() {
     wallJustification,
     setWallJustification,
     activeStory,
-    setActiveStory,
     commitUpdatedFraming,
     cameraDepthClippingEnabled,
     cameraNear,
@@ -1779,7 +1698,6 @@ function Scene() {
     floorTransparency,
     fixturesTransparency,
     terrainModifiers,
-    setTerrainModifiers,
     selectedModifierId,
     setSelectedModifierId,
     activeSplineDraft,
@@ -3684,7 +3602,6 @@ function Scene() {
     to: { position: THREE.Vector3; quaternion: THREE.Quaternion; fov: number; near: number; target: THREE.Vector3 };
   } | null>(null);
   const [trackingGuide, setTrackingGuide] = useState<{ source: [number, number, number]; target: [number, number, number]; color: string; label?: string } | null>(null);
-  const inferenceLockRef = useRef<{ point: THREE.Vector3; type: 'endpoint' | 'midpoint' | 'center'; since: number; locked: boolean } | null>(null);
   const [typedLength, setTypedLength] = useState<string>('');
 
   // Starts (or, mid-flight, restarts from the current interpolated pose)
@@ -5342,7 +5259,6 @@ function Scene() {
         const typedLength = typedLengthRef.current;
         const drawingStart = drawingStartRef.current;
         const drawingNormal = drawingNormalRef.current;
-        const lastDrawTarget = lastDrawTargetRef.current;
         const drawingStep = drawingStepRef.current;
         const previewShape = previewShapeRef.current;
         const bezierKnots = bezierKnotsRef.current;
@@ -6075,7 +5991,6 @@ function Scene() {
       const intersects = raycaster.intersectObjects(scene.children, true);
       const shapeIntersect = intersects.find(i => i.object.userData.isShape);
       const hitPoint = shapeIntersect ? shapeIntersect.point.clone() : e.point.clone();
-      const pt: [number, number, number] = [hitPoint.x, hitPoint.y, hitPoint.z];
 
       if (e.nativeEvent.detail === 2 || (activeSplineDraft.length > 0 && hitPoint.distanceTo(new THREE.Vector3(...activeSplineDraft[activeSplineDraft.length - 1])) < 0.25)) {
         finalizeCivilRoadDraft();
@@ -7925,18 +7840,6 @@ function Scene() {
 
         // Screen-space coordinates for pixel-precise inference
         const rect = gl.domElement.getBoundingClientRect();
-        const mouseScreenX = ((mouse.x + 1) / 2) * rect.width;
-        const mouseScreenY = ((-mouse.y + 1) / 2) * rect.height;
-
-        const projectToScreen = (p: THREE.Vector3) => {
-          const v = p.clone().project(camera);
-          const inFront = v.z < 1.0;
-          return {
-            x: ((v.x + 1) / 2) * rect.width,
-            y: ((-v.y + 1) / 2) * rect.height,
-            inFront
-          };
-        };
 
         // Coordinate basis on drawing plane
         const up = new THREE.Vector3(0, 1, 0);
@@ -9138,19 +9041,6 @@ function Scene() {
       setSelectedSurface(null);
       setContextMenu({ x: clientX, y: clientY, type: 'multi', data: [id] });
     }
-  };
-
-
-  const handleApplyMaterialToSurface = (material: string) => {
-    if (!selectedSurface) return;
-    setShapes(prev => prev.map(s => {
-      if (s.id === selectedSurface.shapeId) {
-        const surfaceMaterials = s.surfaceMaterials || {};
-        return { ...s, surfaceMaterials: { ...surfaceMaterials, [selectedSurface.faceIndex]: material } };
-      }
-      return s;
-    }));
-    setContextMenu(null);
   };
 
   const handleMeshPointerDown = (e: ThreeEvent<PointerEvent>, shape: Shape) => {
@@ -13708,7 +13598,6 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
   // Refs so useFrame always reads the live texture, never a stale closure
   const textureRef = useRef<THREE.Texture | null>(null);
   const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
-  const frameCountRef = useRef(0);
   const lightRef = useRef<THREE.SpotLight>(null!);
 
   // Fix 2: Directly assign refs in render body to prevent stale closures and avoid controlled increment loop
@@ -14698,7 +14587,6 @@ export default function Viewport() {
     activeMaterialBindingId,
     activeSurfaceDepth,
     setShapes, 
-    addShape,
     duplicateObject,
     commitHistory,
     commitUpdatedFraming,
@@ -14706,8 +14594,6 @@ export default function Viewport() {
     viewportToast,
     selectionShapeMode,
     setSelectionShapeMode,
-    selectionFilter,
-    setSelectionFilter,
     selectionCriteria,
     setSelectionCriteria,
     selectedFaceIds,
@@ -14718,7 +14604,6 @@ export default function Viewport() {
     kernelHost,
     bumpKernel,
     setSelectedFaceIds,
-    skybox, 
     activeTagId, 
     shapes, 
     tags, 
@@ -14729,25 +14614,13 @@ export default function Viewport() {
     selectedId,
     customLights,
     setCustomLights,
-    selectedLightId,
-    setSelectedLightId,
-    ambientOcclusionEnabled,
-    setAmbientOcclusionEnabled,
     setRightPanelVisible,
     setPanelVisibility,
     defaultCameraPosition,
     defaultCameraTarget,
     setSelectedIds,
-    showCollaboratorCursors,
     unit,
     wallToolSettings,
-    setWallToolSettings,
-    wallJustification,
-    setWallJustification,
-    activeStory,
-    setActiveStory,
-    isToolModifierDocked,
-    setIsToolModifierDocked,
     setActiveTool,
     kernelRevision,
     registerWallConversionUndo,

@@ -16,12 +16,10 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function CivilGradeHUD() {
   const {
-    activeTool,
     activeCivilGrade,
     civilRoadSettings,
     cutFillMetrics,
     terrainModifiers,
-    unit,
     showCutFillOverlay
   } = useApp();
 

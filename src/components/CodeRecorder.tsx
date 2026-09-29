@@ -7,7 +7,6 @@ import { cn } from '../lib/utils';
 export function CodeRecorder() {
   const { 
     codeRecorderEnabled, 
-    setCodeRecorderEnabled, 
     isRecording, 
     setIsRecording, 
     recordedCode, 

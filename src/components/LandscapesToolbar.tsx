@@ -101,6 +101,8 @@ function CivilToolButton({
     <button
       ref={buttonRef}
       id={`civil-tool-${tool}`}
+      aria-label={label}
+      aria-pressed={active}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

@@ -117,7 +117,6 @@ export default function RightPanelStack() {
     setActiveMaterialBindingId,
     materialBindings,
     setMaterialBindings,
-    activePBR,
     setActivePBR,
     setActiveSurfaceDepth,
     shapes,
@@ -135,8 +134,6 @@ export default function RightPanelStack() {
     setSelectedId, 
     selectedIds,
     setSelectedIds,
-    updateShapeDimensions,
-    updateShapeColor,
     user,
     customMaterials,
     setCustomMaterials,
@@ -159,7 +156,6 @@ export default function RightPanelStack() {
     lightPosition,
     setLightPosition,
     sunOrbitCenter,
-    setSunOrbitCenter,
     pickingSunCenter,
     setPickingSunCenter,
     animateSun,
@@ -192,12 +188,6 @@ export default function RightPanelStack() {
     setCustomLights,
     fogSettings,
     setFogSettings,
-    cameraDepthClippingEnabled,
-    setCameraDepthClippingEnabled,
-    cameraNear,
-    setCameraNear,
-    cameraFar,
-    setCameraFar,
     wallTransparency,
     setWallTransparency,
     exteriorWallTransparency,
@@ -243,27 +233,14 @@ export default function RightPanelStack() {
     placingAnimationId,
     setPlacingAnimationId,
     unit,
-    setUnit,
-    setShapesSilent,
     recordAction,
     notes,
     setNotes,
-    placingNoteId,
-    setPlacingNoteId,
-    isCollaborationOpen,
-    setIsCollaborationOpen,
     collaborators,
-    setCollaborators,
     chatMessages,
-    setChatMessages,
     currentModelId,
-    setCurrentModelId,
     deformationSettings,
     setDeformationSettings,
-    subtractCutterId,
-    setSubtractCutterId,
-    subtractTargetId,
-    setSubtractTargetId,
     allNotesVisible,
     setAllNotesVisible,
     isMessagingOpen,
@@ -912,22 +889,6 @@ export default function RightPanelStack() {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [chatMessages]);
-
-  const handleSendMessage = async () => {
-    if (!chatInput.trim() || !user || !currentModelId) return;
-    try {
-      const path = `models/${currentModelId}/messages`;
-      await addDoc(collection(db, 'models', currentModelId, 'messages'), {
-        uid: user.uid,
-        displayName: user.displayName || 'Anonymous',
-        text: chatInput,
-        timestamp: Date.now()
-      });
-      setChatInput('');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `models/${currentModelId}/messages`);
-    }
-  };
 
   const formatDistance = (m: number) => {
     switch(unit) {
@@ -5399,25 +5360,6 @@ function Loader2({ className, size }: { className?: string, size?: number }) {
       className={className}
     >
       <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-    </svg>
-  );
-}
-
-function SearchIcon({ size, className }: { size: number, className?: string }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
     </svg>
   );
 }

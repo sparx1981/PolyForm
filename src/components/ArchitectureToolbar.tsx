@@ -49,6 +49,8 @@ function ArchToolButton({ tool, icon, label, subtitle, hotkey, children }: ArchT
       <button
         ref={buttonRef}
         id={`arch-tool-${tool}`}
+        aria-label={label}
+        aria-pressed={isActive}
         onClick={() => setActiveTool(tool)}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -91,14 +93,9 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
   const { 
     isArchitectureToolbarEnabled, 
     theme, 
-    bannerColor,
     toolbarVisibility,
     activeTool,
     setActiveTool,
-    wallToolSettings,
-    setWallToolSettings,
-    wallJustification,
-    setWallJustification,
     activeStory,
     setActiveStory,
     shapes,
@@ -374,6 +371,7 @@ function WorldViewToolButton() {
       <button
         ref={buttonRef}
         id="arch-worldview-btn"
+        aria-label="WorldView"
         onClick={() => setActiveTool(activeTool === 'worldview' ? 'select' : 'worldview')}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}

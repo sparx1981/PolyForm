@@ -5,7 +5,7 @@ import { useApp } from '../AppContext';
 import { useModalA11y } from './ui/useModalA11y';
 
 export default function WebpageModal() {
-  const { embeddedWebpageUrl, setEmbeddedWebpageUrl, theme } = useApp();
+  const { embeddedWebpageUrl, setEmbeddedWebpageUrl } = useApp();
   const isOpen = !!embeddedWebpageUrl;
   const modalRef = useModalA11y<HTMLDivElement>(isOpen, () => setEmbeddedWebpageUrl(null));
 

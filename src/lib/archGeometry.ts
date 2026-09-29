@@ -1267,8 +1267,6 @@ export function createWindowGeometry(
     }
 
     case 'slider': {
-      // 2-Pane Horizontal Sliding Sashes with Center Overlap
-      const sashW = innerW / 2 + 0.02;
       const meetingStileW = 0.035;
 
       const sashMeeting = new THREE.BoxGeometry(meetingStileW, innerH, frameDepth * 0.85);

@@ -61,7 +61,6 @@ function AppContent() {
       theme, 
       rightPanelVisible, 
       setRightPanelVisible, 
-      setIsChangelogOpen,
       setCurrentModelId: updateModelId,
       setShapesSilent,
       setTagsSilent,

@@ -65,6 +65,8 @@ function ToolButton({ tool, icon, label }: ToolButtonProps) {
   return (
     <button
       ref={buttonRef}
+      aria-label={label}
+      aria-pressed={isActive}
       onClick={() => {
         setActiveTool(tool);
         if (tool === 'paint') setOpenMaterialsSignal((s: number) => s + 1);
@@ -104,15 +106,12 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
   const { 
     isBasicToolbarEnabled,
     theme, 
-    toolbarVisibility, 
     activeTool, 
     setActiveTool,
     showAllDimensions,
     setShowAllDimensions,
     activeBevelType,
     setActiveBevelType,
-    activeBevelAmount,
-    setActiveBevelAmount,
     pinnedScripts,
     developerScripts,
     basicToolbarExtensions,
@@ -120,9 +119,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     setShapes,
     updateShapeColor,
     selectedId,
-    setConsoleOutput,
-    isWorldViewActive,
-    triggerFocusOnMap
+    setConsoleOutput
   } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [is3DPopoutOpen, setIs3DPopoutOpen] = useState(false);
@@ -303,6 +300,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         onMouseLeave={handleLineLeave}
       >
         <button 
+          aria-label="Line and curve tools"
           onClick={() => setActiveTool('line')}
           className={cn(
             "toolbar-btn transition-colors relative",
@@ -405,6 +403,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         onMouseLeave={handleCircleLeave}
       >
         <button 
+          aria-label="Shape tools"
           onClick={() => setActiveTool('rectangle')}
           className={cn(
             "toolbar-btn transition-colors relative",
@@ -489,6 +488,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         onMouseLeave={handle3DLeave}
       >
         <button 
+          aria-label="3D shape tools"
           className={cn(
             "toolbar-btn transition-colors relative",
             is3DActive && "toolbar-btn-active"
@@ -582,6 +582,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         onMouseLeave={handleBevelLeave}
       >
         <button 
+          aria-label="Bevel"
           onClick={() => setActiveTool('bevel')}
           className={cn(
             "toolbar-btn transition-colors relative",
@@ -652,6 +653,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         onMouseLeave={handleMeasureLeave}
       >
         <button 
+          aria-label="Tape measure"
           onClick={() => setActiveTool('tape')}
           className={cn(
             "toolbar-btn transition-colors relative",
@@ -801,6 +803,7 @@ function PinnedScriptButton({ name, onClick }: { name: string; onClick: () => vo
   return (
     <button
       ref={buttonRef}
+      aria-label={name}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

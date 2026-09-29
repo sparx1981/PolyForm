@@ -353,7 +353,6 @@ const labelOf = (kind: SnapKind, custom?: string): string =>
 export function computeSnap(inp: SnapInput): SnapResult {
   const screen = makeScreen(inp);
   const plane = inp.plane ?? null;
-  const from = inp.from ?? null;
   const m = model(inp.graph, inp.revision);
   const guides = inp.guides ?? [];
 

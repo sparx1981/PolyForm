@@ -14,8 +14,7 @@ export const ScaleFigureModifierSection: React.FC = () => {
     setActiveScaleFigureCharacter,
     activeScaleFigureHeight,
     setActiveScaleFigureHeight,
-    setMeasurements,
-    theme
+    setMeasurements
   } = useApp();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');

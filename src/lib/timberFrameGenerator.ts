@@ -802,9 +802,6 @@ export function generateTimberFraming(
   // 2. FLOOR TIMBER JOISTS & RIM FRAMING (Polygon & Multi-Story Aware)
   // -------------------------------------------------------------
   if (includeFloors) {
-    const joistWidth = 0.045; // 45mm width
-    const joistDepth = 0.195; // 195mm height (C16/C24 structural timber)
-    const offsetJoists = offsetFloorJoists;
 
     // Identify all architectural walls and slabs
     const allWalls = allShapes.filter(s => 
@@ -1528,7 +1525,6 @@ export function generateTimberFraming(
 
           // B. End Eave Jack Rafters along e1 -> e2 (at x = e1.x)
           const spanZ1 = Math.abs(e2.z - e1.z);
-          const midZ1 = (e1.z + e2.z) / 2;
           let zJack1 = Math.min(e1.z, e2.z) + studSpacing;
           const maxZ1 = Math.max(e1.z, e2.z) - 0.05;
           while (zJack1 <= maxZ1) {

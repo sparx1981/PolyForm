@@ -17,9 +17,7 @@ export function DeveloperSuite() {
     setIsDeveloperConsoleOpen, 
     activeDeveloperTab, 
     setActiveDeveloperTab,
-    consoleOutput,
     setConsoleOutput,
-    theme,
     shapes,
     setShapes,
     updateShapeColor,
@@ -29,9 +27,6 @@ export function DeveloperSuite() {
     setSelectedIds,
     developerSuiteWidth,
     setDeveloperSuiteWidth,
-    developerScripts,
-    setDeveloperScripts,
-    user,
     setScenes,
     setSkybox,
     setSkyboxBlur,
@@ -58,9 +53,6 @@ export function DeveloperSuite() {
     setWorldViewRadius,
     googleMapsApiKey,
     triggerFocusOnMap,
-    developerCode,
-    setDeveloperCode,
-    refreshScripts,
     activeTool,
     setActiveTool,
     activeMaterial,
@@ -463,8 +455,6 @@ function DeveloperConsole({ sdkProps }: { sdkProps: any }) {
     theme, 
     developerCode, 
     setDeveloperCode,
-    developerScripts,
-    setDeveloperScripts,
     setActiveDeveloperTab,
     user,
     refreshScripts
@@ -1048,7 +1038,7 @@ console.log("All tool parameters and variables successfully configured!");`
 }
 
 function DeveloperLibrary() {
-  const { developerScripts, setDeveloperScripts, setDeveloperCode, setActiveDeveloperTab, setPinnedScripts, user, refreshScripts } = useApp();
+  const { developerScripts, setDeveloperCode, setActiveDeveloperTab, setPinnedScripts, user, refreshScripts } = useApp();
   const [filter, setFilter] = useState<'all' | 'me' | 'shared'>('all');
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
   const [editingScriptName, setEditingScriptName] = useState('');

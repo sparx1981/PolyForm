@@ -90,7 +90,6 @@ export interface KernelFaceBinding {
 }
 
 const DEFAULT_FACE = '#d8d4cc';
-const DEFAULT_BACK = '#8f9ba8';
 const DEFAULT_EDGE = '#2b2b2b';
 const DEFAULT_SELECTED = '#3b82f6';
 

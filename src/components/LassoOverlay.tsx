@@ -49,11 +49,9 @@ export const LassoOverlay: React.FC<LassoOverlayProps> = ({ getSceneObjectById }
     setSelectedFaceIds,
     setMeasurements,
     selectionShapeMode,
-    setSelectionShapeMode,
     selectionFilter,
     selectionCriteria,
-    theme,
-  } = useApp();
+    } = useApp();
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [points, setPoints] = useState<Point2D[]>([]);

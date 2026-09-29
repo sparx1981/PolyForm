@@ -80,7 +80,7 @@ import { cn } from '../lib/utils';
  */
 
 export default function AIRenderer() {
-  const { isAIRendererOpen, setIsAIRendererOpen, theme } = useApp();
+  const { isAIRendererOpen, setIsAIRendererOpen } = useApp();
   const [prompt, setPrompt] = useState('');
   const [isRendering, setIsRendering] = useState(false);
   const [resultImage, setResultImage] = useState<string | null>(null);
