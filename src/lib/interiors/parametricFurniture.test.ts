@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInteriorFurnitureGeometry, createInteriorFurnitureShape, interiorFurnitureCatalog } from './parametricFurniture';
+import { billOfMaterials } from '../presentation/bom';
 
 describe('parametric interior furniture', () => {
   it('ships the first four native interior definitions', () => {
@@ -21,6 +22,15 @@ describe('parametric interior furniture', () => {
     expect(sofa.customData.semanticComponent.simulation).toMatchObject({ type: 'softbody', bakeable: true });
     expect(bed.customData.semanticComponent.simulation).toMatchObject({ type: 'softbody', bakeable: true });
     expect(curtain.customData.semanticComponent.simulation).toMatchObject({ type: 'cloth', bakeable: true });
+  });
+
+  it('includes semantic furniture in quantities', () => {
+    const lines = billOfMaterials([
+      createInteriorFurnitureShape('bed'),
+      createInteriorFurnitureShape('curtain'),
+    ]);
+    expect(lines.some(line => line.group === 'Fixtures & furniture' && line.item === 'Bed')).toBe(true);
+    expect(lines.some(line => line.group === 'Fixtures & furniture' && line.item === 'Curtain')).toBe(true);
   });
 
   it('creates serialisable native custom shapes with placement metadata', () => {
