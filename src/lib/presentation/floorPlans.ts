@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Shape } from '../../types';
 import { ROOF_BUILDUP, dormerCeilingAt, layoutsOf, type DormerLayout } from '../dormers';
 import { RoofSurface } from '../roofSurface';
+import { detectRooms, type SpatialRoom } from '../spatial/rooms';
 
 /**
  * Simple architectural floor plans drawn from a model's objects: walls, the doors and windows
@@ -19,6 +20,8 @@ export interface RoomLabel {
 }
 
 export interface PlanRoom {
+  /** Stable semantic room id shared with editor/BIM/reconstruction systems. */
+  id?: string;
   name?: string;
   areaM2: number;
   /**
@@ -30,6 +33,9 @@ export interface PlanRoom {
   size: V2;
   /** [x, z] of the room's label spot (pass it back as a RoomLabel to name the room). */
   at: V2;
+  /** Walls/openings associated by the shared spatial room service. */
+  boundaryWallIds?: string[];
+  openingIds?: string[];
 }
 
 export interface FloorPlan {
@@ -356,6 +362,7 @@ function artisticDefs() {
 /** Floor plans for every storey, or none when the model has no walls. */
 export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 1000, options: PlanOptions = {}): FloorPlan[] {
   const levels = buildingLevels(shapes);
+  const spatialRooms = detectRooms(shapes);
   if (!levels.length) return [];
   const art = options.style === 'artistic';
 
@@ -409,9 +416,20 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
       const bi = r.best % grid.nx, bj = (r.best - bi) / grid.nx;
       const areaM2 = +(r.cells * CELL * CELL).toFixed(1);
       const usable = headroom ? usableCells(r, label, grid, (x, z) => headroom(x, z, level.elevation)) * CELL * CELL : r.cells * CELL * CELL;
+      const at: V2 = [+(grid.x0 + (bi + 0.5) * CELL).toFixed(2), +(grid.z0 + (bj + 0.5) * CELL).toFixed(2)];
+      const candidates = spatialRooms.filter(room => room.level === level.level);
+      const semantic = candidates.reduce<SpatialRoom | undefined>((best, room) => {
+        if (!best) return room;
+        const db = Math.hypot(best.at[0] - at[0], best.at[1] - at[1]);
+        const dr = Math.hypot(room.at[0] - at[0], room.at[1] - at[1]);
+        return dr < db ? room : best;
+      }, undefined);
       planRooms.push({
+        id: semantic?.id,
         name: r.name, areaM2, size: [+w.toFixed(2), +d.toFixed(2)],
-        at: [+(grid.x0 + (bi + 0.5) * CELL).toFixed(2), +(grid.z0 + (bj + 0.5) * CELL).toFixed(2)],
+        at,
+        boundaryWallIds: semantic?.boundaryWallIds,
+        openingIds: semantic?.openingIds,
         ...(areaM2 - usable >= 0.1 ? { usableM2: +usable.toFixed(1) } : {}),
       });
       const fill = art ? ROOM_TINTS[n % ROOM_TINTS.length] : '#f5f1e8';

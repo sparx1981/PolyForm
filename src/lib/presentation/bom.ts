@@ -164,6 +164,18 @@ export function billOfMaterials(
         }
         break;
       }
+      case 'other': {
+        const semantic = s.customData?.semanticComponent;
+        if (semantic?.kind === 'furniture' || semantic?.kind === 'soft-furnishing') {
+          t.add({
+            group: 'Fixtures & furniture',
+            item: s.name || titleCase(String(s.customData?.furnitureType || 'Furniture')),
+            qty: 1,
+            unit: 'no.',
+          });
+        }
+        break;
+      }
       default:
         break;
     }
