@@ -978,6 +978,13 @@ export interface AppState {
   setToolbarDocks: (
     val: Record<ToolbarKey, DockZone> | ((prev: Record<ToolbarKey, DockZone>) => Record<ToolbarKey, DockZone>),
   ) => void;
+  /** Which lane of its dock each classic toolbar sits in; toolbars sharing a lane stack. */
+  toolbarLanes: Record<ToolbarKey, number>;
+  /** Sets order, docks and lanes together (one saved layout). */
+  setToolbarLayout: (layout: import('./lib/toolbarLayout').ToolbarLayout) => void;
+  /** Classic toolbars show drag grips and can be moved only while this is on (default off). */
+  isToolbarEditMode: boolean;
+  setIsToolbarEditMode: (val: boolean | ((prev: boolean) => boolean)) => void;
   // Timber Frame Parametric State & Scoped Recompute
   timberFrameParams: TimberFrameParams;
   setTimberFrameParams: (params: TimberFrameParams | ((prev: TimberFrameParams) => TimberFrameParams)) => void;

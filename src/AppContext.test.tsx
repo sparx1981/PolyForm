@@ -338,6 +338,23 @@ describe('AppContext / useApp', () => {
       expect(result.current.toolbarOrder).toEqual(['landscapes', 'left', 'architecture', 'camera', 'ai']);
     });
 
+    it('toolbar editing is off by default and remembered when turned on', () => {
+      const { result } = renderApp();
+      expect(result.current.isToolbarEditMode).toBe(false);
+      act(() => { result.current.setIsToolbarEditMode(true); });
+      expect(result.current.isToolbarEditMode).toBe(true);
+      expect(localStorage.getItem('polyform_toolbar_edit')).toBe('true');
+    });
+
+    it('every toolbar starts in its own lane, and setToolbarLayout saves a stacked layout', () => {
+      const { result } = renderApp();
+      expect(new Set(Object.values(result.current.toolbarLanes)).size).toBe(5);
+      const lanes = { ...result.current.toolbarLanes, ai: result.current.toolbarLanes.camera };
+      act(() => { result.current.setToolbarLayout({ order: result.current.toolbarOrder, docks: result.current.toolbarDocks, lanes }); });
+      expect(result.current.toolbarLanes.ai).toBe(result.current.toolbarLanes.camera);
+      expect(JSON.parse(localStorage.getItem('polyform_toolbar_lanes')!)).toEqual(lanes);
+    });
+
     it('toolbarDocks falls back to the default when stored data has an invalid zone', () => {
       localStorage.setItem('polyform_toolbar_docks', JSON.stringify({ left: 'left', architecture: 'nowhere', landscapes: 'left' }));
       const { result } = renderApp();

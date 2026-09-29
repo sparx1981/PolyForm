@@ -9,6 +9,8 @@ import { isSectionShape } from '../tools/sectionPlanes';
 import { TextEntityFields } from './TextEntityFields';
 import { WeatherControls } from './graphics/WeatherControls';
 import { FinishSwatch } from './PlainFinishPicker';
+import { MaterialPreview3D, type PreviewSpec } from './MaterialPreview3D';
+import { Fold } from './ui/Fold';
 import { buildPbrList, filterPbrList } from '../lib/materials/pbrList';
 import { FLOCK_DEFAULTS } from './animations/FlockSystem';
 import { MaterialEditorDialog } from './MaterialEditorDialog';
@@ -404,10 +406,13 @@ export default function RightPanelStack() {
   // HeightMapPicker has something to derive a height map from as soon as it's ready,
   // without waiting on that handler's Firebase persistence step.
   const [newTextureDataUrl, setNewTextureDataUrl] = useState<string | undefined>(undefined);
+  // What the 3D preview in the Add Material dialog shows once a swatch's cube icon is clicked (else the live colour/upload).
+  const [previewPick, setPreviewPick] = useState<PreviewSpec | null>(null);
   useEffect(() => {
     if (!isAddMaterialOpen) {
       setNewMaterialSurfaceDepth(null);
       setNewTextureDataUrl(undefined);
+      setPreviewPick(null);
       if (premadeClickTimer.current) { clearTimeout(premadeClickTimer.current); premadeClickTimer.current = null; }
     }
   }, [isAddMaterialOpen]);
@@ -487,6 +492,35 @@ export default function RightPanelStack() {
   // is hidden, then run them again once one is shown - a
   // "Rendered more hooks than during the previous render" crash.
   const allPanelsHidden = panelVisibility['entity'] === false && panelVisibility['outliner'] === false && panelVisibility['materials'] === false && panelVisibility['styles'] === false && panelVisibility['tags'] === false && panelVisibility['scenes'] === false && panelVisibility['shadows'] === false && panelVisibility['components'] === false;
+
+  // The dialog's 3D preview: whatever swatch was picked with its cube icon, else the material being made.
+  const previewSpec: PreviewSpec | null = (() => {
+    if (previewPick) return previewPick;
+    const depth = newMaterialSurfaceDepth ?? undefined;
+    const common = {
+      roughness: pbrSettings.roughness, metalness: pbrSettings.metalness, opacity: pbrSettings.opacity,
+      ...(depth?.displacementMapUrl ? { heightMapUrl: depth.displacementMapUrl } : {}),
+      ...(depth?.normalMapUrl ? { normalMapUrl: depth.normalMapUrl } : {}),
+      ...(depth?.displacementScale !== undefined ? { depthScale: depth.displacementScale } : {}),
+    };
+    if (activeTab === 'color') return { label: `Colour ${newColor.toUpperCase()}`, color: newColor, ...common };
+    if (activeTab === 'texture' && newTextureDataUrl) return { label: 'Uploaded texture', textureUrl: newTextureDataUrl, color: '#ffffff', ...common };
+    if (activeTab === 'ai' && aiPreviewUrl) return { label: 'AI material', textureUrl: aiPreviewUrl, color: '#ffffff', ...common };
+    return null;
+  })();
+  /** The small cube button on a swatch: shows that material in the preview without applying it. */
+  const previewButton = (spec: PreviewSpec, className = '') => (
+    <button
+      type="button"
+      title="Preview in 3D"
+      aria-label={`Preview ${spec.label ?? 'material'} in 3D`}
+      onClick={(e) => { e.stopPropagation(); setPreviewPick(spec); }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      className={cn('absolute z-10 p-1 rounded-md bg-white/90 text-gray-600 shadow-sm border border-gray-200 hover:text-polyform-blue hover:border-polyform-blue transition-colors', className)}
+    >
+      <Box size={12} />
+    </button>
+  );
 
   const handleAddColor = async () => {
     const materialId = Math.random().toString(36).substr(2, 9);
@@ -4554,7 +4588,7 @@ export default function RightPanelStack() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-xl shadow-modus-4 w-full max-w-md overflow-hidden flex flex-col"
+              className="bg-white text-gray-800 rounded-xl shadow-modus-4 w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
             >
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-gray-800">Add Material</h2>
@@ -4563,86 +4597,63 @@ export default function RightPanelStack() {
                 </button>
               </div>
 
-              <div className="flex border-b border-gray-100">
-                <button 
-                  onClick={() => setActiveTab('color')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'color' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  Color Picker
-                </button>
-                <button 
-                  onClick={() => setActiveTab('texture')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'texture' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  Upload Texture
-                </button>
-                <button 
-                  onClick={() => setActiveTab('mytextures')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'mytextures' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  My Textures
-                </button>
-                <button 
-                  onClick={() => setActiveTab('premade')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors",
-                    activeTab === 'premade' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  PBR Materials
-                </button>
-                <button 
-                  onClick={() => setActiveTab('ai')}
-                  className={cn(
-                    "flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-1",
-                    activeTab === 'ai' ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  <Wand2 size={14} />
-                  AI Generate
-                </button>
+              <div className="flex border-b border-gray-100 overflow-x-auto" role="tablist">
+                {([
+                  ['color', 'Colour', null],
+                  ['texture', 'Upload Texture', null],
+                  ['mytextures', 'My Textures', null],
+                  ['premade', 'PBR Materials', null],
+                  ['ai', 'AI Generate', <Wand2 key="w" size={14} />],
+                ] as const).map(([id, label, icon]) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    aria-selected={activeTab === id}
+                    onClick={() => { setActiveTab(id); setPreviewPick(null); }}
+                    className={cn(
+                      "px-5 py-3 text-sm font-medium whitespace-nowrap flex items-center gap-1.5 transition-colors",
+                      activeTab === id ? "text-polyform-blue border-b-2 border-polyform-blue" : "text-gray-500 hover:text-gray-700"
+                    )}
+                  >
+                    {icon}{label}
+                  </button>
+                ))}
               </div>
 
-              <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="flex flex-col md:flex-row min-h-0 flex-1">
+                <div className="md:w-72 shrink-0 p-5 border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50/60 order-first md:order-last">
+                  <MaterialPreview3D spec={previewSpec} />
+                  <p className="mt-2 text-[10px] text-gray-400 leading-tight">Drag to turn it. Height maps show as relief.</p>
+                </div>
+              <div className="p-6 overflow-y-auto min-h-[420px] flex-1 min-w-0">
                 {activeTab === 'color' ? (
-                  <div className="space-y-6">
-                    <div className="flex flex-col items-center gap-4">
-                      <input 
-                        type="color" 
-                        value={newColor}
-                        onChange={(e) => setNewColor(e.target.value)}
-                        className="w-32 h-32 rounded-lg cursor-pointer border-4 border-gray-100 shadow-inner"
-                      />
-                      <div className="text-xl font-mono font-bold text-gray-700">{newColor.toUpperCase()}</div>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <input
+                          type="color"
+                          value={newColor}
+                          onChange={(e) => setNewColor(e.target.value)}
+                          className="w-28 h-28 rounded-lg cursor-pointer border-4 border-gray-100 shadow-inner"
+                        />
+                        {previewButton({ label: `Colour ${newColor.toUpperCase()}`, color: newColor, roughness: pbrSettings.roughness, metalness: pbrSettings.metalness, opacity: pbrSettings.opacity }, 'top-1 right-1')}
+                      </div>
+                      <div>
+                        <div className="text-xl font-mono font-bold text-gray-700">{newColor.toUpperCase()}</div>
+                        <p className="text-[11px] text-gray-400 leading-tight mt-1">Pick a colour, then add it to the palette. Open the sections below for finish and relief.</p>
+                      </div>
                     </div>
 
-                    <div className="space-y-4 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
-                      </div>
+                    <Fold title="PBR Settings" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
-                    </div>
+                    </Fold>
 
-                    <div className="space-y-2 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
-                      </div>
+                    <Fold title="Height Map (optional)" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <HeightMapPicker
                         value={newMaterialSurfaceDepth || {}}
                         onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
                       />
-                    </div>
+                    </Fold>
 
                     <button 
                       onClick={handleAddColor}
@@ -4681,25 +4692,17 @@ export default function RightPanelStack() {
                       )}
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
-                      </div>
+                    <Fold title="PBR Settings" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
-                    </div>
+                    </Fold>
 
-                    <div className="space-y-2 pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Settings2 size={16} className="text-gray-400" />
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
-                      </div>
+                    <Fold title="Height Map (optional)" icon={<Settings2 size={14} className="text-gray-400" />}>
                       <HeightMapPicker
                         value={newMaterialSurfaceDepth || {}}
                         onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
                         sourceTextureUrl={newTextureDataUrl}
                       />
-                    </div>
+                    </Fold>
 
                     {uploading && (
                       <div className="flex items-center justify-center gap-2 text-polyform-blue">
@@ -4715,7 +4718,7 @@ export default function RightPanelStack() {
                         No textures yet. Use the Upload Texture tab to add one.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-4 gap-3">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
                         {customMaterials.filter(m => m.type === 'texture').map((m, i) => (
                           <div
                             key={m.id || `custom-tex-${i}`}
@@ -4744,6 +4747,13 @@ export default function RightPanelStack() {
                               <ImageOff size={14} className="opacity-70 mb-0.5" />
                               <span className="text-[7px] truncate max-w-full font-mono leading-none">{m.name || 'Broken'}</span>
                             </div>
+                            {previewButton({
+                              label: m.name || 'Texture', textureUrl: m.value, color: '#ffffff',
+                              ...(m.pbr ? { roughness: m.pbr.roughness, metalness: m.pbr.metalness, opacity: m.pbr.opacity } : {}),
+                              ...(m.surfaceDepth?.displacementMapUrl ? { heightMapUrl: m.surfaceDepth.displacementMapUrl } : {}),
+                              ...(m.surfaceDepth?.normalMapUrl ? { normalMapUrl: m.surfaceDepth.normalMapUrl } : {}),
+                              ...(m.surfaceDepth?.displacementScale !== undefined ? { depthScale: m.surfaceDepth.displacementScale } : {}),
+                            }, 'top-0.5 left-0.5')}
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleDeleteMaterial(m); }}
@@ -4786,10 +4796,12 @@ export default function RightPanelStack() {
                         ))}
                       </div>
                     )}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {pbrEntries.map((entry, i) => entry.kind === 'finish' ? (
-                      <button
-                        type="button"
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) e.currentTarget.click(); }}
                         key={entry.key}
                         onClick={() => {
                           const finish = entry.finish;
@@ -4805,16 +4817,19 @@ export default function RightPanelStack() {
                       >
                         <div className="aspect-square bg-gray-100 relative">
                           <FinishSwatch finish={entry.finish} />
+                          {previewButton({ label: entry.name, color: entry.finish.color, roughness: entry.finish.roughness, metalness: entry.finish.metalness, opacity: entry.finish.opacity }, 'top-1 right-1')}
                         </div>
                         <div className="p-2">
                           <div className="text-[10px] font-bold truncate">{entry.name}</div>
                           <div className="text-[8px] text-gray-400 truncate">{entry.category}</div>
                           <div className="text-[8px] text-gray-400">Plain finish</div>
                         </div>
-                      </button>
+                      </div>
                     ) : (
-                      <button
-                        type="button"
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) e.currentTarget.click(); }}
                         key={entry.key || `premade-${i}`}
                         onClick={() => {
                           if (premadeClickTimer.current) clearTimeout(premadeClickTimer.current);
@@ -4841,30 +4856,31 @@ export default function RightPanelStack() {
                             decoding="async"
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                             <Plus size={24} className="text-white" />
                           </div>
+                          {previewButton({ label: entry.name, textureUrl: entry.item.texture, color: '#ffffff', roughness: 0.7, metalness: 0 }, 'top-1 right-1')}
                         </div>
                         <div className="p-2">
                           <div className="text-[10px] font-bold truncate">{entry.name}</div>
                           <div className="text-[8px] text-gray-400 truncate">{entry.category}</div>
                           <div className="text-[8px] text-gray-400">Material library · CC0{entry.item.hasHeight ? ' · Height' : ''}</div>
                         </div>
-                      </button>
+                      </div>
                     ))}
                     {catalogLoading && premadeMaterials.length === 0 && (
-                      <div className="col-span-2 py-12 text-center text-gray-400">
+                      <div className="col-span-full py-12 text-center text-gray-400">
                         <Loader2 size={24} className="animate-spin mx-auto mb-2" />
                         <span>Loading material library...</span>
                       </div>
                     )}
                     {!catalogLoading && catalogFallback && premadeMaterials.length === 0 && (
-                      <div className="col-span-2 py-8 text-center text-xs text-gray-400">
+                      <div className="col-span-full py-8 text-center text-xs text-gray-400">
                         The material catalog is temporarily unavailable. Custom uploads and colours remain available.
                       </div>
                     )}
                     {!catalogLoading && !catalogFallback && pbrEntries.length === 0 && (
-                      <div className="col-span-2 py-8 text-center text-xs text-gray-400">
+                      <div className="col-span-full py-8 text-center text-xs text-gray-400">
                         No materials in this category.
                       </div>
                     )}
@@ -4927,24 +4943,16 @@ export default function RightPanelStack() {
                         <div className="aspect-square w-32 mx-auto rounded-lg overflow-hidden border-4 border-gray-100 shadow-inner">
                           <img src={aiPreviewUrl} alt="AI generated material" className="w-full h-full object-cover" />
                         </div>
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2">
-                            <Settings2 size={16} className="text-gray-400" />
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PBR Settings</label>
-                          </div>
+                        <Fold title="PBR Settings" icon={<Settings2 size={14} className="text-gray-400" />}>
                           <PBRControls settings={pbrSettings} onChange={setPbrSettings} />
-                        </div>
-                        <div className="space-y-2 pt-2 border-t border-gray-100">
-                          <div className="flex items-center gap-2">
-                            <Settings2 size={16} className="text-gray-400" />
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Height Map (optional)</label>
-                          </div>
+                        </Fold>
+                        <Fold title="Height Map (optional)" icon={<Settings2 size={14} className="text-gray-400" />}>
                           <HeightMapPicker
                             value={newMaterialSurfaceDepth || {}}
                             onChange={changes => setNewMaterialSurfaceDepth(prev => ({ ...prev, ...changes }))}
                             sourceTextureUrl={aiPreviewUrl}
                           />
-                        </div>
+                        </Fold>
                         <button
                           onClick={handleAddAIMaterial}
                           className="w-full py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all"
@@ -4955,6 +4963,7 @@ export default function RightPanelStack() {
                     )}
                   </div>
                 )}
+              </div>
               </div>
             </motion.div>
           </div>

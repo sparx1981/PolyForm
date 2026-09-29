@@ -7,6 +7,7 @@ import { RENDER_MODE, CLIENT_PAGE } from './lib/renderMode';
 import { normalizePresentationContent } from './lib/presentation/content';
 import * as THREE from 'three';
 import { ToolType, AppState, Shape, Tag, SceneState, SkyboxType, FogSettings, SceneAnimation, SceneNote, Collaborator, ChatMessage, DiagLogEntry, CustomLight, PresentationContent, EMPTY_PRESENTATION_CONTENT, isTextureUrl, CustomToolbarDef, CustomToolbarItem, TerrainModifier, PadPrimitiveType, BatterFalloffType, RoadMarkingPreset, ParkingAngle, CutFillMetrics, ToolbarKey, DockZone, HeightMapValue } from './types';
+import { defaultLanes, type ToolbarLayout } from './lib/toolbarLayout';
 import { WallToolSettings, WallJustification, DEFAULT_WALL_SETTINGS } from './tools/inference/types';
 import { db, auth, handleFirestoreError, OperationType, isQuotaLocked, QUOTA_PAUSE_MS, restoreFirestoreArraysAfterLoad, cleanFirestoreDataForSave, offloadModelForSave, hydrateOffloadedModel, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from './firebase';
 import { KernelArcHost } from './tools/kernelArcHost';
@@ -869,6 +870,47 @@ console.log("Created rectangle:", myRect.id);`);
       const next = typeof val === 'function' ? val(prev) : val;
       try {
         localStorage.setItem('polyform_toolbar_docks', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  /** Which lane of its dock each classic-layout toolbar sits in (toolbars sharing a lane stack). */
+  const [toolbarLanes, setToolbarLanesState] = useState<Record<ToolbarKey, number>>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_toolbar_lanes');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === 'object' && ALL_TOOLBAR_KEYS.every((k) => Number.isInteger(parsed[k]) && parsed[k] >= 0)) {
+          return Object.fromEntries(ALL_TOOLBAR_KEYS.map((k) => [k, parsed[k]])) as Record<ToolbarKey, number>;
+        }
+      }
+    } catch (e) {}
+    return defaultLanes(toolbarOrder);
+  });
+
+  /** Moves toolbars: order, edge and lane change together, as one saved layout. */
+  const setToolbarLayout = (layout: ToolbarLayout) => {
+    setToolbarOrder(layout.order);
+    setToolbarDocks(layout.docks);
+    setToolbarLanesState(layout.lanes);
+    try {
+      localStorage.setItem('polyform_toolbar_lanes', JSON.stringify(layout.lanes));
+    } catch (e) {}
+  };
+
+  /** Toolbars can only be dragged (and show their grips) while this is on. Off by default. */
+  const [isToolbarEditMode, setIsToolbarEditModeState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('polyform_toolbar_edit') === 'true';
+    } catch (e) {}
+    return false;
+  });
+  const setIsToolbarEditMode = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsToolbarEditModeState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_toolbar_edit', String(next));
       } catch (e) {}
       return next;
     });
@@ -2891,6 +2933,10 @@ console.log("Created rectangle:", myRect.id);`);
       setToolbarOrder,
       toolbarDocks,
       setToolbarDocks,
+      toolbarLanes,
+      setToolbarLayout,
+      isToolbarEditMode,
+      setIsToolbarEditMode,
       landscapeSculptSettings,
       setLandscapeSculptSettings,
       landscapeRoadSettings,

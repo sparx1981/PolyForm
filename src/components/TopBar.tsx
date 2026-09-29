@@ -165,6 +165,8 @@ export default function TopBar() {
       setIsCameraToolbarEnabled,
       isAIToolbarEnabled,
       setIsAIToolbarEnabled,
+      isToolbarEditMode,
+      setIsToolbarEditMode,
       layoutMode,
       setLayoutMode,
       terrainModifiers,
@@ -1369,6 +1371,16 @@ export default function TopBar() {
                       isVisible={isAIToolbarEnabled}
                       onToggle={() => setIsAIToolbarEnabled(!isAIToolbarEnabled)}
                     />
+                    <div className="mt-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40">
+                      <VisibilityToggle
+                        label="Edit Toolbar Locations"
+                        isVisible={isToolbarEditMode}
+                        onToggle={() => setIsToolbarEditMode(!isToolbarEditMode)}
+                      />
+                      <p className="text-[10px] text-gray-400 leading-tight px-1 pb-1">
+                        Classic layout only. Turn on to show the drag grips: drag a toolbar onto the top or bottom half of another to stack them in one column, or onto a strip between columns to give it its own. Turn off to lock them in place.
+                      </p>
+                    </div>
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
