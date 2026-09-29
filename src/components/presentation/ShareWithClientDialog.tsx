@@ -160,7 +160,7 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
             <h2 className="text-lg font-bold text-slate-900">Client page</h2>
             <p className="text-sm text-slate-500">A private link to a read-only page: the 3D model, floor plans and quantities. No account needed to view it.</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100" aria-label="Close"><X size={18} /></button>
+          <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100" aria-label="Close" title="Close"><X size={18} /></button>
         </div>
 
         <div className="px-6 py-4 space-y-4">

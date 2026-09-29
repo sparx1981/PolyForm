@@ -151,7 +151,7 @@ export function CommentThreads({ comments, dark, canReply, onReply, onDelete, em
             }}>
               <input autoFocus value={text} maxLength={COMMENT_MAX} onChange={e => setText(e.target.value)} placeholder="Write a reply…"
                 className={cn('flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400', dark ? 'bg-white/10 text-white placeholder:text-white/40' : 'bg-white ring-1 ring-black/10')} />
-              <button disabled={busy} className="px-2.5 rounded-lg bg-[#2f3a33] text-white disabled:opacity-50" aria-label="Send reply">
+              <button disabled={busy} className="px-2.5 rounded-lg bg-[#2f3a33] text-white disabled:opacity-50" aria-label="Send reply" title="Send reply">
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               </button>
             </form>

@@ -16,7 +16,7 @@ export function NoteCard({ note, number, date, onComplete, onVisible, onDelete, 
       <button onClick={onShow} disabled={!onShow} title="Show on the model" className="flex items-center gap-0.5 font-bold text-[#b4553a]"><MapPin size={11} />{number}</button>
       <span className="font-semibold text-[#2a241e] truncate">{note.authorName || 'Note'}</span>
       <span className="ml-auto shrink-0">{date}</span>
-      {onDelete && <button onClick={onDelete} aria-label="Delete note" className="opacity-60 hover:opacity-100 hover:text-red-500"><Trash2 size={12} /></button>}
+      {onDelete && <button onClick={onDelete} aria-label="Delete note" title="Delete note" className="opacity-60 hover:opacity-100 hover:text-red-500"><Trash2 size={12} /></button>}
     </div>
     <p className={cn(conversationText, 'leading-snug', note.completed && 'line-through opacity-60')} style={{ fontFamily: SERIF }}>{note.text}</p>
     <div className="mt-2 flex items-center gap-3 text-[11px]">

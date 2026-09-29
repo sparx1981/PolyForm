@@ -27,7 +27,7 @@ export function LampStylePicker({ isOpen, targetShape, onClose, onApplyStyle, th
       >
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold">Light Fixture Style</h2>
-          <button aria-label="Close" onClick={onClose} className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700">
+          <button aria-label="Close" title="Close" onClick={onClose} className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700">
             <X size={16} />
           </button>
         </div>

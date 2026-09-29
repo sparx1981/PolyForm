@@ -195,7 +195,7 @@ export default function BakeModal() {
               <p className="text-[11px] text-gray-500 dark:text-gray-400">Embed procedural pads & roads directly into the site terrain mesh</p>
             </div>
           </div>
-          <button aria-label="Close" 
+          <button aria-label="Close" title="Close" 
             onClick={handleClose}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >

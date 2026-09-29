@@ -70,7 +70,7 @@ export function MaterialEditorDialog({ asset, instance, onSave, onClose }: Props
     <div role="dialog" aria-modal="true" aria-label={`Edit ${asset.name}`} className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-5 shadow-2xl">
       <div className="flex items-start justify-between gap-3 border-b pb-3">
         <div><h2 className="font-semibold text-lg text-gray-900">{asset.name}</h2><p className="text-xs text-gray-500">Material library · CC0 · project material instance</p></div>
-        <button type="button" onClick={onClose} aria-label="Close material editor" className="text-gray-600 hover:text-gray-900">✕</button>
+        <button type="button" onClick={onClose} aria-label="Close material editor" title="Close material editor" className="text-gray-600 hover:text-gray-900">✕</button>
       </div>
       {error && <p role="alert" className="py-4 text-sm text-red-600">{error}</p>}
       {!error && !draft && <p className="py-4 text-sm text-gray-500">Loading PBR properties…</p>}

@@ -107,7 +107,7 @@ export default function AIQuery() {
                     }
                   }}
                 />
-                <button aria-label="Send"
+                <button aria-label="Send" title="Send"
                   onClick={handleQuery}
                   disabled={loading || !prompt.trim()}
                   className="absolute right-3 bottom-3 p-2 bg-polyform-blue text-white rounded-lg hover:bg-polyform-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-polyform-blue/20"

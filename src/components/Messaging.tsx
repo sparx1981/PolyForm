@@ -184,7 +184,7 @@ export default function Messaging() {
                     theme === 'dark' ? "bg-gray-950 border-gray-700 text-white" : "bg-gray-50 border-gray-200 text-gray-900"
                   )}
                 />
-                <button aria-label="Send message"
+                <button aria-label="Send message" title="Send message"
                   onClick={handleSend}
                   disabled={!inputText.trim()}
                   className={cn(

@@ -80,7 +80,7 @@ export default function Login({ onClose, note }: LoginProps = {}) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Close" title="Close"
             className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
           >
             <X size={18} />

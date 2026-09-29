@@ -51,7 +51,7 @@ export function TourPlayer({ stops, onClose, className }: { stops: TourStop[]; o
       onPointerDown={e => e.stopPropagation()} role="region" aria-label="Guided tour">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] tracking-[0.2em] uppercase text-[#8b8177]">Guided tour · {i + 1} / {stops.length}</span>
-        <button onClick={onClose} className="p-1 -m-1 rounded text-[#8b8177] hover:text-[#2a241e]" aria-label="End the tour"><X size={15} /></button>
+        <button onClick={onClose} className="p-1 -m-1 rounded text-[#8b8177] hover:text-[#2a241e]" aria-label="End the tour" title="End the tour"><X size={15} /></button>
       </div>
       <h3 className="mt-1 text-xl leading-tight" style={{ fontFamily: SERIF }}>{stop.title}</h3>
       {stop.caption && <p className="mt-1.5 text-sm text-[#4a4239] leading-relaxed whitespace-pre-line">{stop.caption}</p>}
