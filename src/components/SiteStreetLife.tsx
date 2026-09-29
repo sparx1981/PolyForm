@@ -9,7 +9,9 @@ import { usePresentation } from '../lib/presentation/store';
 import { browserSiteIO } from '../lib/worldSite/fetchSite';
 import { findSiteGround } from '../lib/worldSite/site';
 import { drivesOnLeft, parseStreets, routeTool, streetsQuery } from '../lib/worldSite/streets';
-import { type Seat, gait, planStreetLife, pointOnLoop } from '../lib/worldSite/streetLife';
+import { type Seat, planStreetLife, pointOnLoop } from '../lib/worldSite/streetLife';
+import { startSims, stepStreet } from '../lib/worldSite/streetSim';
+import { flockSizes, gooseFlock, wheelingFlock, type Bird } from '../lib/worldSite/birds';
 
 // WorldView street life uses real, lightweight CC0 entourage models rather than assembled
 // primitives. The models are intentionally stylised enough to sit behind the architecture, while
@@ -226,6 +228,29 @@ function CarHeadlightBeam({ register }: { register: (lights: THREE.SpotLight[]) 
   </>;
 }
 
+/** Amber indicator lamps at the four corners; the frame loop shows the side the car is turning to, flashing. */
+function CarIndicators({ register }: { register: (lamps: { left: THREE.Object3D[]; right: THREE.Object3D[] }) => void }) {
+  const left = useRef<THREE.Object3D[]>([]);
+  const right = useRef<THREE.Object3D[]>([]);
+  useEffect(() => {
+    register({ left: left.current.filter(Boolean), right: right.current.filter(Boolean) });
+    return () => register({ left: [], right: [] });
+  }, [register]);
+  // A car faces +z, so its left is +x.
+  const lamps: { side: 'left' | 'right'; x: number; z: number }[] = [
+    { side: 'left', x: 0.82, z: 1.98 }, { side: 'right', x: -0.82, z: 1.98 },
+    { side: 'left', x: 0.78, z: -2.02 }, { side: 'right', x: -0.78, z: -2.02 },
+  ];
+  return <>
+    {lamps.map((l, i) => (
+      <mesh key={i} position={[l.x, 0.62, l.z]} visible={false} ref={node => { if (node) (l.side === 'left' ? left : right).current[i] = node; }}>
+        <boxGeometry args={[0.2, 0.11, 0.06]} />
+        <meshBasicMaterial color="#ffb020" toneMapped={false} />
+      </mesh>
+    ))}
+  </>;
+}
+
 /* ---------- Placement ---------- */
 
 export function benchSeats(shapes: Shape[]): Seat[] {
@@ -280,6 +305,9 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
   const [gx, gy, gz] = ground.position;
   const heightAt = (x: number, z: number) => gridHeightAt(t, x - gx, z - gz) + gy;
 
+  // Where every car and person is now: they slow for bends, queue, stop for people and wait for cars.
+  const sims = useMemo(() => startSims(plan), [plan]);
+  const carLampRefs = useRef<{ left: THREE.Object3D[]; right: THREE.Object3D[] }[]>([]);
   const walkerRefs = useRef<(THREE.Group | null)[]>([]);
   const standerRefs = useRef<(THREE.Group | null)[]>([]);
   const sitterRefs = useRef<(THREE.Group | null)[]>([]);
@@ -294,22 +322,23 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     time.current += Math.min(delta, 0.1);
     const now = time.current;
 
+    stepStreet(plan, sims.cars, sims.walkers, delta);
+
     plan.walkers.forEach((w, i) => {
       const group = walkerRefs.current[i];
-      if (!group) return;
-      const loop = plan.walkLoops[w.loop]!;
-      const dist = w.start + now * w.speed;
-      const p = pointOnLoop(loop, dist);
+      const sim = sims.walkers[i];
+      if (!group || !sim) return;
+      const dist = sim.s;
       const stride = w.child ? 1.0 : 1.4;
-      const g = gait(dist, stride);
-      group.position.set(p.x, heightAt(p.x, p.z) + 0.04 + g.bob * 0.7, p.z);
-      group.rotation.set(0, Math.atan2(p.dx, p.dz) + HUMAN_FORWARD_YAW, Math.sin(dist * 3.2) * 0.01);
+      group.position.set(sim.x, heightAt(sim.x, sim.z) + 0.04, sim.z);
+      group.rotation.set(0, Math.atan2(sim.dx, sim.dz) + HUMAN_FORWARD_YAW, 0);
 
       // Alternate between the authored walking pose and its mirrored counterpart. At the middle of
       // each step both influences fall back to the neutral standing mesh, so knees, hips, elbows
       // and shoulders pass through a believable weight-transfer position rather than sliding.
+      // Someone waiting for a car stands in the neutral pose.
       const phase = (dist / stride) * Math.PI * 2;
-      const swing = Math.sin(phase);
+      const swing = sim.waiting ? 0 : Math.sin(phase);
       const amount = Math.pow(Math.abs(swing), 0.82) * 0.92;
       const a = swing >= 0 ? amount : 0;
       const b = swing < 0 ? amount : 0;
@@ -335,20 +364,28 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     });
 
     let projectedLights = small ? 6 : 12;
-    plan.cars.forEach((car, i) => {
+    const blink = Math.floor(now * 3) % 2 === 0;
+    plan.cars.forEach((_car, i) => {
       const group = carRefs.current[i];
-      if (!group) return;
-      const loop = plan.carLoops[car.loop]!;
-      const dist = car.start + now * car.speed;
-      const p = pointOnLoop(loop, dist);
-      const front = pointOnLoop(loop, dist + 1.4);
-      const back = pointOnLoop(loop, dist - 1.4);
+      const sim = sims.cars[i];
+      if (!group || !sim) return;
+      const loop = plan.carLoops[plan.cars[i]!.loop]!;
+      const front = pointOnLoop(loop, sim.s + 1.4);
+      const back = pointOnLoop(loop, sim.s - 1.4);
       const hf = heightAt(front.x, front.z);
       const hb = heightAt(back.x, back.z);
       const pitch = -Math.atan2(hf - hb, 2.8);
-      q.setFromEuler(e.set(pitch, Math.atan2(p.dx, p.dz), 0));
-      group.position.set(p.x, (hf + hb) / 2 + 0.01, p.z);
+      // Point along the road a little ahead, so the car eases round bends instead of snapping to each segment.
+      const aim = pointOnLoop(loop, sim.s + 2.5);
+      q.setFromEuler(e.set(pitch, Math.atan2(aim.dx + sim.dx, aim.dz + sim.dz), 0));
+      group.position.set(sim.x, (hf + hb) / 2 + 0.01, sim.z);
       group.quaternion.copy(q);
+
+      const lamps = carLampRefs.current[i];
+      if (lamps) {
+        for (const lamp of lamps.left) lamp.visible = sim.signal === -1 && blink;
+        for (const lamp of lamps.right) lamp.visible = sim.signal === 1 && blink;
+      }
 
       // Keep real projected headlights affordable on mobile: every car has emissive lamp geometry,
       // while the nearest cars receive a live spotlight cone that illuminates the road ahead.
@@ -388,7 +425,87 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     {plan.cars.map((car, i) => <group key={`car-${i}`} ref={node => { carRefs.current[i] = node; }}>
       <StreetAsset source={cars[car.color % cars.length]!} scale={1} tint={CAR_PALETTE[car.color % CAR_PALETTE.length]} kind="car" />
       <CarHeadlightBeam register={lights => { carLightRefs.current[i] = lights; }} />
+      <CarIndicators register={lamps => { carLampRefs.current[i] = lamps; }} />
     </group>)}
+  </group>;
+}
+
+
+/* ---------- Birds ---------- */
+
+/** One bird: a body and two wings that flap (the wing tips lift and drop in the shader, out of phase per bird). */
+function birdGeometry(): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const wing: number[] = [];
+  const tri = (a: number[], b: number[], c: number[], w: [number, number, number]) => { positions.push(...a, ...b, ...c); wing.push(...w); };
+  tri([0, 0, 0.5], [-0.09, 0, -0.32], [0.09, 0, -0.32], [0, 0, 0]);
+  tri([0, 0, 0.16], [0, 0, -0.22], [-1, 0, -0.12], [0, 0, 1]);
+  tri([0, 0, 0.16], [1, 0, -0.12], [0, 0, -0.22], [0, 1, 0]);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('aWing', new THREE.Float32BufferAttribute(wing, 1));
+  return g;
+}
+
+function BirdFlock({ birdsAt, count, wingspan, colour, flapRate }: { birdsAt: (t: number) => Bird[]; count: number; wingspan: number; colour: string; flapRate: number }) {
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uFlap: { value: flapRate } }), [flapRate]);
+  const geometry = useMemo(() => {
+    const g = birdGeometry();
+    g.setAttribute('aPhase', new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
+    return g;
+  }, [count]);
+  const material = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide });
+    m.onBeforeCompile = shader => {
+      shader.uniforms.uTime = uniforms.uTime;
+      shader.uniforms.uFlap = uniforms.uFlap;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aWing;\nattribute float aPhase;\nuniform float uTime;\nuniform float uFlap;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y += aWing * sin(uTime * uFlap + aPhase) * 0.5 * abs(position.x) + aWing * 0.05;');
+    };
+    m.customProgramCacheKey = () => 'pf-bird';
+    return m;
+  }, [colour, uniforms]);
+  useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
+  const clock = useRef(0);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const euler = useMemo(() => new THREE.Euler(0, 0, 0, 'YXZ'), []);
+  useFrame((_, delta) => {
+    const m = mesh.current;
+    if (!m) return;
+    clock.current += Math.min(delta, 0.1);
+    uniforms.uTime.value = clock.current;
+    const phase = geometry.getAttribute('aPhase') as THREE.InstancedBufferAttribute;
+    birdsAt(clock.current).forEach((b, i) => {
+      if (i >= count) return;
+      dummy.position.set(b.x, b.y, b.z);
+      dummy.rotation.copy(euler.set(b.pitch, b.yaw, b.bank));
+      dummy.scale.setScalar(b.visible ? wingspan : 0);
+      dummy.updateMatrix();
+      m.setMatrixAt(i, dummy.matrix);
+      phase.setX(i, b.phase);
+    });
+    m.instanceMatrix.needsUpdate = true;
+    phase.needsUpdate = true;
+  });
+  return <instancedMesh ref={mesh} args={[geometry, material, count]} frustumCulled={false} raycast={() => null} />;
+}
+
+/** Two flocks over the site: birds wheeling about, and geese crossing in a V. They are not part of the model (nothing to select). */
+export function SiteBirds({ ground, level }: { ground: Shape; level: Exclude<StreetLifeLevel, 'off'> }) {
+  const site = ground.terrainData!.site!;
+  const small = isSmallDevice();
+  const sizes = useMemo(() => flockSizes(level, small), [level, small]);
+  const [gx, gy, gz] = ground.position;
+  const size = site.size;
+  // Higher on a hilly site than the ground's own base.
+  const lift = gy;
+  const wheel = useMemo(() => (t: number) => wheelingFlock(t, size, sizes.wheeling).map(b => ({ ...b, x: b.x + gx, y: b.y + lift, z: b.z + gz })), [size, sizes.wheeling, gx, gz, lift]);
+  const geese = useMemo(() => (t: number) => gooseFlock(t, size, sizes.geese).map(b => ({ ...b, x: b.x + gx, y: b.y + lift, z: b.z + gz })), [size, sizes.geese, gx, gz, lift]);
+  return <group name="site-birds" userData={{ isStreetLife: true }}>
+    <BirdFlock birdsAt={wheel} count={sizes.wheeling} wingspan={1.3} colour="#2a2e33" flapRate={16} />
+    <BirdFlock birdsAt={geese} count={sizes.geese} wingspan={2.4} colour="#4a4f57" flapRate={7} />
   </group>;
 }
 
@@ -413,8 +530,11 @@ export function SiteStreetLifeLayer({ shapes }: { shapes: Shape[] }) {
 
   const [gx, , gz] = ground?.position ?? [0, 0, 0];
   const routes = useMemo(() => (site?.routes ?? []).map(r => (gx || gz ? { ...r, points: r.points.map(([x, z]) => [x + gx, z + gz] as [number, number]) } : r)), [site?.routes, gx, gz]);
-  if (!show || !ground || !routes.length) return null;
-  return <SiteStreetLife ground={ground} routes={routes} level={level} seats={seats} />;
+  if (!show || !ground) return null;
+  return <>
+    {routes.length > 0 && <SiteStreetLife ground={ground} routes={routes} level={level} seats={seats} />}
+    <SiteBirds ground={ground} level={level} />
+  </>;
 }
 
 function groundLine(pts: [number, number][], groundAt: (x: number, z: number) => number, lift = 0.15) {
