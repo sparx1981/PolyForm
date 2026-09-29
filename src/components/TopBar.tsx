@@ -1625,7 +1625,7 @@ function Modal({ isOpen, onClose, title, children }: { isOpen: boolean, onClose:
                 <FolderOpen className="w-5 h-5 text-polyform-blue" />
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
               </div>
-              <button onClick={onClose} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
+              <button aria-label="Close" onClick={onClose} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors">
                 <X size={20} className="text-gray-500" />
               </button>
             </div>

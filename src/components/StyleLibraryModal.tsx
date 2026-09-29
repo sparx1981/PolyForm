@@ -942,7 +942,7 @@ export default function StyleLibraryModal({
               </p>
             </div>
           </div>
-          <button 
+          <button aria-label="Close" 
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 transition-colors"
           >

@@ -2823,7 +2823,7 @@ export default function RightPanelStack() {
                   onChange={(e) => setNewTagColor(e.target.value)}
                   className="w-6 h-6 rounded cursor-pointer border-none p-0"
                 />
-                <button 
+                <button aria-label="Add tag" 
                   onClick={handleAddTag}
                   className="p-1 bg-polyform-blue text-white rounded hover:bg-polyform-dark-blue"
                 >

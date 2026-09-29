@@ -557,7 +557,7 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
                   <List size={16} />
                 </button>
               </div>
-              <button 
+              <button aria-label="Close" 
                 onClick={onClose}
                 className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
               >
@@ -1044,7 +1044,7 @@ function ModelRow({ model, currentUserId, onOpen, onDelete, onCopy, onTogglePubl
               <Copy size={16} />
             </button>
           )}
-          <button className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all">
+          <button aria-label="Open model" className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all">
             <ChevronRight size={16} />
           </button>
         </div>
