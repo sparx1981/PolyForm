@@ -9,7 +9,7 @@ import { usePresentation } from '../lib/presentation/store';
 import { browserSiteIO } from '../lib/worldSite/fetchSite';
 import { findSiteGround } from '../lib/worldSite/site';
 import { drivesOnLeft, parseStreets, routeTool, streetsQuery } from '../lib/worldSite/streets';
-import { BODY_TYPES, CAR_COLOURS, type Seat, gait, planStreetLife, pointOnLoop } from '../lib/worldSite/streetLife';
+import { type Seat, gait, planStreetLife, pointOnLoop } from '../lib/worldSite/streetLife';
 
 // WorldView street life uses real, lightweight CC0 entourage models rather than assembled
 // primitives. The models are intentionally stylised enough to sit behind the architecture, while
