@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../AppContext';
 import { cn } from '../lib/utils';
 import { extrasOf, withRoofExtras, type Facing, type RoofExtras } from '../lib/roofExtras';
-import { DORMER_DEFAULTS, dormerLayout, dormersOf, evenlySpaced, type Dormer, type DormerType } from '../lib/dormers';
+import { DORMER_DEFAULTS, dormerFit, dormerLayout, dormerValidSpots, dormersOf, evenlySpaced, type Dormer, type DormerType } from '../lib/dormers';
 import { usePickOnModel } from './presentation/ContentEditor';
+import { pickPoint } from '../lib/presentation/camera';
+import { dormerGuide } from '../lib/dormerGuide';
 import type { Shape } from '../types';
 
 const FACINGS: { id: Facing; label: string }[] = [
@@ -120,12 +122,44 @@ function DormerEditor({ roof, flat }: { roof: Shape; flat: boolean }) {
     if (message) setMeasurements(message);
   };
 
+  // While placing, the roof shows where this dormer would fit and follows the pointer with its outline.
+  const placingExisting = list.find(d => d.id === placing);
+  const template = placingExisting ?? draft;
+  const templateKey = `${template.type}|${template.width}|${template.height}|${template.flush}`;
+  useEffect(() => {
+    if (placing === null) return;
+    const spots = dormerValidSpots(roof, { type: template.type, width: template.width, height: template.height, flush: template.flush });
+    dormerGuide.set({ origin: [roof.position[0], roof.position[1], roof.position[2]], spots, ghost: null });
+    setMeasurements(spots.length
+      ? 'Green dots show where this dormer fits. Move over the roof to see its outline, then click.'
+      : "This dormer doesn't fit anywhere on the roof at this size. Make it narrower or lower.");
+    const onMove = (e: PointerEvent) => {
+      const canvas = e.target as HTMLElement | null;
+      if (!canvas || canvas.tagName !== 'CANVAS') return;
+      const p = pickPoint(e.clientX, e.clientY);
+      if (!p) { dormerGuide.patch({ ghost: null }); return; }
+      const cand: Dormer = { ...template, id: placing, x: +(p[0] - roof.position[0]).toFixed(3), z: +(p[2] - roof.position[2]).toFixed(3) };
+      const fit = dormerFit(roof, cand);
+      if (fit.layout) {
+        dormerGuide.patch({ ghost: { footprint: fit.layout.footprint, y: fit.layout.origin.y, ok: true } });
+        setMeasurements('This dormer fits here. Click to place it.');
+      } else {
+        const half = template.width / 2;
+        dormerGuide.patch({ ghost: { footprint: [[cand.x - half, cand.z - half], [cand.x + half, cand.z - half], [cand.x + half, cand.z + half], [cand.x - half, cand.z + half]], y: p[1] - roof.position[1], ok: false } });
+        setMeasurements(`Can't place it here. ${fit.reason}`);
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    return () => { window.removeEventListener('pointermove', onMove); dormerGuide.set(null); };
+  }, [placing, templateKey, roof.id, roof.geometryData]); // eslint-disable-line react-hooks/exhaustive-deps
+
   usePickOnModel(placing !== null, point => {
     const local = { x: +(point[0] - roof.position[0]).toFixed(3), z: +(point[2] - roof.position[2]).toFixed(3) };
     const existing = list.find(d => d.id === placing);
     const candidate: Dormer = existing ? { ...existing, ...local } : { ...draft, id: placing!, ...local };
-    if (!dormerLayout(roof, candidate)) {
-      setMeasurements("A dormer doesn't fit there: click a roof slope, clear of hips, the ridge and the ends.");
+    const fit = dormerFit(roof, candidate);
+    if (!fit.layout) {
+      setMeasurements(`Can't place it here. ${fit.reason}`);
       return;
     }
     setPlacing(null);

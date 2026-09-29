@@ -118,16 +118,25 @@ function eaveUnder(edges: Edge[], p: V2, downhill: V2): Edge | null {
   return best;
 }
 
+/** Why a dormer can't go where it was put, in words for the person placing it. */
+export type DormerFit = { layout: DormerLayout; reason?: undefined } | { layout: null; reason: string };
+
 /** Where a dormer sits on its roof, or null if it doesn't fit (off the roof, on a hip line, past the ridge). */
 export function dormerLayout(roof: Shape, dormer: Dormer, surface = new RoofSurface(roof), dispose = true): DormerLayout | null {
+  return dormerFit(roof, dormer, surface, dispose).layout;
+}
+
+/** Like dormerLayout, but says why when the dormer doesn't fit. */
+export function dormerFit(roof: Shape, dormer: Dormer, surface = new RoofSurface(roof), dispose = true): DormerFit {
+  const no = (reason: string): DormerFit => ({ layout: null, reason });
   try {
     const at = surface.at(dormer.x, dormer.z);
-    if (!at) return null;
+    if (!at) return no('That point is off the roof.');
     const horiz = Math.hypot(at.normal.x, at.normal.z);
-    if (horiz < 0.1) return null;
+    if (horiz < 0.1) return no('That part of the roof is flat. A dormer needs a sloping roof.');
     const downhill: V2 = [at.normal.x / horiz, at.normal.z / horiz];
     const edge = eaveUnder(roofEdges(eavePolygon(roof), surface), [dormer.x, dormer.z], downhill);
-    if (!edge) return null;
+    if (!edge) return no('There is no eave below that point. Pick a slope that runs down to an eave.');
     const X = v(edge.u[0], 0, edge.u[1]);
     const Z = v(-edge.out[0], 0, -edge.out[1]);
     const slope = Math.atan2(horiz, at.normal.y);
@@ -149,10 +158,10 @@ export function dormerLayout(roof: Shape, dormer: Dormer, surface = new RoofSurf
         const d = (dormer.x - a[0]) * Z.x + (dormer.z - a[1]) * Z.z;
         if (d >= -0.05 && d < best) { best = d; run = d; }
       }
-      if (!Number.isFinite(best)) return null;
+      if (!Number.isFinite(best)) return no('There is no wall below that point to sit a flush dormer on.');
       const front = v(dormer.x - Z.x * run, 0, dormer.z - Z.z * run);
       const s = surface.at(front.x + Z.x * 0.05, front.z + Z.z * 0.05);
-      if (!s) return null;
+      if (!s) return no('The wall line below that point is off the roof.');
       origin = front;
       roofAtFront = s.y - 0.05 * tan;
     }
@@ -170,9 +179,9 @@ export function dormerLayout(roof: Shape, dormer: Dormer, surface = new RoofSurf
     for (const [sx, d] of [[-1, 0.1], [1, 0.1], [-1, sides], [1, sides], [0, depthRoof]] as const) {
       const p = origin.clone().addScaledVector(Z, d).addScaledVector(lx, sx);
       const s = surface.at(p.x, p.z);
-      if (!s) return null;
+      if (!s) return no('The dormer would run off the roof. Move it further from the ends and up from the eave, or make it narrower.');
       const h = Math.hypot(s.normal.x, s.normal.z) || 1;
-      if ((s.normal.x / h) * downhill[0] + (s.normal.z / h) * downhill[1] < 0.97) return null;
+      if ((s.normal.x / h) * downhill[0] + (s.normal.z / h) * downhill[1] < 0.97) return no('The dormer would cross a hip or the ridge. It has to sit wholly on one slope: move it, or make it narrower or lower.');
     }
 
     const P = (x: number, d: number): V2 => {
@@ -185,7 +194,7 @@ export function dormerLayout(roof: Shape, dormer: Dormer, surface = new RoofSurf
       ? [P(-w / 2, front), P(w / 2, front), P(w / 2, depthCheek), P(-w / 2, depthCheek)]
       : [P(-w / 2, front), P(w / 2, front), P(w / 2, depthCheek), P(0, depthRoof), P(-w / 2, depthCheek)];
 
-    return { dormer, X, Z, origin, slope, roofAtFront, width: w, height: hf, depthCheek, depthRoof, top, footprint, edge };
+    return { layout: { dormer, X, Z, origin, slope, roofAtFront, width: w, height: hf, depthCheek, depthRoof, top, footprint, edge } };
   } finally {
     if (dispose) surface.dispose();
   }
@@ -588,4 +597,29 @@ export function dormerFingerprint(roof: Shape | undefined): string {
   if (!list.length) return '';
   const rd = roof.roofData ?? {};
   return JSON.stringify([list, roof.position, rd.ridgeHeight, rd.eaveOverhang, rd.pitchAngleDeg, (roof.geometryData?.positions as number[] | undefined)?.length]);
+}
+
+/**
+ * Every spot on the roof where a dormer of this size would fit, on a grid `step` metres apart (local
+ * x / z, with the roof's height there), so the person placing one can see where it may go.
+ */
+export function dormerValidSpots(roof: Shape, template: Omit<Dormer, 'id' | 'x' | 'z'>, step = 0.35): { x: number; z: number; y: number }[] {
+  const surface = new RoofSurface(roof);
+  try {
+    const eave = eavePolygon(roof);
+    const xs = eave.map(p => p[0]), zs = eave.map(p => p[1]);
+    const out: { x: number; z: number; y: number }[] = [];
+    for (let x = Math.min(...xs); x <= Math.max(...xs); x += step) {
+      for (let z = Math.min(...zs); z <= Math.max(...zs); z += step) {
+        if (!pointInPolygon([x, z], eave)) continue;
+        const cx = +x.toFixed(3), cz = +z.toFixed(3);
+        const at = surface.at(cx, cz);
+        if (!at) continue;
+        if (dormerFit(roof, { ...template, id: 'probe', x: cx, z: cz }, surface, false).layout) out.push({ x: cx, z: cz, y: at.y });
+      }
+    }
+    return out;
+  } finally {
+    surface.dispose();
+  }
 }

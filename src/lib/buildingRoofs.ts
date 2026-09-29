@@ -39,7 +39,7 @@ const nums = (s: Shape) => (Array.isArray(s.args) ? (s.args as number[]) : []);
 const quat = (s: Shape) => (s.quaternion ? new THREE.Quaternion(...s.quaternion) : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(s.rotation ?? [0, 0, 0]))));
 
 /** A wall's footprint rectangle, and its length and thickness. */
-function wallRect(w: Shape): { rect: V2[]; thickness: number } {
+export function wallRect(w: Shape): { rect: V2[]; thickness: number } {
   const [a0 = 3, , a2 = 0.2] = nums(w);
   const unrotatedZ = a2 > a0 && !w.quaternion && (!w.rotation || w.rotation.every(v => v === 0));
   const len = unrotatedZ ? a2 : a0, thickness = unrotatedZ ? a0 : a2;

@@ -5,7 +5,7 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Shape } from '../types';
 import { buildRoofAssemblyForRoom } from './archRoofGenerator';
 import {
-  cutForDormers, dormerCeilingAt, dormerFrame, dormerLayout, dormerMeshes, evenlySpaced, layoutsOf, pointInPolygon, type Dormer,
+  cutForDormers, dormerCeilingAt, dormerFit, dormerFrame, dormerLayout, dormerValidSpots, dormerMeshes, evenlySpaced, layoutsOf, pointInPolygon, type Dormer,
 } from './dormers';
 import { withRoofExtras, gutterRuns } from './roofExtras';
 import { generateTimberFrameForRoof } from './timberFrameGenerator';
@@ -227,5 +227,25 @@ describe('dormer timber and headroom', () => {
     const out2 = withRoofExtras(plain.shapes, plain.roof.id, { dormerList: [dormer()] });
     expect(out2.some(s => s.tags?.includes('roof-extra-dormer-tiles'))).toBe(false);
     expect(out2.some(s => s.tags?.includes('roof-extra-dormer-membrane'))).toBe(false);
+  });
+});
+
+describe('dormer placement help', () => {
+  it('explains why a dormer does not fit, and finds where it would', () => {
+    const { roof } = gableHouse();
+    const off = dormerFit(roof, dormer({ x: 40, z: 40 }));
+    expect(off.layout).toBeNull();
+    expect(off.reason).toMatch(/off the roof/);
+    const nearRidge = dormerFit(roof, dormer({ z: 0 }));
+    expect(nearRidge.layout).toBeNull();
+    expect(nearRidge.reason).toBeTruthy();
+    const t0 = performance.now();
+    const spots = dormerValidSpots(roof, { type: 'gable', width: 1.6, height: 1.3, flush: false });
+    console.log('valid spots', spots.length, 'in', Math.round(performance.now() - t0), 'ms');
+    expect(spots.length).toBeGreaterThan(5);
+    // Every spot offered really does take a dormer.
+    for (const s of spots.slice(0, 10)) expect(dormerLayout(roof, dormer({ x: s.x, z: s.z }))).toBeTruthy();
+    // ...and they are on the slopes, not the ridge.
+    expect(spots.some(s => Math.abs(s.z) < 0.2)).toBe(false);
   });
 });

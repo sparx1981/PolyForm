@@ -6,6 +6,8 @@ import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
 import { GoogleTilesLayer } from './GoogleTilesLayer';
 import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
 import { overlayTileMeters } from '../lib/worldSite/googleTiles';
+import { checkStairPlacement, type StairPlacement } from '../lib/stairPlacement';
+import { dormerGuide } from '../lib/dormerGuide';
 import { siteEditSets } from '../lib/worldSite/siteEdits';
 import { gridHeightAt } from '../lib/worldSite/terrain';
 import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
@@ -222,6 +224,58 @@ const _polyformNoteZIndexRange: [number, number] = [1000, 2000];
 const _polyformTextureCache = new Map<string, THREE.Texture>();
 const _polyformTextureLoader = new THREE.TextureLoader();
 _polyformTextureLoader.setCrossOrigin('anonymous');
+
+/** Where a staircase preview stands against the walls (null for a single step, or when it can't be told). */
+function stairPlacementOf(preview: any, shapes: readonly Shape[]): StairPlacement | null {
+  if (!preview || preview.type !== 'staircase' || !Array.isArray(preview.args)) return null;
+  return checkStairPlacement({
+    position: preview.position, quaternion: preview.quaternion, width: preview.args[0] || 1, height: preview.args[1] || 2.16,
+    style: preview.stairStyle, structure: preview.stairStructure,
+  }, shapes);
+}
+
+/** While a dormer is being placed: green dots where it fits, and its outline under the pointer (red when it can't go there). */
+function DormerGuide() {
+  const guide = React.useSyncExternalStore(dormerGuide.subscribe, dormerGuide.get);
+  const pointGeometry = React.useMemo(() => {
+    if (!guide) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(guide.spots.flatMap(p => [p.x + guide.origin[0], p.y + guide.origin[1] + 0.12, p.z + guide.origin[2]]), 3));
+    return g;
+  }, [guide?.spots, guide?.origin]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => () => pointGeometry?.dispose(), [pointGeometry]);
+  const ghost = React.useMemo(() => (guide?.ghost ? guide.ghost.footprint.map(([x, z]) => [x + guide.origin[0], z + guide.origin[2]] as [number, number]) : null), [guide?.ghost, guide?.origin]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!guide) return null;
+  return (
+    <>
+      {pointGeometry && guide.spots.length > 0 && (
+        <points geometry={pointGeometry} raycast={() => null} renderOrder={7} userData={{ isPreview: true }}>
+          <pointsMaterial color="#16a34a" size={6} sizeAttenuation={false} transparent opacity={0.85} depthTest={false} />
+        </points>
+      )}
+      {ghost && guide.ghost && <PlanPatch poly={ghost} y={guide.ghost.y + guide.origin[1] + 0.15} color={guide.ghost.ok ? '#16a34a' : '#dc2626'} opacity={0.55} />}
+    </>
+  );
+}
+
+/** A flat coloured patch on the plan (a stair's exit, or its outline) that can't be picked. */
+function PlanPatch({ poly, y, color, opacity }: { poly: [number, number][]; y: number; color: string; opacity: number }) {
+  const geometry = React.useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const verts = poly.flatMap(([x, z]) => [x, y, z]);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    const index: number[] = [];
+    for (let i = 1; i < poly.length - 1; i++) index.push(0, i, i + 1);
+    g.setIndex(index);
+    return g;
+  }, [poly, y]);
+  React.useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh geometry={geometry} raycast={() => null} renderOrder={7} userData={{ isPreview: true }}>
+      <meshBasicMaterial color={color} transparent opacity={opacity} side={THREE.DoubleSide} depthTest={false} />
+    </mesh>
+  );
+}
 
 function bufferGeometryToShapeData(geom: THREE.BufferGeometry): { positions: number[]; normals: number[]; uvs?: number[] } {
   return {
@@ -3353,6 +3407,30 @@ function Scene() {
   // to reference.
   const sunMeshRef = useRef<THREE.Mesh>(null!);
   const transformRef = useRef<any>(null);
+  const groupTransformRef = useRef<any>(null);
+  // The move / rotate / scale handles sit over whatever is behind them, and grabbing one used to be read
+  // as a click on that surface (so the surface a light sat on moved instead of the light). Presses that
+  // start on a handle, and the click that follows, are kept from reaching the objects behind.
+  useEffect(() => {
+    const el = gl.domElement;
+    let shielded = 0; // Infinity while a handle is held, else the time the click after it stops being ignored
+    const onHandle = () => [transformRef, groupTransformRef].some(r => !!r.current && (r.current.axis || r.current.dragging));
+    const down = (e: Event) => { if (onHandle()) { shielded = Infinity; e.stopPropagation(); } };
+    const release = () => { if (shielded === Infinity) shielded = performance.now() + 300; };
+    const swallow = (e: Event) => { if (shielded > performance.now()) e.stopPropagation(); };
+    el.addEventListener('pointerdown', down, true);
+    el.addEventListener('pointerup', swallow, true);
+    el.addEventListener('click', swallow, true);
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    return () => {
+      el.removeEventListener('pointerdown', down, true);
+      el.removeEventListener('pointerup', swallow, true);
+      el.removeEventListener('click', swallow, true);
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', release, true);
+    };
+  }, [gl]);
   const selectedIdRef = useRef(selectedId);
   const selectedLightIdRef = useRef(selectedLightId);
   const isDraggingRef = useRef(false);
@@ -3754,6 +3832,7 @@ function Scene() {
     previewShapeRef.current = previewShape;
   }, [previewShape]);
   const [stairRotationAngle, setStairRotationAngle] = useState<number>(0);
+  const stairPlacement = React.useMemo(() => stairPlacementOf(previewShape, shapes), [previewShape, shapes]);
   const [polygonSides, setPolygonSides] = useState<number>(6);
   
   // Push/Pull state
@@ -6330,6 +6409,11 @@ function Scene() {
       e.stopPropagation();
       if (previewShape && (previewShape.type === 'staircase' || previewShape.type === 'step')) {
         const isStaircase = activeTool === 'staircase';
+        const placement = stairPlacementOf(previewShape, shapes);
+        if (placement && !placement.ok) {
+          setMeasurements(`Can't place the stairs here. ${placement.reason}`);
+          return;
+        }
         const newShape: Shape = {
           id: Math.random().toString(36).substr(2, 9),
           name: isStaircase ? 'Staircase Flight' : 'Step',
@@ -7687,7 +7771,10 @@ function Scene() {
 
         const deg = Math.round(((stairRotationAngle * 180) / Math.PI) % 360);
         const normDeg = deg < 0 ? deg + 360 : deg;
-        if (isStaircase && parametricCalc && scanResult) {
+        const blocked = isStaircase ? stairPlacementOf({ type: 'staircase', position: [stairPos.x, stairPos.y, stairPos.z], quaternion: quatArray, args: [width, height, length], stairStyle: 'straight', stairStructure: 'closed' }, shapes) : null;
+        if (blocked && !blocked.ok) {
+          setMeasurements(`Can't place the stairs here. ${blocked.reason} [← / → rotate]`);
+        } else if (isStaircase && parametricCalc && scanResult) {
           setMeasurements(`Parametric Staircase: ${parametricCalc.stepCount} Steps (Riser: ${(parametricCalc.actualStepHeight * 100).toFixed(1)}cm, Tread: ${(parametricCalc.treadDepth * 100).toFixed(1)}cm) | Rise: ${parametricCalc.targetHeight.toFixed(2)}m (${scanResult.description}) | Angle: ${normDeg}° [← / → rotate] | Click to place`);
         } else {
           setMeasurements(`Step: 1.00m × 0.30m (Rise 0.18m) | Angle: ${normDeg}° [Use ← / → to rotate] | Click to place`);
@@ -12335,6 +12422,7 @@ function Scene() {
       />
       {kernelSelectedSet.size > 0 && isTransforming && groupPivotReady && groupPivotRef.current && (
         <TransformControls
+          ref={groupTransformRef}
           object={groupPivotRef.current}
           mode={activeTool === 'move' ? 'translate' : (activeTool === 'rotate' ? 'rotate' : 'scale')}
           showX={!axisLock || axisLock === 'x'}
@@ -12457,7 +12545,7 @@ function Scene() {
             />
           ) : previewShape.type === 'staircase' || previewShape.type === 'step' ? (
             <meshBasicMaterial 
-              color="#0284c7" 
+              color={stairPlacement && !stairPlacement.ok ? '#dc2626' : '#0284c7'} 
               transparent 
               opacity={0.65} 
               side={THREE.DoubleSide} 
@@ -12482,6 +12570,12 @@ function Scene() {
           <Edges threshold={15} color="#000000" transparent opacity={0.6} depthTest={false} renderOrder={6} />
         </mesh>
       )}
+      {/* The patch to step off the top of a staircase onto: green when clear, red when a wall is in the way. */}
+      {stairPlacement?.exit && (
+        <PlanPatch poly={stairPlacement.exit} y={stairPlacement.topY + 0.03} color={stairPlacement.ok ? '#16a34a' : '#f97316'} opacity={0.55} />
+      )}
+
+      <DormerGuide />
 
       {/* Show All Dimensions - per-shape labels, toggled from the Measure tool popout */}
       {showAllDimensions && shapes.map((shape) => {
