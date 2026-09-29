@@ -175,6 +175,11 @@ import {
 } from '../lib/reconstruction/draft';
 import { checkModelHealth } from '../lib/reconstruction/modelHealth';
 import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
+import {
+  createExternalAssetShape,
+  validateGeneratedAsset,
+  type GeneratedAssetInput,
+} from '../lib/assets/externalAsset';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
@@ -407,6 +412,12 @@ export interface SDK {
     getDoorDefaults: () => DoorConfigDefaults;
     configureWindowDefaults: (settings: WindowConfigDefaults) => void;
     getWindowDefaults: () => WindowConfigDefaults;
+  };
+
+  // External / Generated Assets Subsystem
+  externalAssets: {
+    validate: (input: GeneratedAssetInput) => ReturnType<typeof validateGeneratedAsset>;
+    add: (input: GeneratedAssetInput) => Shape;
   };
 
   // BIM Subsystem
@@ -737,6 +748,7 @@ export class DeveloperSDK implements SDK {
 
   // Subsystems
   public architecture: any;
+  public externalAssets: any;
   public bim: any;
   public reconstruction: any;
   public interiors: any;
@@ -1497,6 +1509,19 @@ export class DeveloperSDK implements SDK {
       getWindowDefaults: (): WindowConfigDefaults => {
         return { ...this.windowDefaults };
       }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // EXTERNAL / GENERATED ASSET SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.externalAssets = {
+      validate: (input: GeneratedAssetInput) => validateGeneratedAsset(input),
+      add: (input: GeneratedAssetInput): Shape => {
+        const shape = createExternalAssetShape(input);
+        this.placeBuilt(shape);
+        this.log(`Added external asset: ${shape.name ?? shape.id} (${input.provenance.source}).`);
+        return shape;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
