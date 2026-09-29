@@ -93,7 +93,7 @@
   color: var(--color-gray-100);
 }
 @layer utilities {
-  :where(.dark) .text-polyform-blue:not([class*="dark:text-"], [class~="bg-white"]) {
+  :where(.dark) .text-polyform-blue:not([class*="dark:text-"]):not([class~="bg-white"]:not([class*="dark:bg-"])) {
     color: #5fb0e8;
   }
 }
