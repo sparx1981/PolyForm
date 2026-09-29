@@ -362,6 +362,7 @@ function artisticDefs() {
 /** Floor plans for every storey, or none when the model has no walls. */
 export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 1000, options: PlanOptions = {}): FloorPlan[] {
   const levels = buildingLevels(shapes);
+  const spatialRooms = detectRooms(shapes);
   if (!levels.length) return [];
   const art = options.style === 'artistic';
 
