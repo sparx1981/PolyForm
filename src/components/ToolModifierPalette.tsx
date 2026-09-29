@@ -328,6 +328,22 @@ export const ToolModifierPalette: React.FC = () => {
               </div>
             </div>
 
+            {/* 90° lock */}
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={wallToolSettings.lockRightAngles !== false}
+                onChange={e => setWallToolSettings(prev => ({ ...prev, lockRightAngles: e.target.checked }))}
+              />
+              <span className="text-[11px] text-gray-700 dark:text-gray-200 leading-tight">
+                Lock to 90° turns
+                <span className="block text-[10px] text-gray-400 font-normal">
+                  On: walls turn at right angles unless you hold Shift. Off: walls run at any angle, as if Shift were always held.
+                </span>
+              </span>
+            </label>
+
             {/* Thickness Presets */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-wider">

@@ -4,6 +4,7 @@ import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
 import { TextMesh } from './TextMesh';
 import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
 import { GoogleTilesLayer } from './GoogleTilesLayer';
+import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
 import { buildingLook } from '../lib/worldSite/googleTiles';
 import { gridHeightAt } from '../lib/worldSite/terrain';
 import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
@@ -4644,6 +4645,7 @@ function Scene() {
   }, [shapes]);
 
   // The imported site's Google layer and building styling (WorldView > 3D Site).
+  const googleStatus = useGoogleTilesStatus();
   const siteGround = useMemo(() => findSiteGround(shapes), [shapes]);
   const siteInfo = siteGround?.terrainData?.site;
   const googleLayer = siteInfo?.googleContext && siteGround ? { site: siteInfo, groundId: siteGround.id } : null;
@@ -7048,6 +7050,8 @@ function Scene() {
     }
 
     if (activeTool === 'wall') {
+      // The 90° lock: on by default, and Shift frees it. With the lock off in the tool's settings it behaves as if Shift were held.
+      const wallFreeAngle = e.shiftKey || wallToolSettings?.lockRightAngles === false;
       let basePlaneY = ((activeStory || 1) - 1) * 2.8;
       if (!wallPlane) {
         const intersects = raycaster.intersectObjects(scene.children, true);
@@ -7094,7 +7098,7 @@ function Scene() {
          }
 
         // 2. Default to 90-degree orthogonal angles, allow free angle if Shift is held down
-        if (!e.shiftKey && wallVertices.length > 0 && !isClosingLoop) {
+        if (!wallFreeAngle && wallVertices.length > 0 && !isClosingLoop) {
           const lastVertex = wallVertices[wallVertices.length - 1];
           const dx = target.x - lastVertex.x;
           const dz = target.z - lastVertex.z;
@@ -7239,7 +7243,7 @@ function Scene() {
               tooltip: 'Attached to Intersecting Wall (Pass-through Prevented)'
             });
           }
-        } else if (!e.shiftKey && wallVertices.length === 0) {
+        } else if (!wallFreeAngle && wallVertices.length === 0) {
           // Snap to existing walls (interior face / centerline) or shape origins on any story level
           let bestDist = 0.65;
           let snapTarget: THREE.Vector3 | null = null;
@@ -7299,7 +7303,7 @@ function Scene() {
             setSnapIndicator(null);
           }
           setTrackingGuide(null);
-        } else if (e.shiftKey) {
+        } else if (wallFreeAngle) {
           setSnapIndicator(null);
           setTrackingGuide(null);
         }
@@ -7311,7 +7315,7 @@ function Scene() {
         } else if (wallVertices.length > 0) {
           const lastVertex = wallVertices[wallVertices.length - 1];
           const dist = lastVertex.distanceTo(finalPos);
-          const angleMode = e.shiftKey ? 'Free Angle' : '90° Locked';
+          const angleMode = wallFreeAngle ? 'Free Angle' : '90° Locked';
           const tMm = ((wallToolSettings?.thickness || 0.2) * 1000).toFixed(0);
           const hM = (wallToolSettings?.height || 2.8).toFixed(2);
           const justStr = (wallJustification || 'exterior').toUpperCase();
@@ -11402,8 +11406,8 @@ function Scene() {
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;
-        // Google's own ground stands in for the editable one (its data still drives heights).
-        if (googleLayer?.site.googleGround === 'google' && shape.id === googleLayer.groundId) return null;
+        // Google's own ground stands in for the editable one once it is actually showing (its data still drives heights).
+        if (googleLayer?.site.googleGround === 'google' && googleStatus.state === 'showing' && shape.id === googleLayer.groundId) return null;
         if (batchedPlantIds.has(shape.id)) return null;
         if (shape.tags?.includes('timber-frame') || shape.id.startsWith('tf-')) {
           // Rendered via InstancedTimberFraming for batch instancing performance

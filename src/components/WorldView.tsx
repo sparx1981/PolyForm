@@ -337,7 +337,7 @@ export default function WorldViewPanel() {
         )}
       </Section>
 
-      {/* Height above the ground, and how much map */}
+      {/* Height above the ground, how much map, and the flat map picture under the model */}
       <Section title="Site position" icon={<SlidersHorizontal size={14} />} open={!!open.position} locked={!unlocked} lockedHint={lockedHint} onToggle={() => toggle('position')}>
         <div className="space-y-2">
           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Altitude Offset (m)</label>
@@ -376,34 +376,32 @@ export default function WorldViewPanel() {
             <span>450m (Max)</span>
           </div>
         </div>
+        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+          <button
+            onClick={() => {
+              const nextActive = !isWorldViewActive;
+              setIsWorldViewActive(nextActive);
+              console.log(`[WorldView] Overlay ${nextActive ? 'activated' : 'deactivated'} at Lat: ${worldViewLocation.lat}, Lng: ${worldViewLocation.lng}, Alt: ${worldViewAltitude}m`);
+            }}
+            className={cn(
+              'w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg',
+              isWorldViewActive
+                ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/20'
+                : 'bg-polyform-blue hover:bg-polyform-blue/90 text-white shadow-polyform-blue/20',
+            )}
+          >
+            <Layers size={16} />
+            {isWorldViewActive ? 'Deactivate Overlay' : 'Activate Map Overlay'}
+          </button>
+          <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+            Activating WorldView will render a 2D map plane beneath your 3D models at the specified altitude.
+          </p>
+        </div>
       </Section>
 
       {/* The real ground and buildings around the place */}
       <Section title="3D Site" icon={<Mountain size={14} />} open={!!open.site} locked={!unlocked} lockedHint={lockedHint} onToggle={() => toggle('site')}>
         <WorldSiteSection hideTitle />
-      </Section>
-
-      {/* The flat map picture under the model */}
-      <Section title="Map overlay" icon={<Layers size={14} />} open={!!open.overlay} locked={!unlocked} lockedHint={lockedHint} onToggle={() => toggle('overlay')}>
-        <button
-          onClick={() => {
-            const nextActive = !isWorldViewActive;
-            setIsWorldViewActive(nextActive);
-            console.log(`[WorldView] Overlay ${nextActive ? 'activated' : 'deactivated'} at Lat: ${worldViewLocation.lat}, Lng: ${worldViewLocation.lng}, Alt: ${worldViewAltitude}m`);
-          }}
-          className={cn(
-            'w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg',
-            isWorldViewActive
-              ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/20'
-              : 'bg-polyform-blue hover:bg-polyform-blue/90 text-white shadow-polyform-blue/20',
-          )}
-        >
-          <Layers size={16} />
-          {isWorldViewActive ? 'Deactivate Overlay' : 'Activate Map Overlay'}
-        </button>
-        <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-          Activating WorldView will render a 2D map plane beneath your 3D models at the specified altitude.
-        </p>
       </Section>
     </div>
   );

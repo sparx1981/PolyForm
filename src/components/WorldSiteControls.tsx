@@ -8,6 +8,7 @@ import { browserSiteIO } from '../lib/worldSite/fetchSite';
 import { buildSite, findSiteGround, isSiteShape, replaceSite } from '../lib/worldSite/site';
 import { OSM_ATTRIBUTION, removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../lib/worldSite/geo';
+import { useGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
 import { STREET_LIFE_LEVELS, routeTool, withSiteSettings, withoutRoutes } from '../lib/worldSite/streets';
 
 // World View's 3D site: bring in the real ground and existing buildings around the chosen place
@@ -204,6 +205,7 @@ function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) 
   const change = useSiteChange();
   const on = !!site.googleContext;
   const ground = site.googleGround ?? 'cutout';
+  const status = useGoogleTilesStatus();
   return (
     <div className="space-y-2 pt-2 border-t border-gray-200/70 dark:border-gray-700/70">
       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Look</span>
@@ -222,6 +224,12 @@ function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) 
       {!hasKey && <p className="text-[10px] text-amber-600 leading-tight">Needs a Google Maps API key with the Map Tiles API enabled.</p>}
       {on && hasKey && (
         <div className="space-y-2 pl-6">
+          <p className={cn('text-[10px] leading-tight', status.state === 'error' ? 'text-red-500' : status.state === 'showing' ? 'text-emerald-600' : 'text-gray-400')}>
+            {status.state === 'error' ? status.message
+              : status.state === 'showing' ? `Showing ${status.tiles} Google tile${status.tiles === 1 ? '' : 's'}.`
+              : status.state === 'off' ? 'Starting…'
+              : status.message || 'Loading…'}
+          </p>
           <Toggle options={[{ id: 'cutout', label: 'Cut out site' }, { id: 'google', label: 'Google ground' }]} value={ground}
             onChange={id => id !== ground && change(`Google ground: ${id}`, sdkCall('setGoogleContext', true, { ground: id }), withSite({ googleGround: id as 'cutout' | 'google' }))} />
           <p className="text-[10px] text-gray-400 leading-tight">

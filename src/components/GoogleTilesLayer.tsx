@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { TilesRenderer } from '3d-tiles-renderer/three';
-import { GoogleCloudAuthPlugin, TileFlatteningPlugin } from '3d-tiles-renderer/plugins';
+import { GoogleCloudAuthPlugin, GLTFExtensionsPlugin, TileFlatteningPlugin } from '3d-tiles-renderer/plugins';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import type { Shape, WorldSiteInfo } from '../types';
 import { cutoutPlanes, estimateLift, tilesToSiteMatrix } from '../lib/worldSite/googleTiles';
+import { explainTileError, setGoogleTilesStatus } from '../lib/worldSite/googleTilesStatus';
 
 // Google's Photorealistic 3D Tiles around an imported World View site (see
 // lib/worldSite/googleTiles.ts). A viewing layer only: it can't be picked, measured or exported.
@@ -74,11 +76,14 @@ export function GoogleTilesLayer({ site, apiKey, buildings, groundAt }: Props) {
     if (!apiKey) return;
     const t = new TilesRenderer(TILES_URL);
     t.registerPlugin(new GoogleCloudAuthPlugin({ apiToken: apiKey, autoRefreshToken: true }));
+    // Google's tiles are Draco-compressed; without a decoder none of them can be read.
+    const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL ?? '/'}draco/`);
+    t.registerPlugin(new GLTFExtensionsPlugin({ dracoLoader: draco }));
+    setGoogleTilesStatus({ state: 'connecting', message: 'Connecting to Google…', tiles: 0 });
     const flatten = new TileFlatteningPlugin();
     t.registerPlugin(flatten);
     flattenRef.current = flatten;
     t.group.matrixAutoUpdate = false;
-    t.group.visible = false;
     gl.localClippingEnabled = true;
     t.setCamera(camera);
     t.setResolutionFromRenderer(camera, gl);
@@ -110,8 +115,23 @@ export function GoogleTilesLayer({ site, apiKey, buildings, groundAt }: Props) {
     const refreshCredits = () => {
       if (queued) return;
       queued = true;
-      queueMicrotask(() => { queued = false; setCredits([...t.getAttributions()]); invalidate(); });
+      queueMicrotask(() => {
+        queued = false;
+        setCredits([...t.getAttributions()]);
+        const n = t.visibleTiles.size;
+        setGoogleTilesStatus(n > 0 ? { state: 'showing', message: '', tiles: n } : { state: 'loading', message: 'Loading tiles…', tiles: 0 });
+        invalidate();
+      });
     };
+    let failures = 0;
+    const onError = (e: { error?: unknown; url?: unknown }) => {
+      failures++;
+      console.error('[Google 3D tiles]', e.error, e.url);
+      // A few failed tiles are normal; the root failing, or nothing loading at all, is not.
+      if (!t.root || t.visibleTiles.size === 0) setGoogleTilesStatus({ state: 'error', message: explainTileError(e.error), tiles: 0 });
+    };
+    t.addEventListener('load-error', onError as never);
+    t.addEventListener('load-root-tileset', () => setGoogleTilesStatus({ state: 'loading', message: 'Loading tiles…' }));
     t.addEventListener('tile-visibility-change', refreshCredits);
     t.addEventListener('load-tileset', refreshCredits);
     const wake = () => invalidate();
@@ -159,6 +179,7 @@ export function GoogleTilesLayer({ site, apiKey, buildings, groundAt }: Props) {
     setTiles(t);
     return () => {
       clearTimeout(giveUp);
+      setGoogleTilesStatus({ state: 'off', message: '', tiles: 0 });
       if (timer) clearTimeout(timer);
       scene.remove(t.group);
       flattenRef.current = null;
@@ -176,7 +197,7 @@ export function GoogleTilesLayer({ site, apiKey, buildings, groundAt }: Props) {
     tiles.group.matrix.fromArray(tilesToSiteMatrix(site.lat, site.lng, site.elevation, lift));
     tiles.group.matrixWorldNeedsUpdate = true;
     tiles.group.updateMatrixWorld(true);
-    tiles.group.visible = aligned;
+    tiles.group.visible = true;
     invalidate();
   }, [tiles, site.lat, site.lng, site.elevation, lift, aligned, invalidate]);
 
