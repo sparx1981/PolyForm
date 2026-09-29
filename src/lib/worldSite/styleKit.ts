@@ -28,7 +28,10 @@ const WALL_FALLBACK: Record<WallMaterial, string> = {
   brick: '#a5573e', render: '#e6e1d6', stone: '#b7ae9d', concrete: '#a9a9a6', metal: '#aab2b8', glass: '#ffffff',
 };
 const ROOF_FALLBACK: Record<RoofMaterial, string> = { tiles: '#9a5a44', metal: '#8f979c', flat: '#8a8884' };
-const MAPS: MapSemantic[] = ['basecolor', 'normal-gl', 'orm'];
+// The packed roughness / metalness picture is left out: it made up-facing surfaces (roofs) render black
+// in the editor's lighting, and buildings at this distance don't need it. Roughness is set per material.
+const MAPS: MapSemantic[] = ['basecolor', 'normal-gl'];
+const ROUGHNESS: Record<string, number> = { brick: 0.9, render: 0.92, stone: 0.85, concrete: 0.88, metal: 0.6, tiles: 0.8, flat: 0.9 };
 
 const FACADE_VERTEX_DECL = `
 attribute vec3 aWall;
@@ -140,7 +143,7 @@ const FACADE_FRAGMENT = `
 /** One wall material per kind. Glass walls have no picture; the facade shader draws them. */
 function makeWallMaterial(kind: WallMaterial): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
-    color: WALL_FALLBACK[kind], roughness: kind === 'glass' ? 0.2 : 0.9, metalness: kind === 'glass' ? 0.1 : 0, vertexColors: true,
+    color: WALL_FALLBACK[kind], roughness: kind === 'glass' ? 0.2 : ROUGHNESS[kind] ?? 0.9, metalness: kind === 'glass' ? 0.1 : 0, vertexColors: true,
   });
   material.onBeforeCompile = shader => {
     shader.vertexShader = shader.vertexShader
@@ -162,7 +165,15 @@ export interface StyleKit {
   roof(kind: RoofMaterial): THREE.MeshStandardMaterial;
 }
 
-type Slot = { material: THREE.MeshStandardMaterial; assetId: string | undefined };
+/**
+ * The library pictures are true-to-life and so fairly dark, while the editor's lighting is set for pale
+ * surfaces. These lift each material's brightness (a colour multiplier above 1) so buildings read as
+ * daylit brick, render and roofing rather than as dark blocks.
+ */
+const WALL_GAIN: Record<WallMaterial, number> = { brick: 2.1, render: 1.15, stone: 1.5, concrete: 1.9, metal: 1.9, glass: 1 };
+const ROOF_GAIN: Record<RoofMaterial, number> = { tiles: 2.6, metal: 3.2, flat: 3.8 };
+
+type Slot = { material: THREE.MeshStandardMaterial; assetId: string | undefined; gain: number };
 
 /** Builds a kit and starts loading its maps. Nothing is shared between renderers. */
 export function createStyleKit(gl: THREE.WebGLRenderer): StyleKit {
@@ -187,9 +198,8 @@ export function createStyleKit(gl: THREE.WebGLRenderer): StyleKit {
           texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
           texture.repeat.set(1 / tile[0], 1 / tile[1]);
           texture.anisotropy = 4;
-          if (semantic === 'basecolor') { m.map = texture; m.color.set('#ffffff'); }
+          if (semantic === 'basecolor') { m.map = texture; m.color.setScalar(slot.gain); }
           else if (semantic === 'normal-gl') m.normalMap = texture;
-          else if (semantic === 'orm') { m.roughnessMap = texture; m.metalnessMap = texture; m.roughness = 1; m.metalness = id.includes('metal') ? 1 : 0; }
           m.needsUpdate = true;
         }, new AbortController().signal);
       } catch (error) {
@@ -202,7 +212,7 @@ export function createStyleKit(gl: THREE.WebGLRenderer): StyleKit {
     wall(kind) {
       let slot = walls.get(kind);
       if (!slot) {
-        slot = { material: makeWallMaterial(kind), assetId: WALL_ASSETS[kind] };
+        slot = { material: makeWallMaterial(kind), assetId: WALL_ASSETS[kind], gain: WALL_GAIN[kind] };
         walls.set(kind, slot);
         load(slot);
       }
@@ -211,8 +221,8 @@ export function createStyleKit(gl: THREE.WebGLRenderer): StyleKit {
     roof(kind) {
       let slot = roofs.get(kind);
       if (!slot) {
-        const material = new THREE.MeshStandardMaterial({ color: ROOF_FALLBACK[kind], roughness: 0.9, metalness: 0, vertexColors: true });
-        slot = { material, assetId: ROOF_ASSETS[kind] };
+        const material = new THREE.MeshStandardMaterial({ color: ROOF_FALLBACK[kind], roughness: ROUGHNESS[kind] ?? 0.9, metalness: 0, vertexColors: true });
+        slot = { material, assetId: ROOF_ASSETS[kind], gain: ROOF_GAIN[kind] };
         roofs.set(kind, slot);
         load(slot);
       }
