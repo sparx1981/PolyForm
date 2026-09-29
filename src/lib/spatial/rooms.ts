@@ -20,6 +20,8 @@ export interface SpatialRoom {
   at: [number, number];
   /** Approximate boundary polygon in world X/Z metres. */
   boundary: Array<[number, number]>;
+  /** Axis-aligned room extents [width, depth] in metres. */
+  size: [number, number];
   areaM2: number;
   perimeterM: number;
   /** Walls which bound the detected region, sorted for stable identity. */
@@ -270,6 +272,11 @@ export function detectRooms(shapes: Shape[], options: RoomDetectionOptions = {})
       // Hull is intentionally an approximation for the first reusable spatial
       // milestone. Exact wall-face polygonisation will replace it later.
       const boundary = convexHull(centres);
+      const xs = centres.map(p => p[0]), zs = centres.map(p => p[1]);
+      const size: [number, number] = [
+        Math.max(...xs) - Math.min(...xs) + cell,
+        Math.max(...zs) - Math.min(...zs) + cell,
+      ];
       out.push({
         id: roomId(level.level, boundaryWallIds),
         level: level.level,
@@ -277,6 +284,7 @@ export function detectRooms(shapes: Shape[], options: RoomDetectionOptions = {})
         source: 'detected',
         at,
         boundary,
+        size,
         areaM2,
         perimeterM: perimeterFromBoundary(boundary),
         boundaryWallIds,
