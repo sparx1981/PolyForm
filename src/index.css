@@ -1,4 +1,8 @@
 @import "tailwindcss";
+
+/* `dark:` follows the app's own theme (the `dark` class on the app wrapper), not the computer's. Otherwise a
+   light app on a dark-mode computer showed panels in dark-mode colours over a light background. */
+@custom-variant dark (&:where(.dark, .dark *));
 @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap');
 
 @theme {

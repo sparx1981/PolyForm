@@ -1429,6 +1429,26 @@ export function getLampLightAnchor(height: number = 3.2, style: string = 'classi
   }
 }
 
+/** Where each of a fixture's lamp heads gives light: most fixtures have one, but a track light has
+ * three angled heads and a double cobra has an arm each side, so each gets its own light. `aim`
+ * is an offset from `anchor` (used by spot-type lights). */
+export function getLampLightHeads(height: number = 3.2, style: string = 'classic'): { anchor: [number, number, number]; aim: [number, number, number] }[] {
+  if (style === 'track') {
+    const railLength = 0.9;
+    return [0, 1, 2].map(i => {
+      const x = -railLength / 2 + 0.15 + i * ((railLength - 0.3) / 2);
+      const tilt = (i - 1) * 0.25;
+      return { anchor: [x + Math.sin(tilt) * 0.12, -0.17, 0] as [number, number, number], aim: [Math.sin(tilt), -Math.cos(tilt), 0] as [number, number, number] };
+    });
+  }
+  if (style === 'cobra-double') {
+    const h = roadwayLampHeight(height);
+    return [1, -1].map(side => ({ anchor: [side * (0.85 + 0.14), h - 0.14, 0] as [number, number, number], aim: [0, -1, 0] as [number, number, number] }));
+  }
+  const anchor = getLampLightAnchor(height, style);
+  return [{ anchor, aim: getLampLightAimOffset(style) }];
+}
+
 /** Local-space offset FROM getLampLightAnchor, defining the direction a spot-type
  * light aims (see LampStyleDef.light in lampStyles.ts) - transformed through the same
  * shape matrix as the anchor itself, so the beam follows the shape's own rotation. A

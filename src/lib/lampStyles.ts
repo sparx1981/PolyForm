@@ -55,7 +55,7 @@ export const LAMP_STYLES: LampStyleDef[] = [
     light: { type: 'point', color: '#fff0d8', intensity: 1.3, distance: 8, decay: 2 } },
   { id: 'modern-led', name: 'Modern LED Cutoff', category: 'exterior', mount: 'floor',
     description: 'Slim rectangular shoebox fixture on a straight arm - a contemporary full-cutoff roadway light with a crisp, controlled beam.',
-    light: { type: 'rect', color: '#eaf4ff', intensity: 10, width: 0.44, height: 0.2 } },
+    light: { type: 'rect', color: '#eaf4ff', intensity: 100, width: 2, height: 0.2 } },
   { id: 'high-mast', name: 'High Mast Floodlight', category: 'exterior', mount: 'floor',
     description: 'Tall mast with a cluster of floodlights, for highway interchanges and large junctions.',
     light: { type: 'spot', color: '#eef6ff', intensity: 4.5, distance: 30, decay: 2, angle: Math.PI / 2.2, penumbra: 0.4 } },

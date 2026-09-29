@@ -6,6 +6,16 @@ export type LightMood = 'warm' | 'neutral' | 'cool';
 export type AutoLightSource = 'place' | 'fixtures' | 'custom';
 const COLOURS = { warm: '#ffdfb5', neutral: '#fff4e5', cool: '#e4efff' };
 export const AUTO_LIGHT_PREFIX = 'auto-room-light-';
+/** Ceiling fixtures Auto light can place, in the order they are offered. */
+export const AUTO_FIXTURE_STYLES: { id: string; name: string }[] = [
+  { id: 'recessed', name: 'Recessed downlight' },
+  { id: 'troffer', name: 'Office panel light' },
+  { id: 'track', name: 'Track light' },
+  { id: 'pendant', name: 'Pendant light' },
+  { id: 'chandelier', name: 'Chandelier' },
+  { id: 'high-bay', name: 'Warehouse high-bay' },
+];
+export const DEFAULT_AUTO_FIXTURE_STYLES = ['recessed'];
 export const AUTO_LIGHT_LIMIT = 24;
 export const AUTO_FIXTURE_PREFIX = 'auto-fixture-';
 const FIXTURE_LIMIT = 24;
@@ -24,7 +34,7 @@ function fixtureSpots(room: { at: [number, number]; size: [number, number]; area
 }
 
 /** A lighting starting point in renderer units, kept as ordinary editable scene lights. */
-export function planAutoLighting(shapes: Shape[], lights: CustomLight[], source: AutoLightSource, mood: LightMood): { lights: CustomLight[]; changed: number; message: string; addShapes?: Shape[]; removeShapeIds?: string[] } {
+export function planAutoLighting(shapes: Shape[], lights: CustomLight[], source: AutoLightSource, mood: LightMood, fixtureStyles: readonly string[] = DEFAULT_AUTO_FIXTURE_STYLES): { lights: CustomLight[]; changed: number; message: string; addShapes?: Shape[]; removeShapeIds?: string[] } {
   const visible = shapes.filter(s => !s.hidden);
   const levels = buildingLevels(visible);
   const rooms = floorPlans(visible, [], 300).flatMap(plan => {
@@ -36,18 +46,24 @@ export function planAutoLighting(shapes: Shape[], lights: CustomLight[], source:
   const colour = COLOURS[mood];
   if (source === 'place') {
     if (!rooms.length) return { lights, changed: 0, message: 'No enclosed rooms found. Close the wall layout so fixtures can be placed inside.' };
+    const chosen = AUTO_FIXTURE_STYLES.filter(f => fixtureStyles.includes(f.id));
+    if (!chosen.length) return { lights, changed: 0, message: 'Tick at least one fixture type to place.' };
     const addShapes: Shape[] = [];
     rooms.forEach((room, i) => {
-      for (const [x, z] of fixtureSpots(room)) {
+      // With several types ticked they share out between the rooms, so each one is used.
+      const style = chosen[i % chosen.length]!;
+      // A track light, pendant or chandelier is one fixture for the room, not a grid of them.
+      const spots = style.id === 'recessed' || style.id === 'troffer' || style.id === 'high-bay' ? fixtureSpots(room) : [[room.at[0], room.at[1]] as [number, number]];
+      for (const [x, z] of spots) {
         if (addShapes.length >= FIXTURE_LIMIT) return;
-        addShapes.push({ id: `${AUTO_FIXTURE_PREFIX}${i}-${addShapes.length}`, name: `Room ${i + 1} downlight`, type: 'lamp',
+        addShapes.push({ id: `${AUTO_FIXTURE_PREFIX}${i}-${addShapes.length}`, name: `Room ${i + 1} ${style.name.toLowerCase()}`, type: 'lamp',
           position: [x, room.ceiling, z], quaternion: [0, 0, 0, 1], scale: [1, 1, 1], args: [1, 3.2, 1],
-          archStyle: 'recessed', color: '#1e293b', roughness: 0.7, metalness: 0.1 });
+          archStyle: style.id, color: '#1e293b', roughness: 0.7, metalness: 0.1 });
       }
     });
     const removeShapeIds = shapes.filter(s => s.id.startsWith(AUTO_FIXTURE_PREFIX)).map(s => s.id);
     return { lights, changed: addShapes.length, addShapes, removeShapeIds,
-      message: `Placed ${addShapes.length} ceiling downlights in ${rooms.length} rooms. Each has an editable light in Custom Lights.${addShapes.length >= FIXTURE_LIMIT ? ' Limited to 24 fixtures.' : ''}` };
+      message: `Placed ${addShapes.length} ceiling fixtures in ${rooms.length} rooms. Each has an editable light in Custom Lights.${addShapes.length >= FIXTURE_LIMIT ? ' Limited to 24 fixtures.' : ''}` };
   }
   if (source === 'fixtures') {
     const fixtures = new Map(visible.filter(s => s.type === 'lamp').map(s => [s.id, s]));

@@ -259,7 +259,7 @@ export default function WorldViewPanel() {
             <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
               <input type="checkbox" className="mt-0.5" checked={worldViewGoogle} disabled={isKeyMissing}
                 onChange={e => setWorldViewGoogle(e.target.checked)} />
-              <span>Google photorealistic surroundings<span className="block text-[10px] text-gray-400 leading-tight">Google's 3D map around the overlay, cut away under it so the flat map stays visible. For looking at only. Needs a Maps key with the Map Tiles API.</span></span>
+              <span>Photorealistic surroundings</span>
             </label>
             {worldViewGoogle && !isKeyMissing && (
               <div className="space-y-2 pl-6">
