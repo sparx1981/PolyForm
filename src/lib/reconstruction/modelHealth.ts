@@ -142,6 +142,7 @@ export function checkModelHealth(shapes: readonly Shape[]): ModelHealthReport {
     .filter((footprint): footprint is OrientedFootprint => footprint !== null);
   const footprintById = new Map(footprints.map(f => [f.id!, f]));
 
+  const seenCollisionPairs = new Set<string>();
   for (const shape of semanticShapes) {
     const profile = profileOf(shape);
     const footprint = footprintById.get(shape.id);
@@ -157,7 +158,10 @@ export function checkModelHealth(shapes: readonly Shape[]): ModelHealthReport {
     const obstacles = footprints.filter(f => f.id !== shape.id);
     const collisions = placementCollisions(footprint, obstacles, profile);
     for (const collision of collisions) {
-      if (!collision.obstacleId || shape.id > collision.obstacleId) continue;
+      if (!collision.obstacleId) continue;
+      const pairKey = [shape.id, collision.obstacleId].sort().join('|');
+      if (seenCollisionPairs.has(pairKey)) continue;
+      seenCollisionPairs.add(pairKey);
       issues.push({
         severity: collision.clearanceOnly ? 'warning' : 'error',
         code: collision.clearanceOnly ? 'furniture-clearance' : 'furniture-collision',
