@@ -258,6 +258,30 @@ function DormerGuide() {
   );
 }
 
+const PLANE_LOCK_COLOURS = { x: '#ef4444', z: '#22c55e', y: '#3b82f6', edge: '#f59e0b' } as const;
+
+/** Shows the drawing plane held with the arrow keys as a square, in the axis colour, that follows the pointer. */
+function PlaneLockGuide({ lock, cursor }: { lock: { key: 'x' | 'y' | 'z' | 'edge'; normal: [number, number, number] } | null; cursor: React.MutableRefObject<THREE.Vector3 | null> }) {
+  const ref = React.useRef<THREE.Mesh>(null);
+  const quaternion = React.useMemo(() => (lock ? new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...lock.normal).normalize()) : null), [lock]);
+  useFrame(() => {
+    const m = ref.current;
+    if (!m) return;
+    const c = cursor.current;
+    m.visible = !!c;
+    if (c) m.position.copy(c);
+  });
+  if (!lock || !quaternion) return null;
+  const colour = PLANE_LOCK_COLOURS[lock.key];
+  return (
+    <mesh ref={ref} quaternion={quaternion} raycast={() => null} renderOrder={8} visible={false} userData={{ isPreview: true }}>
+      <planeGeometry args={[1.6, 1.6]} />
+      <meshBasicMaterial color={colour} transparent opacity={0.22} side={THREE.DoubleSide} depthTest={false} />
+      <Edges color={colour} />
+    </mesh>
+  );
+}
+
 /** A flat coloured patch on the plan (a stair's exit, or its outline) that can't be picked. */
 function PlanPatch({ poly, y, color, opacity }: { poly: [number, number][]; y: number; color: string; opacity: number }) {
   const geometry = React.useMemo(() => {
@@ -6213,6 +6237,7 @@ function Scene() {
       } else if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), point)) {
         point = e.point ? e.point.clone() : new THREE.Vector3();
       }
+      if (planeLockRef.current) { normal = withPlaneLock(normal); setPlaneLock(null); }
       arcPlaneRef.current = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, point);
       const start = snapHere(snapCursor(arcPlaneRef.current), arcPlaneRef.current, null);
       const p0 = start.kind === 'none' ? point : start.point.clone();
@@ -6686,6 +6711,7 @@ function Scene() {
       }
 
       if (startPoint && startNormal) {
+        if (planeLockRef.current) { startNormal = withPlaneLock(startNormal); setPlaneLock(null); }
         setDrawingStart(startPoint);
         setDrawingNormal(startNormal);
         setDrawingOnId(startOnId);
@@ -6710,6 +6736,25 @@ function Scene() {
   const lastSnapFromRef = useRef<THREE.Vector3 | null>(null);
   const shiftLineRef = useRef<SnapLine | null>(null);
   const edgeLockRef = useRef<{ mode: 'parallel' | 'perpendicular'; edge: HoverEdge } | null>(null);
+  // Drawing plane held with the arrow keys BEFORE the first click of Rectangle, Circle, Polygon, Triangle and Arc:
+  // Up = flat, Right = facing the red axis, Left = facing the green axis, Down = square to the edge under the pointer.
+  // (After the first click the same keys hold a direction instead.)
+  type PlaneLock = { key: 'x' | 'y' | 'z' | 'edge'; normal: THREE.Vector3 };
+  const planeLockRef = useRef<PlaneLock | null>(null);
+  const [planeLockView, setPlaneLockView] = useState<{ key: PlaneLock['key']; normal: [number, number, number] } | null>(null);
+  const planeLockCursorRef = useRef<THREE.Vector3 | null>(null);
+  const setPlaneLock = (lock: PlaneLock | null) => {
+    planeLockRef.current = lock;
+    setPlaneLockView(lock ? { key: lock.key, normal: lock.normal.toArray() as [number, number, number] } : null);
+  };
+  /** The drawing plane's normal with a held plane applied, turned to face the camera; else `natural`. */
+  const withPlaneLock = (natural: THREE.Vector3): THREE.Vector3 => {
+    const lock = planeLockRef.current;
+    if (!lock) return natural;
+    const n = lock.normal.clone();
+    if (n.dot(raycaster.ray.direction) > 0) n.negate();
+    return n;
+  };
   const publishedSnapRef = useRef('');
   const shapeSnapRef = useRef<{ shapes: Shape[]; points: NonNullable<SnapInput['extraPoints']> } | null>(null);
   const axisLockRef = useRef(axisLock);
@@ -6837,6 +6882,8 @@ function Scene() {
   };
   useEffect(() => {
     clearSnapLocks();
+    planeLockRef.current = null;
+    setPlaneLockView(null);
     snapMemoryRef.current.clear();
     lastSnapRef.current = null;
     lastSnapFromRef.current = null;
@@ -6844,8 +6891,9 @@ function Scene() {
   }, [activeTool]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const ARROW_TOOLS = ['line', 'poly', 'bezier', 'arc', 'rectangle', 'circle', 'triangle'];
+    const ARROW_TOOLS = ['line', 'poly', 'bezier', 'arc', 'rectangle', 'circle', 'triangle', 'polygon'];
     const SHIFT_TOOLS = ['line', 'poly', 'bezier', 'arc'];
+    const PLANE_TOOLS = ['rectangle', 'circle', 'polygon', 'triangle', 'arc'];
     const editing = (t: EventTarget | null) => {
       const el = t as HTMLElement | null;
       return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
@@ -6853,13 +6901,40 @@ function Scene() {
     const onDown = (ev: KeyboardEvent) => {
       if (editing(ev.target)) return;
       const tool = activeToolSnapRef.current;
+      if (ev.key === 'Escape' && planeLockRef.current) setPlaneLock(null);
       if (ev.key === 'Shift') {
         // Hold what the pointer is inferring for as long as Shift is down.
         const line = lastSnapRef.current?.line;
         if (!ev.repeat && line && lastSnapFromRef.current && SHIFT_TOOLS.includes(tool)) shiftLineRef.current = line;
         return;
       }
-      if (!ARROW_TOOLS.includes(tool) || !lastSnapFromRef.current || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (!ARROW_TOOLS.includes(tool) || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      const notStarted = !lastSnapFromRef.current && PLANE_TOOLS.includes(tool) && (tool !== 'arc' || (arcToolRef.current?.current.phase ?? 'ready') === 'ready');
+      if (notStarted && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(ev.key)) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const cur = planeLockRef.current;
+        const planes: Record<string, { key: 'x' | 'y' | 'z'; normal: THREE.Vector3; name: string }> = {
+          ArrowRight: { key: 'x', normal: new THREE.Vector3(1, 0, 0), name: 'standing square to the red axis' },
+          ArrowLeft: { key: 'z', normal: new THREE.Vector3(0, 0, 1), name: 'standing square to the green axis' },
+          ArrowUp: { key: 'y', normal: new THREE.Vector3(0, 1, 0), name: 'flat' },
+        };
+        if (ev.key === 'ArrowDown') {
+          if (cur?.key === 'edge') { setPlaneLock(null); setMeasurementsRef.current('Drawing plane released: it follows the surface you click.'); return; }
+          const edge = snapMemoryRef.current.edge ?? lastSnapRef.current?.hoverEdge ?? null;
+          const dir = edge ? new THREE.Vector3().subVectors(edge.b, edge.a) : null;
+          if (!dir || dir.lengthSq() < 1e-9) { setMeasurementsRef.current('Rest the pointer on an edge for a moment, then press Down to draw square to it.'); return; }
+          setPlaneLock({ key: 'edge', normal: dir.normalize() });
+          setMeasurementsRef.current('Drawing plane locked square to that edge. Click to start; press Down again to release.');
+          return;
+        }
+        const pick = planes[ev.key]!;
+        if (cur?.key === pick.key) { setPlaneLock(null); setMeasurementsRef.current('Drawing plane released: it follows the surface you click.'); return; }
+        setPlaneLock({ key: pick.key, normal: pick.normal });
+        setMeasurementsRef.current(`Drawing plane locked ${pick.name}. Click to start; press the same arrow (or Esc) to release.`);
+        return;
+      }
+      if (!lastSnapFromRef.current) return;
       const axisFor: Record<string, AxisName> = { ArrowRight: 'x', ArrowLeft: 'z', ArrowUp: 'y' };
       const axis = axisFor[ev.key];
       if (axis) {
@@ -7047,6 +7122,7 @@ function Scene() {
         }
       } else {
         const r = arcSnap();
+        planeLockCursorRef.current = phase === 'ready' && planeLockRef.current ? r.point.clone() : null;
         if (phase === 'first') setArcState(tool.move(r.point));
       }
     }
@@ -7828,7 +7904,9 @@ function Scene() {
     if (!drawingStart && KERNEL_SNAP_TOOLS.includes(activeTool) && !['poly', 'bezier', 'arc'].includes(activeTool)) {
       // Before the first click: where a shape or line could start (corners, crossings, points on
       // an edge or a guide). No plane yet, so the ground stands in for the pointer's position.
-      publishSnap(snapHere(snapCursor(null), null, null));
+      const hover = snapHere(snapCursor(null), null, null);
+      publishSnap(hover);
+      planeLockCursorRef.current = planeLockRef.current ? hover.point.clone() : null;
     } else if ((activeTool === 'poly' && polyVertices.length === 0) || (activeTool === 'bezier' && bezierKnots.length === 0)) {
       snapCurve(activeTool);
     }
@@ -12576,6 +12654,7 @@ function Scene() {
       )}
 
       <DormerGuide />
+      <PlaneLockGuide lock={planeLockView} cursor={planeLockCursorRef} />
 
       {/* Show All Dimensions - per-shape labels, toggled from the Measure tool popout */}
       {showAllDimensions && shapes.map((shape) => {
