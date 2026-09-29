@@ -189,31 +189,40 @@ function WalkingStreetAsset({
   return <primitive object={object} scale={scale} dispose={null} />;
 }
 
-function CarHeadlightBeam({ register }: { register: (light: THREE.SpotLight | null) => void }) {
-  const light = useRef<THREE.SpotLight | null>(null);
-  const target = useRef<THREE.Object3D | null>(null);
+function CarHeadlightBeam({ register }: { register: (lights: THREE.SpotLight[]) => void }) {
+  const left = useRef<THREE.SpotLight | null>(null);
+  const right = useRef<THREE.SpotLight | null>(null);
+  const leftTarget = useRef<THREE.Object3D | null>(null);
+  const rightTarget = useRef<THREE.Object3D | null>(null);
 
   useEffect(() => {
-    if (light.current && target.current) {
-      light.current.target = target.current;
-      target.current.updateMatrixWorld();
+    if (left.current && leftTarget.current) {
+      left.current.target = leftTarget.current;
+      leftTarget.current.updateMatrixWorld();
     }
-    return () => register(null);
+    if (right.current && rightTarget.current) {
+      right.current.target = rightTarget.current;
+      rightTarget.current.updateMatrixWorld();
+    }
+    register([left.current, right.current].filter((light): light is THREE.SpotLight => !!light));
+    return () => register([]);
   }, [register]);
 
+  const common = {
+    color: '#fff1c2',
+    intensity: 24,
+    distance: 14,
+    angle: 0.28,
+    penumbra: 0.78,
+    decay: 2,
+    castShadow: false,
+  } as const;
+
   return <>
-    <spotLight
-      ref={node => { light.current = node; register(node); }}
-      position={[0, 0.55, 1.92]}
-      color="#fff1c2"
-      intensity={32}
-      distance={14}
-      angle={0.34}
-      penumbra={0.72}
-      decay={2}
-      castShadow={false}
-    />
-    <object3D ref={target} position={[0, -0.7, 9]} />
+    <spotLight ref={left} position={[-0.58, 0.55, 1.92]} {...common} />
+    <spotLight ref={right} position={[0.58, 0.55, 1.92]} {...common} />
+    <object3D ref={leftTarget} position={[-0.42, -0.7, 9]} />
+    <object3D ref={rightTarget} position={[0.42, -0.7, 9]} />
   </>;
 }
 
@@ -276,7 +285,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
   const sitterRefs = useRef<(THREE.Group | null)[]>([]);
   const carRefs = useRef<(THREE.Group | null)[]>([]);
   const walkerMorphRefs = useRef<THREE.Mesh[][]>([]);
-  const carLightRefs = useRef<(THREE.SpotLight | null)[]>([]);
+  const carLightRefs = useRef<THREE.SpotLight[][]>([]);
   const time = useRef(0);
   const q = useMemo(() => new THREE.Quaternion(), []);
   const e = useMemo(() => new THREE.Euler(0, 0, 0, 'YXZ'), []);
@@ -343,12 +352,12 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
 
       // Keep real projected headlights affordable on mobile: every car has emissive lamp geometry,
       // while the nearest cars receive a live spotlight cone that illuminates the road ahead.
-      const light = carLightRefs.current[i];
-      if (light) {
+      const lights = carLightRefs.current[i] ?? [];
+      if (lights.length) {
         const close = group.position.distanceToSquared(camera.position) < 35 * 35;
-        const enable = close && projectedLights > 0;
-        light.visible = enable;
-        if (enable) projectedLights--;
+        const enable = close && projectedLights >= lights.length;
+        for (const light of lights) light.visible = enable;
+        if (enable) projectedLights -= lights.length;
       }
     });
   });
@@ -378,7 +387,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     </group>)}
     {plan.cars.map((car, i) => <group key={`car-${i}`} ref={node => { carRefs.current[i] = node; }}>
       <StreetAsset source={cars[car.color % cars.length]!} scale={1} tint={CAR_PALETTE[car.color % CAR_PALETTE.length]} kind="car" />
-      <CarHeadlightBeam register={light => { carLightRefs.current[i] = light; }} />
+      <CarHeadlightBeam register={lights => { carLightRefs.current[i] = lights; }} />
     </group>)}
   </group>;
 }
