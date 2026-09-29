@@ -1,0 +1,7243 @@
+{
+  "c8285e8fa": {
+    "value": "Model",
+    "groups": [
+      "data"
+    ]
+  },
+  "c983a4298": {
+    "value": "Draw it, then pull it up",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb29850d7": {
+    "value": "Lines, rectangles, circles and polygons become faces. Extrude turns them into solids, and Subtract carves one shape out of another.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4867ba03": {
+    "value": "Extrude (P), Subtract (X) and Deform (D)",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4c08406c": {
+    "value": "Snaps to endpoints, midpoints and axes",
+    "groups": [
+      "data"
+    ]
+  },
+  "c11d059a8": {
+    "value": "Type exact sizes in the status bar as you draw",
+    "groups": [
+      "data"
+    ]
+  },
+  "c776615f6": {
+    "value": "Screenshot: a rectangle being pulled into a box",
+    "groups": [
+      "data"
+    ]
+  },
+  "c590c76e2": {
+    "value": "Architecture",
+    "groups": [
+      "data",
+      "shared"
+    ]
+  },
+  "c6dcd13dc": {
+    "value": "Walls, rooms and roofs",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3ae1d624": {
+    "value": "Walls, rooms and floors, doors and windows that cut their own openings, stairs, and roofs that fit any footprint.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2cf3281b": {
+    "value": "Gable, hip and parapet flat roofs",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca52bd35f": {
+    "value": "Stack Story Level for the next floor",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4b28b652": {
+    "value": "Timber Frame Engine for studs, plates and rafters",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce727566e": {
+    "value": "Screenshot: two-storey house with its roof",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2bfbe892": {
+    "value": "Landscape",
+    "groups": [
+      "data",
+      "Home"
+    ]
+  },
+  "c378c445d": {
+    "value": "Gardens and landscape",
+    "groups": [
+      "data"
+    ]
+  },
+  "ccaf3e2c3": {
+    "value": "Shape the terrain, lay grass and paths, plant trees and flowers, and add fences, patios, decks and ponds.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c707cd6fe": {
+    "value": "Terrain from isolines or sculpting brushes",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2c835c25": {
+    "value": "Parametric grass and wildflower meadows",
+    "groups": [
+      "data"
+    ]
+  },
+  "cbe5b162": {
+    "value": "Grading pads with cut and fill volumes",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4be342a7": {
+    "value": "Patio and deck quantities for estimating",
+    "groups": [
+      "data"
+    ]
+  },
+  "caba06d0e": {
+    "value": "Screenshot: garden with pond, patio and planting",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6047229a": {
+    "value": "Light and weather",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca7e7abee": {
+    "value": "Light, weather and materials",
+    "groups": [
+      "data"
+    ]
+  },
+  "c64869bd7": {
+    "value": "Real sunlight and shadows, rain and snow, and realistic materials for brick, timber, stone and glass.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c38a61490": {
+    "value": "Skyboxes, fog and custom lights, including projectors",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdf1918bb": {
+    "value": "Clouds, mist and wind",
+    "groups": [
+      "data"
+    ]
+  },
+  "caf0e9050": {
+    "value": "A CC0 material library",
+    "groups": [
+      "data"
+    ]
+  },
+  "c29c211c9": {
+    "value": "Screenshot: the house at golden hour, or in the rain",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3fea17d9": {
+    "value": "Walk through",
+    "groups": [
+      "data"
+    ]
+  },
+  "c75099a06": {
+    "value": "Walk through it",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3c2011a3": {
+    "value": "Step inside at eye level and walk from room to room, or orbit the whole design.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3344800": {
+    "value": "Gravity, collision and stairs",
+    "groups": [
+      "data"
+    ]
+  },
+  "c64073ee9": {
+    "value": "Move with WASD; jump, sprint and crouch",
+    "groups": [
+      "data"
+    ]
+  },
+  "c30b76954": {
+    "value": "On-screen joystick on touch devices",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4cae95df": {
+    "value": "Screenshot: first-person view inside the house",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd0784c2f": {
+    "value": "Collaborate",
+    "groups": [
+      "data",
+      "Home"
+    ]
+  },
+  "cbc4cfa": {
+    "value": "Design it together",
+    "groups": [
+      "data"
+    ]
+  },
+  "c132066e4": {
+    "value": "Invite people by email or a join link and edit the same model live. See where they are pointing and what they are moving as it happens.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdf18df37": {
+    "value": "Live cursors and move previews",
+    "groups": [
+      "data"
+    ]
+  },
+  "c7e188ef": {
+    "value": "Project messaging inside the modeller",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce49044bf": {
+    "value": "Notes pinned to the model",
+    "groups": [
+      "data"
+    ]
+  },
+  "c41f4e012": {
+    "value": "Screenshot: two collaborators’ cursors on one model",
+    "groups": [
+      "data"
+    ]
+  },
+  "c164d5d25": {
+    "value": "Modelling tools",
+    "groups": [
+      "data"
+    ]
+  },
+  "c879bd2c0": {
+    "value": "Draw on the ground or on any face, then push, pull, carve and shape. Every tool has a hotkey, and the status bar takes exact dimensions as you go.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9808f547": {
+    "value": "Line",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc90bfeab": {
+    "value": "L",
+    "groups": [
+      "data"
+    ]
+  },
+  "c11640299": {
+    "value": "Connected segments that snap to axes and vertices.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c16fd5a2e": {
+    "value": "Rectangle",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd70c14b5": {
+    "value": "R",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb9e9fd90": {
+    "value": "Drag, or click once and type width and depth.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c13fda7fa": {
+    "value": "Circle and polygon",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc60bf9f2": {
+    "value": "C",
+    "groups": [
+      "data"
+    ]
+  },
+  "c767cfd31": {
+    "value": "Trace shapes on the ground or on a face.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c15d64c82": {
+    "value": "Extrude",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd50c118f": {
+    "value": "P",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6111935f": {
+    "value": "Extrude faces into solids, or push them back in.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3c92fd81": {
+    "value": "Subtract",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdd0c1e27": {
+    "value": "X",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf7912052": {
+    "value": "Carve a hole using one object as the cutter.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2bb823a0": {
+    "value": "Bevel, fillet and chamfer",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc425bda": {
+    "value": "Round or flatten edges.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca2cc6774": {
+    "value": "Deform",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc10bf213": {
+    "value": "D",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6ac83aba": {
+    "value": "Sculpt vertices with a soft brush.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9c8a29fb": {
+    "value": "Move, Rotate, Scale",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca997664e": {
+    "value": "M · Q · S",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce4ab82e2": {
+    "value": "Gizmo transforms, with optional contact friction.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb627b6a8": {
+    "value": "3D primitives",
+    "groups": [
+      "data"
+    ]
+  },
+  "cff8c1420": {
+    "value": "Sphere, cone, pyramid, torus and dome.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cda7fe2c9": {
+    "value": "Wall Tool",
+    "groups": [
+      "data"
+    ]
+  },
+  "c7f321867": {
+    "value": "Set thickness and height, click each corner.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c7b3d00b7": {
+    "value": "Door Assembly",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf21a4ae5": {
+    "value": "Frames and cuts its own opening.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf84da76c": {
+    "value": "Window Frame",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdfdb9abc": {
+    "value": "Staircase Flight",
+    "groups": [
+      "data"
+    ]
+  },
+  "c1da2e58e": {
+    "value": "Parametric stairs and single steps or risers.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf3d5f1bc": {
+    "value": "Stack Story Level",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd1923935": {
+    "value": "Duplicate walls onto the next floor.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9da1337a": {
+    "value": "Parametric Roof Generator",
+    "groups": [
+      "data"
+    ]
+  },
+  "c20f6356b": {
+    "value": "Gable, hip and parapet flat roofs with fascia and eaves.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8198dcc3": {
+    "value": "Timber Frame Engine",
+    "groups": [
+      "data"
+    ]
+  },
+  "c87461bfa": {
+    "value": "Studs, plates, headers, noggins, rafters and ridges.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c46048bf3": {
+    "value": "Scale Figure",
+    "groups": [
+      "data"
+    ]
+  },
+  "c63afe00e": {
+    "value": "A person for reference; walk-through in Walk Mode.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca7ff0cae": {
+    "value": "Terrain",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4a6d2ad8": {
+    "value": "Plot the ground, form it from isolines or a mesh, and sculpt it with brushes. Level pads for the building and see how much earth moves.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c304414f7": {
+    "value": "Plot Terrain",
+    "groups": [
+      "data"
+    ]
+  },
+  "c121a10a8": {
+    "value": "Set out the ground around the model.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c263c7f15": {
+    "value": "Form from Isolines/Mesh",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb23bc74b": {
+    "value": "Build terrain from contours or an existing mesh.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c63520d33": {
+    "value": "Embed & Fit",
+    "groups": [
+      "data"
+    ]
+  },
+  "cea55ead6": {
+    "value": "Sit the building into the ground.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc1dd764e": {
+    "value": "Sculpting Brushes",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb62d38e8": {
+    "value": "Raise, lower and smooth, with fenced or masked brushing.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca9e22389": {
+    "value": "Path & Road Tools",
+    "groups": [
+      "data"
+    ]
+  },
+  "c131cb74c": {
+    "value": "Spline paths and roads cut into the terrain.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4344273b": {
+    "value": "Grading Pads",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca154bef4": {
+    "value": "Parametric pads with cut and fill volumes.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6de226b0": {
+    "value": "Zone & Subdivision",
+    "groups": [
+      "data"
+    ]
+  },
+  "c28465cc7": {
+    "value": "Divide the plot into zones.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c12e5cae4": {
+    "value": "Dynamic Materials & Shading",
+    "groups": [
+      "data"
+    ]
+  },
+  "c942f08a3": {
+    "value": "Paint grass, soil and surfaces onto the ground.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c19e2f13c": {
+    "value": "Garden and landscape",
+    "groups": [
+      "data"
+    ]
+  },
+  "c7eb6cff": {
+    "value": "Plant trees and shrubs, grow grass and wildflowers, and build the garden: fences, ponds, patios, decks, railings, lights, benches and boulders.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd595499f": {
+    "value": "Plant Tree / Bush",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2ee621e1": {
+    "value": "Trees and shrubs that sway in the wind.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c582b1e1d": {
+    "value": "Grass",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6df32da": {
+    "value": "Parametric grass that grows to fit the ground, swaying in the wind.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb83f8b3f": {
+    "value": "Wildflowers",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2746ec2d": {
+    "value": "Parametric wildflower meadows scattered and coloured procedurally.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c623cb7b6": {
+    "value": "Fence",
+    "groups": [
+      "data"
+    ]
+  },
+  "cfd806c50": {
+    "value": "Draw a run; posts and panels follow the ground.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9404e942": {
+    "value": "Pond / Lake",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf3b12ac9": {
+    "value": "The ground is dug into a basin and filled with water.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c788b7624": {
+    "value": "Patio / Decking",
+    "groups": [
+      "data"
+    ]
+  },
+  "c1a76e712": {
+    "value": "Paving set into the ground, or a timber deck on posts.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc73bea87": {
+    "value": "Safety Railing",
+    "groups": [
+      "data"
+    ]
+  },
+  "c93d41aec": {
+    "value": "Timber, glass or cable.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c26fcb7da": {
+    "value": "Light Fixture",
+    "groups": [
+      "data"
+    ]
+  },
+  "c448febdc": {
+    "value": "Garden lights that glow at night.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca42b3789": {
+    "value": "Bench and Boulder",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd826df5c": {
+    "value": "Park benches and faceted rocks.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8665120c": {
+    "value": "Quantities",
+    "groups": [
+      "data"
+    ]
+  },
+  "cca4df66f": {
+    "value": "Area, perimeter, slab count and board length.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c62878099": {
+    "value": "Site location",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4e8acd3e": {
+    "value": "WorldView lays a Google Maps overlay at the origin, under your model. Search for an address or type coordinates, and set how much ground it covers.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c396a53b5": {
+    "value": "Address search",
+    "groups": [
+      "data"
+    ]
+  },
+  "c58e6b605": {
+    "value": "Find the site by address.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf51a59ad": {
+    "value": "Latitude and longitude",
+    "groups": [
+      "data"
+    ]
+  },
+  "c386de753": {
+    "value": "Place the map precisely.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8cf9b345": {
+    "value": "Map Coverage",
+    "groups": [
+      "data"
+    ]
+  },
+  "c34cad8e1": {
+    "value": "50–450 m",
+    "groups": [
+      "data"
+    ]
+  },
+  "c81e6b284": {
+    "value": "Default 100 m.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6b3f5c0e": {
+    "value": "Scriptable",
+    "groups": [
+      "data"
+    ]
+  },
+  "c76d541bc": {
+    "value": "sdk.worldView.importMap()",
+    "groups": [
+      "data"
+    ]
+  },
+  "cfc5b4824": {
+    "value": "Light and materials",
+    "groups": [
+      "data"
+    ]
+  },
+  "cedda83be": {
+    "value": "Real sunlight and shadows, skyboxes and fog, your own lights, and realistic materials for brick, timber, stone and glass.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c86bf7223": {
+    "value": "Skybox",
+    "groups": [
+      "data"
+    ]
+  },
+  "c66c84245": {
+    "value": "Golden Hour, Woodland and more; blur, intensity, rotation.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c14254321": {
+    "value": "Sun and shadows",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb086fb71": {
+    "value": "Sun intensity, animation speed and ambient occlusion.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c318f6a47": {
+    "value": "Custom lights",
+    "groups": [
+      "data"
+    ]
+  },
+  "c447e9578": {
+    "value": "Spot, point, directional and projector.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9854b083": {
+    "value": "Projector",
+    "groups": [
+      "data"
+    ]
+  },
+  "c691b9cad": {
+    "value": "Casts an image or looping video; static or spinning.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c47e09df": {
+    "value": "Fog",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc9f9ad82": {
+    "value": "Standard or Super Mega, with density and height.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd3ccdb89": {
+    "value": "Materials",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc36a5062": {
+    "value": "A CC0 material library, plain finishes and PBR controls.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c66eab633": {
+    "value": "Weather",
+    "groups": [
+      "data"
+    ]
+  },
+  "c67af1258": {
+    "value": "Turn on weather for an area around the model and set the wind. Each layer has its own density, size, colour and speed.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c66bf0369": {
+    "value": "Rain and snow",
+    "groups": [
+      "data"
+    ]
+  },
+  "cad3f938f": {
+    "value": "Fall speed, gravity and turbulence.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c79d12c97": {
+    "value": "Clouds",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca15d28be": {
+    "value": "Puffy, wispy or layered; fast or volumetric.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd071b28c": {
+    "value": "Mist",
+    "groups": [
+      "data"
+    ]
+  },
+  "c84c4f956": {
+    "value": "Altitude and thickness.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c94413d27": {
+    "value": "Wind",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd53c31f2": {
+    "value": "m/s",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca176da8": {
+    "value": "East–west and north–south.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2a9c98cb": {
+    "value": "Wet glass",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca00eb2f8": {
+    "value": "Rain runs down the glazing.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6696a7d1": {
+    "value": "Animation and scenes",
+    "groups": [
+      "data"
+    ]
+  },
+  "c13fd140d": {
+    "value": "Place particle effects and wildlife in the scene, and save camera scenes to fly between viewpoints when you present.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c592fdd05": {
+    "value": "Effects",
+    "groups": [
+      "data"
+    ]
+  },
+  "ccdc6e655": {
+    "value": "Confetti, fire, smoke, sparks and magic aura.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8f8735af": {
+    "value": "Wildlife",
+    "groups": [
+      "data"
+    ]
+  },
+  "c7f2d3f5": {
+    "value": "Birds taking off from a perch, starling flocks, and bees.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3439a8e4": {
+    "value": "Scale and density",
+    "groups": [
+      "data"
+    ]
+  },
+  "c5b7a49b0": {
+    "value": "Size each effect to the design.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c343782cd": {
+    "value": "Looping",
+    "groups": [
+      "data"
+    ]
+  },
+  "c992585f9": {
+    "value": "Loop, or play once.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8c5a5640": {
+    "value": "Scenes",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4a537d64": {
+    "value": "Saved viewpoints with thumbnails; click to fly there.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c11e30c66": {
+    "value": "Walk Mode puts you inside at eye level, with gravity and collision, so you can climb the stairs and stand on the deck.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c309917e3": {
+    "value": "Walk Mode",
+    "groups": [
+      "data"
+    ]
+  },
+  "c62791e62": {
+    "value": "WASD",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc69a0826": {
+    "value": "Space to jump, Shift to sprint, C to crouch, E to open a door, Esc to exit.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c190a3797": {
+    "value": "Look Around",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce9d14e94": {
+    "value": "Turn the camera without moving.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c44a2c2ef": {
+    "value": "Portal Navigation",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca543ea15": {
+    "value": "Jump between points in the model.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c15167a1b": {
+    "value": "Camera Depth Clipping",
+    "groups": [
+      "data"
+    ]
+  },
+  "c76b2016c": {
+    "value": "Near and far clipping planes.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c38052971": {
+    "value": "Measure and plan",
+    "groups": [
+      "data"
+    ]
+  },
+  "c85e85c95": {
+    "value": "Tape measure, protractor, plan and elevation views, and a split view to see two angles at once.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdd79a7ed": {
+    "value": "Tape measure",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf8756f40": {
+    "value": "Measure between any two points.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c857fe6b3": {
+    "value": "Protractor",
+    "groups": [
+      "data"
+    ]
+  },
+  "c73af0724": {
+    "value": "Measure and set angles.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c522688dc": {
+    "value": "Plan and elevation",
+    "groups": [
+      "data"
+    ]
+  },
+  "c215271d6": {
+    "value": "Orthographic views of the model.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6ed4163c": {
+    "value": "Units",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2a72f13c": {
+    "value": "mm · cm · m",
+    "groups": [
+      "data"
+    ]
+  },
+  "c5c2d6d5a": {
+    "value": "Choose in Settings.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cae9e8b56": {
+    "value": "Collaboration",
+    "groups": [
+      "data",
+      "shared"
+    ]
+  },
+  "c4ee93cf4": {
+    "value": "Invite people to a saved design and work on it together in real time.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cee896835": {
+    "value": "Invite by email",
+    "groups": [
+      "data"
+    ]
+  },
+  "c79bd8263": {
+    "value": "Or generate a join link for invited people.",
+    "groups": [
+      "data"
+    ]
+  },
+  "caaff30c": {
+    "value": "Live cursors",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf329acb6": {
+    "value": "Colour-coded per person, with name pills.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2987fbd1": {
+    "value": "Move previews",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3490577b": {
+    "value": "See a labelled ghost as someone moves an object.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c443a8172": {
+    "value": "Project Messaging",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc09423a": {
+    "value": "Chat docked in the panel stack, or floating.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cff01b6a": {
+    "value": "Notes",
+    "groups": [
+      "data"
+    ]
+  },
+  "ccb0c01d1": {
+    "value": "N",
+    "groups": [
+      "data"
+    ]
+  },
+  "c33aa82eb": {
+    "value": "Pinned to geometry, with a completed state.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c59b4ae0b": {
+    "value": "Access",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb991221f": {
+    "value": "Owners can revoke any collaborator.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c294d7ea4": {
+    "value": "AI tools",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc58470e2": {
+    "value": "Generate objects from a description, render the current view, or turn a photo into a 3D model.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ccf45ff2a": {
+    "value": "AI Generate",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca45d588c": {
+    "value": "Describe a model; it is placed around what is already there.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c470ea376": {
+    "value": "AI Renderer",
+    "groups": [
+      "data"
+    ]
+  },
+  "cba676d33": {
+    "value": "A high-fidelity render of the viewport.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c70973ef": {
+    "value": "Photo to 3D",
+    "groups": [
+      "data"
+    ]
+  },
+  "c374a2d62": {
+    "value": "From Import / Export in the menu.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c73f58b58": {
+    "value": "Files and storage",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd045029": {
+    "value": "Choose where each model lives. Every model appears in one list, wherever it is stored.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4bcdcf24": {
+    "value": "PolyForm cloud",
+    "groups": [
+      "data"
+    ]
+  },
+  "cfa523d31": {
+    "value": "Live collaboration: invite people and design together.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c63e2516": {
+    "value": "Google Drive",
+    "groups": [
+      "data",
+      "Home",
+      "Features"
+    ]
+  },
+  "c8428dc3e": {
+    "value": "Keep large projects as files in your own Drive.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c7976b5f0": {
+    "value": "Trimble Connect",
+    "groups": [
+      "data",
+      "Home",
+      "Features"
+    ]
+  },
+  "c312d90b3": {
+    "value": "Store designs alongside the rest of your project.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c573e0af4": {
+    "value": "Import",
+    "groups": [
+      "data"
+    ]
+  },
+  "c32d8475f": {
+    "value": ".skp · 3D",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9c19af35": {
+    "value": "Bring SKP and other 3D files in.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce86349d3": {
+    "value": "Export",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb1b352db": {
+    "value": "glTF · STL · SKP",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6965bd28": {
+    "value": "For viewers, 3D printing and SKP.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc3fd1573": {
+    "value": "Sharing",
+    "groups": [
+      "data"
+    ]
+  },
+  "c75a949ae": {
+    "value": "Public models, with an optional password.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c80771cfa": {
+    "value": "MODEL",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca9f02f77": {
+    "value": "Draw it, then shape it",
+    "groups": [
+      "data"
+    ]
+  },
+  "c201c96f9": {
+    "value": "Sketch on the ground or on any face, then push, pull, carve and bevel. Every tool has a hotkey, and the status bar takes exact dimensions as you draw.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9387a943": {
+    "value": "BUILD",
+    "groups": [
+      "data"
+    ]
+  },
+  "c3588ad0": {
+    "value": "Walls, rooms and roofs that fit together",
+    "groups": [
+      "data"
+    ]
+  },
+  "c6769f8f0": {
+    "value": "Walls, floors, doors and windows that cut their own openings, staircases, and a parametric roof generator that fits any footprint — with a timber frame engine underneath when you need it.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c66abc608": {
+    "value": "SHAPE THE SITE",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca33ec24f": {
+    "value": "The real site, and everything on it",
+    "groups": [
+      "data"
+    ]
+  },
+  "c10c70fb2": {
+    "value": "Lay the real map under your model with WorldView, sculpt the terrain to match it, then plant, fence and pave the ground around what you’ve built — in the same model as the building itself.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c94f65fb4": {
+    "value": "VISUALISE",
+    "groups": [
+      "data"
+    ]
+  },
+  "c51bfa45f": {
+    "value": "See it in real light, then walk in",
+    "groups": [
+      "data"
+    ]
+  },
+  "c302cc6ae": {
+    "value": "Real sunlight and shadows, weather, materials and saved camera scenes, then Walk Mode to step inside at eye level — the same model, seen the way it will actually look and feel.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c1718b9f2": {
+    "value": "WORK TOGETHER",
+    "groups": [
+      "data"
+    ]
+  },
+  "c45f4ca54": {
+    "value": "Design it together, live",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8a8a117e": {
+    "value": "Invite people to a model and edit it together in real time, with live cursors, move previews and notes pinned to the geometry itself.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c896d057b": {
+    "value": "AUTOMATE",
+    "groups": [
+      "data"
+    ]
+  },
+  "c91975f3b": {
+    "value": "Generate, render and script it",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd2a0df89": {
+    "value": "Describe an object and PolyForm places it, render the viewport at high fidelity, or turn a photo into a 3D model — and script anything you can draw with the JavaScript SDK.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c64ef245d": {
+    "value": "Google Maps",
+    "groups": [
+      "data"
+    ]
+  },
+  "c280fff37": {
+    "value": "Claude",
+    "groups": [
+      "data"
+    ]
+  },
+  "c52f7247a": {
+    "value": "SKP files",
+    "groups": [
+      "data"
+    ]
+  },
+  "c1ece61e0": {
+    "value": "glTF and STL",
+    "groups": [
+      "data"
+    ]
+  },
+  "cfdaccca4": {
+    "value": "Find the site",
+    "groups": [
+      "data"
+    ]
+  },
+  "c725851a5": {
+    "value": "Search a location and lay the real map under your model with WorldView, establishing the real project context from the first click.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c444f4a9c": {
+    "value": "Design the building",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce28abc2b": {
+    "value": "Draw walls, drop in doors and windows, add stairs, stack storeys and raise the roof.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb331be50": {
+    "value": "Shape the landscape",
+    "groups": [
+      "data"
+    ]
+  },
+  "c92e750e4": {
+    "value": "Sculpt the terrain, cut the paths, dig the pond, lay the patio against the back door and plant the garden.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c23f034f3": {
+    "value": "Experience the result",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb32a9ed3": {
+    "value": "Set the sun and the weather, save scenes, then walk through at eye level, before it is built.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c459f8bbb": {
+    "value": "// Build a box, then pull it up",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf5847974": {
+    "value": "const box = sdk.createBox({ width: 2, height: 1, depth: 2 });",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd41d3e5d": {
+    "value": "sdk.pushPull(box, 1.5);",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9517dc81": {
+    "value": "sdk.applyColor(box, '#0063A3');",
+    "groups": [
+      "data"
+    ]
+  },
+  "c914b299": {
+    "value": "// A garden room on a real site",
+    "groups": [
+      "data"
+    ]
+  },
+  "c46c9175f": {
+    "value": "sdk.worldView.importMap({ lat: 51.5007, lng: -0.1246, zoom: 18, altitude: 0 });",
+    "groups": [
+      "data"
+    ]
+  },
+  "c853a8a7f": {
+    "value": "const room = sdk.createBox({ width: 4, height: 0.2, depth: 3, position: [0, 0, 0] });",
+    "groups": [
+      "data"
+    ]
+  },
+  "c327cb269": {
+    "value": "sdk.pushPull(room, 2.4);",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8fac310f": {
+    "value": "sdk.setBevel(room, { amount: 0.05, type: 'radius', segments: 4 });",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf7202da2": {
+    "value": "sdk.applyColor(room, '#e8e1d5');",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd29e5053": {
+    "value": "// Cut a doorway",
+    "groups": [
+      "data"
+    ]
+  },
+  "c52d345bb": {
+    "value": "const cutter = sdk.createBox({ width: 0.9, height: 2.1, depth: 0.5, position: [0, 1.05, 1.5] });",
+    "groups": [
+      "data"
+    ]
+  },
+  "c59ba9ed9": {
+    "value": "sdk.performCSG(room.id, cutter.id, 'SUBTRACTION');",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf303bb02": {
+    "value": "console.log(sdk.getSyncStatus()); // synced",
+    "groups": [
+      "data"
+    ]
+  },
+  "cff86bf93": {
+    "value": "create_model",
+    "groups": [
+      "data",
+      "BuildWithClaude"
+    ]
+  },
+  "c61dfa3ae": {
+    "value": "add_room",
+    "groups": [
+      "data",
+      "BuildWithClaude"
+    ]
+  },
+  "ccdf96623": {
+    "value": "add_opening",
+    "groups": [
+      "data",
+      "BuildWithClaude"
+    ]
+  },
+  "c3f3862d3": {
+    "value": "add_stairs",
+    "groups": [
+      "data",
+      "BuildWithClaude"
+    ]
+  },
+  "c58df9583": {
+    "value": "add_roof",
+    "groups": [
+      "data",
+      "BuildWithClaude"
+    ]
+  },
+  "ca35fd505": {
+    "value": "preview_model",
+    "groups": [
+      "data",
+      "BuildWithClaude"
+    ]
+  },
+  "cc6af889a": {
+    "value": "Connect PolyForm to Claude",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf6d84d86": {
+    "value": "Add PolyForm as a custom connector in Claude and sign in with your Google account.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cac7d1708": {
+    "value": "Ask in plain words",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9820d1c9": {
+    "value": "Describe the building, the garden or the change you want. Claude builds it in your account.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc40e7b7d": {
+    "value": "Check, then open it",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd71dfef0": {
+    "value": "Claude shows a 3D view and a floor plan of every level. Open the model in PolyForm to keep going.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca4f525c8": {
+    "value": "Keep going with any change",
+    "groups": [
+      "data"
+    ]
+  },
+  "cddcaf8e0": {
+    "value": "Everything PolyForm can do, Claude can ask for: restyle a door or window, reshape the terrain, turn on procedural grass or a wildflower meadow, or change the weather.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4f0befe5": {
+    "value": "Read",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdeb967f0": {
+    "value": "List your models and inspect what is in them.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c10b010ec": {
+    "value": "list_models",
+    "groups": [
+      "data"
+    ]
+  },
+  "c51e01505": {
+    "value": "get_model",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc6207686": {
+    "value": "list_objects",
+    "groups": [
+      "data"
+    ]
+  },
+  "caea64a4f": {
+    "value": "get_object",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9a178f19": {
+    "value": "list_catalog",
+    "groups": [
+      "data"
+    ]
+  },
+  "c17b183e0": {
+    "value": "See",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf8374288": {
+    "value": "Take pictures from perspective, plan, front, back, left or right.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce822c431": {
+    "value": "screenshot",
+    "groups": [
+      "data"
+    ]
+  },
+  "cfdda4cf7": {
+    "value": "Preview",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8674a7ae": {
+    "value": "A 3D picture plus a floor plan of each level, with rooms, doors, windows and stairs.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c95967543": {
+    "value": "Build",
+    "groups": [
+      "data"
+    ]
+  },
+  "c919f3ff": {
+    "value": "Rooms, walls, openings, roofs, stairs, terrain, planting, fences, ponds and patios.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb833f489": {
+    "value": "add_wall",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8d91fa6a": {
+    "value": "add_terrain",
+    "groups": [
+      "data"
+    ]
+  },
+  "cfc9de2be": {
+    "value": "add_plant",
+    "groups": [
+      "data"
+    ]
+  },
+  "cac34961a": {
+    "value": "add_fence",
+    "groups": [
+      "data"
+    ]
+  },
+  "c27b9f2be": {
+    "value": "add_pond",
+    "groups": [
+      "data"
+    ]
+  },
+  "c790ad776": {
+    "value": "add_patio",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc2c76cb1": {
+    "value": "Edit",
+    "groups": [
+      "data"
+    ]
+  },
+  "c16943d16": {
+    "value": "Move, restyle, rename and delete objects, change the weather, or step back a change.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c1ccfb538": {
+    "value": "transform_objects",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb40f017e": {
+    "value": "set_appearance",
+    "groups": [
+      "data"
+    ]
+  },
+  "c26ab8128": {
+    "value": "set_weather",
+    "groups": [
+      "data"
+    ]
+  },
+  "c2deaa713": {
+    "value": "rename_object",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca327b68d": {
+    "value": "delete_objects",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb463b585": {
+    "value": "undo_last_change",
+    "groups": [
+      "data"
+    ]
+  },
+  "cec9874bf": {
+    "value": "Open Claude’s connectors",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9ba214d1": {
+    "value": "In Claude, go to Settings → Connectors and choose Add custom connector.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c243a6079": {
+    "value": "Paste the PolyForm address",
+    "groups": [
+      "data"
+    ]
+  },
+  "cbe8b7d6e": {
+    "value": "Enter the connector address, ending in /mcp.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c744be623": {
+    "value": "Sign in",
+    "groups": [
+      "data",
+      "shared"
+    ]
+  },
+  "c87d4a0d": {
+    "value": "Claude opens a PolyForm sign-in page. Use your Google account.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cbeb96d08": {
+    "value": "Ask for a design",
+    "groups": [
+      "data"
+    ]
+  },
+  "cba5b5d79": {
+    "value": "Start a chat and describe what you want built.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c5edb76ca": {
+    "value": "Console",
+    "groups": [
+      "data",
+      "Developers"
+    ]
+  },
+  "cbfdaf6d4": {
+    "value": "Write and run scripts against the open model. The window drags, docks and collapses.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ca8532270": {
+    "value": "Library",
+    "groups": [
+      "data",
+      "Developers"
+    ]
+  },
+  "c1fe557b4": {
+    "value": "Save scripts, make them public, and copy other people’s into your own library.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cd3a7a59f": {
+    "value": "Documentation and Spec",
+    "groups": [
+      "data"
+    ]
+  },
+  "c16a35ab3": {
+    "value": "Every SDK method and property, next to the editor.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c821d7c32": {
+    "value": "Code Recorder",
+    "groups": [
+      "data",
+      "Developers"
+    ]
+  },
+  "c1c156512": {
+    "value": "Turn what you draw into SDK code.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c51500cf6": {
+    "value": "Custom toolbars",
+    "groups": [
+      "data"
+    ]
+  },
+  "cf23c02cb": {
+    "value": "Build your own toolbars with your own icons.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c8ab54bdb": {
+    "value": "Embedded webpages",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc8964db9": {
+    "value": "Open a URL in a floating window with sdk.openWebpage().",
+    "groups": [
+      "data"
+    ]
+  },
+  "c43f5af18": {
+    "value": "AI Diagnostic Log",
+    "groups": [
+      "data"
+    ]
+  },
+  "c87769ad6": {
+    "value": "Live scene telemetry with category filters. Ctrl+Shift+L.",
+    "groups": [
+      "data"
+    ]
+  },
+  "caf6cf14c": {
+    "value": "Console, SDK and library",
+    "groups": [
+      "data"
+    ]
+  },
+  "c5569e449": {
+    "value": "EXTEND",
+    "groups": [
+      "data"
+    ]
+  },
+  "c93c145e3": {
+    "value": "Your own toolbars and pages",
+    "groups": [
+      "data"
+    ]
+  },
+  "c48395d6b": {
+    "value": "UNDERSTAND",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdf9be0": {
+    "value": "Documentation and diagnostics",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdb210d6e": {
+    "value": "sdk.createBox({ width, height, depth, position })",
+    "groups": [
+      "data"
+    ]
+  },
+  "c7fbd1437": {
+    "value": "Create a box.",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "c10cfc972": {
+    "value": "sdk.createPoly({ vertices: [[x, y, z], …] })",
+    "groups": [
+      "data"
+    ]
+  },
+  "c1cd95941": {
+    "value": "Create a polygon from world-space points. Ready for Extrude.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c4b5fad8": {
+    "value": "sdk.pushPull(shape, amount)",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "c2783a920": {
+    "value": "Extrude or intrude a shape.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce234275b": {
+    "value": "sdk.applyColor(shape, color)",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "c62230ce7": {
+    "value": "Colour a shape.",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "c4e905ca7": {
+    "value": "sdk.setBevel(shape, { amount, type, segments })",
+    "groups": [
+      "data"
+    ]
+  },
+  "cdbe579bf": {
+    "value": "Bevel a shape’s edges.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ce298869a": {
+    "value": "sdk.performCSG(targetId, cutterId, \"SUBTRACTION\")",
+    "groups": [
+      "data"
+    ]
+  },
+  "c86e41c5d": {
+    "value": "Carve one shape out of another.",
+    "groups": [
+      "data"
+    ]
+  },
+  "ccb13e793": {
+    "value": "sdk.worldView.importMap({ lat, lng, zoom, altitude })",
+    "groups": [
+      "data"
+    ]
+  },
+  "c69dd4f42": {
+    "value": "Lay a map under the model.",
+    "groups": [
+      "data"
+    ]
+  },
+  "c52962940": {
+    "value": "sdk.openWebpage(url)",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "cf2f8fdf3": {
+    "value": "Open a URL in a floating window.",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "c75c823eb": {
+    "value": "sdk.getSyncStatus()",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "c63f9690d": {
+    "value": "Returns 'synced', 'syncing', 'error' or 'offline'.",
+    "groups": [
+      "data"
+    ]
+  },
+  "cc35084d9": {
+    "value": "sdk.getCollaborators()",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "cfd8ff4ec": {
+    "value": "List the people active in the model.",
+    "groups": [
+      "data",
+      "sdkFullReference"
+    ]
+  },
+  "c398f2f4e": {
+    "value": "ENTITY INFO",
+    "groups": [
+      "data"
+    ]
+  },
+  "c9b03de1d": {
+    "value": "OUTLINER",
+    "groups": [
+      "data"
+    ]
+  },
+  "c530d3389": {
+    "value": "MATERIALS",
+    "groups": [
+      "data"
+    ]
+  },
+  "c1dcd60": {
+    "value": "SCENES",
+    "groups": [
+      "data"
+    ]
+  },
+  "c37b1d8a2": {
+    "value": "VISUALISATION",
+    "groups": [
+      "data"
+    ]
+  },
+  "cb0d25116": {
+    "value": "COLLABORATION",
+    "groups": [
+      "data"
+    ]
+  },
+  "c5d8aac9e": {
+    "value": "Core",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfb2c53f3": {
+    "value": "Primitives, materials, lighting, notes and view control. Available directly on `sdk`, with no namespace prefix.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3cef07f6": {
+    "value": "createRectangle",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3683e4f0": {
+    "value": "sdk.createRectangle({ width, height, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4380ddc6": {
+    "value": "Shape",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c57373ae2": {
+    "value": "Create a flat rectangle.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1a3f65a": {
+    "value": "createBox",
+    "groups": [
+      "sdkFullReference",
+      "Developers"
+    ]
+  },
+  "cd2e41c09": {
+    "value": "sdk.createBox({ width, height, depth, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd8c35280": {
+    "value": "createSphere",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdaae7531": {
+    "value": "sdk.createSphere({ radius, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c476fd607": {
+    "value": "Create a sphere.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccf69a4a2": {
+    "value": "createCone",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c43fe5080": {
+    "value": "sdk.createCone({ radius, height, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c85988e49": {
+    "value": "Create a cone.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3bef0cbf": {
+    "value": "createPyramid",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c95d2fbd3": {
+    "value": "sdk.createPyramid({ radius, height, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c40e46b94": {
+    "value": "Create a pyramid.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c65425477": {
+    "value": "createDonut",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfc9b3b06": {
+    "value": "sdk.createDonut({ radius, tube, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9125c2a": {
+    "value": "Create a torus (donut).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf91a68b2": {
+    "value": "createDome",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cac289bcb": {
+    "value": "sdk.createDome({ radius, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce55bd251": {
+    "value": "Create a dome.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c75884cc7": {
+    "value": "createCylinder",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c431ff91": {
+    "value": "sdk.createCylinder({ radius, height, radiusTop?, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cad8b21f6": {
+    "value": "Create a cylinder, optionally tapered into a cone.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c84a19dcf": {
+    "value": "createPoly",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca1591ec9": {
+    "value": "sdk.createPoly({ vertices, position? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c562658f3": {
+    "value": "Create a polygon from world-space points, ready for Extrude.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb7a3d6a3": {
+    "value": "addObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd050c186": {
+    "value": "sdk.addObject(type, props)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c259720c9": {
+    "value": "Add a raw shape of any catalog type. Pass props.id to choose its id; an existing object with that id is replaced.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c35b648a3": {
+    "value": "updateObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf0f028f6": {
+    "value": "sdk.updateObject(id, changes)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c48b5725f": {
+    "value": "void",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf7b4538e": {
+    "value": "Change some of an object's fields by id; a field set to undefined is removed.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb77846d6": {
+    "value": "pushPull",
+    "groups": [
+      "sdkFullReference",
+      "Developers"
+    ]
+  },
+  "c7a56aa19": {
+    "value": "Extrude or intrude a shape (the Extrude tool).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3155cdfa": {
+    "value": "applyColor",
+    "groups": [
+      "sdkFullReference",
+      "Developers"
+    ]
+  },
+  "c39ca0101": {
+    "value": "setTag",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb30c0d55": {
+    "value": "sdk.setTag(shape, key, value)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c87db78a1": {
+    "value": "Set a custom key/value tag on a shape.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbac20468": {
+    "value": "setName",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca103a3": {
+    "value": "sdk.setName(shape, name)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c47e6fb09": {
+    "value": "Rename a shape.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c78b1367a": {
+    "value": "getObjectByName",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7f171a8a": {
+    "value": "sdk.getObjectByName(name)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce9d0783a": {
+    "value": "Shape | undefined",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c30aab3ac": {
+    "value": "Find a shape by its name.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3cab6bb5": {
+    "value": "getSelectedObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c95aec314": {
+    "value": "sdk.getSelectedObject()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6ab499bf": {
+    "value": "Shape | null",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9265acb8": {
+    "value": "Get the currently selected shape.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c11c2662d": {
+    "value": "select",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb27de828": {
+    "value": "sdk.select(idOrIds)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdb47e62d": {
+    "value": "Select one or more objects by id.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccdb998a1": {
+    "value": "deleteObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb62def9f": {
+    "value": "sdk.deleteObject(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1ec501a": {
+    "value": "Delete an object.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3f55a610": {
+    "value": "saveScene",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c65a66d24": {
+    "value": "sdk.saveScene(name)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c34408973": {
+    "value": "Save the current model.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9214c721": {
+    "value": "setSkybox",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9638b09": {
+    "value": "sdk.setSkybox(type, blur?, rotation?, intensity?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6d21e954": {
+    "value": "Set the sky/environment preset.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c834af415": {
+    "value": "setFog",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce98bd3": {
+    "value": "sdk.setFog(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c44bb2ab": {
+    "value": "Configure scene fog.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c350d68f8": {
+    "value": "addLight",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c86b2920d": {
+    "value": "sdk.addLight(lightData)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c83ae9dd7": {
+    "value": "Add a light to the scene.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc5e354bd": {
+    "value": "setBevelType",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce8f956f0": {
+    "value": "sdk.setBevelType(type)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c38706690": {
+    "value": "Set the default bevel style ('radius' or 'chamfer').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9cc31ab5": {
+    "value": "setBevel",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c86e41620": {
+    "value": "sdk.setBevel(shape, { amount?, type?, segments? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c28d4f771": {
+    "value": "Bevel a shape's edges.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c20dceb1b": {
+    "value": "divideSurface",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c51590394": {
+    "value": "sdk.divideSurface(shapeId, faceIndex, divisions?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3b542fcf": {
+    "value": "Subdivide a face into a grid.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c554a70a4": {
+    "value": "addProjectorLight",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce0e8daed": {
+    "value": "sdk.addProjectorLight(lightData)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c730d4f3e": {
+    "value": "Add a projector light that casts an image or video.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd6d99485": {
+    "value": "performCSG",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca458eb67": {
+    "value": "sdk.performCSG(targetId, cutterId, operation)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc0558a27": {
+    "value": "Boolean-combine two shapes ('SUBTRACTION', 'UNION' or 'INTERSECTION').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9cb66bc3": {
+    "value": "deformObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c562eacbb": {
+    "value": "sdk.deformObject(id, { radius, strength, direction })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9dd985bf": {
+    "value": "Sculpt an object with a radial deform brush.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7fa5e2a0": {
+    "value": "addNote",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca1c49cb9": {
+    "value": "sdk.addNote(text, position)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce13dad7e": {
+    "value": "Pin a note to the model.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf4a1f67": {
+    "value": "setNoteVisibility",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4dd8e18b": {
+    "value": "sdk.setNoteVisibility(id, visible)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccfad5516": {
+    "value": "Show or hide a note.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3032cef9": {
+    "value": "toggleAllNotes",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9b58698c": {
+    "value": "sdk.toggleAllNotes(visible)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cabb70196": {
+    "value": "Show or hide every note.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdc11ae66": {
+    "value": "addRectLight",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c13d4c66b": {
+    "value": "sdk.addRectLight(color, intensity, position, scale?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3381b676": {
+    "value": "Add a rectangular area light.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd845301e": {
+    "value": "animateSun",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c25cdaf3d": {
+    "value": "sdk.animateSun(cycleSpeed?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c91077b56": {
+    "value": "Animate the sun across the sky.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c27a5b6fd": {
+    "value": "toggleFloor",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7ef9f3d5": {
+    "value": "sdk.toggleFloor(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8a584ead": {
+    "value": "Show or hide the ground floor.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce061a6f1": {
+    "value": "toggleGrid",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7df56d4d": {
+    "value": "sdk.toggleGrid(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c464c94ff": {
+    "value": "Show or hide the reference grid.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c581e8def": {
+    "value": "setFloor",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5209e2eb": {
+    "value": "sdk.setFloor(enabled, color?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb47d2296": {
+    "value": "Show or hide the ground floor, optionally setting its colour.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5f6c3cd7": {
+    "value": "setGrid",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2e4d3adb": {
+    "value": "sdk.setGrid(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5a954640": {
+    "value": "setShadows",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5ccc380a": {
+    "value": "sdk.setShadows(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "caef5ad1e": {
+    "value": "Turn shadows on or off.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c91d09252": {
+    "value": "setAmbientOcclusion",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8bcdbccc": {
+    "value": "sdk.setAmbientOcclusion(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6eb95392": {
+    "value": "Turn ambient occlusion on or off.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c76bf7cb": {
+    "value": "setAxisIndicator",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd6e7de07": {
+    "value": "sdk.setAxisIndicator(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9f465958": {
+    "value": "Show or hide the axis lines at the origin.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c412f34de": {
+    "value": "setMiniAxisIndicator",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7609366c": {
+    "value": "sdk.setMiniAxisIndicator(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca1aa7eb7": {
+    "value": "Show or hide the small axis gizmo in the corner.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5e860e4e": {
+    "value": "setSunSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1ac13c73": {
+    "value": "sdk.setSunSettings({ intensity?, position?, animate?, speed? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c51e59e41": {
+    "value": "Set the sun's brightness and position, and whether it moves across the sky.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfa303df3": {
+    "value": "setGraphicsSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbb2b2b39": {
+    "value": "sdk.setGraphicsSettings(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7857de6e": {
+    "value": "Set the weather layers (rain, snow, clouds, mist) and vegetation wind.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfabee1ec": {
+    "value": "setZoom",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "caf3fe99c": {
+    "value": "sdk.setZoom(zoom)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfaabced4": {
+    "value": "Set the camera zoom.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc842e0f1": {
+    "value": "resetView",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4e555e93": {
+    "value": "sdk.resetView(view)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfaa3e014": {
+    "value": "Snap the camera to a standard view ('perspective', 'plan', 'front', 'rear', 'left' or 'right').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca617de5e": {
+    "value": "setCameraDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9c786c41": {
+    "value": "sdk.setCameraDefaults(position, target)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce4c412bf": {
+    "value": "Set the camera's home position.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf24c6d28": {
+    "value": "focusObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc9d32a82": {
+    "value": "sdk.focusObject(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf5db4ce3": {
+    "value": "Frame an object in the camera.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccf100172": {
+    "value": "getSyncStatus",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c789f38cd": {
+    "value": "'synced' | 'syncing' | 'error' | 'offline'",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2c8f3d20": {
+    "value": "Get whether the model is synced.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca3be1918": {
+    "value": "getCollaborators",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2ea54a6d": {
+    "value": "Collaborator[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c313ba224": {
+    "value": "diagLog",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd9c262b": {
+    "value": "sdk.diagLog(category, message, values?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c476058ca": {
+    "value": "Write an entry to the AI Diagnostic Log.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c49d3c56b": {
+    "value": "setContactFriction",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7e46264f": {
+    "value": "sdk.setContactFriction(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c296fd195": {
+    "value": "Toggle move-contact friction (pauses briefly when two surfaces touch).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cad371a6f": {
+    "value": "generateModel",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2dd5782c": {
+    "value": "sdk.generateModel(prompt)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf68c8e24": {
+    "value": "Trigger AI Generate from a text prompt.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cde4cd34e": {
+    "value": "openWebpage",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3f515151": {
+    "value": "log",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c883b7427": {
+    "value": "sdk.log(message)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdb384ae": {
+    "value": "Print to the console's output panel.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c67c36cc2": {
+    "value": "architecture",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd976a16d": {
+    "value": "Walls, rooms, doors, windows, stairs, roofs and timber framing.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca1a27b87": {
+    "value": "createRoof",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c38ff9c56": {
+    "value": "sdk.architecture.createRoof({ roofType?, width, depth, ridgeHeight?, pitchAngleDeg?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "caaf208de": {
+    "value": "Create a parametric roof (gable, hip or parapet flat).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c390a18fa": {
+    "value": "updateRoof",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c47d0d49a": {
+    "value": "sdk.architecture.updateRoof(roofId, { height?, eaveOverhang?, fasciaHeight?, tileShape?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb1e69e82": {
+    "value": "Update an existing roof's height, overhang, fascia and tiles.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca8323a0": {
+    "value": "listRoofs",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c599a4846": {
+    "value": "sdk.architecture.listRoofs()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c75b23a0e": {
+    "value": "Shape[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c612f2b55": {
+    "value": "List every roof in the model.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5b61d7fb": {
+    "value": "roofBuilding",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4874b14": {
+    "value": "sdk.architecture.roofBuilding({ roofType, pitchAngleDeg?, ridgeHeight?, eaveOverhang?, tileShape?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca8324475": {
+    "value": "Roof the whole building as the Roof buttons do: the main roof on the top storey and a roof on each extension, replacing existing roofs.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c34d39557": {
+    "value": "createStairs",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c118b74af": {
+    "value": "sdk.architecture.createStairs({ style?, width?, height?, length?, numSteps?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cacc30f85": {
+    "value": "Create a parametric staircase flight.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c833a9c4f": {
+    "value": "createRailing",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2862f6b0": {
+    "value": "sdk.architecture.createRailing({ length?, height?, position?, color? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc2f96076": {
+    "value": "Create a safety railing.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9aa27082": {
+    "value": "createRoom",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6ec2d1df": {
+    "value": "sdk.architecture.createRoom({ width, length, height?, wallThickness?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2af1ab90": {
+    "value": "{ roomId, wallShapes, floorShape?, ceilingShape? }",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c16380c84": {
+    "value": "Create a room: its walls, floor and ceiling.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdb9fec0d": {
+    "value": "createWall",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc3815416": {
+    "value": "sdk.architecture.createWall({ start?, end?, length?, height?, thickness?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd4820794": {
+    "value": "Create a single wall.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c141f1061": {
+    "value": "createDoor",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3cdb64f4": {
+    "value": "sdk.architecture.createDoor({ width?, height?, depth?, position?, color? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c100adb0c": {
+    "value": "Create a door assembly that cuts its own opening.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbc4730c5": {
+    "value": "createWindow",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce51c5934": {
+    "value": "sdk.architecture.createWindow({ width?, height?, depth?, position?, color? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6b144e1f": {
+    "value": "Create a window frame that cuts its own opening.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdcdc96a1": {
+    "value": "setWallTransparency",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf721691d": {
+    "value": "sdk.architecture.setWallTransparency({ overall?, exterior?, interior? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4e29752d": {
+    "value": "Set how see-through walls are.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c65a16091": {
+    "value": "generateTimberFraming",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c45899fd6": {
+    "value": "sdk.architecture.generateTimberFraming({ roofId?, spacing?, rafterWidth?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6f1ccae5": {
+    "value": "Generate studs, plates, headers, noggins, rafters and ridges.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c48b4ac61": {
+    "value": "clearTimberFraming",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c296f578d": {
+    "value": "sdk.architecture.clearTimberFraming()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c78731622": {
+    "value": "Remove all generated timber framing.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c81bc8e3f": {
+    "value": "configureRoofDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf0c2ce5a": {
+    "value": "sdk.architecture.configureRoofDefaults(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce2bec99f": {
+    "value": "Set the defaults new roofs are created with.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c68435383": {
+    "value": "getRoofDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd55d3075": {
+    "value": "sdk.architecture.getRoofDefaults()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c55294b3f": {
+    "value": "RoofConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9ab02743": {
+    "value": "Read the current roof defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5ff99eb": {
+    "value": "configureStairsDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbe8d2ce": {
+    "value": "sdk.architecture.configureStairsDefaults(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdb2e8ce": {
+    "value": "Set the defaults new stairs are created with.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c28c4bbdf": {
+    "value": "getStairsDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c407a57c1": {
+    "value": "sdk.architecture.getStairsDefaults()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdcdf711f": {
+    "value": "StairsConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb30ea1a3": {
+    "value": "Read the current stairs defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c92b5be53": {
+    "value": "configureTimberFramingSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb06867e4": {
+    "value": "sdk.architecture.configureTimberFramingSettings(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdf2c61f2": {
+    "value": "Set the defaults timber framing is generated with.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb5269607": {
+    "value": "getTimberFramingSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c76d5fa87": {
+    "value": "sdk.architecture.getTimberFramingSettings()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c18204f0c": {
+    "value": "TimberFramingConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2ca89884": {
+    "value": "Read the current timber framing defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c23ca4802": {
+    "value": "configureWallSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c55306fc7": {
+    "value": "sdk.architecture.configureWallSettings(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce631e031": {
+    "value": "Set the defaults new walls are created with.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb57e5f1e": {
+    "value": "getWallSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb333b89c": {
+    "value": "sdk.architecture.getWallSettings()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3e4de889": {
+    "value": "WallConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1cbcbb4d": {
+    "value": "Read the current wall defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfdffc26a": {
+    "value": "setActiveStory",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7e68c567": {
+    "value": "sdk.architecture.setActiveStory(story)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c16c290a3": {
+    "value": "Set which storey new geometry is added to.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9327b37e": {
+    "value": "getActiveStory",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c30cc33e": {
+    "value": "sdk.architecture.getActiveStory()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1bd670a0": {
+    "value": "number",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd4fbafea": {
+    "value": "Read the active storey.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c38d12a5d": {
+    "value": "configureDoorDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca40d8800": {
+    "value": "sdk.architecture.configureDoorDefaults(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca871eac5": {
+    "value": "Set the defaults new doors are created with.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8bb1e211": {
+    "value": "getDoorDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c16a5f92b": {
+    "value": "sdk.architecture.getDoorDefaults()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca9636a0d": {
+    "value": "DoorConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cce613729": {
+    "value": "Read the current door defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8601c4f5": {
+    "value": "configureWindowDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbbd8bb0": {
+    "value": "sdk.architecture.configureWindowDefaults(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c709c5939": {
+    "value": "Set the defaults new windows are created with.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cec952b39": {
+    "value": "getWindowDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c104007cb": {
+    "value": "sdk.architecture.getWindowDefaults()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8fd14351": {
+    "value": "WindowConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9239a195": {
+    "value": "Read the current window defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c20b9b4f2": {
+    "value": "landscape",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccb5fc4bf": {
+    "value": "Terrain, planting, site furniture, fences, ponds and patios.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "caaad2aa9": {
+    "value": "addPlant",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9133c32d": {
+    "value": "sdk.landscape.addPlant(speciesId?, { position?, scale?, rotation?, variation?, color? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c15a07db": {
+    "value": "Plant a tree, shrub or other species from the plant catalog.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c154e5bf3": {
+    "value": "addSiteFurniture",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf2759324": {
+    "value": "sdk.landscape.addSiteFurniture(type, { position?, rotation?, color?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbda2743a": {
+    "value": "Add a bench, lamp, fence run, rock or railing ('bench' | 'lamp' | 'fence' | 'rock' | 'railing').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbda5f436": {
+    "value": "createTerrain",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce1ac486a": {
+    "value": "sdk.landscape.createTerrain({ width, depth, resolution, topography, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7a90b0ff": {
+    "value": "Create terrain ('flat', 'rolling', 'ridge' or 'terraced').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6a792a6f": {
+    "value": "applyTerrainTexture",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb3f25033": {
+    "value": "sdk.landscape.applyTerrainTexture(textureId)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c37e3a9ba": {
+    "value": "Paint a texture preset onto the terrain.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce770a185": {
+    "value": "listPlantCatalog",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c93ddf765": {
+    "value": "sdk.landscape.listPlantCatalog()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5045c324": {
+    "value": "PlantSpecies[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5f2361e9": {
+    "value": "List the plant species available to addPlant.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c56acefa": {
+    "value": "listTerrainTextures",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfaeb0950": {
+    "value": "sdk.landscape.listTerrainTextures()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc1cd8246": {
+    "value": "LandscapeTexturePreset[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7a6a1f6": {
+    "value": "List the terrain texture presets.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9a0f5b02": {
+    "value": "configureLandscapeDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7c5e74e9": {
+    "value": "sdk.landscape.configureLandscapeDefaults(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ceceb13fe": {
+    "value": "Set landscape-wide defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfaec6016": {
+    "value": "getLandscapeDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6a52637e": {
+    "value": "sdk.landscape.getLandscapeDefaults()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c883a8fe6": {
+    "value": "LandscapeConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cebb106c2": {
+    "value": "Read the current landscape defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd82fc5b1": {
+    "value": "configureSculptSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7813db8e": {
+    "value": "sdk.landscape.configureSculptSettings({ mode?, radius?, intensity?, masked? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c49140f62": {
+    "value": "Set the terrain sculpting brush's mode ('push', 'pull', 'smooth', 'flatten' or 'pinch'), radius and intensity.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca536df5d": {
+    "value": "getSculptSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c789121db": {
+    "value": "sdk.landscape.getSculptSettings()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb8c60cba": {
+    "value": "object",
+    "groups": [
+      "sdkFullReference",
+      "SdkDocs"
+    ]
+  },
+  "c8adbdc8b": {
+    "value": "Read the current sculpting brush settings.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd7f2d444": {
+    "value": "configureRoadSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca88eedfa": {
+    "value": "sdk.landscape.configureRoadSettings({ width?, embankment?, roadColor?, curbHeight? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c364d9bb8": {
+    "value": "Set the defaults for the path/road tool.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7e0e5fe8": {
+    "value": "getRoadSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdc1ce5ea": {
+    "value": "sdk.landscape.getRoadSettings()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbfdffa08": {
+    "value": "Read the current path/road settings.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c39e1e495": {
+    "value": "addFence",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2d1f1433": {
+    "value": "sdk.landscape.addFence(points, { style?, height?, closed?, color?, finish?, seed? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c60225ab0": {
+    "value": "A fence run through ground points [x, z], as the Fence tool makes one.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8e387c03": {
+    "value": "addPond",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1e454578": {
+    "value": "sdk.landscape.addPond(points, { depth?, clarity?, level? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccb3924a3": {
+    "value": "A pond or lake filling an outline of ground points [x, z], as the Water tool makes one.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7e7d6b0d": {
+    "value": "addPatio",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c23a41280": {
+    "value": "sdk.landscape.addPatio(points, { kind?, deckHeight?, level?, bulges?, settings? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca1481293": {
+    "value": "A patio or deck over ground points [x, z], levelled with the house floor when drawn against a wall ('patio' or 'deck').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c11338de9": {
+    "value": "materials",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7c9c7a0c": {
+    "value": "PBR materials and edge-line rendering.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3165d022": {
+    "value": "applyMaterial",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3eb911eb": {
+    "value": "sdk.materials.applyMaterial(target, material)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c461cdf0e": {
+    "value": "Apply a named preset or a PBR material spec (colour, roughness, metalness, texture and normal/roughness/metalness/AO/displacement map URLs) to a shape.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c44bd9915": {
+    "value": "setEdgeLines",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce9451a1": {
+    "value": "sdk.materials.setEdgeLines({ enabled?, color?, opacity?, thickness? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9d171664": {
+    "value": "Configure the dark edge lines between adjacent faces.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c587e1d63": {
+    "value": "listPresets",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c111fe322": {
+    "value": "sdk.materials.listPresets()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c10693dcc": {
+    "value": "string[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9e2033c1": {
+    "value": "List the available material preset names.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6ad33d84": {
+    "value": "configureMaterialDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c71c92fa6": {
+    "value": "sdk.materials.configureMaterialDefaults(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9ed3a5be": {
+    "value": "Set the defaults new materials are created with.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c771a2920": {
+    "value": "getMaterialDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7e6e6025": {
+    "value": "sdk.materials.getMaterialDefaults()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cedf9c360": {
+    "value": "MaterialConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1a557ccc": {
+    "value": "Read the current material defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c59aed623": {
+    "value": "measurement",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c62745631": {
+    "value": "Dimensions, distance and units.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c785d78c8": {
+    "value": "addDimension",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c95054f95": {
+    "value": "sdk.measurement.addDimension(start, end, label?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c46b3dbc0": {
+    "value": "Add a dimension label between two points.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce2854538": {
+    "value": "measureDistance",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c32c9b5d0": {
+    "value": "sdk.measurement.measureDistance(p1, p2)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8240089": {
+    "value": "{ distance, dx, dy, dz, horizontalRun, rise, pitchDeg, formatted }",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf74f91e7": {
+    "value": "Measure the distance, run, rise and pitch between two points.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c65d51b39": {
+    "value": "setUnit",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5f9852a4": {
+    "value": "sdk.measurement.setUnit(unit)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3535e3ef": {
+    "value": "Set the display unit ('m', 'cm' or 'mm').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cca8c10f5": {
+    "value": "getUnit",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6cd390de": {
+    "value": "sdk.measurement.getUnit()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c17c16538": {
+    "value": "string",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7b1734d9": {
+    "value": "Read the current display unit.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8d7f6154": {
+    "value": "configureMeasurementSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1d66833c": {
+    "value": "sdk.measurement.configureMeasurementSettings(settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ceba68e91": {
+    "value": "Set measurement-wide defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7e9e3bb0": {
+    "value": "getMeasurementSettings",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6162f3bf": {
+    "value": "sdk.measurement.getMeasurementSettings()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3f0f09f3": {
+    "value": "MeasurementConfigDefaults",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6e7267af": {
+    "value": "Read the current measurement defaults.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4f9249f1": {
+    "value": "toolbars",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c73825f71": {
+    "value": "Build your own toolbars with your own icons (the Developer Extensibility Suite's Custom toolbars).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c26bb595d": {
+    "value": "create",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5d421d0": {
+    "value": "sdk.toolbars.create({ id?, title, position?, orientation?, items?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1e756344": {
+    "value": "CustomToolbarDef",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c75d20720": {
+    "value": "Create a custom toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c28202c90": {
+    "value": "addButton",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3978b61a": {
+    "value": "sdk.toolbars.addButton(toolbarId, item)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8de3a1f": {
+    "value": "Add a button to a custom toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9aa4aa08": {
+    "value": "addToBasicToolbar",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb2c04104": {
+    "value": "sdk.toolbars.addToBasicToolbar(item)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca32b53cd": {
+    "value": "Add a button to the app's own basic toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c47ae8a3a": {
+    "value": "configureToolbar",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c21c196aa": {
+    "value": "sdk.toolbars.configureToolbar(toolbarId, settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd43a0eae": {
+    "value": "Update a custom toolbar's settings.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c71859813": {
+    "value": "configureButton",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2bbff96a": {
+    "value": "sdk.toolbars.configureButton(toolbarId, buttonId, settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7bbbce54": {
+    "value": "Update a custom toolbar button's settings.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2e2d6752": {
+    "value": "configureBasicToolbarButton",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c76a9279f": {
+    "value": "sdk.toolbars.configureBasicToolbarButton(buttonId, settings)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c374a332a": {
+    "value": "Update a basic-toolbar button's settings.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb4b6972e": {
+    "value": "getToolbar",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3981be5": {
+    "value": "sdk.toolbars.getToolbar(toolbarId)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c52d6d144": {
+    "value": "CustomToolbarDef | undefined",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c49447ff4": {
+    "value": "Look up a custom toolbar by id.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7c33f5e7": {
+    "value": "getButton",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4834b45": {
+    "value": "sdk.toolbars.getButton(toolbarId, buttonId)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2a1fd67d": {
+    "value": "CustomToolbarButton | undefined",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cea629993": {
+    "value": "Look up a toolbar button by id.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf548b0e9": {
+    "value": "removeButton",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce983350b": {
+    "value": "sdk.toolbars.removeButton(toolbarId, buttonId)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c35d0ed37": {
+    "value": "Remove a button from a custom toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfa40b018": {
+    "value": "removeFromBasicToolbar",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd2370f0e": {
+    "value": "sdk.toolbars.removeFromBasicToolbar(buttonId)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3576cf0e": {
+    "value": "Remove a button from the basic toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfe49bad0": {
+    "value": "removeToolbar",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c455898f7": {
+    "value": "sdk.toolbars.removeToolbar(toolbarId)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c15b1b1f2": {
+    "value": "Remove a custom toolbar entirely.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccfb5881": {
+    "value": "list",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c953a7e60": {
+    "value": "sdk.toolbars.list()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c92a00db0": {
+    "value": "CustomToolbarDef[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd7d239fc": {
+    "value": "List every custom toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c90a4556f": {
+    "value": "getBasicToolbarButtons",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2ad78f52": {
+    "value": "sdk.toolbars.getBasicToolbarButtons()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cef15bf76": {
+    "value": "CustomToolbarItem[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd988ca80": {
+    "value": "List the buttons on the basic toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5c6e1222": {
+    "value": "clear",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c428708ef": {
+    "value": "sdk.toolbars.clear()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd2660c08": {
+    "value": "Remove every custom toolbar.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4364e615": {
+    "value": "selection",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c23b39a99": {
+    "value": "Selecting, grouping and transforming objects.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c45f22ee8": {
+    "value": "sdk.selection.select(idOrIds)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd4d82e2b": {
+    "value": "Select one or more objects.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf7b601e1": {
+    "value": "deselectAll",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc94da1b4": {
+    "value": "sdk.selection.deselectAll()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c69ae3f27": {
+    "value": "Clear the selection.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cec8e91d6": {
+    "value": "getSelected",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c50c9972b": {
+    "value": "sdk.selection.getSelected()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c968f7fe5": {
+    "value": "List the currently selected shapes.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5fb91e8c": {
+    "value": "group",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c26e958f4": {
+    "value": "sdk.selection.group(ids, groupName?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c69ade973": {
+    "value": "Group objects together; returns the new group id.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1560884d": {
+    "value": "ungroup",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c21fe8cf5": {
+    "value": "sdk.selection.ungroup(groupIdOrIds)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8aca419d": {
+    "value": "Ungroup one or more groups.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5ae81475": {
+    "value": "duplicateObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9388d54b": {
+    "value": "sdk.selection.duplicateObject(id, offset?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ced9183d0": {
+    "value": "Duplicate an object, optionally offset.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd8ff4f62": {
+    "value": "hideObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8e022dd0": {
+    "value": "sdk.selection.hideObject(id, hidden)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8454eca9": {
+    "value": "Show or hide an object.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c91e62729": {
+    "value": "isolateObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3e4c318b": {
+    "value": "sdk.selection.isolateObject(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce4b38968": {
+    "value": "Hide everything except one object.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6af3bcd1": {
+    "value": "unhideAll",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ceac61338": {
+    "value": "sdk.selection.unhideAll()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4e15da7a": {
+    "value": "Show every hidden object.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c96c4d190": {
+    "value": "transformObject",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c37e726a2": {
+    "value": "sdk.selection.transformObject(id, { position?, rotation?, scale? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c20e723f6": {
+    "value": "Move, rotate or scale an object.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf2c6d0aa": {
+    "value": "alignObjects",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce914643b": {
+    "value": "sdk.selection.alignObjects(ids, axis, alignment)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb9a0f796": {
+    "value": "Align objects along an axis ('x' | 'y' | 'z', 'min' | 'center' | 'max').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbd26456d": {
+    "value": "setFilter",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbe9d4b92": {
+    "value": "sdk.selection.setFilter(filter)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c54611d86": {
+    "value": "Restrict what clicking selects ('all' | 'shapes' | 'surfaces').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c58b8fa2c": {
+    "value": "setMode",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c523a4364": {
+    "value": "sdk.selection.setMode(mode)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c11e78aa8": {
+    "value": "Set the selection tool's drag mode ('lasso' | 'marquee').",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9ebe984e": {
+    "value": "camera",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdc76f1c7": {
+    "value": "Camera projection, views and depth clipping.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf40aa806": {
+    "value": "setProjection",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1b50ba01": {
+    "value": "sdk.camera.setProjection(mode)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c54840950": {
+    "value": "Switch between 'perspective' and 'orthographic'.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c64fa2220": {
+    "value": "sdk.camera.resetView(view)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cec42d02f": {
+    "value": "Snap the camera to a standard view.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1b9b7562": {
+    "value": "setDepthClipping",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c36f4e4b": {
+    "value": "sdk.camera.setDepthClipping({ enabled?, near?, far? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8396fbf8": {
+    "value": "Set the camera's near/far clipping planes.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c68f609b0": {
+    "value": "setAutoOrbit",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c91e7f2b5": {
+    "value": "sdk.camera.setAutoOrbit(enabled, speed?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca7dbaee9": {
+    "value": "Turn on automatic orbiting of the camera.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cff0325b1": {
+    "value": "sdk.camera.focusObject(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cefa3023e": {
+    "value": "sdk.camera.setCameraDefaults(position, target)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8db24057": {
+    "value": "sdk.camera.setZoom(zoom)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4424f79f": {
+    "value": "ai",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c44546af3": {
+    "value": "AI Generate, AI Renderer and the assistant panel.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb1eff1a6": {
+    "value": "sdk.ai.generateModel(prompt)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbda56b04": {
+    "value": "Generate objects from a text description.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c23b00daa": {
+    "value": "openRenderer",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c25e7e02e": {
+    "value": "sdk.ai.openRenderer(prompt?, style?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4da624fb": {
+    "value": "Open AI Renderer for a high-fidelity render of the viewport.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8650daae": {
+    "value": "askAssistant",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6bcd11e": {
+    "value": "sdk.ai.askAssistant(query?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7a829efb": {
+    "value": "Open the AI assistant panel with an optional starting question.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2063cb13": {
+    "value": "scene",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c96558331": {
+    "value": "Scene export/import, history and stats.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cec195bc1": {
+    "value": "exportJSON",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cef697ca2": {
+    "value": "sdk.scene.exportJSON()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cec8b8a01": {
+    "value": "Export the whole scene as JSON.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c903cffa6": {
+    "value": "importJSON",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c49dcbf78": {
+    "value": "sdk.scene.importJSON(jsonString)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1abc997": {
+    "value": "Replace the scene from exported JSON.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3a83f552": {
+    "value": "clearScene",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9a307062": {
+    "value": "sdk.scene.clearScene(confirm?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8ac0e001": {
+    "value": "Clear the scene.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c141d149a": {
+    "value": "getStats",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce7cb3439": {
+    "value": "sdk.scene.getStats()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c61f31cb5": {
+    "value": "{ shapeCount, typeCounts, estimatedVertices, memoryEstimateKB, bounds }",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c770c4598": {
+    "value": "Get scene statistics.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf1d0feaf": {
+    "value": "undo",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c79054f38": {
+    "value": "sdk.scene.undo()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c53e5fd68": {
+    "value": "Step back one change.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf3e699c9": {
+    "value": "redo",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5303ec3a": {
+    "value": "sdk.scene.redo()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cec43c3a0": {
+    "value": "Step forward one change.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4d0e4c82": {
+    "value": "sdk.scene.saveScene(name)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c64b847f0": {
+    "value": "getShapeGeometry",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c862d06e0": {
+    "value": "sdk.scene.getShapeGeometry(id)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd3c21a1d": {
+    "value": "{ positions, normals, uvs? } | null",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb95e4585": {
+    "value": "Read a shape's raw geometry, by id.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfb434ddd": {
+    "value": "outliner",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c56fcc205": {
+    "value": "Introspect the grouping and hierarchy the Outliner panel shows.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c45b886bc": {
+    "value": "sdk.outliner.list()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c727f4d5": {
+    "value": "{ id, name, type, tags? }[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6635d30c": {
+    "value": "List every entry in the Outliner.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbdf0855a": {
+    "value": "find",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c6421010c": {
+    "value": "sdk.outliner.find(predicate)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c988ee60e": {
+    "value": "{ id, name, type, tags? } | null",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfd589bc": {
+    "value": "Find the first Outliner entry matching a predicate.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7cac9036": {
+    "value": "blockKit",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca5b6a8b9": {
+    "value": "PolyForm's built-in LEGO-style stud-block catalog and placement tool.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbe4196ed": {
+    "value": "sdk.blockKit.list()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbb8c5b04": {
+    "value": "{ id, label, category }[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1c811ecb": {
+    "value": "List every block part in the catalog.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2ec1dd7f": {
+    "value": "getGeometry",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8bcf6685": {
+    "value": "sdk.blockKit.getGeometry(partId)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd5582d32": {
+    "value": "Read a block part's raw geometry.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc8d632fc": {
+    "value": "place",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cca0a623e": {
+    "value": "sdk.blockKit.place(partId, color?)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c756d39f9": {
+    "value": "Arm the placement tool for a block part.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfed043be": {
+    "value": "setPreventOverlap",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7f94a5f9": {
+    "value": "sdk.blockKit.setPreventOverlap(enabled)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1042e8a5": {
+    "value": "Toggle whether placement refuses to overlap an existing block.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbde64e3e": {
+    "value": "text",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9babb989": {
+    "value": "Flat text labels and solid 3D letters, as the Text and 3D Text tools place them.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3b391274": {
+    "value": "add",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c41daace7": {
+    "value": "sdk.text.add({ text, position, normal?, towardsViewer?, size?, bold?, align?, color? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd8f5d5a7": {
+    "value": "Place a flat text label on a surface (default: the ground), reading the right way up from towardsViewer.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce7abea13": {
+    "value": "add3D",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca0140a6": {
+    "value": "sdk.text.add3D({ text, position, size?, depth?, normal?, towardsViewer?, … })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c493eb5c0": {
+    "value": "Place solid 3D letters standing on position, facing the viewer (or out of a wall, given its normal).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c5be7d591": {
+    "value": "edit",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca96fd76c": {
+    "value": "sdk.text.edit(id, { text?, size?, depth?, bold?, align? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce28d1b5": {
+    "value": "Change a text object's words or settings.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc25960c5": {
+    "value": "drawing",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7d727d82": {
+    "value": "Drawn geometry: lines, arcs and surfaces, and push/pull on their faces. Points are [x, y, z] in metres. Faces are numbered, and the same steps on the same drawing give the same numbers.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c17db1627": {
+    "value": "line",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf0419a59": {
+    "value": "sdk.drawing.line(from, to)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1bc28434": {
+    "value": "number[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c917b874b": {
+    "value": "Draw a line (the Line tool). Lines that close a loop make a face.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3a6f2adb": {
+    "value": "arc",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfa30d2b0": {
+    "value": "sdk.drawing.arc({ centre, radius, sweep, normal?, startAngle?, segments? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca7c811c7": {
+    "value": "Draw an arc (the Arc tool). Angles are in radians; normal defaults to up.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1959cefc": {
+    "value": "surface",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c46548fe0": {
+    "value": "sdk.drawing.surface(points)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c1ac6e84d": {
+    "value": "Draw a flat surface from its corners (as Rectangle, Circle and Polygon do); returns its face numbers.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9dc3d926": {
+    "value": "shape",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c71b2db5a": {
+    "value": "sdk.drawing.shape(points)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c224edaef": {
+    "value": "Draw a closed shape side by side, as Rectangle, Circle and Triangle do; it stays separate from geometry it crosses.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c14f25eb6": {
+    "value": "bezier",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cbbbdcb8b": {
+    "value": "sdk.drawing.bezier({ knots, resolution?, normal? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cfbe70515": {
+    "value": "Draw a closed Bézier curve as a surface (the Bézier tool). Each knot is { point, handleIn?, handleOut? }.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c14c8d3ca": {
+    "value": "offset",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c33c5b8a2": {
+    "value": "sdk.drawing.offset(faceId, distance)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c65f46ebf": {
+    "value": "boolean",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccf5cc760": {
+    "value": "Shrink (negative) or grow a face's outline within its own plane (the Offset tool).",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c471884a2": {
+    "value": "sdk.drawing.pushPull(faceId, distance)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c26ad1fc0": {
+    "value": "Extrude a face along its normal (the Push/Pull tool). Negative pushes in.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c64b8f933": {
+    "value": "paint",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c2449e42e": {
+    "value": "sdk.drawing.paint(faceIds, color)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cada0f7d0": {
+    "value": "Paint faces a colour.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c3c41ddd5": {
+    "value": "erase",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce8459ba9": {
+    "value": "sdk.drawing.erase(faceIds)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca61d2d7": {
+    "value": "Delete faces and the edges only they use.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ce55fd1c1": {
+    "value": "listFaces",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c8ce16384": {
+    "value": "sdk.drawing.listFaces()",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9e2ae559": {
+    "value": "{ id, label, color, hidden, area, holes }[]",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c4ca033ff": {
+    "value": "List every drawn face.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c70176364": {
+    "value": "applyChanges",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cb3bef0f2": {
+    "value": "sdk.drawing.applyChanges(changes)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc76cb0f4": {
+    "value": "Apply a recorded change set exactly. The action recorder writes these for drawing steps.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ca52a72d6": {
+    "value": "worldView",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c66ea0dfc": {
+    "value": "The Google Maps overlay under the model.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "ccbb7771a": {
+    "value": "importMap",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c95a2d5de": {
+    "value": "sdk.worldView.importMap({ lat, lng, zoom?, altitude?, radius? })",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cd5803d59": {
+    "value": "Lay a map under the model at a location.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cf6dc5454": {
+    "value": "setLocation",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7967ba6a": {
+    "value": "sdk.worldView.setLocation(lat, lng)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c64fcf57c": {
+    "value": "Move the map to a new location.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cc17f8d31": {
+    "value": "setRadius",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c846d874d": {
+    "value": "sdk.worldView.setRadius(radius)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c7ec0f4ba": {
+    "value": "Set how much ground the map covers.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cdfb6cd07": {
+    "value": "sdk.worldView.setZoom(zoom)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c17c2d637": {
+    "value": "Set the map zoom level.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c49086fa5": {
+    "value": "setAltitude",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c9aa71cdd": {
+    "value": "sdk.worldView.setAltitude(altitude)",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "c668aac89": {
+    "value": "Set the altitude the map sits at.",
+    "groups": [
+      "sdkFullReference"
+    ]
+  },
+  "cff353ed": {
+    "value": "PolyForm",
+    "groups": [
+      "Home",
+      "Features",
+      "shared"
+    ]
+  },
+  "cc1f50b08": {
+    "value": "Project synced",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cba9272d": {
+    "value": "Architectural site model placeholder",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cfc97c50f": {
+    "value": "Model view",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cdea807a1": {
+    "value": "Building + terrain + landscape",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cc691454b": {
+    "value": "Synced",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cff8953fe": {
+    "value": "Click a surface to apply the active material.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cecc760d5": {
+    "value": "No install",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ce709a8ed": {
+    "value": "Building + terrain in one model",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ced8180dc": {
+    "value": "Real-world site context",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c8c35310e": {
+    "value": "Live collaboration",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cf2d2c63f": {
+    "value": "One continuous workflow",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c76c032a2": {
+    "value": "From real site to walk-through.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c58c3183b": {
+    "value": "Keep the building, ground and landscape together from the start. PolyForm removes the hand-offs between site context, modelling and presentation.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cba38a36e": {
+    "value": "Site",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c2d27223d": {
+    "value": "Start with the place",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c632a3605": {
+    "value": "Bring in real-world context and establish the ground before the building takes shape.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c8a87bf95": {
+    "value": "Building",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c9fe441d0": {
+    "value": "Shape the architecture",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c1113a3c9": {
+    "value": "Develop walls, openings, storeys, roofs and circulation directly in the same model.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c77002d44": {
+    "value": "Design beyond the walls",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ce55fb2d": {
+    "value": "Sculpt terrain, connect paths and patios, then add planting, water and external spaces.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cace39749": {
+    "value": "Experience",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c2cd02149": {
+    "value": "Step into the result",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c96508db6": {
+    "value": "Set light and weather, save views and walk through the project at eye level.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c7bbf9dc6": {
+    "value": "From first context to finished place",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c8b95e287": {
+    "value": "From an empty site to somewhere you can stand.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ccd23cba2": {
+    "value": "Keep the same project moving from real-world context through architecture and landscape to a first-person experience.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cd040c8f9": {
+    "value": "Residential concept",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c5acccf87": {
+    "value": "Architecture, terrain and landscape in one project",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c4b7ae704": {
+    "value": "Garden + site",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cd530d922": {
+    "value": "Ground shaping, planting, paths and external spaces",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c43fb217": {
+    "value": "Site study",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c6cde92a0": {
+    "value": "Real-world context through to walk-through",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c14e930ed": {
+    "value": "Made in PolyForm",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c11f1664": {
+    "value": "Let the projects do the explaining.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cf1c9f16": {
+    "value": "This gallery is structured for real PolyForm work: complete projects, not decorative illustrations. Final project imagery can drop into these slots without changing the page.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cbc7ebdb5": {
+    "value": "Site context",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cefe5a24c": {
+    "value": "Building model",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cf3a5125b": {
+    "value": "Landscape work",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c744ce6e0": {
+    "value": "Exports",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ca0b362a2": {
+    "value": "Visualisation",
+    "groups": [
+      "Home",
+      "shared"
+    ]
+  },
+  "c6ae55601": {
+    "value": "Review",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c90c5f7d": {
+    "value": "Rework",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c41a466b4": {
+    "value": "Visualise",
+    "groups": [
+      "Home",
+      "BuildWithClaude"
+    ]
+  },
+  "cab5bc2db": {
+    "value": "Automate",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cd238ef0b": {
+    "value": "Why PolyForm",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c25440674": {
+    "value": "One model instead of a chain of hand-offs.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cc76c970c": {
+    "value": "Keep site context, architecture, landscape, visualisation and review connected instead of moving the project through separate disconnected stages.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ce74434c7": {
+    "value": "Traditional workflow",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c1f1ea4be": {
+    "value": "PolyForm workflow",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c3de1a099": {
+    "value": "One model throughout",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c31e8b511": {
+    "value": "Architects & designers",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cd61b8a1": {
+    "value": "Develop the building with its real site and surroundings visible from the start.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c993385e4": {
+    "value": "Landscape teams",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cf184296d": {
+    "value": "Shape terrain, planting, paths, water and external spaces in the same model as the architecture.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c47aa754a": {
+    "value": "Builders & collaborators",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c76c3856": {
+    "value": "Review the complete design, leave notes and walk through decisions before work starts.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ca1e83a41": {
+    "value": "Design technologists",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cbe7867e1": {
+    "value": "Automate repeated work with Claude, JavaScript and the PolyForm SDK.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c1775586a": {
+    "value": "Built around the project",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c68c27650": {
+    "value": "For the people shaping the built environment.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c350ca8af": {
+    "value": "0",
+    "groups": [
+      "Home",
+      "BuildWithClaude",
+      "Developers"
+    ]
+  },
+  "c1f94e423": {
+    "value": "3D design for buildings + landscapes",
+    "groups": [
+      "Home",
+      "shared"
+    ]
+  },
+  "c23db2108": {
+    "value": "Design the whole site.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cd80f799e": {
+    "value": "Then step inside.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c77be4f8f": {
+    "value": "PolyForm brings the building, terrain and landscape into one browser-based model — so you can design in context, collaborate live and experience the result before it is built.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c66c1f853": {
+    "value": "Start designing ",
+    "groups": [
+      "Home",
+      "BuildWithClaude"
+    ]
+  },
+  "c93ae7858": {
+    "value": "See how PolyForm works",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ca3d86c61": {
+    "value": "Free to try · No installation · Desktop, tablet and phone",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c29e6a5f2": {
+    "value": "One model",
+    "groups": [
+      "Home"
+    ]
+  },
+  "ca34084d7": {
+    "value": "The building does not stop at the back door.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cf1777de8": {
+    "value": "Model the architecture and everything around it together. The patio meets the floor, the terrain meets the foundations and the landscape stays part of the same design.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c18860815": {
+    "value": "Build with Claude",
+    "groups": [
+      "Home",
+      "BuildWithClaude",
+      "shared"
+    ]
+  },
+  "cbdd02885": {
+    "value": "Describe the change.",
+    "groups": [
+      "Home",
+      "BuildWithClaude"
+    ]
+  },
+  "c51428410": {
+    "value": "Keep the model.",
+    "groups": [
+      "Home",
+      "BuildWithClaude"
+    ]
+  },
+  "ceca81fc": {
+    "value": "Connect PolyForm to Claude and ask for a building, a site change or a landscape edit in plain words. The result stays editable in PolyForm.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cef182c2": {
+    "value": "Explore Build with Claude ",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c7bef93ba": {
+    "value": "Developers",
+    "groups": [
+      "Home",
+      "shared"
+    ]
+  },
+  "c5ea70109": {
+    "value": "Script anything you can draw.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c7d29803": {
+    "value": "Automate model creation with JavaScript, learn the SDK from your own drawing actions and build custom tools around your workflow.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cd932acb8": {
+    "value": "Explore the developer platform ",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cc7995ad5": {
+    "value": "Interoperability",
+    "groups": [
+      "Home",
+      "Features"
+    ]
+  },
+  "c89724b13": {
+    "value": "Keep projects where your team already works.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "cdc6dd80f": {
+    "value": "Choose where each model lives and keep every project visible from one place.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c720e4390": {
+    "value": "Import SKP + supported 3D",
+    "groups": [
+      "Home",
+      "Features"
+    ]
+  },
+  "cb9da7c3c": {
+    "value": "Export glTF",
+    "groups": [
+      "Home",
+      "Features"
+    ]
+  },
+  "ce74a19e6": {
+    "value": "Export STL",
+    "groups": [
+      "Home",
+      "Features"
+    ]
+  },
+  "c45153f7d": {
+    "value": "Export SKP",
+    "groups": [
+      "Home",
+      "Features"
+    ]
+  },
+  "c9caac730": {
+    "value": "Import SKP and other 3D files. Export glTF, STL and SKP.",
+    "groups": [
+      "Home"
+    ]
+  },
+  "c529c60cc": {
+    "value": "Product",
+    "groups": [
+      "Features",
+      "shared"
+    ]
+  },
+  "cd2171954": {
+    "value": "One model.",
+    "groups": [
+      "Features"
+    ]
+  },
+  "c9085d2c0": {
+    "value": "The whole site.",
+    "groups": [
+      "Features"
+    ]
+  },
+  "c82150dd5": {
+    "value": "PolyForm keeps architecture, terrain and landscape together from the first sketch to the final walk-through. No separate site model. No disconnected garden plan.",
+    "groups": [
+      "Features"
+    ]
+  },
+  "cb68d9269": {
+    "value": "Explore the product by workflow, then drill into the detailed tools beneath each chapter.",
+    "groups": [
+      "Features"
+    ]
+  },
+  "cf92a819c": {
+    "value": "EXPLORE",
+    "groups": [
+      "Features"
+    ]
+  },
+  "c1bfad2d3": {
+    "value": "Files & storage",
+    "groups": [
+      "Features",
+      "shared"
+    ]
+  },
+  "ce9b2e317": {
+    "value": "Explore detailed tools",
+    "groups": [
+      "Features"
+    ]
+  },
+  "c2e0c9daa": {
+    "value": "+",
+    "groups": [
+      "Features"
+    ]
+  },
+  "c1741ff75": {
+    "value": "−",
+    "groups": [
+      "Features"
+    ]
+  },
+  "c4e99528e": {
+    "value": "See PolyForm with Claude ",
+    "groups": [
+      "Features"
+    ]
+  },
+  "c4ae7704d": {
+    "value": "Editable PolyForm output — not a locked image",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c6753fa5e": {
+    "value": "3D preview plus a floor plan of every level",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c1885d45": {
+    "value": "Step back through up to 20 model versions",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c8584c00f": {
+    "value": "Build me an L-shaped house, two storeys, with four bedrooms and a bathroom upstairs.",
+    "groups": [
+      "BuildWithClaude",
+      "shared"
+    ]
+  },
+  "c990de47d": {
+    "value": "Create",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c3d83cbe0": {
+    "value": "Add a bathroom off the upstairs landing, three metres by two.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "ca1de2fdd": {
+    "value": "Change",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "ce247e244": {
+    "value": "Turn on a wildflower meadow at the back, and set it to a rainy afternoon.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c8dc21305": {
+    "value": "Copied",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c658f3664": {
+    "value": "Copy",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "cd31fe752": {
+    "value": "Claude × PolyForm",
+    "groups": [
+      "BuildWithClaude",
+      "shared"
+    ]
+  },
+  "c7bf69370": {
+    "value": "Connected",
+    "groups": [
+      "BuildWithClaude",
+      "shared"
+    ]
+  },
+  "c93048556": {
+    "value": "Done. Here is the model and the plans for both floors. Open it in PolyForm to keep designing.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "ce9d7b36a": {
+    "value": "3D preview",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "cafaa722e": {
+    "value": "Editable PolyForm model",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "ce851de62": {
+    "value": "Level 1",
+    "groups": [
+      "BuildWithClaude",
+      "shared"
+    ]
+  },
+  "ce751dccf": {
+    "value": "Level 2",
+    "groups": [
+      "BuildWithClaude",
+      "shared"
+    ]
+  },
+  "c13b78088": {
+    "value": "Connect Claude to PolyForm and create or change buildings, landscape and site context in plain language. The result is an editable PolyForm model — not just a render.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "ccd5dd73b": {
+    "value": "Connect Claude ",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "cd03ba450": {
+    "value": "How it works",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c45a24e62": {
+    "value": "From a sentence to a model you can keep editing.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c4f7f9f6f": {
+    "value": "Claude works through PolyForm rather than around it. The same model continues in the browser when you are ready to take over.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c93f38658": {
+    "value": "What a prompt actually does",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "cfbfd8abe": {
+    "value": "It uses the same tools you do.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c7fd7b6b0": {
+    "value": "Requests are translated into PolyForm actions. That makes the result inspectable, editable and compatible with the rest of the modelling workflow.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c193edc9b": {
+    "value": "“",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c183edb08": {
+    "value": "”",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c7220e394": {
+    "value": "Claude result",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c7b867cef": {
+    "value": "The same editable PolyForm model continues through every prompt",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "cb68be678": {
+    "value": "Final imagery can show the initial model and a second prompt changing that same project, making the continuing-model workflow immediately visible.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c5670be92": {
+    "value": "What Claude can do",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c29171dc8": {
+    "value": "Built on PolyForm’s own toolset.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c3ffbbe02": {
+    "value": "The connector can inspect the model, build with native tools, change appearance and weather, and preview the result before you open it.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c848693dd": {
+    "value": "The last 20 versions of a model are retained, so a change can be stepped back when needed.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c7524865a": {
+    "value": "Explore the underlying SDK ",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c43c06abc": {
+    "value": "Set up",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c752f3001": {
+    "value": "Add PolyForm to Claude.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c55de54ad": {
+    "value": "Four steps, then PolyForm becomes available from your Claude conversations.",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c2efee924": {
+    "value": "Paste the address below, ending in ",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c6eea02a": {
+    "value": "/mcp",
+    "groups": [
+      "BuildWithClaude"
+    ]
+  },
+  "c2b0c98f1": {
+    "value": ".",
+    "groups": [
+      "BuildWithClaude",
+      "Developers"
+    ]
+  },
+  "c12f8f721": {
+    "value": "Documentation",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c8e9f0fde": {
+    "value": "Spec",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c4d0d9a1c": {
+    "value": "Draw it",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cd299599a": {
+    "value": "Use PolyForm normally — create geometry, transform it, apply materials or assemble architectural elements.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c2f302479": {
+    "value": "Record it",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cfa70c54d": {
+    "value": "Code Recorder captures the modelling actions as they happen, without changing how you work.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c59771adc": {
+    "value": "Reuse it",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c5c607f46": {
+    "value": "The equivalent JavaScript SDK calls are ready to edit, save and run against another model.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cd16a9890": {
+    "value": "Developer extensibility suite",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c6d4cbedc": {
+    "value": "Script anything",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c508446a6": {
+    "value": "you can draw.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c9bb54d6f": {
+    "value": "Automate PolyForm with JavaScript, run scripts directly against the open model and turn repeated modelling work into tools your team can reuse.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c266a0c89": {
+    "value": "Open the console ",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c29b3879e": {
+    "value": "SDK reference",
+    "groups": [
+      "Developers",
+      "shared"
+    ]
+  },
+  "c87d2d3cd": {
+    "value": "Run Script",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c1e08bffc": {
+    "value": "sdk connected",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cf178938a": {
+    "value": "model: active",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c807c382b": {
+    "value": "synced",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "caf04ec3f": {
+    "value": "5-minute start",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c8d2dcb20": {
+    "value": "Open the console. Run real geometry.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c3335fb69": {
+    "value": "The fastest way to understand the SDK is to use it against the model in front of you.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c3f743ded": {
+    "value": "Open the Developer Console",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c769ed70f": {
+    "value": "Paste a small SDK script",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c32c99bba": {
+    "value": "Run it against the active model",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c38d9c951": {
+    "value": "Save the script when it becomes useful",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cf19515ec": {
+    "value": "Developer Console",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c93ac2192": {
+    "value": "active model",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cd0ac3d68": {
+    "value": "ready to run",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cc79c0bd0": {
+    "value": "Your drawing can become the documentation.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c2d50162c": {
+    "value": "Code Recorder translates modelling actions into the SDK calls that created them. Learn the API from work you already understand, then turn a one-off operation into a repeatable script.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c61ecdb7": {
+    "value": "Drawing actions become reusable JavaScript",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c664fd1d4": {
+    "value": "const",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ca7262d15": {
+    "value": "wall",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c380cad68": {
+    "value": "=",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cdb24e97b": {
+    "value": "sdk",
+    "groups": [
+      "Developers",
+      "SdkDocs"
+    ]
+  },
+  "c586f18f": {
+    "value": "(...);",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c905df53d": {
+    "value": "(wall, 2.4);",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c5f4b796": {
+    "value": "(wall, '#e8e1d5');",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ca05cfcb2": {
+    "value": "Extensibility suite",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c9ab05d56": {
+    "value": "Build the workflow around the model.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ceebf6f3d": {
+    "value": "Run automation, add your own interface and inspect what PolyForm is doing — without moving the design into a separate development environment.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c70bfa12": {
+    "value": "Start with the ",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c73c5ccfc": {
+    "value": "object.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cf6d653cb": {
+    "value": "A compact sample of the modelling, site and collaboration methods available in the console.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ca15bcded": {
+    "value": "View full SDK documentation ",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c9493849e": {
+    "value": "text-slate-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "cf57ba4eb": {
+    "value": "text-orange-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c2b16fd2f": {
+    "value": "text-emerald-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c3dcb01ec": {
+    "value": "text-amber-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "ce98291be": {
+    "value": "text-sky-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c355f0a57": {
+    "value": "text-teal-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c89027c99": {
+    "value": "text-pink-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "cf52cec7b": {
+    "value": "text-indigo-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "cd009e5aa": {
+    "value": "text-violet-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c617c4452": {
+    "value": "text-gray-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c641587c2": {
+    "value": "text-cyan-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c5517bd93": {
+    "value": "text-red-600",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "cef228149": {
+    "value": "text-blue-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c2ea67058": {
+    "value": "text-lime-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c936726b2": {
+    "value": "text-fuchsia-700",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "cc049050d": {
+    "value": "Signature",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "cd2aab1c4": {
+    "value": "Returns",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c6609993e": {
+    "value": "Back to Developers",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c6a6ff735": {
+    "value": "Full SDK reference",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c2c72c41": {
+    "value": "The complete ",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c8110aaf4": {
+    "value": "Every method in the Developer Console’s ",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "cfe4c07fc": {
+    "value": "object, grouped by subsystem, with its full signature and return type — ",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c71f124ba": {
+    "value": "methods across ",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c69b0fa79": {
+    "value": "groups.",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c963afbc2": {
+    "value": "Filter methods (e.g. roof, terrain, camera)",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c75091e9d": {
+    "value": "Jump to SDK group",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c2d0c9c17": {
+    "value": "(",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c2c0c9a84": {
+    "value": ")",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c8db3d9ad": {
+    "value": "GROUPS",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "ce2dafd6d": {
+    "value": "No methods match “",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "c50f2fcd2": {
+    "value": "”.",
+    "groups": [
+      "SdkDocs"
+    ]
+  },
+  "ce59260bc": {
+    "value": "PolyForm home",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c23d5135f": {
+    "value": "AI",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c6ff5732b": {
+    "value": "Account menu",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c811c9dc5": {
+    "value": "",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c98f957d0": {
+    "value": "My Designs",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c8b4f3c70": {
+    "value": "Sign out",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c51707928": {
+    "value": "Main",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c3efb6661": {
+    "value": "Start designing",
+    "groups": [
+      "shared"
+    ]
+  },
+  "cc6075a": {
+    "value": "Menu",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c5f41fb7c": {
+    "value": "Build on PolyForm",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c1c7e956": {
+    "value": "Turn repeated modelling work into your own workflow.",
+    "groups": [
+      "shared"
+    ]
+  },
+  "ccbd69d6f": {
+    "value": "Open the modeller, run JavaScript against the active model and keep the scripts that earn a place in your toolkit.",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c7cd604ad": {
+    "value": "Open the developer console",
+    "groups": [
+      "shared"
+    ]
+  },
+  "ca554f1ec": {
+    "value": "Describe the change. Keep designing the model.",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c6819a6b5": {
+    "value": "Connect Claude to PolyForm, make model changes in plain language, then continue with the same editable project in the browser.",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c86492fe9": {
+    "value": "Start in the browser",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c587440e0": {
+    "value": "Design the whole project in one place.",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c40d492a6": {
+    "value": "Start with the site, shape the building and landscape, then walk through the result before it is built.",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c75f510c": {
+    "value": "PRODUCT",
+    "groups": [
+      "shared"
+    ]
+  },
+  "cab681ec7": {
+    "value": "Product overview",
+    "groups": [
+      "shared"
+    ]
+  },
+  "cff904211": {
+    "value": "AI — Build with Claude",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c6f000a7f": {
+    "value": "CAPABILITIES",
+    "groups": [
+      "shared"
+    ]
+  },
+  "ca07e1939": {
+    "value": "Terrain & landscape",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c4463804a": {
+    "value": "Automation",
+    "groups": [
+      "shared"
+    ]
+  },
+  "cea0a1cbc": {
+    "value": "ACCOUNT",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c4e0834ea": {
+    "value": "Browser-based 3D design for buildings, terrain and landscape — from real site context to eye-level walkthrough.",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c575cffd2": {
+    "value": "Footer",
+    "groups": [
+      "shared"
+    ]
+  },
+  "cfa9a3bac": {
+    "value": "© ",
+    "groups": [
+      "shared"
+    ]
+  },
+  "c469cd652": {
+    "value": "Done. Here is the 3D view and the plans for both floors. You can keep editing the model in PolyForm.",
+    "groups": [
+      "shared"
+    ]
+  }
+}

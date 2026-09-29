@@ -155,6 +155,49 @@ service cloud.firestore {
 
     // Rules Definitions
 
+    // CMS: private draft, public published snapshot, immutable admin-only history.
+    // Fields: content(map), revision(int), updatedBy(uid), updatedAt(timestamp).
+    // Published/history also include draftRevision(int). Nested content is validated by the CMS.
+    function isCmsAdmin() {
+      return isLoginActivityAdmin() && request.auth.token.email_verified == true;
+    }
+    function validCmsContent(content) {
+      return content is map && content.keys().hasOnly(['schemaVersion','copy','media','pages','links','replaceNavigation']) &&
+        content.keys().hasAll(['schemaVersion','copy','media','pages','links','replaceNavigation']) &&
+        content.schemaVersion == 1 && content.copy is map && content.copy.size() <= 2000 &&
+        content.media is map && content.media.size() <= 300 && content.replaceNavigation is bool &&
+        content.pages is list && content.pages.size() >= 5 && content.pages.size() <= 100 &&
+        content.links is list && content.links.size() <= 100;
+    }
+    function validCmsRevision(data, published) {
+      return data.keys().hasAll(['content','revision','updatedBy','updatedAt']) &&
+        data.keys().hasOnly(published ? ['content','revision','updatedBy','updatedAt','draftRevision'] : ['content','revision','updatedBy','updatedAt']) &&
+        validCmsContent(data.content) && data.revision is int && data.revision > 0 &&
+        data.updatedBy == request.auth.uid && data.updatedAt == request.time &&
+        (!published || (data.draftRevision is int && data.draftRevision > 0));
+    }
+    function matchesSavedDraft(data) {
+      let draft = get(/databases/$(database)/documents/marketingCms/draft).data;
+      let history = getAfter(/databases/$(database)/documents/marketingCmsHistory/$(string(data.revision))).data;
+      return data.content == draft.content && data.draftRevision == draft.revision && history == data;
+    }
+    match /marketingCms/draft {
+      allow get: if isCmsAdmin();
+      allow create: if isCmsAdmin() && validCmsRevision(request.resource.data, false) && request.resource.data.revision == 1;
+      allow update: if isCmsAdmin() && validCmsRevision(request.resource.data, false) && request.resource.data.revision == resource.data.revision + 1;
+    }
+    match /marketingCms/published {
+      allow get: if true;
+      allow create: if isCmsAdmin() && validCmsRevision(request.resource.data, true) && request.resource.data.revision == 1 && matchesSavedDraft(request.resource.data);
+      allow update: if isCmsAdmin() && validCmsRevision(request.resource.data, true) && request.resource.data.revision == resource.data.revision + 1 && matchesSavedDraft(request.resource.data);
+    }
+    match /marketingCmsHistory/{version} {
+      allow read: if isCmsAdmin();
+      allow create: if isCmsAdmin() && validCmsRevision(request.resource.data, true) &&
+        version == string(request.resource.data.revision) &&
+        getAfter(/databases/$(database)/documents/marketingCms/published).data == request.resource.data;
+    }
+
     match /user_settings/{userId} {
       allow read, write: if isOwner(userId);
     }

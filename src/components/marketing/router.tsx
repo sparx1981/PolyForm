@@ -38,10 +38,11 @@ export function isAppEditorPath(pathname: string): boolean {
 
 /** Real History API router for the signed-out marketing site: normal URLs, back/forward, and a shared hash-anchor scroll. */
 export function useMarketingRouter() {
+  const [pathname, setPathname] = useState(() => window.location.pathname.replace(/\/+$/, '') || '/');
   const [page, setPage] = useState<Page>(() => pageFromPath(window.location.pathname));
 
   useEffect(() => {
-    const onPopState = () => setPage(pageFromPath(window.location.pathname));
+    const onPopState = () => { setPage(pageFromPath(window.location.pathname)); setPathname(window.location.pathname.replace(/\/+$/, '') || '/'); };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -58,6 +59,7 @@ export function useMarketingRouter() {
     const url = PATHS[next] + (anchor ? `#${anchor}` : '');
     window.history.pushState({}, '', url);
     setPage(next);
+    setPathname(PATHS[next]);
     if (anchor) {
       requestAnimationFrame(() => scrollToId(anchor));
     } else {
@@ -65,7 +67,7 @@ export function useMarketingRouter() {
     }
   }, []);
 
-  return { page, go };
+  return { page, go, pathname };
 }
 
 export function scrollToId(id: string) {

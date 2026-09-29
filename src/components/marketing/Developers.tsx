@@ -1,3 +1,5 @@
+import { useCms } from '../cms/context';
+import { CmsLayout } from '../cms/Sections';
 import React from 'react';
 import { ArrowRight, Circle, MousePointerClick, Sparkles } from 'lucide-react';
 import { CODE_LONG, DEV_TOOL_GROUPS, SDK_METHODS } from './data';
@@ -13,8 +15,15 @@ const RECORDER_STEPS = [
 ];
 
 export default function Developers({ onLogin, go }: { onLogin: () => void; go: (p: Page, anchor?: string) => void }) {
+  const cms = useCms();
+  const DEV_TABS = cms.data(CMS_DEFAULT_DEV_TABS);
+  const CODE_LONG = cms.data(CMS_DEFAULT_CODE_LONG);
+  const RECORDER_STEPS = cms.data(CMS_DEFAULT_RECORDER_STEPS);
+  const DEV_TOOL_GROUPS = cms.data(CMS_DEFAULT_DEV_TOOL_GROUPS);
+  const SDK_METHODS = cms.data(CMS_DEFAULT_SDK_METHODS);
+
   return (
-    <>
+    <CmsLayout page="developers">
       <section className="relative overflow-hidden bg-[#071a2b] text-white py-24 sm:py-28 px-6">
         <div
           className="absolute inset-0 opacity-[0.12] pointer-events-none"
@@ -25,29 +34,27 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
         />
         <div className="relative max-w-[1240px] mx-auto grid lg:grid-cols-[0.78fr_1.22fr] gap-14 lg:gap-20 items-center">
           <div className="flex flex-col gap-6">
-            <Eyebrow dark>Developer extensibility suite</Eyebrow>
+            <Eyebrow dark>{cms.text("Developer extensibility suite")}</Eyebrow>
             <h1 className="text-[clamp(44px,6vw,74px)] font-bold leading-[1.01] tracking-[-0.045em]">
-              Script anything<br />
-              <span className="text-[#9ed5f7]">you can draw.</span>
+              {cms.text("Script anything")}<br />
+              <span className="text-[#9ed5f7]">{cms.text("you can draw.")}</span>
             </h1>
             <p className="text-[18px] leading-[1.7] text-white/75 max-w-[560px]">
-              Automate PolyForm with JavaScript, run scripts directly against the open model and turn repeated modelling work into tools your team can reuse.
-            </p>
+              {cms.text("Automate PolyForm with JavaScript, run scripts directly against the open model and turn repeated modelling work into tools your team can reuse.")}</p>
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 onClick={onLogin}
                 className="inline-flex items-center gap-2 text-base font-semibold px-6 py-[14px] rounded-lg bg-white text-[#071a2b] hover:bg-gray-100 transition-colors"
               >
-                Open the console <ArrowRight size={16} />
+                {cms.text("Open the console ")}<ArrowRight size={16} />
               </button>
               <RouterLink
                 to="sdk-docs"
                 go={go}
                 className="inline-flex items-center gap-2 text-base font-semibold px-[22px] py-[14px] rounded-lg border border-white/20 text-white hover:bg-white/10 transition-colors"
               >
-                SDK reference
-              </RouterLink>
+                {cms.text("SDK reference")}</RouterLink>
             </div>
           </div>
 
@@ -60,16 +67,15 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
                 </span>
               ))}
               <button type="button" onClick={onLogin} className="ml-auto text-[11px] font-semibold px-3 py-1.5 rounded-md bg-polyform-blue text-white hover:bg-[#0879be] transition-colors">
-                Run Script
-              </button>
+                {cms.text("Run Script")}</button>
             </div>
             <div className="p-5 sm:p-6 flex flex-col overflow-x-auto min-h-[330px]">
               {CODE_LONG.map((c, i) => highlightJsLine(c.t, i))}
             </div>
             <div className="flex items-center gap-4 px-5 py-3 border-t border-white/10 text-[10px] text-slate-500 font-mono">
-              <span>sdk connected</span>
-              <span>model: active</span>
-              <span className="ml-auto text-emerald-500">synced</span>
+              <span>{cms.text("sdk connected")}</span>
+              <span>{cms.text("model: active")}</span>
+              <span className="ml-auto text-emerald-500">{cms.text("synced")}</span>
             </div>
           </div>
         </div>
@@ -78,30 +84,28 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
       <section className="py-24 px-6 bg-[#f7f9fb] border-b border-slate-200">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.72fr_1.28fr] gap-12 lg:gap-20 items-center">
           <div className="flex flex-col gap-5">
-            <Eyebrow>5-minute start</Eyebrow>
+            <Eyebrow>{cms.text("5-minute start")}</Eyebrow>
             <h2 className="text-[clamp(32px,4vw,50px)] font-bold leading-[1.05] tracking-[-0.03em] text-polyform-dark-blue">
-              Open the console. Run real geometry.
-            </h2>
+              {cms.text("Open the console. Run real geometry.")}</h2>
             <p className="text-[16px] leading-[1.7] text-gray-600">
-              The fastest way to understand the SDK is to use it against the model in front of you.
-            </p>
+              {cms.text("The fastest way to understand the SDK is to use it against the model in front of you.")}</p>
             <div className="flex flex-col border-y border-slate-200">
-              {['Open the Developer Console', 'Paste a small SDK script', 'Run it against the active model', 'Save the script when it becomes useful'].map((step, i) => (
+              {[cms.text("Open the Developer Console"), cms.text("Paste a small SDK script"), cms.text("Run it against the active model"), cms.text("Save the script when it becomes useful")].map((step, i) => (
                 <div key={step} className="grid grid-cols-[38px_1fr] gap-3 py-3.5 border-b border-slate-200 last:border-b-0">
-                  <span className="font-mono text-[10px] text-polyform-blue pt-0.5">0{i + 1}</span>
+                  <span className="font-mono text-[10px] text-polyform-blue pt-0.5">{cms.text("0")}{i + 1}</span>
                   <span className="text-sm font-semibold text-polyform-dark-blue">{step}</span>
                 </div>
               ))}
             </div>
           </div>
           <div className="bg-[#020817] rounded-2xl border border-slate-800 overflow-hidden shadow-[0_26px_65px_-40px_rgba(15,23,42,.8)]">
-            <div className="px-4 py-3 border-b border-white/10 text-[11px] font-semibold text-slate-400">Developer Console</div>
+            <div className="px-4 py-3 border-b border-white/10 text-[11px] font-semibold text-slate-400">{cms.text("Developer Console")}</div>
             <div className="p-5 sm:p-6 flex flex-col overflow-x-auto">
               {CODE_LONG.slice(2, 7).map((c, i) => highlightJsLine(c.t, i))}
             </div>
             <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between text-[10px] font-mono text-slate-500">
-              <span>active model</span>
-              <span className="text-emerald-500">ready to run</span>
+              <span>{cms.text("active model")}</span>
+              <span className="text-emerald-500">{cms.text("ready to run")}</span>
             </div>
           </div>
         </div>
@@ -110,13 +114,11 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
       <section className="py-28 px-6 bg-white">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.82fr_1.18fr] gap-14 lg:gap-20 items-center">
           <div className="flex flex-col gap-5">
-            <Eyebrow>Code Recorder</Eyebrow>
+            <Eyebrow>{cms.text("Code Recorder")}</Eyebrow>
             <h2 className="text-[clamp(34px,4.5vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
-              Your drawing can become the documentation.
-            </h2>
+              {cms.text("Your drawing can become the documentation.")}</h2>
             <p className="text-[17px] leading-[1.7] text-gray-600">
-              Code Recorder translates modelling actions into the SDK calls that created them. Learn the API from work you already understand, then turn a one-off operation into a repeatable script.
-            </p>
+              {cms.text("Code Recorder translates modelling actions into the SDK calls that created them. Learn the API from work you already understand, then turn a one-off operation into a repeatable script.")}</p>
             <div className="mt-2 flex flex-col">
               {RECORDER_STEPS.map((s, i) => (
                 <div key={s.title} className="grid grid-cols-[46px_1fr] gap-4 py-5 border-t border-slate-200 last:border-b">
@@ -126,7 +128,7 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
                   <div>
                     <div className="flex items-center gap-3">
                       <h3 className="text-[16px] font-bold text-polyform-dark-blue">{s.title}</h3>
-                      <span className="font-mono text-[10px] text-gray-400">0{i + 1}</span>
+                      <span className="font-mono text-[10px] text-gray-400">{cms.text("0")}{i + 1}</span>
                     </div>
                     <p className="mt-1 text-[14px] leading-[1.6] text-gray-600">{s.text}</p>
                   </div>
@@ -137,17 +139,17 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
 
           <div className="relative">
             <MarketingVisual
-              label="Code Recorder"
-              title="Drawing actions become reusable JavaScript"
+              label={cms.text("Code Recorder")}
+              title={cms.text("Drawing actions become reusable JavaScript")}
               dark
               aspectRatio="4 / 3"
               className="shadow-[0_30px_70px_-35px_rgba(15,23,42,.6)]"
             />
             <div className="hidden sm:block absolute -bottom-6 -left-6 w-[74%] bg-[#020817] rounded-xl border border-slate-800 p-4 shadow-xl">
               <div className="font-mono text-[11px] leading-[1.8] overflow-hidden">
-                <div><span className="text-purple-300">const</span> <span className="text-slate-200">wall</span> <span className="text-slate-500">=</span> <span className="text-sky-300">sdk</span><span className="text-slate-400">.</span><span className="text-amber-200">createBox</span><span className="text-slate-300">(...);</span></div>
-                <div><span className="text-sky-300">sdk</span><span className="text-slate-400">.</span><span className="text-amber-200">pushPull</span><span className="text-slate-300">(wall, 2.4);</span></div>
-                <div><span className="text-sky-300">sdk</span><span className="text-slate-400">.</span><span className="text-amber-200">applyColor</span><span className="text-slate-300">(wall, '#e8e1d5');</span></div>
+                <div><span className="text-purple-300">{cms.text("const")}</span> <span className="text-slate-200">{cms.text("wall")}</span> <span className="text-slate-500">{cms.text("=")}</span> <span className="text-sky-300">{cms.text("sdk")}</span><span className="text-slate-400">{cms.text(".")}</span><span className="text-amber-200">{cms.text("createBox")}</span><span className="text-slate-300">{cms.text("(...);")}</span></div>
+                <div><span className="text-sky-300">{cms.text("sdk")}</span><span className="text-slate-400">{cms.text(".")}</span><span className="text-amber-200">{cms.text("pushPull")}</span><span className="text-slate-300">{cms.text("(wall, 2.4);")}</span></div>
+                <div><span className="text-sky-300">{cms.text("sdk")}</span><span className="text-slate-400">{cms.text(".")}</span><span className="text-amber-200">{cms.text("applyColor")}</span><span className="text-slate-300">{cms.text("(wall, '#e8e1d5');")}</span></div>
               </div>
             </div>
           </div>
@@ -158,14 +160,12 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
         <div className="max-w-[1240px] mx-auto">
           <div className="grid lg:grid-cols-[0.7fr_1.3fr] gap-12 lg:gap-20 items-end mb-14">
             <div className="flex flex-col gap-5">
-              <Eyebrow>Extensibility suite</Eyebrow>
+              <Eyebrow>{cms.text("Extensibility suite")}</Eyebrow>
               <h2 className="text-[clamp(34px,4.3vw,54px)] font-bold leading-[1.05] tracking-[-0.035em] text-polyform-dark-blue">
-                Build the workflow around the model.
-              </h2>
+                {cms.text("Build the workflow around the model.")}</h2>
             </div>
             <p className="text-[17px] leading-[1.7] text-gray-600">
-              Run automation, add your own interface and inspect what PolyForm is doing — without moving the design into a separate development environment.
-            </p>
+              {cms.text("Run automation, add your own interface and inspect what PolyForm is doing — without moving the design into a separate development environment.")}</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
@@ -176,7 +176,7 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
                     <span className="text-[11px] font-bold tracking-[0.13em] text-polyform-blue">{g.kicker}</span>
                     <h3 className="mt-2 text-xl font-bold text-polyform-dark-blue">{g.title}</h3>
                   </div>
-                  <span className="font-mono text-[11px] text-gray-400">0{gi + 1}</span>
+                  <span className="font-mono text-[11px] text-gray-400">{cms.text("0")}{gi + 1}</span>
                 </div>
                 <div className="flex flex-col">
                   {g.items.map(item => (
@@ -199,21 +199,19 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
         <div className="max-w-[1240px] mx-auto">
           <div className="grid lg:grid-cols-[0.75fr_1.25fr] gap-12 lg:gap-20 items-end mb-10">
             <div className="flex flex-col gap-5">
-              <Eyebrow>SDK reference</Eyebrow>
+              <Eyebrow>{cms.text("SDK reference")}</Eyebrow>
               <h2 className="text-[clamp(34px,4.3vw,54px)] font-bold leading-[1.05] tracking-[-0.035em] text-polyform-dark-blue">
-                Start with the <code className="text-[0.84em]">sdk</code> object.
-              </h2>
+                {cms.text("Start with the ")}<code className="text-[0.84em]">{cms.text("sdk")}</code> {cms.text("object.")}</h2>
             </div>
             <div className="flex flex-col items-start lg:items-end gap-3">
               <p className="text-[15px] leading-[1.65] text-gray-600 max-w-[520px] lg:text-right">
-                A compact sample of the modelling, site and collaboration methods available in the console.
-              </p>
+                {cms.text("A compact sample of the modelling, site and collaboration methods available in the console.")}</p>
               <RouterLink
                 to="sdk-docs"
                 go={go}
                 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-polyform-blue hover:text-polyform-dark-blue transition-colors"
               >
-                View full SDK documentation <ArrowRight size={16} />
+                {cms.text("View full SDK documentation ")}<ArrowRight size={16} />
               </RouterLink>
             </div>
           </div>
@@ -229,6 +227,12 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
           </div>
         </div>
       </section>
-    </>
+    </CmsLayout>
   );
 }
+
+const CMS_DEFAULT_DEV_TABS = DEV_TABS;
+const CMS_DEFAULT_CODE_LONG = CODE_LONG;
+const CMS_DEFAULT_RECORDER_STEPS = RECORDER_STEPS;
+const CMS_DEFAULT_DEV_TOOL_GROUPS = DEV_TOOL_GROUPS;
+const CMS_DEFAULT_SDK_METHODS = SDK_METHODS;

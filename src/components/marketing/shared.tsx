@@ -1,3 +1,5 @@
+import { useCms, CmsLinks } from '../cms/context';
+import { isCmsAdmin } from '../cms/access';
 import React, { useState } from 'react';
 import { ArrowRight, Box, User } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -7,6 +9,8 @@ export type { Page };
 export { RouterLink, useMarketingRouter, scrollToId, hrefFor, isMarketingPath, isAppEditorPath, APP_PATH } from './router';
 
 export function Logo({ go, size = 27, textSize = 'text-[17px]' }: { go?: (p: Page) => void; size?: number; textSize?: string }) {
+  const cms = useCms();
+
   const content = (
     <>
       <span
@@ -15,12 +19,11 @@ export function Logo({ go, size = 27, textSize = 'text-[17px]' }: { go?: (p: Pag
       >
         <Box size={Math.round(size * 0.56)} />
       </span>
-      PolyForm
-    </>
+      {cms.text("PolyForm")}</>
   );
   const className = 'flex items-center gap-2.5 font-bold ' + textSize + ' tracking-[-0.015em] text-polyform-dark-blue';
   if (!go) return <span className={className}>{content}</span>;
-  return <RouterLink to="home" go={go} className={className} aria-label="PolyForm home">{content}</RouterLink>;
+  return <RouterLink to="home" go={go} className={className} aria-label={cms.text("PolyForm home")}>{content}</RouterLink>;
 }
 
 const NAV: { page: Page; label: string }[] = [
@@ -31,6 +34,8 @@ const NAV: { page: Page; label: string }[] = [
 
 /** Hover/click menu shown in place of the "Sign in" button once someone is signed in. */
 function ProfileMenu({ user, onOpenDesigns, onSignOut }: { user: FirebaseUser; onOpenDesigns: () => void; onSignOut: () => void }) {
+  const cms = useCms();
+
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -43,11 +48,11 @@ function ProfileMenu({ user, onOpenDesigns, onSignOut }: { user: FirebaseUser; o
         onClick={() => setOpen(v => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Account menu"
+        aria-label={cms.text("Account menu")}
         className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center bg-polyform-blue text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
       >
         {user.photoURL ? (
-          <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+          <img src={user.photoURL} alt={cms.text("")} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
         ) : (
           <User size={18} />
         )}
@@ -55,14 +60,14 @@ function ProfileMenu({ user, onOpenDesigns, onSignOut }: { user: FirebaseUser; o
       {open && (
         <div role="menu" className="absolute right-0 top-full pt-2 w-48 z-10">
           <div className="rounded-lg border border-slate-200 bg-white shadow-lg py-1.5">
+            {isCmsAdmin(user) && <button type="button" role="menuitem" onClick={() => { setOpen(false); window.dispatchEvent(new Event('polyform:open-cms')); }} className="w-full text-left px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Content management</button>}
             <button
               type="button"
               role="menuitem"
               onClick={onOpenDesigns}
               className="w-full text-left px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
-              My Designs
-            </button>
+              {cms.text("My Designs")}</button>
             <div className="h-px bg-gray-100 my-1" />
             <button
               type="button"
@@ -70,8 +75,7 @@ function ProfileMenu({ user, onOpenDesigns, onSignOut }: { user: FirebaseUser; o
               onClick={onSignOut}
               className="w-full text-left px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
-              Sign out
-            </button>
+              {cms.text("Sign out")}</button>
           </div>
         </div>
       )}
@@ -89,16 +93,20 @@ export function Header({
   onOpenDesigns: () => void;
   onSignOut: () => void;
 }) {
+  const cms = useCms();
+  const NAV = cms.data(CMS_DEFAULT_NAV);
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const isActive = (n: Page) => page === n || (n === 'developers' && page === 'sdk-docs');
 
   return (
     <header className="sticky top-0 z-[100] bg-white/92 backdrop-blur-xl border-b border-slate-200/70" style={{ height: 60 }}>
-      <nav className="max-w-[1240px] mx-auto px-5 sm:px-6 h-full flex items-center justify-between gap-6" aria-label="Main">
+      <nav className="max-w-[1240px] mx-auto px-5 sm:px-6 h-full flex items-center justify-between gap-6" aria-label={cms.text("Main")}>
         <Logo go={go} />
 
         <div className="hidden md:flex items-center h-full gap-6">
-          {NAV.map(n => (
+          <CmsLinks location="header" />
+          {!cms.content?.replaceNavigation && NAV.map(n => (
             <RouterLink
               key={n.page}
               to={n.page}
@@ -125,16 +133,14 @@ export function Header({
               onClick={onLogin}
               className="text-[13px] font-semibold px-3 py-2 rounded-lg text-gray-600 hover:text-polyform-dark-blue hover:bg-gray-50 transition-colors"
             >
-              Sign in
-            </button>
+              {cms.text("Sign in")}</button>
           )}
           <button
             type="button"
             onClick={onLogin}
             className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-polyform-blue text-white shadow-[0_5px_16px_rgb(0_99_163_/_0.2)] hover:bg-polyform-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
           >
-            Start designing
-          </button>
+            {cms.text("Start designing")}</button>
         </div>
 
         <button
@@ -143,15 +149,15 @@ export function Header({
           className="md:hidden min-h-10 min-w-10 text-sm font-semibold px-3 rounded-lg text-polyform-gray hover:bg-gray-50"
           aria-expanded={mobileOpen}
           aria-controls="mobile-nav"
-          aria-label="Menu"
+          aria-label={cms.text("Menu")}
         >
-          Menu
-        </button>
+          {cms.text("Menu")}</button>
       </nav>
 
       {mobileOpen && (
         <div id="mobile-nav" className="md:hidden border-t border-gray-100 bg-white px-6 py-4 flex flex-col gap-1 shadow-lg">
-          {NAV.map(n => (
+          <CmsLinks location="header" />
+          {!cms.content?.replaceNavigation && NAV.map(n => (
             <RouterLink
               key={n.page}
               to={n.page}
@@ -168,21 +174,18 @@ export function Header({
           <div className="h-px bg-gray-100 my-2" />
           {user ? (
             <>
+              <ProfileMenu user={user} onOpenDesigns={onOpenDesigns} onSignOut={onSignOut} />
               <button type="button" onClick={() => { onOpenDesigns(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
-                My Designs
-              </button>
+                {cms.text("My Designs")}</button>
               <button type="button" onClick={() => { onSignOut(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
-                Sign out
-              </button>
+                {cms.text("Sign out")}</button>
             </>
           ) : (
             <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg text-left px-3.5 text-polyform-gray hover:bg-gray-50">
-              Sign in
-            </button>
+              {cms.text("Sign in")}</button>
           )}
           <button type="button" onClick={() => { onLogin(); setMobileOpen(false); }} className="text-sm font-semibold min-h-11 rounded-lg bg-polyform-blue text-white text-center">
-            Start designing
-          </button>
+            {cms.text("Start designing")}</button>
         </div>
       )}
     </header>
@@ -190,25 +193,27 @@ export function Header({
 }
 
 export function ClosingCTA({ onLogin, page }: { onLogin: () => void; page: Page }) {
+  const cms = useCms();
+
   const copy = page === 'developers' || page === 'sdk-docs'
     ? {
-        eyebrow: 'Build on PolyForm',
-        title: 'Turn repeated modelling work into your own workflow.',
-        body: 'Open the modeller, run JavaScript against the active model and keep the scripts that earn a place in your toolkit.',
-        cta: 'Open the developer console',
+        eyebrow: cms.text("Build on PolyForm"),
+        title: cms.text("Turn repeated modelling work into your own workflow."),
+        body: cms.text("Open the modeller, run JavaScript against the active model and keep the scripts that earn a place in your toolkit."),
+        cta: cms.text("Open the developer console"),
       }
     : page === 'claude'
       ? {
-          eyebrow: 'Build with Claude',
-          title: 'Describe the change. Keep designing the model.',
-          body: 'Connect Claude to PolyForm, make model changes in plain language, then continue with the same editable project in the browser.',
-          cta: 'Start designing',
+          eyebrow: cms.text("Build with Claude"),
+          title: cms.text("Describe the change. Keep designing the model."),
+          body: cms.text("Connect Claude to PolyForm, make model changes in plain language, then continue with the same editable project in the browser."),
+          cta: cms.text("Start designing"),
         }
       : {
-          eyebrow: 'Start in the browser',
-          title: 'Design the whole project in one place.',
-          body: 'Start with the site, shape the building and landscape, then walk through the result before it is built.',
-          cta: 'Start designing',
+          eyebrow: cms.text("Start in the browser"),
+          title: cms.text("Design the whole project in one place."),
+          body: cms.text("Start with the site, shape the building and landscape, then walk through the result before it is built."),
+          cta: cms.text("Start designing"),
         };
 
   return (
@@ -252,24 +257,26 @@ export function Footer({
   onOpenDesigns: () => void;
   onSignOut: () => void;
 }) {
+  const cms = useCms();
+
   const columns: FooterCol[] = [
-    { title: 'PRODUCT', links: [{ label: 'Product overview', page: 'features' }, { label: 'AI — Build with Claude', page: 'claude' }, { label: 'Developers', page: 'developers' }, { label: 'SDK reference', page: 'sdk-docs' }] },
+    { title: cms.text("PRODUCT"), links: [{ label: cms.text("Product overview"), page: 'features' }, { label: cms.text("AI — Build with Claude"), page: 'claude' }, { label: cms.text("Developers"), page: 'developers' }, { label: cms.text("SDK reference"), page: 'sdk-docs' }] },
     {
-      title: 'CAPABILITIES',
+      title: cms.text("CAPABILITIES"),
       links: [
-        { label: 'Architecture', page: 'features', anchor: 'build' },
-        { label: 'Terrain & landscape', page: 'features', anchor: 'shape-the-site' },
-        { label: 'Visualisation', page: 'features', anchor: 'visualise' },
-        { label: 'Collaboration', page: 'features', anchor: 'work-together' },
-        { label: 'Automation', page: 'features', anchor: 'automate' },
-        { label: 'Files & storage', page: 'features', anchor: 'files' },
+        { label: cms.text("Architecture"), page: 'features', anchor: 'build' },
+        { label: cms.text("Terrain & landscape"), page: 'features', anchor: 'shape-the-site' },
+        { label: cms.text("Visualisation"), page: 'features', anchor: 'visualise' },
+        { label: cms.text("Collaboration"), page: 'features', anchor: 'work-together' },
+        { label: cms.text("Automation"), page: 'features', anchor: 'automate' },
+        { label: cms.text("Files & storage"), page: 'features', anchor: 'files' },
       ],
     },
     {
-      title: 'ACCOUNT',
+      title: cms.text("ACCOUNT"),
       links: user
-        ? [{ label: 'My Designs', onClick: onOpenDesigns }, { label: 'Sign out', onClick: onSignOut }]
-        : [{ label: 'Sign in', onClick: onLogin }],
+        ? [{ label: cms.text("My Designs"), onClick: onOpenDesigns }, { label: cms.text("Sign out"), onClick: onSignOut }]
+        : [{ label: cms.text("Sign in"), onClick: onLogin }],
     },
   ];
 
@@ -280,11 +287,11 @@ export function Footer({
           <div className="flex flex-col gap-4 max-w-[360px]">
             <Logo go={go} size={27} textSize="text-[17px]" />
             <p className="text-sm text-gray-500 leading-relaxed">
-              Browser-based 3D design for buildings, terrain and landscape — from real site context to eye-level walkthrough.
-            </p>
+              {cms.text("Browser-based 3D design for buildings, terrain and landscape — from real site context to eye-level walkthrough.")}</p>
           </div>
-          <nav className="grid grid-cols-2 sm:grid-cols-3 gap-10" aria-label="Footer">
-            {columns.map(col => (
+          <nav className="grid grid-cols-2 sm:grid-cols-3 gap-10" aria-label={cms.text("Footer")}>
+            <CmsLinks location="footer" />
+            {(!cms.content?.replaceNavigation ? columns : columns.filter(col => col.links.some(link => !link.page))).map(col => (
               <div key={col.title} className="flex flex-col gap-3">
                 <span className="text-[11px] font-bold tracking-[0.14em] text-gray-400">{col.title}</span>
                 {col.links.map(link => (
@@ -303,8 +310,8 @@ export function Footer({
           </nav>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-4 text-[13px] text-gray-500 border-t border-slate-200 pt-6">
-          <span>© {new Date().getFullYear()} PolyForm</span>
-          <span>3D design for buildings + landscapes</span>
+          <span>{cms.text("© ")}{new Date().getFullYear()} {cms.text("PolyForm")}</span>
+          <span>{cms.text("3D design for buildings + landscapes")}</span>
         </div>
       </div>
     </footer>
@@ -312,6 +319,8 @@ export function Footer({
 }
 
 export function Eyebrow({ children, dark = false, icon }: { children: React.ReactNode; dark?: boolean; icon?: React.ReactNode }) {
+  const cms = useCms();
+
   return (
     <span className={'inline-flex items-center gap-2.5 text-[12px] font-bold uppercase tracking-[0.12em] ' + (dark ? 'text-white/85' : 'text-polyform-blue')}>
       <span className={'h-px w-7 ' + (dark ? 'bg-white/45' : 'bg-polyform-blue/45')} aria-hidden="true" />
@@ -322,6 +331,8 @@ export function Eyebrow({ children, dark = false, icon }: { children: React.Reac
 }
 
 export function IconTile({ icon, size = 44 }: { icon: React.ReactNode; size?: number }) {
+  const cms = useCms();
+
   return (
     <span
       className="rounded-[10px] bg-polyform-blue/10 text-polyform-blue flex items-center justify-center shrink-0"
@@ -345,7 +356,11 @@ export function MarketingVisual({
   aspectRatio?: string;
   className?: string;
 }) {
+  const cms = useCms();
+
   const grid = dark ? 'rgba(255,255,255,.09)' : 'rgba(0,56,101,.08)';
+  const media = cms.media(cms.original(label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+  if (media?.url) return <img src={media.url} alt={media.alt} style={{ aspectRatio }} className={'w-full object-cover rounded-[24px] ' + className} loading="lazy" />;
   return (
     <div
       className={
@@ -384,6 +399,10 @@ export function MarketingVisual({
 }
 
 export function FloorPlanTile({ label, variant = 1 }: { label: string; variant?: 1 | 2 }) {
+  const cms = useCms();
+  const media = cms.media('floor-plan-' + variant);
+  if (media?.url) return <img src={media.url} alt={media.alt} className="w-full rounded-xl object-contain" loading="lazy" />;
+
   return (
     <div className="rounded-xl border border-gray-200 bg-[#fbfaf7] p-3 flex flex-col gap-1.5">
       <svg viewBox="0 0 100 80" className="w-full" role="img" aria-label={'Floor plan, ' + label}>
@@ -399,25 +418,26 @@ export function FloorPlanTile({ label, variant = 1 }: { label: string; variant?:
 }
 
 export function ChatCard() {
+  const cms = useCms();
+
   return (
     <div className="bg-white text-polyform-gray rounded-[22px] overflow-hidden shadow-[0_40px_90px_-28px_rgba(0,0,0,0.55)] border border-white/15">
       <div className="h-11 px-4 flex items-center gap-2 border-b border-gray-100 text-[12px] font-semibold text-gray-500">
         <span className="w-2 h-2 rounded-full bg-polyform-green" />
-        Claude × PolyForm
-        <span className="ml-auto text-gray-400">Connected</span>
+        {cms.text("Claude × PolyForm")}<span className="ml-auto text-gray-400">{cms.text("Connected")}</span>
       </div>
       <div className="p-5 flex flex-col gap-3.5">
         <div className="ml-auto max-w-[85%] bg-polyform-blue text-white text-sm leading-[1.55] px-4 py-3 rounded-2xl rounded-br-[4px]">
-          Build me an L-shaped house, two storeys, with four bedrooms and a bathroom upstairs.
-        </div>
+          {cms.text("Build me an L-shaped house, two storeys, with four bedrooms and a bathroom upstairs.")}</div>
         <div className="max-w-[90%] bg-gray-100 text-sm leading-[1.55] px-4 py-3 rounded-2xl rounded-bl-[4px]">
-          Done. Here is the 3D view and the plans for both floors. You can keep editing the model in PolyForm.
-        </div>
+          {cms.text("Done. Here is the 3D view and the plans for both floors. You can keep editing the model in PolyForm.")}</div>
         <div className="grid grid-cols-2 gap-3">
-          <FloorPlanTile label="Level 1" variant={1} />
-          <FloorPlanTile label="Level 2" variant={2} />
+          <FloorPlanTile label={cms.text("Level 1")} variant={1} />
+          <FloorPlanTile label={cms.text("Level 2")} variant={2} />
         </div>
       </div>
     </div>
   );
 }
+
+const CMS_DEFAULT_NAV = NAV;

@@ -1,3 +1,5 @@
+import { useCms } from '../cms/context';
+import { CmsLayout } from '../cms/Sections';
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { FEATURE_CHAPTERS, FEATURE_SECTIONS } from './data';
@@ -6,22 +8,25 @@ import { Eyebrow, MarketingVisual, RouterLink, scrollToId, type Page } from './s
 const FILES_SECTION = FEATURE_SECTIONS.find(s => s.id === 'files')!;
 
 export default function Features({ go }: { go: (p: Page, anchor?: string) => void }) {
+  const cms = useCms();
+  const FEATURE_CHAPTERS = cms.data(CMS_DEFAULT_FEATURE_CHAPTERS);
+  const FEATURE_SECTIONS = cms.data(CMS_DEFAULT_FEATURE_SECTIONS);
+  const FILES_SECTION = cms.data(CMS_DEFAULT_FILES_SECTION);
+
   return (
-    <>
+    <CmsLayout page="features">
       <section className="relative overflow-hidden px-6 pt-20 pb-20 bg-white border-b border-slate-200">
         <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(circle_at_20%_0%,rgba(0,99,163,0.08),transparent_48%)] pointer-events-none" />
         <div className="relative max-w-[1240px] mx-auto grid lg:grid-cols-[0.95fr_1.05fr] gap-12 lg:gap-20 items-end">
           <div className="flex flex-col gap-5">
-            <Eyebrow>Product</Eyebrow>
+            <Eyebrow>{cms.text("Product")}</Eyebrow>
             <h1 className="text-[clamp(42px,6vw,72px)] font-bold leading-[1.01] tracking-[-0.045em] text-polyform-dark-blue">
-              One model.<br />The whole site.
-            </h1>
+              {cms.text("One model.")}<br />{cms.text("The whole site.")}</h1>
           </div>
           <div className="flex flex-col gap-5">
             <p className="text-[19px] leading-[1.7] text-gray-600 max-w-[640px]">
-              PolyForm keeps architecture, terrain and landscape together from the first sketch to the final walk-through. No separate site model. No disconnected garden plan.
-            </p>
-            <p className="text-sm text-gray-500">Explore the product by workflow, then drill into the detailed tools beneath each chapter.</p>
+              {cms.text("PolyForm keeps architecture, terrain and landscape together from the first sketch to the final walk-through. No separate site model. No disconnected garden plan.")}</p>
+            <p className="text-sm text-gray-500">{cms.text("Explore the product by workflow, then drill into the detailed tools beneath each chapter.")}</p>
           </div>
         </div>
       </section>
@@ -29,7 +34,7 @@ export default function Features({ go }: { go: (p: Page, anchor?: string) => voi
       <section className="px-6 py-24 bg-[#f8fafc]">
         <div className="max-w-[1240px] mx-auto flex gap-14 xl:gap-20 items-start">
           <aside className="hidden lg:flex sticky top-[76px] w-[190px] flex-none flex-col">
-            <span className="text-[11px] font-bold tracking-[0.14em] text-gray-400 px-3 pb-3">EXPLORE</span>
+            <span className="text-[11px] font-bold tracking-[0.14em] text-gray-400 px-3 pb-3">{cms.text("EXPLORE")}</span>
             {FEATURE_CHAPTERS.map(c => (
               <button
                 key={c.id}
@@ -45,8 +50,7 @@ export default function Features({ go }: { go: (p: Page, anchor?: string) => voi
               onClick={() => scrollToId('files')}
               className="text-sm font-semibold text-gray-500 px-3 py-2.5 rounded-lg text-left hover:bg-white hover:text-polyform-blue transition-colors"
             >
-              Files & storage
-            </button>
+              {cms.text("Files & storage")}</button>
           </aside>
 
           <div className="flex-1 min-w-0 flex flex-col">
@@ -71,9 +75,9 @@ export default function Features({ go }: { go: (p: Page, anchor?: string) => voi
 
                   <details className="mt-9 group border-t border-slate-200">
                     <summary className="cursor-pointer list-none py-4 flex items-center justify-between gap-4 text-sm font-bold text-polyform-dark-blue hover:text-polyform-blue transition-colors">
-                      <span>Explore detailed tools</span>
-                      <span className="text-gray-400 font-normal group-open:hidden">+</span>
-                      <span className="text-gray-400 font-normal hidden group-open:inline">−</span>
+                      <span>{cms.text("Explore detailed tools")}</span>
+                      <span className="text-gray-400 font-normal group-open:hidden">{cms.text("+")}</span>
+                      <span className="text-gray-400 font-normal hidden group-open:inline">{cms.text("−")}</span>
                     </summary>
                     <div className={'pb-4 grid gap-x-10 gap-y-8 ' + (sections.length > 1 ? 'md:grid-cols-2' : '')}>
                       {sections.map(s => (
@@ -110,27 +114,27 @@ export default function Features({ go }: { go: (p: Page, anchor?: string) => voi
             <article id="files" className="pt-16 scroll-mt-24">
               <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-14 items-start">
                 <div className="flex flex-col gap-4">
-                  <Eyebrow>Interoperability</Eyebrow>
+                  <Eyebrow>{cms.text("Interoperability")}</Eyebrow>
                   <h2 className="text-[clamp(30px,4vw,50px)] font-bold leading-[1.06] tracking-[-0.03em] text-polyform-dark-blue">{FILES_SECTION.title}</h2>
                   <p className="text-[16px] leading-[1.7] text-gray-600">{FILES_SECTION.body}</p>
                   <RouterLink to="claude" go={go} className="mt-2 self-start inline-flex items-center gap-1.5 text-[15px] font-semibold text-polyform-blue hover:text-polyform-dark-blue transition-colors">
-                    See PolyForm with Claude <ArrowRight size={16} />
+                    {cms.text("See PolyForm with Claude ")}<ArrowRight size={16} />
                   </RouterLink>
                 </div>
                 <div>
                   <div className="mb-7 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
                     <div className="flex flex-wrap items-center justify-center gap-2.5 text-[12px] font-semibold">
-                      <span className="px-3 py-2 rounded-lg border border-slate-200 bg-[#f8fafc] text-gray-600">Google Drive</span>
+                      <span className="px-3 py-2 rounded-lg border border-slate-200 bg-[#f8fafc] text-gray-600">{cms.text("Google Drive")}</span>
                       <ArrowRight size={14} className="text-gray-300" />
-                      <span className="px-4 py-2.5 rounded-lg bg-polyform-blue text-white">PolyForm</span>
+                      <span className="px-4 py-2.5 rounded-lg bg-polyform-blue text-white">{cms.text("PolyForm")}</span>
                       <ArrowRight size={14} className="text-gray-300" />
-                      <span className="px-3 py-2 rounded-lg border border-slate-200 bg-[#f8fafc] text-gray-600">Trimble Connect</span>
+                      <span className="px-3 py-2 rounded-lg border border-slate-200 bg-[#f8fafc] text-gray-600">{cms.text("Trimble Connect")}</span>
                     </div>
                     <div className="mt-4 pt-4 border-t border-slate-200 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] text-gray-500">
-                      <span>Import SKP + supported 3D</span>
-                      <span>Export glTF</span>
-                      <span>Export STL</span>
-                      <span>Export SKP</span>
+                      <span>{cms.text("Import SKP + supported 3D")}</span>
+                      <span>{cms.text("Export glTF")}</span>
+                      <span>{cms.text("Export STL")}</span>
+                      <span>{cms.text("Export SKP")}</span>
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-x-8">
@@ -156,6 +160,10 @@ export default function Features({ go }: { go: (p: Page, anchor?: string) => voi
           </div>
         </div>
       </section>
-    </>
+    </CmsLayout>
   );
 }
+
+const CMS_DEFAULT_FEATURE_CHAPTERS = FEATURE_CHAPTERS;
+const CMS_DEFAULT_FEATURE_SECTIONS = FEATURE_SECTIONS;
+const CMS_DEFAULT_FILES_SECTION = FILES_SECTION;
