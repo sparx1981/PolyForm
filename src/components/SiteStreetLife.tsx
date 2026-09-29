@@ -37,49 +37,184 @@ const CAR_URLS = [
 
 type StreetAssetKind = 'person' | 'car';
 
+function collectMeshes(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse(child => {
+    const mesh = child as THREE.Mesh;
+    if (mesh.isMesh) meshes.push(mesh);
+  });
+  return meshes;
+}
+
+function styleStreetObject(source: THREE.Object3D, tint: string | undefined, kind: StreetAssetKind) {
+  const clone = source.clone(true);
+  clone.traverse(child => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = true;
+    mesh.raycast = () => {};
+
+    const original = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const materials = original.filter(Boolean).map(material => {
+      const m = material.clone() as THREE.MeshStandardMaterial;
+      const name = (m.name || '').toLowerCase();
+
+      if (m.color && tint) {
+        if (kind === 'person' && name.includes('shirt')) m.color.set(tint);
+        if (kind === 'car' && !/(window|black|grey|gray|headlight|taillight|tail light|tyre|tire|wheel)/.test(name)) m.color.set(tint);
+      }
+
+      if (kind === 'car' && /window/.test(name)) {
+        // Real glass rather than opaque painted panels. Keep enough tint to read the glazing at
+        // architectural viewing distances while allowing the opposite side/background through.
+        m.color.set('#20333d');
+        m.transparent = true;
+        m.opacity = 0.46;
+        m.depthWrite = false;
+        m.side = THREE.DoubleSide;
+        m.roughness = 0.12;
+        m.metalness = 0.08;
+      } else if (kind === 'car' && /headlight/.test(name)) {
+        m.color.set('#fff5d6');
+        m.emissive = new THREE.Color('#fff0bd');
+        m.emissiveIntensity = 2.2;
+        m.roughness = 0.2;
+      } else if (kind === 'car' && /(taillight|tail light)/.test(name)) {
+        m.color.set('#d9362b');
+        m.emissive = new THREE.Color('#b91c1c');
+        m.emissiveIntensity = 1.3;
+        m.roughness = 0.25;
+      } else if ('roughness' in m) {
+        m.roughness = Math.max(0.5, m.roughness ?? 0.7);
+      }
+      return m;
+    });
+    mesh.material = Array.isArray(mesh.material) ? materials : materials[0]!;
+  });
+  return clone;
+}
+
+function disposeStreetMaterials(object: THREE.Object3D) {
+  object.traverse(child => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    materials.forEach(m => m?.dispose());
+  });
+}
+
+/**
+ * The supplied posed humans are authored from the same source topology. Build two morph targets
+ * from the hand-authored walking pose: the original stride and a left/right mirrored stride.
+ * This gives the static entourage real hip/knee/elbow/shoulder deformation without falling back to
+ * capsule limbs or requiring a heavyweight skeletal character per pedestrian.
+ */
+function buildWalkTemplate(standing: THREE.Object3D, walking: THREE.Object3D) {
+  const template = standing.clone(true);
+  const baseMeshes = collectMeshes(template);
+  const walkMeshes = collectMeshes(walking);
+
+  baseMeshes.forEach((mesh, meshIndex) => {
+    const walkMesh = walkMeshes[meshIndex];
+    if (!walkMesh) return;
+    const basePosition = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    const walkPosition = walkMesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (!basePosition || !walkPosition || basePosition.count !== walkPosition.count) return;
+
+    const geometry = mesh.geometry.clone();
+    const walkTarget = walkPosition.clone();
+    const mirrored = new Float32Array(basePosition.count * 3);
+
+    // Match each vertex to the closest vertex on the opposite side of the neutral standing pose.
+    // The models are small enough that doing this once per gender is inexpensive, while avoiding
+    // the crossed-limb artefact produced by simply negating X coordinates.
+    for (let i = 0; i < basePosition.count; i++) {
+      const x = basePosition.getX(i), y = basePosition.getY(i), z = basePosition.getZ(i);
+      let best = i, bestD = Infinity;
+      for (let j = 0; j < basePosition.count; j++) {
+        const dx = basePosition.getX(j) + x;
+        const dy = basePosition.getY(j) - y;
+        const dz = basePosition.getZ(j) - z;
+        const d = dx * dx + dy * dy + dz * dz;
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      mirrored[i * 3] = -walkPosition.getX(best);
+      mirrored[i * 3 + 1] = walkPosition.getY(best);
+      mirrored[i * 3 + 2] = walkPosition.getZ(best);
+    }
+
+    geometry.morphAttributes.position = [
+      walkTarget,
+      new THREE.Float32BufferAttribute(mirrored, 3),
+    ];
+    geometry.morphTargetsRelative = false;
+    mesh.geometry = geometry;
+    mesh.updateMorphTargets();
+  });
+
+  return template;
+}
+
 function StreetAsset({ source, scale, tint, kind }: { source: THREE.Object3D; scale: number; tint?: string; kind: StreetAssetKind }) {
-  const object = useMemo(() => {
-    const clone = source.clone(true);
-    clone.traverse(child => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = true;
-      mesh.raycast = () => {};
+  const object = useMemo(() => styleStreetObject(source, tint, kind), [source, tint, kind]);
+  useEffect(() => () => disposeStreetMaterials(object), [object]);
+  return <primitive object={object} scale={scale} dispose={null} />;
+}
 
-      const original = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const materials = original.filter(Boolean).map(material => {
-        const m = material.clone() as THREE.MeshStandardMaterial;
-        const name = (m.name || '').toLowerCase();
+function WalkingStreetAsset({
+  template,
+  scale,
+  tint,
+  registerMorphs,
+}: {
+  template: THREE.Object3D;
+  scale: number;
+  tint?: string;
+  registerMorphs: (meshes: THREE.Mesh[]) => void;
+}) {
+  const object = useMemo(() => styleStreetObject(template, tint, 'person'), [template, tint]);
+  const morphMeshes = useMemo(
+    () => collectMeshes(object).filter(mesh => !!mesh.morphTargetInfluences?.length),
+    [object],
+  );
 
-        if (m.color && tint) {
-          if (kind === 'person' && name.includes('shirt')) m.color.set(tint);
-          if (kind === 'car' && !/(window|black|grey|gray|headlight|taillight|tail light|tyre|tire|wheel)/.test(name)) m.color.set(tint);
-        }
-        if (kind === 'car' && /window/.test(name)) {
-          m.roughness = 0.24;
-          m.metalness = 0.08;
-        } else if ('roughness' in m) {
-          m.roughness = Math.max(0.5, m.roughness ?? 0.7);
-        }
-        return m;
-      });
-      mesh.material = Array.isArray(mesh.material) ? materials : materials[0]!;
-    });
-    return clone;
-  }, [source, tint, kind]);
-
-  useEffect(() => () => {
-    object.traverse(child => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      materials.forEach(m => m?.dispose());
-    });
-  }, [object]);
+  useEffect(() => {
+    registerMorphs(morphMeshes);
+    return () => registerMorphs([]);
+  }, [morphMeshes, registerMorphs]);
+  useEffect(() => () => disposeStreetMaterials(object), [object]);
 
   return <primitive object={object} scale={scale} dispose={null} />;
+}
+
+function CarHeadlightBeam({ register }: { register: (light: THREE.SpotLight | null) => void }) {
+  const light = useRef<THREE.SpotLight | null>(null);
+  const target = useRef<THREE.Object3D | null>(null);
+
+  useEffect(() => {
+    if (light.current && target.current) {
+      light.current.target = target.current;
+      target.current.updateMatrixWorld();
+    }
+    return () => register(null);
+  }, [register]);
+
+  return <>
+    <spotLight
+      ref={node => { light.current = node; register(node); }}
+      position={[0, 0.55, 1.92]}
+      color="#fff1c2"
+      intensity={32}
+      distance={14}
+      angle={0.34}
+      penumbra={0.72}
+      decay={2}
+      castShadow={false}
+    />
+    <object3D ref={target} position={[0, -0.7, 9]} />
+  </>;
 }
 
 /* ---------- Placement ---------- */
@@ -129,6 +264,8 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
   const car2 = useGLTF(CAR_URLS[2]).scene;
   const car3 = useGLTF(CAR_URLS[3]).scene;
   const cars = [car0, car1, car2, car3];
+  const maleWalkTemplate = useMemo(() => buildWalkTemplate(maleStand, maleWalk), [maleStand, maleWalk]);
+  const femaleWalkTemplate = useMemo(() => buildWalkTemplate(femaleStand, femaleWalk), [femaleStand, femaleWalk]);
 
   const t = ground.terrainData!;
   const [gx, gy, gz] = ground.position;
@@ -138,11 +275,13 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
   const standerRefs = useRef<(THREE.Group | null)[]>([]);
   const sitterRefs = useRef<(THREE.Group | null)[]>([]);
   const carRefs = useRef<(THREE.Group | null)[]>([]);
+  const walkerMorphRefs = useRef<THREE.Mesh[][]>([]);
+  const carLightRefs = useRef<(THREE.SpotLight | null)[]>([]);
   const time = useRef(0);
   const q = useMemo(() => new THREE.Quaternion(), []);
   const e = useMemo(() => new THREE.Euler(0, 0, 0, 'YXZ'), []);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     time.current += Math.min(delta, 0.1);
     const now = time.current;
 
@@ -152,9 +291,24 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
       const loop = plan.walkLoops[w.loop]!;
       const dist = w.start + now * w.speed;
       const p = pointOnLoop(loop, dist);
-      const g = gait(dist, w.child ? 1.0 : 1.4);
-      group.position.set(p.x, heightAt(p.x, p.z) + 0.04 + g.bob * 0.35, p.z);
-      group.rotation.set(0, Math.atan2(p.dx, p.dz) + HUMAN_FORWARD_YAW, Math.sin(dist * 3.2) * 0.012);
+      const stride = w.child ? 1.0 : 1.4;
+      const g = gait(dist, stride);
+      group.position.set(p.x, heightAt(p.x, p.z) + 0.04 + g.bob * 0.7, p.z);
+      group.rotation.set(0, Math.atan2(p.dx, p.dz) + HUMAN_FORWARD_YAW, Math.sin(dist * 3.2) * 0.01);
+
+      // Alternate between the authored walking pose and its mirrored counterpart. At the middle of
+      // each step both influences fall back to the neutral standing mesh, so knees, hips, elbows
+      // and shoulders pass through a believable weight-transfer position rather than sliding.
+      const phase = (dist / stride) * Math.PI * 2;
+      const swing = Math.sin(phase);
+      const amount = Math.pow(Math.abs(swing), 0.82) * 0.92;
+      const a = swing >= 0 ? amount : 0;
+      const b = swing < 0 ? amount : 0;
+      for (const mesh of walkerMorphRefs.current[i] ?? []) {
+        if (!mesh.morphTargetInfluences) continue;
+        mesh.morphTargetInfluences[0] = a;
+        mesh.morphTargetInfluences[1] = b;
+      }
     });
 
     plan.standers.forEach((s, i) => {
@@ -171,6 +325,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
       group.rotation.set(0, s.yaw + HUMAN_FORWARD_YAW, 0);
     });
 
+    let projectedLights = small ? 6 : 12;
     plan.cars.forEach((car, i) => {
       const group = carRefs.current[i];
       if (!group) return;
@@ -185,15 +340,30 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
       q.setFromEuler(e.set(pitch, Math.atan2(p.dx, p.dz), 0));
       group.position.set(p.x, (hf + hb) / 2 + 0.01, p.z);
       group.quaternion.copy(q);
+
+      // Keep real projected headlights affordable on mobile: every car has emissive lamp geometry,
+      // while the nearest cars receive a live spotlight cone that illuminates the road ahead.
+      const light = carLightRefs.current[i];
+      if (light) {
+        const close = group.position.distanceToSquared(camera.position) < 35 * 35;
+        const enable = close && projectedLights > 0;
+        light.visible = enable;
+        if (enable) projectedLights--;
+      }
     });
   });
 
   return <group name="site-street-life" userData={{ isStreetLife: true }}>
     {plan.walkers.map((w, i) => {
-      const source = w.body % 2 ? femaleWalk : maleWalk;
+      const template = w.body % 2 ? femaleWalkTemplate : maleWalkTemplate;
       const scale = HUMAN_SCALE * (w.child ? 0.68 : 1);
       return <group key={`walker-${i}`} ref={node => { walkerRefs.current[i] = node; }}>
-        <StreetAsset source={source} scale={scale} tint={PERSON_COLOURS[w.body % PERSON_COLOURS.length]} kind="person" />
+        <WalkingStreetAsset
+          template={template}
+          scale={scale}
+          tint={PERSON_COLOURS[w.body % PERSON_COLOURS.length]}
+          registerMorphs={meshes => { walkerMorphRefs.current[i] = meshes; }}
+        />
       </group>;
     })}
     {plan.standers.map((s, i) => {
@@ -208,6 +378,7 @@ export function SiteStreetLife({ ground, routes, level, seats }: SiteStreetLifeP
     </group>)}
     {plan.cars.map((car, i) => <group key={`car-${i}`} ref={node => { carRefs.current[i] = node; }}>
       <StreetAsset source={cars[car.color % cars.length]!} scale={1} tint={CAR_PALETTE[car.color % CAR_PALETTE.length]} kind="car" />
+      <CarHeadlightBeam register={light => { carLightRefs.current[i] = light; }} />
     </group>)}
   </group>;
 }
