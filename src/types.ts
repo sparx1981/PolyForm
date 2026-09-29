@@ -16,7 +16,7 @@ import type { EnvironmentState, MaterialInstance } from './lib/assets/types';
 // application, well outside the kernel — into that strict-mode kernel
 // compilation, which is where most of tsconfig.kernel.json's several
 // hundred errors were actually coming from.
-export type ToolbarKey = 'left' | 'architecture' | 'landscapes' | 'camera';
+export type ToolbarKey = 'left' | 'architecture' | 'landscapes' | 'camera' | 'ai';
 export type DockZone = 'left' | 'top' | 'bottom';
 
 export type CivilToolMode = 'terrain' | 'road' | 'pad-rect' | 'pad-circle' | 'striping';
@@ -860,6 +860,8 @@ export interface AppState {
   setIsArchitectureToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   isLandscapesToolbarEnabled: boolean;
   setIsLandscapesToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+  isAIToolbarEnabled: boolean;
+  setIsAIToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   isCameraToolbarEnabled: boolean;
   setIsCameraToolbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
   layoutMode: 'classic' | 'unified';

@@ -19,16 +19,13 @@ import {
   RotateCw, 
   Maximize, 
   ArrowUpFromLine, Route, Slice, 
-  Search,
   MoreHorizontal,
-  Sparkles,
   CircleDot,
   CornerUpRight,
   Code,
   Combine,
   CircleDashed,
   Grab,
-  Wand2,
   Ruler,
   ToggleLeft,
   ToggleRight,
@@ -110,11 +107,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
   const flyoutSide: 'right' | 'bottom' = horizontal ? 'bottom' : 'right';
   const { 
     isBasicToolbarEnabled,
-    setIsAIRendererOpen, 
-    setIsAIQueryOpen, 
-    setIsAIGenerateOpen,
     theme, 
-    bannerColor, 
     toolbarVisibility, 
     activeTool, 
     setActiveTool,
@@ -136,9 +129,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     triggerFocusOnMap
   } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isAIPopoutOpen, setIsAIPopoutOpen] = useState(false);
-  const aiGroupRef = useRef<HTMLDivElement>(null);
-  const [aiGroupHovered, setAiGroupHovered] = useState(false);
   const [is3DPopoutOpen, setIs3DPopoutOpen] = useState(false);
   const threeDGroupRef = useRef<HTMLDivElement>(null);
   const [threeDGroupHovered, setThreeDGroupHovered] = useState(false);
@@ -219,20 +209,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     } catch (err: any) {
       setConsoleOutput(prev => [...prev, `[ERROR] ${err.message}`]);
     }
-  };
-
-  const handleAIEnter = () => {
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    setIsAIPopoutOpen(true);
-    setAiGroupHovered(true);
-  };
-
-  const handleAILeave = () => {
-    const timeout = setTimeout(() => {
-      setIsAIPopoutOpen(false);
-    }, 300);
-    setHoverTimeout(timeout);
-    setAiGroupHovered(false);
   };
 
   const handle3DEnter = () => {
@@ -317,78 +293,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         : "w-12 border-r flex flex-col items-center py-2 gap-1 z-40 transition-colors duration-300",
       theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
     )}>
-      <div 
-        className="relative"
-        ref={aiGroupRef}
-        onMouseEnter={handleAIEnter}
-        onMouseLeave={handleAILeave}
-      >
-        <button 
-          onClick={() => setIsAIQueryOpen(true)}
-          className={cn("toolbar-btn transition-colors relative", horizontal ? "mr-2" : "mb-2")}
-          style={{ color: bannerColor }}
-        >
-          <Sparkles size={20} />
-        </button>
-
-        <FlyoutPortal anchorRef={aiGroupRef} open={aiGroupHovered && !isAIPopoutOpen} side={flyoutSide}>
-          {aiGroupHovered && !isAIPopoutOpen && (
-            <div className="px-2 py-1 bg-polyform-gray text-white text-xs rounded whitespace-nowrap shadow-modus-2 pointer-events-none">
-              AI Model Query
-            </div>
-          )}
-        </FlyoutPortal>
-
-        <FlyoutPortal anchorRef={aiGroupRef} open={isAIPopoutOpen} side={flyoutSide}>
-          <div onMouseEnter={handleAIEnter} onMouseLeave={handleAILeave}>
-            <AnimatePresence>
-              {isAIPopoutOpen && (
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className={cn(
-                    "border rounded-lg shadow-modus-3 p-2 flex flex-col gap-1 min-w-[140px]",
-                    theme === 'dark' ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"
-                  )}
-                >
-                  <button 
-                    onClick={() => setIsAIQueryOpen(true)}
-                    className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                      theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
-                    )}
-                  >
-                    <Sparkles size={16} style={{ color: bannerColor }} />
-                    <span>AI Query</span>
-                  </button>
-                  <button 
-                    onClick={() => setIsAIRendererOpen(true)}
-                    className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                      theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
-                    )}
-                  >
-                    <Search size={16} style={{ color: bannerColor }} />
-                    <span>AI Renderer</span>
-                  </button>
-                  <button 
-                    onClick={() => setIsAIGenerateOpen(true)}
-                    className={cn(
-                      "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                      theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700"
-                    )}
-                  >
-                    <Wand2 size={16} style={{ color: bannerColor }} />
-                    <span>AI Generate</span>
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </FlyoutPortal>
-      </div>
-      
       <ToolButton tool="select" icon={<MousePointer2 size={20} />} label="Select (Space)" />
       <ToolButton tool="eraser" icon={<Eraser size={20} />} label="Eraser (E) - click: delete object, Shift+click: delete surface" />
       <ToolButton tool="paint" icon={<PaintBucket size={20} />} label="Paint Bucket (B) - click: face/sub-face, Shift+click: whole object" />
@@ -743,7 +647,6 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       
       <ToolButton tool="pushpull" icon={<ArrowUpFromLine size={20} />} label="Extrude (P)" />
       <ToolButton tool="followme" icon={<Route size={20} />} label="Follow Me" />
-      <ToolButton tool="section" icon={<Slice size={20} />} label="Section Plane" />
       <ToolButton tool="offset" icon={<Layers size={20} />} label="Offset" />
       <ToolButton tool="combine" icon={<Combine size={20} />} label="Combine: merge, subtract or intersect flat shapes or 3D objects" />
       <div 

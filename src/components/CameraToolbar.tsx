@@ -1,5 +1,5 @@
 import React, { useRef, useState, createContext, useContext } from 'react';
-import { Aperture, RotateCcw, Crop, Footprints, Orbit, Hand, Eye, ZoomIn } from 'lucide-react';
+import { Aperture, RotateCcw, Crop, Footprints, Orbit, Hand, Eye, ZoomIn, Slice } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
 import { cn } from '../lib/utils';
@@ -147,6 +147,14 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
           icon={<Footprints size={19} />}
           label="Walk Mode"
           subtitle="Walk through the model in first person"
+        />
+
+        {/* Section Plane */}
+        <CameraToolButton
+          tool="section"
+          icon={<Slice size={19} />}
+          label="Section Plane"
+          subtitle="Slice the model to see inside: click a wall or floor to cut along it"
         />
 
         {/* Reset Camera Position */}

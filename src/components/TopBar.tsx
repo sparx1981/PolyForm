@@ -163,6 +163,8 @@ export default function TopBar() {
       setIsLandscapesToolbarEnabled,
       isCameraToolbarEnabled,
       setIsCameraToolbarEnabled,
+      isAIToolbarEnabled,
+      setIsAIToolbarEnabled,
       layoutMode,
       setLayoutMode,
       terrainModifiers,
@@ -841,6 +843,15 @@ export default function TopBar() {
     setIsMenuOpen(false);
   };
 
+  // The AI toolbar's Photo to 3D button asks for the same flow as the File menu's.
+  const photoTo3DRef = useRef(handlePhotoTo3D);
+  photoTo3DRef.current = handlePhotoTo3D;
+  useEffect(() => {
+    const onRequest = () => photoTo3DRef.current();
+    window.addEventListener('polyform:photo-to-3d', onRequest);
+    return () => window.removeEventListener('polyform:photo-to-3d', onRequest);
+  }, []);
+
   return (
     <header 
       className={cn("text-white flex items-center justify-between z-50 transition-colors duration-300 shrink-0", isPhone ? "h-10 px-2" : "h-12 px-4")}
@@ -1352,6 +1363,11 @@ export default function TopBar() {
                       label="Camera Toolbar"
                       isVisible={isCameraToolbarEnabled}
                       onToggle={() => setIsCameraToolbarEnabled(!isCameraToolbarEnabled)}
+                    />
+                    <VisibilityToggle 
+                      label="AI Toolbar"
+                      isVisible={isAIToolbarEnabled}
+                      onToggle={() => setIsAIToolbarEnabled(!isAIToolbarEnabled)}
                     />
                   </CollapsibleSection>
 

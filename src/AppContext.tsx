@@ -742,6 +742,25 @@ console.log("Created rectangle:", myRect.id);`);
     });
   };
 
+  // AI Toolbar (Enabled by default, persisted across sessions)
+  const [isAIToolbarEnabled, setIsAIToolbarEnabledState] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('polyform_ai_toolbar');
+      if (stored !== null) return stored === 'true';
+    } catch (e) {}
+    return true;
+  });
+
+  const setIsAIToolbarEnabled = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsAIToolbarEnabledState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('polyform_ai_toolbar', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   // Toolbar Layout Mode ('classic' | 'unified', default 'classic')
   const [layoutMode, setLayoutModeState] = useState<'classic' | 'unified'>(() => {
     try {
@@ -767,8 +786,8 @@ console.log("Created rectangle:", myRect.id);`);
    * the same way a desktop app like Word or Excel lets you drag a
    * toolbar to reposition it. Persisted the same way layoutMode is.
    */
-  const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera'];
-  const ALL_TOOLBAR_KEYS: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera'];
+  const DEFAULT_TOOLBAR_ORDER: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera', 'ai'];
+  const ALL_TOOLBAR_KEYS: ToolbarKey[] = ['left', 'architecture', 'landscapes', 'camera', 'ai'];
   const [toolbarOrder, setToolbarOrderState] = useState<ToolbarKey[]>(() => {
     try {
       const stored = localStorage.getItem('polyform_toolbar_order');
@@ -784,12 +803,8 @@ console.log("Created rectangle:", myRect.id);`);
           new Set(parsed).size === parsed.length &&
           parsed.every((k) => ALL_TOOLBAR_KEYS.includes(k))
         ) {
-          if (parsed.length === ALL_TOOLBAR_KEYS.length) {
-            return parsed as ToolbarKey[];
-          }
-          if (parsed.length === ALL_TOOLBAR_KEYS.length - 1 && !parsed.includes('camera')) {
-            return [...parsed, 'camera'] as ToolbarKey[];
-          }
+          // A permutation saved before a toolbar existed: keep its order, add the newer ones at the end.
+          return [...(parsed as ToolbarKey[]), ...ALL_TOOLBAR_KEYS.filter((k) => !parsed.includes(k))];
         }
       }
     } catch (e) {}
@@ -822,6 +837,7 @@ console.log("Created rectangle:", myRect.id);`);
     architecture: 'left',
     landscapes: 'left',
     camera: 'left',
+    ai: 'left',
   };
   const [toolbarDocks, setToolbarDocksState] = useState<Record<ToolbarKey, DockZone>>(() => {
     try {
@@ -838,6 +854,7 @@ console.log("Created rectangle:", myRect.id);`);
             architecture: parsed.architecture,
             landscapes: parsed.landscapes,
             camera: isValidZone(parsed.camera) ? parsed.camera : 'left',
+            ai: isValidZone(parsed.ai) ? parsed.ai : 'left',
           };
         }
       }
@@ -975,6 +992,7 @@ console.log("Created rectangle:", myRect.id);`);
             isArchitectureToolbarEnabled,
             isLandscapesToolbarEnabled,
             isCameraToolbarEnabled,
+            isAIToolbarEnabled,
             layoutMode,
             updatedAt: Date.now()
           }, { merge: true });
@@ -987,7 +1005,7 @@ console.log("Created rectangle:", myRect.id);`);
       const timeout = setTimeout(saveSettings, 30000); // 30s debounce for settings
       return () => clearTimeout(timeout);
     }
-  }, [theme, unit, gridEnabled, axisIndicatorEnabled, miniAxisIndicatorEnabled, floorEnabled, allNotesVisible, guidesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, layoutMode, user?.uid]);
+  }, [theme, unit, gridEnabled, axisIndicatorEnabled, miniAxisIndicatorEnabled, floorEnabled, allNotesVisible, guidesVisible, defaultCameraPosition, defaultCameraTarget, isArchitectureToolbarEnabled, isLandscapesToolbarEnabled, isCameraToolbarEnabled, isAIToolbarEnabled, layoutMode, user?.uid]);
 
   // Load user settings
   const lastSettingsLoad = useRef<number>(0);
@@ -1033,6 +1051,9 @@ console.log("Created rectangle:", myRect.id);`);
           }
           if (data.isCameraToolbarEnabled !== undefined) {
             setIsCameraToolbarEnabled(Boolean(data.isCameraToolbarEnabled));
+          }
+          if (data.isAIToolbarEnabled !== undefined) {
+            setIsAIToolbarEnabled(Boolean(data.isAIToolbarEnabled));
           }
           if (data.layoutMode === 'classic' || data.layoutMode === 'unified') {
             setLayoutMode(data.layoutMode);
@@ -2862,6 +2883,8 @@ console.log("Created rectangle:", myRect.id);`);
       setIsLandscapesToolbarEnabled,
       isCameraToolbarEnabled,
       setIsCameraToolbarEnabled,
+      isAIToolbarEnabled,
+      setIsAIToolbarEnabled,
       layoutMode,
       setLayoutMode,
       toolbarOrder,

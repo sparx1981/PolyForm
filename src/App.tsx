@@ -22,6 +22,7 @@ import { RENDER_MODE } from './lib/renderMode';
 import RenderView from './components/RenderView';
 import { STORAGE_LABELS } from './lib/storage/registry';
 import CameraToolbar from './components/CameraToolbar';
+import AIToolbar from './components/AIToolbar';
 import UnifiedToolRail from './components/UnifiedToolRail';
 import RightPanelStack from './components/RightPanelStack';
 import StatusBar from './components/StatusBar';
@@ -261,6 +262,7 @@ function AppContent() {
       isArchitectureToolbarEnabled,
       isLandscapesToolbarEnabled,
       isCameraToolbarEnabled,
+      isAIToolbarEnabled,
       walkModePhase,
       externalStorage,
       externalStorageProblem,
@@ -331,6 +333,7 @@ function AppContent() {
         case 'architecture': return <ArchitectureToolbar dock={dock} />;
         case 'landscapes': return <LandscapesToolbar dock={dock} />;
         case 'camera': return <CameraToolbar dock={dock} />;
+        case 'ai': return <AIToolbar dock={dock} />;
       }
     };
     // toolbarOrder governs relative order everywhere; filtering it per
@@ -343,6 +346,7 @@ function AppContent() {
         case 'architecture': return isArchitectureToolbarEnabled;
         case 'landscapes': return isLandscapesToolbarEnabled;
         case 'camera': return isCameraToolbarEnabled;
+        case 'ai': return isAIToolbarEnabled;
       }
     };
     const toolbarsInZone = (zone: DockZone) => toolbarOrder.filter((k) => toolbarDocks[k] === zone && isToolbarEnabled(k));
