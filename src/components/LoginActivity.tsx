@@ -58,7 +58,7 @@ function Metric({
 
   return (
     <div className="min-w-[150px] flex-1 rounded-lg border border-gray-200 bg-white px-3.5 py-3 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600">
-      <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+      <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-300">
         <span className="text-polyform-blue">{icon}</span>
         {label}
       </div>
@@ -312,7 +312,7 @@ export default function LoginActivity() {
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div>
-              <h2 id="activity-title" className="text-lg font-bold text-polyform-gray flex items-center gap-2">
+              <h2 id="activity-title" className="text-lg font-bold text-polyform-gray dark:text-white flex items-center gap-2">
                 <ShieldAlert size={18} className="text-polyform-blue" /> Activity
               </h2>
               <p className="mt-0.5 text-xs text-gray-400">Sign-in monitoring and marketing website analytics.</p>
@@ -328,7 +328,7 @@ export default function LoginActivity() {
           </div>
 
           {!isAdmin ? (
-            <div className="p-8 text-center text-gray-500">You don&rsquo;t have access to this panel.</div>
+            <div className="p-8 text-center text-gray-500 dark:text-gray-300">You don&rsquo;t have access to this panel.</div>
           ) : (
             <>
               <div className="flex gap-1 px-5 pt-3 border-b border-gray-100">
@@ -337,7 +337,7 @@ export default function LoginActivity() {
                   onClick={() => setTab('login')}
                   className={cn(
                     'inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold border-b-2 transition-colors',
-                    tab === 'login' ? 'border-polyform-blue text-polyform-dark-blue' : 'border-transparent text-gray-500 hover:text-gray-800',
+                    tab === 'login' ? 'border-polyform-blue text-polyform-dark-blue dark:text-sky-200' : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:text-gray-100',
                   )}
                 >
                   <LogIn size={15} /> Login Activity
@@ -347,7 +347,7 @@ export default function LoginActivity() {
                   onClick={() => setTab('website')}
                   className={cn(
                     'inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold border-b-2 transition-colors',
-                    tab === 'website' ? 'border-polyform-blue text-polyform-dark-blue' : 'border-transparent text-gray-500 hover:text-gray-800',
+                    tab === 'website' ? 'border-polyform-blue text-polyform-dark-blue dark:text-sky-200' : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:text-gray-100',
                   )}
                 >
                   <BarChart3 size={15} /> Website Activity
@@ -357,7 +357,7 @@ export default function LoginActivity() {
               {tab === 'login' ? (
                 <>
                   <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-gray-100 bg-gray-light">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
                       <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">Total <span className="text-polyform-dark-blue dark:text-sky-200">{loginSummary.total}</span></span>
                       <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center gap-1"><CheckCircle2 size={13} className="text-polyform-green" /> Success <span className="text-polyform-green">{loginSummary.success}</span></span>
                       <span className="px-2.5 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex items-center gap-1"><XCircle size={13} className="text-polyform-red" /> Failed <span className="text-polyform-red">{loginSummary.failure}</span></span>
@@ -401,7 +401,7 @@ export default function LoginActivity() {
                     ) : loginError ? (
                       <div className="p-8 text-center text-polyform-red text-sm">{loginError}</div>
                     ) : filtered.length === 0 ? (
-                      <div className="p-8 text-center text-gray-500 text-sm">No login activity matches these filters.</div>
+                      <div className="p-8 text-center text-gray-500 dark:text-gray-300 text-sm">No login activity matches these filters.</div>
                     ) : (
                       <table className="w-full text-sm">
                         <thead className="sticky top-0 bg-white border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600">
@@ -416,8 +416,8 @@ export default function LoginActivity() {
                         <tbody>
                           {filtered.map(r => (
                             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-                              <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.timestamp.getTime() > 0 ? r.timestamp.toLocaleString() : '—'}</td>
-                              <td className="px-4 py-2.5 text-gray-800 font-medium truncate max-w-[220px]" title={r.email}>{r.email || '—'}</td>
+                              <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300 whitespace-nowrap">{r.timestamp.getTime() > 0 ? r.timestamp.toLocaleString() : '—'}</td>
+                              <td className="px-4 py-2.5 text-gray-800 dark:text-gray-100 font-medium truncate max-w-[220px]" title={r.email}>{r.email || '—'}</td>
                               <td className="px-4 py-2.5">
                                 <span className={cn(
                                   'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold',
@@ -427,8 +427,8 @@ export default function LoginActivity() {
                                   {r.success ? 'Success' : 'Failed'}
                                 </span>
                               </td>
-                              <td className="px-4 py-2.5 text-gray-600 capitalize">{r.method === 'google' ? 'Google' : 'Email/password'}</td>
-                              <td className="px-4 py-2.5 text-gray-500 font-mono text-xs truncate max-w-[240px]" title={r.reason || ''}>{r.reason || '—'}</td>
+                              <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300 capitalize">{r.method === 'google' ? 'Google' : 'Email/password'}</td>
+                              <td className="px-4 py-2.5 text-gray-500 dark:text-gray-300 font-mono text-xs truncate max-w-[240px]" title={r.reason || ''}>{r.reason || '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -498,7 +498,7 @@ export default function LoginActivity() {
                     ) : websiteError ? (
                       <div className="p-8 text-center text-polyform-red text-sm">{websiteError}</div>
                     ) : websiteFiltered.length === 0 ? (
-                      <div className="p-8 text-center text-gray-500 text-sm">No website activity matches these filters.</div>
+                      <div className="p-8 text-center text-gray-500 dark:text-gray-300 text-sm">No website activity matches these filters.</div>
                     ) : (
                       <table className="w-full text-sm">
                         <thead className="sticky top-0 bg-white border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600">
@@ -514,11 +514,11 @@ export default function LoginActivity() {
                         <tbody>
                           {websiteFiltered.map(r => (
                             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-                              <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{r.timestamp.getTime() > 0 ? r.timestamp.toLocaleString() : '—'}</td>
+                              <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300 whitespace-nowrap">{r.timestamp.getTime() > 0 ? r.timestamp.toLocaleString() : '—'}</td>
                               <td className="px-4 py-2.5 font-semibold text-polyform-dark-blue dark:text-sky-200">{PAGE_LABELS[r.page] || r.page}</td>
-                              <td className="px-4 py-2.5 text-gray-600 font-mono text-xs">{r.path}</td>
-                              <td className="px-4 py-2.5 text-gray-600 capitalize">{r.device}</td>
-                              <td className="px-4 py-2.5 text-gray-500 truncate max-w-[220px]" title={r.referrer || 'Direct'}>{r.referrer || 'Direct'}</td>
+                              <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300 font-mono text-xs">{r.path}</td>
+                              <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300 capitalize">{r.device}</td>
+                              <td className="px-4 py-2.5 text-gray-500 dark:text-gray-300 truncate max-w-[220px]" title={r.referrer || 'Direct'}>{r.referrer || 'Direct'}</td>
                               <td className="px-4 py-2.5 text-gray-400 font-mono text-[10px] truncate max-w-[150px]" title={r.visitorId}>{r.visitorId}</td>
                             </tr>
                           ))}

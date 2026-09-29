@@ -1348,7 +1348,7 @@ export default function TopBar() {
                     </div>
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                  <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-2">
                     {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'component'].map(tool => (
                       <VisibilityToggle 
                         key={tool}
@@ -1359,7 +1359,7 @@ export default function TopBar() {
                     ))}
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Camera Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                  <CollapsibleSection title="Camera Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-2">
                     {[
                       { tool: 'orbit', label: 'Orbit (O)' },
                       { tool: 'pan', label: 'Pan (H)' },
@@ -1379,7 +1379,7 @@ export default function TopBar() {
                     ))}
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Architecture Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                  <CollapsibleSection title="Architecture Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-2">
                     {[
                       { tool: 'wall', label: 'Wall Tool' },
                       { tool: 'door', label: 'Door Assembly' },
@@ -1417,7 +1417,7 @@ export default function TopBar() {
                     ))}
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Landscapes Toolbar Icons" className="bg-blue-50/50 rounded-lg px-2">
+                  <CollapsibleSection title="Landscapes Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-2">
                     {[
                       { tool: 'landscape_plot', label: 'Plot Terrain' },
                       { tool: 'landscape_form', label: 'Form from Isolines/Mesh' },
