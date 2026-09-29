@@ -272,3 +272,53 @@ describe('locks', () => {
     expect(held.point.x).toBeCloseTo(5, 9);
   });
 });
+
+describe('snaps never land off screen', () => {
+  const size2 = { width: 800, height: 600 };
+  const onScreen = (cam: THREE.PerspectiveCamera, p: THREE.Vector3) => {
+    const v = p.clone().project(cam);
+    return v.z > -1 && v.z < 1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1;
+  };
+  const input = (cam: THREE.PerspectiveCamera, h: KernelArcHost, ndc: THREE.Vector2, over: Partial<SnapInput> = {}): SnapInput => {
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(ndc, cam);
+    return {
+      graph: h.graph, camera: cam, size: size2,
+      pointer: { x: ((ndc.x + 1) / 2) * size2.width, y: ((-ndc.y + 1) / 2) * size2.height },
+      ray: rc.ray, cursor: rc.ray.at(10, new THREE.Vector3()), plane: null, ...over,
+    };
+  };
+
+  it('an on-edge snap on an edge standing off the drawing plane does not pull the point off screen', () => {
+    // A wall-top edge at eye level; drawing on the ground 3 m below it. Put on the ground, the
+    // point under the pointer would be hundreds of pixels below the bottom of the canvas.
+    const cam = new THREE.PerspectiveCamera(50, size2.width / size2.height, 0.1, 1000);
+    cam.position.set(2, 3, 10);
+    cam.lookAt(0, 3, 0);
+    cam.updateMatrixWorld(true);
+    const h = host();
+    draw(h, [0, 3, -20], [0, 3, 7]);
+    const under = V(0, 3, 3).project(cam);
+    const ground = new THREE.Plane(V(0, 1, 0), 0);
+    const r = computeSnap(input(cam, h, new THREE.Vector2(under.x, under.y), { plane: ground }));
+    expect(onScreen(cam, r.point)).toBe(true);
+    expect(r.kind).not.toBe('edge');
+  });
+
+  it('drops any snap that would land off the canvas, keeping the pointer position', () => {
+    const cam = new THREE.PerspectiveCamera(50, size2.width / size2.height, 0.1, 1000);
+    cam.position.set(2, 3, 10);
+    cam.lookAt(0, 3, 0);
+    cam.updateMatrixWorld(true);
+    const h = host();
+    // A corner right under the pointer, 3 m above the ground being drawn on: put on the ground
+    // it is far below the bottom of the canvas.
+    const corner = V(0, 3, 5);
+    const under = corner.clone().project(cam);
+    const ground = new THREE.Plane(V(0, 1, 0), 0);
+    const inp = input(cam, h, new THREE.Vector2(under.x, under.y), { plane: ground, extraPoints: [{ point: corner, kind: 'endpoint' }] });
+    const r = computeSnap(inp);
+    expect(r.kind).toBe('none');
+    expect(r.point.toArray()).toEqual(inp.cursor.toArray());
+  });
+});

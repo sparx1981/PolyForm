@@ -94,6 +94,8 @@ const LINE_REACH = 500;
 /** Edges considered for crossings: the nearest few by screen distance. */
 const NEAR_EDGE_LIMIT = 40;
 const NEAR_EDGE_PX = 40;
+/** An on-edge snap put on the drawing plane may land this far (px) from the pointer, no more. */
+const OFF_PLANE_EDGE_PX = 24;
 
 // ---------------------------------------------------------------------------
 // Memory: the corners and edge you rested on
@@ -195,6 +197,10 @@ interface Screen {
   pointDist(v: V3): number;
   /** Pixels from the pointer to a segment, or to the whole line through it. */
   segmentDist(a: V3, b: V3, infinite?: boolean): number;
+  /** The point on a segment that appears under the pointer (null if it can't be told). */
+  segmentPointUnderPointer(a: V3, b: V3): V3 | null;
+  /** Whether a point is in front of the camera and inside the canvas. */
+  onScreen(v: V3): boolean;
 }
 
 function makeScreen(inp: SnapInput): Screen {
@@ -239,6 +245,27 @@ function makeScreen(inp: SnapInput): Screen {
       if (!infinite) t = t < 0 ? 0 : t > 1 ? 1 : t;
       return Math.hypot(sax + dx * t - px, say + dy * t - py);
     },
+    segmentPointUnderPointer: (a, b) => {
+      const ax = cx(a), ay = cy(a), aw = cw(a);
+      const bx = cx(b), by = cy(b), bw = cw(b);
+      if (persp && (aw < near || bw < near)) return null;
+      const sax = ((ax / aw + 1) / 2) * W, say = ((1 - ay / aw) / 2) * H;
+      const sbx = ((bx / bw + 1) / 2) * W, sby = ((1 - by / bw) / 2) * H;
+      const dx = sbx - sax, dy = sby - say;
+      const len2 = dx * dx + dy * dy;
+      if (len2 < 1e-9) return null;
+      const ts = Math.min(1, Math.max(0, ((px - sax) * dx + (py - say) * dy) / len2));
+      // Screen-space fraction back to a fraction of the 3-D segment (perspective-correct).
+      const denom = ts * aw + (1 - ts) * bw;
+      if (!persp || Math.abs(denom) < 1e-12) return a.clone().lerp(b, ts);
+      return a.clone().lerp(b, (ts * aw) / denom);
+    },
+    onScreen: v => {
+      const w = cw(v);
+      if (persp ? w < near : false) return false;
+      const x = cx(v) / w, y = cy(v) / w;
+      return Number.isFinite(x) && Number.isFinite(y) && x >= -1 && x <= 1 && y >= -1 && y <= 1;
+    },
   };
 }
 
@@ -253,7 +280,8 @@ function nearestOnLineToRay(origin: V3, dir: V3, ray: THREE.Ray): V3 {
   const d = dir.dot(w0), e = ray.direction.dot(w0);
   const denom = 1 - b * b;
   if (denom < 1e-9) return origin.clone();
-  const s = (b * e - d) / denom;
+  // Looking almost along the line, the nearest point is anywhere far along it: keep it near.
+  const s = Math.max(-LINE_REACH, Math.min(LINE_REACH, (b * e - d) / denom));
   return origin.clone().addScaledVector(dir, s);
 }
 
@@ -350,7 +378,25 @@ const labelOf = (kind: SnapKind, custom?: string): string =>
     intersection: 'Intersection', edge: 'On edge', guide: 'On guide',
   } as Record<string, string>)[kind] ?? kind;
 
+/**
+ * A snap is where the pointer means; one that lands off the canvas (or behind the camera, or
+ * isn't a number) never is, so it is dropped in favour of the plain pointer position. A held
+ * lock is exempt: it keeps its line whatever the pointer does.
+ */
 export function computeSnap(inp: SnapInput): SnapResult {
+  const result = computeSnapUnguarded(inp);
+  if (result.kind === 'none' || result.kind === 'lock') return result;
+  const p = result.point;
+  const finite = Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
+  if (finite) {
+    const screen = makeScreen(inp);
+    const pointerOnCanvas = inp.pointer.x >= 0 && inp.pointer.x <= inp.size.width && inp.pointer.y >= 0 && inp.pointer.y <= inp.size.height;
+    if (!pointerOnCanvas || screen.onScreen(p)) return result;
+  }
+  return { point: inp.cursor.clone(), marker: null, kind: 'none', label: '', guides: [], line: null, hoverEdge: result.hoverEdge };
+}
+
+function computeSnapUnguarded(inp: SnapInput): SnapResult {
   const screen = makeScreen(inp);
   const plane = inp.plane ?? null;
   const from = inp.from ?? null;
@@ -400,8 +446,13 @@ export function computeSnap(inp: SnapInput): SnapResult {
 
   // Any point ON an edge or guide - the weakest snap, and what splits an edge.
   for (const e of near) {
-    const target = new THREE.Vector3();
-    inp.ray.distanceSqToSegment(e.a, e.b, undefined, target);
+    // The point that appears under the pointer. (The nearest point to the ray in 3-D can be
+    // anywhere along an edge that points towards the camera, and put the snap far off.)
+    let target = screen.segmentPointUnderPointer(e.a, e.b);
+    if (!target) { target = new THREE.Vector3(); inp.ray.distanceSqToSegment(e.a, e.b, undefined, target); }
+    // Put on the drawing plane, it must still be about where the pointer is: an edge standing
+    // off the plane would otherwise pull the point somewhere else on screen.
+    if (plane && screen.pointDist(onPlane(target)) > OFF_PLANE_EDGE_PX) continue;
     offer(target, e.guide ? 'guide' : 'edge', e.guide ? 'On guide' : 'On edge', e.dist);
   }
 

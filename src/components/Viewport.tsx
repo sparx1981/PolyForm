@@ -150,6 +150,7 @@ import {
   makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource, type V3,
 } from '../tools/tapeGuides';
 import { SectionCutter } from './SectionCutter';
+import { previewIsDegenerate, ringIsDegenerate } from '../lib/previewGuard';
 import { DIRECTIONAL_SHADOW, POINT_SHADOW, SPOT_SHADOW } from '../lib/graphics/shadowQuality';
 import { NIGHT_AMBIENT_COLOR, NIGHT_BACKGROUND, daylightFactor, scaleForDaylight } from '../lib/graphics/daylight';
 import { SectionPlaneMesh } from './SectionPlaneMesh';
@@ -10028,6 +10029,10 @@ function Scene() {
 
   /** A whole shape (Rectangle / Circle / Polygon / Triangle) as one isolated ring, left adjustable. */
   const commitKernelRing = (tool: string, label: string, ring: THREE.Vector3[], remakeRing: (typed: string) => THREE.Vector3[] | string) => {
+    if (ringIsDegenerate(ring)) {
+      setMeasurements(`${label} not drawn: a side is shorter than 1 mm.`);
+      return;
+    }
     recordAction(actionLabel(`${label} tool`), { sdk: `sdk.drawing.shape(${JSON.stringify(ring.map(p => [p.x, p.y, p.z]))});` });
     if (!kernelHost.commitIsolatedShape(ring.map(p => ({ x: p.x, y: p.y, z: p.z })))) return;
     bumpKernel();
@@ -12410,7 +12415,7 @@ function Scene() {
         />
       )}
 
-      {previewShape && (
+      {previewShape && !previewIsDegenerate(previewShape) && (
         <mesh
           position={previewShape.position}
           quaternion={new THREE.Quaternion(...previewShape.quaternion)}

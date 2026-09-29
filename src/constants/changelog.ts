@@ -5,6 +5,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'September 30, 2026',
+    items: [
+      'Drawing a rectangle, circle or triangle no longer flickers across the view when it is dragged down to nothing (opposite edges meeting). A shape with a side under 1 mm is not drawn, and says so.',
+      'Line and Arc: snapping onto an edge no longer sometimes throws the point off screen. An "on edge" snap now uses the spot under the pointer, an edge standing off the drawing plane no longer pulls the point elsewhere, and any snap that would land off the canvas is ignored.',
+    ],
+  },
+  {
     date: 'September 29, 2026',
     items: [
       'Floor slabs now rest against the internal face of the walls instead of stopping a few centimetres short. Slabs already in your models that were made the old way are moved out to the wall when the model opens.',
