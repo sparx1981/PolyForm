@@ -43,6 +43,8 @@ export function SectionPlaneMesh({
   }, [args.point, args.normal, args.size]);
 
   const active = args.active && !preview;
+  // Hidden planes still cut (SectionCutter); only the drawing goes. A selected one stays drawn, so it can be found.
+  if (args.showPlane === false && !preview && !selected) return null;
   return (
     <group>
       <mesh

@@ -16,6 +16,13 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       'Auto Street Light (under Street life in WorldView): places Modern LED cutoff lights on main roads (staggered), cobra heads on streets, double-arm cobra heads on wide roads, at realistic spacing and clear of junctions and buildings; some existing houses get a gate light (post-top acorn or Victorian) and solar or bollard path lights. They are ordinary lamps: edit or delete them, or untick to remove them all.',
       'Lighting: Modern LED Cutoff lights are now a 2 m wide area light at intensity 100. A Track Light has all three lights on its model (a Double Cobra has one at each arm), where before only one worked. Auto light can now place track lights, pendants, chandeliers, office panels and high-bays as well as downlights: tick the fixtures you want and they are shared out between the rooms.',
       'Tidied up: "Photorealistic surroundings" (was "Google photorealistic surroundings") and the extra explanatory lines under the Style the buildings, Photorealistic surroundings and Auto light settings are gone.',
+      'Floor slabs now rest against the internal face of the walls instead of stopping a few centimetres short. Slabs already in your models that were made the old way are moved out to the wall when the model opens.',
+      'Shadows from lights you add (spot, point, projector and directional) are smoother: the stripes and noise on floors are gone, and the sun\'s shadow edge is less grainy.',
+      'A sun intensity of 0 now feels like night: the sky, ambient and environment light fade down (with a cool moonlight tint), so lights you place stand out. The default sun is unchanged.',
+      'The Section Plane tool has a modifier panel: show or hide the orange plane (it keeps cutting), and choose the colour and opacity of the see-through lines on the cut-away side, down to fully transparent.',
+      'Add Material: the tabs (Colour, Upload Texture, My Textures, PBR Materials, AI Generate) no longer get pushed out of view on the PBR Materials tab.',
+      'Settings > Toolbars > Edit Toolbar Locations: toolbars can be dragged again, and an empty screen edge shows a labelled drop target while you drag.',
+      'Walk Mode: the floor framing under a floor now leaves the opening where a staircase actually is, including when the stair is turned, so you are no longer stopped by joists across the stairwell.',
     ],
   },
   {

@@ -152,8 +152,10 @@ import {
   makeGuideArgs, offsetAtDistance, pickGuideSource, type GuideArgs, type GuideSource, type V3,
 } from '../tools/tapeGuides';
 import { SectionCutter } from './SectionCutter';
+import { DIRECTIONAL_SHADOW, POINT_SHADOW, SPOT_SHADOW } from '../lib/graphics/shadowQuality';
+import { NIGHT_AMBIENT_COLOR, NIGHT_BACKGROUND, daylightFactor, scaleForDaylight } from '../lib/graphics/daylight';
 import { SectionPlaneMesh } from './SectionPlaneMesh';
-import { activeSection, dragDistance, isSectionShape, moveSection, sectionOnFace, type SectionArgs } from '../tools/sectionPlanes';
+import { activeSection, dragDistance, isSectionShape, moveSection, sectionLook, sectionOnFace, type SectionArgs } from '../tools/sectionPlanes';
 import { usePresentation } from '../lib/presentation/store';
 import { explodeGroup, isGroupShape, makeGroup, makeUnique } from '../tools/kernelGroups';
 import {
@@ -10842,6 +10844,11 @@ function Scene() {
   // ---------------------------------------------------------------------------
   const { active: presentationActive } = usePresentation();
   const activeSectionArgs = useMemo(() => activeSection(shapes)?.args ?? null, [shapes]);
+  // Cool moonlight tint on the ambient light as the sun goes down (white by day).
+  const nightAmbientColor = useMemo(
+    () => new THREE.Color('#ffffff').lerp(new THREE.Color(NIGHT_AMBIENT_COLOR), 1 - daylightFactor(sunIntensity)),
+    [sunIntensity],
+  );
   const [sectionHover, setSectionHover] = useState<SectionArgs | null>(null);
   const sectionDragRef = useRef<{ id: string; start: SectionArgs; from: THREE.Vector3; distance: number } | null>(null);
 
@@ -10925,7 +10932,8 @@ function Scene() {
     if (!isClick) return;
     const probe = sectionProbe(ev);
     if (!probe.face || !probe.point) return;
-    const args = sectionOnFace(probe.point, probe.face, camera.position, sectionSize());
+    // A new plane looks like the ones already placed (plane shown or hidden, x-ray line style).
+    const args: SectionArgs = { ...sectionOnFace(probe.point, probe.face, camera.position, sectionSize()), ...sectionLook(shapes) };
     const id = Math.random().toString(36).substr(2, 9);
     const count = shapes.filter(isSectionShape).length;
     setShapes(prev => [
@@ -11138,7 +11146,10 @@ function Scene() {
       
       <Fog />
       
-      <ambientLight intensity={(skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity)} />
+      <ambientLight
+        intensity={(skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity) * scaleForDaylight(daylightFactor(sunIntensity))}
+        color={nightAmbientColor}
+      />
       <directionalLight 
         ref={directionalLightRef}
         position={lightPosition} 
@@ -13041,7 +13052,7 @@ function Scene() {
         );
       })()}
       {/* Section tool: where a click would place a plane */}
-      {activeTool === 'section' && sectionHover && <SectionPlaneMesh args={sectionHover} preview />}
+      {activeTool === 'section' && sectionHover && <SectionPlaneMesh args={{ ...sectionHover, showPlane: true }} preview />}
       {/* Follow Me: the path under the pointer, and the sweep it would make */}
       {activeTool === 'followme' && followMeHover && (
         <group>
@@ -13553,9 +13564,12 @@ function EnvironmentLighting() {
     skyboxRotation,
     theme,
     environment,
+    sunIntensity,
   } = useApp();
   const { gl, scene } = useThree();
   const { assets: environmentAssets } = useAssetCatalog('hdri');
+  // Sun at 0 means night: the sky, environment and hemisphere light all fade down with it.
+  const daylight = scaleForDaylight(daylightFactor(sunIntensity));
   const managerRef = useRef<EnvironmentManager | null>(null);
 
   useEffect(() => {
@@ -13596,6 +13610,15 @@ function EnvironmentLighting() {
     scene.environmentIntensity = environmentIntensity;
   }, [skyboxRotation, environmentIntensity, scene, skybox]);
 
+  // Set every frame rather than once: the environment loads (and re-applies its own intensities)
+  // whenever it likes, and the sun can change at any time.
+  useFrame(() => {
+    const sceneWithIntensity = scene as THREE.Scene & { environmentIntensity: number; backgroundIntensity: number };
+    const usingAsset = !!environment.ref;
+    sceneWithIntensity.environmentIntensity = (usingAsset ? environment.intensity : environmentIntensity) * daylight;
+    sceneWithIntensity.backgroundIntensity = (usingAsset ? environment.backgroundIntensity : 1) * daylight;
+  });
+
   // Hardware fallback detection
   const isHDRSupported = gl.capabilities.isWebGL2;
   
@@ -13606,13 +13629,13 @@ function EnvironmentLighting() {
     return null;
   }, [skybox]);
 
-  if (environment.ref) return <hemisphereLight intensity={0.25} groundColor="#444444" />;
+  if (environment.ref) return <hemisphereLight intensity={0.25 * daylight} groundColor="#444444" />;
 
   if (skybox === 'none' || !isHDRSupported) {
     return (
       <>
-        {skybox === 'none' ? <color attach="background" args={[theme === 'light' ? '#e5e5e5' : '#2B2B2B']} /> : null}
-        <hemisphereLight intensity={0.5} groundColor="#444444" />
+        {skybox === 'none' ? <color attach="background" args={[new THREE.Color(theme === 'light' ? '#e5e5e5' : '#2B2B2B').lerp(new THREE.Color(NIGHT_BACKGROUND), 1 - daylightFactor(sunIntensity)).getStyle()]} /> : null}
+        <hemisphereLight intensity={0.5 * daylight} groundColor="#444444" />
       </>
     );
   }
@@ -13857,6 +13880,7 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
       color={map ? "#ffffff" : baseColor} 
       intensity={light.intensity * (light.scale || 1)} 
       castShadow={shadowsEnabled}
+      {...SPOT_SHADOW}
       target-position={light.target || [0, 0, 0]}
       distance={(light.distance || 50) * (light.scale || 1)}
       angle={light.angle || Math.PI / 3}
@@ -13929,6 +13953,7 @@ function CustomLightComponent({
           intensity={light.intensity * (light.scale || 1)} 
           distance={(light.distance || 50) * (light.scale || 1)}
           castShadow={shadowsEnabled}
+          {...POINT_SHADOW}
         />
       )}
       {light.type === 'directional' && (
@@ -13937,6 +13962,7 @@ function CustomLightComponent({
           color={baseColor} 
           intensity={light.intensity * (light.scale || 1)} 
           castShadow={shadowsEnabled}
+          {...DIRECTIONAL_SHADOW}
           target={lightTarget}
         />
       )}
@@ -13946,6 +13972,7 @@ function CustomLightComponent({
           color={baseColor} 
           intensity={light.intensity * (light.scale || 1)} 
           castShadow={shadowsEnabled}
+          {...SPOT_SHADOW}
           target={lightTarget}
           distance={(light.distance || 50) * (light.scale || 1)}
           angle={light.angle || Math.PI / 3}

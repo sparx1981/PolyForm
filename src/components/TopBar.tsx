@@ -36,7 +36,9 @@ import {
   Cloud,
   ShieldAlert
 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { lazy, Suspense, useState, useRef, useEffect } from 'react';
+import { isCmsAdmin } from './cms/access';
+const CmsAdmin = lazy(() => import('./cms/CmsAdmin'));
 import { PresentButton } from './presentation/PresentationPanel';
 import { auth, db, storage, handleFirestoreError, OperationType, cleanFirestoreDataForSave, offloadModelForSave, assertModelFits, ModelTooLargeError, firebaseGeometryIO } from '../firebase';
 import { signOut } from 'firebase/auth';
@@ -187,6 +189,7 @@ export default function TopBar() {
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isCmsOpen, setIsCmsOpen] = useState(false);
   const [isSavedModelsOpen, setIsSavedModelsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'general' | 'camera' | 'toolbars' | 'api'>('general');
@@ -1010,6 +1013,7 @@ export default function TopBar() {
                   <div className="text-xs text-gray-500 truncate">{user?.email}</div>
                 </div>
                 <div className="py-1">
+                  {isCmsAdmin(user) && <MenuButton icon={<FileText size={16} />} label="Content management" onClick={() => { setIsProfileOpen(false); setIsCmsOpen(true); }} />}
                   <MenuButton
                     icon={<Home size={16} className="text-polyform-blue" />}
                     label="PolyForm home"
@@ -1038,6 +1042,7 @@ export default function TopBar() {
         isOpen={isSavedModelsOpen} 
         onClose={() => setIsSavedModelsOpen(false)} 
       />
+      {isCmsOpen && isCmsAdmin(user) && <Suspense fallback={<div role="status" className="fixed inset-0 z-[1000] bg-white p-12 text-slate-700">Loading content studio…</div>}><CmsAdmin onClose={() => setIsCmsOpen(false)} /></Suspense>}
 
       {/* Save As Modal */}
       <Modal isOpen={isSaveAsOpen} onClose={() => setIsSaveAsOpen(false)} title="Save Model">

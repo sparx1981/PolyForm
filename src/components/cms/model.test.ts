@@ -1,0 +1,13 @@
+import { describe, expect, it } from 'vitest';
+import { applyProposal, copyKey, defaultContent, newSection, safeUrl, validateContent, validateProposal } from './model';
+import { isCmsAdmin } from './access';
+describe('CMS content and AI conflict protection', () => {
+  it('accepts original content, new pages and structured sections', () => { const c=defaultContent();c.pages.push({id:'about',path:'/about',title:'About',description:'About us',hidden:false,sections:[newSection('hero')]});expect(()=>validateContent(c)).not.toThrow(); });
+  it('only permits the verified existing administrator', () => { expect(isCmsAdmin(null)).toBe(false);expect(isCmsAdmin({email:'craigtrickett@gmail.com',emailVerified:false})).toBe(false);expect(isCmsAdmin({email:'other@example.com',emailVerified:true})).toBe(false);expect(isCmsAdmin({email:'CRAIGTRICKETT@gmail.com',emailVerified:true})).toBe(true); });
+  it.each(['javascript:alert(1)','//evil.test/x','data:image/svg+xml,x','https://good.test\\@evil.test','https:\n//evil.test'])('rejects unsafe URL %s', url=>expect(safeUrl(url,true)).toBe(false));
+  it('prevents routing into private app pages or duplicate addresses',()=>{const c=defaultContent();c.pages.push({...c.pages[1],id:'other',path:'/app'});expect(()=>validateContent(c)).toThrow();c.pages.at(-1)!.path='/features';expect(()=>validateContent(c)).toThrow();});
+  it('rejects invalid images, deleted baseline pages and duplicate native sections',()=>{const c=defaultContent();c.media.hero={url:'https://example.com/a.png',alt:''};expect(()=>validateContent(c)).toThrow(/alternative/);c.media={};c.pages.pop();expect(()=>validateContent(c)).toThrow(/Existing pages/);});
+  it('applies only selected AI changes without touching the source object',()=>{const c=defaultContent(),key=copyKey('Then step inside.');const next=applyProposal(c,{schemaVersion:1,title:'Hero',baseRevision:0,changes:[{path:`copy/${key}`,before:'Then step inside.',after:'Explore the model.'}]},[0]);expect(next.copy[key]).toBe('Explore the model.');expect(c.copy).toEqual({});});
+  it('preserves an administrator edit when an AI proposal is stale',()=>{const c=defaultContent(),key=copyKey('Then step inside.');c.copy[key]='My edit';expect(()=>applyProposal(c,{schemaVersion:1,title:'Stale',baseRevision:0,changes:[{path:`copy/${key}`,before:'Then step inside.',after:'AI edit'}]},[0])).toThrow(/Conflict/);expect(c.copy[key]).toBe('My edit');});
+  it('rejects unknown fields, prototype paths, malformed proposals and unsafe copy links',()=>{expect(()=>validateProposal({schemaVersion:1,title:'bad',baseRevision:0,changes:[{path:'media/__proto__',before:null,after:{}}]})).toThrow();const c=defaultContent();c.copy.notAField='test';expect(()=>validateContent(c)).toThrow(/Unknown/);});
+});

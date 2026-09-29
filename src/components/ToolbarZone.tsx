@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { GripHorizontal } from 'lucide-react';
 import type { DockZone, ToolbarKey } from '../types';
@@ -32,6 +32,7 @@ interface Props {
 
 export function ToolbarZone({ zone, layout, enabled, editMode, theme, draggedKey, setDraggedKey, onLayout, render }: Props) {
   const [hint, setHint] = useState<Hint>(null);
+  const startTimer = useRef<number | undefined>(undefined);
   const horizontal = zone !== 'left';
   const lanes = lanesOf(layout, zone, enabled);
   const dragging = editMode && draggedKey !== null;
@@ -93,8 +94,15 @@ export function ToolbarZone({ zone, layout, enabled, editMode, theme, draggedKey
         {editMode && (
           <div
             draggable
-            onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedKey(key); }}
-            onDragEnd={() => { setDraggedKey(null); setHint(null); }}
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              // Some browsers won't start a drag that carries no data.
+              e.dataTransfer.setData('text/plain', key);
+              // The drop strips appear (and this toolbar shifts) as soon as a drag is under way. Doing
+              // that inside dragstart makes Chrome cancel the drag at once, so wait until it has begun.
+              startTimer.current = window.setTimeout(() => setDraggedKey(key), 0);
+            }}
+            onDragEnd={() => { window.clearTimeout(startTimer.current); setDraggedKey(null); setHint(null); }}
             title="Drag to move this toolbar"
             className={cn(
               'flex items-center justify-center cursor-grab active:cursor-grabbing transition-colors shrink-0',
@@ -112,11 +120,15 @@ export function ToolbarZone({ zone, layout, enabled, editMode, theme, draggedKey
 
   if (lanes.length === 0 && !dragging) return null;
 
+  // An empty edge is a real target while dragging, big enough to aim at.
+  const emptyTarget = dragging && lanes.length === 0;
+  const edgeName = zone === 'left' ? 'left' : zone === 'top' ? 'top' : 'bottom';
+
   return (
     <div
       className={cn(
         horizontal ? 'flex flex-col w-full shrink-0' : 'flex flex-row h-full shrink-0',
-        dragging && lanes.length === 0 && (horizontal ? 'min-h-[14px]' : 'min-w-[14px]'),
+        emptyTarget && (horizontal ? 'min-h-[36px]' : 'min-w-[36px]'),
       )}
       onDragOver={dragging ? (e) => { e.preventDefault(); } : undefined}
       onDrop={dragging ? (e) => { e.preventDefault(); drop({ kind: 'lane', zone, index: lanes.length }); } : undefined}
@@ -129,7 +141,22 @@ export function ToolbarZone({ zone, layout, enabled, editMode, theme, draggedKey
           </div>
         </React.Fragment>
       ))}
-      {strip(lanes.length)}
+      {emptyTarget ? (
+        <div
+          title={`Drop here to dock the toolbar on the ${edgeName} edge`}
+          className={cn(
+            'flex-1 flex items-center justify-center border-2 border-dashed text-[10px] font-semibold uppercase tracking-wider select-none',
+            hint?.kind === 'lane' && hint.index === 0
+              ? 'border-polyform-blue bg-polyform-blue/15 text-polyform-blue'
+              : theme === 'dark' ? 'border-gray-600 text-gray-400' : 'border-gray-300 text-gray-500',
+          )}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setHint({ kind: 'lane', index: 0 }); }}
+          onDragLeave={() => setHint(h => (h?.kind === 'lane' && h.index === 0 ? null : h))}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); drop({ kind: 'lane', zone, index: 0 }); }}
+        >
+          <span className={horizontal ? undefined : '[writing-mode:vertical-rl]'}>Dock {edgeName}</span>
+        </div>
+      ) : strip(lanes.length)}
     </div>
   );
 }

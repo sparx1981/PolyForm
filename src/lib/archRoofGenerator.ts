@@ -69,6 +69,11 @@ export interface RoomFootprint {
   isLShape: boolean;
   bounds: BuildingEnvelope;
   reflexIndex?: number;
+  /**
+   * What the polygon traces: the walls' centre lines, the outline of a floor slab already in the
+   * model, or the walls' outer bounding box (when the walls don't chain into a loop).
+   */
+  outline?: 'centerline' | 'slab' | 'envelope';
 }
 
 /**
@@ -205,6 +210,7 @@ export function extractRoomFootprintPolygon(
   if (!envelope) return null;
 
   let worldPoly: [number, number][] | null = null;
+  let outline: 'centerline' | 'slab' | 'envelope' = 'slab';
 
   // 1. Try finding an existing floor slab that matches this room
   const candidateSlabs = existingShapes.filter(s => 
@@ -233,6 +239,7 @@ export function extractRoomFootprintPolygon(
 
   // 2. If no floor slab found, chain the wall segment centerlines
   if (!worldPoly || worldPoly.length < 3) {
+    outline = 'centerline';
     const segments: { pA: THREE.Vector2; pB: THREE.Vector2 }[] = [];
     for (const w of roomWalls) {
       if (w.hidden) continue;
@@ -309,6 +316,7 @@ export function extractRoomFootprintPolygon(
 
   // Fallback to bounding box 4-corners if polygon extraction produced nothing
   if (!worldPoly || worldPoly.length < 3) {
+    outline = 'envelope';
     worldPoly = [
       [envelope.minX, envelope.minZ],
       [envelope.maxX, envelope.minZ],
@@ -363,6 +371,7 @@ export function extractRoomFootprintPolygon(
     isLShape,
     bounds: envelope,
     reflexIndex: isLShape ? reflexIndex : undefined,
+    outline,
   };
 }
 
@@ -2452,6 +2461,18 @@ export function insetPolygon2D(polygon: [number, number][], insetAmount: number)
   return isCCW ? insetPoly : insetPoly.reverse();
 }
 
+/** How far the slab tucks into a wall's thickness, so its edge is hidden inside the wall rather than showing a seam. */
+const SLAB_WALL_OVERLAP = 0.005;
+
+/**
+ * How far to pull a room outline in so a floor slab's edge lies on the internal face of the walls:
+ * half a wall from their centre lines, a whole wall from their outer box.
+ */
+export function slabInsetToInternalFace(outline: RoomFootprint['outline'], wallThickness: number): number {
+  const toFace = outline === 'envelope' ? wallThickness : wallThickness / 2;
+  return Math.max(0, toFace - SLAB_WALL_OVERLAP);
+}
+
 /**
  * Creates a 3D Ceiling Slab / Floor Slab matching the room footprint polygon.
  * Automatically insets the slab to sit strictly within the internal faces of the walls on subsequent floors.
@@ -2467,7 +2488,9 @@ export function buildCeilingSlabForRoom(
     wallThickness?: number;
   } = {}
 ): Shape | null {
-  const footprint = extractRoomFootprintPolygon(roomWalls, existingShapes);
+  // Traced from the walls themselves, never from a slab already in the model: that slab's outline
+  // has been pulled in from the walls once already, and would be pulled in again.
+  const footprint = extractRoomFootprintPolygon(roomWalls);
   if (!footprint) return null;
 
   const { polygon: rawWorldPoly, centerX, centerZ, topY, bounds } = footprint;
@@ -2482,9 +2505,9 @@ export function buildCeilingSlabForRoom(
     avgThickness = totalT / roomWalls.length;
   }
 
-  // Inset the slab polygon by wall thickness so it does not exceed the internal side of the walls on subsequent floors
+  // The slab rests against the internal face of the walls, with no gap.
   const shouldInset = options.insetForInternalWalls !== false;
-  const insetDist = shouldInset ? Math.max(avgThickness, 0.20) : 0;
+  const insetDist = shouldInset ? slabInsetToInternalFace(footprint.outline, avgThickness) : 0;
   const worldPoly = insetDist > 0 ? insetPolygon2D(rawWorldPoly, insetDist) : rawWorldPoly;
 
   const slabQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);

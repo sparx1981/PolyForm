@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
+import { SUN_SHADOW_RADIUS } from '../../lib/graphics/shadowQuality';
 
 /**
  * Fits the sun's shadow camera to what is being looked at, every frame.
@@ -65,8 +66,8 @@ export function SunShadowRig({ lightRef, sunPosition, enabled, walking }: SunSha
       shadow.map?.dispose();
       shadow.map = null;
     }
-    shadow.radius = 2.5;
-    shadow.blurSamples = 12;
+    // Few samples per pixel are jittered around this radius, so a wide radius shows as grain.
+    shadow.radius = SUN_SHADOW_RADIUS;
   }, [lightRef, enabled, mapSize]);
 
   useFrame(({ camera }) => {

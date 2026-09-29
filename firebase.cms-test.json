@@ -1,0 +1,5 @@
+{
+  "firestore": { "rules": "firestore.rules" },
+  "storage": { "rules": "storage.rules" },
+  "emulators": { "firestore": { "port": 8188, "edition": "enterprise" }, "storage": { "port": 9298 }, "ui": { "enabled": false }, "singleProjectMode": true }
+}

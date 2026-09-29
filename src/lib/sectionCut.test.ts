@@ -65,7 +65,7 @@ describe('SectionCut', () => {
     const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
     const cut = new SectionCut();
 
-    cut.apply(s, plane, layerOf, new Set(['ground', 'overlay']));
+    cut.apply(s, plane, {}, layerOf, new Set(['ground', 'overlay']));
     expect((ground.material as THREE.Material).clippingPlanes).toBeFalsy();
     expect(ground.children.filter(c => c.userData.isSectionCap)).toHaveLength(0);
     expect((overlay.material as THREE.Material).clippingPlanes).toBeFalsy();
@@ -73,14 +73,14 @@ describe('SectionCut', () => {
     expect((drawn.material as THREE.Material).clippingPlanes).toEqual([plane]);
 
     // The overlay is cut too when it is not exempt, but never gets a fill.
-    cut.apply(s, plane, layerOf, new Set(['ground']));
+    cut.apply(s, plane, {}, layerOf, new Set(['ground']));
     expect((overlay.material as THREE.Material).clippingPlanes).toEqual([plane]);
     expect(overlay.children).toHaveLength(0);
 
     // Un-exempting the ground cuts it; exempting it again puts it back.
-    cut.apply(s, plane, layerOf, new Set());
+    cut.apply(s, plane, {}, layerOf, new Set());
     expect((ground.material as THREE.Material).clippingPlanes).toEqual([plane]);
-    cut.apply(s, plane, layerOf, new Set(['ground']));
+    cut.apply(s, plane, {}, layerOf, new Set(['ground']));
     expect((ground.material as THREE.Material).clippingPlanes).toBeFalsy();
     expect(ground.children.filter(c => c.userData.isSectionCap)).toHaveLength(0); // its fill goes too
   });

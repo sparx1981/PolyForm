@@ -332,7 +332,7 @@ export default function RightPanelStack() {
   const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame']);
 
   useEffect(() => {
-    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping'].includes(activeTool)) {
+    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping', 'section'].includes(activeTool)) {
       setOpenPanels(prev => prev.includes('toolModifiers') ? prev : [...prev, 'toolModifiers']);
     }
     if (activeTool === 'timber-frame') {
@@ -4830,14 +4830,15 @@ export default function RightPanelStack() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white text-gray-800 rounded-xl shadow-modus-4 w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
             >
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
                 <h2 className="text-lg font-bold text-gray-800">{editingMaterial ? 'Edit Material' : 'Add Material'}</h2>
                 <button onClick={() => setIsAddMaterialOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
                   <X size={20} className="text-gray-500" />
                 </button>
               </div>
 
-              <div className="flex border-b border-gray-100 overflow-x-auto" role="tablist">
+              {/* shrink-0: with tall tab content (PBR Materials) the tabs were squeezed out of view. */}
+              <div className="flex border-b border-gray-100 overflow-x-auto shrink-0" role="tablist">
                 {([
                   ['color', 'Colour', null],
                   ['texture', 'Upload Texture', null],
@@ -4860,12 +4861,12 @@ export default function RightPanelStack() {
                 ))}
               </div>
 
-              <div className="flex flex-col md:flex-row min-h-0 flex-1">
+              <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-hidden">
                 <div className="md:w-72 shrink-0 p-5 border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50/60 order-first md:order-last">
                   <MaterialPreview3D spec={previewSpec} />
                   <p className="mt-2 text-[10px] text-gray-400 leading-tight">Drag to turn it. Height maps show as relief.</p>
                 </div>
-              <div className="p-6 overflow-y-auto min-h-[420px] flex-1 min-w-0">
+              <div className="p-6 overflow-y-auto min-h-[min(420px,50vh)] flex-1 min-w-0">
                 {activeTab === 'color' ? (
                   <div className="space-y-4">
                     <div className="flex items-center gap-4">

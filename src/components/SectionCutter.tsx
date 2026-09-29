@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { clippingPlaneOf, sectionLayerOfShape, setSectionPickPlane, type SectionArgs } from '../tools/sectionPlanes';
-import { SectionCut } from '../lib/sectionCut';
+import { SectionCut, type SectionXray } from '../lib/sectionCut';
 import type { Shape } from '../types';
 
 /**
@@ -20,6 +20,9 @@ export function SectionCutter({ section, shapes }: { section: SectionArgs | null
   const exempt = useMemo(() => new Set(section?.exempt ?? []), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const cut = useMemo(() => new SectionCut(), []);
   const frame = useRef(0);
+  // The look of the lines on the cut-away side; read on every sweep, so changing it doesn't rebuild the cut.
+  const xray = useRef<SectionXray>({});
+  xray.current = { color: section?.xrayColor, opacity: section?.xrayOpacity };
 
   // Which layer a mesh is in: the shape it belongs to, else drawn geometry ("design").
   const byId = useMemo(() => new Map(shapes.map(s => [s.id, s])), [shapes]);
@@ -41,7 +44,7 @@ export function SectionCutter({ section, shapes }: { section: SectionArgs | null
     setSectionPickPlane(plane);
     if (plane) {
       gl.localClippingEnabled = true;
-      cut.apply(scene, plane, layerOf, exempt);
+      cut.apply(scene, plane, xray.current, layerOf, exempt);
     }
     return () => {
       cut.clear();
@@ -49,10 +52,14 @@ export function SectionCutter({ section, shapes }: { section: SectionArgs | null
     };
   }, [plane, exempt, cut, scene, gl, layerOf]);
 
+  useEffect(() => {
+    if (plane) cut.apply(scene, plane, xray.current, layerOf, exempt);
+  }, [section?.xrayColor, section?.xrayOpacity, plane, cut, scene, layerOf, exempt]);
+
   useFrame(() => {
     if (!plane) return;
     frame.current = (frame.current + 1) % SWEEP_EVERY_FRAMES;
-    if (frame.current === 0) cut.apply(scene, plane, layerOf, exempt);
+    if (frame.current === 0) cut.apply(scene, plane, xray.current, layerOf, exempt);
   });
 
   return null;

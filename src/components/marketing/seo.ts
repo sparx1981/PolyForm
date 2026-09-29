@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { Page } from './router';
+import { useCms } from '../cms/context';
 
 export interface SeoMeta {
   title: string;
@@ -74,9 +75,13 @@ function setJsonLd(id: string, data: object) {
 }
 
 /** Sets this route's <title>, meta description, canonical URL and OG/Twitter tags, plus one shared piece of structured data. */
-export function usePageSeo(page: Page) {
+export function usePageSeo(page: Page, pathname?: string) {
+  const { content } = useCms();
   useEffect(() => {
-    const meta = SEO[page];
+    const cmsPage = content?.pages.find(p => p.path === (pathname ?? SEO[page].path));
+    const known = Object.values(SEO).some(p => p.path === pathname);
+    const fallback = known || !pathname ? SEO[page] : { title: 'Page not found | PolyForm', description: '', path: pathname };
+    const meta = cmsPage && !cmsPage.hidden ? { title: cmsPage.title || fallback.title, description: cmsPage.description || fallback.description, path: cmsPage.path } : fallback;
     const canonical = `${SITE_URL}${meta.path}`;
     document.title = meta.title;
     setMeta('description', meta.description);
@@ -88,7 +93,7 @@ export function usePageSeo(page: Page) {
     setMeta('twitter:card', 'summary');
     setMeta('twitter:title', meta.title);
     setMeta('twitter:description', meta.description);
-    setMeta('robots', page === 'designs' ? 'noindex' : 'index, follow');
+    setMeta('robots', page === 'designs' || cmsPage?.hidden || (!known && !cmsPage) ? 'noindex' : 'index, follow');
 
     setJsonLd('ld-software-application', {
       '@context': 'https://schema.org',
@@ -100,5 +105,5 @@ export function usePageSeo(page: Page) {
       description: SEO.home.description,
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD', description: 'Free to try' },
     });
-  }, [page]);
+  }, [page, pathname, content]);
 }

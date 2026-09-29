@@ -31,6 +31,12 @@ export interface SectionArgs {
   active: boolean;
   /** Side of the square drawn to show the plane, metres. */
   size: number;
+  /** Draw the orange square, outline and arrows (default true). The plane cuts either way. */
+  showPlane?: boolean;
+  /** Colour of the edge lines on the cut-away side ("x-ray"); unset = the edge-line colour. */
+  xrayColor?: string;
+  /** Opacity 0-1 of those lines; unset = the edge-line opacity, 0 hides them. */
+  xrayOpacity?: number;
   /** Layers (see `sectionLayers`) this plane leaves alone. Missing = it cuts everything. */
   exempt?: string[];
 }
@@ -98,6 +104,17 @@ export function sectionOnFace(point: THREE.Vector3, faceNormal: THREE.Vector3, c
   const n = tidy(faceNormal);
   if (n.dot(point.clone().sub(cameraPosition)) < 0) n.negate();
   return { kind: 'section', point: [point.x, point.y, point.z], normal: [n.x + 0, n.y + 0, n.z + 0], active: true, size };
+}
+
+/** The plane look settings a new section inherits from the ones already in the model. */
+export function sectionLook(shapes: readonly Shape[]): Pick<SectionArgs, 'showPlane' | 'xrayColor' | 'xrayOpacity'> {
+  const s = shapes.find(sh => isSectionShape(sh)) ?? null;
+  const a = s?.args as SectionArgs | undefined;
+  const look: Pick<SectionArgs, 'showPlane' | 'xrayColor' | 'xrayOpacity'> = {};
+  if (a?.showPlane !== undefined) look.showPlane = a.showPlane;
+  if (a?.xrayColor !== undefined) look.xrayColor = a.xrayColor;
+  if (a?.xrayOpacity !== undefined) look.xrayOpacity = a.xrayOpacity;
+  return look;
 }
 
 export function flipSection(args: SectionArgs): SectionArgs {

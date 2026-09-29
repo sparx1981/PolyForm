@@ -1,3 +1,5 @@
+import { useCms } from '../cms/context';
+import { CmsLayout } from '../cms/Sections';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { SDK_METHOD_COUNT, SDK_REFERENCE, type SdkMethod, type SdkTag } from './sdkFullReference';
@@ -34,6 +36,9 @@ function matches(query: string, tag: SdkTag, method: SdkMethod): boolean {
 }
 
 function MethodRow({ tag, method }: { tag: SdkTag; method: SdkMethod }) {
+  const cms = useCms();
+  const TAG_COLORS = cms.data(CMS_DEFAULT_TAG_COLORS);
+
   const [open, setOpen] = useState(false);
   const color = TAG_COLORS[tag.id] ?? TAG_COLORS.core;
 
@@ -56,12 +61,12 @@ function MethodRow({ tag, method }: { tag: SdkTag; method: SdkMethod }) {
         <div className="px-4 pb-4 pt-1 border-t border-gray-100 flex flex-col gap-3 text-sm">
           <p className="text-gray-600 sm:hidden">{method.description}</p>
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Signature</span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{cms.text("Signature")}</span>
             <div className="bg-slate-950 px-3 py-2 rounded-md overflow-x-auto">{highlightJsLine(method.signature, method.name)}</div>
           </div>
           <div className="flex gap-6">
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Returns</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{cms.text("Returns")}</span>
               <code className="text-[13px] font-mono text-polyform-dark-blue">{method.returns}</code>
             </div>
           </div>
@@ -77,6 +82,11 @@ function hashTag(): string {
 }
 
 export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void }) {
+  const cms = useCms();
+  const SDK_REFERENCE = cms.data(CMS_DEFAULT_SDK_REFERENCE);
+  const SDK_METHOD_COUNT = cms.data(CMS_DEFAULT_SDK_METHOD_COUNT);
+  const TAG_COLORS = cms.data(CMS_DEFAULT_TAG_COLORS);
+
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState(hashTag);
 
@@ -84,7 +94,7 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
     () => SDK_REFERENCE
       .map(tag => ({ ...tag, methods: tag.methods.filter(method => matches(query, tag, method)) }))
       .filter(tag => tag.methods.length > 0),
-    [query],
+    [query, cms],
   );
 
   const jumpTo = (tagId: string, pushHistory = true) => {
@@ -130,7 +140,7 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
   }, [filtered]);
 
   return (
-    <>
+    <CmsLayout page="sdk-docs">
       <section className="pt-20 pb-14 px-6 border-b border-gray-100">
         <div className="max-w-[1200px] mx-auto flex flex-col gap-5">
           <RouterLink
@@ -138,23 +148,19 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
             go={go}
             className="self-start inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-polyform-blue transition-colors"
           >
-            <ArrowLeft size={15} /> Back to Developers
-          </RouterLink>
-          <Eyebrow>Full SDK reference</Eyebrow>
+            <ArrowLeft size={15} /> {cms.text("Back to Developers")}</RouterLink>
+          <Eyebrow>{cms.text("Full SDK reference")}</Eyebrow>
           <h1 className="text-[clamp(36px,5vw,56px)] font-bold leading-[1.05] tracking-[-0.03em] text-polyform-dark-blue max-w-[900px]">
-            The complete <code className="text-[0.85em] font-mono">sdk</code> object
-          </h1>
+            {cms.text("The complete ")}<code className="text-[0.85em] font-mono">{cms.text("sdk")}</code> {cms.text("object")}</h1>
           <p className="text-lg leading-[1.6] text-gray-600 max-w-[680px]">
-            Every method in the Developer Console&rsquo;s <code className="font-mono text-[0.9em]">sdk</code> object, grouped by
-            subsystem, with its full signature and return type &mdash; {SDK_METHOD_COUNT} methods across {SDK_REFERENCE.length} groups.
-          </p>
+            {cms.text("Every method in the Developer Console’s ")}<code className="font-mono text-[0.9em]">{cms.text("sdk")}</code> {cms.text("object, grouped by subsystem, with its full signature and return type — ")}{SDK_METHOD_COUNT} {cms.text("methods across ")}{SDK_REFERENCE.length} {cms.text("groups.")}</p>
           <div className="relative max-w-md mt-2">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="search"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Filter methods (e.g. roof, terrain, camera)"
+              placeholder={cms.text("Filter methods (e.g. roof, terrain, camera)")}
               className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-gray-200 bg-gray-light focus:outline-none focus:ring-2 focus:ring-polyform-blue focus:border-transparent"
             />
           </div>
@@ -162,7 +168,7 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
       </section>
 
       <div className="lg:hidden sticky top-[60px] z-40 px-4 py-3 bg-white/95 backdrop-blur-xl border-b border-slate-200">
-        <label htmlFor="sdk-group-jump" className="sr-only">Jump to SDK group</label>
+        <label htmlFor="sdk-group-jump" className="sr-only">{cms.text("Jump to SDK group")}</label>
         <select
           id="sdk-group-jump"
           value={activeTag}
@@ -171,8 +177,7 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
         >
           {SDK_REFERENCE.map(tag => (
             <option key={tag.id} value={tag.id}>
-              {tag.id === 'core' ? 'sdk' : tag.id} ({tag.methods.length})
-            </option>
+              {tag.id === 'core' ? 'sdk' : tag.id} {cms.text("(")}{tag.methods.length}{cms.text(")")}</option>
           ))}
         </select>
       </div>
@@ -180,7 +185,7 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
       <section className="px-6 py-14">
         <div className="max-w-[1200px] mx-auto flex gap-12 items-start">
           <aside className="hidden lg:flex sticky top-[76px] w-[210px] flex-none flex-col gap-0.5">
-            <span className="text-[11px] font-bold tracking-[0.12em] text-gray-400 px-3 pb-2.5">GROUPS</span>
+            <span className="text-[11px] font-bold tracking-[0.12em] text-gray-400 px-3 pb-2.5">{cms.text("GROUPS")}</span>
             {SDK_REFERENCE.map(tag => {
               const color = TAG_COLORS[tag.id] ?? TAG_COLORS.core;
               const active = tag.id === activeTag;
@@ -205,7 +210,7 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
 
           <div className="flex-1 min-w-0 flex flex-col gap-12">
             {filtered.length === 0 && (
-              <p className="text-gray-500">No methods match &ldquo;{query}&rdquo;.</p>
+              <p className="text-gray-500">{cms.text("No methods match “")}{query}{cms.text("”.")}</p>
             )}
             {filtered.map(tag => (
               <div key={tag.id} id={'sdk-' + tag.id} className="flex flex-col gap-3 scroll-mt-[76px]">
@@ -223,6 +228,10 @@ export default function SdkDocs({ go }: { go: (p: Page, anchor?: string) => void
           </div>
         </div>
       </section>
-    </>
+    </CmsLayout>
   );
 }
+
+const CMS_DEFAULT_TAG_COLORS = TAG_COLORS;
+const CMS_DEFAULT_SDK_REFERENCE = SDK_REFERENCE;
+const CMS_DEFAULT_SDK_METHOD_COUNT = SDK_METHOD_COUNT;

@@ -1,3 +1,5 @@
+import { useCms } from '../cms/context';
+import { CmsLayout } from '../cms/Sections';
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Check, Cloud, Menu, Redo2, Sparkles, Undo2 } from 'lucide-react';
@@ -9,15 +11,21 @@ import { highlightJsLine } from './codeHighlight';
 
 
 function ProductFrame() {
+  const cms = useCms();
+  const HERO_RAIL_ICONS = cms.data(CMS_DEFAULT_HERO_RAIL_ICONS);
+  const HERO_PANEL_TITLES = cms.data(CMS_DEFAULT_HERO_PANEL_TITLES);
+  const media = cms.media('hero-model');
+  if (media?.url) return <img src={media.url} alt={media.alt} className="w-full max-w-[1240px] rounded-[24px] object-contain" />;
+
   return (
     <div className="w-full max-w-[1240px] rounded-[24px] overflow-hidden border border-slate-200 bg-white shadow-[0_45px_110px_-42px_rgba(15,23,42,0.5),0_4px_18px_rgba(15,23,42,0.08)] flex flex-col text-left">
       <div className="hidden sm:flex h-11 bg-[#075b92] text-white items-center gap-3.5 px-4 text-sm">
         <Menu size={18} />
-        <span className="font-bold">PolyForm</span>
+        <span className="font-bold">{cms.text("PolyForm")}</span>
         <span className="w-px h-3.5 bg-white/25" />
         <Undo2 size={15} />
         <Redo2 size={15} />
-        <span className="ml-auto text-[11px] text-white/60">Project synced</span>
+        <span className="ml-auto text-[11px] text-white/60">{cms.text("Project synced")}</span>
         <span className="w-6 h-6 rounded-full bg-white/15 border border-white/20" />
       </div>
       <div className="flex" style={{ aspectRatio: '16 / 8.1', minHeight: 270 }}>
@@ -41,7 +49,7 @@ function ProductFrame() {
             aria-hidden="true"
           />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_24%,rgba(0,99,163,.13),transparent_35%)]" aria-hidden="true" />
-          <svg viewBox="0 0 920 560" className="absolute inset-[5%] w-[90%] h-[90%]" role="img" aria-label="Architectural site model placeholder">
+          <svg viewBox="0 0 920 560" className="absolute inset-[5%] w-[90%] h-[90%]" role="img" aria-label={cms.text("Architectural site model placeholder")}>
             <path d="M80 430 C190 355 260 420 350 370 S520 435 630 355 S785 330 850 365" fill="none" stroke="rgba(0,99,163,.34)" strokeWidth="2.5" strokeDasharray="10 9" />
             <path d="M120 456 C245 400 292 470 415 408 S625 454 822 398" fill="none" stroke="rgba(0,56,101,.16)" strokeWidth="2" />
             <path d="M268 355 L268 198 L485 260 L485 414 L268 355 Z" fill="rgba(255,255,255,.78)" stroke="#285b7c" strokeWidth="3" />
@@ -58,8 +66,8 @@ function ProductFrame() {
             <path d="M716 73 V48 M716 198 V173 M666 123 H641 M791 123 H766" stroke="rgba(0,99,163,.2)" strokeWidth="2" />
           </svg>
           <div className="absolute left-5 bottom-5 rounded-lg bg-white/85 backdrop-blur-md border border-white/70 px-3.5 py-2 shadow-sm">
-            <span className="block text-[10px] font-bold tracking-[0.12em] uppercase text-polyform-blue">Model view</span>
-            <span className="block mt-0.5 text-[12px] font-semibold text-polyform-dark-blue">Building + terrain + landscape</span>
+            <span className="block text-[10px] font-bold tracking-[0.12em] uppercase text-polyform-blue">{cms.text("Model view")}</span>
+            <span className="block mt-0.5 text-[12px] font-semibold text-polyform-dark-blue">{cms.text("Building + terrain + landscape")}</span>
           </div>
         </div>
         <div className="hidden md:flex w-[230px] flex-none border-l border-gray-200 bg-[#f8fafb] flex-col">
@@ -81,9 +89,9 @@ function ProductFrame() {
         </div>
       </div>
       <div className="hidden sm:flex h-8 border-t border-gray-200 items-center gap-3 px-3.5 text-[11px] text-gray-600 bg-white">
-        <span className="flex items-center gap-1.5 text-polyform-green"><Cloud size={12} /> Synced</span>
+        <span className="flex items-center gap-1.5 text-polyform-green"><Cloud size={12} /> {cms.text("Synced")}</span>
         <span className="w-px h-3 bg-gray-200" />
-        <span>Click a surface to apply the active material.</span>
+        <span>{cms.text("Click a surface to apply the active material.")}</span>
       </div>
     </div>
   );
@@ -97,6 +105,9 @@ const PROOF_STRIP = [
 ];
 
 function WorkflowStory() {
+  const cms = useCms();
+  const WORKFLOW_STEPS = cms.data(CMS_DEFAULT_WORKFLOW_STEPS);
+
   const [active, setActive] = useState(0);
   const stepRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -123,13 +134,11 @@ function WorkflowStory() {
       <div className="max-w-[1240px] mx-auto">
         <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-14 lg:gap-20 items-start">
           <div className="lg:sticky lg:top-[84px] flex flex-col gap-5">
-            <Eyebrow>One continuous workflow</Eyebrow>
+            <Eyebrow>{cms.text("One continuous workflow")}</Eyebrow>
             <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
-              From real site to walk-through.
-            </h2>
+              {cms.text("From real site to walk-through.")}</h2>
             <p className="text-[17px] leading-[1.7] text-gray-600 max-w-[520px]">
-              Keep the building, ground and landscape together from the start. PolyForm removes the hand-offs between site context, modelling and presentation.
-            </p>
+              {cms.text("Keep the building, ground and landscape together from the start. PolyForm removes the hand-offs between site context, modelling and presentation.")}</p>
             <div className="pt-3">
               <MarketingVisual
                 label={'Workflow ' + step.n}
@@ -169,11 +178,13 @@ function WorkflowStory() {
 
 
 function TransformationSection() {
+  const cms = useCms();
+
   const stages = [
-    { n: '01', label: 'Site', title: 'Start with the place', text: 'Bring in real-world context and establish the ground before the building takes shape.' },
-    { n: '02', label: 'Building', title: 'Shape the architecture', text: 'Develop walls, openings, storeys, roofs and circulation directly in the same model.' },
-    { n: '03', label: 'Landscape', title: 'Design beyond the walls', text: 'Sculpt terrain, connect paths and patios, then add planting, water and external spaces.' },
-    { n: '04', label: 'Experience', title: 'Step into the result', text: 'Set light and weather, save views and walk through the project at eye level.' },
+    { n: '01', label: cms.text("Site"), title: cms.text("Start with the place"), text: cms.text("Bring in real-world context and establish the ground before the building takes shape.") },
+    { n: '02', label: cms.text("Building"), title: cms.text("Shape the architecture"), text: cms.text("Develop walls, openings, storeys, roofs and circulation directly in the same model.") },
+    { n: '03', label: cms.text("Landscape"), title: cms.text("Design beyond the walls"), text: cms.text("Sculpt terrain, connect paths and patios, then add planting, water and external spaces.") },
+    { n: '04', label: cms.text("Experience"), title: cms.text("Step into the result"), text: cms.text("Set light and weather, save views and walk through the project at eye level.") },
   ];
 
   return (
@@ -181,14 +192,12 @@ function TransformationSection() {
       <div className="max-w-[1240px] mx-auto">
         <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-20 items-end">
           <div className="flex flex-col gap-5">
-            <Eyebrow dark>From first context to finished place</Eyebrow>
+            <Eyebrow dark>{cms.text("From first context to finished place")}</Eyebrow>
             <h2 className="text-[clamp(36px,4.8vw,62px)] font-bold leading-[1.02] tracking-[-0.04em]">
-              From an empty site to somewhere you can stand.
-            </h2>
+              {cms.text("From an empty site to somewhere you can stand.")}</h2>
           </div>
           <p className="text-[17px] leading-[1.7] text-white/70 max-w-[620px]">
-            Keep the same project moving from real-world context through architecture and landscape to a first-person experience.
-          </p>
+            {cms.text("Keep the same project moving from real-world context through architecture and landscape to a first-person experience.")}</p>
         </div>
 
         <div className="mt-14 grid md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -217,10 +226,12 @@ function TransformationSection() {
 }
 
 function MadeInPolyForm() {
+  const cms = useCms();
+
   const projects = [
-    { label: 'Residential concept', title: 'Architecture, terrain and landscape in one project', ratio: '16 / 11' },
-    { label: 'Garden + site', title: 'Ground shaping, planting, paths and external spaces', ratio: '4 / 3' },
-    { label: 'Site study', title: 'Real-world context through to walk-through', ratio: '4 / 3' },
+    { label: cms.text("Residential concept"), title: cms.text("Architecture, terrain and landscape in one project"), ratio: '16 / 11' },
+    { label: cms.text("Garden + site"), title: cms.text("Ground shaping, planting, paths and external spaces"), ratio: '4 / 3' },
+    { label: cms.text("Site study"), title: cms.text("Real-world context through to walk-through"), ratio: '4 / 3' },
   ];
 
   return (
@@ -228,14 +239,12 @@ function MadeInPolyForm() {
       <div className="max-w-[1240px] mx-auto">
         <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-20 items-end">
           <div className="flex flex-col gap-5">
-            <Eyebrow>Made in PolyForm</Eyebrow>
+            <Eyebrow>{cms.text("Made in PolyForm")}</Eyebrow>
             <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
-              Let the projects do the explaining.
-            </h2>
+              {cms.text("Let the projects do the explaining.")}</h2>
           </div>
           <p className="text-[17px] leading-[1.7] text-gray-600 max-w-[620px]">
-            This gallery is structured for real PolyForm work: complete projects, not decorative illustrations. Final project imagery can drop into these slots without changing the page.
-          </p>
+            {cms.text("This gallery is structured for real PolyForm work: complete projects, not decorative illustrations. Final project imagery can drop into these slots without changing the page.")}</p>
         </div>
 
         <div className="mt-14 grid lg:grid-cols-[1.35fr_0.65fr] gap-5">
@@ -252,27 +261,27 @@ function MadeInPolyForm() {
 }
 
 function WhyPolyForm() {
-  const traditional = ['Site context', 'Building model', 'Landscape work', 'Exports', 'Visualisation', 'Review', 'Rework'];
-  const polyform = ['Site', 'Building', 'Landscape', 'Visualise', 'Collaborate', 'Automate'];
+  const cms = useCms();
+
+  const traditional = [cms.text("Site context"), cms.text("Building model"), cms.text("Landscape work"), cms.text("Exports"), cms.text("Visualisation"), cms.text("Review"), cms.text("Rework")];
+  const polyform = [cms.text("Site"), cms.text("Building"), cms.text("Landscape"), cms.text("Visualise"), cms.text("Collaborate"), cms.text("Automate")];
 
   return (
     <section className="py-24 sm:py-28 px-6 bg-white border-b border-slate-200">
       <div className="max-w-[1240px] mx-auto">
         <div className="grid lg:grid-cols-[0.78fr_1.22fr] gap-12 lg:gap-20 items-end">
           <div className="flex flex-col gap-5">
-            <Eyebrow>Why PolyForm</Eyebrow>
+            <Eyebrow>{cms.text("Why PolyForm")}</Eyebrow>
             <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
-              One model instead of a chain of hand-offs.
-            </h2>
+              {cms.text("One model instead of a chain of hand-offs.")}</h2>
           </div>
           <p className="text-[17px] leading-[1.7] text-gray-600 max-w-[610px]">
-            Keep site context, architecture, landscape, visualisation and review connected instead of moving the project through separate disconnected stages.
-          </p>
+            {cms.text("Keep site context, architecture, landscape, visualisation and review connected instead of moving the project through separate disconnected stages.")}</p>
         </div>
 
         <div className="mt-14 grid lg:grid-cols-2 gap-6">
           <div className="rounded-2xl border border-slate-200 bg-[#fbfcfd] p-6 sm:p-7">
-            <span className="text-[11px] font-bold uppercase tracking-[0.13em] text-gray-400">Traditional workflow</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.13em] text-gray-400">{cms.text("Traditional workflow")}</span>
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
               {traditional.map((item, i) => (
                 <React.Fragment key={item}>
@@ -285,8 +294,8 @@ function WhyPolyForm() {
 
           <div className="rounded-2xl border border-polyform-blue/20 bg-[#eef6fb] p-6 sm:p-7">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-[11px] font-bold uppercase tracking-[0.13em] text-polyform-blue">PolyForm workflow</span>
-              <span className="text-[11px] font-bold text-polyform-dark-blue">One model throughout</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.13em] text-polyform-blue">{cms.text("PolyForm workflow")}</span>
+              <span className="text-[11px] font-bold text-polyform-dark-blue">{cms.text("One model throughout")}</span>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
               {polyform.map((item, i) => (
@@ -304,26 +313,27 @@ function WhyPolyForm() {
 }
 
 function AudienceSection() {
+  const cms = useCms();
+
   const audiences = [
-    { title: 'Architects & designers', text: 'Develop the building with its real site and surroundings visible from the start.' },
-    { title: 'Landscape teams', text: 'Shape terrain, planting, paths, water and external spaces in the same model as the architecture.' },
-    { title: 'Builders & collaborators', text: 'Review the complete design, leave notes and walk through decisions before work starts.' },
-    { title: 'Design technologists', text: 'Automate repeated work with Claude, JavaScript and the PolyForm SDK.' },
+    { title: cms.text("Architects & designers"), text: cms.text("Develop the building with its real site and surroundings visible from the start.") },
+    { title: cms.text("Landscape teams"), text: cms.text("Shape terrain, planting, paths, water and external spaces in the same model as the architecture.") },
+    { title: cms.text("Builders & collaborators"), text: cms.text("Review the complete design, leave notes and walk through decisions before work starts.") },
+    { title: cms.text("Design technologists"), text: cms.text("Automate repeated work with Claude, JavaScript and the PolyForm SDK.") },
   ];
 
   return (
     <section className="py-24 sm:py-28 px-6 bg-white border-b border-slate-200">
       <div className="max-w-[1240px] mx-auto">
         <div className="max-w-[760px]">
-          <Eyebrow>Built around the project</Eyebrow>
+          <Eyebrow>{cms.text("Built around the project")}</Eyebrow>
           <h2 className="mt-5 text-[clamp(34px,4.4vw,56px)] font-bold leading-[1.05] tracking-[-0.035em] text-polyform-dark-blue">
-            For the people shaping the built environment.
-          </h2>
+            {cms.text("For the people shaping the built environment.")}</h2>
         </div>
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 border-y border-slate-200">
           {audiences.map((a, i) => (
             <div key={a.title} className={'py-7 sm:px-6 first:pl-0 last:pr-0 ' + (i > 0 ? 'sm:border-l sm:border-slate-200' : '')}>
-              <span className="text-[11px] font-mono text-gray-400">0{i + 1}</span>
+              <span className="text-[11px] font-mono text-gray-400">{cms.text("0")}{i + 1}</span>
               <h3 className="mt-3 text-[17px] font-bold text-polyform-dark-blue">{a.title}</h3>
               <p className="mt-2 text-sm leading-[1.65] text-gray-600">{a.text}</p>
             </div>
@@ -335,39 +345,44 @@ function AudienceSection() {
 }
 
 export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) => void; onLogin: () => void }) {
+  const cms = useCms();
+  const SHOWCASE_TABS = cms.data(CMS_DEFAULT_SHOWCASE_TABS);
+  const PROOF_STRIP = cms.data(CMS_DEFAULT_PROOF_STRIP);
+  const WORKS_WITH = cms.data(CMS_DEFAULT_WORKS_WITH);
+  const CODE_SHORT = cms.data(CMS_DEFAULT_CODE_SHORT);
+  const STORAGE_OPTIONS = cms.data(CMS_DEFAULT_STORAGE_OPTIONS);
+
   const [tab, setTab] = useState(0);
   const active = SHOWCASE_TABS[tab];
 
   return (
-    <>
+    <CmsLayout page="home">
       <section className="relative overflow-hidden px-6 pt-16 sm:pt-20 pb-0 bg-white">
         <div className="absolute inset-x-0 top-0 h-[620px] bg-[radial-gradient(circle_at_50%_0%,rgba(0,99,163,0.08),transparent_62%)] pointer-events-none" />
         <div className="relative max-w-[980px] mx-auto text-center flex flex-col items-center">
-          <Eyebrow>3D design for buildings + landscapes</Eyebrow>
+          <Eyebrow>{cms.text("3D design for buildings + landscapes")}</Eyebrow>
           <h1 className="mt-6 text-[clamp(44px,7vw,82px)] font-bold leading-[0.98] tracking-[-0.055em] text-polyform-dark-blue">
-            Design the whole site.<br />
-            <span className="text-polyform-blue">Then step inside.</span>
+            {cms.text("Design the whole site.")}<br />
+            <span className="text-polyform-blue">{cms.text("Then step inside.")}</span>
           </h1>
           <p className="mt-7 text-[clamp(17px,1.7vw,21px)] leading-[1.65] text-gray-600 max-w-[760px]">
-            PolyForm brings the building, terrain and landscape into one browser-based model — so you can design in context, collaborate live and experience the result before it is built.
-          </p>
+            {cms.text("PolyForm brings the building, terrain and landscape into one browser-based model — so you can design in context, collaborate live and experience the result before it is built.")}</p>
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
             <button
               type="button"
               onClick={onLogin}
               className="inline-flex items-center gap-2 text-base font-semibold px-6 py-[14px] rounded-lg bg-polyform-blue text-white shadow-[0_10px_25px_rgb(0_99_163_/_0.22)] hover:bg-polyform-dark-blue transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-polyform-blue"
             >
-              Start designing <ArrowRight size={16} />
+              {cms.text("Start designing ")}<ArrowRight size={16} />
             </button>
             <button
               type="button"
               onClick={() => scrollToId('workflow')}
               className="inline-flex items-center gap-2 text-base font-semibold px-[22px] py-[14px] rounded-lg bg-white text-polyform-dark-blue border border-slate-200 hover:bg-gray-50 transition-colors"
             >
-              See how PolyForm works
-            </button>
+              {cms.text("See how PolyForm works")}</button>
           </div>
-          <p className="mt-4 text-[13px] text-gray-500">Free to try · No installation · Desktop, tablet and phone</p>
+          <p className="mt-4 text-[13px] text-gray-500">{cms.text("Free to try · No installation · Desktop, tablet and phone")}</p>
         </div>
 
         <div className="relative max-w-[1240px] mx-auto mt-12 translate-y-8">
@@ -409,14 +424,12 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
         <div className="max-w-[1240px] mx-auto">
           <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-12 lg:gap-20 items-end">
             <div className="flex flex-col gap-5">
-              <Eyebrow>One model</Eyebrow>
+              <Eyebrow>{cms.text("One model")}</Eyebrow>
               <h2 className="text-[clamp(34px,4.4vw,58px)] font-bold leading-[1.04] tracking-[-0.035em] text-polyform-dark-blue">
-                The building does not stop at the back door.
-              </h2>
+                {cms.text("The building does not stop at the back door.")}</h2>
             </div>
             <p className="text-[18px] leading-[1.75] text-gray-600 max-w-[600px] lg:justify-self-end">
-              Model the architecture and everything around it together. The patio meets the floor, the terrain meets the foundations and the landscape stays part of the same design.
-            </p>
+              {cms.text("Model the architecture and everything around it together. The patio meets the floor, the terrain meets the foundations and the landscape stays part of the same design.")}</p>
           </div>
 
           <div className="mt-14 grid lg:grid-cols-[320px_1fr] gap-8 lg:gap-12 items-start">
@@ -477,19 +490,17 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
         <div className="absolute inset-0 opacity-[0.1] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
         <div className="relative max-w-[1240px] mx-auto grid lg:grid-cols-[0.85fr_1.15fr] gap-14 lg:gap-20 items-center">
           <div className="flex flex-col gap-5">
-            <Eyebrow dark icon={<Sparkles size={16} />}>Build with Claude</Eyebrow>
+            <Eyebrow dark icon={<Sparkles size={16} />}>{cms.text("Build with Claude")}</Eyebrow>
             <h2 className="text-[clamp(34px,4.5vw,58px)] font-bold leading-[1.04] tracking-[-0.035em]">
-              Describe the change.<br />Keep the model.
-            </h2>
+              {cms.text("Describe the change.")}<br />{cms.text("Keep the model.")}</h2>
             <p className="text-[17px] leading-[1.7] text-white/75">
-              Connect PolyForm to Claude and ask for a building, a site change or a landscape edit in plain words. The result stays editable in PolyForm.
-            </p>
+              {cms.text("Connect PolyForm to Claude and ask for a building, a site change or a landscape edit in plain words. The result stays editable in PolyForm.")}</p>
             <RouterLink
               to="claude"
               go={go}
               className="self-start mt-2 inline-flex items-center gap-2 text-[15px] font-semibold text-white hover:text-[#9ed5f7] transition-colors"
             >
-              Explore Build with Claude <ArrowRight size={16} />
+              {cms.text("Explore Build with Claude ")}<ArrowRight size={16} />
             </RouterLink>
           </div>
           <ChatCard />
@@ -499,36 +510,35 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
       <section className="py-28 px-6 bg-white">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-2 gap-14 lg:gap-20">
           <div className="flex flex-col gap-5">
-            <Eyebrow>Developers</Eyebrow>
-            <h2 className="text-[clamp(30px,3.7vw,46px)] font-bold leading-[1.08] tracking-[-0.025em] text-polyform-dark-blue">Script anything you can draw.</h2>
+            <Eyebrow>{cms.text("Developers")}</Eyebrow>
+            <h2 className="text-[clamp(30px,3.7vw,46px)] font-bold leading-[1.08] tracking-[-0.025em] text-polyform-dark-blue">{cms.text("Script anything you can draw.")}</h2>
             <p className="text-[16px] leading-[1.7] text-gray-600">
-              Automate model creation with JavaScript, learn the SDK from your own drawing actions and build custom tools around your workflow.
-            </p>
+              {cms.text("Automate model creation with JavaScript, learn the SDK from your own drawing actions and build custom tools around your workflow.")}</p>
             <div className="bg-slate-950 rounded-2xl p-5 flex flex-col overflow-x-auto shadow-[0_24px_60px_-34px_rgba(15,23,42,.8)]">
               {CODE_SHORT.map((c, i) => highlightJsLine(c.t, i))}
             </div>
             <RouterLink to="developers" go={go} className="self-start inline-flex items-center gap-1.5 text-[15px] font-semibold text-polyform-blue hover:text-polyform-dark-blue transition-colors">
-              Explore the developer platform <ArrowRight size={16} />
+              {cms.text("Explore the developer platform ")}<ArrowRight size={16} />
             </RouterLink>
           </div>
 
           <div className="flex flex-col gap-5">
-            <Eyebrow>Interoperability</Eyebrow>
-            <h2 className="text-[clamp(30px,3.7vw,46px)] font-bold leading-[1.08] tracking-[-0.025em] text-polyform-dark-blue">Keep projects where your team already works.</h2>
-            <p className="text-[16px] leading-[1.7] text-gray-600">Choose where each model lives and keep every project visible from one place.</p>
+            <Eyebrow>{cms.text("Interoperability")}</Eyebrow>
+            <h2 className="text-[clamp(30px,3.7vw,46px)] font-bold leading-[1.08] tracking-[-0.025em] text-polyform-dark-blue">{cms.text("Keep projects where your team already works.")}</h2>
+            <p className="text-[16px] leading-[1.7] text-gray-600">{cms.text("Choose where each model lives and keep every project visible from one place.")}</p>
             <div className="rounded-2xl border border-slate-200 bg-[#f8fafc] p-5 sm:p-6">
               <div className="flex flex-wrap items-center justify-center gap-2.5 text-[12px] font-semibold">
-                <span className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-gray-600">Google Drive</span>
+                <span className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-gray-600">{cms.text("Google Drive")}</span>
                 <ArrowRight size={14} className="text-gray-300" />
-                <span className="px-4 py-2.5 rounded-lg bg-polyform-blue text-white shadow-sm">PolyForm</span>
+                <span className="px-4 py-2.5 rounded-lg bg-polyform-blue text-white shadow-sm">{cms.text("PolyForm")}</span>
                 <ArrowRight size={14} className="text-gray-300" />
-                <span className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-gray-600">Trimble Connect</span>
+                <span className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-gray-600">{cms.text("Trimble Connect")}</span>
               </div>
               <div className="mt-4 pt-4 border-t border-slate-200 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] text-gray-500">
-                <span>Import SKP + supported 3D</span>
-                <span>Export glTF</span>
-                <span>Export STL</span>
-                <span>Export SKP</span>
+                <span>{cms.text("Import SKP + supported 3D")}</span>
+                <span>{cms.text("Export glTF")}</span>
+                <span>{cms.text("Export STL")}</span>
+                <span>{cms.text("Export SKP")}</span>
               </div>
             </div>
             <div className="flex flex-col">
@@ -550,10 +560,19 @@ export default function Home({ go, onLogin }: { go: (p: Page, anchor?: string) =
                 </div>
               ))}
             </div>
-            <span className="text-sm text-gray-500">Import SKP and other 3D files. Export glTF, STL and SKP.</span>
+            <span className="text-sm text-gray-500">{cms.text("Import SKP and other 3D files. Export glTF, STL and SKP.")}</span>
           </div>
         </div>
       </section>
-    </>
+    </CmsLayout>
   );
 }
+
+const CMS_DEFAULT_HERO_RAIL_ICONS = HERO_RAIL_ICONS;
+const CMS_DEFAULT_HERO_PANEL_TITLES = HERO_PANEL_TITLES;
+const CMS_DEFAULT_WORKFLOW_STEPS = WORKFLOW_STEPS;
+const CMS_DEFAULT_SHOWCASE_TABS = SHOWCASE_TABS;
+const CMS_DEFAULT_PROOF_STRIP = PROOF_STRIP;
+const CMS_DEFAULT_WORKS_WITH = WORKS_WITH;
+const CMS_DEFAULT_CODE_SHORT = CODE_SHORT;
+const CMS_DEFAULT_STORAGE_OPTIONS = STORAGE_OPTIONS;

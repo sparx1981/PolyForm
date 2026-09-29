@@ -22,6 +22,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { RoofModifierSection } from './RoofModifierSection';
 import { ScaleFigureModifierSection } from './ScaleFigureModifierSection';
 import { CameraClippingSection } from './CameraClippingSection';
+import { SectionModifierSection } from './SectionModifierSection';
 import { WalkModeModifiers } from './walk/WalkModeModifiers';
 import { AutoLightingPanel } from './AutoLightingPanel';
 import { usePhoneLayout } from '../lib/phoneLayout';
@@ -98,7 +99,8 @@ export const ToolModifierPalette: React.FC = () => {
     'timber-frame',
     'roof',
     'scale_figure',
-    'clipping'
+    'clipping',
+    'section'
     , 'lamp'
     , 'worldview'
     , 'section'
@@ -515,6 +517,12 @@ export const ToolModifierPalette: React.FC = () => {
         {activeTool === 'clipping' && (
           <ErrorBoundary name="Camera Clipping Modifiers" compact>
             <CameraClippingSection idPrefix="palette-camera" />
+          </ErrorBoundary>
+        )}
+
+        {activeTool === 'section' && (
+          <ErrorBoundary name="Section Plane Modifiers" compact>
+            <SectionModifierSection idPrefix="palette-section" />
           </ErrorBoundary>
         )}
 
