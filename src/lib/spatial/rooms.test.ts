@@ -27,6 +27,9 @@ describe('spatial room intelligence', () => {
     expect(rooms[0].areaM2).toBeLessThan(17);
     expect(rooms[0].at[0]).toBeCloseTo(0, 1);
     expect(rooms[0].at[1]).toBeCloseTo(0, 1);
+    expect(rooms[0].size[0]).toBeGreaterThan(3.5);
+    expect(rooms[0].size[1]).toBeGreaterThan(3.5);
+    expect(rooms[0].id).toContain('north');
   });
 
   it('includes hosted doors and windows belonging to the room boundary', () => {
