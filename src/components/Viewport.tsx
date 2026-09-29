@@ -3,6 +3,9 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallba
 import { actionLabel, sdkLiteral } from '../lib/macroRecorder';
 import { TextMesh } from './TextMesh';
 import { SiteBuildingMesh, SiteGhosts } from './SiteBuildingMesh';
+import { GoogleTilesLayer } from './GoogleTilesLayer';
+import { buildingLook } from '../lib/worldSite/googleTiles';
+import { gridHeightAt } from '../lib/worldSite/terrain';
 import { RouteDrawPreview, SiteStreetLifeLayer } from './SiteStreetLife';
 import { routeTool, withDrawnRoute } from '../lib/worldSite/streets';
 import { removedBuildings } from '../lib/worldSite/buildings';
@@ -4639,6 +4642,25 @@ function Scene() {
     const ground = findSiteGround(shapes);
     return ground?.terrainData?.site?.showRemoved ? removedBuildings(ground.terrainData.siteExisting, shapes) : [];
   }, [shapes]);
+
+  // The imported site's Google layer and building styling (WorldView > 3D Site).
+  const siteGround = useMemo(() => findSiteGround(shapes), [shapes]);
+  const siteInfo = siteGround?.terrainData?.site;
+  const googleLayer = siteInfo?.googleContext && siteGround ? { site: siteInfo, groundId: siteGround.id } : null;
+  const googleBuildings = useMemo(
+    () => (googleLayer ? shapes.filter(s => s.type === 'site_building' && !!s.siteBuildingData && !s.hidden) : []),
+    [shapes, googleLayer?.site.googleContext], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const googleGroundAt = useCallback((x: number, z: number) => {
+    const t = siteGround?.terrainData;
+    if (!siteGround || !t) return 0;
+    return siteGround.position[1] + gridHeightAt(t, x - siteGround.position[0], z - siteGround.position[2]);
+  }, [siteGround]);
+  const siteSatelliteForStyle = siteInfo?.styledBuildings ? siteSatelliteUrl(siteInfo, googleMapsApiKey || '') : null;
+  const siteStyleFor = (shape: Shape) => {
+    if (!siteInfo?.styledBuildings || !shape.siteBuildingData) return undefined;
+    return { look: buildingLook(shape.siteBuildingData), satelliteUrl: siteSatelliteForStyle, size: siteInfo.size };
+  };
 
   /**
    * The fence tool builds one editable fence from the clicked path, live: it appears at the
@@ -11283,6 +11305,11 @@ function Scene() {
       {/* Moving cars and people on an imported site (presentations, or the editor if turned on). */}
       <SiteStreetLifeLayer shapes={shapes} />
 
+      {/* Google's Photorealistic 3D Tiles around the site: a viewing layer (WorldView > 3D Site). */}
+      {googleLayer && googleMapsApiKey && (
+        <GoogleTilesLayer site={googleLayer.site} apiKey={googleMapsApiKey} buildings={googleBuildings} groundAt={googleGroundAt} />
+      )}
+
       {/*
         Toast render moved to the outer Viewport() function — see
         showToast's own doc comment above for why this can't render here.
@@ -11375,6 +11402,8 @@ function Scene() {
 
       {shapes.map((shape) => {
       if (shape.hidden) return null;
+        // Google's own ground stands in for the editable one (its data still drives heights).
+        if (googleLayer?.site.googleGround === 'google' && shape.id === googleLayer.groundId) return null;
         if (batchedPlantIds.has(shape.id)) return null;
         if (shape.tags?.includes('timber-frame') || shape.id.startsWith('tf-')) {
           // Rendered via InstancedTimberFraming for batch instancing performance
@@ -11977,7 +12006,8 @@ function Scene() {
         if (shape.type === 'site_building' && shape.siteBuildingData) {
           return (
             <SiteBuildingMesh key={shape.id} shape={shape} meshProps={meshProps}
-              selected={selectedId === shape.id || selectedIds.includes(shape.id)} />
+              selected={selectedId === shape.id || selectedIds.includes(shape.id)}
+              style={siteStyleFor(shape)} />
           );
         }
 

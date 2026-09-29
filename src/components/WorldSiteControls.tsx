@@ -70,6 +70,14 @@ export function WorldSiteSection({ hideTitle = false }: { hideTitle?: boolean } 
         sdk: sdkCall('importArea', { lat: +origin.lat.toFixed(7), lng: +origin.lng.toFixed(7) }, { size, groundStyle: style }),
         unchecked: true,
       });
+      // A re-import keeps how the site was being shown.
+      if (site && built.ground.terrainData?.site) {
+        const keep = built.ground.terrainData.site;
+        if (site.googleContext !== undefined) keep.googleContext = site.googleContext;
+        if (site.googleGround !== undefined) keep.googleGround = site.googleGround;
+        if (site.googleNudge !== undefined) keep.googleNudge = site.googleNudge;
+        if (site.styledBuildings !== undefined) keep.styledBuildings = site.styledBuildings;
+      }
       setShapes(prev => replaceSite(prev, built));
       commitHistory();
       setIsWorldViewActive(false);
@@ -140,6 +148,7 @@ export function WorldSiteSection({ hideTitle = false }: { hideTitle?: boolean } 
               onChange={e => change(e.target.checked ? 'Show removed buildings' : 'Hide removed buildings', sdkCall('showExisting', e.target.checked), withSite({ showRemoved: e.target.checked }))} />
             <Eye size={12} /> Show removed buildings as ghosts
           </label>
+          <LookFields site={site} hasKey={!!googleMapsApiKey} />
           <StreetLifeFields site={site} onDraw={kind => {
             routeTool.kind = kind;
             setActiveTool('site_route');
@@ -167,6 +176,63 @@ export function WorldSiteSection({ hideTitle = false }: { hideTitle?: boolean } 
       <p className="text-[9px] text-gray-400 leading-tight">
         Buildings {OSM_ATTRIBUTION} (ODbL). Heights: Terrain Tiles (AWS open data); LiDAR from the Environment Agency (OGL), AHN (CC0) or USGS 3DEP where available. Up to {MAX_SITE_SIZE} m square.
       </p>
+    </div>
+  );
+}
+
+/** A slider that commits once, when let go, so one drag is one undo step. */
+function NudgeSlider({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  const commit = () => { if (v !== value) onCommit(v); };
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-gray-500">Raise or lower Google's layer</span>
+        <span className="text-xs font-mono text-polyform-blue bg-polyform-blue/10 px-1.5 py-0.5 rounded">{v > 0 ? '+' : ''}{v.toFixed(1)} m</span>
+      </div>
+      <input type="range" min={-30} max={30} step={0.5} value={v}
+        onChange={e => setV(parseFloat(e.target.value))}
+        onPointerUp={commit} onKeyUp={commit} onBlur={commit}
+        className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-polyform-blue" />
+    </div>
+  );
+}
+
+/** How the imported site looks: Google's photorealistic surroundings, and styled buildings. */
+function LookFields({ site, hasKey }: { site: WorldSiteInfo; hasKey: boolean }) {
+  const change = useSiteChange();
+  const on = !!site.googleContext;
+  const ground = site.googleGround ?? 'cutout';
+  return (
+    <div className="space-y-2 pt-2 border-t border-gray-200/70 dark:border-gray-700/70">
+      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Look</span>
+      <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+        <input type="checkbox" className="mt-0.5" checked={!!site.styledBuildings}
+          onChange={e => change(e.target.checked ? 'Style site buildings' : 'Plain site buildings',
+            sdkCall('styleBuildings', e.target.checked), withSite({ styledBuildings: e.target.checked }))} />
+        <span>Style the buildings<span className="block text-[10px] text-gray-400 leading-tight">Roofs from the satellite picture, walls from the map's colour or material (else the kind of building). A building you paint keeps its colour.</span></span>
+      </label>
+      <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+        <input type="checkbox" className="mt-0.5" checked={on} disabled={!hasKey}
+          onChange={e => change(e.target.checked ? 'Show Google 3D surroundings' : 'Hide Google 3D surroundings',
+            sdkCall('setGoogleContext', e.target.checked), withSite({ googleContext: e.target.checked }))} />
+        <span>Google photorealistic surroundings<span className="block text-[10px] text-gray-400 leading-tight">Google's 3D map around the site. For looking at only: it can't be edited, measured or exported.</span></span>
+      </label>
+      {!hasKey && <p className="text-[10px] text-amber-600 leading-tight">Needs a Google Maps API key with the Map Tiles API enabled.</p>}
+      {on && hasKey && (
+        <div className="space-y-2 pl-6">
+          <Toggle options={[{ id: 'cutout', label: 'Cut out site' }, { id: 'google', label: 'Google ground' }]} value={ground}
+            onChange={id => id !== ground && change(`Google ground: ${id}`, sdkCall('setGoogleContext', true, { ground: id }), withSite({ googleGround: id as 'cutout' | 'google' }))} />
+          <p className="text-[10px] text-gray-400 leading-tight">
+            {ground === 'cutout'
+              ? 'The editable satellite ground shows over the site; Google fills in everything around it.'
+              : "Google's ground is used instead of the editable one, with its buildings pressed flat under yours."}
+          </p>
+          <NudgeSlider value={site.googleNudge ?? 0}
+            onCommit={v => change(`Google layer height ${v} m`, sdkCall('setGoogleContext', true, { nudge: v }), withSite({ googleNudge: v }))} />
+        </div>
+      )}
     </div>
   );
 }

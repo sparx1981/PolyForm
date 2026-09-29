@@ -67,6 +67,16 @@ describe('sdk.worldView sites', () => {
     expect(h.shapes.find(s => s.id === 'site-way-1')!.siteBuildingData).toMatchObject({ height: 14, heightSource: 'tagged' });
   });
 
+  it('turns Google surroundings and building styling on and off', async () => {
+    const h = harness();
+    await h.sdk().worldView.importArea(origin, { size: 80 });
+    h.sdk().worldView.setGoogleContext(true, { ground: 'google', nudge: 99 });
+    h.sdk().worldView.styleBuildings(true);
+    expect(h.sdk().worldView.getSite()).toMatchObject({ googleContext: true, googleGround: 'google', googleNudge: 30, styledBuildings: true });
+    h.sdk().worldView.setGoogleContext(false);
+    expect(h.sdk().worldView.getSite()).toMatchObject({ googleContext: false, googleGround: 'google' });
+  });
+
   it('says so when a place can\'t be found', async () => {
     const h = harness();
     const findPlace = await import('../lib/worldSite/fetchSite');

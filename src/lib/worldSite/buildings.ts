@@ -9,7 +9,7 @@
  * Map data © OpenStreetMap contributors, available under the Open Database Licence.
  */
 
-import type { Shape, SiteBuildingData, SiteBuildingSnapshot } from '../../types';
+import type { Shape, SiteBuildingData, SiteBuildingSnapshot, SiteBuildingStyleTags } from '../../types';
 import { type LatLng, latLngToLocal, siteBounds } from './geo';
 
 export const BUILDING_SOURCE_NAME = 'OpenStreetMap';
@@ -228,6 +228,8 @@ export function siteBuildingShapes(
     if (b.holes.length) data.holes = b.holes.map(hole => hole.map(p => latLngToLocal(origin, p)).map(([x, z]) => [round(x - cx), round(z - cz)] as [number, number]));
     if (h.minHeight > 0.05) data.minHeight = round(h.minHeight + lift);
     if (h.levels !== undefined) data.levels = h.levels;
+    const style = styleTags(b.tags);
+    if (style) data.style = style;
     placed.push({
       dist: Math.hypot(cx, cz),
       shape: {
@@ -252,6 +254,21 @@ export function siteBuildingShapes(
  * A building given a new overall height (metres above its lowest ground). A fitted roof keeps
  * its shape and pitch and moves up or down with it; the height counts as known from then on.
  */
+/** The appearance tags worth keeping from a building's map tags, or nothing if it has none. */
+export function styleTags(tags: Record<string, string>): SiteBuildingStyleTags | undefined {
+  const pick = (v: string | undefined) => (v && v.trim() ? v.trim().toLowerCase() : undefined);
+  const out: SiteBuildingStyleTags = {};
+  const colour = pick(tags['building:colour'] ?? tags['colour']);
+  const material = pick(tags['building:material'] ?? tags['material']);
+  const roofColour = pick(tags['roof:colour']);
+  const roofMaterial = pick(tags['roof:material']);
+  if (colour) out.colour = colour;
+  if (material) out.material = material;
+  if (roofColour) out.roofColour = roofColour;
+  if (roofMaterial) out.roofMaterial = roofMaterial;
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function withBuildingHeight(data: SiteBuildingData, height: number): SiteBuildingData {
   const { heightCheck: _check, ...rest } = data;
   const next: SiteBuildingData = { ...rest, height, heightSource: 'tagged' };

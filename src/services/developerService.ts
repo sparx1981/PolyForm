@@ -618,6 +618,12 @@ export interface SDK {
     // Draw removed buildings as see-through ghosts, for before-and-after.
     showExisting: (show: boolean) => void;
     setGroundStyle: (style: 'plain' | 'satellite') => void;
+    // Google's Photorealistic 3D Tiles around the site (needs a Google Maps key with the Map
+    // Tiles API). ground: 'cutout' shows the editable ground over the site, 'google' uses Google's.
+    // nudge raises or lowers the layer, metres.
+    setGoogleContext: (on: boolean, options?: { ground?: 'cutout' | 'google'; nudge?: number }) => void;
+    // Style the site's buildings: satellite roofs, walls from the map's colour or material.
+    styleBuildings: (on: boolean) => void;
     // Moving cars and people on the site. A level ('off' | 'quiet' | 'normal' | 'busy'), and/or
     // whether they also move in the editor (they always do in presentations unless 'off').
     setStreetLife: (options: StreetLifeLevel | { level?: StreetLifeLevel; inEditor?: boolean }) => void;
@@ -2443,6 +2449,18 @@ export class DeveloperSDK implements SDK {
         }
         this.updateSite({ groundStyle: style });
       },
+      setGoogleContext: (on: boolean, options?: { ground?: 'cutout' | 'google'; nudge?: number }) => {
+        if (options?.ground !== undefined && options.ground !== 'cutout' && options.ground !== 'google') {
+          this.log(`worldView.setGoogleContext: ground is 'cutout' or 'google'.`);
+          return;
+        }
+        this.updateSite({
+          googleContext: !!on,
+          ...(options?.ground !== undefined ? { googleGround: options.ground } : {}),
+          ...(typeof options?.nudge === 'number' && Number.isFinite(options.nudge) ? { googleNudge: Math.max(-30, Math.min(30, options.nudge)) } : {}),
+        });
+      },
+      styleBuildings: (on: boolean) => this.updateSite({ styledBuildings: !!on }),
       setStreetLife: (options: StreetLifeLevel | { level?: StreetLifeLevel; inEditor?: boolean }) => {
         const o = typeof options === 'string' ? { level: options } : options ?? {};
         if (o.level !== undefined && !STREET_LIFE_LEVELS.some(l => l.id === o.level)) {

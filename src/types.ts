@@ -155,6 +155,18 @@ export interface WorldSiteInfo {
   streetLife?: StreetLifeLevel;
   /** Also show moving cars and people in the editor, not only in presentations. */
   streetLifeInEditor?: boolean;
+  /** Show Google's Photorealistic 3D Tiles around the site (a viewing layer, not editable). */
+  googleContext?: boolean;
+  /**
+   * With the Google layer on: 'cutout' (default) cuts it away over the site so the editable
+   * satellite ground shows there; 'google' hides the editable ground and stands the buildings on
+   * Google's mesh, with Google's own buildings flattened under them.
+   */
+  googleGround?: 'cutout' | 'google';
+  /** Metres to raise (+) or lower (-) the Google layer, on top of the automatic height match. */
+  googleNudge?: number;
+  /** Colour the editable buildings: satellite roofs, walls from the map's material or colour tags. */
+  styledBuildings?: boolean;
 }
 
 export type StreetLifeLevel = 'off' | 'quiet' | 'normal' | 'busy';
@@ -198,6 +210,16 @@ export interface SiteBuildingData {
   levels?: number;
   /** The map's building type, e.g. "house", "apartments". */
   kind?: string;
+  /** What the map says the building is made of (OpenStreetMap tags), for styling. */
+  style?: SiteBuildingStyleTags;
+}
+
+/** Appearance tags from the map: colours are CSS colours or names, materials are OSM values. */
+export interface SiteBuildingStyleTags {
+  colour?: string;
+  material?: string;
+  roofColour?: string;
+  roofMaterial?: string;
 }
 
 /**

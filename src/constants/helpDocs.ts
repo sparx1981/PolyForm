@@ -427,6 +427,18 @@ export const HELP_DOCS: HelpTopic[] = [
     ]
   },
   {
+    id: 'worldview-google-context',
+    title: 'WorldView: Google surroundings and styled buildings',
+    category: 'tools',
+    content: 'Two switches on an imported 3D site (WorldView > 3D Site > Look) change how the site looks without changing what you can edit.',
+    steps: [
+      'Google photorealistic surroundings: shows Google\'s 3D map around the site, in the editor, in presentations and on the client page. It needs a Google Maps API key with the Map Tiles API enabled, and shows Google\'s attribution. It is for looking at: it can\'t be edited, measured, snapped to or exported.',
+      'Cut out site: Google is cut away over the site, so the editable satellite ground and your buildings show there and Google fills in the rest. Google ground: the editable ground is hidden, your buildings stand on Google\'s ground, and Google\'s own buildings are pressed flat under them.',
+      'The layer is matched to your site\'s ground height automatically; use the slider to raise or lower it if it looks off.',
+      'Style the buildings: the editable buildings get roofs cut from the satellite picture and walls from the map\'s colour or material (else a colour for the kind of building). A building you have painted keeps its own colour. Turn it off to go back to white.'
+    ]
+  },
+  {
     id: 'extrude-solids',
     title: 'Extrude on a solid (Push/Pull)',
     category: 'tools',

@@ -295,6 +295,8 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('setBuildingHeight', 'sdk.worldView.setBuildingHeight(id, height)', 'boolean', 'Correct an existing building\'s height, in metres above its lowest ground. A fitted roof moves with it and keeps its pitch.'),
       m('showExisting', 'sdk.worldView.showExisting(show)', 'void', 'Draw removed buildings as see-through ghosts, for before and after.'),
       m('setGroundStyle', "sdk.worldView.setGroundStyle('plain' | 'satellite')", 'void', 'Plain white-model ground, or the satellite picture (needs a Google Maps key).'),
+      m('setGoogleContext', "sdk.worldView.setGoogleContext(on, { ground?: 'cutout' | 'google', nudge?: metres })", 'void', "Show Google's Photorealistic 3D Tiles around the site (needs a Maps key with the Map Tiles API). 'cutout' keeps the editable ground over the site; 'google' uses Google's ground and presses its buildings flat under yours."),
+      m('styleBuildings', 'sdk.worldView.styleBuildings(on)', 'void', "Colour the site's buildings: roofs from the satellite picture, walls from the map's colour or material."),
       m('setStreetLife', "sdk.worldView.setStreetLife('off' | 'quiet' | 'normal' | 'busy' | { level?, inEditor? })", 'void', 'Moving cars and people on the site: how busy, and whether they also move in the editor (they always do in presentations unless off).'),
       m('listRoutes', 'sdk.worldView.listRoutes()', 'SiteRoute[]', 'The roads (cars) and paths (people) on the site: the map\'s and any drawn. Points are [x, z] metres.'),
       m('addRoute', "sdk.worldView.addRoute('path' | 'road', [[x, z], ...])", 'string | null', 'A route of your own: a walking path for people or a driving route for cars. Returns its id.'),
