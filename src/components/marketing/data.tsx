@@ -305,16 +305,18 @@ export const CODE_LONG: CodeLine[] = code([
   '// A garden room on a real site',
   'sdk.worldView.importMap({ lat: 51.5007, lng: -0.1246, zoom: 18, altitude: 0 });',
   '',
-  'const room = sdk.createBox({ width: 4, height: 0.2, depth: 3, position: [0, 0, 0] });',
-  'sdk.pushPull(room, 2.4);',
-  "sdk.setBevel(room, { amount: 0.05, type: 'radius', segments: 4 });",
-  "sdk.applyColor(room, '#e8e1d5');",
+  'const room = sdk.architecture.createRoom({',
+  '  width: 4, length: 3, height: 2.4,',
+  "  justification: 'exterior', includeFoundation: true",
+  '});',
   '',
-  '// Cut a doorway',
-  'const cutter = sdk.createBox({ width: 0.9, height: 2.1, depth: 0.5, position: [0, 1.05, 1.5] });',
-  "sdk.performCSG(room.id, cutter.id, 'SUBTRACTION');",
+  '// Add a Style Library door to one of the room walls',
+  'sdk.architecture.createDoor({',
+  "  style: 'double-french', width: 1.8,",
+  '  hostWallId: room.wallShapes[0].id, position: [0, 1.05, -1.5]',
+  '});',
   '',
-  'console.log(sdk.getSyncStatus()); // synced',
+  'sdk.measurement.addDimension([0, 0, 0], [4, 0, 0], { text: "4.0 m", offset: [0, 0.4, 0] });',
 ]);
 
 export const TOOL_CALLS = ['create_model', 'add_room', 'add_opening', 'add_stairs', 'add_roof', 'preview_model'];
@@ -379,16 +381,16 @@ export const DEV_TOOL_GROUPS: DevToolGroup[] = [
 ];
 
 export const SDK_METHODS: { sig: string; text: string }[] = [
-  { sig: 'sdk.createBox({ width, height, depth, position })', text: 'Create a box.' },
-  { sig: 'sdk.createPoly({ vertices: [[x, y, z], …] })', text: 'Create a polygon from world-space points. Ready for Extrude.' },
-  { sig: 'sdk.pushPull(shape, amount)', text: 'Extrude or intrude a shape.' },
-  { sig: 'sdk.applyColor(shape, color)', text: 'Colour a shape.' },
-  { sig: 'sdk.setBevel(shape, { amount, type, segments })', text: 'Bevel a shape’s edges.' },
-  { sig: 'sdk.performCSG(targetId, cutterId, "SUBTRACTION")', text: 'Carve one shape out of another.' },
-  { sig: 'sdk.worldView.importMap({ lat, lng, zoom, altitude })', text: 'Lay a map under the model.' },
-  { sig: 'sdk.openWebpage(url)', text: 'Open a URL in a floating window.' },
-  { sig: 'sdk.getSyncStatus()', text: "Returns 'synced', 'syncing', 'error' or 'offline'." },
-  { sig: 'sdk.getCollaborators()', text: 'List the people active in the model.' },
+  { sig: 'sdk.architecture.createRoom({ width, length, justification, … })', text: 'Build the same mitred room assembly as the Wall tool.' },
+  { sig: 'sdk.architecture.createDoor({ style, hostWallId, … })', text: 'Create a styled architectural opening.' },
+  { sig: 'sdk.drawing.followMe(profileFaceId, { points })', text: 'Sweep a profile along a path with Follow Me.' },
+  { sig: 'sdk.sections.create({ point, normal, … })', text: 'Create and control saved section planes.' },
+  { sig: 'sdk.measurement.addDimension(start, end, options)', text: 'Place a proper Dimension-tool annotation.' },
+  { sig: 'sdk.civil.addRoad({ points, width, profile, … })', text: 'Create a civil road modifier.' },
+  { sig: 'sdk.civil.addPad({ center, dimensions, … })', text: 'Create a grading or building pad.' },
+  { sig: 'sdk.landscape.updatePond(id, { flow, … })', text: 'Edit pond, lake and flowing-water settings.' },
+  { sig: 'sdk.landscape.updatePatio(id, { settings, steps })', text: 'Edit patio/deck finishes, railings, lights and steps.' },
+  { sig: 'sdk.camera.setNavigationMode("walk")', text: 'Activate the same camera modes as the toolbar.' },
 ];
 
 export const HERO_RAIL_ICONS: { icon: LucideIcon; active?: boolean }[] = [
