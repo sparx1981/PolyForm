@@ -73,18 +73,23 @@ async function run(code) {
       if (Array.isArray(a.start) && Array.isArray(a.end)) {
         var s = pos(a.start, [0, 0, 0]), e = pos(a.end, [1, 0, 0]);
         var dx = e[0] - s[0], dz = e[2] - s[2], len = Math.sqrt(dx * dx + dz * dz) || 0.1;
-        return box(len, height, t, [(s[0] + e[0]) / 2, s[1] + height / 2, (s[2] + e[2]) / 2], c, -Math.atan2(dz, dx));
+        return box(len, height, t, [(s[0] + e[0]) / 2, (s[1] + e[1]) / 2 + height / 2, (s[2] + e[2]) / 2], c, -Math.atan2(dz, dx));
       }
       var p = pos(a.position, [0, height / 2, 0]);
       return box(num(a.length, 3), height, t, p, c, Array.isArray(a.rotation) ? num(a.rotation[1], 0) : 0);
     },
     createRoof: function (a) {
       a = a || {};
-      var overhang = 0.3, width = num(a.width, 4) + overhang * 2, depth = num(a.depth, 4) + overhang * 2, type = a.roofType === 'hip' || a.roofType === 'parapet' ? a.roofType : 'gable';
-      var ridge = typeof a.pitchAngleDeg === 'number' ? Math.tan(a.pitchAngleDeg * Math.PI / 180) * Math.min(width, depth) / 2 : num(a.ridgeHeight, 1.6);
-      if (type === 'parapet') ridge = 0.3;
-      var p = pos(a.position, [0, 2.8, 0]);
-      return add({ kind: 'roof', roofType: type, size: [width, Math.max(0.05, ridge), depth], position: [p[0], p[1] + Math.max(0.05, ridge) / 2, p[2]], color: color(a.color, '#b45309') });
+      var baseWidth = Math.max(0.5, num(a.width, 4)), baseDepth = Math.max(0.5, num(a.depth, 4));
+      var overhang = Math.max(0, num(a.eaveOverhang, 0.3));
+      var type = a.roofType === 'hip' || a.roofType === 'parapet' ? a.roofType : 'gable';
+      var ridge = num(a.ridgeHeight, 2.0);
+      var pitch = typeof a.pitchAngleDeg === 'number' && isFinite(a.pitchAngleDeg) ? a.pitchAngleDeg : 35;
+      if (pitch) ridge = Math.max(0.6, (Math.min(baseWidth, baseDepth) / 2 + overhang) * Math.tan(pitch * Math.PI / 180));
+      var width = type === 'parapet' ? baseWidth : baseWidth + overhang * 2;
+      var depth = type === 'parapet' ? baseDepth : baseDepth + overhang * 2;
+      var p = pos(a.position, [0, 0, 0]);
+      return add({ kind: 'roof', roofType: type, size: [width, Math.max(0.05, ridge), depth], position: [p[0], p[1] + Math.max(0.05, ridge) / 2, p[2]], color: color(a.color, '#a85a44') });
     },
     createStairs: function (a) {
       a = a || {};
