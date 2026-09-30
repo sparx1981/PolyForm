@@ -7,6 +7,10 @@ import { commitKernelPushPull } from '../tools/kernelPushPull';
 import { commitKernelFaceOffset } from '../tools/kernelFaceOffset';
 import { captureKernelState, diffKernelStates } from '../lib/geometry/graphPatch';
 import type { Shape } from '../types';
+import { detectRooms } from '../lib/spatial/rooms';
+import { planRoomFurnishing } from '../lib/interiors/smartFurnish';
+import { bakeSemanticSimulation } from '../lib/interiors/bakeSimulation';
+import { createInteriorFurnitureShape } from '../lib/interiors/parametricFurniture';
 
 function makeSdk(initialShapes: Shape[] = [], host?: KernelArcHost) {
   let shapes = initialShapes;
@@ -112,6 +116,79 @@ describe('Developer SDK ↔ in-app tool parity', () => {
       const actual = h.sdk.landscape.addPatio(points, options);
       expect(actual).toEqual(expected);
       expect(h.shapes).toEqual([expected]);
+    });
+  });
+
+
+  describe('Interior Studio shared planning and simulation', () => {
+    const wall = (id: string, x: number, z: number, length: number, rotationY = 0): Shape => ({
+      id,
+      type: 'wall',
+      position: [x, 1.4, z],
+      rotation: [0, rotationY, 0],
+      args: [length, 2.8, 0.2],
+      color: '#fff',
+    });
+
+    const roomShapes = (): Shape[] => [
+      wall('north', 0, -5, 10),
+      wall('south', 0, 5, 10),
+      wall('west', -5, 0, 10, Math.PI / 2),
+      wall('east', 5, 0, 10, Math.PI / 2),
+    ];
+
+    const withoutGeneratedId = (shape: Shape) => {
+      const { id: _id, ...rest } = shape;
+      return rest;
+    };
+
+    it.each(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal'] as const)(
+      'furnishRoom(%s) matches Interior Studio planning',
+      preset => {
+        const shapes = roomShapes();
+        const room = detectRooms(shapes)[0]!;
+        const expected = planRoomFurnishing(shapes, room, preset);
+        const h = makeSdk(shapes);
+        const actual = h.sdk.interiors.furnishRoom(room.id, preset);
+
+        expect(actual.unplaced).toEqual(expected.unplaced);
+        expect(actual.shapes.map(withoutGeneratedId)).toEqual(expected.shapes.map(withoutGeneratedId));
+        expect(h.shapes.slice(shapes.length).map(withoutGeneratedId)).toEqual(expected.shapes.map(withoutGeneratedId));
+      },
+    );
+
+    it.each([
+      ['sofa', 0],
+      ['sofa', 0.42],
+      ['sofa', 1],
+      ['curtain', 0.32],
+      ['curtain', 0.75],
+      ['curtain', 1.5],
+    ] as const)('bakeSimulation(%s, %s) matches Interior Studio settling', (type, strength) => {
+      const source = createInteriorFurnitureShape(type, { id: 'fixture', position: [1, 0, 2] });
+      const expected = bakeSemanticSimulation(source, strength);
+      const h = makeSdk([source]);
+      const actual = h.sdk.interiors.bakeSimulation('fixture', strength);
+
+      // Both paths stamp the bake time independently. Geometry and all behavioural metadata
+      // must otherwise be identical; compare the timestamp separately as a valid finite value.
+      const expectedBake = expected.customData?.simulationBake;
+      const actualBake = actual.customData?.simulationBake;
+      expect(actualBake?.type).toBe(expectedBake?.type);
+      expect(actualBake?.strength).toBe(expectedBake?.strength);
+      expect(Number.isFinite(actualBake?.bakedAt)).toBe(true);
+
+      const stripBakeTime = (shape: Shape): Shape => ({
+        ...shape,
+        customData: {
+          ...shape.customData,
+          simulationBake: shape.customData?.simulationBake
+            ? { ...shape.customData.simulationBake, bakedAt: 0 }
+            : undefined,
+        },
+      });
+      expect(stripBakeTime(actual)).toEqual(stripBakeTime(expected));
+      expect(stripBakeTime(h.shapes[0]!)).toEqual(stripBakeTime(expected));
     });
   });
 
