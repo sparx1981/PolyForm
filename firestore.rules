@@ -145,6 +145,16 @@ service cloud.firestore {
              data.timestamp is number;
     }
 
+    function isValidPasswordGate(data) {
+      return data.keys().hasOnly(['algorithm', 'salt', 'hash', 'iterations', 'version']) &&
+             data.keys().hasAll(['algorithm', 'salt', 'hash', 'iterations', 'version']) &&
+             data.algorithm == 'PBKDF2-SHA256' &&
+             data.salt is string && data.salt.size() >= 16 && data.salt.size() <= 128 &&
+             data.hash is string && data.hash.size() >= 32 && data.hash.size() <= 256 &&
+             data.iterations is int && data.iterations >= 100000 && data.iterations <= 1000000 &&
+             data.version == 1;
+    }
+
     function isValidRecipientCollaborationUpdate() {
       return request.resource.data.modelId == resource.data.modelId &&
              request.resource.data.email == resource.data.email &&
@@ -218,23 +228,21 @@ service cloud.firestore {
                     (isInvited(modelId) && isValidCollaboratorModelUpdate());
       allow delete: if isDocOwner();
 
-      // Password-protected sharing: the plaintext password lives only here,
-      // never on the parent /models/{modelId} doc (which is world-readable
-      // by anyone browsing public models). Only the owner, an invited
-      // collaborator, or someone who can already see the model (isPublic)
-      // may fetch it to verify a password attempt.
+      // Password-protected sharing stores only a one-way PBKDF2 gate here,
+      // never a plaintext password and never on the public model document.
       match /secure/{docId} {
-        allow get: if isAuthenticated() && (
+        allow get: if docId == 'gate' && isAuthenticated() && (
           get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid ||
           get(/databases/$(database)/documents/models/$(modelId)).data.isPublic == true ||
           isInvited(modelId)
         );
-        // Listing (rather than fetching the one known "gate" doc) is
-        // owner-only — needed so handleDelete's cleanup can enumerate and
-        // purge this subcollection before deleting the parent model.
+        // Listing is owner-only for deletion cleanup.
         allow list: if isAuthenticated() &&
           get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
-        allow write: if isAuthenticated() &&
+        allow create, update: if docId == 'gate' && isAuthenticated() &&
+          get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid &&
+          isValidPasswordGate(request.resource.data);
+        allow delete: if isAuthenticated() &&
           get(/databases/$(database)/documents/models/$(modelId)).data.userId == request.auth.uid;
       }
 
