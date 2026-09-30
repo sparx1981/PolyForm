@@ -29,6 +29,16 @@ describe('smart room furnishing', () => {
     expect(plan.unplaced.length).toBeLessThan(3);
   });
 
+  it('exposes a soft-furnishings preset with soft-body and cloth geometry', () => {
+    const shapes = roomShapes();
+    const room = detectRooms(shapes, { cell: 0.1 })[0];
+    const plan = planRoomFurnishing(shapes, room, 'soft-furnishings');
+    const sofa = plan.shapes.find(shape => shape.customData?.furnitureType === 'sofa');
+    const curtain = plan.shapes.find(shape => shape.customData?.furnitureType === 'curtain');
+    expect(sofa?.customData?.semanticComponent?.simulation?.type).toBe('softbody');
+    expect(curtain?.customData?.semanticComponent?.simulation?.type).toBe('cloth');
+  });
+
   it('reserves access space around a hosted door', () => {
     const shapes: Shape[] = [
       ...roomShapes(),
