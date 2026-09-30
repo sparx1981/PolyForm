@@ -93,9 +93,30 @@ describe('connector over HTTP', () => {
     const door = parse(await client.callTool({ name: 'add_opening', arguments: { model: created.id, wall: wall.id, kind: 'door' } }));
     expect(door.created[0].inWall).toBe(wall.id);
 
-    await client.callTool({ name: 'add_patio', arguments: { model: created.id, kind: 'patio', points: [[-2, 2.1], [2, 2.1], [2, 5], [-2, 5]] } });
+    const patioMade = parse(await client.callTool({ name: 'add_patio', arguments: { model: created.id, kind: 'patio', points: [[-2, 2.1], [2, 2.1], [2, 5], [-2, 5]] } }));
+    const patioId = patioMade.created[0].id;
+    await client.callTool({ name: 'update_patio', arguments: {
+      model: created.id, object: patioId, paving: 'porcelain', railing: 'glass',
+      lights_enabled: true, light_spacing: 1.25, steps: [{ edge: 1, t: 0.5, width: 1.2 }],
+    } });
+    const patioEdited = parse(await client.callTool({ name: 'get_object', arguments: { model: created.id, object: patioId } }));
+    expect(patioEdited.patioData).toMatchObject({ paving: 'porcelain', railing: 'glass', lights: { enabled: true, spacing: 1.25 } });
+    expect(patioEdited.patioData.steps).toHaveLength(1);
+
+    const waterMade = parse(await client.callTool({ name: 'add_pond', arguments: {
+      model: created.id, points: [[6, 0], [10, 0], [10, 2], [6, 2]], depth: 0.8,
+    } }));
+    const waterId = waterMade.created[0].id;
+    await client.callTool({ name: 'update_pond', arguments: {
+      model: created.id, object: waterId, depth: 1.1, clarity: 'clear', level: 0.2,
+      flow_mode: 'stream', flow_direction: [1, 0.2], flow_speed: 0.7, turbulence: 0.3,
+    } });
+    const waterEdited = parse(await client.callTool({ name: 'get_object', arguments: { model: created.id, object: waterId } }));
+    expect(waterEdited.position[1]).toBeCloseTo(0.2);
+    expect(waterEdited.waterData).toMatchObject({ depth: 1.1, clarity: 'clear', flow: { mode: 'stream', speed: 0.7, turbulence: 0.3 } });
+
     const summary = parse(await client.callTool({ name: 'get_model', arguments: { model: 'garden' } }));
-    expect(summary.byType).toMatchObject({ wall: 4, box: 1, door: 1, patio: 1 });
+    expect(summary.byType).toMatchObject({ wall: 4, box: 1, door: 1, patio: 1, water: 1 });
     expect(summary.totals.patioAreaM2).toBeCloseTo(11.6);
 
     const shot = await client.callTool({ name: 'screenshot', arguments: { model: created.id, view: 'plan' } }) as any;
