@@ -376,7 +376,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       room: z.string().describe('Room id from list_rooms'),
       preset: z.enum(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal']),
       settle_soft: z.boolean().default(true),
-      settle_strength: z.number().min(0).max(1).default(0.38),
+      settle_strength: z.number().min(0).max(1).optional().describe('Override settling strength; when omitted PolyForm uses the Interior Studio defaults: 0.32 for cloth and 0.42 for soft bodies'),
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, `Furnished room (${a.preset})`, shapes => {
@@ -385,7 +385,10 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       if (a.settle_soft) {
         for (const item of plan.shapes) {
           const sim = item.customData?.semanticComponent?.simulation;
-          if (sim?.bakeable) sdk.interiors.bakeSimulation(item.id, a.settle_strength);
+          if (sim?.bakeable) {
+            const strength = a.settle_strength ?? (sim.type === 'cloth' ? 0.32 : 0.42);
+            sdk.interiors.bakeSimulation(item.id, strength);
+          }
         }
       }
       return plan;
