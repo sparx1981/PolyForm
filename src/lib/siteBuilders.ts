@@ -80,6 +80,8 @@ export interface PondOptions {
   clarity?: string;
   /** Water level; by default it settles where the ground under the outline holds it. */
   level?: number;
+  /** Optional moving-water profile. Ordinary ponds should leave this unset. */
+  flow?: { mode: 'still' | 'stream'; direction?: [number, number]; speed?: number; turbulence?: number };
 }
 
 /** A pond or lake filling an outline of ground points [x, z], as the water tool makes one. */
@@ -107,6 +109,7 @@ export function buildWaterBody(shapes: Shape[], points: Vec2[], opts: PondOption
       depth: opts.depth ?? 1.2,
       clarity: (opts.clarity ?? 'lake') as any,
       dig: true,
+      flow: opts.flow,
     },
   } as Shape;
 }

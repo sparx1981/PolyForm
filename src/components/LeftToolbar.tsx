@@ -44,7 +44,7 @@ const FlyoutSideContext = createContext<'right' | 'bottom'>('right');
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
-import { cn, runToolboxScript } from '../lib/utils';
+import { cn, runToolboxScript, assertScriptExecutionAllowed } from '../lib/utils';
 import { DeveloperSDK } from '../services/developerService';
 
 interface ToolButtonProps {
@@ -119,7 +119,8 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     setShapes,
     updateShapeColor,
     selectedId,
-    setConsoleOutput
+    setConsoleOutput,
+    user
   } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [is3DPopoutOpen, setIs3DPopoutOpen] = useState(false);
@@ -149,6 +150,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     if (!script) return;
 
     try {
+      assertScriptExecutionAllowed(script.userId, user?.uid);
       const sdk = new DeveloperSDK(
         shapes,
         setShapes,
@@ -194,6 +196,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       } else if (item.scriptId) {
         const found = developerScripts.find(s => s.id === item.scriptId);
         if (found) {
+          assertScriptExecutionAllowed(found.userId, user?.uid);
           await runToolboxScript(found.code, ['sdk', 'console'], [sdk, customConsole]);
         }
       } else if (item.code) {

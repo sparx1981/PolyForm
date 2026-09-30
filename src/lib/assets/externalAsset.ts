@@ -143,6 +143,56 @@ export function validateGeneratedAsset(input: GeneratedAssetInput): GeneratedAss
  * Normalise a generated mesh for PolyForm: centre it in X/Z, put its lowest
  * point at Y=0 and optionally scale uniformly to a requested height.
  */
+/**
+ * Flattens a Three.js hierarchy (for example a GLB returned by an image-to-3D
+ * provider) into the provider-neutral triangle arrays used by PolyForm.
+ * World transforms are baked into each mesh before concatenation.
+ */
+export function generatedGeometryFromObject3D(root: THREE.Object3D): GeneratedGeometryInput {
+  root.updateMatrixWorld(true);
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvParts: number[][] = [];
+  let allHaveUvs = true;
+
+  root.traverse(object => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || !(mesh.geometry instanceof THREE.BufferGeometry)) return;
+
+    let geometry = mesh.geometry.clone();
+    geometry.applyMatrix4(mesh.matrixWorld);
+    if (geometry.index) {
+      const nonIndexed = geometry.toNonIndexed();
+      geometry.dispose();
+      geometry = nonIndexed;
+    }
+    if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
+
+    const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    const normal = geometry.getAttribute('normal') as THREE.BufferAttribute | undefined;
+    const uv = geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
+    if (!position || position.count < 3) {
+      geometry.dispose();
+      return;
+    }
+
+    positions.push(...Array.from(position.array as ArrayLike<number>));
+    if (normal) normals.push(...Array.from(normal.array as ArrayLike<number>));
+    else normals.push(...new Array(position.count * 3).fill(0));
+
+    if (uv) uvParts.push(Array.from(uv.array as ArrayLike<number>));
+    else allHaveUvs = false;
+    geometry.dispose();
+  });
+
+  if (positions.length < 9) throw new Error('Generated 3D result contained no triangle meshes.');
+  return {
+    positions,
+    normals: normals.length === positions.length ? normals : undefined,
+    uvs: allHaveUvs && uvParts.length ? uvParts.flat() : undefined,
+  };
+}
+
 export function normaliseGeneratedGeometry(
   input: GeneratedGeometryInput,
   targetHeightM?: number,

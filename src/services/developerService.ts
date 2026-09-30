@@ -169,12 +169,33 @@ import {
   type FurnitureParams,
 } from '../lib/interiors/parametricFurniture';
 import {
+  planRoomFurnishing,
+  type FurnishingPreset,
+} from '../lib/interiors/smartFurnish';
+import { bakeSemanticSimulation } from '../lib/interiors/bakeSimulation';
+import { detectRooms } from '../lib/spatial/rooms';
+import {
   commitReconstructionDraft,
   validateReconstructionDraft,
   type ReconstructionDraft,
 } from '../lib/reconstruction/draft';
+import {
+  imageObservationToDraft,
+  ImageReconstructionProviderRegistry,
+  type ImageReconstructionObservation,
+  type ImageReconstructionProvider,
+  type ImageReconstructionProviderRequest,
+} from '../lib/reconstruction/imageAdapter';
+import {
+  applyReconstructionReview,
+  buildReconstructionReview,
+} from '../lib/reconstruction/review';
 import { checkModelHealth } from '../lib/reconstruction/modelHealth';
 import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
+import {
+  IfcGeometryProviderRegistry,
+  type IfcGeometryProvider,
+} from '../lib/bim/ifcGeometry';
 import {
   createExternalAssetShape,
   validateGeneratedAsset,
@@ -448,6 +469,9 @@ export interface SDK {
       model: ReturnType<typeof parseIfcMetadata>,
       stepId: number,
     ) => ReturnType<typeof ifcSpatialPath>;
+    registerGeometryProvider: (provider: IfcGeometryProvider) => void;
+    listGeometryProviders: () => string[];
+    importGeometry: (providerId: string, source: ArrayBuffer | Uint8Array) => Promise<ReturnType<IfcGeometryProviderRegistry['import']> extends Promise<infer T> ? T : never>;
   };
 
   // Reconstruction Subsystem
@@ -458,6 +482,15 @@ export interface SDK {
       options?: { includeFurniture?: boolean },
     ) => ReturnType<typeof commitReconstructionDraft>;
     checkModelHealth: () => ReturnType<typeof checkModelHealth>;
+    fromImageObservation: (observation: ImageReconstructionObservation) => ReconstructionDraft;
+    registerImageProvider: (provider: ImageReconstructionProvider) => void;
+    listImageProviders: () => string[];
+    reconstructImage: (
+      providerId: string,
+      request: ImageReconstructionProviderRequest,
+    ) => Promise<ReconstructionDraft>;
+    reviewDraft: (draft: ReconstructionDraft) => ReturnType<typeof buildReconstructionReview>;
+    applyReview: (draft: ReconstructionDraft, decisions: Record<string, boolean>) => ReconstructionDraft;
   };
 
   // Interior Design Subsystem
@@ -470,6 +503,8 @@ export interface SDK {
       params?: FurnitureParams;
     }) => Shape;
     listCatalog: () => ReturnType<typeof interiorFurnitureCatalog>;
+    furnishRoom: (roomId: string, preset: FurnishingPreset) => ReturnType<typeof planRoomFurnishing>;
+    bakeSimulation: (shapeId: string, strength?: number) => Shape;
   };
 
   // Landscape & Site Planning Subsystem
@@ -761,6 +796,8 @@ export interface SDK {
 }
 
 export class DeveloperSDK implements SDK {
+  private imageReconstructionProviders = new ImageReconstructionProviderRegistry();
+  private ifcGeometryProviders = new IfcGeometryProviderRegistry();
   public shapes: Shape[];
   public setShapes: (shapes: Shape[] | ((prev: Shape[]) => Shape[])) => void;
   public updateShapeColor: (id: string, color: string) => void;
@@ -1573,6 +1610,14 @@ export class DeveloperSDK implements SDK {
     this.bim = {
       parseIfcMetadata: (text: string) => parseIfcMetadata(text),
       spatialPath: (model: ReturnType<typeof parseIfcMetadata>, stepId: number) => ifcSpatialPath(model, stepId),
+      registerGeometryProvider: (provider: IfcGeometryProvider) => this.ifcGeometryProviders.register(provider),
+      listGeometryProviders: () => this.ifcGeometryProviders.list(),
+      importGeometry: async (providerId: string, source: ArrayBuffer | Uint8Array) => {
+        const imported = await this.ifcGeometryProviders.import(providerId, source);
+        if (imported.shapes.length) this.setShapes(prev => [...prev, ...imported.shapes]);
+        this.log(`Imported ${imported.shapes.length} IFC geometry elements through ${providerId}.`);
+        return imported;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -1582,6 +1627,22 @@ export class DeveloperSDK implements SDK {
       validateDraft: (draft: ReconstructionDraft) => validateReconstructionDraft(draft),
 
       checkModelHealth: () => checkModelHealth(this.shapes),
+
+      fromImageObservation: (observation: ImageReconstructionObservation) => imageObservationToDraft(observation),
+
+      registerImageProvider: (provider: ImageReconstructionProvider) => {
+        this.imageReconstructionProviders.register(provider);
+      },
+
+      listImageProviders: () => this.imageReconstructionProviders.list(),
+
+      reconstructImage: (providerId: string, request: ImageReconstructionProviderRequest) =>
+        this.imageReconstructionProviders.reconstruct(providerId, request),
+
+      reviewDraft: (draft: ReconstructionDraft) => buildReconstructionReview(draft),
+
+      applyReview: (draft: ReconstructionDraft, decisions: Record<string, boolean>) =>
+        applyReconstructionReview(draft, decisions),
 
       commitDraft: (draft: ReconstructionDraft, options?: { includeFurniture?: boolean }) => {
         const result = commitReconstructionDraft(draft, options);
@@ -1623,6 +1684,26 @@ export class DeveloperSDK implements SDK {
       },
 
       listCatalog: () => interiorFurnitureCatalog(),
+
+      furnishRoom: (roomId: string, preset: FurnishingPreset) => {
+        const room = detectRooms(this.shapes).find(candidate => candidate.id === roomId);
+        if (!room) throw new Error(`Room not found: ${roomId}`);
+        const plan = planRoomFurnishing(this.shapes, room, preset);
+        if (plan.shapes.length) {
+          this.setShapes(prev => [...prev, ...plan.shapes]);
+        }
+        this.log(`Furnished room ${roomId} with ${plan.shapes.length} items; ${plan.unplaced.length} unplaced.`);
+        return plan;
+      },
+
+      bakeSimulation: (shapeId: string, strength?: number) => {
+        const source = this.shapes.find(shape => shape.id === shapeId);
+        if (!source) throw new Error(`Shape not found: ${shapeId}`);
+        const baked = bakeSemanticSimulation(source, strength);
+        this.setShapes(prev => prev.map(shape => shape.id === shapeId ? baked : shape));
+        this.log(`Baked ${baked.customData?.simulationBake?.type ?? 'simulation'} for ${shapeId}.`);
+        return baked;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────

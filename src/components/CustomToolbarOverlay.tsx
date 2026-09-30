@@ -5,7 +5,7 @@ import { useApp } from '../AppContext';
 import { CustomToolbarDef, CustomToolbarItem } from '../types';
 import { DynamicIcon } from './ui/DynamicIcon';
 import { DeveloperSDK } from '../services/developerService';
-import { cn, runToolboxScript } from '../lib/utils';
+import { cn, runToolboxScript, assertScriptExecutionAllowed } from '../lib/utils';
 import { GripVertical, X, ChevronUp, ChevronDown, Loader2, PanelRightClose } from 'lucide-react';
 
 /** Small static 3D thumbnail of a toolbar tile's real geometry, so a "tile"
@@ -60,6 +60,7 @@ export const CustomToolbarOverlay: React.FC = () => {
     setConsoleOutput,
     diagLog,
     developerScripts,
+    user,
     activeTool,
     setActiveTool,
     activeMaterial,
@@ -280,6 +281,7 @@ export const CustomToolbarOverlay: React.FC = () => {
       } else if (item.scriptId) {
         const script = developerScripts.find(s => s.id === item.scriptId);
         if (script) {
+          assertScriptExecutionAllowed(script.userId, user?.uid);
           await runToolboxScript(script.code, ['sdk', 'console'], [sdk, customConsole], true);
         } else {
           customConsole.warn(`Script ID "${item.scriptId}" not found in library.`);

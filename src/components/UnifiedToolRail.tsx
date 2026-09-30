@@ -82,7 +82,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType, Shape, TerrainData } from '../types';
-import { cn, runToolboxScript } from '../lib/utils';
+import { cn, runToolboxScript, assertScriptExecutionAllowed } from '../lib/utils';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { PLANT_SPECIES_CATALOG } from '../lib/plantLibrary';
 import { DeveloperSDK } from '../services/developerService';
@@ -139,6 +139,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
     selectedId,
     selectedIds,
     setConsoleOutput,
+    user,
     landscapeSculptSettings,
     setLandscapeSculptSettings,
     landscapeRoadSettings,
@@ -533,6 +534,7 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
     if (!script) return;
 
     try {
+      assertScriptExecutionAllowed(script.userId, user?.uid);
       const sdk = new DeveloperSDK(
         shapes,
         setShapes,

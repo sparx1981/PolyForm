@@ -39,6 +39,11 @@ export interface WaterUniforms {
   /** 0 when dry; up to 1 in heavy rain, which rings the surface with drop ripples. */
   uRain: { value: number };
   uRainTime: { value: number };
+  /** Directional current used only for stream-style moving water. */
+  uFlowDir: { value: THREE.Vector2 };
+  uFlowSpeed: { value: number };
+  uFlowTurbulence: { value: number };
+  uFlowTime: { value: number };
 }
 
 export function createWaterUniforms(): WaterUniforms {
@@ -50,6 +55,8 @@ export function createWaterUniforms(): WaterUniforms {
     uHeights: { value: null }, uBounds: { value: new THREE.Vector4(0, 0, 1, 1) }, uBaseY: { value: 0 }, uHasTerrain: { value: 0 },
     uReflection: { value: null }, uReflectionMatrix: { value: new THREE.Matrix4() }, uUseReflection: { value: 0 },
     uRain: { value: 0 }, uRainTime: { value: 0 },
+    uFlowDir: { value: new THREE.Vector2(1, 0) }, uFlowSpeed: { value: 0 },
+    uFlowTurbulence: { value: 0 }, uFlowTime: { value: 0 },
   };
 }
 
@@ -59,6 +66,8 @@ uniform mat4 uReflectionMatrix;
 uniform float uUseReflection;
 uniform vec2 uCausShift;
 uniform float uL, uLevel, uFallbackDepth, uLakeWaves, uBaseY, uHasTerrain, uRain, uRainTime;
+uniform vec2 uFlowDir;
+uniform float uFlowSpeed, uFlowTurbulence, uFlowTime;
 uniform vec3 uAbsorb, uScatter, uSunDir;
 uniform vec4 uBounds;
 const float WATER_IOR = 1.3335;
@@ -98,12 +107,20 @@ float gSlopeVariance;
 vec3 waterNormal(vec2 xz, float distanceToEye) {
   const mat2 M = mat2(0.8, -0.6, 0.6, 0.8);
   const mat2 M3 = mat2(0.28, 0.96, -0.96, 0.28);
-  vec4 A = texture(uSurf, xz / uL);
-  vec4 B = texture(uSurf, (M * xz) / (uL * 0.41) + 0.37);
-  vec4 D = texture(uSurf, (M3 * xz) / (uL * 2.7) + 0.19);
+  vec2 flow = uFlowDir * uFlowSpeed * uFlowTime;
+  vec2 flowFine = flow * (1.25 + 0.35 * uFlowTurbulence);
+  vec2 flowSwell = flow * (0.42 + 0.18 * uFlowTurbulence);
+  vec4 A = texture(uSurf, (xz - flow) / uL);
+  vec4 B = texture(uSurf, (M * (xz - flowFine)) / (uL * 0.41) + 0.37);
+  vec4 D = texture(uSurf, (M3 * (xz - flowSwell)) / (uL * 2.7) + 0.19);
   float calm = mix(0.55, 1.0, uLakeWaves);
-  vec2 slope = calm * (A.yz + 0.10 * (transpose(M) * B.yz) * exp(-distanceToEye * 0.05))
+  vec2 slope = calm * (A.yz + (0.10 + 0.12 * uFlowTurbulence) * (transpose(M) * B.yz) * exp(-distanceToEye * 0.05))
     + 0.6 * uLakeWaves * (transpose(M3) * D.yz);
+  if (uFlowSpeed > 0.0) {
+    vec2 across = vec2(-uFlowDir.y, uFlowDir.x);
+    float streak = sin(dot(xz, across) * 5.5 + uFlowTime * (3.0 + 4.0 * uFlowSpeed));
+    slope += across * streak * 0.018 * uFlowTurbulence;
+  }
   if (uRain > 0.0) slope += rainRipples(xz) * uRain * (1.0 - smoothstep(15.0, 45.0, distanceToEye));
   // Sub-pixel slope spread (LEAN mapping): widens distant glints instead of sparkling noise.
   gSlopeVariance = calm * calm * (max(A.w - dot(A.yz, A.yz), 0.0) + 0.01 * max(B.w - dot(B.yz, B.yz), 0.0));

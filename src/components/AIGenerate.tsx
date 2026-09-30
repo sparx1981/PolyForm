@@ -4,7 +4,7 @@ import { X, Sparkles, Loader2, Wand2, AlertCircle, Box } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { GoogleGenAI, Type } from "@google/genai";
 import { getGeminiApiKey } from '../lib/utils';
-import { Shape } from '../types';
+import { createGeneratedPrimitiveShape, validateGeneratedPrimitive } from '../lib/assets/generatedPrimitive';
 
 import { useModalA11y } from './ui/useModalA11y';
 export default function AIGenerate() {
@@ -77,25 +77,25 @@ export default function AIGenerate() {
 
       console.log(`[AIGenerate] Generated ${generatedShapes.length} shapes`);
       
-      generatedShapes.forEach((s: any) => {
-        const id = Math.random().toString(36).substr(2, 9);
-        const newShape: Shape = {
-          id,
-          name: `AI ${s.type}`,
-          type: s.type,
-          position: s.position || [0, 0, 0],
-          rotation: s.rotation || [0, 0, 0],
-          scale: s.scale || [1, 1, 1],
-          color: s.color || '#ffffff',
-          args: s.args || [1, 1, 1],
-          roughness: 0.5,
-          metalness: 0,
-          opacity: 1
-        };
-        addShape(newShape);
+      let accepted = 0;
+      const rejected: string[] = [];
+      generatedShapes.forEach((candidate: any, index: number) => {
+        const validation = validateGeneratedPrimitive(candidate);
+        if (!validation.valid) {
+          rejected.push(`#${index + 1}: ${validation.issues.join(' ')}`);
+          return;
+        }
+        addShape(createGeneratedPrimitiveShape(candidate, {
+          provider: 'google-genai',
+          model: 'gemini-3-flash-preview',
+          prompt,
+        }));
+        accepted++;
       });
+      if (!accepted) throw new Error(`AI returned no safe geometry. ${rejected.join(' ')}`);
+      if (rejected.length) console.warn('[AIGenerate] Rejected candidates:', rejected);
 
-      recordAction(`// AI Generated model from prompt: "${prompt}"\n// Created ${generatedShapes.length} objects.`);
+      recordAction(`// AI Generated model from prompt: "${prompt}"\n// Created ${accepted} validated objects; rejected ${rejected.length}.`);
       setIsAIGenerateOpen(false);
       setPrompt('');
     } catch (err: any) {

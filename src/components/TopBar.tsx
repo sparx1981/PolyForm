@@ -771,51 +771,9 @@ export default function TopBar() {
   };
 
   const handlePhotoTo3D = () => {
-    const token = HuggingFaceService.getToken();
-    if (!token) {
-      alert('Add a Hugging Face API token first: open Materials \u2192 Add Material \u2192 AI Generate tab to set it, then try Photo to 3D again.');
-      setIsMenuOpen(false);
-      return;
-    }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async (e: any) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      diagLog('Import', 'Converting photo to 3D model', { name: file.name });
-      try {
-        const group = await HuggingFaceService.photoTo3D(file);
-        const id = Math.random().toString(36).substr(2, 9);
-        const newShape: any = {
-          id,
-          name: file.name.split('.')[0] + ' (AI 3D)',
-          type: 'custom',
-          position: [0, 0, 0],
-          args: {},
-          color: '#ffffff',
-          geometryData: group.toJSON()
-        };
-        setShapes(prev => [...prev, newShape]);
-        alert('Generated a 3D model from your photo!');
-      } catch (err: any) {
-        console.error('Photo to 3D error:', err);
-        alert(err?.message || 'Failed to generate a 3D model from this photo.');
-      }
-    };
-    input.click();
+    window.dispatchEvent(new CustomEvent('polyform:reconstruction-studio', { detail: { mode: 'photo' } }));
     setIsMenuOpen(false);
   };
-
-  // The AI toolbar's Photo to 3D button asks for the same flow as the File menu's.
-  const photoTo3DRef = useRef(handlePhotoTo3D);
-  photoTo3DRef.current = handlePhotoTo3D;
-  useEffect(() => {
-    const onRequest = () => photoTo3DRef.current();
-    window.addEventListener('polyform:photo-to-3d', onRequest);
-    return () => window.removeEventListener('polyform:photo-to-3d', onRequest);
-  }, []);
 
   return (
     <header 
