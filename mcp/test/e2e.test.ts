@@ -175,6 +175,28 @@ describe('connector over HTTP', () => {
     await client.close();
   });
 
+  it('matches Interior Studio soft-furnishing settle strengths by default', async () => {
+    const { token } = await signIn();
+    const client = await connect(token!);
+    const { id } = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Soft furnishings parity' } }));
+    await client.callTool({ name: 'add_room', arguments: { model: id, width: 7, length: 6 } });
+    const rooms = parse(await client.callTool({ name: 'list_rooms', arguments: { model: id } }));
+    expect(rooms.length).toBeGreaterThan(0);
+    const furnished = parse(await client.callTool({
+      name: 'furnish_room',
+      arguments: { model: id, room: rooms[0].id, preset: 'soft-furnishings' },
+    }));
+    expect(furnished.created.length).toBeGreaterThan(0);
+    const details = [];
+    for (const item of furnished.created) {
+      details.push(parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: item.id } })));
+    }
+    const bakes = details.map((item: any) => item.customData?.simulationBake).filter(Boolean);
+    expect(bakes.some((b: any) => b.type === 'cloth' && b.strength === 0.32)).toBe(true);
+    expect(bakes.some((b: any) => b.type === 'soft-body' && b.strength === 0.42)).toBe(true);
+    await client.close();
+  });
+
   it('roofs a room with the app roof assembly and replaces it on a second call', async () => {
     const { token } = await signIn();
     const client = await connect(token!);
