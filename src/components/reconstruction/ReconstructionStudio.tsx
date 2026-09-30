@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertCircle, Check, ImagePlus, Loader2, Ruler, ScanLine, X } from 'lucide-react';
+import { AlertCircle, Box, Check, ImagePlus, Loader2, Ruler, ScanLine, X } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
 import { useModalA11y } from '../ui/useModalA11y';
@@ -21,6 +21,11 @@ import {
   type ReconstructionDraft,
 } from '../../lib/reconstruction/draft';
 import { checkModelHealth } from '../../lib/reconstruction/modelHealth';
+import { HuggingFaceService } from '../../services/skpService';
+import {
+  createExternalAssetShape,
+  generatedGeometryFromObject3D,
+} from '../../lib/assets/externalAsset';
 
 type PixelPoint = [number, number];
 
@@ -49,6 +54,7 @@ export default function ReconstructionStudio() {
   const imageRef = useRef<HTMLImageElement>(null);
 
   const [fileName, setFileName] = useState('');
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pixelSize, setPixelSize] = useState<[number, number] | null>(null);
   const [points, setPoints] = useState<PixelPoint[]>([]);
@@ -108,6 +114,7 @@ export default function ReconstructionStudio() {
       const url = await fileToDataUrl(file);
       const image = await loadImage(url);
       setFileName(file.name);
+      setSourceFile(file);
       setImageUrl(url);
       setPixelSize([image.naturalWidth, image.naturalHeight]);
       setPoints([]);
@@ -185,6 +192,37 @@ export default function ReconstructionStudio() {
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Plan recognition failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const generatePhotoMesh = async () => {
+    if (!sourceFile) return;
+    if (!HuggingFaceService.getToken()) {
+      setMessage('Add a Hugging Face API token in Settings → API before using AI Photo to 3D.');
+      return;
+    }
+    setBusy(true);
+    setMessage('Sending the selected photo to Hugging Face TripoSR…');
+    try {
+      const group = await HuggingFaceService.photoTo3D(sourceFile);
+      const geometry = generatedGeometryFromObject3D(group);
+      const shape = createExternalAssetShape({
+        name: `${fileName.replace(/\.[^/.]+$/, '') || 'Photo'} (AI 3D)`,
+        geometry,
+        provenance: {
+          source: 'generated',
+          provider: 'huggingface',
+          model: 'stabilityai/TripoSR',
+          sourceFile: sourceFile.name,
+        },
+      });
+      setShapes(previous => [...previous, shape]);
+      const triangles = shape.customData?.assetValidation?.triangles ?? 0;
+      setMessage(`Generated and inserted an AI 3D mesh from the photo (${Number(triangles).toLocaleString()} triangles). Source provenance has been retained.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'AI Photo to 3D failed.');
     } finally {
       setBusy(false);
     }
@@ -344,6 +382,20 @@ export default function ReconstructionStudio() {
                   className="w-full px-3 py-2 rounded-lg bg-polyform-blue text-white text-xs font-bold disabled:opacity-40 flex items-center justify-center gap-2">
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <ScanLine size={14} />} Detect and review
                 </button>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+                <div className="flex items-center gap-2 font-bold text-sm"><Box size={16} /> AI Photo to 3D mesh</div>
+                <p className="text-xs text-gray-500">
+                  For object photos rather than floor plans. This explicitly uploads the selected image to Hugging Face TripoSR and inserts the returned GLB through PolyForm's generated-asset validation pipeline.
+                </p>
+                <button onClick={generatePhotoMesh} disabled={!sourceFile || busy}
+                  className="w-full px-3 py-2 rounded-lg border border-polyform-blue text-polyform-blue text-xs font-bold disabled:opacity-40 flex items-center justify-center gap-2">
+                  {busy ? <Loader2 size={14} className="animate-spin" /> : <Box size={14} />} Generate 3D mesh
+                </button>
+                <div className="text-[10px] text-gray-400">
+                  Requires a Hugging Face API token. Floor-plan wall detection above stays entirely local.
+                </div>
               </div>
 
               {message && (
