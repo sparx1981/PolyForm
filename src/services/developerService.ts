@@ -5,6 +5,8 @@ import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphic
 import type { KernelArcHost } from '../tools/kernelArcHost';
 import { roofBuilding, type RoofTileLook } from '../lib/buildingRoofs';
 import { buildRoomAssembly } from '../lib/archRoomAssembly';
+import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
+import { makeGuideArgs, isGuideShape } from '../tools/tapeGuides';
 import { withShapeIds } from '../lib/shapeIds';
 import { buildTextShape, editTextShape, type TextOptions } from '../lib/textShapes';
 import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
@@ -379,6 +381,8 @@ export interface SDK {
       color?: string;
       handrailHeight?: number;
     }) => Shape;
+    createScaleFigure: (args?: { characterId?: string; height?: number; position?: [number, number, number]; rotation?: number; name?: string }) => Shape;
+    listScaleFigureCharacters: () => typeof SCALE_FIGURE_CHARACTERS;
     createRailing: (args: {
       length?: number;
       height?: number;
@@ -641,6 +645,9 @@ export interface SDK {
     ) => Shape;
     addAreaLabel: (faceId: number, anchor?: [number, number, number], position?: [number, number, number]) => Shape | null;
     addLeader: (target: [number, number, number], anchor: [number, number, number], text: string) => Shape;
+    addGuide: (point: [number, number, number], direction: [number, number, number], distance?: number, reach?: number) => Shape;
+    listGuides: () => Shape[];
+    deleteGuides: () => number;
     measureDistance: (p1: [number, number, number], p2: [number, number, number]) => {
       distance: number;
       dx: number;
@@ -721,6 +728,9 @@ export interface SDK {
 
   // Camera & Presentation Subsystem
   camera: {
+    setNavigationMode: (mode: 'orbit' | 'pan' | 'zoom' | 'look' | 'walk' | 'teleport') => void;
+    configureWalk: (settings: { movementSpeed?: number; mouseSensitivity?: number }) => void;
+    getWalkSettings: () => { movementSpeed?: number; mouseSensitivity?: number };
     setProjection: (mode: 'perspective' | 'orthographic') => void;
     resetView: (view: 'perspective' | 'plan' | 'front' | 'rear' | 'left' | 'right') => void;
     setDepthClipping: (settings: { enabled?: boolean; near?: number; far?: number }) => void;
@@ -1273,6 +1283,28 @@ export class DeveloperSDK implements SDK {
         this.log(`Created parametric stairs (${style}, height: ${height}m, steps: ${numSteps}, structure: ${structure}).`);
         return stairShape;
       },
+
+      createScaleFigure: (args: { characterId?: string; height?: number; position?: [number, number, number]; rotation?: number; name?: string } = {}): Shape => {
+        const character = SCALE_FIGURE_CHARACTERS.find(c => c.id === (args.characterId ?? 'architect-alex')) ?? SCALE_FIGURE_CHARACTERS[0]!;
+        const height = args.height && args.height > 0.5 ? args.height : character.height;
+        const geom = createScaleFigureGeometry(character.id, height);
+        const shape: Shape = {
+          id: Math.random().toString(36).slice(2, 11),
+          name: args.name ?? character.name,
+          type: 'scale_figure',
+          position: args.position ?? [0, 0, 0],
+          rotation: [0, args.rotation ?? 0, 0],
+          args: [character.width * (height / character.height), height, character.depth * (height / character.height)],
+          archStyle: character.id,
+          color: character.primaryColor,
+          tags: ['architecture', 'scale-figure', 'reference'],
+          geometryData: geometryToData(geom),
+        };
+        geom.dispose();
+        this.setShapes(prev => [...prev, shape]);
+        return shape;
+      },
+      listScaleFigureCharacters: () => SCALE_FIGURE_CHARACTERS.map(c => ({ ...c })),
 
       createRailing: (args: {
         length?: number;
@@ -2287,6 +2319,30 @@ export class DeveloperSDK implements SDK {
         return shape;
       },
 
+      addGuide: (point, direction, distance = 0, reach = 100) => {
+        const p = new THREE.Vector3(...point);
+        const d = new THREE.Vector3(...direction);
+        if (d.lengthSq() < 1e-12) throw new Error('Guide direction must not be zero.');
+        const args = makeGuideArgs(p, d, distance, reach);
+        const shape: Shape = {
+          id: Math.random().toString(36).slice(2, 11),
+          name: 'Guide',
+          type: 'measurement',
+          position: point,
+          args,
+          color: '#60a5fa',
+          tags: ['annotation', 'guide', 'measurement'],
+        };
+        this.setShapes(prev => [...prev, shape]);
+        return shape;
+      },
+      listGuides: () => this.shapes.filter(isGuideShape),
+      deleteGuides: () => {
+        const ids = new Set(this.shapes.filter(isGuideShape).map(shape => shape.id));
+        this.setShapes(prev => prev.filter(shape => !ids.has(shape.id)));
+        return ids.size;
+      },
+
       setUnit: (unit: 'm' | 'cm' | 'mm'): void => {
         if (!['m', 'cm', 'mm'].includes(unit)) {
           this.log(`Unknown unit "${unit}" - use 'm', 'cm' or 'mm'.`);
@@ -2554,6 +2610,18 @@ export class DeveloperSDK implements SDK {
     // CAMERA & PRESENTATION SUBSYSTEM
     // ─────────────────────────────────────────────────────────────
     this.camera = {
+      setNavigationMode: (mode) => {
+        this.extraSetters.setActiveTool?.(mode);
+        this.log(`Camera navigation mode: ${mode}.`);
+      },
+      configureWalk: (settings) => {
+        if (settings.movementSpeed !== undefined) this.extraSetters.setWalkMovementSpeed?.(settings.movementSpeed);
+        if (settings.mouseSensitivity !== undefined) this.extraSetters.setWalkMouseSensitivity?.(settings.mouseSensitivity);
+      },
+      getWalkSettings: () => ({
+        movementSpeed: this.extraSetters.walkMovementSpeed,
+        mouseSensitivity: this.extraSetters.walkMouseSensitivity,
+      }),
       setProjection: (mode: 'perspective' | 'orthographic'): void => {
         window.dispatchEvent(new CustomEvent('set-camera-projection', { detail: { mode } }));
         this.log(`Switched camera projection to: ${mode}`);
