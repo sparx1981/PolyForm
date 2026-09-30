@@ -50,6 +50,7 @@ import { ToolModifierPalette } from './components/ToolModifierPalette';
 import CivilGradeHUD from './components/terrain/CivilGradeHUD';
 import FpsCounter from './components/FpsCounter';
 import BakeModal from './components/terrain/BakeModal';
+import ReconstructionStudio from './components/reconstruction/ReconstructionStudio';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
 import { upgradeRoofsWhenReady } from './lib/roofUpgrade';
@@ -399,6 +400,7 @@ function AppContent() {
       <CodeRecorder />
       <CustomToolbarOverlay />
       <BakeModal />
+      <ReconstructionStudio />
     </>
   );
 
