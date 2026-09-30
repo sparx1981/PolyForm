@@ -133,25 +133,43 @@ export function planRoomFurnishing(
       for (const t of candidateTs(types.length)) {
         const candidate = wallPlacementCandidate(wall, t, defaults.depth);
         if (!candidate) continue;
-        const position: [number, number, number] = [
-          candidate.position[0],
-          room.elevation,
-          candidate.position[2],
-        ];
-        const yaw = candidate.rotationY ?? 0;
-        const footprint = candidateFootprint(type, position, yaw);
-        if (room.boundary.length >= 3 && !pointInPolygon(footprint.center, room.boundary)) continue;
-        if (placementCollisions(footprint, obstacles, profile).length > 0) continue;
 
-        placed = createInteriorFurnitureShape(type, {
-          position,
-          rotationY: yaw,
-          roomId: room.id,
-        });
-        const placedFootprint = semanticFootprint(placed);
-        if (placedFootprint) obstacles.push(placedFootprint);
-        planned.push(placed);
-        break;
+        // A wall's local +Z is not guaranteed to face the room. Imported walls, rooms drawn in
+        // the opposite winding direction and older models may legitimately point the other way.
+        // The placement helper gives one face; try its mirror across the wall centreline too and
+        // let the room-boundary/collision checks choose the valid side. This keeps furnishing
+        // independent of wall orientation instead of silently losing wall-hosted items.
+        const dx = candidate.position[0] - wall.position[0];
+        const dz = candidate.position[2] - wall.position[2];
+        const angle = candidate.rotationY ?? 0;
+        const nx = Math.sin(angle), nz = Math.cos(angle);
+        const normalOffset = dx * nx + dz * nz;
+        const candidatePositions: [number, number, number][] = [
+          [candidate.position[0], room.elevation, candidate.position[2]],
+          [
+            candidate.position[0] - 2 * normalOffset * nx,
+            room.elevation,
+            candidate.position[2] - 2 * normalOffset * nz,
+          ],
+        ];
+
+        for (const position of candidatePositions) {
+          const yaw = candidate.rotationY ?? 0;
+          const footprint = candidateFootprint(type, position, yaw);
+          if (room.boundary.length >= 3 && !pointInPolygon(footprint.center, room.boundary)) continue;
+          if (placementCollisions(footprint, obstacles, profile).length > 0) continue;
+
+          placed = createInteriorFurnitureShape(type, {
+            position,
+            rotationY: yaw,
+            roomId: room.id,
+          });
+          const placedFootprint = semanticFootprint(placed);
+          if (placedFootprint) obstacles.push(placedFootprint);
+          planned.push(placed);
+          break;
+        }
+        if (placed) break;
       }
       if (placed) break;
     }
