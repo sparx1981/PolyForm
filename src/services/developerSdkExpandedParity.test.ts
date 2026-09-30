@@ -156,21 +156,38 @@ describe('expanded SDK tool coverage', () => {
       includeRoof: false,
     });
     expect(framing.length).toBeGreaterThan(0);
-    const member = framing.find((shape: Shape) => shape.timberMemberData);
+    const member = framing.find(shape => shape.tags?.includes('timber-stud'));
+    expect(member).toBeDefined();
     expect(member?.timberMemberData?.generation_params_snapshot).toMatchObject({
       spacing_mm: 450,
       frame_depth_mm: 120,
       species: 'Douglas Fir',
       grade: 'C16',
     });
-    expect((member?.args as number[])[1] === 0.05 || (member?.args as number[])[0] === 0.05 || (member?.args as number[])[2] === 0.05).toBe(true);
+    // Stud cross-sections use the configured dimensions; plates retain the app's 45mm thickness.
+    const studs = framing.filter(shape => shape.tags?.includes('timber-stud'));
+    for (const stud of studs) {
+      expect((stud.args as number[])[0]).toBeCloseTo(0.05);
+      expect((stud.args as number[])[2]).toBeCloseTo(0.12);
+    }
+    const plate = framing.find(shape => shape.tags?.includes('timber-plate'));
+    expect(plate).toBeDefined();
+    expect((plate!.args as number[])[1]).toBeCloseTo(0.045);
   });
 
   it('uses roofId to scope timber framing instead of silently ignoring it', () => {
     const h = harness();
+    h.sdk.architecture.createRoom({ width: 6, length: 5, height: 3 });
     const roof = h.sdk.architecture.createRoof({ roofType: 'gable', width: 6, depth: 5, position: [0, 3, 0] });
+    h.sdk.architecture.createRoof({ roofType: 'hip', width: 4, depth: 4, position: [12, 3, 0] });
+    const before = h.shapes.length;
     const framing = h.sdk.architecture.generateTimberFraming({ roofId: roof.id, includeRoof: true });
+    expect(framing.length).toBeGreaterThan(0);
     expect(framing.every((shape: Shape) => shape.parentWallOrRoofId === roof.id)).toBe(true);
+    expect(framing.every(shape => shape.tags?.includes('timber-roof-rafter'))).toBe(true);
+    expect(h.shapes.slice(before)).toEqual(framing);
+    expect(h.sdk.architecture.generateTimberFraming({ roofId: 'missing-roof' })).toEqual([]);
+    expect(h.shapes).toHaveLength(before + framing.length);
   });
 
   it('creates styled doors/windows and procedural scale figures', () => {

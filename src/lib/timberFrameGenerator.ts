@@ -1237,6 +1237,7 @@ export function generateTimberFraming(
           roughness: 0.8,
           metalness: 0.05,
           groupId,
+          parentWallOrRoofId: roof.id,
           tags: [timberTag, 'timber-roof-rafter', subTag, ...(roof.tags || []).filter(t => t !== 'roof-assembly')],
         });
         roofRafterCount++;

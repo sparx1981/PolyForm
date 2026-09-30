@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { SDK_REFERENCE } from './sdkFullReference';
 
 function sdkInterfaceSource(): string {
-  const source = readFileSync(resolve(__dirname, '../../services/developerService.ts'), 'utf8');
+  const source = readFileSync(resolve(__dirname, '../../services/developerService.ts'), 'utf8').replace(/\r\n/g, '\n');
   const start = source.indexOf('export interface SDK {');
   const end = source.indexOf('\n}\n\nexport class DeveloperSDK', start);
   if (start < 0 || end < 0) throw new Error('Could not locate SDK interface.');

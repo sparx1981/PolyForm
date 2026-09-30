@@ -116,7 +116,7 @@ describe('connector over HTTP', () => {
     expect(waterEdited.waterData).toMatchObject({ depth: 1.1, clarity: 'clear', flow: { mode: 'stream', speed: 0.7, turbulence: 0.3 } });
 
     const summary = parse(await client.callTool({ name: 'get_model', arguments: { model: 'garden' } }));
-    expect(summary.byType).toMatchObject({ wall: 4, box: 1, door: 1, patio: 1, water: 1 });
+    expect(summary.byType).toMatchObject({ wall: 4, poly: 2, door: 1, patio: 1, water: 1 });
     expect(summary.totals.patioAreaM2).toBeCloseTo(11.6);
 
     const shot = await client.callTool({ name: 'screenshot', arguments: { model: created.id, view: 'plan' } }) as any;
@@ -143,12 +143,12 @@ describe('connector over HTTP', () => {
 
     await client.callTool({ name: 'delete_objects', arguments: { model: created.id, objects: [wall.id] } });
     let objects = parse(await client.callTool({ name: 'list_objects', arguments: { model: created.id } }));
-    expect(objects.total).toBe(5); // the wall and its door are gone
+    expect(objects.total).toBe(7); // the wall and its door are gone
 
     const undo = await client.callTool({ name: 'undo_last_change', arguments: { model: created.id } }) as any;
     expect(undo.content[0].text).toMatch(/Undid: Deleted/);
     objects = parse(await client.callTool({ name: 'list_objects', arguments: { model: created.id } }));
-    expect(objects.total).toBe(7);
+    expect(objects.total).toBe(9);
     await client.close();
   });
 
@@ -193,7 +193,7 @@ describe('connector over HTTP', () => {
     }
     const bakes = details.map((item: any) => item.customData?.simulationBake).filter(Boolean);
     expect(bakes.some((b: any) => b.type === 'cloth' && b.strength === 0.32)).toBe(true);
-    expect(bakes.some((b: any) => b.type === 'soft-body' && b.strength === 0.42)).toBe(true);
+    expect(bakes.some((b: any) => b.type === 'softbody' && b.strength === 0.42)).toBe(true);
     await client.close();
   });
 
@@ -249,7 +249,8 @@ describe('connector over HTTP', () => {
     const [, y, z] = stairs.created[0].position;
     expect(y).toBeCloseTo(0.15 + 2.85 / 2, 1);
     expect(z).toBeCloseTo(1 + 4.4 / 2, 1);
-    expect(stairs.created[0].customData).toMatchObject({
+    const stairDetail = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: stairs.created[0].id } }));
+    expect(stairDetail.customData).toMatchObject({
       style: 'straight',
       structure: 'floating',
       railing: 'left',
@@ -263,7 +264,8 @@ describe('connector over HTTP', () => {
       name: 'add_railing',
       arguments: { model: id, length: 3.2, height: 1.1, position: [0, 0.15, -1], color: '#334155' },
     }));
-    expect(railing.created[0]).toMatchObject({ type: 'railing', position: [0, 0.15, -1], args: [3.2, 1.1], color: '#334155' });
+    const railingDetail = parse(await client.callTool({ name: 'get_object', arguments: { model: id, object: railing.created[0].id } }));
+    expect(railingDetail).toMatchObject({ type: 'railing', position: [0, 0.15, -1], args: [3.2, 1.1], color: '#334155' });
     await client.close();
   });
 

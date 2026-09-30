@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FirestoreStore, externalStorageError } from '../src/store';
 
 describe('models kept in Drive or Trimble Connect', () => {
@@ -67,6 +67,7 @@ function fakeFirestore() {
 }
 
 describe('FirestoreStore reads and undo history', () => {
+  afterEach(() => vi.restoreAllMocks());
   const caller = { uid: 'u1', email: 'me@example.com' };
   const box = (id: string) => ({ id, type: 'box', position: [0, 0, 0] }) as any;
 
@@ -95,7 +96,8 @@ describe('FirestoreStore reads and undo history', () => {
     expect((await store.undo(caller, id)).note).toBe('add 28');
   });
 
-  it('persists civil modifiers and kernel state and restores both through undo', async () => {
+  it('persists civil modifiers and kernel state and undoes same-millisecond changes in order', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
     const fake = fakeFirestore();
     const store = new FirestoreStore(fake.db, () => Date.now());
     const id = await store.createModel(caller, 'Civil and kernel');
@@ -123,6 +125,22 @@ describe('FirestoreStore reads and undo history', () => {
 
     expect((await store.undo(caller, id)).note).toBe('road');
     expect((await store.loadModel(caller, id)).terrainModifiers).toEqual([]);
+  });
+
+  it('keeps undo order when the clock goes backwards after an undo and a new edit', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(2000);
+    const fake = fakeFirestore();
+    const store = new FirestoreStore(fake.db, () => Date.now());
+    const id = await store.createModel(caller, 'Clock changes');
+    await store.changeShapes(caller, id, 'first', s => [...s, box('a')]);
+    await store.changeShapes(caller, id, 'second', s => [...s, box('b')]);
+    expect((await store.undo(caller, id)).note).toBe('second');
+    clock.mockReturnValue(1000);
+    await store.changeShapes(caller, id, 'replacement', s => [...s, box('c')]);
+    expect((await store.undo(caller, id)).note).toBe('replacement');
+    expect((await store.loadModel(caller, id)).shapes.map(s => s.id)).toEqual(['a']);
+    expect((await store.undo(caller, id)).note).toBe('first');
+    expect((await store.undo(caller, id)).note).toBeNull();
   });
 
   it('still finds a model by name, and refuses other people’s models', async () => {

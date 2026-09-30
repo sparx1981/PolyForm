@@ -334,11 +334,15 @@ export class FirestoreStore implements ModelStore {
    */
   private recordHistory(caller: Caller, tx: FirebaseFirestore.Transaction, ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData, note: string) {
     const seq = Number.isInteger(data.mcpHistorySeq) ? data.mcpHistorySeq as number : 0;
+    // Changes can share a millisecond (or arrive after the clock moves backwards).
+    // Keep undo's timestamp ordering strictly increasing within this model transaction.
+    const createdAt = Math.max(Date.now(), (Number(data.mcpHistoryCreatedAt) || 0) + 1);
     tx.set(ref.collection('mcpHistory').doc(`slot${seq % HISTORY_LIMIT}`), {
       shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null,
       terrainModifiers: data.terrainModifiers ?? [], kernel: data.kernel ?? null,
-      note, uid: caller.uid, createdAt: Date.now(),
+      note, uid: caller.uid, createdAt,
     });
+    tx.update(ref, { mcpHistoryCreatedAt: createdAt });
     return seq + 1;
   }
 

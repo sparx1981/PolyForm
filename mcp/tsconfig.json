@@ -11,7 +11,7 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "baseUrl": ".",

@@ -34,3 +34,12 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Install MCP dependencies
+        run: npm ci --prefix mcp
+
+      - name: Type check MCP
+        run: npm run typecheck --prefix mcp
+
+      - name: Run MCP tests
+        run: npm test --prefix mcp

@@ -494,6 +494,15 @@ describe('timberFrameGenerator - Roof Framing Precision', () => {
       expect(withWindow.roofRafterCount).toBe(withoutWindow.roofRafterCount);
     });
 
+    it('keeps roof ownership on saved shapes and instanced members for every roof', () => {
+      const roofs = [rectRoof({ id: 'roof-a' }), rectRoof({ id: 'roof-b', position: [20, 0, 0] })];
+      const framing = generateTimberFraming(roofs, { includeWalls: false, includeFloors: false });
+      expect(new Set(framing.shapes.map(s => s.parentWallOrRoofId))).toEqual(new Set(roofs.map(r => r.id)));
+      for (const instance of framing.instancedMembers!.rafter) {
+        expect(framing.shapes.find(s => s.id === instance.id)?.parentWallOrRoofId).toBe(instance.parentWallOrRoofId);
+      }
+    });
+
     it('reads roof height from roofData.ridgeHeight, not a stale args[1]', () => {
       // args[1] intentionally disagrees with roofData.ridgeHeight - only
       // one of them can be the "real" roof height, and it must be

@@ -6,9 +6,9 @@ import { carryHosted, fenceRun, openingInWall, patioOrDeck, summarize, transform
 const wallAlongX = (): Shape => withSdk([], sdk => sdk.architecture.createWall({ start: [0, 0, 0], end: [4, 0, 0], height: 2.8 })).created[0];
 
 describe('building with the app scripting library', () => {
-  it('makes a room of four walls and a floor', () => {
+  it('makes a room of four walls, a polygon floor and a foundation', () => {
     const run = withSdk([], sdk => sdk.architecture.createRoom({ width: 5, length: 4 }));
-    expect(run.created.map(s => s.type).sort()).toEqual(['box', 'wall', 'wall', 'wall', 'wall']);
+    expect(run.created.map(s => s.type).sort()).toEqual(['poly', 'poly', 'wall', 'wall', 'wall', 'wall']);
   });
 
   it('makes a wall from start to end standing on the floor', () => {

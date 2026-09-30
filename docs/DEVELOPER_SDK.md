@@ -12,6 +12,7 @@ The `sdk` object is available in the Developer Console and in saved developer sc
 - `sdk.reconstruction` — reconstruction drafts, providers, review, commit and health checks
 - `sdk.interiors` — detected rooms, parametric furniture, smart furnishing, cloth/soft-body baking
 - `sdk.landscape` — terrain, plants, fences, water, patios and site furniture
+- `sdk.civil` — roads, grading pads, parking surfaces and terrain modifier editing
 - `sdk.materials`, `sdk.measurement`, `sdk.selection`, `sdk.camera`, `sdk.performance`, `sdk.scene`, `sdk.outliner`
 - `sdk.blockKit`, `sdk.worldView`, `sdk.text`, `sdk.drawing`, `sdk.toolbars`, `sdk.ai`
 
