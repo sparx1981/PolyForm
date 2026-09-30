@@ -26,7 +26,8 @@ import {
   generateRoofTileTexture 
 } from '../lib/roofTileGenerator';
 import { 
-  updateRoofAssembly 
+  updateRoofAssembly,
+  DEFAULT_ROOF_MATERIAL_ID
 } from '../lib/archRoofGenerator';
 import { Shape } from '../types';
 import { refreshRoofExtras } from '../lib/roofExtras';
@@ -74,6 +75,9 @@ export const RoofModifierSection: React.FC = () => {
     }
     return roofShapes[0] || null;
   }, [selectedId, shapes, roofShapes]);
+
+  // Whether the roof wears the library's tile picture (only on flat roof planes).
+  const usesPicture = !!activeRoof?.materialBindingId;
 
   // 2. State for Tile Configuration
   const [tileShape, setTileShape] = useState<RoofTileShape>(
@@ -183,6 +187,8 @@ export const RoofModifierSection: React.FC = () => {
     seedVal?: number;
     copingOverhang?: number;
     slabProjection?: number;
+    /** true: cover the roof with the library tile picture; false: plain colour. */
+    picture?: boolean;
   }) => {
     if (!activeRoof) return;
 
@@ -228,6 +234,10 @@ export const RoofModifierSection: React.FC = () => {
           ...s,
           color: targetTileColor,
           textureUrl: tileTextureUrl || undefined,
+          // 3D tiles and a chosen colour replace the tile picture.
+          materialBindingId: params.picture === undefined
+            ? (targetTileShape === 'none' ? s.materialBindingId : undefined)
+            : (params.picture && targetTileShape === 'none' ? DEFAULT_ROOF_MATERIAL_ID : undefined),
         };
       }
       return s;
@@ -309,7 +319,7 @@ export const RoofModifierSection: React.FC = () => {
     setTileShape(shapeId);
     applyRoofAssemblyModifications({ shape: shapeId });
     if (shapeId === 'none') {
-      setMeasurements('Roof tile profile set to No Tile (smooth clean planes, maximum performance).');
+      setMeasurements('Roof tile profile set to flat planes (no 3D tiles, maximum performance).');
     } else {
       setMeasurements(`Roof tile profile set to 3D ${ROOF_TILE_SHAPES.find(s => s.id === shapeId)?.name}.`);
     }
@@ -325,7 +335,7 @@ export const RoofModifierSection: React.FC = () => {
   // Handler for Base Tile Color change
   const handleColorChange = (newColor: string) => {
     setTileColor(newColor);
-    applyRoofAssemblyModifications({ color: newColor });
+    applyRoofAssemblyModifications({ color: newColor, picture: false });
   };
 
   // Handler for Randomize Toggle
@@ -667,15 +677,38 @@ export const RoofModifierSection: React.FC = () => {
           })}
         </div>
 
-        {/* Performance Mode Callout for No Tile */}
+        {/* Flat-plane roofs: tile picture from the material library, or one plain colour */}
         {tileShape === 'none' && (
-          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 text-[10px] leading-relaxed flex items-start gap-2">
-            <span className="text-xs pt-0.5">⚡</span>
-            <div>
-              <div className="font-bold">Fast Performance Mode Active</div>
-              <p className="text-[9px] opacity-90 mt-0.5 text-emerald-700 dark:text-emerald-400">
-                Smooth planar roof planes with zero 3D tile models or texture mapping. Ideal for low-spec hardware, large models, or clean modern architecture.
-              </p>
+          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 text-[10px] leading-relaxed space-y-2">
+            <div className="flex items-start gap-2">
+              <span className="text-xs pt-0.5">⚡</span>
+              <div>
+                <div className="font-bold">Fast: flat roof planes</div>
+                <p className="text-[9px] opacity-90 mt-0.5 text-emerald-700 dark:text-emerald-400">
+                  No 3D tile models, so it stays smooth on large models and low-spec hardware.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1" role="group" aria-label="Roof surface">
+              {([[true, 'Tile picture'], [false, 'Plain colour']] as const).map(([picture, label]) => {
+                const active = usesPicture === picture;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => applyRoofAssemblyModifications({ picture })}
+                    className={cn(
+                      "py-1 rounded-md border text-[10px] font-semibold transition-colors",
+                      active
+                        ? "bg-polyform-blue/10 border-polyform-blue text-polyform-blue"
+                        : "bg-white dark:bg-gray-800/80 border-gray-200/80 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

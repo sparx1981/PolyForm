@@ -128,6 +128,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { useLineBinding } from '../tools/lineToolBinding';
 import { Button } from './ui/Surface';
 import { runtimeImageUrl, useMaterialBindings } from '../lib/assets/useMaterialBindings';
+import { indexCatalog } from '../lib/assets/catalog';
 import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
 import { isMaterialAssetId } from '../lib/assets/types';
 import { loadAssetManifest } from '../lib/assets/catalog';
@@ -1730,6 +1731,8 @@ function Scene() {
     exitGroupEdit,
   } = useApp();
 
+  const { catalog: viewportCatalog } = useAssetCatalog();
+  const catalogSummaries = useMemo(() => indexCatalog(viewportCatalog), [viewportCatalog]);
   const usedMaterialBindings = useMemo(() => {
     const ids = new Set<string>();
     for (const shape of shapes) {
@@ -1742,8 +1745,14 @@ function Scene() {
       const bindingId = (face.attributes.custom.finish as { bindingId?: string | null } | undefined)?.bindingId;
       if (bindingId) ids.add(bindingId);
     }
-    return Object.fromEntries([...ids].filter(id => materialBindings[id]).map(id => [id, materialBindings[id]]));
-  }, [shapes, materialBindings, kernelHost, kernelRevision]);
+    // A library material used by a shape (e.g. the default roof tiles) needs no manual registration.
+    const bindingFor = (id: string) => {
+      if (materialBindings[id]) return materialBindings[id];
+      const summary = isMaterialAssetId(id) ? catalogSummaries.get(id) : undefined;
+      return summary && isMaterialAssetId(summary.id) ? { ref: { assetId: summary.id, revision: summary.revision } } : undefined;
+    };
+    return Object.fromEntries([...ids].map(id => [id, bindingFor(id)] as const).filter(([, b]) => b));
+  }, [shapes, materialBindings, kernelHost, kernelRevision, catalogSummaries]);
   const { resolved: resolvedMaterialBindings } = useMaterialBindings(usedMaterialBindings, '2k');
 
   const { raycaster, mouse, camera, scene, gl } = useThree();
@@ -11927,21 +11936,24 @@ function Scene() {
           const binding = bindingId ? resolvedMaterialBindings[bindingId] : undefined;
           if (!binding) return undefined;
           const textures = bindingId ? managedBindingTextures[bindingId] : undefined;
-          const ormUrl = runtimeImageUrl(binding.maps.orm);
+          // Roof planes face the sky: the packed occlusion/roughness/metal map only makes them muddy,
+          // and the dark clay needs a lift (same treatment as styled existing buildings).
+          const isRoof = !!shape.roofData;
+          const ormUrl = isRoof ? undefined : runtimeImageUrl(binding.maps.orm);
           return {
             baseColorUrl: runtimeImageUrl(binding.maps.basecolor),
             baseColorTexture: textures?.basecolor,
-            color: binding.color,
+            color: isRoof ? new THREE.Color(binding.color).multiplyScalar(2.2) : binding.color,
             roughness: binding.roughness,
-            metalness: binding.metalness,
+            metalness: isRoof ? 0 : binding.metalness,
             opacity: binding.opacity,
             depth: binding.depth,
             pbr: {
               normalMap: textures?.['normal-gl'] ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps['normal-gl'])),
               normalScale: binding.maps['normal-gl'] ? new THREE.Vector2(binding.normalStrength, binding.normalStrength) : undefined,
-              roughnessMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
-              metalnessMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
-              aoMap: textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              roughnessMap: isRoof ? undefined : textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              metalnessMap: isRoof ? undefined : textures?.orm ?? getCachedPBRMapTexture(ormUrl),
+              aoMap: isRoof ? undefined : textures?.orm ?? getCachedPBRMapTexture(ormUrl),
               aoMapIntensity: ormUrl ? 1 : undefined,
               specularIntensityMap: textures?.specular ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps.specular)),
               transmissionMap: textures?.transmission ?? getCachedPBRMapTexture(runtimeImageUrl(binding.maps.transmission)),

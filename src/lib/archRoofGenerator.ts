@@ -11,6 +11,9 @@ import {
   ROOF_TILE_SHAPES 
 } from './roofTileGenerator';
 
+/** The library material new pitched roofs are covered with (picture, relief and real tile size, on flat planes). */
+export const DEFAULT_ROOF_MATERIAL_ID = 'ph:material:clay_roof_tiles';
+
 export type RoofType = 'gable' | 'hip' | 'parapet';
 
 export interface RoofParams {
@@ -21,6 +24,8 @@ export interface RoofParams {
   eaveOverhang?: number;     // e.g. 0.30 m
   roofThickness?: number;    // e.g. 0.12 m
   fasciaHeight?: number;     // e.g. 0.18 m
+  /** Keep the roof one plain colour instead of the library tile picture. */
+  plainColour?: boolean;
   parapetHeight?: number;    // e.g. 0.60 m (for parapet flat roofs)
   parapetThickness?: number; // e.g. 0.20 m
   copingOverhang?: number;   // coping drip past the parapet faces, e.g. 0.04 m
@@ -2173,7 +2178,9 @@ export function buildRoofAssemblyForRoom(
     position: [centerX, topY, centerZ],
     rotation: [0, 0, 0],
     args: [width, ridgeH, depth],
-    color: params.color || '#991b1b', // Terracotta roof red
+    color: params.color || '#991b1b', // Terracotta roof red (shown only when the tile picture is off)
+    // New pitched roofs on flat planes wear the library's clay tile picture (3D tiles bring their own look).
+    ...((params.tileShape ?? 'none') === 'none' && !params.plainColour ? { materialBindingId: DEFAULT_ROOF_MATERIAL_ID } : {}),
     roughness: 0.75,
     metalness: 0.05,
     geometryData: safeExtractGeometryData(slopesGeom),

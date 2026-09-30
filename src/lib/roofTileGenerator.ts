@@ -37,7 +37,7 @@ export interface TileShapeOption {
 export const ROOF_TILE_SHAPES: TileShapeOption[] = [
   {
     id: 'none',
-    name: 'No Tile (Smooth / Fast)',
+    name: 'Flat Planes (Fast)',
     category: 'performance',
     description: 'Clean planar roof planes with zero tile geometry or tile textures for maximum rendering performance.',
     svgPath: 'M20 2C10.06 2 2 10.06 2 20C2 29.94 10.06 38 20 38C29.94 38 38 29.94 38 20C38 10.06 29.94 2 20 2ZM6 20C6 12.27 12.27 6 20 6C23.23 6 26.2 7.1 28.59 8.94L8.94 28.59C7.1 26.2 6 23.23 6 20ZM20 34C16.77 34 13.8 32.9 11.41 31.06L31.06 11.41C32.9 13.8 34 16.77 34 20C34 27.73 27.73 34 20 34Z'

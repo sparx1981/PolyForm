@@ -211,6 +211,7 @@ export function rebuildExtensionRoof(shapes: Shape[], roofId: string, kind: Exte
     eaveOverhang: roof.roofData.eaveOverhang || 0.3,
     fasciaHeight: roof.roofData.fasciaHeight,
     color: roof.color,
+    plainColour: !roof.materialBindingId,
     ...(tiles ? { tileShape: tiles.shape, tileSize: tiles.size, tileColor: tiles.color, randomizeColor: tiles.randomizeColor, colorPalette: tiles.colorPalette, seed: tiles.seed } : {}),
   };
   const r = extensionRoof(site, kind, params, site.mainPitch, shapes);
