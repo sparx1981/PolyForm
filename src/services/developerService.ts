@@ -495,6 +495,7 @@ export interface SDK {
 
   // Interior Design Subsystem
   interiors: {
+    listRooms: () => ReturnType<typeof detectRooms>;
     addFurniture: (type: InteriorFurnitureType, options?: {
       position?: [number, number, number];
       rotation?: number;
@@ -1664,6 +1665,8 @@ export class DeveloperSDK implements SDK {
     // INTERIOR DESIGN SUBSYSTEM
     // ─────────────────────────────────────────────────────────────
     this.interiors = {
+      listRooms: () => detectRooms(this.shapes),
+
       addFurniture: (type: InteriorFurnitureType, options?: {
         position?: [number, number, number];
         rotation?: number;
