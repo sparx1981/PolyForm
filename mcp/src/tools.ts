@@ -605,16 +605,33 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
   })));
 
   server.registerTool('add_pond', {
-    title: 'Add a pond or lake',
-    description: 'Water filling an outline of ground points; it digs its own basin into the terrain.',
+    title: 'Add a pond, lake or flowing water body',
+    description: 'Water filling an outline of ground points; it digs its own basin into the terrain. Set flow_mode to stream for a directional current.',
     inputSchema: {
       model: modelRef,
       points: z.array(point2).min(3),
       depth: z.number().min(0.2).max(20).default(1.2),
       clarity: z.enum(['clear', 'lake', 'pond', 'murky']).default('lake'),
+      flow_mode: z.enum(['still', 'stream']).default('still'),
+      flow_direction: point2.optional().describe('Plan direction [x, z] for stream/current flow; normalised by the renderer'),
+      flow_speed: z.number().min(0).max(4).optional().describe('Surface current speed in metres/second'),
+      turbulence: z.number().min(0).max(1).optional().describe('Extra small-scale disturbance from 0 to 1'),
     },
     annotations: WRITE,
-  }, safe(async (a) => change(a.model, 'Added a pond', shapes => add(waterBody(shapes, a.points as [number, number][], { depth: a.depth, clarity: a.clarity }))(shapes))));
+  }, safe(async (a) => change(a.model, a.flow_mode === 'stream' ? 'Added flowing water' : 'Added a pond', shapes => add(waterBody(
+    shapes,
+    a.points as [number, number][],
+    {
+      depth: a.depth,
+      clarity: a.clarity,
+      flow: a.flow_mode === 'stream' ? {
+        mode: 'stream',
+        direction: a.flow_direction as [number, number] | undefined,
+        speed: a.flow_speed,
+        turbulence: a.turbulence,
+      } : { mode: 'still' },
+    },
+  ))(shapes))));
 
   server.registerTool('add_patio', {
     title: 'Add a patio or deck',
