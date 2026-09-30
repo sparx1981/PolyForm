@@ -317,7 +317,6 @@ export const SDK_REFERENCE: SdkTag[] = [
     ],
   },
   {
-  {
     id: 'performance', title: 'performance',
     description: 'GPU/frame profiler automation: record, benchmark, compare and export the same runs shown by the in-app GPU Profiler.',
     methods: [
@@ -336,6 +335,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('toMarkdown', 'sdk.performance.toMarkdown(runOrId?)', 'string | null', 'Format a profiler run as the same readable summary used by the Copy summary action.'),
     ],
   },
+  {
     id: 'scene', title: 'scene',
     description: 'Scene export/import, history and stats.',
     methods: [
