@@ -173,6 +173,20 @@ import {
   validateReconstructionDraft,
   type ReconstructionDraft,
 } from '../lib/reconstruction/draft';
+import { checkModelHealth } from '../lib/reconstruction/modelHealth';
+import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
+import {
+  createExternalAssetShape,
+  validateGeneratedAsset,
+  type GeneratedAssetInput,
+} from '../lib/assets/externalAsset';
+import {
+  calibrateReferencePlan,
+  createReferencePlanShape,
+  type ReferencePlanCalibration,
+  type ReferencePlanSettings,
+  type ReferencePlanSource,
+} from '../lib/reconstruction/referencePlan';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
@@ -408,6 +422,34 @@ export interface SDK {
     getWindowDefaults: () => WindowConfigDefaults;
   };
 
+  // Reference Plan Subsystem
+  referencePlans: {
+    calibrate: (
+      source: Pick<ReferencePlanSource, 'pixelWidth' | 'pixelHeight'>,
+      calibration: ReferencePlanCalibration,
+    ) => ReturnType<typeof calibrateReferencePlan>;
+    add: (
+      source: ReferencePlanSource,
+      calibration: ReferencePlanCalibration,
+      settings?: ReferencePlanSettings,
+    ) => Shape;
+  };
+
+  // External / Generated Assets Subsystem
+  externalAssets: {
+    validate: (input: GeneratedAssetInput) => ReturnType<typeof validateGeneratedAsset>;
+    add: (input: GeneratedAssetInput) => Shape;
+  };
+
+  // BIM Subsystem
+  bim: {
+    parseIfcMetadata: (text: string) => ReturnType<typeof parseIfcMetadata>;
+    spatialPath: (
+      model: ReturnType<typeof parseIfcMetadata>,
+      stepId: number,
+    ) => ReturnType<typeof ifcSpatialPath>;
+  };
+
   // Reconstruction Subsystem
   reconstruction: {
     validateDraft: (draft: ReconstructionDraft) => ReturnType<typeof validateReconstructionDraft>;
@@ -415,6 +457,7 @@ export interface SDK {
       draft: ReconstructionDraft,
       options?: { includeFurniture?: boolean },
     ) => ReturnType<typeof commitReconstructionDraft>;
+    checkModelHealth: () => ReturnType<typeof checkModelHealth>;
   };
 
   // Interior Design Subsystem
@@ -726,6 +769,9 @@ export class DeveloperSDK implements SDK {
 
   // Subsystems
   public architecture: any;
+  public referencePlans: any;
+  public externalAssets: any;
+  public bim: any;
   public reconstruction: any;
   public interiors: any;
   public landscape: any;
@@ -1488,10 +1534,54 @@ export class DeveloperSDK implements SDK {
     };
 
     // ─────────────────────────────────────────────────────────────
+    // REFERENCE PLAN SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.referencePlans = {
+      calibrate: (
+        source: Pick<ReferencePlanSource, 'pixelWidth' | 'pixelHeight'>,
+        calibration: ReferencePlanCalibration,
+      ) => calibrateReferencePlan(source, calibration),
+
+      add: (
+        source: ReferencePlanSource,
+        calibration: ReferencePlanCalibration,
+        settings?: ReferencePlanSettings,
+      ): Shape => {
+        const shape = createReferencePlanShape(source, calibration, settings);
+        this.placeBuilt(shape);
+        this.log(`Added calibrated reference plan: ${shape.name ?? shape.id}.`);
+        return shape;
+      },
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // EXTERNAL / GENERATED ASSET SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.externalAssets = {
+      validate: (input: GeneratedAssetInput) => validateGeneratedAsset(input),
+      add: (input: GeneratedAssetInput): Shape => {
+        const shape = createExternalAssetShape(input);
+        this.placeBuilt(shape);
+        this.log(`Added external asset: ${shape.name ?? shape.id} (${input.provenance.source}).`);
+        return shape;
+      },
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // BIM SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.bim = {
+      parseIfcMetadata: (text: string) => parseIfcMetadata(text),
+      spatialPath: (model: ReturnType<typeof parseIfcMetadata>, stepId: number) => ifcSpatialPath(model, stepId),
+    };
+
+    // ─────────────────────────────────────────────────────────────
     // RECONSTRUCTION SUBSYSTEM
     // ─────────────────────────────────────────────────────────────
     this.reconstruction = {
       validateDraft: (draft: ReconstructionDraft) => validateReconstructionDraft(draft),
+
+      checkModelHealth: () => checkModelHealth(this.shapes),
 
       commitDraft: (draft: ReconstructionDraft, options?: { includeFurniture?: boolean }) => {
         const result = commitReconstructionDraft(draft, options);
