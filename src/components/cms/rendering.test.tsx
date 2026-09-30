@@ -18,9 +18,25 @@ const props={go:vi.fn(),onLogin:vi.fn(),user:null,onOpenDesigns:vi.fn(),onSignOu
 afterEach(cleanup);
 describe('marketing preservation and CMS rendering',()=>{
   const normalise=(s:string)=>s.replace(/© \d{4}/g,'© YEAR');
-  [Home,Features,BuildWithClaude,Developers,Header,Footer,ClosingCTA].forEach((Component,index)=> {
-    const baselineIndex = index < 4 ? index : index + 1;
-    it(`preserves original ${Component.name} DOM and copy with empty CMS`,()=>{expect(normalise(renderToStaticMarkup(<CmsProvider value={defaultContent()}><Component {...props}/></CmsProvider>))).toBe(normalise(baseline[baselineIndex]));});
+  [
+    [Home, 0],
+    [Features, 1],
+    [Header, 5],
+    [Footer, 6],
+    [ClosingCTA, 7],
+  ].forEach(([Component,baselineIndex])=>
+    it(`preserves original ${(Component as React.ComponentType<any>).name} DOM and copy with empty CMS`,()=>{
+      expect(normalise(renderToStaticMarkup(<CmsProvider value={defaultContent()}>{React.createElement(Component as React.ComponentType<any>, props)}</CmsProvider>))).toBe(normalise(baseline[baselineIndex as number]));
+    })
+  );
+  it('renders the current Build with Claude and Developers pages through CMS without relying on obsolete marketing baselines',()=>{
+    const content=defaultContent();
+    const claude=renderToStaticMarkup(<CmsProvider value={content}><BuildWithClaude {...props}/></CmsProvider>);
+    const developers=renderToStaticMarkup(<CmsProvider value={content}><Developers {...props}/></CmsProvider>);
+    expect(claude).toContain('Build with Claude');
+    expect(claude).toContain('Claude × PolyForm');
+    expect(developers).toContain('Developer extensibility suite');
+    expect(developers).toContain('Try it live');
   });
   it('renders the generated SDK reference without relying on a frozen API baseline',()=>{
     const html=renderToStaticMarkup(<CmsProvider value={defaultContent()}><SdkDocs {...props}/></CmsProvider>);
