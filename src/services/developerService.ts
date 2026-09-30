@@ -14,6 +14,9 @@ import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOp
 import { commitKernelPushPull } from '../tools/kernelPushPull';
 import { commitKernelFaceOffset } from '../tools/kernelFaceOffset';
 import { commitKernelFollowMe, pathFromEdge, pathFromFace, type FollowMePath } from '../tools/kernelFollowMe';
+import { createChamferBinding } from '../tools/kernelChamfer';
+import { createFilletBinding } from '../tools/kernelFillet';
+import { applyBoolean, orderedShapeGroups, planBoolean, type BooleanOp } from '../tools/kernelBoolean';
 import { makeDimensionArgs, measureFace, type AreaLabelArgs, type LeaderArgs } from '../tools/annotations';
 import { flipSection, moveSection, isSectionShape, withLayerCut, type SectionArgs } from '../tools/sectionPlanes';
 import { commitBezierSurface, type BezierKnotInput } from '../tools/bezier/bezierSurface';
@@ -857,6 +860,9 @@ export interface SDK {
     triangle: (spec: { centre?: DrawingPoint; radius: number; rotationDeg?: number; normal?: DrawingPoint }) => number[];
     pie: (spec: { centre?: DrawingPoint; radius: number; startAngleDeg?: number; sweepDeg: number; segments?: number; normal?: DrawingPoint }) => number[];
     freehand: (points: DrawingPoint[], closed?: boolean) => number[];
+    chamfer: (faceIds: number[], amount: number) => { ok: boolean; reason?: string };
+    fillet: (faceIds: number[], radius: number) => { ok: boolean; reason?: string };
+    boolean: (faceIds: number[], operation: 'merge' | 'subtract' | 'intersect') => { ok: boolean; faces?: number[]; reason?: string };
     followMe: (
       profileFaceId: number,
       path: { edgeId: number } | { faceId: number } | { points: DrawingPoint[]; closed?: boolean },
@@ -3075,6 +3081,44 @@ export class DeveloperSDK implements SDK {
         const ids: number[] = [];
         for (let i = 1; i < points.length; i++) ids.push(...this.drawing.line(points[i - 1]!, points[i]!));
         return ids;
+      },
+
+      chamfer: (faceIds, amount) => {
+        const host = kernel();
+        if (!host) return { ok: false, reason: 'geometry kernel is not available' };
+        const binding = createChamferBinding(host, changed);
+        const faces = faceIds.map(id => id as FaceId);
+        const begun = binding.begin(faces);
+        if (!begun.ok) return begun;
+        binding.update(amount);
+        return binding.commit();
+      },
+      fillet: (faceIds, radius) => {
+        const host = kernel();
+        if (!host) return { ok: false, reason: 'geometry kernel is not available' };
+        const binding = createFilletBinding(host, changed);
+        const faces = faceIds.map(id => id as FaceId);
+        const begun = binding.begin(faces);
+        if (!begun.ok) return begun;
+        binding.update(radius);
+        return binding.commit();
+      },
+      boolean: (faceIds, operation) => {
+        const host = kernel();
+        if (!host) return { ok: false, reason: 'geometry kernel is not available' };
+        const selected = faceIds.map(id => id as FaceId);
+        const groups = orderedShapeGroups(host.graph, selected);
+        const plan = planBoolean(host.graph, groups, operation as BooleanOp);
+        if (!plan.ok) return { ok: false, reason: plan.reason };
+        let resultFaces: FaceId[] = [];
+        const ok = host.transact(() => {
+          const ctx = { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex };
+          resultFaces = applyBoolean(ctx, plan, host.deriveOptions);
+          return true;
+        });
+        if (!ok) return { ok: false, reason: 'kernel boolean transaction failed' };
+        changed();
+        return { ok: true, faces: resultFaces as number[] };
       },
 
       followMe: (profileFaceId, pathSpec) => {
