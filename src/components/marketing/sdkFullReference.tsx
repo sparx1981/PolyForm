@@ -90,6 +90,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('updateRoof', 'sdk.architecture.updateRoof(roofId, { height?, eaveOverhang?, fasciaHeight?, tileShape?, … })', 'void', "Update an existing roof's height, overhang, fascia and tiles."),
       m('listRoofs', 'sdk.architecture.listRoofs()', 'Shape[]', 'List every roof in the model.'),
       m('roofBuilding', 'sdk.architecture.roofBuilding({ roofType, pitchAngleDeg?, ridgeHeight?, eaveOverhang?, tileShape?, … })', 'Shape[]', 'Roof the whole building as the Roof buttons do: the main roof on the top storey and a roof on each extension, replacing existing roofs.'),
+      m('checkStairPlacement', 'sdk.architecture.checkStairPlacement({ position, rotationY?, width, height, style?, structure? })', 'StairPlacement | null', 'Validate a staircase against the same footprint, obstacle and landing-clearance rules used by the placement tool.'),
       m('createStairs', 'sdk.architecture.createStairs({ style?, width?, height?, length?, numSteps?, … })', 'Shape', 'Create a parametric staircase flight.'),
       m('createScaleFigure', 'sdk.architecture.createScaleFigure({ characterId?, height?, position?, rotation?, name? })', 'Shape', 'Place one of PolyForm’s procedural human scale figures at an exact height and rotation.'),
       m('listScaleFigureCharacters', 'sdk.architecture.listScaleFigureCharacters()', 'ScaleFigureCharacter[]', 'List the available human reference characters and their default proportions.'),
