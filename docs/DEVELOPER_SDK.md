@@ -95,6 +95,131 @@ if (!validation.errors.length) {
 }
 ```
 
+
+### Tool-equivalent modelling APIs
+
+The Developer SDK exposes deterministic operations for modelling tools that would otherwise require viewport gestures.
+
+```js
+// Closed room using the same room assembly and exact wall mitres as the Wall tool.
+const room = sdk.architecture.createRoom({
+  width: 7,
+  length: 5,
+  height: 2.8,
+  wallThickness: 0.2,
+  justification: 'exterior',
+  story: 1,
+  includeFloor: true,
+  includeFoundation: true,
+});
+
+// Architectural Style Library choices are available directly during creation.
+const door = sdk.architecture.createDoor({
+  style: 'double-french',
+  width: 1.8,
+  hostWallId: room.wallShapes[0].id,
+});
+const window = sdk.architecture.createWindow({
+  style: 'porthole',
+  hostWallId: room.wallShapes[0].id,
+});
+
+// Human scale references use the same procedural figure generator as the app.
+console.table(sdk.architecture.listScaleFigureCharacters());
+sdk.architecture.createScaleFigure({
+  characterId: 'engineer-sam',
+  height: 1.9,
+  position: [2, 0, 2],
+});
+```
+
+For drawn kernel geometry, Follow Me uses the same commit path as the interactive tool:
+
+```js
+const [profile] = sdk.drawing.shape([
+  [-0.2, 0, 0], [0.2, 0, 0], [0.2, 0.4, 0], [-0.2, 0.4, 0],
+]);
+sdk.drawing.followMe(profile, {
+  points: [[0, 0, 0], [0, 0, 4], [4, 0, 4]],
+});
+```
+
+### Sections and annotations
+
+```js
+const section = sdk.sections.create({
+  point: [0, 1.2, 0],
+  normal: [0, 1, 0],
+  size: 15,
+});
+sdk.sections.move(section.id, 0.4);
+sdk.sections.flip(section.id);
+sdk.sections.setLayerCut(section.id, 'ground', false);
+
+sdk.measurement.addDimension(
+  [0, 0, 0],
+  [4, 0, 0],
+  { text: 'Grid A', offset: [0, 0.5, 0] },
+);
+sdk.measurement.addLeader([2, 1, 0], [3, 2, 0], 'Beam');
+sdk.measurement.addGuide([0, 0, 2], [1, 0, 0], 2);
+```
+
+### Civil roads, pads and parking
+
+Civil/site grading is stored as terrain modifiers rather than ordinary shapes. The SDK operates on that same state:
+
+```js
+const road = sdk.civil.addRoad({
+  points: [[0, 0, 0], [12, 0.2, 0], [20, 0.6, 5]],
+  width: 7,
+  maxGradePercent: 8,
+  markings: 'bike-lanes',
+  profile: { hasCurb: true, curbHeight: 0.15 },
+});
+
+const pad = sdk.civil.addPad({
+  center: [8, 1.2, 8],
+  dimensions: [20, 14],
+  targetElevation: 1.2,
+  batterDistance: 3,
+  batterProfile: 'linear',
+});
+
+sdk.civil.setPadSurface(pad.id, {
+  pattern: 'parking-striping',
+  parkingConfig: {
+    angle: 60,
+    stallWidth: 2.7,
+    stallDepth: 5.5,
+    stripeColor: '#ffffff',
+    doubleRow: true,
+  },
+});
+```
+
+### Editing water, patios and navigation
+
+```js
+const pond = sdk.landscape.addPond([[0, 0], [8, 0], [8, 2], [0, 2]]);
+sdk.landscape.updatePond(pond.id, {
+  clarity: 'clear',
+  flow: { mode: 'stream', direction: [1, 0.2], speed: 0.7, turbulence: 0.35 },
+});
+
+const deck = sdk.landscape.addPatio(
+  [[0, 0], [5, 0], [5, 4], [0, 4]],
+  { kind: 'deck' },
+);
+sdk.landscape.updatePatio(deck.id, {
+  settings: { railing: 'glass', lights: { enabled: true, spacing: 1.2 } },
+  steps: [{ edge: 1, t: 0.5, width: 1.1 }],
+});
+
+sdk.camera.setNavigationMode('walk');
+sdk.camera.configureWalk({ movementSpeed: 4.1, mouseSensitivity: 0.55 });
+```
+
 ## MCP relationship
 
 The MCP connector uses the same builders/SDK for model-safe remote workflows, but is intentionally task-oriented rather than exposing arbitrary browser code or provider registration. Its complete tool inventory is in `mcp/README.md`.
