@@ -190,7 +190,12 @@ export function fenceRun(shapes: Shape[], points: Vec2[], opts: { closed?: boole
 }
 
 /** A pond or lake filling an outline of ground points, as the water tool makes one. */
-export function waterBody(shapes: Shape[], points: Vec2[], opts: { depth?: number; clarity?: string; level?: number }): Shape {
+export function waterBody(shapes: Shape[], points: Vec2[], opts: {
+  depth?: number;
+  clarity?: string;
+  level?: number;
+  flow?: { mode: 'still' | 'stream'; direction?: [number, number]; speed?: number; turbulence?: number };
+}): Shape {
   return asToolError(() => buildWaterBody(shapes, points, { ...opts, id: newId() }));
 }
 
