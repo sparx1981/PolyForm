@@ -19,6 +19,15 @@ function harness(initial: Shape[] = [], extra: Record<string, any> = {}) {
 }
 
 describe('expanded SDK tool coverage', () => {
+  it('opens Photo to 3D through the same application event as the AI toolbar', () => {
+    const h = harness();
+    const handler = vi.fn();
+    window.addEventListener('polyform:photo-to-3d', handler);
+    h.sdk.ai.openPhotoTo3D();
+    expect(handler).toHaveBeenCalledTimes(1);
+    window.removeEventListener('polyform:photo-to-3d', handler);
+  });
+
   it.each([
     { justification: 'center' as const, width: 6, length: 4, height: 2.8, thickness: 0.2 },
     { justification: 'exterior' as const, width: 8, length: 5, height: 3.1, thickness: 0.3 },
