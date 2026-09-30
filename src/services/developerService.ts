@@ -180,6 +180,10 @@ import {
   type ImageReconstructionProvider,
   type ImageReconstructionProviderRequest,
 } from '../lib/reconstruction/imageAdapter';
+import {
+  applyReconstructionReview,
+  buildReconstructionReview,
+} from '../lib/reconstruction/review';
 import { checkModelHealth } from '../lib/reconstruction/modelHealth';
 import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
 import {
@@ -472,6 +476,8 @@ export interface SDK {
       providerId: string,
       request: ImageReconstructionProviderRequest,
     ) => Promise<ReconstructionDraft>;
+    reviewDraft: (draft: ReconstructionDraft) => ReturnType<typeof buildReconstructionReview>;
+    applyReview: (draft: ReconstructionDraft, decisions: Record<string, boolean>) => ReconstructionDraft;
   };
 
   // Interior Design Subsystem
@@ -1608,6 +1614,11 @@ export class DeveloperSDK implements SDK {
 
       reconstructImage: (providerId: string, request: ImageReconstructionProviderRequest) =>
         this.imageReconstructionProviders.reconstruct(providerId, request),
+
+      reviewDraft: (draft: ReconstructionDraft) => buildReconstructionReview(draft),
+
+      applyReview: (draft: ReconstructionDraft, decisions: Record<string, boolean>) =>
+        applyReconstructionReview(draft, decisions),
 
       commitDraft: (draft: ReconstructionDraft, options?: { includeFurniture?: boolean }) => {
         const result = commitReconstructionDraft(draft, options);
