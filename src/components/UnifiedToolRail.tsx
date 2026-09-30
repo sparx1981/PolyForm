@@ -140,6 +140,11 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
     selectedIds,
     setConsoleOutput,
     user,
+    terrainModifiers,
+    setTerrainModifiers,
+    civilRoadSettings,
+    civilPadSettings,
+    civilStripingSettings,
     landscapeSculptSettings,
     setLandscapeSculptSettings,
     landscapeRoadSettings,
@@ -539,7 +544,8 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         shapes,
         setShapes,
         updateShapeColor,
-        selectedId
+        selectedId,
+        { terrainModifiers, setTerrainModifiers, civilRoadSettings, civilPadSettings, civilStripingSettings }
       );
 
       const customConsole = {
