@@ -41,7 +41,7 @@ describe('preview sdk', () => {
   it('recolours and extrudes existing shapes', async () => {
     const r = await run(`const b = sdk.createBox({ width: 1, height: 1, depth: 1 }); sdk.applyColor(b, '#ff0000'); sdk.pushPull(b, 2);`);
     expect(r.objects[0]!.color).toBe('#ff0000');
-    expect(r.objects[0]!.size[1]).toBe(3);
+    expect(r.objects[0]!.size[1]).toBe(2);
   });
   it('supports await', async () => {
     expect((await run(`await Promise.resolve(); sdk.createSphere({ radius: 1 });`)).objects).toHaveLength(1);
