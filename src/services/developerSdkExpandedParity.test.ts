@@ -143,6 +143,36 @@ describe('expanded SDK tool coverage', () => {
     expect(high.customData?.handrailHeight).toBe(1.2);
   });
 
+  it('honours timber framing species, grade and member dimensions', () => {
+    const h = harness();
+    h.sdk.architecture.createRoom({ width: 5, length: 4, height: 2.8 });
+    const framing = h.sdk.architecture.generateTimberFraming({
+      spacing: 0.45,
+      memberWidth: 0.05,
+      memberDepth: 0.12,
+      species: 'Douglas Fir',
+      grade: 'C16',
+      includeFloors: false,
+      includeRoof: false,
+    });
+    expect(framing.length).toBeGreaterThan(0);
+    const member = framing.find((shape: Shape) => shape.timberMemberData);
+    expect(member?.timberMemberData?.generation_params_snapshot).toMatchObject({
+      spacing_mm: 450,
+      frame_depth_mm: 120,
+      species: 'Douglas Fir',
+      grade: 'C16',
+    });
+    expect((member?.args as number[])[1] === 0.05 || (member?.args as number[])[0] === 0.05 || (member?.args as number[])[2] === 0.05).toBe(true);
+  });
+
+  it('uses roofId to scope timber framing instead of silently ignoring it', () => {
+    const h = harness();
+    const roof = h.sdk.architecture.createRoof({ roofType: 'gable', width: 6, depth: 5, position: [0, 3, 0] });
+    const framing = h.sdk.architecture.generateTimberFraming({ roofId: roof.id, includeRoof: true });
+    expect(framing.every((shape: Shape) => shape.parentWallOrRoofId === roof.id)).toBe(true);
+  });
+
   it('creates styled doors/windows and procedural scale figures', () => {
     const h = harness();
     const door = h.sdk.architecture.createDoor({ style: 'double-french', rotation: [0, Math.PI / 2, 0], hostWallId: 'wall-1' });
