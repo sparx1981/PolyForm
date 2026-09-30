@@ -41,6 +41,7 @@ export interface StairFlightParams {
   numSteps: number;
   structure: StairStructureType;
   railing: RailingModeType;
+  handrailHeight?: number;
 }
 
 /** Builds a single rectangular tread plank with front nosing. */
@@ -153,6 +154,7 @@ export function buildStairFlightGeometry(params: StairFlightParams): THREE.Buffe
   const style = (params.style || 'straight').toString().toLowerCase();
   const structure = params.structure || 'closed';
   const railing = params.railing || 'both';
+  const handrailHeight = Math.max(0.5, params.handrailHeight ?? 0.95);
 
   const geoms: THREE.BufferGeometry[] = [];
 
@@ -162,12 +164,12 @@ export function buildStairFlightGeometry(params: StairFlightParams): THREE.Buffe
   ) => {
     if (railing === 'left' || railing === 'both') {
       for (let i = 0; i < ptsLeft.length - 1; i++) {
-        geoms.push(...createRailingAlongSegment(ptsLeft[i], ptsLeft[i + 1], 0.95, Math.ceil(numSteps / (ptsLeft.length - 1))));
+        geoms.push(...createRailingAlongSegment(ptsLeft[i], ptsLeft[i + 1], handrailHeight, Math.ceil(numSteps / (ptsLeft.length - 1))));
       }
     }
     if (railing === 'right' || railing === 'both') {
       for (let i = 0; i < ptsRight.length - 1; i++) {
-        geoms.push(...createRailingAlongSegment(ptsRight[i], ptsRight[i + 1], 0.95, Math.ceil(numSteps / (ptsRight.length - 1))));
+        geoms.push(...createRailingAlongSegment(ptsRight[i], ptsRight[i + 1], handrailHeight, Math.ceil(numSteps / (ptsRight.length - 1))));
       }
     }
   };
