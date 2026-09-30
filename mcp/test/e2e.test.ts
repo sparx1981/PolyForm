@@ -88,7 +88,7 @@ describe('connector over HTTP', () => {
 
     const created = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Garden studio' } }));
     const room = parse(await client.callTool({ name: 'add_room', arguments: { model: 'Garden studio', width: 5, length: 4 } }));
-    expect(room.created).toHaveLength(5);
+    expect(room.created).toHaveLength(6);
     const wall = room.created.find((o: any) => o.type === 'wall');
     const door = parse(await client.callTool({ name: 'add_opening', arguments: { model: created.id, wall: wall.id, kind: 'door' } }));
     expect(door.created[0].inWall).toBe(wall.id);
