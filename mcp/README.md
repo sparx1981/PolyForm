@@ -7,17 +7,18 @@ when the app isn't open. It runs on Vercel and talks to PolyForm's Firebase proj
 
 | Kind | Tools |
 |---|---|
-| Read | `list_models`, `get_model` (counts, extent, wall/fence length, patio/deck area), `list_objects`, `get_object`, `list_rooms`, `check_model_health`, `list_catalog` |
+| Read | `list_models`, `get_model` (counts, extent, wall/fence length, patio/deck area), `list_objects`, `get_object`, `list_rooms`, `list_drawn_faces`, `list_civil_modifiers`, `check_model_health`, `list_catalog` |
 | See | `screenshot` (perspective, plan, front, back, left, right; whole model or one object) |
 | Preview | `preview_model`: called when a design is finished. A 3D picture, plus a floor plan of each level for buildings (rooms and areas, doors, windows, stairs). The plans are drawn by the connector itself, so they work even without screenshots |
-| Build | `create_model`, `add_shape`, `add_room`, `add_wall`, `add_opening` (door/window in a wall), `add_roof`, `add_stairs`, `add_terrain`, `flatten_terrain` (level a terrain back to one height), `import_site` (a real place's ground and existing buildings, up to 200 m square, from an address, postcode or lat/lng; LiDAR heights and roofs in England and the Netherlands), `set_street_life` (moving cars, people and birds on the imported site: off/quiet/normal/busy, in the editor too, Auto Street Light lamps, and extra routes), `add_plant`, `add_fence`, `add_pond` (still water or directional stream/current with speed and turbulence), `add_patio`, `add_interior_furniture`, `furnish_room` |
-| Edit | `transform_objects`, `set_appearance` (colour, material presets, plain finishes, and for terrain: ground texture, procedural grass and wildflower meadows), `set_weather` (rain, snow, clouds, mist and wind), `rename_object`, `delete_objects`, `undo_last_change` |
+| Build | `create_model`, `add_shape`, `add_room`, `add_wall`, `add_opening` (door/window in a wall), `add_roof`, `add_stairs`, `add_railing`, `add_terrain`, `flatten_terrain` (level a terrain back to one height), `import_site` (a real place's ground and existing buildings, up to 200 m square, from an address, postcode or lat/lng; LiDAR heights and roofs in England and the Netherlands), `set_street_life` (moving cars, people and birds on the imported site: off/quiet/normal/busy, in the editor too, Auto Street Light lamps, and extra routes), `add_plant`, `add_fence`, `add_pond` (still water or directional stream/current with speed and turbulence), `add_patio`, `add_interior_furniture`, `furnish_room`, `draw_line`, `draw_primitive`, `follow_me`, `add_road`, `add_grading_pad`, `set_pad_surface` |
+| Edit | `transform_objects`, `set_appearance` (colour, material presets, plain finishes, and for terrain: ground texture, procedural grass and wildflower meadows), `set_weather` (rain, snow, clouds, mist and wind), `update_pond`, `update_patio`, `edit_drawn_faces` (Push/Pull, Offset, Chamfer, Fillet, booleans, paint and erase), `update_civil_modifier`, `remove_civil_modifier`, `rename_object`, `delete_objects`, `undo_last_change` |
 
 Building uses the app's own code (the scripting library, the roof tool's roof assembly, the
 patio, fence and pond tools), so objects come out exactly as if drawn in the app. Changes save
-to the model in Firestore and appear live in the app if it's open. The connector changes a
-model's objects (`shapes`) and its graphics settings (`graphicsSettings`, for weather), and keeps
-the last 20 versions of each per model so `undo_last_change` can step back either.
+to the model in Firestore and appear live in the app if it's open. The connector persists the same model fields the app uses for these workflows: ordinary objects
+(`shapes`), graphics settings (`graphicsSettings`), Civil/Terrain Studio state
+(`terrainModifiers`) and drawn geometry (`kernel`). It keeps the last 20 connector changes per
+model so `undo_last_change` can step back object, weather, civil or drawing-kernel edits.
 
 Screenshots come from the real app: a headless browser opens the app's `?render=1` page, which
 signs in as you with a one-off token, opens the model read-only and frames it.
@@ -57,6 +58,6 @@ For local screenshots set `CHROME_PATH` to a Chromium (headless-shell) binary.
 
 ## MCP vs Developer SDK
 
-The connector is deliberately task-oriented rather than a one-to-one transport for every JavaScript SDK method. It exposes model-safe workflows that make sense remotely (read/inspect, build, furnish, edit, preview and undo). Lower-level provider registration APIs such as `sdk.bim.registerGeometryProvider` and `sdk.reconstruction.registerImageProvider` remain Developer SDK capabilities because they require code and/or binary providers in the browser/runtime.
+The connector is deliberately task-oriented rather than a one-to-one transport for every JavaScript SDK method. It exposes model-safe workflows that make sense remotely (read/inspect, build, draw with the geometry kernel, grade Civil/Terrain Studio state, furnish, edit, preview and undo). Lower-level provider registration APIs such as `sdk.bim.registerGeometryProvider` and `sdk.reconstruction.registerImageProvider` remain Developer SDK capabilities because they require code and/or binary providers in the browser/runtime.
 
 For the complete scripting surface, use PolyForm's Developer Suite → Documentation or `src/components/marketing/sdkFullReference.tsx`. The repository also includes `docs/DEVELOPER_SDK.md` and `examples/developer-sdk-recipes.md`.
