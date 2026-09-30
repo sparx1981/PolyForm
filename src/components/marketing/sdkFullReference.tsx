@@ -116,6 +116,58 @@ export const SDK_REFERENCE: SdkTag[] = [
     ],
   },
   {
+    id: 'referencePlans', title: 'referencePlans',
+    description: 'Calibrate image/PDF reference plans to real-world scale and add them as locked model underlays.',
+    methods: [
+      m('calibrate', 'sdk.referencePlans.calibrate({ pixelWidth, pixelHeight }, { pixelA, pixelB, knownDistanceM })', 'ReferencePlanCalibrationResult', 'Convert a known pixel distance into metres-per-pixel and real plan dimensions.'),
+      m('add', 'sdk.referencePlans.add(source, calibration, settings?)', 'Shape', 'Add a calibrated reference plan as a locked textured PolyForm shape.'),
+    ],
+  },
+  {
+    id: 'externalAssets', title: 'externalAssets',
+    description: 'Validate and insert uploaded, generated or externally sourced geometry with provenance metadata.',
+    methods: [
+      m('validate', 'sdk.externalAssets.validate(input)', 'GeneratedAssetValidation', 'Validate generated/external geometry before insertion, including geometry size and source provenance.'),
+      m('add', 'sdk.externalAssets.add(input)', 'Shape', 'Validate and add external/generated geometry as a native PolyForm shape.'),
+    ],
+  },
+  {
+    id: 'bim', title: 'bim',
+    description: 'IFC metadata, spatial hierarchy and pluggable IFC geometry import.',
+    methods: [
+      m('parseIfcMetadata', 'sdk.bim.parseIfcMetadata(text)', 'IfcModelSummary', 'Parse IFC STEP metadata, GUIDs, entity types, property sets and spatial relationships.'),
+      m('spatialPath', 'sdk.bim.spatialPath(model, stepId)', 'IfcEntitySummary[]', 'Return the IFC spatial hierarchy path for an entity.'),
+      m('registerGeometryProvider', 'sdk.bim.registerGeometryProvider(provider)', 'void', 'Register an IFC tessellation provider. Providers receive IFC bytes and return metadata plus geometry elements.'),
+      m('listGeometryProviders', 'sdk.bim.listGeometryProviders()', 'string[]', 'List registered IFC geometry provider ids.'),
+      m('importGeometry', 'await sdk.bim.importGeometry(providerId, source)', 'Promise<IfcGeometryImport>', 'Import IFC bytes through a registered geometry provider and add the resulting native shapes to the model.'),
+    ],
+  },
+  {
+    id: 'reconstruction', title: 'reconstruction',
+    description: 'Reference-image/plan reconstruction drafts, review, validation and model-health checks.',
+    methods: [
+      m('validateDraft', 'sdk.reconstruction.validateDraft(draft)', 'ReconstructionValidation', 'Validate a reconstruction draft before committing it.'),
+      m('checkModelHealth', 'sdk.reconstruction.checkModelHealth()', 'ModelHealthReport', 'Check the current model for reconstruction/geometry health warnings and errors.'),
+      m('fromImageObservation', 'sdk.reconstruction.fromImageObservation(observation)', 'ReconstructionDraft', 'Convert a calibrated image-recognition observation into a deterministic reconstruction draft.'),
+      m('registerImageProvider', 'sdk.reconstruction.registerImageProvider(provider)', 'void', 'Register an image reconstruction provider.'),
+      m('listImageProviders', 'sdk.reconstruction.listImageProviders()', 'string[]', 'List registered image reconstruction provider ids.'),
+      m('reconstructImage', 'await sdk.reconstruction.reconstructImage(providerId, request)', 'Promise<ReconstructionDraft>', 'Run a registered image provider and return a draft for review; this does not commit geometry by itself.'),
+      m('reviewDraft', 'sdk.reconstruction.reviewDraft(draft)', 'ReconstructionReview', 'Build the accepted/review/error decision set for a reconstruction draft.'),
+      m('applyReview', 'sdk.reconstruction.applyReview(draft, decisions)', 'ReconstructionDraft', 'Apply per-candidate review decisions to a reconstruction draft.'),
+      m('commitDraft', 'sdk.reconstruction.commitDraft(draft, { includeFurniture? })', 'ReconstructionCommitResult', 'Commit approved reconstruction geometry into the current model.'),
+    ],
+  },
+  {
+    id: 'interiors', title: 'interiors',
+    description: 'Native parametric furniture, collision-aware room furnishing and baked soft-body/cloth settling.',
+    methods: [
+      m('addFurniture', "sdk.interiors.addFurniture('bed' | 'sofa' | 'cabinet' | 'curtain', options?)", 'Shape', 'Add native parametric interior furniture or a curtain.'),
+      m('listCatalog', 'sdk.interiors.listCatalog()', 'InteriorFurnitureCatalogEntry[]', 'List available interior items, defaults, placement rules and simulation support.'),
+      m('furnishRoom', "sdk.interiors.furnishRoom(roomId, 'bedroom' | 'living-room' | 'soft-furnishings' | 'storage' | 'minimal')", 'FurnishingPlan', 'Collision-aware furnishing of a detected room using an Interior Studio preset.'),
+      m('bakeSimulation', 'sdk.interiors.bakeSimulation(shapeId, strength?)', 'Shape', 'Bake supported soft-body or cloth settling into deterministic saved mesh geometry.'),
+    ],
+  },
+  {
     id: 'landscape', title: 'landscape',
     description: 'Terrain, planting, site furniture, fences, ponds and patios.',
     methods: [
@@ -132,7 +184,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('configureRoadSettings', 'sdk.landscape.configureRoadSettings({ width?, embankment?, roadColor?, curbHeight? })', 'void', 'Set the defaults for the path/road tool.'),
       m('getRoadSettings', 'sdk.landscape.getRoadSettings()', 'object', 'Read the current path/road settings.'),
       m('addFence', 'sdk.landscape.addFence(points, { style?, height?, closed?, color?, finish?, seed? })', 'Shape', 'A fence run through ground points [x, z], as the Fence tool makes one.'),
-      m('addPond', 'sdk.landscape.addPond(points, { depth?, clarity?, level? })', 'Shape', 'A pond or lake filling an outline of ground points [x, z], as the Water tool makes one.'),
+      m('addPond', "sdk.landscape.addPond(points, { depth?, clarity?, level?, flow?: { mode: 'still' | 'stream', direction?, speed?, turbulence? } })", 'Shape', 'A pond, lake or flowing water body over an outline of ground points [x, z]. Stream flow uses direction [x,z], speed and turbulence while keeping the same water renderer.'),
       m('addPatio', "sdk.landscape.addPatio(points, { kind?, deckHeight?, level?, bulges?, settings? })", 'Shape', "A patio or deck over ground points [x, z], levelled with the house floor when drawn against a wall ('patio' or 'deck')."),
     ],
   },
