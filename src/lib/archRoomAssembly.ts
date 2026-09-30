@@ -519,11 +519,97 @@ export function buildRoomAssembly(
       color: options.wallColor || '#f1f5f9',
       roughness: 0.7,
       metalness: 0.05,
-      tags: [`story-${story}`, 'architecture', 'wall-assembly'],
+      tags: [
+        `story-${story}`,
+        'architecture',
+        'wall-assembly',
+        `wall-${options.justification ?? 'exterior'}`,
+      ],
     };
 
     wallShapes.push(wallShape);
   }
+
+  // Finalise the perimeter walls exactly as the interactive Wall tool does when a loop closes:
+  // offset each wall centreline for its justification, intersect neighbouring offset lines for
+  // true corner locations, compute outer/inner face intersections, then store the resulting
+  // mitered footprint in each wall's local coordinates. This keeps SDK-created rooms and the
+  // Wall tool on the same geometry rules for arbitrary (including non-90-degree) corners.
+  const justification = options.justification ?? 'exterior';
+  interface EdgeWall {
+    shapeId: string;
+    thickness: number;
+    wallH: number;
+    linePoint: THREE.Vector2;
+    dir: THREE.Vector2;
+    outwardNormal: THREE.Vector2;
+  }
+  const edgeWalls: (EdgeWall | null)[] = vertices.map((pA, i) => {
+    const pB = vertices[(i + 1) % n];
+    const wall = wallShapes[i];
+    if (!wall) return null;
+    const dir = new THREE.Vector2(pB.x - pA.x, pB.z - pA.z);
+    if (dir.lengthSq() < 1e-8) return null;
+    dir.normalize();
+    const trueNormal = computeOutwardWallNormal2D(pA, pB, roomPoly2D);
+    const outwardNormal = new THREE.Vector2(trueNormal.x, trueNormal.z);
+    const offsetScalar = justification === 'exterior' ? wallThickness / 2
+      : justification === 'interior' ? -wallThickness / 2 : 0;
+    const linePoint = new THREE.Vector2(pA.x, pA.z).addScaledVector(outwardNormal, offsetScalar);
+    return { shapeId: wall.id, thickness: wallThickness, wallH: wallHeight, linePoint, dir, outwardNormal };
+  });
+
+  const cornerPoints = vertices.map((vertex, i) => {
+    const before = edgeWalls[(i - 1 + n) % n];
+    const after = edgeWalls[i];
+    return computeWallCornerPoint(
+      vertex,
+      before ? { offsetPoint: before.linePoint, dir: before.dir } : null,
+      after ? { offsetPoint: after.linePoint, dir: after.dir } : null,
+    );
+  });
+  const outerCorners = vertices.map((vertex, i) =>
+    computeWallFaceCorner(vertex, edgeWalls[(i - 1 + n) % n], edgeWalls[i], 1));
+  const innerCorners = vertices.map((vertex, i) =>
+    computeWallFaceCorner(vertex, edgeWalls[(i - 1 + n) % n], edgeWalls[i], -1));
+
+  const worldFootprintById = new Map<string, [THREE.Vector2, THREE.Vector2, THREE.Vector2, THREE.Vector2]>();
+  const mitered = wallShapes.map((wall, i) => {
+    const edge = edgeWalls[i];
+    if (!edge) return wall;
+    const start = cornerPoints[i];
+    const end = cornerPoints[(i + 1) % n];
+    const length = start.distanceTo(end);
+    if (length < 0.01) return wall;
+    const angle = Math.atan2(edge.dir.y, edge.dir.x);
+    const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+    const updated: Shape = {
+      ...wall,
+      position: [(start.x + end.x) / 2, datumZ + wallHeight / 2, (start.y + end.y) / 2],
+      quaternion: [quat.x, quat.y, quat.z, quat.w],
+      args: [length, wallHeight, wallThickness],
+    };
+    worldFootprintById.set(wall.id, [
+      outerCorners[i],
+      innerCorners[i],
+      innerCorners[(i + 1) % n],
+      outerCorners[(i + 1) % n],
+    ]);
+    return updated;
+  });
+
+  const orientedWalls = orientRoomWallsToExterior(mitered, roomPoly2D);
+  wallShapes.splice(0, wallShapes.length, ...orientedWalls.map(wall => {
+    const worldFootprint = worldFootprintById.get(wall.id);
+    if (!worldFootprint) return wall;
+    const pos = new THREE.Vector3(...wall.position);
+    const invQuat = new THREE.Quaternion(...(wall.quaternion || [0, 0, 0, 1])).invert();
+    const localFootprint = worldFootprint.map(point => {
+      const local = new THREE.Vector3(point.x - pos.x, 0, point.y - pos.z).applyQuaternion(invQuat);
+      return [local.x, local.z] as [number, number];
+    }) as [[number, number], [number, number], [number, number], [number, number]];
+    return { ...wall, wallMiterFootprint: localFootprint };
+  }));
 
   // 4. Generate 3D Floor Slab Extrusion (200 mm thickness at datum elevation Z0)
   // Polygon coordinates relative to center of room bounding box
@@ -602,7 +688,7 @@ export function buildRoomAssembly(
 
   return {
     datumZ,
-    wallShapes: orientRoomWallsToExterior(wallShapes, roomPoly2D),
+    wallShapes,
     slabShape,
     foundationShape,
     updatedTerrainData,
