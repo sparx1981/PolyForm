@@ -7,6 +7,7 @@ import { commitKernelPushPull } from '../tools/kernelPushPull';
 import { commitKernelFaceOffset } from '../tools/kernelFaceOffset';
 import { captureKernelState, diffKernelStates } from '../lib/geometry/graphPatch';
 import type { Shape } from '../types';
+import type { FaceId } from '../lib/geometry/types';
 import { detectRooms } from '../lib/spatial/rooms';
 import { planRoomFurnishing } from '../lib/interiors/smartFurnish';
 import { bakeSemanticSimulation } from '../lib/interiors/bakeSimulation';
@@ -205,7 +206,7 @@ describe('Developer SDK ↔ in-app tool parity', () => {
         const sdkFaces = sdkSetup.sdk.drawing.shape([[0, 0, 0], [3, 0, 0], [3, 0, 2], [0, 0, 2]]);
         expect(uiFaces).toEqual(sdkFaces);
 
-        const uiOk = commitKernelPushPull(uiHost, uiFaces[0]!, distance);
+        const uiOk = commitKernelPushPull(uiHost, uiFaces[0]! as FaceId, distance);
         const sdkOk = sdkSetup.sdk.drawing.pushPull(sdkFaces[0]!, distance);
         expect(sdkOk).toBe(uiOk);
         expectSameKernel(uiHost, sdkHost);
@@ -224,7 +225,7 @@ describe('Developer SDK ↔ in-app tool parity', () => {
         const sdkFaces = sdkSetup.sdk.drawing.shape([[0, 0, 0], [5, 0, 0], [5, 0, 4], [0, 0, 4]]);
         expect(uiFaces).toEqual(sdkFaces);
 
-        const uiOk = commitKernelFaceOffset(uiHost, uiFaces[0]!, distance);
+        const uiOk = commitKernelFaceOffset(uiHost, uiFaces[0]! as FaceId, distance);
         const sdkOk = sdkSetup.sdk.drawing.offset(sdkFaces[0]!, distance);
         expect(sdkOk).toBe(uiOk);
         expectSameKernel(uiHost, sdkHost);
