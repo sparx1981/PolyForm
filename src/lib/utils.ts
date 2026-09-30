@@ -16,6 +16,21 @@ export function formatValue(meters: number, unit: 'mm' | 'cm' | 'm', decimals: n
 export const SCRIPT_EXECUTION_TIMEOUT_MS = 5000;
 
 /**
+ * Page-scope script execution is intentionally restricted to code owned by
+ * the signed-in user. Public/shared scripts may be inspected or copied, but
+ * must never execute directly with another user's browser privileges.
+ */
+export function canExecuteDeveloperScript(scriptOwnerId: string | undefined, currentUserId: string | undefined): boolean {
+  return Boolean(currentUserId && scriptOwnerId && scriptOwnerId === currentUserId);
+}
+
+export function assertScriptExecutionAllowed(scriptOwnerId: string | undefined, currentUserId: string | undefined): void {
+  if (!canExecuteDeveloperScript(scriptOwnerId, currentUserId)) {
+    throw new Error('Shared scripts cannot run directly. Copy the script to your library and review it before executing.');
+  }
+}
+
+/**
  * Executes a user/toolbar script body via `new Function`. This still runs
  * in the page's own global scope (window/DOM/localStorage are reachable) —
  * it is NOT a sandbox. The timeout only interrupts a script awaiting a
