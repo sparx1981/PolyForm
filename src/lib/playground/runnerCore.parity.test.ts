@@ -93,6 +93,8 @@ function visual(shape: Shape): Omit<PlaygroundObject, 'id'> {
   if (shape.type === 'wall' && Math.abs(Math.abs(rotationY) - Math.PI / 2) < 1e-8) {
     size = [args[2]!, args[1]!, args[0]!];
     normalizedRotation = 0;
+  } else if (shape.type === 'wall' && Math.abs(Math.abs(rotationY) - Math.PI) < 1e-8) {
+    normalizedRotation = 0;
   }
 
   return {
