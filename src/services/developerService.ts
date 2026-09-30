@@ -3026,8 +3026,10 @@ export class DeveloperSDK implements SDK {
         return r.ok ? r.faces : [];
       },
       rectangle: (spec) => {
-        const c = toVec(spec.centre ?? [0, 0, 0]);
-        const n = toVec(spec.normal ?? [0, 1, 0]).normalize();
+        const centrePoint = spec.centre ?? [0, 0, 0];
+        const normalPoint = spec.normal ?? [0, 1, 0];
+        const c = new THREE.Vector3(centrePoint[0], centrePoint[1], centrePoint[2]);
+        const n = new THREE.Vector3(normalPoint[0], normalPoint[1], normalPoint[2]).normalize();
         const ref = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
         const u = new THREE.Vector3().crossVectors(ref, n).normalize();
         const v = new THREE.Vector3().crossVectors(n, u).normalize();
@@ -3042,8 +3044,10 @@ export class DeveloperSDK implements SDK {
       },
       circle: (spec) => this.drawing.polygon({ ...spec, sides: Math.max(8, Math.floor(spec.segments ?? 32)) }),
       polygon: (spec) => {
-        const c = toVec(spec.centre ?? [0, 0, 0]);
-        const n = toVec(spec.normal ?? [0, 1, 0]).normalize();
+        const centrePoint = spec.centre ?? [0, 0, 0];
+        const normalPoint = spec.normal ?? [0, 1, 0];
+        const c = new THREE.Vector3(centrePoint[0], centrePoint[1], centrePoint[2]);
+        const n = new THREE.Vector3(normalPoint[0], normalPoint[1], normalPoint[2]).normalize();
         const ref = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
         const u = new THREE.Vector3().crossVectors(ref, n).normalize();
         const v = new THREE.Vector3().crossVectors(n, u).normalize();
@@ -3059,8 +3063,10 @@ export class DeveloperSDK implements SDK {
       },
       triangle: (spec) => this.drawing.polygon({ ...spec, sides: 3 }),
       pie: (spec) => {
-        const c = toVec(spec.centre ?? [0, 0, 0]);
-        const n = toVec(spec.normal ?? [0, 1, 0]).normalize();
+        const centrePoint = spec.centre ?? [0, 0, 0];
+        const normalPoint = spec.normal ?? [0, 1, 0];
+        const c = new THREE.Vector3(centrePoint[0], centrePoint[1], centrePoint[2]);
+        const n = new THREE.Vector3(normalPoint[0], normalPoint[1], normalPoint[2]).normalize();
         const ref = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
         const u = new THREE.Vector3().crossVectors(ref, n).normalize();
         const v = new THREE.Vector3().crossVectors(n, u).normalize();
