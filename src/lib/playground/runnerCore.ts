@@ -59,12 +59,12 @@ async function run(code) {
       var walls = [
         box(width, height, t, [p[0], midY, p[2] + hl], wc),
         box(width, height, t, [p[0], midY, p[2] - hl], wc),
-        box(t, height, length - t * 2, [p[0] + hw - t / 2, midY, p[2]], wc),
-        box(t, height, length - t * 2, [p[0] - hw + t / 2, midY, p[2]], wc)
+        box(t, height, length - t * 2, [p[0] + hw, midY, p[2]], wc),
+        box(t, height, length - t * 2, [p[0] - hw, midY, p[2]], wc)
       ];
       var out = { roomId: roomId, wallShapes: walls };
-      if (a.includeFloor !== false) out.floorShape = box(width, 0.1, length, [p[0], p[1] - 0.05, p[2]], fc);
-      if (a.includeCeiling) out.ceilingShape = box(width, 0.1, length, [p[0], p[1] + height + 0.05, p[2]], color(a.ceilingColor, '#e2e8f0'));
+      if (a.includeFloor !== false) out.floorShape = box(width + 0.4, 0.2, length + 0.4, [p[0], p[1] - 0.1, p[2]], fc);
+      if (a.includeCeiling) out.ceilingShape = box(width, 0.2, length, [p[0], p[1] + height + 0.1, p[2]], color(a.ceilingColor, '#e2e8f0'));
       return out;
     },
     createWall: function (a) {
@@ -98,14 +98,14 @@ async function run(code) {
   };
 
   var api = {
-    createBox: function (a) { a = a || {}; return box(num(a.width, 1), num(a.height, 1), num(a.depth, 1), pos(a.position, [0, num(a.height, 1) / 2, 0]), color(a.color, '#cbd5e1')); },
+    createBox: function (a) { a = a || {}; return box(num(a.width, 1), num(a.height, 1), num(a.depth, 1), pos(a.position, [0, 0, 0]), color(a.color, '#ffffff')); },
     createCylinder: function (a) {
       a = a || {}; var r = Math.max(0.01, num(a.radius, 0.5)), h = Math.max(0.01, num(a.height, 1));
-      return add({ kind: 'cylinder', size: [r, h, Math.max(0, num(a.radiusTop, r))], position: pos(a.position, [0, h / 2, 0]) });
+      return add({ kind: 'cylinder', size: [r, h, Math.max(0, num(a.radiusTop, r))], position: pos(a.position, [0, 0, 0]), color: '#ffffff' });
     },
-    createSphere: function (a) { a = a || {}; var r = Math.max(0.01, num(a.radius, 0.5)); return add({ kind: 'sphere', size: [r, r, r], position: pos(a.position, [0, r, 0]) }); },
+    createSphere: function (a) { a = a || {}; var r = Math.max(0.01, num(a.radius, 0.5)); return add({ kind: 'sphere', size: [r, r, r], position: pos(a.position, [0, 0, 0]), color: '#ffffff' }); },
     applyColor: function (shape, c) { find(shape).color = color(c, '#cbd5e1'); },
-    pushPull: function (shape, distance) { var s = find(shape); var d = num(distance, 0); s.size[1] = Math.max(0.001, s.size[1] + d); s.position[1] += d / 2; },
+    pushPull: function (shape, distance) { var s = find(shape); var d = num(distance, 0); s.size[1] = d; s.position[1] += d / 2; },
     clearScene: function () { objects.length = 0; },
     scene: { getStats: function () { return { shapeCount: objects.length }; } },
     architecture: architecture
