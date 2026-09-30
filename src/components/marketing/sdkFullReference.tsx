@@ -350,6 +350,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('setGoogleContext', "sdk.worldView.setGoogleContext(on, { ground?: 'cutout' | 'google', nudge?: metres })", 'void', "Show Google's Photorealistic 3D Tiles around the site (needs a Maps key with the Map Tiles API). 'cutout' keeps the editable ground over the site; 'google' uses Google's ground and presses its buildings flat under yours."),
       m('styleBuildings', 'sdk.worldView.styleBuildings(on)', 'void', "Colour the site's buildings: roofs from the satellite picture, walls from the map's colour or material."),
       m('setStreetLife', "sdk.worldView.setStreetLife('off' | 'quiet' | 'normal' | 'busy' | { level?, inEditor? })", 'void', 'Moving cars and people on the site: how busy, and whether they also move in the editor (they always do in presentations unless off).'),
+      m('autoStreetLights', 'sdk.worldView.autoStreetLights(on)', 'void', 'Add or remove automatically placed road and garden lights for the imported site. Roads/routes must be loaded first.'),
       m('listRoutes', 'sdk.worldView.listRoutes()', 'SiteRoute[]', 'The roads (cars) and paths (people) on the site: the map\'s and any drawn. Points are [x, z] metres.'),
       m('addRoute', "sdk.worldView.addRoute('path' | 'road', [[x, z], ...])", 'string | null', 'A route of your own: a walking path for people or a driving route for cars. Returns its id.'),
       m('removeRoute', 'sdk.worldView.removeRoute(id)', 'boolean', 'Take a route away.'),
