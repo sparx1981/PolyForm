@@ -4,6 +4,20 @@ import { gradePatioGround } from '../patio/patioGeometry';
 /** Optical presets: how fast each colour channel is absorbed and scattered per metre. */
 export type WaterClarity = 'clear' | 'lake' | 'pond' | 'murky';
 
+export interface WaterFlowProfile {
+  /**
+   * Still keeps the existing pond/lake renderer unchanged. Stream advects the
+   * wave field in a direction without replacing the physically based water.
+   */
+  mode: 'still' | 'stream';
+  /** Plan direction [x,z], normalised by the renderer. */
+  direction?: [number, number];
+  /** Surface current speed in metres/second. */
+  speed?: number;
+  /** Extra small-scale disturbance, 0..1. */
+  turbulence?: number;
+}
+
 export interface WaterData {
   /** Outline in metres, relative to the shape position (whose y is the water level). */
   points: [number, number][];
@@ -12,6 +26,8 @@ export interface WaterData {
   clarity: WaterClarity;
   /** Dig a basin into the terrain under the outline (the default). */
   dig: boolean;
+  /** Optional directional surface flow; omitted/still preserves existing pond behaviour. */
+  flow?: WaterFlowProfile;
 }
 
 export const WATER_CLARITY: Record<WaterClarity, { label: string; absorb: [number, number, number]; scatter: [number, number, number] }> = {
