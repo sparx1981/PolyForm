@@ -130,6 +130,10 @@ export function DeveloperSuite() {
     setLandscapeSculptSettings,
     landscapeRoadSettings,
     setLandscapeRoadSettings,
+    walkMovementSpeed,
+    setWalkMovementSpeed,
+    walkMouseSensitivity,
+    setWalkMouseSensitivity,
     terrainModifiers,
     setTerrainModifiers,
     civilRoadSettings,
@@ -268,6 +272,10 @@ export function DeveloperSuite() {
         setLandscapeSculptSettings,
         landscapeRoadSettings,
         setLandscapeRoadSettings,
+        walkMovementSpeed,
+        setWalkMovementSpeed,
+        walkMouseSensitivity,
+        setWalkMouseSensitivity,
         terrainModifiers,
         setTerrainModifiers,
         civilRoadSettings,
@@ -311,6 +319,7 @@ export function DeveloperSuite() {
     basicToolbarExtensions, setBasicToolbarExtensions,
     landscapeSculptSettings, setLandscapeSculptSettings,
     landscapeRoadSettings, setLandscapeRoadSettings,
+    walkMovementSpeed, setWalkMovementSpeed, walkMouseSensitivity, setWalkMouseSensitivity,
     terrainModifiers, setTerrainModifiers, civilRoadSettings, civilPadSettings, civilStripingSettings
   ]);
 
