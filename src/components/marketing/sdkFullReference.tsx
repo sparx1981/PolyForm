@@ -188,7 +188,9 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('getRoadSettings', 'sdk.landscape.getRoadSettings()', 'object', 'Read the current path/road settings.'),
       m('addFence', 'sdk.landscape.addFence(points, { style?, height?, closed?, color?, finish?, seed? })', 'Shape', 'A fence run through ground points [x, z], as the Fence tool makes one.'),
       m('addPond', "sdk.landscape.addPond(points, { depth?, clarity?, level?, flow?: { mode: 'still' | 'stream', direction?, speed?, turbulence? } })", 'Shape', 'A pond, lake or flowing water body over an outline of ground points [x, z]. Stream flow uses direction [x,z], speed and turbulence while keeping the same water renderer.'),
+      m('updatePond', 'sdk.landscape.updatePond(id, { depth?, clarity?, level?, dig?, flow?, name? })', 'void', 'Edit an existing water body, including its level, basin and current settings. Pass flow: null to return to the default still-water profile.'),
       m('addPatio', "sdk.landscape.addPatio(points, { kind?, deckHeight?, level?, bulges?, settings? })", 'Shape', "A patio or deck over ground points [x, z], levelled with the house floor when drawn against a wall ('patio' or 'deck')."),
+      m('updatePatio', 'sdk.landscape.updatePatio(id, { level?, name?, settings?, steps? })', 'void', 'Edit an existing patio/deck including paving/decking look, railing, lighting and placed steps.'),
     ],
   },
   {
