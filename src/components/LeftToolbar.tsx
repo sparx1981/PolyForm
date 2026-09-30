@@ -120,7 +120,12 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
     updateShapeColor,
     selectedId,
     setConsoleOutput,
-    user
+    user,
+    terrainModifiers,
+    setTerrainModifiers,
+    civilRoadSettings,
+    civilPadSettings,
+    civilStripingSettings
   } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [is3DPopoutOpen, setIs3DPopoutOpen] = useState(false);
@@ -155,7 +160,8 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
         shapes,
         setShapes,
         updateShapeColor,
-        selectedId
+        selectedId,
+        { terrainModifiers, setTerrainModifiers, civilRoadSettings, civilPadSettings, civilStripingSettings }
       );
 
       const customConsole = {
