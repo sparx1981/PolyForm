@@ -53,18 +53,27 @@ async function run(code) {
   var architecture = {
     createRoom: function (a) {
       a = a || {};
-      var width = Math.max(1, num(a.width, 4)), length = Math.max(1, num(a.length, 4)), height = num(a.height, 2.8), t = num(a.wallThickness, 0.2);
-      var p = pos(a.position, [0, 0, 0]), wc = color(a.wallColor, '#f8fafc'), fc = color(a.floorColor, '#94a3b8');
+      var width = Math.max(1, num(a.width, 4)), length = Math.max(1, num(a.length, 4)), height = Math.max(0.5, num(a.height, 2.8)), t = Math.max(0.05, num(a.wallThickness, 0.2));
+      var slabT = Math.max(0.05, num(a.slabThickness, 0.2));
+      var p = pos(a.position, [0, 0, 0]), wc = color(a.wallColor, '#f1f5f9'), fc = color(a.floorColor, '#94a3b8');
       var roomId = 'room-' + (++counter), midY = p[1] + height / 2, hw = width / 2, hl = length / 2;
+      var justification = a.justification === 'exterior' || a.justification === 'interior' ? a.justification : 'center';
+      var sign = justification === 'exterior' ? 1 : justification === 'interior' ? -1 : 0;
+      var ox = sign * t / 2, oz = sign * t / 2;
+      var wallW = Math.max(0.01, width + sign * t), wallL = Math.max(0.01, length + sign * t);
+      // Same click order as buildRoomAssembly: south, east, north, west.
       var walls = [
-        box(width, height, t, [p[0], midY, p[2] + hl], wc),
-        box(width, height, t, [p[0], midY, p[2] - hl], wc),
-        box(t, height, length - t * 2, [p[0] + hw, midY, p[2]], wc),
-        box(t, height, length - t * 2, [p[0] - hw, midY, p[2]], wc)
+        box(wallW, height, t, [p[0], midY, p[2] - hl - oz], wc),
+        box(t, height, wallL, [p[0] + hw + ox, midY, p[2]], wc),
+        box(wallW, height, t, [p[0], midY, p[2] + hl + oz], wc),
+        box(t, height, wallL, [p[0] - hw - ox, midY, p[2]], wc)
       ];
       var out = { roomId: roomId, wallShapes: walls };
-      if (a.includeFloor !== false) out.floorShape = box(width + 0.4, 0.2, length + 0.4, [p[0], p[1] - 0.1, p[2]], fc);
-      if (a.includeCeiling) out.ceilingShape = box(width, 0.2, length, [p[0], p[1] + height + 0.1, p[2]], color(a.ceilingColor, '#e2e8f0'));
+      if (a.includeFloor !== false) {
+        out.floorShape = box(width, slabT, length, [p[0], p[1] - slabT / 2, p[2]], fc);
+        if (a.includeFoundation !== false) out.foundationShape = box(width, 0.4, length, [p[0], p[1] - slabT - 0.2, p[2]], color(a.foundationColor, '#64748b'));
+      }
+      if (a.includeCeiling) out.ceilingShape = box(width, slabT, length, [p[0], p[1] + height + slabT / 2, p[2]], color(a.ceilingColor, '#e2e8f0'));
       return out;
     },
     createWall: function (a) {
