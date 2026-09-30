@@ -118,6 +118,30 @@ describe('expanded SDK tool coverage', () => {
     expect(h.sdk.measurement.listGuides()).toHaveLength(0);
   });
 
+  it('applies SDK handrailHeight to generated stair geometry', () => {
+    const low = harness().sdk.architecture.createStairs({
+      style: 'straight',
+      height: 2.7,
+      length: 3.6,
+      numSteps: 14,
+      railing: 'both',
+      isParametric: false,
+      handrailHeight: 0.7,
+    });
+    const high = harness().sdk.architecture.createStairs({
+      style: 'straight',
+      height: 2.7,
+      length: 3.6,
+      numSteps: 14,
+      railing: 'both',
+      isParametric: false,
+      handrailHeight: 1.2,
+    });
+    const maxY = (shape: Shape) => Math.max(...(shape.geometryData?.positions ?? []).filter((_, i) => i % 3 === 1));
+    expect(maxY(high)).toBeGreaterThan(maxY(low) + 0.4);
+    expect(high.customData?.handrailHeight).toBe(1.2);
+  });
+
   it('creates styled doors/windows and procedural scale figures', () => {
     const h = harness();
     const door = h.sdk.architecture.createDoor({ style: 'double-french', rotation: [0, Math.PI / 2, 0], hostWallId: 'wall-1' });
