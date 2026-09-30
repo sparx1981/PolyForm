@@ -649,7 +649,7 @@ export const RoofModifierSection: React.FC = () => {
                   </svg>
                   <div className="flex items-center gap-1">
                     {shapeOpt.id === 'none' && (
-                      <span className="text-[7.5px] px-1 py-0.5 rounded font-bold font-mono bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      <span className="text-[8px] px-1 py-0.5 rounded font-bold font-mono bg-emerald-500/15 text-emerald-800 dark:text-emerald-400">
                         FAST
                       </span>
                     )}

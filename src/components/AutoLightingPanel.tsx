@@ -15,7 +15,7 @@ export function AutoLightingPanel() {
   const dark = theme === 'dark';
   const fieldStyle = { backgroundColor: dark ? '#1f2937' : '#ffffff', color: dark ? '#f1f5f9' : '#0f172a', colorScheme: dark ? 'dark' : 'light' } as const;
   const fieldClass = 'w-full rounded-lg px-2 py-1.5 text-xs ring-1 ring-black/10 dark:ring-white/10';
-  return <div className="rounded-xl bg-[#eef3f0] dark:bg-white/5 ring-1 ring-black/10 p-3 space-y-2">
+  return <div className="rounded-xl bg-gray-50 dark:bg-white/5 ring-1 ring-gray-200 dark:ring-white/10 p-3 space-y-2">
     <h4 className="text-xs font-semibold">Auto light</h4>
     <select aria-label="Auto light source" value={source} onChange={e => setSource(e.target.value as AutoLightSource)} className={fieldClass} style={fieldStyle}>
       <option style={fieldStyle} value="place">Place fixtures in rooms</option>
@@ -40,7 +40,7 @@ export function AutoLightingPanel() {
       <option style={fieldStyle} value="cool">Cool · workspace</option>
     </select>
     <div className="flex gap-2">
-      <button className="rounded-lg bg-[#2f3a33] text-white px-3 py-1.5 text-xs" onClick={() => {
+      <button className="rounded-lg bg-polyform-blue hover:bg-polyform-dark-blue text-white px-3 py-1.5 text-xs font-semibold transition-colors" onClick={() => {
         const visible = shapes.filter(s => !s.hidden && (!s.tags?.length || s.tags.some(id => tags.find(t => t.id === id)?.visible !== false)));
         const plan = planAutoLighting(visible, customLights, source, mood, fixtureStyles);
         setStatus(plan.message);
@@ -55,7 +55,7 @@ export function AutoLightingPanel() {
         setUndo({ model: currentModelId, before: customLights, after: plan.lights });
         setCustomLights(plan.lights);
       }}>Apply auto light</button>
-      {canUndo && <button className="text-xs underline" onClick={() => {
+      {canUndo && <button className="text-xs underline text-gray-700 dark:text-gray-200" onClick={() => {
         if (undo.shapesBefore) { setShapes(undo.shapesBefore); commitHistory(); } else setCustomLights(undo.before);
         setUndo(null); setStatus('Previous lighting restored.');
       }}>Undo auto light</button>}
