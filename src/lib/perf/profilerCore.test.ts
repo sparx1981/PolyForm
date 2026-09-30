@@ -21,6 +21,18 @@ describe('profiler maths', () => {
     expect(s.fpsAvg).toBeCloseTo(83.3, 0);
     expect(s.gpuMs?.avg).toBe(5);
   });
+  it('computes 1% low from the average of the worst one percent of frame times', () => {
+    const samples = [
+      ...run(198, 10),
+      sample(198, 40),
+      sample(199, 80),
+    ];
+    const s = summarise(samples);
+    expect(s.fps1Low).toBeCloseTo(1000 / 60, 2);
+    // A simple 1/p99 reciprocal would return 25 fps here, which overstates the low.
+    expect(s.fps1Low).toBeLessThan(20);
+  });
+
   it('reports no gpu distribution without timer data', () => {
     expect(summarise(run(50, 16, { gpuMs: null })).gpuMs).toBeNull();
   });
