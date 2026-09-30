@@ -26,9 +26,9 @@ describe('playground examples', () => {
 });
 
 describe('preview sdk', () => {
-  it('builds a room from four walls and a floor', async () => {
+  it('builds a room from four walls, floor and foundation', async () => {
     const r = await run(`const room = sdk.architecture.createRoom({ width: 4, length: 3, height: 2.5 }); console.log(room.wallShapes.length);`);
-    expect(r.objects).toHaveLength(5);
+    expect(r.objects).toHaveLength(6);
     expect(r.logs[0]?.text).toBe('4');
   });
   it('sizes a roof from the pitch', async () => {
