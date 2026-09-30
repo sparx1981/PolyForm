@@ -180,6 +180,13 @@ import {
   validateGeneratedAsset,
   type GeneratedAssetInput,
 } from '../lib/assets/externalAsset';
+import {
+  calibrateReferencePlan,
+  createReferencePlanShape,
+  type ReferencePlanCalibration,
+  type ReferencePlanSettings,
+  type ReferencePlanSource,
+} from '../lib/reconstruction/referencePlan';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
@@ -413,6 +420,19 @@ export interface SDK {
     getDoorDefaults: () => DoorConfigDefaults;
     configureWindowDefaults: (settings: WindowConfigDefaults) => void;
     getWindowDefaults: () => WindowConfigDefaults;
+  };
+
+  // Reference Plan Subsystem
+  referencePlans: {
+    calibrate: (
+      source: Pick<ReferencePlanSource, 'pixelWidth' | 'pixelHeight'>,
+      calibration: ReferencePlanCalibration,
+    ) => ReturnType<typeof calibrateReferencePlan>;
+    add: (
+      source: ReferencePlanSource,
+      calibration: ReferencePlanCalibration,
+      settings?: ReferencePlanSettings,
+    ) => Shape;
   };
 
   // External / Generated Assets Subsystem
@@ -749,6 +769,7 @@ export class DeveloperSDK implements SDK {
 
   // Subsystems
   public architecture: any;
+  public referencePlans: any;
   public externalAssets: any;
   public bim: any;
   public reconstruction: any;
@@ -1510,6 +1531,27 @@ export class DeveloperSDK implements SDK {
       getWindowDefaults: (): WindowConfigDefaults => {
         return { ...this.windowDefaults };
       }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // REFERENCE PLAN SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.referencePlans = {
+      calibrate: (
+        source: Pick<ReferencePlanSource, 'pixelWidth' | 'pixelHeight'>,
+        calibration: ReferencePlanCalibration,
+      ) => calibrateReferencePlan(source, calibration),
+
+      add: (
+        source: ReferencePlanSource,
+        calibration: ReferencePlanCalibration,
+        settings?: ReferencePlanSettings,
+      ): Shape => {
+        const shape = createReferencePlanShape(source, calibration, settings);
+        this.placeBuilt(shape);
+        this.log(`Added calibrated reference plan: ${shape.name ?? shape.id}.`);
+        return shape;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
