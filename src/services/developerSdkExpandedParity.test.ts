@@ -164,6 +164,100 @@ describe('expanded SDK tool coverage', () => {
     expect(edited.patioData?.steps).toHaveLength(1);
   });
 
+  it('creates Protractor measurements in the same persisted annotation format', () => {
+    const h = harness();
+    const protractor = h.sdk.measurement.addProtractor({
+      centre: [1, 0, 2],
+      base: [1, 0, 0],
+      normal: [0, 1, 0],
+      angle: 45,
+      radius: 1.4,
+    });
+    const args = protractor.args as any;
+    expect(args.kind).toBe('protractor');
+    expect(args.angle).toBe(45);
+    expect(args.direction[0]).toBeCloseTo(Math.SQRT1_2);
+    expect(args.direction[2]).toBeCloseTo(-Math.SQRT1_2);
+    expect(args.distance).toBe(80);
+  });
+
+  it('exposes Rectangle, Circle, Polygon, Triangle, Pie and Freehand through the kernel', () => {
+    const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } });
+    const h = harness([], { kernelHost: host, bumpKernel: vi.fn() });
+    expect(h.sdk.drawing.rectangle({ width: 4, depth: 3 })).toHaveLength(1);
+    expect(h.sdk.drawing.circle({ centre: [8, 0, 0], radius: 2, segments: 24 })).toHaveLength(1);
+    expect(h.sdk.drawing.polygon({ centre: [14, 0, 0], radius: 2, sides: 6 })).toHaveLength(1);
+    expect(h.sdk.drawing.triangle({ centre: [20, 0, 0], radius: 2 })).toHaveLength(1);
+    expect(h.sdk.drawing.pie({ centre: [26, 0, 0], radius: 2, sweepDeg: 120 })).toHaveLength(1);
+    expect(h.sdk.drawing.freehand([[32, 0, 0], [33, 0, 1], [34, 0, 0]], false).length).toBeGreaterThan(0);
+    expect(checkIntegrity(host.graph)).toEqual([]);
+  });
+
+  it('exposes kernel Chamfer and Fillet through their real tool bindings', () => {
+    const makeSolid = () => {
+      const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } });
+      const h = harness([], { kernelHost: host, bumpKernel: vi.fn() });
+      const [base] = h.sdk.drawing.rectangle({ width: 4, depth: 3 });
+      expect(h.sdk.drawing.pushPull(base!, 2)).toBe(true);
+      return { host, h };
+    };
+
+    const chamfer = makeSolid();
+    const chamferFaces = chamfer.h.sdk.drawing.listFaces().map((face: any) => face.id);
+    expect(chamfer.h.sdk.drawing.chamfer(chamferFaces, 0.2).ok).toBe(true);
+    expect(checkIntegrity(chamfer.host.graph)).toEqual([]);
+
+    const fillet = makeSolid();
+    const filletFaces = fillet.h.sdk.drawing.listFaces().map((face: any) => face.id);
+    expect(fillet.h.sdk.drawing.fillet(filletFaces, 0.2).ok).toBe(true);
+    expect(checkIntegrity(fillet.host.graph)).toEqual([]);
+  });
+
+  it('combines flat kernel shapes with Merge/Subtract/Intersect semantics', () => {
+    const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } });
+    const h = harness([], { kernelHost: host, bumpKernel: vi.fn() });
+    const [a] = h.sdk.drawing.rectangle({ centre: [0, 0, 0], width: 4, depth: 4 });
+    const [b] = h.sdk.drawing.rectangle({ centre: [2, 0, 0], width: 4, depth: 4 });
+    const result = h.sdk.drawing.boolean([a!, b!], 'merge');
+    expect(result.ok).toBe(true);
+    expect(result.faces?.length).toBeGreaterThan(0);
+    expect(checkIntegrity(host.graph)).toEqual([]);
+  });
+
+  it('validates stairs with the same placement rules used by the app', () => {
+    const wall: Shape = { id: 'wall', type: 'wall', position: [0, 1.4, 0], args: [6, 2.8, 0.2], color: '#fff' };
+    const open = harness().sdk.architecture.checkStairPlacement({
+      position: [0, 1.4, 0],
+      width: 1,
+      height: 2.8,
+      style: 'straight',
+      structure: 'closed',
+    });
+    expect(open?.ok).toBe(true);
+
+    const blocked = harness([wall]).sdk.architecture.checkStairPlacement({
+      position: [0, 1.4, 0],
+      width: 1,
+      height: 2.8,
+      style: 'straight',
+      structure: 'closed',
+    });
+    expect(blocked?.ok).toBe(false);
+  });
+
+  it('creates slope-aware railing chains with one segment per path edge', () => {
+    const h = harness();
+    const railings = h.sdk.landscape.addRailing(
+      [[0, 0, 0], [4, 0.6, 0], [7, 1.1, 3]],
+      { height: 1.1, color: '#334455', name: 'Garden rail' },
+    );
+    expect(railings).toHaveLength(2);
+    expect(railings.every(r => r.type === 'railing')).toBe(true);
+    expect((railings[0]!.customData as any).railing.rise).toBeCloseTo(0.6);
+    expect((railings[1]!.customData as any).railing.rise).toBeCloseTo(0.5);
+    expect(h.shapes.filter(s => s.type === 'railing')).toHaveLength(2);
+  });
+
   it('controls navigation modes and Walk settings through the real application setters', () => {
     const setActiveTool = vi.fn();
     const setWalkMovementSpeed = vi.fn();
