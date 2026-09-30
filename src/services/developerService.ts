@@ -2302,7 +2302,11 @@ export class DeveloperSDK implements SDK {
           id,
           name: `Dimension ${options.text || info.formatted}`,
           type: 'measurement',
-          position: start,
+          position: [
+            (start[0] + end[0]) / 2 + offset[0],
+            (start[1] + end[1]) / 2 + offset[1],
+            (start[2] + end[2]) / 2 + offset[2],
+          ],
           args,
           color: '#0284c7',
           tags: ['annotation', 'dimension', 'measurement'],
