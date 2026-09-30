@@ -21,7 +21,9 @@ function runReal(code: string): Shape[] {
 }
 
 function visual(shape: Shape): Omit<PlaygroundObject, 'id'> {
-  const rotationY = shape.rotation?.[1] ?? 0;
+  const rotationY = shape.rotation?.[1] ?? (shape.quaternion
+    ? Math.atan2(2 * (shape.quaternion[3] * shape.quaternion[1] + shape.quaternion[0] * shape.quaternion[2]), 1 - 2 * (shape.quaternion[1] ** 2 + shape.quaternion[2] ** 2))
+    : 0);
   const color = shape.color ?? '#ffffff';
 
   if (shape.type === 'cylinder') {
@@ -63,6 +65,21 @@ function visual(shape: Shape): Omit<PlaygroundObject, 'id'> {
         roofType === 'parapet' ? baseDepth : baseDepth + overhang * 2,
       ],
       rotationY,
+      color,
+    };
+  }
+
+  if (shape.type === 'poly' && shape.args && !Array.isArray(shape.args)) {
+    const args = shape.args as { vertices?: [number, number][]; height?: number };
+    const verts = args.vertices ?? [];
+    const xs = verts.map(v => v[0]), zs = verts.map(v => v[1]);
+    const width = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+    const depth = zs.length ? Math.max(...zs) - Math.min(...zs) : 0;
+    return {
+      kind: 'box',
+      position: [...shape.position] as [number, number, number],
+      size: [width, Number(args.height ?? 0.2), depth],
+      rotationY: 0,
       color,
     };
   }
