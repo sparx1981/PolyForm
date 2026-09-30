@@ -8,6 +8,7 @@ import { isSectionShape, type SectionArgs } from '../tools/sectionPlanes';
 import { isGuideShape } from '../tools/tapeGuides';
 import { checkIntegrity } from '../lib/geometry/topology';
 import type { Shape, TerrainModifier } from '../types';
+import { perfStore } from '../lib/perf/profilerStore';
 
 function harness(initial: Shape[] = [], extra: Record<string, any> = {}) {
   let shapes = [...initial];
@@ -195,6 +196,32 @@ describe('expanded SDK tool coverage', () => {
     expect(edited.patioData?.railing).toBe('glass');
     expect(edited.patioData?.lights.enabled).toBe(true);
     expect(edited.patioData?.steps).toHaveLength(1);
+  });
+
+  it('controls the same GPU profiler store used by the in-app profiler', () => {
+    const enabled = vi.fn();
+    const h = harness([], { perfProfilerEnabled: false, setPerfProfilerEnabled: enabled });
+    h.sdk.performance.setEnabled(true);
+    expect(enabled).toHaveBeenCalledWith(true);
+
+    h.sdk.performance.startRecording();
+    expect(enabled).toHaveBeenCalledWith(true);
+    expect(h.sdk.performance.getState().phase.kind).toBe('recording');
+
+    perfStore.finish({
+      device: {
+        gpu: 'test', vendor: 'test', webgl: 'test', maxTextureSize: 4096,
+        antialias: true, canvas: '800x600', pixelRatio: 1, gpuTimer: false,
+        cores: 8, memoryGB: 8, userAgent: 'test',
+      },
+      settings: {},
+      scene: {
+        meshes: 0, instancedMeshes: 0, triangles: 0, lights: 0, shadowLights: 0,
+        transparentMeshes: 0, materials: 0, textures: 0, textureMemoryMB: 0,
+        geometries: 0, programs: 0, heaviest: [], biggestTextures: [],
+      },
+    }, true);
+    expect(h.sdk.performance.getState().phase.kind).toBe('idle');
   });
 
   it('runs Reconstruction Studio local plan recognition through the SDK', () => {
