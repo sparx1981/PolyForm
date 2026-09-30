@@ -46,6 +46,21 @@ function pointInPolygon(point: [number, number], polygon: Array<[number, number]
   return inside;
 }
 
+function pointInPolygonOrNear(point: [number, number], polygon: Array<[number, number]>, tolerance = 0.08): boolean {
+  if (pointInPolygon(point, polygon)) return true;
+  if (polygon.length < 2) return false;
+  const [px, pz] = point;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i]!, b = polygon[(i + 1) % polygon.length]!;
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const len2 = dx * dx + dz * dz;
+    const t = len2 <= 1e-12 ? 0 : Math.max(0, Math.min(1, ((px - a[0]) * dx + (pz - a[1]) * dz) / len2));
+    const x = a[0] + dx * t, z = a[1] + dz * t;
+    if (Math.hypot(px - x, pz - z) <= tolerance) return true;
+  }
+  return false;
+}
+
 function semanticFootprint(shape: Shape): OrientedFootprint | null {
   const semantic = shape.customData?.semanticComponent;
   if (!semantic) return null;
@@ -156,7 +171,11 @@ export function planRoomFurnishing(
         for (const position of candidatePositions) {
           const yaw = candidate.rotationY ?? 0;
           const footprint = candidateFootprint(type, position, yaw);
-          if (room.boundary.length >= 3 && !pointInPolygon(footprint.center, room.boundary)) continue;
+          // Room detection is raster-derived, so its hull can sit a few centimetres inside the
+          // actual wall face. Treat a centre very close to that hull as inside; this matters for
+          // shallow wall-hosted objects such as curtains while still rejecting the mirrored
+          // candidate on the outside face.
+          if (room.boundary.length >= 3 && !pointInPolygonOrNear(footprint.center, room.boundary)) continue;
           if (placementCollisions(footprint, obstacles, profile).length > 0) continue;
 
           placed = createInteriorFurnitureShape(type, {
