@@ -137,6 +137,11 @@ export const CustomToolbarOverlay: React.FC = () => {
     setLandscapeSculptSettings,
     landscapeRoadSettings,
     setLandscapeRoadSettings,
+    terrainModifiers,
+    setTerrainModifiers,
+    civilRoadSettings,
+    civilPadSettings,
+    civilStripingSettings,
     commitHistory
   } = useApp();
 
@@ -237,6 +242,11 @@ export const CustomToolbarOverlay: React.FC = () => {
       setLandscapeSculptSettings,
       landscapeRoadSettings,
       setLandscapeRoadSettings,
+      terrainModifiers,
+      setTerrainModifiers,
+      civilRoadSettings,
+      civilPadSettings,
+      civilStripingSettings,
       onLog: (msg: string) => setConsoleOutput(prev => [...prev, `[EXT] ${msg}`])
     };
 
