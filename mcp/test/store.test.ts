@@ -95,6 +95,36 @@ describe('FirestoreStore reads and undo history', () => {
     expect((await store.undo(caller, id)).note).toBe('add 28');
   });
 
+  it('persists civil modifiers and kernel state and restores both through undo', async () => {
+    const fake = fakeFirestore();
+    const store = new FirestoreStore(fake.db, () => Date.now());
+    const id = await store.createModel(caller, 'Civil and kernel');
+
+    await store.changeTerrainModifiers(caller, id, 'road', () => [{
+      id: 'road-1', name: 'Road 1', type: 'road', enabled: true,
+      points: [[0, 0, 0], [10, 0, 0]], width: 6, maxGradePercent: 8,
+      bankingAngle: 0, profile: { width: 0.15, height: 0.15, ditchWidth: 1.2, ditchDepth: 0.35, hasCurb: true, hasDitch: false },
+      markings: 'center-dashed',
+    } as any]);
+    expect((await store.loadModel(caller, id)).terrainModifiers).toHaveLength(1);
+
+    await store.changeKernel(caller, id, 'draw', () => ({
+      version: 1,
+      nextId: { vertex: 3, edge: 2, loop: 1, face: 1, curve: 1, component: 1 },
+      vertices: [{ id: 1, x: 0, y: 0, z: 0, provenance: 'import' }, { id: 2, x: 1, y: 0, z: 0, provenance: 'import' }],
+      edges: [{ id: 1, v0: 1, v1: 2, smooth: false, hidden: false, curve: null }],
+      loops: [], faces: [], curves: [],
+    }));
+    expect((await store.loadModel(caller, id)).kernel).toMatchObject({ version: 1, edges: [{ id: 1 }] });
+
+    expect((await store.undo(caller, id)).note).toBe('draw');
+    expect((await store.loadModel(caller, id)).kernel).toBeNull();
+    expect((await store.loadModel(caller, id)).terrainModifiers).toHaveLength(1);
+
+    expect((await store.undo(caller, id)).note).toBe('road');
+    expect((await store.loadModel(caller, id)).terrainModifiers).toEqual([]);
+  });
+
   it('still finds a model by name, and refuses other people’s models', async () => {
     const fake = fakeFirestore();
     const store = new FirestoreStore(fake.db, () => Date.now());
