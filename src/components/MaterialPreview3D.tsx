@@ -200,7 +200,7 @@ export function MaterialPreview3D({ spec, className }: { spec: PreviewSpec | nul
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">{stable?.label ?? 'Preview'}</span>
-        <div className="flex gap-1 p-0.5 rounded-lg bg-gray-100" role="group" aria-label="Preview shape">
+        <div className="flex gap-1 p-0.5 rounded-lg bg-gray-100 dark:bg-gray-800" role="group" aria-label="Preview shape">
           {([['sphere', <Circle key="s" size={12} />, 'Sphere'], ['cube', <Box key="c" size={12} />, 'Cube']] as const).map(([id, icon, label]) => (
             <button
               key={id}
@@ -209,7 +209,7 @@ export function MaterialPreview3D({ spec, className }: { spec: PreviewSpec | nul
               title={label}
               aria-pressed={shape === id}
               className={cn('px-2 py-1 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-colors',
-                shape === id ? 'bg-white text-polyform-blue shadow-sm' : 'text-gray-500 hover:text-gray-700')}
+                shape === id ? 'bg-white dark:bg-gray-700 text-polyform-blue shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200')}
             >
               {icon}{label}
             </button>

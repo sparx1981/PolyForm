@@ -4791,17 +4791,17 @@ export default function RightPanelStack() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white text-gray-800 rounded-xl shadow-modus-4 w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
+              className="bg-white text-gray-800 rounded-xl shadow-modus-4 w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col dark:bg-gray-900 dark:text-gray-100"
             >
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-                <h2 className="text-lg font-bold text-gray-800">{editingMaterial ? 'Edit Material' : 'Add Material'}</h2>
-                <button onClick={() => setIsAddMaterialOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-                  <X size={20} className="text-gray-500" />
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0 dark:border-gray-700">
+                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">{editingMaterial ? 'Edit Material' : 'Add Material'}</h2>
+                <button onClick={() => setIsAddMaterialOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition-colors dark:bg-gray-800 dark:hover:bg-gray-700">
+                  <X size={20} className="text-gray-500 dark:text-gray-400" />
                 </button>
               </div>
 
               {/* shrink-0: with tall tab content (PBR Materials) the tabs were squeezed out of view. */}
-              <div className="flex border-b border-gray-100 overflow-x-auto shrink-0" role="tablist">
+              <div className="flex border-b border-gray-100 overflow-x-auto shrink-0 dark:border-gray-700" role="tablist">
                 {([
                   ['color', 'Colour', null],
                   ['texture', 'Upload Texture', null],
@@ -4825,7 +4825,7 @@ export default function RightPanelStack() {
               </div>
 
               <div className="flex flex-col md:flex-row min-h-0 flex-1 overflow-hidden">
-                <div className="md:w-72 shrink-0 p-5 border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50/60 order-first md:order-last">
+                <div className="md:w-72 shrink-0 p-5 border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50/60 order-first md:order-last dark:bg-gray-800 dark:border-gray-700">
                   <MaterialPreview3D spec={previewSpec} />
                   <p className="mt-2 text-[10px] text-gray-400 leading-tight">Drag to turn it. Height maps show as relief.</p>
                 </div>
@@ -4838,12 +4838,12 @@ export default function RightPanelStack() {
                           type="color"
                           value={newColor}
                           onChange={(e) => setNewColor(e.target.value)}
-                          className="w-28 h-28 rounded-lg cursor-pointer border-4 border-gray-100 shadow-inner"
+                          className="w-28 h-28 rounded-lg cursor-pointer border-4 border-gray-100 shadow-inner dark:border-gray-700"
                         />
                         {previewButton({ label: `Colour ${newColor.toUpperCase()}`, color: newColor, roughness: pbrSettings.roughness, metalness: pbrSettings.metalness, opacity: pbrSettings.opacity }, 'top-1 right-1')}
                       </div>
                       <div>
-                        <div className="text-xl font-mono font-bold text-gray-700">{newColor.toUpperCase()}</div>
+                        <div className="text-xl font-mono font-bold text-gray-700 dark:text-gray-200">{newColor.toUpperCase()}</div>
                         <p className="text-[11px] text-gray-400 leading-tight mt-1">Pick a colour, then add it to the palette. Open the sections below for finish and relief.</p>
                       </div>
                     </div>
@@ -4861,7 +4861,7 @@ export default function RightPanelStack() {
 
                     {editingMaterial ? (
                       <div className="flex gap-2">
-                        <button onClick={endEdit} className="flex-1 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-all">Cancel</button>
+                        <button onClick={endEdit} className="flex-1 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-all dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800">Cancel</button>
                         <button onClick={handleSaveEdit} className="flex-1 py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all">Save changes</button>
                       </div>
                     ) : (
@@ -4877,29 +4877,29 @@ export default function RightPanelStack() {
                   <div className="space-y-6">
                     {editingMaterial ? (
                       <div className="flex items-center gap-3">
-                        <img src={editingMaterial.value} alt="" className="h-20 w-20 rounded-lg object-cover border border-gray-200" referrerPolicy="no-referrer" />
-                        <div className="text-xs text-gray-500 leading-tight">
-                          <div className="font-semibold text-gray-700 text-sm">{editingMaterial.name || 'Texture'}</div>
+                        <img src={editingMaterial.value} alt="" className="h-20 w-20 rounded-lg object-cover border border-gray-200 dark:border-gray-700" referrerPolicy="no-referrer" />
+                        <div className="text-xs text-gray-500 leading-tight dark:text-gray-400">
+                          <div className="font-semibold text-gray-700 text-sm dark:text-gray-200">{editingMaterial.name || 'Texture'}</div>
                           Change how it is finished below. To use a different image, add it again from Upload Texture.
                         </div>
                       </div>
                     ) : (
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Texture File</label>
-                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-800">
                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
                           <Upload className="w-8 h-8 mb-3 text-gray-400" />
-                          <p className="mb-2 text-sm text-gray-500 font-medium">Click to upload texture</p>
+                          <p className="mb-2 text-sm text-gray-500 font-medium dark:text-gray-400">Click to upload texture</p>
                           <p className="text-xs text-gray-400">PNG, JPG or WEBP</p>
                         </div>
                         <input type="file" className="hidden" accept="image/*" onChange={handleTextureUpload} disabled={uploading} />
                       </label>
-                      <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer pt-1">
+                      <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer pt-1 dark:text-gray-400">
                         <input
                           type="checkbox"
                           checked={removeBgEnabled}
                           onChange={(e) => setRemoveBgEnabled(e.target.checked)}
-                          className="rounded border-gray-300"
+                          className="rounded border-gray-300 dark:border-gray-600"
                         />
                         <ImageOff size={14} className="text-gray-400" />
                         <span>Remove background with AI (Hugging Face)</span>
@@ -4934,7 +4934,7 @@ export default function RightPanelStack() {
                     )}
                     {editingMaterial && (
                       <div className="flex gap-2">
-                        <button onClick={endEdit} className="flex-1 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-all">Cancel</button>
+                        <button onClick={endEdit} className="flex-1 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-all dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800">Cancel</button>
                         <button onClick={handleSaveEdit} className="flex-1 py-3 bg-polyform-blue text-white rounded-lg font-semibold hover:bg-polyform-dark-blue transition-all">Save changes</button>
                       </div>
                     )}
@@ -5043,9 +5043,9 @@ export default function RightPanelStack() {
                           setIsAddMaterialOpen(false);
                         }}
                         title={`${entry.name} — click to apply`}
-                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left"
+                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left dark:border-gray-700"
                       >
-                        <div className="aspect-square bg-gray-100 relative">
+                        <div className="aspect-square bg-gray-100 relative dark:bg-gray-800">
                           <FinishSwatch finish={entry.finish} />
                           {previewButton({ label: entry.name, color: entry.finish.color, roughness: entry.finish.roughness, metalness: entry.finish.metalness, opacity: entry.finish.opacity }, 'top-1 right-1')}
                         </div>
@@ -5077,9 +5077,9 @@ export default function RightPanelStack() {
                           if (asset) setEditorAsset(asset);
                         }}
                         title={`${entry.name} — click to apply, double-click to edit`}
-                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left"
+                        className="group border border-gray-100 rounded-lg overflow-hidden cursor-pointer hover:border-polyform-blue transition-all text-left dark:border-gray-700"
                       >
-                        <div className="aspect-square bg-gray-100 relative">
+                        <div className="aspect-square bg-gray-100 relative dark:bg-gray-800">
                           <img
                             src={entry.item.texture}
                             alt={entry.name}
@@ -5137,21 +5137,21 @@ export default function RightPanelStack() {
                         value={hfToken}
                         onChange={(e) => setHfToken(e.target.value)}
                         placeholder="hf_..."
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-polyform-blue/30"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-polyform-blue/30 dark:border-gray-700"
                       />
                       <p className="text-[11px] text-gray-400">
                         Free at huggingface.co/settings/tokens. Used for AI material generation, background removal, and Photo to 3D. Stored only in your browser.
                       </p>
                     </div>
 
-                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                    <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Describe the material</label>
                       <textarea
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                         placeholder="e.g. weathered oak planks, brushed titanium, cracked red brick"
                         rows={3}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-polyform-blue/30"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-polyform-blue/30 dark:border-gray-700"
                       />
                     </div>
 
@@ -5178,8 +5178,8 @@ export default function RightPanelStack() {
                     )}
 
                     {aiPreviewUrl && (
-                      <div className="space-y-4 pt-2 border-t border-gray-100">
-                        <div className="aspect-square w-32 mx-auto rounded-lg overflow-hidden border-4 border-gray-100 shadow-inner">
+                      <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <div className="aspect-square w-32 mx-auto rounded-lg overflow-hidden border-4 border-gray-100 shadow-inner dark:border-gray-700">
                           <img src={aiPreviewUrl} alt="AI generated material" className="w-full h-full object-cover" />
                         </div>
                         <Fold title="PBR Settings" icon={<Settings2 size={14} className="text-gray-400" />}>

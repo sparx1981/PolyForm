@@ -879,7 +879,7 @@ console.log("All tool parameters and variables successfully configured!");`
           className="flex-1 p-4 font-mono text-xs overflow-y-auto bg-gray-900 text-gray-300"
         >
           {consoleOutput.length === 0 ? (
-            <span className="text-gray-600 italic">No output yet...</span>
+            <span className="text-gray-400 italic">No output yet...</span>
           ) : (
             consoleOutput.map((line, i) => (
               <div key={i} className={cn(
