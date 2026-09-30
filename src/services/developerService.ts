@@ -9,11 +9,14 @@ import { buildTextShape, editTextShape, type TextOptions } from '../lib/textShap
 import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
 import { commitKernelPushPull } from '../tools/kernelPushPull';
 import { commitKernelFaceOffset } from '../tools/kernelFaceOffset';
+import { commitKernelFollowMe, pathFromEdge, pathFromFace, type FollowMePath } from '../tools/kernelFollowMe';
+import { makeDimensionArgs, measureFace, type AreaLabelArgs, type LeaderArgs } from '../tools/annotations';
+import { flipSection, moveSection, isSectionShape, withLayerCut, type SectionArgs } from '../tools/sectionPlanes';
 import { commitBezierSurface, type BezierKnotInput } from '../tools/bezier/bezierSurface';
 import { deleteGroupFacesAndEdges, paintFaces, faceSummaries } from '../tools/kernelSelection';
 import { applyKernelPatch, type KernelPatch } from '../lib/geometry/graphPatch';
 import { DEFAULT_SEGMENTS } from '../lib/geometry/curve';
-import type { FaceId, Vec3 } from '../lib/geometry/types';
+import type { EdgeId, FaceId, Vec3 } from '../lib/geometry/types';
 import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../lib/worldSite/site';
 import { browserSiteIO, findPlace } from '../lib/worldSite/fetchSite';
 import { removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/worldSite/buildings';
@@ -580,7 +583,13 @@ export interface SDK {
 
   // Measurement & Dimensioning Subsystem
   measurement: {
-    addDimension: (start: [number, number, number], end: [number, number, number], label?: string) => Shape;
+    addDimension: (
+      start: [number, number, number],
+      end: [number, number, number],
+      labelOrOptions?: string | { text?: string; offset?: [number, number, number] },
+    ) => Shape;
+    addAreaLabel: (faceId: number, anchor?: [number, number, number], position?: [number, number, number]) => Shape | null;
+    addLeader: (target: [number, number, number], anchor: [number, number, number], text: string) => Shape;
     measureDistance: (p1: [number, number, number], p2: [number, number, number]) => {
       distance: number;
       dx: number;
@@ -595,6 +604,18 @@ export interface SDK {
     getUnit: () => string;
     configureMeasurementSettings: (settings: MeasurementConfigDefaults) => void;
     getMeasurementSettings: () => MeasurementConfigDefaults;
+  };
+
+  // Section Plane Subsystem
+  sections: {
+    create: (options: { point: [number, number, number]; normal: [number, number, number]; size?: number; active?: boolean; showPlane?: boolean; xrayColor?: string; xrayOpacity?: number; exempt?: string[]; name?: string }) => Shape;
+    list: () => Shape[];
+    setActive: (id: string, active?: boolean) => void;
+    move: (id: string, distance: number) => void;
+    flip: (id: string) => void;
+    setLayerCut: (id: string, layer: string, cut: boolean) => void;
+    update: (id: string, changes: Partial<Pick<SectionArgs, 'size' | 'showPlane' | 'xrayColor' | 'xrayOpacity' | 'exempt'>>) => void;
+    remove: (id: string) => void;
   };
 
   // Toolbars & Extensions Subsystem
@@ -765,6 +786,10 @@ export interface SDK {
     surface: (points: DrawingPoint[]) => number[];
     shape: (points: DrawingPoint[]) => number[];
     bezier: (curve: { knots: BezierKnotInput[]; resolution?: number; normal?: DrawingPoint }) => number[];
+    followMe: (
+      profileFaceId: number,
+      path: { edgeId: number } | { faceId: number } | { points: DrawingPoint[]; closed?: boolean },
+    ) => boolean;
     pushPull: (faceId: number, distance: number) => boolean;
     offset: (faceId: number, distance: number) => boolean;
     erase: (faceIds: number[]) => void;
@@ -815,6 +840,7 @@ export class DeveloperSDK implements SDK {
   public landscape: any;
   public materials: any;
   public measurement: any;
+  public sections: SDK['sections'];
   public selection: any;
   public camera: any;
   public ai: any;
@@ -2032,32 +2058,85 @@ export class DeveloperSDK implements SDK {
         return { distance: dist, dx, dy, dz, horizontalRun: horiz, rise: dy, pitchDeg, formatted };
       },
 
-      addDimension: (start: [number, number, number], end: [number, number, number], label?: string): Shape => {
+      addDimension: (
+        start: [number, number, number],
+        end: [number, number, number],
+        labelOrOptions?: string | { text?: string; offset?: [number, number, number] },
+      ): Shape => {
         const info = this.measurement.measureDistance(start, end);
-        const mid: [number, number, number] = [
-          (start[0] + end[0]) / 2,
-          (start[1] + end[1]) / 2 + 0.15,
-          (start[2] + end[2]) / 2
-        ];
+        const options = typeof labelOrOptions === 'string' ? { text: labelOrOptions } : (labelOrOptions ?? {});
+        const offset = options.offset ?? [0, 0, 0];
+        const args = makeDimensionArgs(start, end, offset);
+        if (options.text) args.text = options.text;
         const id = Math.random().toString(36).substr(2, 9);
         const dimShape: Shape = {
           id,
-          name: `Dimension: ${label || info.formatted}`,
+          name: `Dimension ${options.text || info.formatted}`,
           type: 'measurement',
-          position: mid,
-          args: [start, end],
+          position: start,
+          args,
           color: '#0284c7',
           tags: ['annotation', 'dimension', 'measurement'],
           customData: {
             start,
             end,
             distance: info.distance,
-            label: label || info.formatted
-          }
+            label: options.text || info.formatted,
+          },
         };
         this.setShapes(prev => [...prev, dimShape]);
-        this.log(`Added dimension line: ${label || info.formatted} from [${start}] to [${end}].`);
+        this.log(`Added dimension: ${options.text || info.formatted} from [${start}] to [${end}].`);
         return dimShape;
+      },
+
+      addAreaLabel: (faceId: number, anchor?: [number, number, number], position?: [number, number, number]): Shape | null => {
+        const host = this.extraSetters.kernelHost as KernelArcHost | undefined;
+        if (!host) {
+          this.log('Area label not added: geometry kernel is not available.');
+          return null;
+        }
+        const measured = measureFace(host.graph, faceId as FaceId);
+        const face = host.graph.faces.get(faceId as FaceId);
+        if (!measured || !face) {
+          this.log(`Area label not added: face ${faceId} was not found or could not be measured.`);
+          return null;
+        }
+        const pts = faceSummaries(host.graph).find(f => (f.id as number) === faceId);
+        const a = anchor ?? (pts ? [pts.center[0], pts.center[1], pts.center[2]] : [face.plane.point.x, face.plane.point.y, face.plane.point.z]);
+        const lift = 0.05;
+        const p = position ?? [
+          a[0] + face.plane.normal.x * lift,
+          a[1] + face.plane.normal.y * lift,
+          a[2] + face.plane.normal.z * lift,
+        ] as [number, number, number];
+        const args: AreaLabelArgs = { kind: 'area', faceId, anchor: a, position: p, area: measured.area, perimeter: measured.perimeter };
+        const shape: Shape = {
+          id: Math.random().toString(36).slice(2, 11),
+          name: 'Area label',
+          type: 'measurement',
+          position: a,
+          args,
+          color: '#10b981',
+          tags: ['annotation', 'area', 'measurement'],
+        };
+        this.setShapes(prev => [...prev, shape]);
+        return shape;
+      },
+
+      addLeader: (target: [number, number, number], anchor: [number, number, number], text: string): Shape => {
+        const clean = text.trim();
+        const args: LeaderArgs = { kind: 'leader', target, anchor, text: clean };
+        const shape: Shape = {
+          id: Math.random().toString(36).slice(2, 11),
+          name: `Label: ${clean.slice(0, 24)}`,
+          type: 'measurement',
+          position: anchor,
+          args,
+          color: '#f59e0b',
+          tags: ['annotation', 'leader', 'measurement'],
+        };
+        this.setShapes(prev => [...prev, shape]);
+        return shape;
       },
 
       setUnit: (unit: 'm' | 'cm' | 'mm'): void => {
@@ -2086,6 +2165,82 @@ export class DeveloperSDK implements SDK {
       getMeasurementSettings: (): MeasurementConfigDefaults => {
         return { ...this.measurementDefaults };
       }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // SECTION PLANE SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.sections = {
+      create: (options) => {
+        const n = new THREE.Vector3(...options.normal);
+        if (n.lengthSq() < 1e-12) throw new Error('Section normal must not be zero.');
+        n.normalize();
+        const args: SectionArgs = {
+          kind: 'section',
+          point: options.point,
+          normal: [n.x, n.y, n.z],
+          active: options.active ?? true,
+          size: Math.max(0.1, options.size ?? 6),
+          ...(options.showPlane !== undefined ? { showPlane: options.showPlane } : {}),
+          ...(options.xrayColor !== undefined ? { xrayColor: options.xrayColor } : {}),
+          ...(options.xrayOpacity !== undefined ? { xrayOpacity: Math.max(0, Math.min(1, options.xrayOpacity)) } : {}),
+          ...(options.exempt?.length ? { exempt: [...options.exempt] } : {}),
+        };
+        const id = Math.random().toString(36).slice(2, 11);
+        const count = this.shapes.filter(isSectionShape).length;
+        if (args.active) {
+          this.setShapes(prev => [
+            ...prev.map(sh => isSectionShape(sh) && (sh.args as SectionArgs).active
+              ? { ...sh, args: { ...(sh.args as SectionArgs), active: false } }
+              : sh),
+            { id, name: options.name ?? `Section ${count + 1}`, type: 'measurement', position: args.point, args, color: '#f97316' } as Shape,
+          ]);
+        } else {
+          this.setShapes(prev => [...prev, { id, name: options.name ?? `Section ${count + 1}`, type: 'measurement', position: args.point, args, color: '#f97316' } as Shape]);
+        }
+        return this.shapes.find(sh => sh.id === id)!;
+      },
+      list: () => this.shapes.filter(isSectionShape),
+      setActive: (id, active = true) => {
+        this.setShapes(prev => prev.map(sh => {
+          if (!isSectionShape(sh)) return sh;
+          const args = sh.args as SectionArgs;
+          if (sh.id === id) return { ...sh, args: { ...args, active } };
+          return active && args.active ? { ...sh, args: { ...args, active: false } } : sh;
+        }));
+      },
+      move: (id, distance) => {
+        this.setShapes(prev => prev.map(sh => {
+          if (sh.id !== id || !isSectionShape(sh)) return sh;
+          const args = moveSection(sh.args as SectionArgs, distance);
+          return { ...sh, args, position: args.point };
+        }));
+      },
+      flip: (id) => {
+        this.setShapes(prev => prev.map(sh => sh.id === id && isSectionShape(sh)
+          ? { ...sh, args: flipSection(sh.args as SectionArgs) }
+          : sh));
+      },
+      setLayerCut: (id, layer, cut) => {
+        this.setShapes(prev => prev.map(sh => sh.id === id && isSectionShape(sh)
+          ? { ...sh, args: withLayerCut(sh.args as SectionArgs, layer, cut) }
+          : sh));
+      },
+      update: (id, changes) => {
+        this.setShapes(prev => prev.map(sh => {
+          if (sh.id !== id || !isSectionShape(sh)) return sh;
+          const current = sh.args as SectionArgs;
+          const args: SectionArgs = {
+            ...current,
+            ...changes,
+            ...(changes.xrayOpacity !== undefined ? { xrayOpacity: Math.max(0, Math.min(1, changes.xrayOpacity)) } : {}),
+          };
+          return { ...sh, args };
+        }));
+      },
+      remove: (id) => {
+        this.setShapes(prev => prev.filter(sh => sh.id !== id || !isSectionShape(sh)));
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -2550,6 +2705,36 @@ export class DeveloperSDK implements SDK {
         if (!r.ok) this.log(`Bézier surface not drawn: ${r.reason}.`);
         changed();
         return r.ok ? r.faces : [];
+      },
+      followMe: (profileFaceId, pathSpec) => {
+        const host = kernel();
+        if (!host) return false;
+        const profile = profileFaceId as FaceId;
+        if (!host.graph.faces.has(profile)) {
+          this.log(`Follow Me: profile face ${profileFaceId} does not exist.`);
+          return false;
+        }
+        let path: FollowMePath | null = null;
+        if ('edgeId' in pathSpec) path = pathFromEdge(host.graph, pathSpec.edgeId as EdgeId);
+        else if ('faceId' in pathSpec) path = pathFromFace(host.graph, pathSpec.faceId as FaceId);
+        else {
+          path = {
+            points: pathSpec.points.map(toVec),
+            closed: pathSpec.closed ?? false,
+            edges: [],
+          };
+        }
+        if (!path) {
+          this.log('Follow Me: the requested path could not be resolved.');
+          return false;
+        }
+        const result = commitKernelFollowMe(host, profile, path);
+        if (!result.ok) {
+          this.log(`Follow Me: ${result.reason}`);
+          return false;
+        }
+        changed();
+        return true;
       },
       offset: (faceId, distance) => {
         const host = kernel();
