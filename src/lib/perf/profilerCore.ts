@@ -46,8 +46,17 @@ export interface RunStats {
   triangles: { avg: number; max: number };
 }
 
+function lowFps(frameTimes: readonly number[], fraction = 0.01): number {
+  if (!frameTimes.length) return 0;
+  const count = Math.max(1, Math.ceil(frameTimes.length * fraction));
+  const worst = [...frameTimes].sort((a, b) => b - a).slice(0, count);
+  const avgWorstMs = worst.reduce((sum, value) => sum + value, 0) / worst.length;
+  return avgWorstMs > 0 ? 1000 / avgWorstMs : 0;
+}
+
 export function summarise(samples: readonly FrameSample[]): RunStats {
-  const frameMs = distribution(samples.map(s => s.frameMs));
+  const frameTimes = samples.map(s => s.frameMs);
+  const frameMs = distribution(frameTimes);
   const gpu = samples.map(s => s.gpuMs).filter((v): v is number => v !== null);
   const durationS = samples.length ? samples[samples.length - 1]!.t - samples[0]!.t + samples[0]!.frameMs / 1000 : 0;
   const avgMax = (values: number[]) => ({ avg: values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0, max: values.length ? Math.max(...values) : 0 });
@@ -55,7 +64,7 @@ export function summarise(samples: readonly FrameSample[]): RunStats {
     frames: samples.length,
     durationS,
     fpsAvg: frameMs.avg > 0 ? 1000 / frameMs.avg : 0,
-    fps1Low: frameMs.p99 > 0 ? 1000 / frameMs.p99 : 0,
+    fps1Low: lowFps(frameTimes),
     frameMs,
     hitches: samples.filter(s => s.frameMs > 33.4).length,
     renderCpuMs: distribution(samples.map(s => s.renderCpuMs)),

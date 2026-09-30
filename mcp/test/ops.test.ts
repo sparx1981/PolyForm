@@ -63,6 +63,15 @@ describe('landscape', () => {
     expect(pond.position[1]).toBeCloseTo(0.02);
   });
 
+  it('preserves a directional stream profile on MCP water bodies', () => {
+    const stream = waterBody([], [[0, 0], [8, 0], [8, 2], [0, 2]], {
+      depth: 0.8,
+      clarity: 'clear',
+      flow: { mode: 'stream', direction: [1, 0.25], speed: 0.7, turbulence: 0.4 },
+    });
+    expect(stream.waterData?.flow).toEqual({ mode: 'stream', direction: [1, 0.25], speed: 0.7, turbulence: 0.4 });
+  });
+
   it('sets a patio against a house level with its floor', () => {
     const room = withSdk([], sdk => sdk.architecture.createRoom({ width: 6, length: 6, position: [0, 0.3, 0] })).shapes;
     // North wall outer face is at z = 3.1; patio runs along it.

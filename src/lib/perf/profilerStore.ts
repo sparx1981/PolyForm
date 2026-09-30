@@ -58,6 +58,19 @@ function saveRuns(runs: PerfRun[]) {
 }
 function set(patch: Partial<PerfState>) { state = { ...state, ...patch }; listeners.forEach(l => l()); }
 
+function comparisonWarnings(before: PerfRun, after: PerfRun): string[] {
+  const warnings: string[] = [];
+  if (before.device.gpu !== after.device.gpu || before.device.webgl !== after.device.webgl) warnings.push('GPU/WebGL device changed.');
+  if (before.device.canvas !== after.device.canvas || before.device.pixelRatio !== after.device.pixelRatio) warnings.push('Canvas size or pixel ratio changed.');
+  const keys = new Set([...Object.keys(before.settings), ...Object.keys(after.settings)]);
+  const changedSettings = [...keys].filter(key => before.settings[key] !== after.settings[key]);
+  if (changedSettings.length) warnings.push(`Quality/settings changed: ${changedSettings.join(', ')}.`);
+  const beforeTris = Math.max(1, before.scene.triangles);
+  const triangleDelta = Math.abs(after.scene.triangles - before.scene.triangles) / beforeTris;
+  if (triangleDelta > 0.05 || before.scene.meshes !== after.scene.meshes) warnings.push('Scene complexity changed, so this is not a strict before/after benchmark.');
+  return warnings;
+}
+
 export const perfStore = {
   subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
   getState: () => state,
@@ -104,7 +117,7 @@ export const perfStore = {
     const runs = state.runs; const latest = runs[runs.length - 1];
     if (!latest) return null;
     const previous = [...runs.slice(0, -1)].reverse().find(r => r.kind === latest.kind);
-    return previous ? { previous, latest, rows: compareRuns(previous.stats, latest.stats) } : null;
+    return previous ? { previous, latest, rows: compareRuns(previous.stats, latest.stats), warnings: comparisonWarnings(previous, latest) } : null;
   },
 };
 

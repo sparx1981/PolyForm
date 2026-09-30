@@ -94,9 +94,14 @@ export default function PerfOverlay() {
                   {latest.diagnosis.map(d => <li key={d}>{d}</li>)}
                 </ul>
                 {comparison && (
-                  <div className="text-[10px] text-gray-300">
-                    vs previous {comparison.latest.kind}:{' '}
-                    {comparison.rows.slice(0, 3).map(r => <span key={r.metric} className={r.better ? 'text-emerald-400' : 'text-red-400'}>{r.metric} {r.change > 0 ? '+' : ''}{r.change}%; </span>)}
+                  <div className="text-[10px] text-gray-300 space-y-0.5">
+                    <div>
+                      vs previous {comparison.latest.kind}:{' '}
+                      {comparison.rows.slice(0, 3).map(r => <span key={r.metric} className={r.better ? 'text-emerald-400' : 'text-red-400'}>{r.metric} {r.change > 0 ? '+' : ''}{r.change}%; </span>)}
+                    </div>
+                    {comparison.warnings.map(warning => (
+                      <div key={warning} className="text-amber-400">Comparison caution: {warning}</div>
+                    ))}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-1.5 pt-0.5">

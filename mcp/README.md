@@ -7,10 +7,10 @@ when the app isn't open. It runs on Vercel and talks to PolyForm's Firebase proj
 
 | Kind | Tools |
 |---|---|
-| Read | `list_models`, `get_model` (counts, extent, wall/fence length, patio/deck area), `list_objects`, `get_object`, `list_catalog` |
+| Read | `list_models`, `get_model` (counts, extent, wall/fence length, patio/deck area), `list_objects`, `get_object`, `list_rooms`, `check_model_health`, `list_catalog` |
 | See | `screenshot` (perspective, plan, front, back, left, right; whole model or one object) |
 | Preview | `preview_model`: called when a design is finished. A 3D picture, plus a floor plan of each level for buildings (rooms and areas, doors, windows, stairs). The plans are drawn by the connector itself, so they work even without screenshots |
-| Build | `create_model`, `add_shape`, `add_room`, `add_wall`, `add_opening` (door/window in a wall), `add_roof`, `add_stairs`, `add_terrain`, `flatten_terrain` (level a terrain back to one height), `import_site` (a real place's ground and existing buildings, up to 200 m square, from an address, postcode or lat/lng; LiDAR heights and roofs in England and the Netherlands), `set_street_life` (moving cars, people and birds on the imported site: off/quiet/normal/busy, in the editor too, Auto Street Light lamps, and extra routes), `add_plant`, `add_fence`, `add_pond`, `add_patio` |
+| Build | `create_model`, `add_shape`, `add_room`, `add_wall`, `add_opening` (door/window in a wall), `add_roof`, `add_stairs`, `add_terrain`, `flatten_terrain` (level a terrain back to one height), `import_site` (a real place's ground and existing buildings, up to 200 m square, from an address, postcode or lat/lng; LiDAR heights and roofs in England and the Netherlands), `set_street_life` (moving cars, people and birds on the imported site: off/quiet/normal/busy, in the editor too, Auto Street Light lamps, and extra routes), `add_plant`, `add_fence`, `add_pond` (still water or directional stream/current with speed and turbulence), `add_patio`, `add_interior_furniture`, `furnish_room` |
 | Edit | `transform_objects`, `set_appearance` (colour, material presets, plain finishes, and for terrain: ground texture, procedural grass and wildflower meadows), `set_weather` (rain, snow, clouds, mist and wind), `rename_object`, `delete_objects`, `undo_last_change` |
 
 Building uses the app's own code (the scripting library, the roof tool's roof assembly, the
@@ -53,3 +53,10 @@ npm run dev             # local server on :8787 with the same environment variab
 ```
 
 For local screenshots set `CHROME_PATH` to a Chromium (headless-shell) binary.
+
+
+## MCP vs Developer SDK
+
+The connector is deliberately task-oriented rather than a one-to-one transport for every JavaScript SDK method. It exposes model-safe workflows that make sense remotely (read/inspect, build, furnish, edit, preview and undo). Lower-level provider registration APIs such as `sdk.bim.registerGeometryProvider` and `sdk.reconstruction.registerImageProvider` remain Developer SDK capabilities because they require code and/or binary providers in the browser/runtime.
+
+For the complete scripting surface, use PolyForm's Developer Suite → Documentation or `src/components/marketing/sdkFullReference.tsx`. The repository also includes `docs/DEVELOPER_SDK.md` and `examples/developer-sdk-recipes.md`.

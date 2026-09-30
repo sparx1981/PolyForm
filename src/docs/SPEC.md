@@ -145,18 +145,11 @@ interface Collaborator {
 
 ## 5. Scripting API (SDK)
 
-The `sdk` object is available in the Developer Console.
+The `sdk` object is available in the Developer Console and saved developer scripts. The complete, tested API reference is generated from `src/components/marketing/sdkFullReference.tsx` and shown in Developer Suite → Documentation.
 
-- `sdk.createBox({ width, height, depth, position })`
-- `sdk.pushPull(shape, amount)`
-- `sdk.applyColor(shape, color)`
-- `sdk.setBevel(shape, { amount, type, segments })`
-- `sdk.performCSG(targetId, cutterId, "SUBTRACTION")`
-- `sdk.createPoly({ vertices: [[x,y,z], ...] })`
-- `sdk.openWebpage(url)`: Opens an internal floating iframe with the specified URL.
-- `sdk.getSyncStatus()`: Returns `'synced' | 'syncing' | 'error' | 'offline'`.
-- `sdk.getCollaborators()`: Returns list of active users.
-- `sdk.worldView.importMap({ lat, lng, zoom, altitude })`
+Current namespaces include core `sdk.*` plus `architecture`, `referencePlans`, `externalAssets`, `bim`, `reconstruction`, `interiors`, `landscape`, `materials`, `measurement`, `toolbars`, `selection`, `camera`, `ai`, `scene`, `outliner`, `blockKit`, `worldView`, `text` and `drawing`.
+
+See `docs/DEVELOPER_SDK.md` for integration guidance and `examples/developer-sdk-recipes.md` for current runnable recipes. `src/components/marketing/sdkFullReference.test.ts` guards the reference against SDK-interface drift.
 
 ## 6. Keyboard Shortcuts
 
