@@ -267,6 +267,42 @@ describe('connector over HTTP', () => {
     await client.close();
   });
 
+  it('draws and edits persisted kernel geometry through MCP', async () => {
+    const { token } = await signIn();
+    const client = await connect(token!);
+    const { id } = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Kernel parity' } }));
+
+    const rectangle = parse(await client.callTool({
+      name: 'draw_primitive',
+      arguments: { model: id, kind: 'rectangle', width: 4, depth: 3 },
+    }));
+    expect(rectangle.faces).toHaveLength(1);
+    const face = rectangle.faces[0];
+
+    let faces = parse(await client.callTool({ name: 'list_drawn_faces', arguments: { model: id } }));
+    expect(faces).toHaveLength(1);
+    expect(faces[0].id).toBe(face);
+    expect(faces[0].area).toBeCloseTo(12);
+
+    const extruded = parse(await client.callTool({
+      name: 'edit_drawn_faces',
+      arguments: { model: id, operation: 'push-pull', faces: [face], distance: 2 },
+    }));
+    expect(extruded.result).toBe(true);
+    faces = parse(await client.callTool({ name: 'list_drawn_faces', arguments: { model: id } }));
+    expect(faces.length).toBeGreaterThan(1);
+
+    await client.callTool({ name: 'undo_last_change', arguments: { model: id } });
+    faces = parse(await client.callTool({ name: 'list_drawn_faces', arguments: { model: id } }));
+    expect(faces).toHaveLength(1);
+    expect(faces[0].area).toBeCloseTo(12);
+
+    await client.callTool({ name: 'edit_drawn_faces', arguments: { model: id, operation: 'paint', faces: [face], color: '#336699' } });
+    faces = parse(await client.callTool({ name: 'list_drawn_faces', arguments: { model: id } }));
+    expect(faces[0].color).toBe('#336699');
+    await client.close();
+  });
+
   it('creates, edits and undoes persisted Civil modifiers', async () => {
     const { token } = await signIn();
     const client = await connect(token!);
