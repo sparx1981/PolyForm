@@ -267,6 +267,55 @@ describe('connector over HTTP', () => {
     await client.close();
   });
 
+  it('creates, edits and undoes persisted Civil modifiers', async () => {
+    const { token } = await signIn();
+    const client = await connect(token!);
+    const { id } = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Civil parity' } }));
+
+    const road = parse(await client.callTool({
+      name: 'add_road',
+      arguments: {
+        model: id,
+        points: [[0, 0, 0], [12, 0.2, 0], [20, 0.6, 5]],
+        width: 7,
+        max_grade_percent: 6,
+        markings: 'bike-lanes',
+        has_curb: true,
+        has_ditch: true,
+      },
+    }));
+    expect(road.modifier).toMatchObject({ type: 'road', width: 7, maxGradePercent: 6, markings: 'bike-lanes' });
+
+    const pad = parse(await client.callTool({
+      name: 'add_grading_pad',
+      arguments: {
+        model: id, center: [8, 1.2, 8], dimensions: [20, 14],
+        target_elevation: 1.2, batter_profile: 'curved',
+      },
+    }));
+    expect(pad.modifier).toMatchObject({ type: 'pad', targetElevation: 1.2, batterProfile: 'curved' });
+
+    await client.callTool({
+      name: 'set_pad_surface',
+      arguments: {
+        model: id, pad: pad.modifier.id, pattern: 'parking-striping',
+        parking_angle: 60, double_row: true,
+      },
+    });
+    let modifiers = parse(await client.callTool({ name: 'list_civil_modifiers', arguments: { model: id } }));
+    expect(modifiers).toHaveLength(2);
+    expect(modifiers.find((m: any) => m.id === pad.modifier.id).surfaceModifier.parkingConfig).toMatchObject({ angle: 60, doubleRow: true });
+
+    await client.callTool({ name: 'update_civil_modifier', arguments: { model: id, modifier: road.modifier.id, enabled: false } });
+    modifiers = parse(await client.callTool({ name: 'list_civil_modifiers', arguments: { model: id } }));
+    expect(modifiers.find((m: any) => m.id === road.modifier.id).enabled).toBe(false);
+
+    await client.callTool({ name: 'undo_last_change', arguments: { model: id } });
+    modifiers = parse(await client.callTool({ name: 'list_civil_modifiers', arguments: { model: id } }));
+    expect(modifiers.find((m: any) => m.id === road.modifier.id).enabled).toBe(true);
+    await client.close();
+  });
+
   it('sets weather and turns procedural grass/wildflowers on for a terrain, and undoes each in turn', async () => {
     const { token } = await signIn();
     const client = await connect(token!);
