@@ -6,6 +6,7 @@ import type { KernelArcHost } from '../tools/kernelArcHost';
 import { roofBuilding, type RoofTileLook } from '../lib/buildingRoofs';
 import { buildRoomAssembly } from '../lib/archRoomAssembly';
 import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
+import { checkStairPlacement, type StairPlacement } from '../lib/stairPlacement';
 import { makeGuideArgs, isGuideShape } from '../tools/tapeGuides';
 import type { ProtractorArgs } from '../components/ProtractorTool';
 import { withShapeIds } from '../lib/shapeIds';
@@ -370,6 +371,7 @@ export interface SDK {
      * roofs the Roof panel's tile look; `options.ids` reuses recorded object ids.
      */
     roofBuilding: (params: RoofParams, options?: { tiles?: RoofTileLook; ids?: string[] }) => Shape[];
+    checkStairPlacement: (args: { position: [number, number, number]; rotationY?: number; width: number; height: number; style?: StairStyleType; structure?: StairStructureType }) => StairPlacement | null;
     createStairs: (args: {
       style?: StairStyleType;
       width?: number;
@@ -573,6 +575,8 @@ export interface SDK {
     getRoadSettings: () => any;
     /** A fence run through ground points [x, z], as the Fence tool makes one. */
     addFence: (points: [number, number][], options?: FenceOptions) => Shape;
+    /** A slope-aware safety-railing chain through world-space points [x,y,z]. */
+    addRailing: (points: [number, number, number][], options?: { height?: number; color?: string; name?: string }) => Shape[];
     /** A pond or lake filling an outline of ground points [x, z], as the Water tool makes one. */
     addPond: (points: [number, number][], options?: PondOptions) => Shape;
     updatePond: (id: string, changes: { depth?: number; clarity?: 'clear' | 'lake' | 'pond' | 'murky'; level?: number; dig?: boolean; flow?: { mode: 'still' | 'stream'; direction?: [number, number]; speed?: number; turbulence?: number } | null; name?: string }) => void;
@@ -1235,6 +1239,18 @@ export class DeveloperSDK implements SDK {
         this.setShapes(result.shapes);
         this.log(`Roofed the building (${result.roofs.length} roof${result.roofs.length === 1 ? '' : 's'}).`);
         return result.roofs;
+      },
+
+      checkStairPlacement: (args) => {
+        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), args.rotationY ?? 0);
+        return checkStairPlacement({
+          position: args.position,
+          quaternion: [q.x, q.y, q.z, q.w],
+          width: args.width,
+          height: args.height,
+          style: args.style,
+          structure: args.structure,
+        }, this.shapes);
       },
 
       createStairs: (args: {
@@ -2023,6 +2039,36 @@ export class DeveloperSDK implements SDK {
       },
 
       addFence: (points, options = {}) => this.placeBuilt(buildFence(this.shapes, points, options)),
+      addRailing: (points, options = {}) => {
+        if (points.length < 2) throw new Error('landscape.addRailing requires at least two points.');
+        const height = Math.max(0.2, options.height ?? 1.0);
+        const made: Shape[] = [];
+        for (let i = 1; i < points.length; i++) {
+          const a = points[i - 1]!, b = points[i]!;
+          const dx = b[0] - a[0], dz = b[2] - a[2], rise = b[1] - a[1];
+          const length = Math.hypot(dx, dz);
+          if (length < 0.01) continue;
+          const geom = createRailingGeometry(length, height, rise);
+          const angle = Math.atan2(dz, dx);
+          const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -angle);
+          const shape: Shape = {
+            id: Math.random().toString(36).slice(2, 11),
+            name: options.name ? `${options.name} ${i}` : `Railing ${this.shapes.filter(s => s.type === 'railing').length + made.length + 1}`,
+            type: 'railing',
+            position: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
+            quaternion: [q.x, q.y, q.z, q.w],
+            args: [length, height, 0.08],
+            color: options.color ?? '#475569',
+            tags: ['landscape', 'railing', 'guardrail'],
+            geometryData: geometryToData(geom),
+            customData: { railing: { start: a, end: b, rise } },
+          };
+          geom.dispose();
+          made.push(shape);
+        }
+        if (made.length) this.setShapes(prev => [...prev, ...made]);
+        return made;
+      },
       addPond: (points, options = {}) => this.placeBuilt(buildWaterBody(this.shapes, points, options)),
       updatePond: (id, changes) => {
         this.setShapes(prev => prev.map(shape => {
