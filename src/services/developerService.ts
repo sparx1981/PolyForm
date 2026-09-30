@@ -201,6 +201,11 @@ import {
   applyReconstructionReview,
   buildReconstructionReview,
 } from '../lib/reconstruction/review';
+import {
+  recogniseOrthogonalFloorPlan,
+  type RasterImageData,
+  type LocalPlanRecognitionOptions,
+} from '../lib/reconstruction/localPlanRecognizer';
 import { checkModelHealth } from '../lib/reconstruction/modelHealth';
 import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
 import {
@@ -510,6 +515,7 @@ export interface SDK {
     ) => ReturnType<typeof commitReconstructionDraft>;
     checkModelHealth: () => ReturnType<typeof checkModelHealth>;
     fromImageObservation: (observation: ImageReconstructionObservation) => ReconstructionDraft;
+    recogniseOrthogonalPlan: (image: RasterImageData, options: LocalPlanRecognitionOptions) => ReconstructionDraft;
     registerImageProvider: (provider: ImageReconstructionProvider) => void;
     listImageProviders: () => string[];
     reconstructImage: (
@@ -1778,6 +1784,9 @@ export class DeveloperSDK implements SDK {
       checkModelHealth: () => checkModelHealth(this.shapes),
 
       fromImageObservation: (observation: ImageReconstructionObservation) => imageObservationToDraft(observation),
+
+      recogniseOrthogonalPlan: (image: RasterImageData, options: LocalPlanRecognitionOptions) =>
+        imageObservationToDraft(recogniseOrthogonalFloorPlan(image, options)),
 
       registerImageProvider: (provider: ImageReconstructionProvider) => {
         this.imageReconstructionProviders.register(provider);
