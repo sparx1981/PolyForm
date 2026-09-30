@@ -4,6 +4,7 @@ import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKit
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
 import { roofBuilding, type RoofTileLook } from '../lib/buildingRoofs';
+import { buildRoomAssembly } from '../lib/archRoomAssembly';
 import { withShapeIds } from '../lib/shapeIds';
 import { buildTextShape, editTextShape, type TextOptions } from '../lib/textShapes';
 import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
@@ -391,11 +392,16 @@ export interface SDK {
       wallThickness?: number;
       includeFloor?: boolean;
       includeCeiling?: boolean;
+      includeFoundation?: boolean;
+      slabThickness?: number;
+      justification?: 'center' | 'exterior' | 'interior';
+      story?: number;
       position?: [number, number, number];
       wallColor?: string;
       floorColor?: string;
       ceilingColor?: string;
-    }) => { roomId: string; wallShapes: Shape[]; floorShape?: Shape; ceilingShape?: Shape };
+      foundationColor?: string;
+    }) => { roomId: string; wallShapes: Shape[]; floorShape?: Shape; ceilingShape?: Shape; foundationShape?: Shape };
     createWall: (args: {
       start?: [number, number, number];
       end?: [number, number, number];
@@ -1293,114 +1299,101 @@ export class DeveloperSDK implements SDK {
         wallThickness?: number;
         includeFloor?: boolean;
         includeCeiling?: boolean;
+        includeFoundation?: boolean;
+        slabThickness?: number;
+        justification?: 'center' | 'exterior' | 'interior';
+        story?: number;
         position?: [number, number, number];
         wallColor?: string;
         floorColor?: string;
         ceilingColor?: string;
-      }): { roomId: string; wallShapes: Shape[]; floorShape?: Shape; ceilingShape?: Shape } => {
+        foundationColor?: string;
+      }): { roomId: string; wallShapes: Shape[]; floorShape?: Shape; ceilingShape?: Shape; foundationShape?: Shape } => {
         const width = Math.max(1, args.width);
         const length = Math.max(1, args.length);
-        const height = args.height ?? 2.8;
-        const wallThick = args.wallThickness ?? 0.20;
-        const pos = args.position || [0, 0, 0];
-        const roomId = `room-${Math.random().toString(36).substr(2, 7)}`;
-        const wallColor = args.wallColor || '#f8fafc';
-        const floorColor = args.floorColor || '#94a3b8';
-        const ceilingColor = args.ceilingColor || '#e2e8f0';
+        const height = Math.max(0.5, args.height ?? this.wallDefaults.height ?? 2.8);
+        const wallThickness = Math.max(0.05, args.wallThickness ?? this.wallDefaults.thickness ?? 0.20);
+        const slabThickness = Math.max(0.05, args.slabThickness ?? 0.20);
+        const pos = args.position ?? [0, 0, 0];
+        const story = Math.max(1, Math.floor(args.story ?? this.extraSetters.activeStory ?? 1));
+        const configuredJustification = this.wallDefaults.justification;
+        const justification = args.justification
+          ?? (configuredJustification === 'interior' || configuredJustification === 'exterior' || configuredJustification === 'center'
+            ? configuredJustification
+            : 'center');
+        const roomId = `room-${Math.random().toString(36).slice(2, 9)}`;
+        const halfW = width / 2, halfL = length / 2;
+        const vertices = [
+          new THREE.Vector3(pos[0] - halfW, pos[1], pos[2] - halfL),
+          new THREE.Vector3(pos[0] + halfW, pos[1], pos[2] - halfL),
+          new THREE.Vector3(pos[0] + halfW, pos[1], pos[2] + halfL),
+          new THREE.Vector3(pos[0] - halfW, pos[1], pos[2] + halfL),
+        ];
+        const terrain = args.includeFloor === false
+          ? null
+          : this.shapes.find(shape => shape.type === 'terrain' && shape.terrainData) ?? null;
+        const assembly = buildRoomAssembly(vertices, terrain, undefined, {
+          wallHeight: height,
+          wallThickness,
+          slabThickness,
+          justification,
+          story,
+          wallColor: args.wallColor ?? this.wallDefaults.color ?? '#f1f5f9',
+          slabColor: args.floorColor ?? '#94a3b8',
+          foundationColor: args.foundationColor,
+        });
 
-        const hw = width / 2;
-        const hl = length / 2;
-        const floorY = pos[1];
-        const wallMidY = floorY + height / 2;
-        const ceilingY = floorY + height;
-
-        const wallShapes: Shape[] = [];
-
-        // North wall (+Z)
-        const nWall: Shape = {
-          id: `${roomId}-wall-n`,
-          name: `Room Wall (North)`,
-          type: 'wall',
-          position: [pos[0], wallMidY, pos[2] + hl],
-          rotation: [0, 0, 0],
-          args: [width, height, wallThick],
-          color: wallColor,
-          tags: ['architecture', 'wall', 'exterior-wall'],
-          customData: { roomId, orientation: 'north' }
+        const wallShapes = assembly.wallShapes.map((wall, index) => ({
+          ...wall,
+          name: `Room Wall ${index + 1}`,
+          tags: [...new Set([...(wall.tags ?? []), 'wall', `room:${roomId}`])],
+          customData: { ...(wall.customData ?? {}), roomId },
+        }));
+        const floorShape = args.includeFloor === false ? undefined : {
+          ...assembly.slabShape,
+          name: 'Room Floor Slab',
+          tags: [...new Set([...(assembly.slabShape.tags ?? []), 'floor', `room:${roomId}`])],
+          customData: { ...(assembly.slabShape.customData ?? {}), roomId },
         };
-        // South wall (-Z)
-        const sWall: Shape = {
-          id: `${roomId}-wall-s`,
-          name: `Room Wall (South)`,
-          type: 'wall',
-          position: [pos[0], wallMidY, pos[2] - hl],
-          rotation: [0, 0, 0],
-          args: [width, height, wallThick],
-          color: wallColor,
-          tags: ['architecture', 'wall', 'exterior-wall'],
-          customData: { roomId, orientation: 'south' }
-        };
-        // East wall (+X)
-        const eWall: Shape = {
-          id: `${roomId}-wall-e`,
-          name: `Room Wall (East)`,
-          type: 'wall',
-          position: [pos[0] + hw, wallMidY, pos[2]],
-          rotation: [0, Math.PI / 2, 0],
-          args: [length - wallThick * 2, height, wallThick],
-          color: wallColor,
-          tags: ['architecture', 'wall', 'exterior-wall'],
-          customData: { roomId, orientation: 'east' }
-        };
-        // West wall (-X)
-        const wWall: Shape = {
-          id: `${roomId}-wall-w`,
-          name: `Room Wall (West)`,
-          type: 'wall',
-          position: [pos[0] - hw, wallMidY, pos[2]],
-          rotation: [0, Math.PI / 2, 0],
-          args: [length - wallThick * 2, height, wallThick],
-          color: wallColor,
-          tags: ['architecture', 'wall', 'exterior-wall'],
-          customData: { roomId, orientation: 'west' }
-        };
-
-        wallShapes.push(nWall, sWall, eWall, wWall);
-        const shapesToAdd: Shape[] = [...wallShapes];
-
-        let floorShape: Shape | undefined;
-        if (args.includeFloor !== false) {
-          floorShape = {
-            id: `${roomId}-floor`,
-            name: `Room Floor Slab`,
-            type: 'box',
-            position: [pos[0], floorY - 0.1, pos[2]],
-            args: [width + 0.4, 0.2, length + 0.4],
-            color: floorColor,
-            tags: ['architecture', 'slab', 'floor'],
-            customData: { roomId }
+        const foundationShape = args.includeFloor === false || args.includeFoundation === false || !assembly.foundationShape
+          ? undefined
+          : {
+            ...assembly.foundationShape,
+            tags: [...new Set([...(assembly.foundationShape.tags ?? []), `room:${roomId}`])],
+            customData: { ...(assembly.foundationShape.customData ?? {}), roomId },
           };
-          shapesToAdd.push(floorShape);
-        }
 
         let ceilingShape: Shape | undefined;
         if (args.includeCeiling) {
+          const ceilingArgs = typeof assembly.slabShape.args === 'object' && !Array.isArray(assembly.slabShape.args)
+            ? { ...assembly.slabShape.args, height: slabThickness }
+            : assembly.slabShape.args;
           ceilingShape = {
-            id: `${roomId}-ceiling`,
-            name: `Room Ceiling Slab`,
-            type: 'box',
-            position: [pos[0], ceilingY + 0.1, pos[2]],
-            args: [width, 0.2, length],
-            color: ceilingColor,
-            tags: ['architecture', 'slab', 'ceiling'],
-            customData: { roomId }
+            ...assembly.slabShape,
+            id: Math.random().toString(36).slice(2, 11),
+            name: 'Room Ceiling Slab',
+            position: [assembly.slabShape.position[0], assembly.datumZ + height + slabThickness / 2, assembly.slabShape.position[2]],
+            args: ceilingArgs,
+            color: args.ceilingColor ?? '#e2e8f0',
+            tags: [`story-${story}`, 'architecture', 'ceiling', `room:${roomId}`],
+            customData: { roomId },
           };
-          shapesToAdd.push(ceilingShape);
         }
 
-        this.setShapes(prev => [...prev, ...shapesToAdd]);
-        this.log(`Created room ${roomId} (${width}m x ${length}m x ${height}m, 4 walls + floor slab).`);
-        return { roomId, wallShapes, floorShape, ceilingShape };
+        const additions: Shape[] = [
+          ...wallShapes,
+          ...(floorShape ? [floorShape] : []),
+          ...(foundationShape ? [foundationShape] : []),
+          ...(ceilingShape ? [ceilingShape] : []),
+        ];
+        this.setShapes(prev => {
+          const withTerrain = assembly.updatedTerrainData && assembly.modifiedTerrainShapeId
+            ? prev.map(shape => shape.id === assembly.modifiedTerrainShapeId ? { ...shape, terrainData: assembly.updatedTerrainData! } : shape)
+            : prev;
+          return [...withTerrain, ...additions];
+        });
+        this.log(`Created room ${roomId} (${width}m × ${length}m × ${height}m) using Wall tool room assembly.`);
+        return { roomId, wallShapes, floorShape, ceilingShape, foundationShape };
       },
 
       createWall: (args: {
