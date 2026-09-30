@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig } from '../types';
+import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig, type TerrainModifier, type RoadModifier, type PadModifier, type SurfaceModifier, type CurbDitchProfile, type RoadMarkingPreset, type BatterFalloffType, type PadPrimitiveType, type ParkingStallConfig } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
@@ -557,6 +557,43 @@ export interface SDK {
     addPatio: (points: [number, number][], options?: PatioOptions) => Shape;
   };
 
+  // Civil / Terrain Modifier Subsystem
+  civil: {
+    list: () => TerrainModifier[];
+    addRoad: (options: {
+      points: [number, number, number][];
+      name?: string;
+      width?: number;
+      maxGradePercent?: number;
+      bankingAngle?: number;
+      profile?: Partial<CurbDitchProfile>;
+      markings?: RoadMarkingPreset;
+      material?: string;
+      batterDistance?: number;
+      enabled?: boolean;
+    }) => RoadModifier;
+    addPad: (options: {
+      primitive?: PadPrimitiveType;
+      center: [number, number, number];
+      dimensions?: [number, number];
+      rotationY?: number;
+      targetElevation?: number;
+      batterDistance?: number;
+      batterProfile?: BatterFalloffType;
+      name?: string;
+      enabled?: boolean;
+    }) => PadModifier;
+    setPadSurface: (padId: string, options: {
+      pattern: 'parking-striping' | 'hatch' | 'asphalt' | 'gravel';
+      parkingConfig?: Partial<ParkingStallConfig>;
+      enabled?: boolean;
+      name?: string;
+    } | null) => void;
+    update: (id: string, changes: Partial<TerrainModifier>) => void;
+    remove: (id: string) => void;
+    clear: () => void;
+  };
+
   // Materials & PBR Subsystem
   materials: {
     applyMaterial: (target: Shape | string, material: string | {
@@ -838,6 +875,7 @@ export class DeveloperSDK implements SDK {
   public reconstruction: any;
   public interiors: any;
   public landscape: any;
+  public civil: SDK['civil'];
   public materials: any;
   public measurement: any;
   public sections: SDK['sections'];
@@ -1922,6 +1960,100 @@ export class DeveloperSDK implements SDK {
       addFence: (points, options = {}) => this.placeBuilt(buildFence(this.shapes, points, options)),
       addPond: (points, options = {}) => this.placeBuilt(buildWaterBody(this.shapes, points, options)),
       addPatio: (points, options = {}) => this.placeBuilt(buildPatio(this.shapes, points, options)),
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // CIVIL / TERRAIN MODIFIER SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    const getTerrainModifiers = (): TerrainModifier[] => (this.extraSetters.terrainModifiers ?? []) as TerrainModifier[];
+    const setTerrainModifiers = (updater: TerrainModifier[] | ((prev: TerrainModifier[]) => TerrainModifier[])) => {
+      const prev = getTerrainModifiers();
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      this.extraSetters.terrainModifiers = next;
+      this.extraSetters.setTerrainModifiers?.(next);
+      return next;
+    };
+    this.civil = {
+      list: () => [...getTerrainModifiers()],
+      addRoad: (options) => {
+        if (!Array.isArray(options.points) || options.points.length < 2) throw new Error('civil.addRoad requires at least two points.');
+        const settings = this.extraSetters.civilRoadSettings ?? {};
+        const profile: CurbDitchProfile = {
+          width: options.profile?.width ?? settings.curbWidth ?? 0.15,
+          height: options.profile?.height ?? settings.curbHeight ?? 0.15,
+          ditchWidth: options.profile?.ditchWidth ?? settings.ditchWidth ?? 1.2,
+          ditchDepth: options.profile?.ditchDepth ?? settings.ditchDepth ?? 0.35,
+          hasCurb: options.profile?.hasCurb ?? settings.hasCurb ?? true,
+          hasDitch: options.profile?.hasDitch ?? settings.hasDitch ?? false,
+        };
+        const road: RoadModifier = {
+          id: `road-${Math.random().toString(36).slice(2, 10)}`,
+          name: options.name ?? `Road ${getTerrainModifiers().filter(m => m.type === 'road').length + 1}`,
+          type: 'road',
+          enabled: options.enabled ?? true,
+          points: options.points.map(p => [p[0], p[1], p[2]]),
+          width: Math.max(0.1, options.width ?? settings.width ?? 6),
+          maxGradePercent: Math.max(0, options.maxGradePercent ?? settings.maxGradePercent ?? 8),
+          bankingAngle: options.bankingAngle ?? 0,
+          profile,
+          markings: options.markings ?? settings.markings ?? 'center-dashed',
+          material: options.material ?? settings.material ?? 'asphalt-weathered',
+          ...(options.batterDistance !== undefined ? { batterDistance: Math.max(0, options.batterDistance) } : {}),
+        };
+        setTerrainModifiers(prev => [...prev, road]);
+        return road;
+      },
+      addPad: (options) => {
+        const settings = this.extraSetters.civilPadSettings ?? {};
+        const dimensions = options.dimensions ?? settings.dimensions ?? [18, 12];
+        const pad: PadModifier = {
+          id: `pad-${Math.random().toString(36).slice(2, 10)}`,
+          name: options.name ?? `Pad ${getTerrainModifiers().filter(m => m.type === 'pad').length + 1}`,
+          type: 'pad',
+          enabled: options.enabled ?? true,
+          primitive: options.primitive ?? settings.primitive ?? 'rectangle',
+          center: [...options.center],
+          dimensions: [Math.max(0.1, dimensions[0]), Math.max(0.1, dimensions[1])],
+          rotationY: options.rotationY ?? 0,
+          targetElevation: options.targetElevation ?? settings.targetElevation ?? 1.5,
+          batterDistance: Math.max(0, options.batterDistance ?? settings.batterDistance ?? 3),
+          batterProfile: options.batterProfile ?? settings.batterProfile ?? 'linear',
+        };
+        setTerrainModifiers(prev => [...prev, pad]);
+        return pad;
+      },
+      setPadSurface: (padId, options) => {
+        setTerrainModifiers(prev => prev.map(mod => {
+          if (mod.id !== padId || mod.type !== 'pad') return mod;
+          if (options === null) return { ...mod, surfaceModifier: undefined };
+          const defaults = this.extraSetters.civilStripingSettings ?? {};
+          const surface: SurfaceModifier = {
+            id: mod.surfaceModifier?.id ?? `surface-${Math.random().toString(36).slice(2, 10)}`,
+            name: options.name ?? mod.surfaceModifier?.name ?? 'Pad surface',
+            type: 'surface',
+            enabled: options.enabled ?? true,
+            hostPadId: padId,
+            pattern: options.pattern,
+            ...(options.pattern === 'parking-striping' ? {
+              parkingConfig: {
+                angle: options.parkingConfig?.angle ?? defaults.angle ?? 90,
+                stallWidth: options.parkingConfig?.stallWidth ?? defaults.stallWidth ?? 2.7,
+                stallDepth: options.parkingConfig?.stallDepth ?? defaults.stallDepth ?? 5.5,
+                stripeColor: options.parkingConfig?.stripeColor ?? defaults.stripeColor ?? '#FFFFFF',
+                doubleRow: options.parkingConfig?.doubleRow ?? defaults.doubleRow ?? false,
+              },
+            } : {}),
+          };
+          return { ...mod, surfaceModifier: surface };
+        }));
+      },
+      update: (id, changes) => {
+        setTerrainModifiers(prev => prev.map(mod => mod.id === id ? ({ ...mod, ...changes, id: mod.id, type: mod.type } as TerrainModifier) : mod));
+      },
+      remove: (id) => {
+        setTerrainModifiers(prev => prev.filter(mod => mod.id !== id && !(mod.type === 'surface' && mod.hostPadId === id)));
+      },
+      clear: () => setTerrainModifiers([]),
     };
 
     // ─────────────────────────────────────────────────────────────
