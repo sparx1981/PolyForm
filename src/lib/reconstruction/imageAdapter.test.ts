@@ -25,7 +25,8 @@ describe('image reconstruction adapter', () => {
       walls: [{ id: 'w', start: [0, 0], end: [2, 0] }],
       furniture: [{ id: 'bed', type: 'bed', position: [1, 0], rotationY: 0 }],
     });
-    expect(draft.walls[0].end[0]).toBeCloseTo(0);\n    expect(draft.walls[0].end[1]).toBeCloseTo(-2);
+    expect(draft.walls[0].end[0]).toBeCloseTo(0);
+    expect(draft.walls[0].end[1]).toBeCloseTo(-2);
     expect(draft.furniture?.[0].rotationY).toBeCloseTo(Math.PI / 2);
   });
 
