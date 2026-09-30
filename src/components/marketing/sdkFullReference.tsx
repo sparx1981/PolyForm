@@ -152,6 +152,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('validateDraft', 'sdk.reconstruction.validateDraft(draft)', 'ReconstructionValidation', 'Validate a reconstruction draft before committing it.'),
       m('checkModelHealth', 'sdk.reconstruction.checkModelHealth()', 'ModelHealthReport', 'Check the current model for reconstruction/geometry health warnings and errors.'),
       m('fromImageObservation', 'sdk.reconstruction.fromImageObservation(observation)', 'ReconstructionDraft', 'Convert a calibrated image-recognition observation into a deterministic reconstruction draft.'),
+      m('recogniseOrthogonalPlan', 'sdk.reconstruction.recogniseOrthogonalPlan(image, options)', 'ReconstructionDraft', 'Run the same local high-contrast orthogonal floor-plan recogniser used by Reconstruction Studio and return a deterministic draft.'),
       m('registerImageProvider', 'sdk.reconstruction.registerImageProvider(provider)', 'void', 'Register an image reconstruction provider.'),
       m('listImageProviders', 'sdk.reconstruction.listImageProviders()', 'string[]', 'List registered image reconstruction provider ids.'),
       m('reconstructImage', 'await sdk.reconstruction.reconstructImage(providerId, request)', 'Promise<ReconstructionDraft>', 'Run a registered image provider and return a draft for review; this does not commit geometry by itself.'),
