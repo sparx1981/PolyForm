@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig, type TerrainModifier, type RoadModifier, type PadModifier, type SurfaceModifier, type CurbDitchProfile, type RoadMarkingPreset, type BatterFalloffType, type PadPrimitiveType, type ParkingStallConfig } from '../types';
+import { Shape, TextData, WorldSiteInfo, SiteBuildingData, SiteRoute, StreetLifeLevel, CustomToolbarDef, CustomToolbarItem, CustomToolbarButton, CustomToolbarConfig, type TerrainModifier, type RoadModifier, type PadModifier, type SurfaceModifier, type CurbDitchProfile, type RoadMarkingPreset, type BatterFalloffType, type PadPrimitiveType, type ParkingStallConfig, type TimberFrameParams } from '../types';
 import { getBlockPart, buildBlockGeometry, BLOCK_CATALOG } from '../lib/blockKitGeometry';
 import { normalizeGraphicsSettings, type GraphicsSettings } from '../lib/graphics/graphicsSettings';
 import type { KernelArcHost } from '../tools/kernelArcHost';
@@ -229,7 +229,8 @@ import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
 import { createTerrainShape } from '../lib/terrain/terrainFactory';
-import { generateTimberFraming, TimberFrameOptions } from '../lib/timberFrameGenerator';
+import { generateTimberFraming, generateTimberFrameForRoof, TimberFrameOptions } from '../lib/timberFrameGenerator';
+import { DEFAULT_TIMBER_FRAME_PARAMS } from '../constants/timberFrameDefaults';
 import {
   createWallGeometry,
   createDoorGeometry,
@@ -452,12 +453,22 @@ export interface SDK {
     }) => Shape;
     setWallTransparency: (settings: { overall?: number; exterior?: number; interior?: number }) => void;
     generateTimberFraming: (options?: {
+      /** When supplied, frame only this roof instead of the whole building. */
       roofId?: string;
+      /** Stud/member spacing in metres. */
       spacing?: number;
+      /** Preferred app terminology for the structural member width/depth. */
+      memberWidth?: number;
+      memberDepth?: number;
+      /** Backwards-compatible aliases for memberWidth/memberDepth. */
       rafterWidth?: number;
       rafterDepth?: number;
       species?: string;
+      grade?: string;
       color?: string;
+      includeWalls?: boolean;
+      includeFloors?: boolean;
+      includeRoof?: boolean;
     }) => Shape[];
     clearTimberFraming: () => void;
     configureRoofDefaults: (settings: RoofConfigDefaults) => void;
@@ -1632,28 +1643,63 @@ export class DeveloperSDK implements SDK {
       generateTimberFraming: (options?: {
         roofId?: string;
         spacing?: number;
+        memberWidth?: number;
+        memberDepth?: number;
         rafterWidth?: number;
         rafterDepth?: number;
         species?: string;
+        grade?: string;
         color?: string;
+        includeWalls?: boolean;
+        includeFloors?: boolean;
+        includeRoof?: boolean;
       }): Shape[] => {
         try {
-          const framingOpts: TimberFrameOptions = {
-            studSpacing: options?.spacing ?? this.timberFramingDefaults.studSpacing ?? 0.60,
-            studWidth: options?.rafterWidth ?? this.timberFramingDefaults.studWidth ?? 0.045,
-            studDepth: options?.rafterDepth ?? this.timberFramingDefaults.studDepth ?? 0.145,
-            timberColor: options?.color || this.timberFramingDefaults.timberColor || '#b45309',
-            includeRoof: this.timberFramingDefaults.includeRoof ?? true,
-            includeWalls: this.timberFramingDefaults.includeWalls ?? true
+          const baseParams: TimberFrameParams = {
+            ...DEFAULT_TIMBER_FRAME_PARAMS,
+            ...(this.extraSetters.timberFrameParams ?? {}),
           };
-          const result = generateTimberFraming(this.shapes, framingOpts);
-          if (result && result.shapes && result.shapes.length > 0) {
-            this.setShapes(prev => [...prev, ...result.shapes]);
-            if (this.extraSetters.commitUpdatedFraming) {
-              this.extraSetters.commitUpdatedFraming(result.shapes);
+          const params: TimberFrameParams = {
+            ...baseParams,
+            studSpacing: options?.spacing ?? this.timberFramingDefaults.studSpacing ?? baseParams.studSpacing,
+            memberWidth: options?.memberWidth ?? options?.rafterWidth ?? this.timberFramingDefaults.studWidth ?? baseParams.memberWidth,
+            memberDepth: options?.memberDepth ?? options?.rafterDepth ?? this.timberFramingDefaults.studDepth ?? baseParams.memberDepth,
+            species: options?.species ?? this.timberFramingDefaults.species ?? baseParams.species,
+            grade: options?.grade ?? baseParams.grade,
+          };
+          const framingOpts: TimberFrameOptions = {
+            params,
+            studSpacing: params.studSpacing,
+            studWidth: params.memberWidth,
+            studDepth: params.memberDepth,
+            timberColor: options?.color || this.timberFramingDefaults.timberColor || '#b45309',
+            includeRoof: options?.includeRoof ?? this.timberFramingDefaults.includeRoof ?? true,
+            includeWalls: options?.includeWalls ?? this.timberFramingDefaults.includeWalls ?? true,
+            includeFloors: options?.includeFloors ?? this.timberFramingDefaults.includeFloors ?? true,
+          };
+
+          let framingShapes: Shape[];
+          if (options?.roofId) {
+            const roof = this.shapes.find(s => s.id === options.roofId);
+            if (!roof) {
+              this.log(`Timber framing roof "${options.roofId}" was not found.`);
+              return [];
             }
-            this.log(`Generated ${result.shapes.length} timber framing elements.`);
-            return result.shapes;
+            framingShapes = generateTimberFrameForRoof(roof, this.shapes, framingOpts);
+          } else {
+            framingShapes = generateTimberFraming(this.shapes, framingOpts).shapes;
+          }
+
+          if (framingShapes.length > 0) {
+            this.setShapes(prev => [...prev, ...framingShapes]);
+            if (this.extraSetters.commitUpdatedFraming) {
+              this.extraSetters.commitUpdatedFraming(framingShapes);
+            }
+            if (this.extraSetters.setTimberFrameParams) {
+              this.extraSetters.setTimberFrameParams(params);
+            }
+            this.log(`Generated ${framingShapes.length} timber framing elements${options?.roofId ? ` for roof ${options.roofId}` : ''}.`);
+            return framingShapes;
           }
         } catch (err: any) {
           this.log(`Error generating timber framing: ${err.message}`);
