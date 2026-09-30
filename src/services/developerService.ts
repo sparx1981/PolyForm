@@ -31,6 +31,7 @@ import { removedBuildings, shapeFromSnapshot, withBuildingHeight } from '../lib/
 import { clampSiteSize } from '../lib/worldSite/geo';
 import { STREET_LIFE_LEVELS, withDrawnRoute, withoutRoutes } from '../lib/worldSite/streets';
 import { applyAutoStreetLights } from '../lib/worldSite/streetLights';
+import { perfStore, runToMarkdown, type PerfRun, type PerfState } from '../lib/perf/profilerStore';
 
 export interface RoofConfigDefaults {
   roofType?: RoofType;
@@ -765,6 +766,23 @@ export interface SDK {
     openPhotoTo3D: () => void;
   };
 
+  // Performance Profiler Subsystem
+  performance: {
+    setEnabled: (enabled: boolean) => void;
+    isEnabled: () => boolean;
+    startBenchmark: () => void;
+    startRecording: () => void;
+    stop: () => void;
+    cancel: () => void;
+    getState: () => PerfState;
+    listRuns: () => PerfRun[];
+    latest: () => PerfRun | null;
+    latestComparison: () => ReturnType<typeof perfStore.latestComparison>;
+    removeRun: (id: string) => void;
+    clearRuns: () => void;
+    toMarkdown: (runOrId?: PerfRun | string) => string | null;
+  };
+
   // Scene & History Subsystem
   scene: {
     exportJSON: () => string;
@@ -933,6 +951,7 @@ export class DeveloperSDK implements SDK {
   public selection: any;
   public camera: any;
   public ai: any;
+  public performance: SDK['performance'];
   public scene: any;
   public outliner: any;
   public blockKit: any;
@@ -2870,6 +2889,46 @@ export class DeveloperSDK implements SDK {
         window.dispatchEvent(new CustomEvent('polyform:photo-to-3d'));
         this.log('Opened Photo to 3D.');
       }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // PERFORMANCE PROFILER SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.performance = {
+      setEnabled: (enabled: boolean): void => {
+        this.extraSetters.setPerfProfilerEnabled?.(enabled);
+        this.log(`Performance profiler ${enabled ? 'enabled' : 'disabled'}.`);
+      },
+      isEnabled: (): boolean => Boolean(this.extraSetters.perfProfilerEnabled),
+      startBenchmark: (): void => {
+        this.extraSetters.setPerfProfilerEnabled?.(true);
+        perfStore.startBenchmark();
+        this.log('Started performance fly-around benchmark.');
+      },
+      startRecording: (): void => {
+        this.extraSetters.setPerfProfilerEnabled?.(true);
+        perfStore.startRecording();
+        this.log('Started performance recording.');
+      },
+      stop: (): void => {
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('polyform-perf-stop'));
+      },
+      cancel: (): void => {
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('polyform-perf-cancel'));
+      },
+      getState: (): PerfState => perfStore.getState(),
+      listRuns: (): PerfRun[] => [...perfStore.getState().runs],
+      latest: (): PerfRun | null => perfStore.getState().runs.at(-1) ?? null,
+      latestComparison: () => perfStore.latestComparison(),
+      removeRun: (id: string): void => perfStore.removeRun(id),
+      clearRuns: (): void => perfStore.clearRuns(),
+      toMarkdown: (runOrId?: PerfRun | string): string | null => {
+        const runs = perfStore.getState().runs;
+        const run = typeof runOrId === 'string'
+          ? runs.find(candidate => candidate.id === runOrId) ?? null
+          : runOrId ?? runs.at(-1) ?? null;
+        return run ? runToMarkdown(run) : null;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
