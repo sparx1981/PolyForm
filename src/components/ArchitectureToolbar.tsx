@@ -9,7 +9,8 @@ import {
   Home,
   Globe,
   Hammer,
-  PersonStanding
+  PersonStanding,
+  Armchair
 } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
@@ -232,6 +233,19 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
         label="Scale Figure (Person)"
         subtitle={`${currentScaleChar.name} (${currentScaleHeight.toFixed(2)}m eye-level datum)`}
       />
+
+      <button
+        id="arch-interior-studio-btn"
+        onClick={() => window.dispatchEvent(new CustomEvent('polyform:interior-studio'))}
+        aria-label="Interior Studio"
+        title="Interior Studio — furnish detected rooms with collision-aware native furniture"
+        className={cn(
+          "toolbar-btn relative flex items-center justify-center transition-all",
+          theme === 'dark' ? "hover:bg-gray-700 text-violet-400" : "hover:bg-gray-100 text-violet-600"
+        )}
+      >
+        <Armchair size={18} />
+      </button>
 
       {((toolbarVisibility?.stack_story !== false) || (toolbarVisibility?.roof !== false) || (toolbarVisibility?.['timber-frame'] !== false && toolbarVisibility?.timber_frame !== false)) && (
         <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />
