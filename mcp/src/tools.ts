@@ -152,6 +152,37 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     return text({ total: rows.length, objects: rows.slice(0, limit) });
   }));
 
+  server.registerTool('list_rooms', {
+    title: 'List detected rooms',
+    description: 'Lists enclosed rooms detected from the model walls, including the stable room id used by furnish_room, level, area and perimeter.',
+    inputSchema: { model: modelRef },
+    annotations: READ,
+  }, safe(async ({ model }) => {
+    const m = await store.loadModel(caller, model);
+    const rooms = withSdk(m.shapes, sdk => sdk.interiors.listRooms()).result;
+    return text(rooms.map((room: any, index: number) => ({
+      index,
+      id: room.id,
+      name: room.name,
+      level: room.level,
+      areaM2: room.areaM2,
+      perimeterM: room.perimeterM,
+      elevation: room.elevation,
+      walls: room.boundaryWallIds,
+      openings: room.openingIds,
+    })));
+  }));
+
+  server.registerTool('check_model_health', {
+    title: 'Check model health',
+    description: 'Runs PolyForm reconstruction/model-health checks and returns errors and warnings before further editing or generation.',
+    inputSchema: { model: modelRef },
+    annotations: READ,
+  }, safe(async ({ model }) => {
+    const m = await store.loadModel(caller, model);
+    return text(withSdk(m.shapes, sdk => sdk.reconstruction.checkModelHealth()).result);
+  }));
+
   server.registerTool('get_object', {
     title: 'Show one object',
     description: 'All settings of one object (mesh data left out).',
@@ -309,6 +340,62 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       includeFloor: a.floor, includeCeiling: a.ceiling, wallColor: a.wall_color, floorColor: a.floor_color,
     }));
     return { shapes: run.shapes, made: run.created };
+  })));
+
+  server.registerTool('add_interior_furniture', {
+    title: 'Add interior furniture',
+    description: 'Adds PolyForm native parametric furniture: bed, sofa, cabinet or curtain. Sofas/beds support baked soft-body settling and curtains support baked cloth settling.',
+    inputSchema: {
+      model: modelRef,
+      type: z.enum(['bed', 'sofa', 'cabinet', 'curtain']),
+      position: vec3.default([0, 0, 0]),
+      rotation_deg: z.number().default(0),
+      color: colour.optional(),
+      settle_soft: z.boolean().default(true),
+      settle_strength: z.number().min(0).max(1).default(0.35),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, `Added interior ${a.type}`, shapes => {
+    const run = withSdk(shapes, sdk => {
+      const item = sdk.interiors.addFurniture(a.type, {
+        position: a.position,
+        rotation: a.rotation_deg * Math.PI / 180,
+        color: a.color,
+      });
+      const sim = item.customData?.semanticComponent?.simulation;
+      return a.settle_soft && sim?.bakeable ? sdk.interiors.bakeSimulation(item.id, a.settle_strength) : item;
+    });
+    return { shapes: run.shapes, made: run.created };
+  })));
+
+  server.registerTool('furnish_room', {
+    title: 'Furnish a detected room',
+    description: 'Collision-aware Interior Studio furnishing. Call list_rooms first and pass its room id. Presets include soft furnishings with sofa and curtains.',
+    inputSchema: {
+      model: modelRef,
+      room: z.string().describe('Room id from list_rooms'),
+      preset: z.enum(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal']),
+      settle_soft: z.boolean().default(true),
+      settle_strength: z.number().min(0).max(1).default(0.38),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, `Furnished room (${a.preset})`, shapes => {
+    const run = withSdk(shapes, sdk => {
+      const plan = sdk.interiors.furnishRoom(a.room, a.preset);
+      if (a.settle_soft) {
+        for (const item of plan.shapes) {
+          const sim = item.customData?.semanticComponent?.simulation;
+          if (sim?.bakeable) sdk.interiors.bakeSimulation(item.id, a.settle_strength);
+        }
+      }
+      return plan;
+    });
+    const plan = run.result;
+    return {
+      shapes: run.shapes,
+      made: run.created,
+      message: `Placed ${plan.shapes.length} item(s); ${plan.unplaced.length} could not be placed without a collision.`,
+    };
   })));
 
   server.registerTool('add_wall', {
