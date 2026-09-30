@@ -312,6 +312,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('generateModel', 'sdk.ai.generateModel(prompt)', 'void', 'Generate objects from a text description.'),
       m('openRenderer', 'sdk.ai.openRenderer(prompt?, style?)', 'void', 'Open AI Renderer for a high-fidelity render of the viewport.'),
       m('askAssistant', 'sdk.ai.askAssistant(query?)', 'void', 'Open the AI assistant panel with an optional starting question.'),
+      m('openPhotoTo3D', 'sdk.ai.openPhotoTo3D()', 'void', 'Open the same Photo to 3D workflow as the AI toolbar.'),
     ],
   },
   {
