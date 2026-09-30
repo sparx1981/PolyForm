@@ -144,6 +144,58 @@ sdk.drawing.followMe(profile, {
 });
 ```
 
+### Drawing primitives, bevels and booleans
+
+The kernel drawing API now mirrors the main drawing/modifier tools directly:
+
+```js
+const [rect] = sdk.drawing.rectangle({
+  centre: [0, 0, 0],
+  width: 4,
+  depth: 3,
+});
+
+const [circle] = sdk.drawing.circle({
+  centre: [6, 0, 0],
+  radius: 1.5,
+  segments: 32,
+});
+
+sdk.drawing.polygon({ centre: [12, 0, 0], radius: 2, sides: 6 });
+sdk.drawing.triangle({ centre: [18, 0, 0], radius: 2 });
+sdk.drawing.pie({ centre: [24, 0, 0], radius: 2, sweepDeg: 120 });
+sdk.drawing.freehand([[30, 0, 0], [31, 0, 1], [32, 0, 0]]);
+
+// The modifier methods use the same kernel bindings as the viewport tools.
+sdk.drawing.pushPull(rect, 2);
+const solidFaces = sdk.drawing.listFaces().map(face => face.id);
+sdk.drawing.fillet(solidFaces, 0.18); // or chamfer(...)
+
+const a = sdk.drawing.rectangle({ centre: [40, 0, 0], width: 4, depth: 4 });
+const b = sdk.drawing.rectangle({ centre: [42, 0, 0], width: 4, depth: 4 });
+sdk.drawing.boolean([a[0], b[0]], 'merge');
+```
+
+For stair placement and landscape railings:
+
+```js
+const check = sdk.architecture.checkStairPlacement({
+  position: [0, 1.4, 0],
+  width: 1,
+  height: 2.8,
+  style: 'straight',
+  structure: 'closed',
+});
+if (check?.ok) {
+  sdk.architecture.createStairs({ width: 1, height: 2.8, style: 'straight' });
+}
+
+sdk.landscape.addRailing(
+  [[0, 0, 0], [4, 0.6, 0], [7, 1.1, 3]],
+  { height: 1.1 },
+);
+```
+
 ### Sections and annotations
 
 ```js
@@ -163,6 +215,12 @@ sdk.measurement.addDimension(
 );
 sdk.measurement.addLeader([2, 1, 0], [3, 2, 0], 'Beam');
 sdk.measurement.addGuide([0, 0, 2], [1, 0, 0], 2);
+sdk.measurement.addProtractor({
+  centre: [0, 0, 0],
+  base: [1, 0, 0],
+  normal: [0, 1, 0],
+  angle: 45,
+});
 ```
 
 ### Civil roads, pads and parking
