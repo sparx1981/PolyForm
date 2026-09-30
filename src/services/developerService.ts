@@ -172,6 +172,7 @@ import {
   planRoomFurnishing,
   type FurnishingPreset,
 } from '../lib/interiors/smartFurnish';
+import { bakeSemanticSimulation } from '../lib/interiors/bakeSimulation';
 import { detectRooms } from '../lib/spatial/rooms';
 import {
   commitReconstructionDraft,
@@ -496,6 +497,7 @@ export interface SDK {
     }) => Shape;
     listCatalog: () => ReturnType<typeof interiorFurnitureCatalog>;
     furnishRoom: (roomId: string, preset: FurnishingPreset) => ReturnType<typeof planRoomFurnishing>;
+    bakeSimulation: (shapeId: string, strength?: number) => Shape;
   };
 
   // Landscape & Site Planning Subsystem
@@ -1676,6 +1678,15 @@ export class DeveloperSDK implements SDK {
         }
         this.log(`Furnished room ${roomId} with ${plan.shapes.length} items; ${plan.unplaced.length} unplaced.`);
         return plan;
+      },
+
+      bakeSimulation: (shapeId: string, strength?: number) => {
+        const source = this.shapes.find(shape => shape.id === shapeId);
+        if (!source) throw new Error(`Shape not found: ${shapeId}`);
+        const baked = bakeSemanticSimulation(source, strength);
+        this.setShapes(prev => prev.map(shape => shape.id === shapeId ? baked : shape));
+        this.log(`Baked ${baked.customData?.simulationBake?.type ?? 'simulation'} for ${shapeId}.`);
+        return baked;
       },
     };
 
