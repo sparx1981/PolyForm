@@ -747,6 +747,88 @@ sdk.toolbars.addToBasicToolbar({
 console.log("Added 2 custom extension buttons to basic toolbar!");`
     },
     {
+      name: 'Sections & Annotations',
+      code: `// Saved section plane plus tool-equivalent annotations
+const section = sdk.sections.create({
+  point: [0, 1.2, 0],
+  normal: [0, 1, 0],
+  size: 12,
+  xrayOpacity: 0.4
+});
+sdk.sections.move(section.id, 0.3);
+
+sdk.measurement.addDimension(
+  [0, 0, 0],
+  [6, 0, 0],
+  { text: "Main span", offset: [0, 0.5, 0] }
+);
+sdk.measurement.addLeader([3, 2.4, 0], [4, 3, 0], "Beam");
+sdk.measurement.addGuide([0, 0, 2], [1, 0, 0], 2);
+console.log("Section and annotations created:", section.id);`
+    },
+    {
+      name: 'Civil Road & Parking Pad',
+      code: `// Civil modifiers use the same terrain-modifier model as the Landscapes tools
+const road = sdk.civil.addRoad({
+  points: [[-10, 0, 0], [0, 0.2, 0], [12, 0.6, 5]],
+  width: 6.5,
+  maxGradePercent: 8,
+  markings: "center-dashed",
+  profile: { hasCurb: true, curbHeight: 0.15 }
+});
+
+const pad = sdk.civil.addPad({
+  center: [8, 1.2, 8],
+  dimensions: [20, 14],
+  targetElevation: 1.2,
+  batterDistance: 3
+});
+
+sdk.civil.setPadSurface(pad.id, {
+  pattern: "parking-striping",
+  parkingConfig: { angle: 60, stallWidth: 2.7, stallDepth: 5.5, doubleRow: true }
+});
+console.log("Civil modifiers:", road.id, pad.id);`
+    },
+    {
+      name: 'Follow Me Sweep',
+      code: `// Sweep a vertical profile along an L-shaped path
+const faces = sdk.drawing.shape([
+  [-0.2, 0, 0],
+  [0.2, 0, 0],
+  [0.2, 0.4, 0],
+  [-0.2, 0.4, 0]
+]);
+if (faces.length) {
+  const ok = sdk.drawing.followMe(faces[0], {
+    points: [[0, 0, 0], [0, 0, 4], [4, 0, 4]]
+  });
+  console.log("Follow Me completed:", ok);
+}`
+    },
+    {
+      name: 'Edit Water & Deck',
+      code: `// Create then edit the same water/deck settings exposed in Landscapes
+const water = sdk.landscape.addPond(
+  [[0, 0], [8, 0], [8, 2], [0, 2]],
+  { depth: 0.8, clarity: "lake" }
+);
+sdk.landscape.updatePond(water.id, {
+  clarity: "clear",
+  flow: { mode: "stream", direction: [1, 0.2], speed: 0.7, turbulence: 0.35 }
+});
+
+const deck = sdk.landscape.addPatio(
+  [[10, 0], [15, 0], [15, 4], [10, 4]],
+  { kind: "deck", level: 0.45 }
+);
+sdk.landscape.updatePatio(deck.id, {
+  settings: { railing: "glass", lights: { enabled: true, spacing: 1.2 } },
+  steps: [{ edge: 1, t: 0.5, width: 1.1 }]
+});
+console.log("Updated water and deck:", water.id, deck.id);`
+    },
+    {
       name: 'Configure Tool Parameters',
       code: `// Configure defaults & variables matching all main tools
 
