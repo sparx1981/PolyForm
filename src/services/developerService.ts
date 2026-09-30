@@ -2042,7 +2042,7 @@ export class DeveloperSDK implements SDK {
       },
 
       addFence: (points, options = {}) => this.placeBuilt(buildFence(this.shapes, points, options)),
-      addRailing: (points, options = {}) => {
+      addRailing: (points: [number, number, number][], options: { height?: number; color?: string; name?: string } = {}) => {
         if (points.length < 2) throw new Error('landscape.addRailing requires at least two points.');
         const height = Math.max(0.2, options.height ?? 1.0);
         const made: Shape[] = [];
@@ -3169,7 +3169,7 @@ export class DeveloperSDK implements SDK {
         const selected = faceIds.map(id => id as FaceId);
         const groups = orderedShapeGroups(host.graph, selected);
         const plan = planBoolean(host.graph, groups, operation as BooleanOp);
-        if (!plan.ok) return { ok: false, reason: plan.reason };
+        if (!plan.ok) return { ok: false, reason: 'reason' in plan ? plan.reason : 'kernel boolean planning failed' };
         let resultFaces: FaceId[] = [];
         const ok = host.transact(() => {
           const ctx = { graph: host.graph, tolerances: host.tolerances, index: host.spatialIndex };
