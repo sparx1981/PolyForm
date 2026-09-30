@@ -329,11 +329,11 @@ export const HOW_IT_WORKS: { n: string; title: string; body: string }[] = [
 ];
 
 export const CAPABILITY_GROUPS: { icon: LucideIcon; kind: string; text: string; tools: string[] }[] = [
-  { icon: Eye, kind: 'Read', text: 'List models, inspect objects and rooms, and check model health.', tools: ['list_models', 'get_model', 'list_objects', 'get_object', 'list_rooms', 'check_model_health', 'list_catalog'] },
+  { icon: Eye, kind: 'Read', text: 'List models, inspect objects, rooms, drawn faces and Civil modifiers, and check model health.', tools: ['list_models', 'get_model', 'list_objects', 'get_object', 'list_rooms', 'list_drawn_faces', 'list_civil_modifiers', 'check_model_health', 'list_catalog'] },
   { icon: Camera, kind: 'See', text: 'Take pictures from perspective, plan, front, back, left or right.', tools: ['screenshot'] },
   { icon: LayoutDashboard, kind: 'Preview', text: 'A 3D picture plus a floor plan of each level, with rooms, doors, windows and stairs.', tools: ['preview_model'] },
-  { icon: Hammer, kind: 'Build', text: 'Rooms, walls, roofs, terrain, planting, flowing water, patios and collision-aware interiors.', tools: ['create_model', 'add_shape', 'add_room', 'add_wall', 'add_opening', 'add_roof', 'add_stairs', 'add_terrain', 'import_site', 'set_street_life', 'flatten_terrain', 'add_plant', 'add_fence', 'add_pond', 'add_patio', 'add_interior_furniture', 'furnish_room'] },
-  { icon: PencilRuler, kind: 'Edit', text: 'Move, restyle, rename and delete objects, change the weather, or step back a change.', tools: ['transform_objects', 'set_appearance', 'set_weather', 'rename_object', 'delete_objects', 'undo_last_change'] },
+  { icon: Hammer, kind: 'Build', text: 'Rooms, walls, roofs, terrain, planting, flowing water, patios, kernel drawing, Civil grading and collision-aware interiors.', tools: ['create_model', 'add_shape', 'add_room', 'add_wall', 'add_opening', 'add_roof', 'add_stairs', 'add_railing', 'add_terrain', 'import_site', 'set_street_life', 'flatten_terrain', 'add_plant', 'add_fence', 'add_pond', 'add_patio', 'add_interior_furniture', 'furnish_room', 'draw_line', 'draw_primitive', 'follow_me', 'add_road', 'add_grading_pad', 'set_pad_surface'] },
+  { icon: PencilRuler, kind: 'Edit', text: 'Move, restyle and rename objects; edit water, patios, kernel faces and Civil modifiers; change weather; or step back a change.', tools: ['transform_objects', 'set_appearance', 'set_weather', 'update_pond', 'update_patio', 'edit_drawn_faces', 'update_civil_modifier', 'remove_civil_modifier', 'rename_object', 'delete_objects', 'undo_last_change'] },
 ];
 
 export const SETUP_STEPS: { n: string; title: string; body: string }[] = [
@@ -376,6 +376,7 @@ export const DEV_TOOL_GROUPS: DevToolGroup[] = [
     items: [
       { icon: FileText, title: 'Documentation and Spec', text: 'Every SDK method and property, next to the editor.' },
       { icon: Activity, title: 'AI Diagnostic Log', text: 'Live scene telemetry with category filters. Ctrl+Shift+L.' },
+      { icon: Activity, title: 'GPU Profiler', text: 'Record frame/GPU metrics, run repeatable fly-around benchmarks and compare saved runs from sdk.performance.' },
     ],
   },
 ];
@@ -391,6 +392,8 @@ export const SDK_METHODS: { sig: string; text: string }[] = [
   { sig: 'sdk.landscape.updatePond(id, { flow, … })', text: 'Edit pond, lake and flowing-water settings.' },
   { sig: 'sdk.landscape.updatePatio(id, { settings, steps })', text: 'Edit patio/deck finishes, railings, lights and steps.' },
   { sig: 'sdk.camera.setNavigationMode("walk")', text: 'Activate the same camera modes as the toolbar.' },
+  { sig: 'sdk.reconstruction.recogniseOrthogonalPlan(image, options)', text: 'Run Reconstruction Studio’s local plan recogniser.' },
+  { sig: 'sdk.performance.startBenchmark()', text: 'Run the same repeatable GPU/frame benchmark as the profiler UI.' },
 ];
 
 export const HERO_RAIL_ICONS: { icon: LucideIcon; active?: boolean }[] = [
