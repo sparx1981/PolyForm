@@ -113,6 +113,8 @@ export function DeveloperSuite() {
     activeStory,
     setActiveStory,
     setGraphicsSettings,
+    perfProfilerEnabled,
+    setPerfProfilerEnabled,
     kernelHost,
     bumpKernel,
     setAmbientOcclusionEnabled,
@@ -284,6 +286,8 @@ export function DeveloperSuite() {
         activeStory,
         setActiveStory,
         setGraphicsSettings,
+        perfProfilerEnabled,
+        setPerfProfilerEnabled,
         kernelHost,
         bumpKernel
       }
@@ -313,7 +317,7 @@ export function DeveloperSuite() {
     setEdgeLinesThickness, undo, redo, selectionFilter, setSelectionFilter,
     selectionShapeMode, setSelectionShapeMode, setShadowsEnabled,
     setGridEnabled, setAxisIndicatorEnabled, setMiniAxisIndicatorEnabled, setFloorEnabled, setFloorColor, setAmbientOcclusionEnabled,
-    activeStory, setActiveStory, setGraphicsSettings, kernelHost, bumpKernel,
+    activeStory, setActiveStory, setGraphicsSettings, perfProfilerEnabled, setPerfProfilerEnabled, kernelHost, bumpKernel,
     setSunIntensity, setLightPosition, setAnimateSun, setSunSpeed,
     setNotes, setAllNotesVisible, customToolbars, setCustomToolbars,
     basicToolbarExtensions, setBasicToolbarExtensions,
