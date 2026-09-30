@@ -46,6 +46,27 @@ function visual(shape: Shape): Omit<PlaygroundObject, 'id'> {
     };
   }
 
+  if (shape.type === 'roof') {
+    const data = shape.customData ?? {};
+    const baseWidth = Number(data.width ?? (shape.args as number[])[0] ?? 0);
+    const baseDepth = Number(data.depth ?? (shape.args as number[])[2] ?? 0);
+    const ridge = Number(data.ridgeHeight ?? (shape.args as number[])[1] ?? 0);
+    const overhang = Number(data.eaveOverhang ?? 0);
+    const roofType = (data.roofType ?? 'gable') as 'gable' | 'hip' | 'parapet';
+    return {
+      kind: 'roof',
+      roofType,
+      position: [shape.position[0], shape.position[1] + Math.max(0.05, ridge) / 2, shape.position[2]],
+      size: [
+        roofType === 'parapet' ? baseWidth : baseWidth + overhang * 2,
+        Math.max(0.05, ridge),
+        roofType === 'parapet' ? baseDepth : baseDepth + overhang * 2,
+      ],
+      rotationY,
+      color,
+    };
+  }
+
   const args = shape.args as number[];
   let size: [number, number, number] = [args[0]!, args[1]!, args[2]!];
   let normalizedRotation = rotationY;
@@ -115,11 +136,25 @@ describe('Developers-page preview ↔ real DeveloperSDK parity', () => {
 
   it.each([
     `{ start: [0, 0, 0], end: [3, 0, 4], height: 2.6, thickness: 0.18, color: '#ddeeff' }`,
+    `{ start: [1, 0.5, -2], end: [4, 1.5, 2], height: 2.2, thickness: 0.14 }`,
     `{ length: 4.5, height: 3, thickness: 0.25, position: [2, 1.5, -1], rotation: [0, 0.4, 0] }`,
   ])('createWall matches preview for %s', async args => {
     const code = `sdk.architecture.createWall(${args});`;
     const real = runReal(code).map(visual);
     const preview = await runPreview(code);
+    expect(previewVisuals(preview.objects)).toEqual(real);
+  });
+
+  it.each([
+    `{ width: 6, depth: 4 }`,
+    `{ roofType: 'hip', width: 8, depth: 5, pitchAngleDeg: 28, eaveOverhang: 0.55, position: [2, 3.1, -4], color: '#884422' }`,
+    `{ roofType: 'gable', width: 3, depth: 7, pitchAngleDeg: 50, eaveOverhang: 0 }`,
+    `{ roofType: 'parapet', width: 5, depth: 5, pitchAngleDeg: 20, position: [-3, 2.8, 1] }`,
+  ])('createRoof matches real SDK dimensions, placement and defaults for %s', async args => {
+    const code = `sdk.architecture.createRoof(${args});`;
+    const real = runReal(code).map(visual);
+    const preview = await runPreview(code);
+    expect(preview.ok).toBe(true);
     expect(previewVisuals(preview.objects)).toEqual(real);
   });
 });
