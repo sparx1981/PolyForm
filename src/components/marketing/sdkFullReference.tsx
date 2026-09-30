@@ -161,6 +161,7 @@ export const SDK_REFERENCE: SdkTag[] = [
     id: 'interiors', title: 'interiors',
     description: 'Native parametric furniture, collision-aware room furnishing and baked soft-body/cloth settling.',
     methods: [
+      m('listRooms', 'sdk.interiors.listRooms()', 'SpatialRoom[]', 'List detected enclosed rooms with stable room ids, level, area, perimeter and bounding walls.'),
       m('addFurniture', "sdk.interiors.addFurniture('bed' | 'sofa' | 'cabinet' | 'curtain', options?)", 'Shape', 'Add native parametric interior furniture or a curtain.'),
       m('listCatalog', 'sdk.interiors.listCatalog()', 'InteriorFurnitureCatalogEntry[]', 'List available interior items, defaults, placement rules and simulation support.'),
       m('furnishRoom', "sdk.interiors.furnishRoom(roomId, 'bedroom' | 'living-room' | 'soft-furnishings' | 'storage' | 'minimal')", 'FurnishingPlan', 'Collision-aware furnishing of a detected room using an Interior Studio preset.'),
