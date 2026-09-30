@@ -255,7 +255,7 @@
     ]
   },
   "c41f4e012": {
-    "value": "Screenshot: two collaborators’ cursors on one model",
+    "value": "Screenshot: two collaborators\u2019 cursors on one model",
     "groups": [
       "data"
     ]
@@ -399,7 +399,7 @@
     ]
   },
   "ca997664e": {
-    "value": "M · Q · S",
+    "value": "M \u00b7 Q \u00b7 S",
     "groups": [
       "data"
     ]
@@ -795,7 +795,7 @@
     ]
   },
   "c34cad8e1": {
-    "value": "50–450 m",
+    "value": "50\u2013450 m",
     "groups": [
       "data"
     ]
@@ -963,7 +963,7 @@
     ]
   },
   "ca176da8": {
-    "value": "East–west and north–south.",
+    "value": "East\u2013west and north\u2013south.",
     "groups": [
       "data"
     ]
@@ -1167,7 +1167,7 @@
     ]
   },
   "c2a72f13c": {
-    "value": "mm · cm · m",
+    "value": "mm \u00b7 cm \u00b7 m",
     "groups": [
       "data"
     ]
@@ -1376,7 +1376,7 @@
     ]
   },
   "c32d8475f": {
-    "value": ".skp · 3D",
+    "value": ".skp \u00b7 3D",
     "groups": [
       "data"
     ]
@@ -1394,7 +1394,7 @@
     ]
   },
   "cb1b352db": {
-    "value": "glTF · STL · SKP",
+    "value": "glTF \u00b7 STL \u00b7 SKP",
     "groups": [
       "data"
     ]
@@ -1448,7 +1448,7 @@
     ]
   },
   "c6769f8f0": {
-    "value": "Walls, floors, doors and windows that cut their own openings, staircases, and a parametric roof generator that fits any footprint — with a timber frame engine underneath when you need it.",
+    "value": "Walls, floors, doors and windows that cut their own openings, staircases, and a parametric roof generator that fits any footprint \u2014 with a timber frame engine underneath when you need it.",
     "groups": [
       "data"
     ]
@@ -1466,7 +1466,7 @@
     ]
   },
   "c10c70fb2": {
-    "value": "Lay the real map under your model with WorldView, sculpt the terrain to match it, then plant, fence and pave the ground around what you’ve built — in the same model as the building itself.",
+    "value": "Lay the real map under your model with WorldView, sculpt the terrain to match it, then plant, fence and pave the ground around what you\u2019ve built \u2014 in the same model as the building itself.",
     "groups": [
       "data"
     ]
@@ -1484,7 +1484,7 @@
     ]
   },
   "c302cc6ae": {
-    "value": "Real sunlight and shadows, weather, materials and saved camera scenes, then Walk Mode to step inside at eye level — the same model, seen the way it will actually look and feel.",
+    "value": "Real sunlight and shadows, weather, materials and saved camera scenes, then Walk Mode to step inside at eye level \u2014 the same model, seen the way it will actually look and feel.",
     "groups": [
       "data"
     ]
@@ -1520,7 +1520,7 @@
     ]
   },
   "cd2a0df89": {
-    "value": "Describe an object and PolyForm places it, render the viewport at high fidelity, or turn a photo into a 3D model — and script anything you can draw with the JavaScript SDK.",
+    "value": "Describe an object and PolyForm places it, render the viewport at high fidelity, or turn a photo into a 3D model \u2014 and script anything you can draw with the JavaScript SDK.",
     "groups": [
       "data"
     ]
@@ -1834,7 +1834,8 @@
   "cfdda4cf7": {
     "value": "Preview",
     "groups": [
-      "data"
+      "data",
+      "Developers"
     ]
   },
   "c8674a7ae": {
@@ -1940,13 +1941,13 @@
     ]
   },
   "cec9874bf": {
-    "value": "Open Claude’s connectors",
+    "value": "Open Claude\u2019s connectors",
     "groups": [
       "data"
     ]
   },
   "c9ba214d1": {
-    "value": "In Claude, go to Settings → Connectors and choose Add custom connector.",
+    "value": "In Claude, go to Settings \u2192 Connectors and choose Add custom connector.",
     "groups": [
       "data"
     ]
@@ -2009,7 +2010,7 @@
     ]
   },
   "c1fe557b4": {
-    "value": "Save scripts, make them public, and copy other people’s into your own library.",
+    "value": "Save scripts, make them public, and copy other people\u2019s into your own library.",
     "groups": [
       "data"
     ]
@@ -2119,7 +2120,7 @@
     ]
   },
   "c10cfc972": {
-    "value": "sdk.createPoly({ vertices: [[x, y, z], …] })",
+    "value": "sdk.createPoly({ vertices: [[x, y, z], \u2026] })",
     "groups": [
       "data"
     ]
@@ -2164,7 +2165,7 @@
     ]
   },
   "cdbe579bf": {
-    "value": "Bevel a shape’s edges.",
+    "value": "Bevel a shape\u2019s edges.",
     "groups": [
       "data"
     ]
@@ -3270,7 +3271,7 @@
     ]
   },
   "c38ff9c56": {
-    "value": "sdk.architecture.createRoof({ roofType?, width, depth, ridgeHeight?, pitchAngleDeg?, … })",
+    "value": "sdk.architecture.createRoof({ roofType?, width, depth, ridgeHeight?, pitchAngleDeg?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3288,7 +3289,7 @@
     ]
   },
   "c47d0d49a": {
-    "value": "sdk.architecture.updateRoof(roofId, { height?, eaveOverhang?, fasciaHeight?, tileShape?, … })",
+    "value": "sdk.architecture.updateRoof(roofId, { height?, eaveOverhang?, fasciaHeight?, tileShape?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3330,7 +3331,7 @@
     ]
   },
   "c4874b14": {
-    "value": "sdk.architecture.roofBuilding({ roofType, pitchAngleDeg?, ridgeHeight?, eaveOverhang?, tileShape?, … })",
+    "value": "sdk.architecture.roofBuilding({ roofType, pitchAngleDeg?, ridgeHeight?, eaveOverhang?, tileShape?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3348,7 +3349,7 @@
     ]
   },
   "c118b74af": {
-    "value": "sdk.architecture.createStairs({ style?, width?, height?, length?, numSteps?, … })",
+    "value": "sdk.architecture.createStairs({ style?, width?, height?, length?, numSteps?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3384,7 +3385,7 @@
     ]
   },
   "c6ec2d1df": {
-    "value": "sdk.architecture.createRoom({ width, length, height?, wallThickness?, … })",
+    "value": "sdk.architecture.createRoom({ width, length, height?, wallThickness?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3408,7 +3409,7 @@
     ]
   },
   "cc3815416": {
-    "value": "sdk.architecture.createWall({ start?, end?, length?, height?, thickness?, … })",
+    "value": "sdk.architecture.createWall({ start?, end?, length?, height?, thickness?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3480,7 +3481,7 @@
     ]
   },
   "c45899fd6": {
-    "value": "sdk.architecture.generateTimberFraming({ roofId?, spacing?, rafterWidth?, … })",
+    "value": "sdk.architecture.generateTimberFraming({ roofId?, spacing?, rafterWidth?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3840,7 +3841,7 @@
     ]
   },
   "cf2759324": {
-    "value": "sdk.landscape.addSiteFurniture(type, { position?, rotation?, color?, … })",
+    "value": "sdk.landscape.addSiteFurniture(type, { position?, rotation?, color?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -3858,7 +3859,7 @@
     ]
   },
   "ce1ac486a": {
-    "value": "sdk.landscape.createTerrain({ width, depth, resolution, topography, … })",
+    "value": "sdk.landscape.createTerrain({ width, depth, resolution, topography, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -4381,7 +4382,7 @@
     ]
   },
   "c5d421d0": {
-    "value": "sdk.toolbars.create({ id?, title, position?, orientation?, items?, … })",
+    "value": "sdk.toolbars.create({ id?, title, position?, orientation?, items?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -5383,7 +5384,7 @@
     ]
   },
   "ca0140a6": {
-    "value": "sdk.text.add3D({ text, position, size?, depth?, normal?, towardsViewer?, … })",
+    "value": "sdk.text.add3D({ text, position, size?, depth?, normal?, towardsViewer?, \u2026 })",
     "groups": [
       "sdkFullReference"
     ]
@@ -5515,7 +5516,7 @@
     ]
   },
   "cfbe70515": {
-    "value": "Draw a closed Bézier curve as a surface (the Bézier tool). Each knot is { point, handleIn?, handleOut? }.",
+    "value": "Draw a closed B\u00e9zier curve as a surface (the B\u00e9zier tool). Each knot is { point, handleIn?, handleOut? }.",
     "groups": [
       "sdkFullReference"
     ]
@@ -6134,7 +6135,7 @@
     ]
   },
   "c77be4f8f": {
-    "value": "PolyForm brings the building, terrain and landscape into one browser-based model — so you can design in context, collaborate live and experience the result before it is built.",
+    "value": "PolyForm brings the building, terrain and landscape into one browser-based model \u2014 so you can design in context, collaborate live and experience the result before it is built.",
     "groups": [
       "Home"
     ]
@@ -6153,7 +6154,7 @@
     ]
   },
   "ca3d86c61": {
-    "value": "Free to try · No installation · Desktop, tablet and phone",
+    "value": "Free to try \u00b7 No installation \u00b7 Desktop, tablet and phone",
     "groups": [
       "Home"
     ]
@@ -6345,7 +6346,7 @@
     ]
   },
   "c1741ff75": {
-    "value": "−",
+    "value": "\u2212",
     "groups": [
       "Features"
     ]
@@ -6357,7 +6358,7 @@
     ]
   },
   "c4ae7704d": {
-    "value": "Editable PolyForm output — not a locked image",
+    "value": "Editable PolyForm output \u2014 not a locked image",
     "groups": [
       "BuildWithClaude"
     ]
@@ -6418,7 +6419,7 @@
     ]
   },
   "cd31fe752": {
-    "value": "Claude × PolyForm",
+    "value": "Claude \u00d7 PolyForm",
     "groups": [
       "BuildWithClaude",
       "shared"
@@ -6464,7 +6465,7 @@
     ]
   },
   "c13b78088": {
-    "value": "Connect Claude to PolyForm and create or change buildings, landscape and site context in plain language. The result is an editable PolyForm model — not just a render.",
+    "value": "Connect Claude to PolyForm and create or change buildings, landscape and site context in plain language. The result is an editable PolyForm model \u2014 not just a render.",
     "groups": [
       "BuildWithClaude"
     ]
@@ -6512,13 +6513,13 @@
     ]
   },
   "c193edc9b": {
-    "value": "“",
+    "value": "\u201c",
     "groups": [
       "BuildWithClaude"
     ]
   },
   "c183edb08": {
-    "value": "”",
+    "value": "\u201d",
     "groups": [
       "BuildWithClaude"
     ]
@@ -6548,7 +6549,7 @@
     ]
   },
   "c29171dc8": {
-    "value": "Built on PolyForm’s own toolset.",
+    "value": "Built on PolyForm\u2019s own toolset.",
     "groups": [
       "BuildWithClaude"
     ]
@@ -6627,7 +6628,7 @@
     ]
   },
   "cd299599a": {
-    "value": "Use PolyForm normally — create geometry, transform it, apply materials or assemble architectural elements.",
+    "value": "Use PolyForm normally \u2014 create geometry, transform it, apply materials or assemble architectural elements.",
     "groups": [
       "Developers"
     ]
@@ -6851,7 +6852,7 @@
     ]
   },
   "ceebf6f3d": {
-    "value": "Run automation, add your own interface and inspect what PolyForm is doing — without moving the design into a separate development environment.",
+    "value": "Run automation, add your own interface and inspect what PolyForm is doing \u2014 without moving the design into a separate development environment.",
     "groups": [
       "Developers"
     ]
@@ -7001,13 +7002,13 @@
     ]
   },
   "c8110aaf4": {
-    "value": "Every method in the Developer Console’s ",
+    "value": "Every method in the Developer Console\u2019s ",
     "groups": [
       "SdkDocs"
     ]
   },
   "cfe4c07fc": {
-    "value": "object, grouped by subsystem, with its full signature and return type — ",
+    "value": "object, grouped by subsystem, with its full signature and return type \u2014 ",
     "groups": [
       "SdkDocs"
     ]
@@ -7055,13 +7056,13 @@
     ]
   },
   "ce2dafd6d": {
-    "value": "No methods match “",
+    "value": "No methods match \u201c",
     "groups": [
       "SdkDocs"
     ]
   },
   "c50f2fcd2": {
-    "value": "”.",
+    "value": "\u201d.",
     "groups": [
       "SdkDocs"
     ]
@@ -7187,7 +7188,7 @@
     ]
   },
   "cff904211": {
-    "value": "AI — Build with Claude",
+    "value": "AI \u2014 Build with Claude",
     "groups": [
       "shared"
     ]
@@ -7217,7 +7218,7 @@
     ]
   },
   "c4e0834ea": {
-    "value": "Browser-based 3D design for buildings, terrain and landscape — from real site context to eye-level walkthrough.",
+    "value": "Browser-based 3D design for buildings, terrain and landscape \u2014 from real site context to eye-level walkthrough.",
     "groups": [
       "shared"
     ]
@@ -7229,7 +7230,7 @@
     ]
   },
   "cfa9a3bac": {
-    "value": "© ",
+    "value": "\u00a9 ",
     "groups": [
       "shared"
     ]
@@ -7526,6 +7527,168 @@
     "value": "Take a route away.",
     "groups": [
       "sdkFullReference"
+    ]
+  },
+  "cb4776a9f": {
+    "value": "Try it live",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cbdcf131f": {
+    "value": "Run the SDK in your browser.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c11c77f29": {
+    "value": "Pick an example, change a number and press Run. The preview draws what your script builds. It is a lightweight version of the sdk, so the full SDK in PolyForm does much more.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c6f8737b6": {
+    "value": "Examples",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c6651e9ca": {
+    "value": "Script",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c8d57e66a": {
+    "value": "Run",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ca9941cfe": {
+    "value": "Running\u2026",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cac8a560": {
+    "value": "Reset",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ceccd81db": {
+    "value": "Output from console.log appears here.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c8686e81b": {
+    "value": "Nothing to draw yet. Press Run.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c4532e149": {
+    "value": "Drag to orbit, scroll to zoom.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ca8c6206b": {
+    "value": "objects",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c32edd391": {
+    "value": "Error:",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c1f1f9e52": {
+    "value": "Your browser could not start the 3D preview.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cc9dad769": {
+    "value": "Open PolyForm to use the full SDK",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c51802471": {
+    "value": "Room with a roof",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c69d12efa": {
+    "value": "Walls, a floor and a pitched roof from a handful of numbers. Try a different pitch or roof type.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c2d5596bc": {
+    "value": "// A garden room: four walls, a floor and a roof\nconst room = sdk.architecture.createRoom({\n  width: 5,\n  length: 4,\n  height: 2.6,\n  wallColor: '#f5efe6',\n  floorColor: '#8b7d6b',\n});\n\nsdk.architecture.createRoof({\n  roofType: 'gable',   // try 'hip' or 'parapet'\n  width: 5,\n  depth: 4,\n  pitchAngleDeg: 32,\n  position: [0, 2.6, 0],\n  color: '#b45309',\n});\n\nconsole.log('Walls built:', room.wallShapes.length);",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c71d86a9e": {
+    "value": "A row of columns",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c7ce5e57d": {
+    "value": "A loop turns one column into a colonnade. Change the count or the spacing.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c9ae69a85": {
+    "value": "// A colonnade with a loop\nconst count = 7;\nconst spacing = 1.6;\n\nfor (let i = 0; i < count; i++) {\n  const x = (i - (count - 1) / 2) * spacing;\n  sdk.createCylinder({ radius: 0.28, height: 3.2, position: [x, 1.6, 0] });\n}\n\n// A beam across the top\nsdk.createBox({\n  width: (count - 1) * spacing + 1,\n  height: 0.3,\n  depth: 0.7,\n  position: [0, 3.35, 0],\n  color: '#e7e5e4',\n});\n\nconsole.log('Shapes:', sdk.scene.getStats().shapeCount);",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c2911b51b": {
+    "value": "Spiral steps",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "cfb5f5572": {
+    "value": "Colours and finishes",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ca2a6baaf": {
+    "value": "Paint shapes from a palette. Swap the colours or the order to restyle the whole row.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "ccd977597": {
+    "value": "// Paint a row of blocks from a palette\nconst palette = ['#0f766e', '#0ea5e9', '#f59e0b', '#e11d48', '#7c3aed'];\n\npalette.forEach((colour, i) => {\n  const block = sdk.createBox({ width: 1, height: 1 + i * 0.5, depth: 1, position: [i * 1.4 - 2.8, (1 + i * 0.5) / 2, 0] });\n  sdk.applyColor(block, colour);\n});\n\n// A plinth under everything\nconst plinth = sdk.createBox({ width: 8, height: 0.2, depth: 2, position: [0, -0.1, 0] });\nsdk.applyColor(plinth, '#e7e5e4');\n\nconsole.log('Coloured', palette.length, 'blocks');",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c9f0fde7b": {
+    "value": "Each tread is a short wall from the centre post outwards, turned a little more each time. Change the number of steps or the turn.",
+    "groups": [
+      "Developers"
+    ]
+  },
+  "c79d7f46": {
+    "value": "// A spiral staircase around a central post\nconst steps = 22;\nconst rise = 0.17;\nconst turn = 0.34;   // radians per step\nconst reach = 1.5;   // how far each tread sticks out\n\nsdk.createCylinder({ radius: 0.16, height: steps * rise + 0.6, position: [0, (steps * rise + 0.6) / 2, 0] });\n\nfor (let i = 0; i < steps; i++) {\n  const angle = i * turn;\n  sdk.architecture.createWall({\n    start: [0, rise * (i + 1), 0],\n    end: [Math.cos(angle) * reach, rise * (i + 1), Math.sin(angle) * reach],\n    height: 0.08,\n    thickness: 0.6,\n    color: i % 2 ? '#d6d3d1' : '#a8a29e',\n  });\n}\n\nconsole.log('Top of the stairs is', (steps * rise).toFixed(2), 'm up');",
+    "groups": [
+      "Developers"
     ]
   }
 }

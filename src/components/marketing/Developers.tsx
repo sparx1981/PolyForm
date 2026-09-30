@@ -5,6 +5,7 @@ import { ArrowRight, Circle, MousePointerClick, Sparkles } from 'lucide-react';
 import { CODE_LONG, DEV_TOOL_GROUPS, SDK_METHODS } from './data';
 import { highlightJsLine } from './codeHighlight';
 import { Eyebrow, MarketingVisual, RouterLink, type Page } from './shared';
+import DeveloperPlayground from './DeveloperPlayground';
 
 const DEV_TABS = ['Console', 'Library', 'Documentation', 'Spec'];
 
@@ -81,6 +82,7 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
         </div>
       </section>
 
+      <>
       <section className="py-24 px-6 bg-[#f7f9fb] border-b border-slate-200">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.72fr_1.28fr] gap-12 lg:gap-20 items-center">
           <div className="flex flex-col gap-5">
@@ -110,6 +112,8 @@ export default function Developers({ onLogin, go }: { onLogin: () => void; go: (
           </div>
         </div>
       </section>
+      <DeveloperPlayground onLogin={onLogin} />
+      </>
 
       <section className="py-28 px-6 bg-white">
         <div className="max-w-[1240px] mx-auto grid lg:grid-cols-[0.82fr_1.18fr] gap-14 lg:gap-20 items-center">
