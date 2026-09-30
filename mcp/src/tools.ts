@@ -173,6 +173,16 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     })));
   }));
 
+  server.registerTool('list_civil_modifiers', {
+    title: 'List civil/site modifiers',
+    description: 'Lists PolyForm civil terrain modifiers such as roads and grading pads, including pad surface/parking settings.',
+    inputSchema: { model: modelRef },
+    annotations: READ,
+  }, safe(async ({ model }) => {
+    const m = await store.loadModel(caller, model);
+    return text(m.terrainModifiers);
+  }));
+
   server.registerTool('check_model_health', {
     title: 'Check model health',
     description: 'Runs PolyForm reconstruction/model-health checks and returns errors and warnings before further editing or generation.',
@@ -538,6 +548,206 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     }));
     return { shapes: run.shapes, made: run.created };
   })));
+
+  server.registerTool('add_road', {
+    title: 'Add a civil road alignment',
+    description: 'Adds the same persisted Civil road modifier as PolyForm Terrain Studio, including grade, curb/ditch profile, markings and batter distance.',
+    inputSchema: {
+      model: modelRef,
+      points: z.array(vec3).min(2),
+      name: z.string().min(1).max(120).optional(),
+      width: z.number().min(0.1).optional(),
+      max_grade_percent: z.number().min(0).optional(),
+      banking_angle: z.number().optional(),
+      curb_width: z.number().min(0).optional(),
+      curb_height: z.number().min(0).optional(),
+      ditch_width: z.number().min(0).optional(),
+      ditch_depth: z.number().min(0).optional(),
+      has_curb: z.boolean().optional(),
+      has_ditch: z.boolean().optional(),
+      markings: z.enum(['none', 'center-solid', 'center-dashed', 'double-yellow', 'edge-lines', 'bike-lanes']).optional(),
+      material: z.string().optional(),
+      batter_distance: z.number().min(0).optional(),
+      enabled: z.boolean().optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    let made: any = null;
+    const m = await store.loadModel(caller, a.model);
+    await store.changeTerrainModifiers(caller, m.id, 'Added a civil road', modifiers => {
+      let next = modifiers;
+      const run = withSdk(m.shapes, sdk => {
+        made = sdk.civil.addRoad({
+          points: a.points,
+          name: a.name,
+          width: a.width,
+          maxGradePercent: a.max_grade_percent,
+          bankingAngle: a.banking_angle,
+          profile: {
+            width: a.curb_width,
+            height: a.curb_height,
+            ditchWidth: a.ditch_width,
+            ditchDepth: a.ditch_depth,
+            hasCurb: a.has_curb,
+            hasDitch: a.has_ditch,
+          },
+          markings: a.markings,
+          material: a.material,
+          batterDistance: a.batter_distance,
+          enabled: a.enabled,
+        });
+      }, {
+        terrainModifiers: modifiers,
+        setTerrainModifiers: (value: any[]) => { next = value; },
+      });
+      void run;
+      return next;
+    });
+    return text({ model: `${m.name} (${m.id})`, done: 'Added a civil road', modifier: made, tip: 'undo_last_change reverses this.' });
+  }));
+
+  server.registerTool('add_grading_pad', {
+    title: 'Add a grading pad',
+    description: 'Adds the same persisted Civil grading-pad modifier as PolyForm Terrain Studio.',
+    inputSchema: {
+      model: modelRef,
+      center: vec3,
+      primitive: z.enum(['rectangle', 'circle']).default('rectangle'),
+      dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional(),
+      rotation_y: z.number().optional().describe('Rotation in radians'),
+      target_elevation: z.number().optional(),
+      batter_distance: z.number().min(0).optional(),
+      batter_profile: z.enum(['linear', 'smooth', 'stepped']).optional(),
+      name: z.string().min(1).max(120).optional(),
+      enabled: z.boolean().optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    let made: any = null;
+    const m = await store.loadModel(caller, a.model);
+    await store.changeTerrainModifiers(caller, m.id, 'Added a grading pad', modifiers => {
+      let next = modifiers;
+      withSdk(m.shapes, sdk => {
+        made = sdk.civil.addPad({
+          center: a.center,
+          primitive: a.primitive,
+          dimensions: a.dimensions,
+          rotationY: a.rotation_y,
+          targetElevation: a.target_elevation,
+          batterDistance: a.batter_distance,
+          batterProfile: a.batter_profile,
+          name: a.name,
+          enabled: a.enabled,
+        });
+      }, {
+        terrainModifiers: modifiers,
+        setTerrainModifiers: (value: any[]) => { next = value; },
+      });
+      return next;
+    });
+    return text({ model: `${m.name} (${m.id})`, done: 'Added a grading pad', modifier: made, tip: 'undo_last_change reverses this.' });
+  }));
+
+  server.registerTool('set_pad_surface', {
+    title: 'Set grading-pad surface',
+    description: 'Adds, edits or clears the pad surface modifier used for parking striping, hatch, asphalt or gravel.',
+    inputSchema: {
+      model: modelRef,
+      pad: z.string(),
+      clear: z.boolean().default(false),
+      pattern: z.enum(['parking-striping', 'hatch', 'asphalt', 'gravel']).optional(),
+      enabled: z.boolean().optional(),
+      name: z.string().min(1).max(120).optional(),
+      parking_angle: z.union([z.literal(30), z.literal(45), z.literal(60), z.literal(90)]).optional(),
+      stall_width: z.number().positive().optional(),
+      stall_depth: z.number().positive().optional(),
+      stripe_color: colour.optional(),
+      double_row: z.boolean().optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const m = await store.loadModel(caller, a.model);
+    const pad = m.terrainModifiers.find(mod => mod.id === a.pad || mod.name?.toLowerCase() === a.pad.toLowerCase());
+    if (!pad || pad.type !== 'pad') throw new ToolError(`No grading pad "${a.pad}". Use list_civil_modifiers to find ids.`);
+    await store.changeTerrainModifiers(caller, m.id, 'Updated grading pad surface', modifiers => {
+      let next = modifiers;
+      withSdk(m.shapes, sdk => sdk.civil.setPadSurface(pad.id, a.clear ? null : {
+        pattern: a.pattern ?? 'parking-striping',
+        enabled: a.enabled,
+        name: a.name,
+        parkingConfig: {
+          angle: a.parking_angle,
+          stallWidth: a.stall_width,
+          stallDepth: a.stall_depth,
+          stripeColor: a.stripe_color,
+          doubleRow: a.double_row,
+        },
+      }), {
+        terrainModifiers: modifiers,
+        setTerrainModifiers: (value: any[]) => { next = value; },
+      });
+      return next;
+    });
+    const updated = (await store.loadModel(caller, m.id)).terrainModifiers.find(mod => mod.id === pad.id);
+    return text({ model: `${m.name} (${m.id})`, done: 'Updated grading pad surface', modifier: updated, tip: 'undo_last_change reverses this.' });
+  }));
+
+  server.registerTool('update_civil_modifier', {
+    title: 'Update a civil modifier',
+    description: 'Updates common persisted settings on an existing civil road or grading pad.',
+    inputSchema: {
+      model: modelRef,
+      modifier: z.string(),
+      name: z.string().min(1).max(120).optional(),
+      enabled: z.boolean().optional(),
+      width: z.number().min(0.1).optional(),
+      max_grade_percent: z.number().min(0).optional(),
+      target_elevation: z.number().optional(),
+      batter_distance: z.number().min(0).optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const m = await store.loadModel(caller, a.model);
+    const current = m.terrainModifiers.find(mod => mod.id === a.modifier || mod.name?.toLowerCase() === a.modifier.toLowerCase());
+    if (!current) throw new ToolError(`No civil modifier "${a.modifier}". Use list_civil_modifiers to find ids.`);
+    await store.changeTerrainModifiers(caller, m.id, 'Updated civil modifier', modifiers => {
+      let next = modifiers;
+      const changes: any = {};
+      if (a.name !== undefined) changes.name = a.name;
+      if (a.enabled !== undefined) changes.enabled = a.enabled;
+      if (a.width !== undefined && current.type === 'road') changes.width = a.width;
+      if (a.max_grade_percent !== undefined && current.type === 'road') changes.maxGradePercent = a.max_grade_percent;
+      if (a.target_elevation !== undefined && current.type === 'pad') changes.targetElevation = a.target_elevation;
+      if (a.batter_distance !== undefined) changes.batterDistance = a.batter_distance;
+      withSdk(m.shapes, sdk => sdk.civil.update(current.id, changes), {
+        terrainModifiers: modifiers,
+        setTerrainModifiers: (value: any[]) => { next = value; },
+      });
+      return next;
+    });
+    const updated = (await store.loadModel(caller, m.id)).terrainModifiers.find(mod => mod.id === current.id);
+    return text({ model: `${m.name} (${m.id})`, done: 'Updated civil modifier', modifier: updated, tip: 'undo_last_change reverses this.' });
+  }));
+
+  server.registerTool('remove_civil_modifier', {
+    title: 'Remove a civil modifier',
+    description: 'Removes a civil road or grading pad by id or exact name.',
+    inputSchema: { model: modelRef, modifier: z.string() },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const m = await store.loadModel(caller, a.model);
+    const current = m.terrainModifiers.find(mod => mod.id === a.modifier || mod.name?.toLowerCase() === a.modifier.toLowerCase());
+    if (!current) throw new ToolError(`No civil modifier "${a.modifier}". Use list_civil_modifiers to find ids.`);
+    await store.changeTerrainModifiers(caller, m.id, 'Removed civil modifier', modifiers => {
+      let next = modifiers;
+      withSdk(m.shapes, sdk => sdk.civil.remove(current.id), {
+        terrainModifiers: modifiers,
+        setTerrainModifiers: (value: any[]) => { next = value; },
+      });
+      return next;
+    });
+    return text({ model: `${m.name} (${m.id})`, done: `Removed ${current.name ?? current.id}`, tip: 'undo_last_change reverses this.' });
+  }));
 
   server.registerTool('add_terrain', {
     title: 'Add terrain',
