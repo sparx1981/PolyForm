@@ -1286,6 +1286,7 @@ export class DeveloperSDK implements SDK {
           numSteps,
           stairStructure: structure,
           railingMode: railing,
+          handrailHeight: args.handrailHeight ?? this.stairsDefaults.handrailHeight,
           isParametric: args.isParametric ?? this.stairsDefaults.isParametric ?? true,
           idealStepHeight: args.idealStepHeight ?? this.stairsDefaults.idealStepHeight,
           strideConstant: args.strideConstant ?? this.stairsDefaults.strideConstant
@@ -1307,7 +1308,8 @@ export class DeveloperSDK implements SDK {
             width,
             height,
             length,
-            numSteps
+            numSteps,
+            handrailHeight: args.handrailHeight ?? this.stairsDefaults.handrailHeight
           },
           geometryData: geometryToData(geom)
         };
