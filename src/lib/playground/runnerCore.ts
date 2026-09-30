@@ -54,7 +54,7 @@ async function run(code) {
     createRoom: function (a) {
       a = a || {};
       var width = Math.max(1, num(a.width, 4)), length = Math.max(1, num(a.length, 4)), height = num(a.height, 2.8), t = num(a.wallThickness, 0.2);
-      var p = pos(a.position, [0, 0, 0]), wc = color(a.wallColor, '#f1f5f9'), fc = color(a.floorColor, '#94a3b8');
+      var p = pos(a.position, [0, 0, 0]), wc = color(a.wallColor, '#f8fafc'), fc = color(a.floorColor, '#94a3b8');
       var roomId = 'room-' + (++counter), midY = p[1] + height / 2, hw = width / 2, hl = length / 2;
       var walls = [
         box(width, height, t, [p[0], midY, p[2] + hl], wc),
