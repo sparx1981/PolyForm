@@ -417,14 +417,22 @@ export interface SDK {
       height?: number;
       depth?: number;
       position?: [number, number, number];
+      rotation?: [number, number, number];
       color?: string;
+      style?: string;
+      hostWallId?: string;
+      name?: string;
     }) => Shape;
     createWindow: (args: {
       width?: number;
       height?: number;
       depth?: number;
       position?: [number, number, number];
+      rotation?: [number, number, number];
       color?: string;
+      style?: string;
+      hostWallId?: string;
+      name?: string;
     }) => Shape;
     setWallTransparency: (settings: { overall?: number; exterior?: number; interior?: number }) => void;
     generateTimberFraming: (options?: {
@@ -1449,22 +1457,30 @@ export class DeveloperSDK implements SDK {
         height?: number;
         depth?: number;
         position?: [number, number, number];
+        rotation?: [number, number, number];
         color?: string;
+        style?: string;
+        hostWallId?: string;
+        name?: string;
       }): Shape => {
         const width = args.width ?? this.doorDefaults.width ?? 0.90;
         const height = args.height ?? this.doorDefaults.height ?? 2.10;
         const depth = args.depth ?? this.doorDefaults.depth ?? 0.15;
         const pos: [number, number, number] = args.position || [0, height / 2, 0];
-        const geom = createDoorGeometry(width, height, depth);
+        const style = args.style ?? 'flush';
+        const geom = createDoorGeometry(width, height, depth, style);
         const id = Math.random().toString(36).substr(2, 9);
         const doorShape: Shape = {
           id,
-          name: `Door (${width}m x ${height}m)`,
+          name: args.name ?? `Door (${width}m x ${height}m)`,
           type: 'door',
           position: pos,
+          rotation: args.rotation ?? [0, 0, 0],
           args: [width, height, depth],
           color: args.color || this.doorDefaults.color || '#78350f',
           tags: ['architecture', 'door', 'opening'],
+          hostWallId: args.hostWallId,
+          archStyle: style,
           geometryData: geometryToData(geom)
         };
         this.setShapes(prev => [...prev, doorShape]);
@@ -1477,22 +1493,30 @@ export class DeveloperSDK implements SDK {
         height?: number;
         depth?: number;
         position?: [number, number, number];
+        rotation?: [number, number, number];
         color?: string;
+        style?: string;
+        hostWallId?: string;
+        name?: string;
       }): Shape => {
         const width = args.width ?? this.windowDefaults.width ?? 1.20;
         const height = args.height ?? this.windowDefaults.height ?? 1.50;
         const depth = args.depth ?? this.windowDefaults.depth ?? 0.15;
         const pos: [number, number, number] = args.position || [0, 1.5, 0];
-        const geom = createWindowGeometry(width, height, depth);
+        const style = args.style ?? 'cross';
+        const geom = createWindowGeometry(width, height, depth, style);
         const id = Math.random().toString(36).substr(2, 9);
         const windowShape: Shape = {
           id,
-          name: `Window (${width}m x ${height}m)`,
+          name: args.name ?? `Window (${width}m x ${height}m)`,
           type: 'window',
           position: pos,
+          rotation: args.rotation ?? [0, 0, 0],
           args: [width, height, depth],
           color: args.color || this.windowDefaults.frameColor || '#ffffff',
           tags: ['architecture', 'window', 'opening'],
+          hostWallId: args.hostWallId,
+          archStyle: style,
           geometryData: geometryToData(geom)
         };
         this.setShapes(prev => [...prev, windowShape]);
