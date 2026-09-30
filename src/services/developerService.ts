@@ -756,6 +756,7 @@ export interface SDK {
     generateModel: (prompt: string) => void;
     openRenderer: (prompt?: string, style?: string) => void;
     askAssistant: (query?: string) => void;
+    openPhotoTo3D: () => void;
   };
 
   // Scene & History Subsystem
@@ -2852,6 +2853,11 @@ export class DeveloperSDK implements SDK {
           this.extraSetters.setIsAIQueryOpen(true);
         }
         this.log(`Opened AI Architectural Assistant.`);
+      },
+
+      openPhotoTo3D: (): void => {
+        window.dispatchEvent(new CustomEvent('polyform:photo-to-3d'));
+        this.log('Opened Photo to 3D.');
       }
     };
 
