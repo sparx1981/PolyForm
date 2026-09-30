@@ -49,6 +49,22 @@ describe('smart room furnishing', () => {
     expect(curtain?.customData?.semanticComponent?.simulation?.type).toBe('cloth');
   });
 
+  it('places wall-hosted soft furnishings regardless of wall face orientation', () => {
+    // Reverse two wall directions so their local +Z faces away from the room. The planner
+    // must still use the inward face rather than treating the wall as unusable.
+    const shapes: Shape[] = [
+      wall('north', 0, -5, 10, Math.PI),
+      wall('south', 0, 5, 10),
+      wall('west', -5, 0, 10, -Math.PI / 2),
+      wall('east', 5, 0, 10, Math.PI / 2),
+    ];
+    const room = detectRooms(shapes, { cell: 0.1 })[0];
+    const plan = planRoomFurnishing(shapes, room, 'soft-furnishings');
+    expect(plan.unplaced).not.toContain('sofa');
+    expect(plan.unplaced).not.toContain('curtain');
+    expect(plan.shapes.map(shape => shape.customData?.furnitureType).sort()).toEqual(['curtain', 'sofa']);
+  });
+
   it('reserves access space around a hosted door', () => {
     const shapes: Shape[] = [
       ...roomShapes(),
