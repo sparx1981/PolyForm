@@ -12,7 +12,7 @@ import {
   type OrientedFootprint,
 } from '../spatial/placement';
 
-export type FurnishingPreset = 'bedroom' | 'living-room' | 'storage' | 'minimal';
+export type FurnishingPreset = 'bedroom' | 'living-room' | 'soft-furnishings' | 'storage' | 'minimal';
 
 export interface FurnishingPlan {
   roomId: string;
@@ -24,6 +24,7 @@ export interface FurnishingPlan {
 const PRESETS: Record<FurnishingPreset, InteriorFurnitureType[]> = {
   bedroom: ['bed', 'cabinet', 'cabinet'],
   'living-room': ['sofa', 'cabinet'],
+  'soft-furnishings': ['sofa', 'curtain'],
   storage: ['cabinet', 'cabinet', 'cabinet'],
   minimal: ['sofa'],
 };
