@@ -317,6 +317,25 @@ export const SDK_REFERENCE: SdkTag[] = [
     ],
   },
   {
+  {
+    id: 'performance', title: 'performance',
+    description: 'GPU/frame profiler automation: record, benchmark, compare and export the same runs shown by the in-app GPU Profiler.',
+    methods: [
+      m('setEnabled', 'sdk.performance.setEnabled(enabled)', 'void', 'Show or hide the GPU Profiler overlay and probe.'),
+      m('isEnabled', 'sdk.performance.isEnabled()', 'boolean', 'Read whether the GPU Profiler is enabled.'),
+      m('startBenchmark', 'sdk.performance.startBenchmark()', 'void', 'Start the repeatable fly-around benchmark used by the profiler UI.'),
+      m('startRecording', 'sdk.performance.startRecording()', 'void', 'Start a freeform performance recording while using the model normally.'),
+      m('stop', 'sdk.performance.stop()', 'void', 'Stop and save the active profiler run.'),
+      m('cancel', 'sdk.performance.cancel()', 'void', 'Cancel the active profiler run without saving it.'),
+      m('getState', 'sdk.performance.getState()', 'PerfState', 'Read live profiler state, current phase and stored runs.'),
+      m('listRuns', 'sdk.performance.listRuns()', 'PerfRun[]', 'List saved performance runs.'),
+      m('latest', 'sdk.performance.latest()', 'PerfRun | null', 'Return the latest saved profiler run.'),
+      m('latestComparison', 'sdk.performance.latestComparison()', 'Profiler comparison | null', 'Compare the latest run with the previous run of the same kind, including comparison cautions.'),
+      m('removeRun', 'sdk.performance.removeRun(id)', 'void', 'Remove one stored performance run.'),
+      m('clearRuns', 'sdk.performance.clearRuns()', 'void', 'Clear all stored performance runs.'),
+      m('toMarkdown', 'sdk.performance.toMarkdown(runOrId?)', 'string | null', 'Format a profiler run as the same readable summary used by the Copy summary action.'),
+    ],
+  },
     id: 'scene', title: 'scene',
     description: 'Scene export/import, history and stats.',
     methods: [
