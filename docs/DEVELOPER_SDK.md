@@ -12,7 +12,7 @@ The `sdk` object is available in the Developer Console and in saved developer sc
 - `sdk.reconstruction` — reconstruction drafts, providers, review, commit and health checks
 - `sdk.interiors` — detected rooms, parametric furniture, smart furnishing, cloth/soft-body baking
 - `sdk.landscape` — terrain, plants, fences, water, patios and site furniture
-- `sdk.materials`, `sdk.measurement`, `sdk.selection`, `sdk.camera`, `sdk.scene`, `sdk.outliner`
+- `sdk.materials`, `sdk.measurement`, `sdk.selection`, `sdk.camera`, `sdk.performance`, `sdk.scene`, `sdk.outliner`
 - `sdk.blockKit`, `sdk.worldView`, `sdk.text`, `sdk.drawing`, `sdk.toolbars`, `sdk.ai`
 
 The SDK documentation parity test, `src/components/marketing/sdkFullReference.test.ts`, checks that every namespace and declared method in the `SDK` interface is represented by the reference.
@@ -58,6 +58,13 @@ Use `{ mode: 'still' }` or omit `flow` for ordinary pond/lake behaviour.
 ### Reconstruction pipeline
 
 ```js
+// For a local black/white orthogonal plan, Reconstruction Studio's own recogniser is available:
+const localDraft = sdk.reconstruction.recogniseOrthogonalPlan(
+  { width, height, data: rgbaPixels },
+  { metresPerPixel: 0.02, threshold: 150 },
+);
+
+// Provider observations use the same deterministic draft pipeline:
 const draft = sdk.reconstruction.fromImageObservation(observation);
 const review = sdk.reconstruction.reviewDraft(draft);
 
@@ -277,6 +284,24 @@ sdk.landscape.updatePatio(deck.id, {
 sdk.camera.setNavigationMode('walk');
 sdk.camera.configureWalk({ movementSpeed: 4.1, mouseSensitivity: 0.55 });
 ```
+
+
+### GPU/frame performance profiler
+
+The Developer SDK can drive the same profiler overlay, freeform recording and repeatable fly-around benchmark as the in-app GPU Profiler:
+
+```js
+sdk.performance.setEnabled(true);
+sdk.performance.startBenchmark();
+
+// After the benchmark completes:
+const run = sdk.performance.latest();
+console.log(run);
+console.log(sdk.performance.latestComparison());
+console.log(sdk.performance.toMarkdown(run));
+```
+
+For freeform capture use `startRecording()`, then `stop()` or `cancel()`. Stored runs are available through `listRuns()`, `removeRun(id)` and `clearRuns()`.
 
 ## MCP relationship
 
