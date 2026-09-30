@@ -173,6 +173,13 @@ import {
   validateReconstructionDraft,
   type ReconstructionDraft,
 } from '../lib/reconstruction/draft';
+import {
+  imageObservationToDraft,
+  ImageReconstructionProviderRegistry,
+  type ImageReconstructionObservation,
+  type ImageReconstructionProvider,
+  type ImageReconstructionProviderRequest,
+} from '../lib/reconstruction/imageAdapter';
 import { checkModelHealth } from '../lib/reconstruction/modelHealth';
 import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
 import {
@@ -458,6 +465,13 @@ export interface SDK {
       options?: { includeFurniture?: boolean },
     ) => ReturnType<typeof commitReconstructionDraft>;
     checkModelHealth: () => ReturnType<typeof checkModelHealth>;
+    fromImageObservation: (observation: ImageReconstructionObservation) => ReconstructionDraft;
+    registerImageProvider: (provider: ImageReconstructionProvider) => void;
+    listImageProviders: () => string[];
+    reconstructImage: (
+      providerId: string,
+      request: ImageReconstructionProviderRequest,
+    ) => Promise<ReconstructionDraft>;
   };
 
   // Interior Design Subsystem
@@ -761,6 +775,7 @@ export interface SDK {
 }
 
 export class DeveloperSDK implements SDK {
+  private imageReconstructionProviders = new ImageReconstructionProviderRegistry();
   public shapes: Shape[];
   public setShapes: (shapes: Shape[] | ((prev: Shape[]) => Shape[])) => void;
   public updateShapeColor: (id: string, color: string) => void;
@@ -1582,6 +1597,17 @@ export class DeveloperSDK implements SDK {
       validateDraft: (draft: ReconstructionDraft) => validateReconstructionDraft(draft),
 
       checkModelHealth: () => checkModelHealth(this.shapes),
+
+      fromImageObservation: (observation: ImageReconstructionObservation) => imageObservationToDraft(observation),
+
+      registerImageProvider: (provider: ImageReconstructionProvider) => {
+        this.imageReconstructionProviders.register(provider);
+      },
+
+      listImageProviders: () => this.imageReconstructionProviders.list(),
+
+      reconstructImage: (providerId: string, request: ImageReconstructionProviderRequest) =>
+        this.imageReconstructionProviders.reconstruct(providerId, request),
 
       commitDraft: (draft: ReconstructionDraft, options?: { includeFurniture?: boolean }) => {
         const result = commitReconstructionDraft(draft, options);
