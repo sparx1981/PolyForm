@@ -169,6 +169,11 @@ import {
   type FurnitureParams,
 } from '../lib/interiors/parametricFurniture';
 import {
+  planRoomFurnishing,
+  type FurnishingPreset,
+} from '../lib/interiors/smartFurnish';
+import { detectRooms } from '../lib/spatial/rooms';
+import {
   commitReconstructionDraft,
   validateReconstructionDraft,
   type ReconstructionDraft,
@@ -490,6 +495,7 @@ export interface SDK {
       params?: FurnitureParams;
     }) => Shape;
     listCatalog: () => ReturnType<typeof interiorFurnitureCatalog>;
+    furnishRoom: (roomId: string, preset: FurnishingPreset) => ReturnType<typeof planRoomFurnishing>;
   };
 
   // Landscape & Site Planning Subsystem
@@ -1660,6 +1666,17 @@ export class DeveloperSDK implements SDK {
       },
 
       listCatalog: () => interiorFurnitureCatalog(),
+
+      furnishRoom: (roomId: string, preset: FurnishingPreset) => {
+        const room = detectRooms(this.shapes).find(candidate => candidate.id === roomId);
+        if (!room) throw new Error(`Room not found: ${roomId}`);
+        const plan = planRoomFurnishing(this.shapes, room, preset);
+        if (plan.shapes.length) {
+          this.setShapes(prev => [...prev, ...plan.shapes]);
+        }
+        this.log(`Furnished room ${roomId} with ${plan.shapes.length} items; ${plan.unplaced.length} unplaced.`);
+        return plan;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
