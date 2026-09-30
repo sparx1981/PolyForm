@@ -92,7 +92,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('roofBuilding', 'sdk.architecture.roofBuilding({ roofType, pitchAngleDeg?, ridgeHeight?, eaveOverhang?, tileShape?, … })', 'Shape[]', 'Roof the whole building as the Roof buttons do: the main roof on the top storey and a roof on each extension, replacing existing roofs.'),
       m('createStairs', 'sdk.architecture.createStairs({ style?, width?, height?, length?, numSteps?, … })', 'Shape', 'Create a parametric staircase flight.'),
       m('createRailing', 'sdk.architecture.createRailing({ length?, height?, position?, color? })', 'Shape', 'Create a safety railing.'),
-      m('createRoom', 'sdk.architecture.createRoom({ width, length, height?, wallThickness?, … })', '{ roomId, wallShapes, floorShape?, ceilingShape? }', 'Create a room: its walls, floor and ceiling.'),
+      m('createRoom', 'sdk.architecture.createRoom({ width, length, height?, wallThickness?, justification?, story?, slabThickness?, includeFloor?, includeCeiling?, includeFoundation?, … })', '{ roomId, wallShapes, floorShape?, ceilingShape?, foundationShape? }', 'Create a room through the same closed Wall-tool room assembly, including exact mitres, storey tags, slab/foundation and terrain integration.'),
       m('createWall', 'sdk.architecture.createWall({ start?, end?, length?, height?, thickness?, … })', 'Shape', 'Create a single wall.'),
       m('createDoor', 'sdk.architecture.createDoor({ width?, height?, depth?, position?, color? })', 'Shape', 'Create a door assembly that cuts its own opening.'),
       m('createWindow', 'sdk.architecture.createWindow({ width?, height?, depth?, position?, color? })', 'Shape', 'Create a window frame that cuts its own opening.'),
