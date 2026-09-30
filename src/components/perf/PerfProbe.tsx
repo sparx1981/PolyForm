@@ -146,13 +146,19 @@ export default function PerfProbe() {
     const renderCpu = f.renderCpu;
     f.renderCpu = 0; gl.info.reset();
 
-    // Collect finished GPU timer queries (they finish a few frames late).
+    // Collect finished GPU timer queries (they finish a few frames late). Only
+    // attach fresh results to samples; reusing the previous result on every
+    // intervening frame would overweight slower query-return cadences.
+    let freshGpu: number | null = null;
     if (g.ext && g.pending.length) {
       const ctx = gl.getContext() as WebGL2RenderingContext;
       const disjoint = ctx.getParameter(g.ext.GPU_DISJOINT_EXT);
       while (g.pending.length && ctx.getQueryParameter(g.pending[0]!, ctx.QUERY_RESULT_AVAILABLE)) {
         const q = g.pending.shift()!;
-        if (!disjoint) g.last = Number(ctx.getQueryParameter(q, ctx.QUERY_RESULT)) / 1e6;
+        if (!disjoint) {
+          freshGpu = Number(ctx.getQueryParameter(q, ctx.QUERY_RESULT)) / 1e6;
+          g.last = freshGpu;
+        }
         ctx.deleteQuery(q);
       }
     }
@@ -160,7 +166,7 @@ export default function PerfProbe() {
 
     // Live numbers: rolling average of the last second or so.
     f.live.push(interval); if (f.live.length > 90) f.live.shift();
-    if (g.last !== null) { f.gpuRecent.push(g.last); if (f.gpuRecent.length > 90) f.gpuRecent.shift(); }
+    if (freshGpu !== null) { f.gpuRecent.push(freshGpu); if (f.gpuRecent.length > 90) f.gpuRecent.shift(); }
     if (now - f.lastLive > 250) {
       f.lastLive = now;
       const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -178,6 +184,11 @@ export default function PerfProbe() {
     if (phase.kind === 'benchmark') {
       const elapsed = now - phase.startedAt;
       const controls = scene.userData.controls as { enabled: boolean; autoRotate: boolean; target: THREE.Vector3; update: () => void } | undefined;
+      if (!bench.current && !controls) {
+        finish(true);
+        perfStore.setNotice('Benchmark could not start because orbit controls are unavailable in this view.');
+        return;
+      }
       if (!bench.current && controls) {
         bench.current = { target: controls.target.clone(), offset: camera.position.clone().sub(controls.target), wasEnabled: controls.enabled, wasRotating: controls.autoRotate };
         controls.enabled = false; controls.autoRotate = false;
@@ -191,7 +202,7 @@ export default function PerfProbe() {
       if (elapsed < phase.warmupMs) { f.t0 = 0; return; }
       if (elapsed >= phase.warmupMs + phase.durationMs) { finish(); return; }
     }
-    perfStore.pushSample({ frameMs: interval, renderCpuMs: renderCpu, gpuMs: g.last, calls, triangles, t: (now - f.t0) / 1000 });
+    perfStore.pushSample({ frameMs: interval, renderCpuMs: renderCpu, gpuMs: freshGpu, calls, triangles, t: (now - f.t0) / 1000 });
   });
 
   // Turning the profiler off, or leaving the scene, ends a run in progress without saving it.
