@@ -174,6 +174,7 @@ import {
   type ReconstructionDraft,
 } from '../lib/reconstruction/draft';
 import { checkModelHealth } from '../lib/reconstruction/modelHealth';
+import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
 import { PLANT_SPECIES_CATALOG, PlantSpecies } from '../lib/plantLibrary';
 import { LANDSCAPE_TEXTURES, LandscapeTexturePreset } from '../lib/landscapeTextures';
 import { MATERIAL_PRESETS, getMaterialPreset } from '../lib/materialPresets';
@@ -407,6 +408,15 @@ export interface SDK {
     getDoorDefaults: () => DoorConfigDefaults;
     configureWindowDefaults: (settings: WindowConfigDefaults) => void;
     getWindowDefaults: () => WindowConfigDefaults;
+  };
+
+  // BIM Subsystem
+  bim: {
+    parseIfcMetadata: (text: string) => ReturnType<typeof parseIfcMetadata>;
+    spatialPath: (
+      model: ReturnType<typeof parseIfcMetadata>,
+      stepId: number,
+    ) => ReturnType<typeof ifcSpatialPath>;
   };
 
   // Reconstruction Subsystem
@@ -728,6 +738,7 @@ export class DeveloperSDK implements SDK {
 
   // Subsystems
   public architecture: any;
+  public bim: any;
   public reconstruction: any;
   public interiors: any;
   public landscape: any;
@@ -1487,6 +1498,14 @@ export class DeveloperSDK implements SDK {
       getWindowDefaults: (): WindowConfigDefaults => {
         return { ...this.windowDefaults };
       }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // BIM SUBSYSTEM
+    // ─────────────────────────────────────────────────────────────
+    this.bim = {
+      parseIfcMetadata: (text: string) => parseIfcMetadata(text),
+      spatialPath: (model: ReturnType<typeof parseIfcMetadata>, stepId: number) => ifcSpatialPath(model, stepId),
     };
 
     // ─────────────────────────────────────────────────────────────
