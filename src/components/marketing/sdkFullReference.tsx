@@ -190,6 +190,19 @@ export const SDK_REFERENCE: SdkTag[] = [
     ],
   },
   {
+    id: 'civil', title: 'civil',
+    description: 'Civil/site grading modifiers: spline roads, building pads and pad surface detailing.',
+    methods: [
+      m('list', 'sdk.civil.list()', 'TerrainModifier[]', 'List all road, pad and surface terrain modifiers.'),
+      m('addRoad', 'sdk.civil.addRoad({ points, width?, maxGradePercent?, bankingAngle?, profile?, markings?, material?, batterDistance?, name?, enabled? })', 'RoadModifier', 'Add a spline road using the same persisted terrain-modifier model as the Civil road tool.'),
+      m('addPad', 'sdk.civil.addPad({ center, primitive?, dimensions?, rotationY?, targetElevation?, batterDistance?, batterProfile?, name?, enabled? })', 'PadModifier', 'Add a rectangular or circular grading/building pad.'),
+      m('setPadSurface', "sdk.civil.setPadSurface(padId, { pattern, parkingConfig?, enabled?, name? } | null)", 'void', 'Add, update or remove parking striping/hatch/asphalt/gravel surface detailing on a pad.'),
+      m('update', 'sdk.civil.update(id, changes)', 'void', 'Update a road, pad or surface modifier without changing its id/type.'),
+      m('remove', 'sdk.civil.remove(id)', 'void', 'Remove a civil modifier. Removing a pad also removes surface modifiers hosted by that pad.'),
+      m('clear', 'sdk.civil.clear()', 'void', 'Remove all civil terrain modifiers.'),
+    ],
+  },
+  {
     id: 'materials', title: 'materials',
     description: 'PBR materials and edge-line rendering.',
     methods: [
