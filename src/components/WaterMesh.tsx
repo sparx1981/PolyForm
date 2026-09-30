@@ -81,6 +81,17 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
     const xs = data.points.map(p => p[0]), zs = data.points.map(p => p[1]);
     const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
     uniforms.uLakeWaves.value = THREE.MathUtils.clamp((extent - 12) / 40, 0, 1);
+    const flow = data.flow;
+    if (flow?.mode === 'stream') {
+      const [fx, fz] = flow.direction ?? [1, 0];
+      const length = Math.hypot(fx, fz) || 1;
+      uniforms.uFlowDir.value.set(fx / length, fz / length);
+      uniforms.uFlowSpeed.value = THREE.MathUtils.clamp(flow.speed ?? 0.45, 0, 4);
+      uniforms.uFlowTurbulence.value = THREE.MathUtils.clamp(flow.turbulence ?? 0.35, 0, 1);
+    } else {
+      uniforms.uFlowSpeed.value = 0;
+      uniforms.uFlowTurbulence.value = 0;
+    }
     uniforms.uHeights.value = heights;
     uniforms.uHasTerrain.value = heights ? 1 : 0;
     if (terrain?.terrainData) {
@@ -118,6 +129,7 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
   useFrame(({ gl, scene, clock, camera }, delta) => {
     uniforms.uRain.value = rain;
     if (rain > 0) uniforms.uRainTime.value += delta;
+    if (uniforms.uFlowSpeed.value > 0) uniforms.uFlowTime.value += delta;
     if (!sharedSim) return;
     const frame = gl.info.render.frame;
     if (clock.elapsedTime - lastSunLookup > 1) { findSun(scene, sunDirection); lastSunLookup = clock.elapsedTime; }
