@@ -117,4 +117,49 @@ if (!result.errors.length) {
 }
 ```
 
+## 9. Recognise a local orthogonal floor plan
+
+```js
+const draft = sdk.reconstruction.recogniseOrthogonalPlan(
+  { width: imageWidth, height: imageHeight, data: rgbaPixels },
+  { metresPerPixel: 0.02, threshold: 150 },
+);
+
+console.log('Walls recognised:', draft.walls.length);
+```
+
+## 10. Profile a repeatable viewport workload
+
+```js
+sdk.performance.setEnabled(true);
+sdk.performance.startBenchmark();
+
+// Read the latest completed run later in the same interactive session.
+const latest = sdk.performance.latest();
+if (latest) {
+  console.log(sdk.performance.toMarkdown(latest));
+}
+```
+
+## 11. Build civil roads and a parking pad
+
+```js
+const road = sdk.civil.addRoad({
+  points: [[0, 0, 0], [12, 0.2, 0], [20, 0.6, 5]],
+  width: 7,
+  markings: 'bike-lanes',
+});
+
+const pad = sdk.civil.addPad({
+  center: [8, 1.2, 8],
+  dimensions: [20, 14],
+  batterProfile: 'curved',
+});
+
+sdk.civil.setPadSurface(pad.id, {
+  pattern: 'parking-striping',
+  parkingConfig: { angle: 60, stallWidth: 2.7, stallDepth: 5.5, stripeColor: '#ffffff', doubleRow: true },
+});
+```
+
 For signatures and return types, use Developer Suite → Documentation or `docs/DEVELOPER_SDK.md`.
