@@ -114,12 +114,16 @@ export function summarize(shapes: Shape[]) {
  * Runs the app's own scripting library against a list of objects, so the connector builds
  * rooms, walls, roofs, stairs, terrain, plants and materials exactly as `sdk.*` scripts do.
  */
-export function withSdk<T>(shapes: Shape[], run: (sdk: any) => T): { shapes: Shape[]; result: T; created: Shape[]; log: string[] } {
+export function withSdk<T>(
+  shapes: Shape[],
+  run: (sdk: any) => T,
+  extraSetters: Record<string, unknown> = {},
+): { shapes: Shape[]; result: T; created: Shape[]; log: string[] } {
   let current = shapes;
   const log: string[] = [];
   const setShapes = (u: Shape[] | ((prev: Shape[]) => Shape[])) => { current = typeof u === 'function' ? u(current) : u; };
   const updateColor = (id: string, color: string) => setShapes(prev => prev.map(s => (s.id === id ? { ...s, color } : s)));
-  const sdk: any = new DeveloperSDK(current, setShapes, updateColor, null, {});
+  const sdk: any = new DeveloperSDK(current, setShapes, updateColor, null, extraSetters);
   sdk.log = (message: string) => log.push(message);
   const before = new Set(shapes.map(s => s.id));
   const result = run(sdk);
