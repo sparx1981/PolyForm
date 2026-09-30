@@ -763,6 +763,46 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     },
   ))(shapes))));
 
+  server.registerTool('update_pond', {
+    title: 'Edit a pond, lake or flowing water body',
+    description: 'Edits the same saved water settings as PolyForm\'s Water controls: depth, clarity, level, basin digging and directional flow.',
+    inputSchema: {
+      model: modelRef,
+      object: z.string().describe('Water object id or exact name'),
+      depth: z.number().min(0.01).max(20).optional(),
+      clarity: z.enum(['clear', 'lake', 'pond', 'murky']).optional(),
+      level: z.number().optional().describe('Water surface elevation in metres'),
+      dig: z.boolean().optional().describe('Whether the water body digs its basin into terrain'),
+      flow_mode: z.enum(['still', 'stream']).optional(),
+      flow_direction: point2.optional(),
+      flow_speed: z.number().min(0).max(4).optional(),
+      turbulence: z.number().min(0).max(1).optional(),
+      clear_flow: z.boolean().default(false).describe('Remove saved flow settings entirely'),
+      name: z.string().min(1).max(120).optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, 'Updated water body', shapes => {
+    const source = findShape(shapes, a.object);
+    if (source.type !== 'water' || !source.waterData) throw new ToolError(`"${a.object}" is not a water body.`);
+    const flowRequested = a.flow_mode !== undefined || a.flow_direction !== undefined || a.flow_speed !== undefined || a.turbulence !== undefined;
+    const flow = a.clear_flow ? null : flowRequested ? {
+      mode: a.flow_mode ?? source.waterData.flow?.mode ?? 'stream',
+      direction: a.flow_direction as [number, number] | undefined,
+      speed: a.flow_speed,
+      turbulence: a.turbulence,
+    } : undefined;
+    const run = withSdk(shapes, sdk => sdk.landscape.updatePond(source.id, {
+      depth: a.depth,
+      clarity: a.clarity,
+      level: a.level,
+      dig: a.dig,
+      flow,
+      name: a.name,
+    }));
+    const edited = run.shapes.find(s => s.id === source.id)!;
+    return { shapes: run.shapes, made: [edited] };
+  })));
+
   server.registerTool('add_patio', {
     title: 'Add a patio or deck',
     description: 'A paved patio (set into the ground) or a raised timber deck over an outline of ground points. Drawn against a building, it is level with the house floor.',
@@ -788,6 +828,52 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     if (a.color) settings.color = a.color;
     if (a.lights !== undefined) settings.lights = { enabled: a.lights };
     return add(patioOrDeck(shapes, a.points as [number, number][], { kind: a.kind, deckHeight: a.deck_height, settings }))(shapes);
+  })));
+
+  server.registerTool('update_patio', {
+    title: 'Edit a patio or deck',
+    description: 'Edits the same saved patio/deck settings as PolyForm\'s Patio controls, including finish, railing, lights and edge steps.',
+    inputSchema: {
+      model: modelRef,
+      object: z.string().describe('Patio/deck object id or exact name'),
+      level: z.number().optional(),
+      name: z.string().min(1).max(120).optional(),
+      paving: z.enum(['slabs', 'block', 'natural', 'porcelain', 'gravel']).optional(),
+      slab_size: z.tuple([z.number().positive(), z.number().positive()]).optional(),
+      board: z.enum(['softwood', 'hardwood', 'composite', 'weathered', 'painted']).optional(),
+      railing: z.enum(['none', 'timber', 'glass', 'cable']).optional(),
+      lights_enabled: z.boolean().optional(),
+      light_spacing: z.number().positive().optional(),
+      steps: z.array(z.object({
+        edge: z.number().int().min(0),
+        t: z.number().min(0).max(1),
+        width: z.number().positive(),
+      })).optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, 'Updated patio or deck', shapes => {
+    const source = findShape(shapes, a.object);
+    if (source.type !== 'patio' || !source.patioData) throw new ToolError(`"${a.object}" is not a patio or deck.`);
+    const settings: Record<string, unknown> = {};
+    if (a.paving !== undefined) settings.paving = a.paving;
+    if (a.slab_size !== undefined) settings.slabSize = a.slab_size;
+    if (a.board !== undefined) settings.board = a.board;
+    if (a.railing !== undefined) settings.railing = a.railing;
+    if (a.lights_enabled !== undefined || a.light_spacing !== undefined) {
+      settings.lights = {
+        ...(source.patioData.lights ?? {}),
+        ...(a.lights_enabled !== undefined ? { enabled: a.lights_enabled } : {}),
+        ...(a.light_spacing !== undefined ? { spacing: a.light_spacing } : {}),
+      };
+    }
+    const run = withSdk(shapes, sdk => sdk.landscape.updatePatio(source.id, {
+      level: a.level,
+      name: a.name,
+      settings,
+      steps: a.steps,
+    }));
+    const edited = run.shapes.find(s => s.id === source.id)!;
+    return { shapes: run.shapes, made: [edited] };
   })));
 
   // ── Editing ───────────────────────────────────────────────────────────
