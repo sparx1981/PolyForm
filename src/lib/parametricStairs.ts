@@ -57,6 +57,7 @@ export interface ParametricStairOptions {
   stairStyle?: StairStyleType | string;
   stairStructure?: StairStructureType;
   railingMode?: RailingModeType;
+  handrailHeight?: number;
   // Optional scene shapes for automatic scanning
   shapes?: Shape[];
   currentPosition?: [number, number, number] | THREE.Vector3;
@@ -402,7 +403,8 @@ export function createParametricStaircaseGeometry(
       length: calc.totalRun,
       numSteps: stepCount,
       structure,
-      railing
+      railing,
+      handrailHeight: options.handrailHeight
     });
     return { geometry, calculation: calc };
   }
@@ -495,12 +497,12 @@ export function createParametricStaircaseGeometry(
   if (railing === 'left' || railing === 'both') {
     const pLeftStart: [number, number, number] = [-width / 2 + 0.04, -totalHeight / 2, -totalRun / 2];
     const pLeftEnd: [number, number, number] = [-width / 2 + 0.04, totalHeight / 2, totalRun / 2];
-    geoms.push(...createRailingAlongSegment(pLeftStart, pLeftEnd, 0.95, stepCount));
+    geoms.push(...createRailingAlongSegment(pLeftStart, pLeftEnd, Math.max(0.5, options.handrailHeight ?? 0.95), stepCount));
   }
   if (railing === 'right' || railing === 'both') {
     const pRightStart: [number, number, number] = [width / 2 - 0.04, -totalHeight / 2, -totalRun / 2];
     const pRightEnd: [number, number, number] = [width / 2 - 0.04, totalHeight / 2, totalRun / 2];
-    geoms.push(...createRailingAlongSegment(pRightStart, pRightEnd, 0.95, stepCount));
+    geoms.push(...createRailingAlongSegment(pRightStart, pRightEnd, Math.max(0.5, options.handrailHeight ?? 0.95), stepCount));
   }
 
   try {
