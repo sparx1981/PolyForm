@@ -18,6 +18,8 @@ import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../../src/l
 import { withDrawnRoute, withSiteSettings, withoutRoutes } from '../../src/lib/worldSite/streets';
 import { applyAutoStreetLights } from '../../src/lib/worldSite/streetLights';
 import { findPlace } from '../../src/lib/worldSite/fetchSite';
+import { KernelArcHost } from '../../src/tools/kernelArcHost';
+import { deserializeGraph, serializeGraph } from '../../src/lib/geometry/serialize';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../../src/lib/worldSite/geo';
 import {
   carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
@@ -105,6 +107,23 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     return { shapes: [...shapes, ...list], made: list };
   };
 
+  /** Runs one SDK drawing operation against the model's persisted kernel graph. */
+  async function changeKernel<T>(ref: string, note: string, run: (sdk: any) => T) {
+    const model = await store.loadModel(caller, ref);
+    let result!: T;
+    let stored: unknown | null = model.kernel;
+    await store.changeKernel(caller, model.id, note, kernel => {
+      const host = new KernelArcHost(
+        { upAxis: { x: 0, y: 1, z: 0 } },
+        deserializeGraph((kernel ?? null) as any),
+      );
+      result = withSdk(model.shapes, run, { kernelHost: host, bumpKernel: () => {} }).result;
+      stored = serializeGraph(host.graph);
+      return stored;
+    });
+    return { model, result, kernel: stored };
+  }
+
   /** Loads a model, changes its graphics settings (weather, vegetation wind), and reports what changed. */
   async function changeSettings(ref: string, note: string, fn: (settings: GraphicsSettings) => GraphicsSettings) {
     const model = await store.changeGraphicsSettings(caller, ref, note, fn);
@@ -171,6 +190,17 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       walls: room.boundaryWallIds,
       openings: room.openingIds,
     })));
+  }));
+
+  server.registerTool('list_drawn_faces', {
+    title: 'List drawn kernel faces',
+    description: 'Lists faces made with PolyForm drawing tools, including stable face ids, area, colour, visibility and holes.',
+    inputSchema: { model: modelRef },
+    annotations: READ,
+  }, safe(async ({ model }) => {
+    const m = await store.loadModel(caller, model);
+    const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } }, deserializeGraph((m.kernel ?? null) as any));
+    return text(withSdk(m.shapes, sdk => sdk.drawing.listFaces(), { kernelHost: host, bumpKernel: () => {} }).result);
   }));
 
   server.registerTool('list_civil_modifiers', {
@@ -292,6 +322,132 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     inputSchema: { name: z.string().min(1).max(200) },
     annotations: WRITE,
   }, safe(async ({ name }) => text({ id: await store.createModel(caller, name), name })));
+
+  // ── Drawing kernel ─────────────────────────────────────────────────────
+
+  server.registerTool('draw_line', {
+    title: 'Draw a kernel line',
+    description: 'Draws a PolyForm Line-tool segment. Closing connected lines can create a face automatically.',
+    inputSchema: { model: modelRef, from: vec3, to: vec3 },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const changed = await changeKernel(a.model, 'Drew a line', sdk => sdk.drawing.line(a.from, a.to));
+    return text({ model: `${changed.model.name} (${changed.model.id})`, done: 'Drew a line', edges: changed.result, tip: 'undo_last_change reverses this.' });
+  }));
+
+  server.registerTool('draw_primitive', {
+    title: 'Draw a kernel primitive or surface',
+    description: 'Draws the same Rectangle, Circle, Polygon, Triangle, Pie, Freehand or arbitrary flat Surface geometry as PolyForm drawing tools.',
+    inputSchema: {
+      model: modelRef,
+      kind: z.enum(['rectangle', 'circle', 'polygon', 'triangle', 'pie', 'freehand', 'surface']),
+      centre: vec3.optional(),
+      width: z.number().positive().optional(),
+      depth: z.number().positive().optional(),
+      radius: z.number().positive().optional(),
+      sides: z.number().int().min(3).max(256).optional(),
+      rotation_deg: z.number().optional(),
+      start_angle_deg: z.number().optional(),
+      sweep_deg: z.number().optional(),
+      segments: z.number().int().min(3).max(512).optional(),
+      normal: vec3.optional(),
+      points: z.array(vec3).optional(),
+      closed: z.boolean().default(false),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const changed = await changeKernel(a.model, `Drew ${a.kind}`, sdk => {
+      switch (a.kind) {
+        case 'rectangle':
+          if (a.width === undefined || a.depth === undefined) throw new ToolError('rectangle needs width and depth.');
+          return sdk.drawing.rectangle({ centre: a.centre, width: a.width, depth: a.depth, normal: a.normal, rotationDeg: a.rotation_deg });
+        case 'circle':
+          if (a.radius === undefined) throw new ToolError('circle needs radius.');
+          return sdk.drawing.circle({ centre: a.centre, radius: a.radius, segments: a.segments, normal: a.normal });
+        case 'polygon':
+          if (a.radius === undefined || a.sides === undefined) throw new ToolError('polygon needs radius and sides.');
+          return sdk.drawing.polygon({ centre: a.centre, radius: a.radius, sides: a.sides, rotationDeg: a.rotation_deg, normal: a.normal });
+        case 'triangle':
+          if (a.radius === undefined) throw new ToolError('triangle needs radius.');
+          return sdk.drawing.triangle({ centre: a.centre, radius: a.radius, rotationDeg: a.rotation_deg, normal: a.normal });
+        case 'pie':
+          if (a.radius === undefined || a.sweep_deg === undefined) throw new ToolError('pie needs radius and sweep_deg.');
+          return sdk.drawing.pie({ centre: a.centre, radius: a.radius, startAngleDeg: a.start_angle_deg, sweepDeg: a.sweep_deg, segments: a.segments, normal: a.normal });
+        case 'freehand':
+          if (!a.points || a.points.length < 2) throw new ToolError('freehand needs at least two points.');
+          return sdk.drawing.freehand(a.points, a.closed);
+        case 'surface':
+          if (!a.points || a.points.length < 3) throw new ToolError('surface needs at least three points.');
+          return sdk.drawing.surface(a.points);
+      }
+    });
+    return text({ model: `${changed.model.name} (${changed.model.id})`, done: `Drew ${a.kind}`, faces: changed.result, tip: 'undo_last_change reverses this.' });
+  }));
+
+  server.registerTool('edit_drawn_faces', {
+    title: 'Edit drawn kernel faces',
+    description: 'Runs PolyForm kernel editing operations on face ids: Push/Pull, Offset, Chamfer, Fillet, Boolean, Paint or Erase.',
+    inputSchema: {
+      model: modelRef,
+      operation: z.enum(['push-pull', 'offset', 'chamfer', 'fillet', 'merge', 'subtract', 'intersect', 'paint', 'erase']),
+      faces: z.array(z.number().int().positive()).min(1),
+      distance: z.number().optional().describe('Push/Pull or Offset distance in metres'),
+      amount: z.number().positive().optional().describe('Chamfer amount or Fillet radius in metres'),
+      color: colour.optional().describe('Paint colour'),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const changed = await changeKernel(a.model, `Edited drawn faces: ${a.operation}`, sdk => {
+      switch (a.operation) {
+        case 'push-pull':
+          if (a.faces.length !== 1 || a.distance === undefined) throw new ToolError('push-pull needs exactly one face and distance.');
+          return sdk.drawing.pushPull(a.faces[0], a.distance);
+        case 'offset':
+          if (a.faces.length !== 1 || a.distance === undefined) throw new ToolError('offset needs exactly one face and distance.');
+          return sdk.drawing.offset(a.faces[0], a.distance);
+        case 'chamfer':
+          if (a.amount === undefined) throw new ToolError('chamfer needs amount.');
+          return sdk.drawing.chamfer(a.faces, a.amount);
+        case 'fillet':
+          if (a.amount === undefined) throw new ToolError('fillet needs amount.');
+          return sdk.drawing.fillet(a.faces, a.amount);
+        case 'merge':
+        case 'subtract':
+        case 'intersect':
+          return sdk.drawing.boolean(a.faces, a.operation);
+        case 'paint':
+          if (!a.color) throw new ToolError('paint needs color.');
+          sdk.drawing.paint(a.faces, a.color);
+          return true;
+        case 'erase':
+          sdk.drawing.erase(a.faces);
+          return true;
+      }
+    });
+    return text({ model: `${changed.model.name} (${changed.model.id})`, done: `Edited drawn faces: ${a.operation}`, result: changed.result, tip: 'undo_last_change reverses this.' });
+  }));
+
+  server.registerTool('follow_me', {
+    title: 'Sweep a drawn face with Follow Me',
+    description: 'Sweeps a profile face along an existing edge, a face outline, or an explicit point path using PolyForm Follow Me.',
+    inputSchema: {
+      model: modelRef,
+      profile_face: z.number().int().positive(),
+      edge_id: z.number().int().positive().optional(),
+      face_id: z.number().int().positive().optional(),
+      points: z.array(vec3).min(2).optional(),
+      closed: z.boolean().default(false),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const selectors = Number(a.edge_id !== undefined) + Number(a.face_id !== undefined) + Number(a.points !== undefined);
+    if (selectors !== 1) throw new ToolError('Give exactly one Follow Me path: edge_id, face_id, or points.');
+    const path = a.edge_id !== undefined ? { edgeId: a.edge_id }
+      : a.face_id !== undefined ? { faceId: a.face_id }
+      : { points: a.points, closed: a.closed };
+    const changed = await changeKernel(a.model, 'Applied Follow Me', sdk => sdk.drawing.followMe(a.profile_face, path));
+    return text({ model: `${changed.model.name} (${changed.model.id})`, done: 'Applied Follow Me', result: changed.result, tip: 'undo_last_change reverses this.' });
+  }));
 
   // ── Building ──────────────────────────────────────────────────────────
 
