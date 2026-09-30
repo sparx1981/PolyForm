@@ -1265,12 +1265,15 @@ function DeveloperLibrary() {
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => {
+                      if (script.userId !== user?.uid) return;
                       setDeveloperCode(script.code);
                       setActiveDeveloperTab('console');
                     }}
-                    className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs font-bold transition-colors"
+                    disabled={script.userId !== user?.uid}
+                    title={script.userId === user?.uid ? 'Open in Console' : 'Copy this shared script to your library and review it before running'}
+                    className="flex-1 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Open in Console
+                    {script.userId === user?.uid ? 'Open in Console' : 'Review via Copy'}
                   </button>
                   <button 
                     onClick={() => {
