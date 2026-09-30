@@ -187,10 +187,40 @@ describe('connector over HTTP', () => {
     expect(plant.plantSpeciesId).toBe('lavender_shrub');
     expect(plant.geometryData).toBeUndefined();
 
-    const stairs = parse(await client.callTool({ name: 'add_stairs', arguments: { model: id, rise: 2.85, position: [1, 0.15, 1] } }));
+    const stairs = parse(await client.callTool({
+      name: 'add_stairs',
+      arguments: {
+        model: id,
+        rise: 2.85,
+        width: 1.2,
+        length: 4.4,
+        num_steps: 16,
+        structure: 'floating',
+        railing: 'left',
+        parametric: false,
+        handrail_height: 1.05,
+        color: '#cbd5e1',
+        position: [1, 0.15, 1],
+      },
+    }));
     const [, y, z] = stairs.created[0].position;
     expect(y).toBeCloseTo(0.15 + 2.85 / 2, 1);
-    expect(z).toBeGreaterThan(1);
+    expect(z).toBeCloseTo(1 + 4.4 / 2, 1);
+    expect(stairs.created[0].customData).toMatchObject({
+      style: 'straight',
+      structure: 'floating',
+      railing: 'left',
+      width: 1.2,
+      height: 2.85,
+      length: 4.4,
+      numSteps: 16,
+    });
+
+    const railing = parse(await client.callTool({
+      name: 'add_railing',
+      arguments: { model: id, length: 3.2, height: 1.1, position: [0, 0.15, -1], color: '#334155' },
+    }));
+    expect(railing.created[0]).toMatchObject({ type: 'railing', position: [0, 0.15, -1], args: [3.2, 1.1], color: '#334155' });
     await client.close();
   });
 
