@@ -193,6 +193,10 @@ import {
 import { checkModelHealth } from '../lib/reconstruction/modelHealth';
 import { parseIfcMetadata, ifcSpatialPath } from '../lib/bim/ifcMetadata';
 import {
+  IfcGeometryProviderRegistry,
+  type IfcGeometryProvider,
+} from '../lib/bim/ifcGeometry';
+import {
   createExternalAssetShape,
   validateGeneratedAsset,
   type GeneratedAssetInput,
@@ -465,6 +469,9 @@ export interface SDK {
       model: ReturnType<typeof parseIfcMetadata>,
       stepId: number,
     ) => ReturnType<typeof ifcSpatialPath>;
+    registerGeometryProvider: (provider: IfcGeometryProvider) => void;
+    listGeometryProviders: () => string[];
+    importGeometry: (providerId: string, source: ArrayBuffer | Uint8Array) => Promise<ReturnType<IfcGeometryProviderRegistry['import']> extends Promise<infer T> ? T : never>;
   };
 
   // Reconstruction Subsystem
@@ -790,6 +797,7 @@ export interface SDK {
 
 export class DeveloperSDK implements SDK {
   private imageReconstructionProviders = new ImageReconstructionProviderRegistry();
+  private ifcGeometryProviders = new IfcGeometryProviderRegistry();
   public shapes: Shape[];
   public setShapes: (shapes: Shape[] | ((prev: Shape[]) => Shape[])) => void;
   public updateShapeColor: (id: string, color: string) => void;
@@ -1602,6 +1610,14 @@ export class DeveloperSDK implements SDK {
     this.bim = {
       parseIfcMetadata: (text: string) => parseIfcMetadata(text),
       spatialPath: (model: ReturnType<typeof parseIfcMetadata>, stepId: number) => ifcSpatialPath(model, stepId),
+      registerGeometryProvider: (provider: IfcGeometryProvider) => this.ifcGeometryProviders.register(provider),
+      listGeometryProviders: () => this.ifcGeometryProviders.list(),
+      importGeometry: async (providerId: string, source: ArrayBuffer | Uint8Array) => {
+        const imported = await this.ifcGeometryProviders.import(providerId, source);
+        if (imported.shapes.length) this.setShapes(prev => [...prev, ...imported.shapes]);
+        this.log(`Imported ${imported.shapes.length} IFC geometry elements through ${providerId}.`);
+        return imported;
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
