@@ -2237,6 +2237,10 @@ sdk.animateSun(30);`
         {
           name: "Ask Architectural Assistant",
           code: `sdk.ai.askAssistant("Suggest structural bay spacing for mass timber construction.");`
+        },
+        {
+          name: "Open Photo to 3D",
+          code: `sdk.ai.openPhotoTo3D();`
         }
       ]
     },
