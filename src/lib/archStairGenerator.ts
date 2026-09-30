@@ -23,6 +23,7 @@ export interface StaircaseOptions {
   stairStyle?: StairStyleType | string;
   stairStructure?: StairStructureType;
   railingMode?: RailingModeType;
+  handrailHeight?: number;
   isParametric?: boolean;
   idealStepHeight?: number;
   strideConstant?: number;
@@ -75,10 +76,11 @@ export function createArchitecturalStaircaseGeometry(
         strideConstant: options.strideConstant,
         width,
         stairStructure: structure,
-        railingMode: railing
+        railingMode: railing,
+        handrailHeight: options.handrailHeight
       }).geometry;
     }
   }
 
-  return buildStairFlightGeometry({ style, width, height, length, numSteps, structure, railing });
+  return buildStairFlightGeometry({ style, width, height, length, numSteps, structure, railing, handrailHeight: options.handrailHeight });
 }
