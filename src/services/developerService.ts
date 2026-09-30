@@ -2101,8 +2101,7 @@ export class DeveloperSDK implements SDK {
           this.log(`Area label not added: face ${faceId} was not found or could not be measured.`);
           return null;
         }
-        const pts = faceSummaries(host.graph).find(f => (f.id as number) === faceId);
-        const a = anchor ?? (pts ? [pts.center[0], pts.center[1], pts.center[2]] : [face.plane.point.x, face.plane.point.y, face.plane.point.z]);
+        const a = anchor ?? [face.plane.point.x, face.plane.point.y, face.plane.point.z] as [number, number, number];
         const lift = 0.05;
         const p = position ?? [
           a[0] + face.plane.normal.x * lift,
