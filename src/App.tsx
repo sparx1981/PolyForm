@@ -49,6 +49,7 @@ import { CustomToolbarOverlay } from './components/CustomToolbarOverlay';
 import { ToolModifierPalette } from './components/ToolModifierPalette';
 import CivilGradeHUD from './components/terrain/CivilGradeHUD';
 import FpsCounter from './components/FpsCounter';
+import PerfOverlay from './components/perf/PerfOverlay';
 import BakeModal from './components/terrain/BakeModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
@@ -528,6 +529,7 @@ function AppContent() {
           <Viewport />
           <CivilGradeHUD />
           <FpsCounter />
+          <PerfOverlay />
 
           {!isToolModifierDocked && (
             <ErrorBoundary name="Tool Modifiers">

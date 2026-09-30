@@ -693,6 +693,8 @@ export interface AppState {
   setFloorEnabled: (enabled: boolean) => void;
   fpsCounterEnabled: boolean;
   setFpsCounterEnabled: (enabled: boolean) => void;
+  perfProfilerEnabled: boolean;
+  setPerfProfilerEnabled: (enabled: boolean) => void;
   walkModePhase: WalkModePhase;
   /** Style and size the fence tool uses for the next fence. */
   fenceToolSettings: FenceToolSettings;

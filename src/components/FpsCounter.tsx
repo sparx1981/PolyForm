@@ -5,7 +5,9 @@ const SAMPLE_INTERVAL_MS = 250;
 
 /** Scene Helpers debug overlay: current/min/max FPS, sampled from the render loop's own rAF cadence. */
 export default function FpsCounter() {
-  const { fpsCounterEnabled } = useApp();
+  const { fpsCounterEnabled: fpsOn, perfProfilerEnabled } = useApp();
+  // The profiler shows frame rate itself.
+  const fpsCounterEnabled = fpsOn && !perfProfilerEnabled;
   const [stats, setStats] = useState({ current: 0, min: 0, max: 0 });
   const frameCountRef = useRef(0);
   const lastSampleRef = useRef(0);

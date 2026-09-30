@@ -129,6 +129,7 @@ import { useLineBinding } from '../tools/lineToolBinding';
 import { Button } from './ui/Surface';
 import { runtimeImageUrl, useMaterialBindings } from '../lib/assets/useMaterialBindings';
 import { indexCatalog } from '../lib/assets/catalog';
+import PerfProbe from './perf/PerfProbe';
 import { useAssetCatalog } from '../lib/assets/useAssetCatalog';
 import { isMaterialAssetId } from '../lib/assets/types';
 import { loadAssetManifest } from '../lib/assets/catalog';
@@ -11012,7 +11013,7 @@ function Scene() {
 
   return (
     <>
-
+      <PerfProbe />
       <PerspectiveCamera 
         makeDefault 
         position={defaultCameraPosition} 

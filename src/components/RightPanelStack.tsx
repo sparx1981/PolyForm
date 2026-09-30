@@ -220,6 +220,8 @@ export default function RightPanelStack() {
     setFloorColor,
     fpsCounterEnabled,
     setFpsCounterEnabled,
+    perfProfilerEnabled,
+    setPerfProfilerEnabled,
     skyboxBlur,
     setSkyboxBlur,
     environmentIntensity,
@@ -4502,6 +4504,25 @@ export default function RightPanelStack() {
                     <div className={cn(
                       "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
                       fpsCounterEnabled ? "left-4.5" : "left-0.5"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span title="Live GPU and frame timings, recording and a repeatable fly-around benchmark whose results you can save">GPU Profiler</span>
+                  <button
+                    onClick={() => setPerfProfilerEnabled(!perfProfilerEnabled)}
+                    role="switch"
+                    aria-checked={perfProfilerEnabled}
+                    aria-label="GPU Profiler"
+                    className={cn(
+                      "w-8 h-4 rounded-full relative transition-colors",
+                      perfProfilerEnabled ? "bg-polyform-blue" : "bg-gray-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                      perfProfilerEnabled ? "left-4.5" : "left-0.5"
                     )} />
                   </button>
                 </div>

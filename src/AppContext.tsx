@@ -334,6 +334,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // A debug/performance overlay, not project data - deliberately not persisted with the
   // scene helpers above.
   const [fpsCounterEnabled, setFpsCounterEnabled] = useState(false);
+  const [perfProfilerEnabled, setPerfProfilerEnabled] = useState(false);
 
   // Walk Mode (see src/lib/walkMode/ and the Walk Mode spec). Not
   // persisted as the active tool on reload/autosave - it's a transient
@@ -2773,6 +2774,8 @@ console.log("Created rectangle:", myRect.id);`);
       setFloorEnabled: handleSetFloorEnabled,
       fpsCounterEnabled,
       setFpsCounterEnabled,
+      perfProfilerEnabled,
+      setPerfProfilerEnabled,
       walkModePhase,
       fenceToolSettings,
       setFenceToolSettings,
