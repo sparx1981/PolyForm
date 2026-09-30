@@ -1,4 +1,4 @@
-import type { Shape } from '../../src/types';
+import type { Shape, TerrainModifier } from '../../src/types';
 import { cleanFirestoreDataForSave, restoreFirestoreArraysAfterLoad } from '../../src/lib/firestoreArrayCodec';
 import { hydrateOffloadedGeometry, offloadLargeGeometryForSave, withGeometryCache, type GeometryOffloadIO } from '../../src/lib/firestoreGeometryOffload';
 import { chunkedBlobIO } from '../../src/lib/blobCodec';
@@ -46,6 +46,8 @@ export interface LoadedModel {
   userId: string;
   shapes: Shape[];
   graphicsSettings: GraphicsSettings;
+  terrainModifiers: TerrainModifier[];
+  kernel: unknown | null;
   updatedAt?: string;
 }
 
@@ -76,7 +78,11 @@ export interface ModelStore {
   changeShapes(caller: Caller, ref: string, note: string, mutate: (shapes: Shape[]) => Shape[]): Promise<ChangedModel>;
   /** Applies `mutate` to the model's graphics settings (weather, vegetation wind) and records the old value for undo. */
   changeGraphicsSettings(caller: Caller, ref: string, note: string, mutate: (settings: GraphicsSettings) => GraphicsSettings): Promise<ChangedModel>;
-  /** Restores whichever of the objects or graphics settings changed most recently; returns its note. */
+  /** Applies a change to the persisted civil/terrain modifier list. */
+  changeTerrainModifiers(caller: Caller, ref: string, note: string, mutate: (modifiers: TerrainModifier[]) => TerrainModifier[]): Promise<ChangedModel>;
+  /** Applies a change to the serialized drawing-kernel graph. */
+  changeKernel(caller: Caller, ref: string, note: string, mutate: (kernel: unknown | null) => unknown | null): Promise<ChangedModel>;
+  /** Restores whichever persisted model field changed most recently; returns its note. */
   undo(caller: Caller, ref: string): Promise<ChangedModel & { note: string | null }>;
   createModel(caller: Caller, name: string): Promise<string>;
 }
@@ -110,8 +116,8 @@ function checkSize(shapes: Shape[]) {
 
 /** In-memory store for tests and local trials. */
 export class MemoryStore implements ModelStore {
-  models = new Map<string, { name: string; userId: string; shapes: unknown[]; graphicsSettings: unknown; updatedAt: string; collaborators: string[] }>();
-  history = new Map<string, { shapes: unknown[]; graphicsSettings: unknown; note: string }[]>();
+  models = new Map<string, { name: string; userId: string; shapes: unknown[]; graphicsSettings: unknown; terrainModifiers: TerrainModifier[]; kernel: unknown | null; updatedAt: string; collaborators: string[] }>();
+  history = new Map<string, { shapes: unknown[]; graphicsSettings: unknown; terrainModifiers: TerrainModifier[]; kernel: unknown | null; note: string }[]>();
   private next = 1;
 
   async listModels(caller: Caller): Promise<ModelRow[]> {
@@ -131,7 +137,13 @@ export class MemoryStore implements ModelStore {
     const direct = this.access(caller, ref);
     const id = direct ? ref : matchModel(await this.listModels(caller), ref).id;
     const m = this.access(caller, id)!;
-    return { id, name: m.name, userId: m.userId, shapes: decodeShapes(m.shapes), graphicsSettings: normalizeGraphicsSettings(m.graphicsSettings), updatedAt: m.updatedAt };
+    return {
+      id, name: m.name, userId: m.userId, shapes: decodeShapes(m.shapes),
+      graphicsSettings: normalizeGraphicsSettings(m.graphicsSettings),
+      terrainModifiers: Array.isArray(m.terrainModifiers) ? structuredClone(m.terrainModifiers) : [],
+      kernel: structuredClone(m.kernel ?? null),
+      updatedAt: m.updatedAt,
+    };
   }
 
   private async resolve(caller: Caller, ref: string) {
@@ -144,7 +156,13 @@ export class MemoryStore implements ModelStore {
     const next = mutate(decodeShapes(m.shapes));
     checkSize(next);
     const list = this.history.get(id) ?? [];
-    list.push({ shapes: m.shapes, graphicsSettings: m.graphicsSettings, note });
+    list.push({
+      shapes: m.shapes,
+      graphicsSettings: m.graphicsSettings,
+      terrainModifiers: structuredClone(m.terrainModifiers ?? []),
+      kernel: structuredClone(m.kernel ?? null),
+      note,
+    });
     this.history.set(id, list.slice(-HISTORY_LIMIT));
     m.shapes = encodeShapes(next);
     m.updatedAt = new Date().toISOString();
@@ -155,9 +173,49 @@ export class MemoryStore implements ModelStore {
     const { id, m } = await this.resolve(caller, ref);
     const next = mutate(normalizeGraphicsSettings(m.graphicsSettings));
     const list = this.history.get(id) ?? [];
-    list.push({ shapes: m.shapes, graphicsSettings: m.graphicsSettings, note });
+    list.push({
+      shapes: m.shapes,
+      graphicsSettings: m.graphicsSettings,
+      terrainModifiers: structuredClone(m.terrainModifiers ?? []),
+      kernel: structuredClone(m.kernel ?? null),
+      note,
+    });
     this.history.set(id, list.slice(-HISTORY_LIMIT));
     m.graphicsSettings = next;
+    m.updatedAt = new Date().toISOString();
+    return { id, name: m.name };
+  }
+
+  async changeTerrainModifiers(caller: Caller, ref: string, note: string, mutate: (modifiers: TerrainModifier[]) => TerrainModifier[]) {
+    const { id, m } = await this.resolve(caller, ref);
+    const next = mutate(structuredClone(m.terrainModifiers ?? []));
+    const list = this.history.get(id) ?? [];
+    list.push({
+      shapes: m.shapes,
+      graphicsSettings: m.graphicsSettings,
+      terrainModifiers: structuredClone(m.terrainModifiers ?? []),
+      kernel: structuredClone(m.kernel ?? null),
+      note,
+    });
+    this.history.set(id, list.slice(-HISTORY_LIMIT));
+    m.terrainModifiers = structuredClone(next);
+    m.updatedAt = new Date().toISOString();
+    return { id, name: m.name };
+  }
+
+  async changeKernel(caller: Caller, ref: string, note: string, mutate: (kernel: unknown | null) => unknown | null) {
+    const { id, m } = await this.resolve(caller, ref);
+    const next = mutate(structuredClone(m.kernel ?? null));
+    const list = this.history.get(id) ?? [];
+    list.push({
+      shapes: m.shapes,
+      graphicsSettings: m.graphicsSettings,
+      terrainModifiers: structuredClone(m.terrainModifiers ?? []),
+      kernel: structuredClone(m.kernel ?? null),
+      note,
+    });
+    this.history.set(id, list.slice(-HISTORY_LIMIT));
+    m.kernel = structuredClone(next);
     m.updatedAt = new Date().toISOString();
     return { id, name: m.name };
   }
@@ -168,12 +226,14 @@ export class MemoryStore implements ModelStore {
     if (!entry) return { id, name: m.name, note: null };
     m.shapes = entry.shapes;
     m.graphicsSettings = entry.graphicsSettings;
+    m.terrainModifiers = structuredClone(entry.terrainModifiers ?? []);
+    m.kernel = structuredClone(entry.kernel ?? null);
     return { id, name: m.name, note: entry.note };
   }
 
   async createModel(caller: Caller, name: string) {
     const id = `m${this.next++}`;
-    this.models.set(id, { name, userId: caller.uid, shapes: [], graphicsSettings: null, updatedAt: new Date().toISOString(), collaborators: [] });
+    this.models.set(id, { name, userId: caller.uid, shapes: [], graphicsSettings: null, terrainModifiers: [], kernel: null, updatedAt: new Date().toISOString(), collaborators: [] });
     return id;
   }
 }
@@ -236,7 +296,10 @@ export class FirestoreStore implements ModelStore {
     if (external) throw external;
     return {
       id: snap.id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: await this.readShapes(data.shapes, this.geometryIO(caller.uid)),
-      graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings), updatedAt: toIso(data.updatedAt),
+      graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings),
+      terrainModifiers: Array.isArray(data.terrainModifiers) ? restoreFirestoreArraysAfterLoad(data.terrainModifiers) as TerrainModifier[] : [],
+      kernel: data.kernel ?? null,
+      updatedAt: toIso(data.updatedAt),
     };
   }
 
@@ -272,7 +335,9 @@ export class FirestoreStore implements ModelStore {
   private recordHistory(caller: Caller, tx: FirebaseFirestore.Transaction, ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData, note: string) {
     const seq = Number.isInteger(data.mcpHistorySeq) ? data.mcpHistorySeq as number : 0;
     tx.set(ref.collection('mcpHistory').doc(`slot${seq % HISTORY_LIMIT}`), {
-      shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null, note, uid: caller.uid, createdAt: Date.now(),
+      shapes: data.shapes ?? [], graphicsSettings: data.graphicsSettings ?? null,
+      terrainModifiers: data.terrainModifiers ?? [], kernel: data.kernel ?? null,
+      note, uid: caller.uid, createdAt: Date.now(),
     });
     return seq + 1;
   }
@@ -309,6 +374,35 @@ export class FirestoreStore implements ModelStore {
     }));
   }
 
+  async changeTerrainModifiers(caller: Caller, ref: string, note: string, mutate: (modifiers: TerrainModifier[]) => TerrainModifier[]) {
+    return this.byRef(caller, ref, id => this.db.runTransaction(async tx => {
+      const doc = this.db.collection('models').doc(id);
+      const data = await this.openForChange(caller, tx, doc);
+      const current = Array.isArray(data.terrainModifiers)
+        ? restoreFirestoreArraysAfterLoad(data.terrainModifiers) as TerrainModifier[]
+        : [];
+      const result = mutate(current);
+      const seq = this.recordHistory(caller, tx, doc, data, note);
+      tx.update(doc, {
+        terrainModifiers: cleanFirestoreDataForSave(result),
+        mcpHistorySeq: seq,
+        updatedAt: this.serverTimestamp(),
+      });
+      return { id, name: String(data.name ?? 'Untitled') };
+    }));
+  }
+
+  async changeKernel(caller: Caller, ref: string, note: string, mutate: (kernel: unknown | null) => unknown | null) {
+    return this.byRef(caller, ref, id => this.db.runTransaction(async tx => {
+      const doc = this.db.collection('models').doc(id);
+      const data = await this.openForChange(caller, tx, doc);
+      const result = mutate(data.kernel ?? null);
+      const seq = this.recordHistory(caller, tx, doc, data, note);
+      tx.update(doc, { kernel: cleanFirestoreDataForSave(result), mcpHistorySeq: seq, updatedAt: this.serverTimestamp() });
+      return { id, name: String(data.name ?? 'Untitled') };
+    }));
+  }
+
   async undo(caller: Caller, ref: string) {
     return this.byRef(caller, ref, id => this.db.runTransaction(async tx => {
       const doc = this.db.collection('models').doc(id);
@@ -318,7 +412,13 @@ export class FirestoreStore implements ModelStore {
       const last = await tx.get(doc.collection('mcpHistory').orderBy('createdAt', 'desc').limit(1));
       if (last.empty) return { id, name, note: null };
       const entry = last.docs[0];
-      tx.update(doc, { shapes: entry.get('shapes') ?? [], graphicsSettings: entry.get('graphicsSettings') ?? null, updatedAt: this.serverTimestamp() });
+      tx.update(doc, {
+        shapes: entry.get('shapes') ?? [],
+        graphicsSettings: entry.get('graphicsSettings') ?? null,
+        terrainModifiers: entry.get('terrainModifiers') ?? [],
+        kernel: entry.get('kernel') ?? null,
+        updatedAt: this.serverTimestamp(),
+      });
       tx.delete(entry.ref);
       return { id, name, note: String(entry.get('note') ?? 'last change') };
     }));
@@ -340,6 +440,8 @@ export class FirestoreStore implements ModelStore {
       notes: [],
       customLights: [],
       graphicsSettings: defaultGraphicsSettings(),
+      terrainModifiers: [],
+      kernel: null,
       assetSchemaVersion: 1,
       updatedAt: this.serverTimestamp(),
       createdAt: this.serverTimestamp(),
