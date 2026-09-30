@@ -129,7 +129,12 @@ export function DeveloperSuite() {
     landscapeSculptSettings,
     setLandscapeSculptSettings,
     landscapeRoadSettings,
-    setLandscapeRoadSettings
+    setLandscapeRoadSettings,
+    terrainModifiers,
+    setTerrainModifiers,
+    civilRoadSettings,
+    civilPadSettings,
+    civilStripingSettings
   } = useApp();
 
   const dragControls = useDragControls();
@@ -263,6 +268,11 @@ export function DeveloperSuite() {
         setLandscapeSculptSettings,
         landscapeRoadSettings,
         setLandscapeRoadSettings,
+        terrainModifiers,
+        setTerrainModifiers,
+        civilRoadSettings,
+        civilPadSettings,
+        civilStripingSettings,
         activeStory,
         setActiveStory,
         setGraphicsSettings,
@@ -300,7 +310,8 @@ export function DeveloperSuite() {
     setNotes, setAllNotesVisible, customToolbars, setCustomToolbars,
     basicToolbarExtensions, setBasicToolbarExtensions,
     landscapeSculptSettings, setLandscapeSculptSettings,
-    landscapeRoadSettings, setLandscapeRoadSettings
+    landscapeRoadSettings, setLandscapeRoadSettings,
+    terrainModifiers, setTerrainModifiers, civilRoadSettings, civilPadSettings, civilStripingSettings
   ]);
 
   useEffect(() => {
