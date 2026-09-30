@@ -197,6 +197,25 @@ describe('expanded SDK tool coverage', () => {
     expect(edited.patioData?.steps).toHaveLength(1);
   });
 
+  it('runs Reconstruction Studio local plan recognition through the SDK', () => {
+    const h = harness();
+    const width = 32;
+    const height = 24;
+    const data = new Uint8ClampedArray(width * height * 4).fill(255);
+    const dark = (x: number, y: number) => {
+      const i = (y * width + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 0;
+      data[i + 3] = 255;
+    };
+    for (let x = 3; x < 29; x++) for (let y = 5; y < 8; y++) dark(x, y);
+    const draft = h.sdk.reconstruction.recogniseOrthogonalPlan(
+      { width, height, data },
+      { metresPerPixel: 0.1, minCoverage: 0.08, minRunPx: 6 },
+    );
+    expect(draft.source.kind).toBe('image');
+    expect(draft.walls.length).toBeGreaterThan(0);
+  });
+
   it('creates Protractor measurements in the same persisted annotation format', () => {
     const h = harness();
     const protractor = h.sdk.measurement.addProtractor({
