@@ -3107,7 +3107,7 @@ export default function RightPanelStack() {
                                 ['birdBreastColor', 'Breast', '#ea580c'],
                                 ['birdBeakColor', 'Beak', '#f59e0b'],
                               ] as const).map(([field, label, fallback]) => (
-                                <label key={field} className="flex flex-col items-center gap-1 text-[8px] text-gray-500">
+                                <label key={field} className="flex flex-col items-center gap-1 text-[8px] text-gray-500 dark:text-gray-400">
                                   {label}
                                   <input
                                     type="color"
@@ -4068,7 +4068,7 @@ export default function RightPanelStack() {
                         </div>
                         {['X', 'Y', 'Z'].map((axis, i) => (
                           <div key={axis} className="space-y-1">
-                            <div className="flex justify-between text-[8px] text-gray-500">
+                            <div className="flex justify-between text-[8px] text-gray-500 dark:text-gray-400">
                               <span>{axis}</span>
                               <span>{light.position[i].toFixed(1)}</span>
                             </div>
@@ -4091,7 +4091,7 @@ export default function RightPanelStack() {
                           <label className="text-[8px] text-gray-400 uppercase font-bold">Target (X, Y, Z)</label>
                           {['X', 'Y', 'Z'].map((axis, i) => (
                             <div key={axis} className="space-y-1">
-                              <div className="flex justify-between text-[8px] text-gray-500">
+                              <div className="flex justify-between text-[8px] text-gray-500 dark:text-gray-400">
                                 <span>{axis}</span>
                                 <span>{(light.target?.[i] || 0).toFixed(1)}</span>
                               </div>
