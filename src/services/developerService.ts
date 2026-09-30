@@ -571,8 +571,10 @@ export interface SDK {
     addFence: (points: [number, number][], options?: FenceOptions) => Shape;
     /** A pond or lake filling an outline of ground points [x, z], as the Water tool makes one. */
     addPond: (points: [number, number][], options?: PondOptions) => Shape;
+    updatePond: (id: string, changes: { depth?: number; clarity?: 'clear' | 'lake' | 'pond' | 'murky'; level?: number; dig?: boolean; flow?: { mode: 'still' | 'stream'; direction?: [number, number]; speed?: number; turbulence?: number } | null; name?: string }) => void;
     /** A patio or deck over an outline of ground points [x, z], as the Patio tool makes one. */
     addPatio: (points: [number, number][], options?: PatioOptions) => Shape;
+    updatePatio: (id: string, changes: { level?: number; name?: string; settings?: Record<string, unknown>; steps?: Array<{ edge: number; t: number; width: number }> }) => void;
   };
 
   // Civil / Terrain Modifier Subsystem
@@ -2008,7 +2010,53 @@ export class DeveloperSDK implements SDK {
 
       addFence: (points, options = {}) => this.placeBuilt(buildFence(this.shapes, points, options)),
       addPond: (points, options = {}) => this.placeBuilt(buildWaterBody(this.shapes, points, options)),
+      updatePond: (id, changes) => {
+        this.setShapes(prev => prev.map(shape => {
+          if (shape.id !== id || shape.type !== 'water' || !shape.waterData) return shape;
+          const flow = changes.flow === null ? undefined : changes.flow === undefined ? shape.waterData.flow : {
+            ...shape.waterData.flow,
+            ...changes.flow,
+            ...(changes.flow.speed !== undefined ? { speed: Math.max(0, changes.flow.speed) } : {}),
+            ...(changes.flow.turbulence !== undefined ? { turbulence: Math.max(0, Math.min(1, changes.flow.turbulence)) } : {}),
+          };
+          return {
+            ...shape,
+            ...(changes.name !== undefined ? { name: changes.name } : {}),
+            ...(changes.level !== undefined ? { position: [shape.position[0], changes.level, shape.position[2]] as [number, number, number] } : {}),
+            waterData: {
+              ...shape.waterData,
+              ...(changes.depth !== undefined ? { depth: Math.max(0.01, changes.depth) } : {}),
+              ...(changes.clarity !== undefined ? { clarity: changes.clarity } : {}),
+              ...(changes.dig !== undefined ? { dig: changes.dig } : {}),
+              flow,
+            },
+          };
+        }));
+      },
       addPatio: (points, options = {}) => this.placeBuilt(buildPatio(this.shapes, points, options)),
+      updatePatio: (id, changes) => {
+        this.setShapes(prev => prev.map(shape => {
+          if (shape.id !== id || shape.type !== 'patio' || !shape.patioData) return shape;
+          const settings = changes.settings ?? {};
+          return {
+            ...shape,
+            ...(changes.name !== undefined ? { name: changes.name } : {}),
+            ...(changes.level !== undefined ? { position: [shape.position[0], changes.level, shape.position[2]] as [number, number, number] } : {}),
+            patioData: {
+              ...shape.patioData,
+              ...settings,
+              ...(changes.steps !== undefined ? {
+                steps: changes.steps.map(step => ({
+                  edge: Math.max(0, Math.floor(step.edge)),
+                  t: Math.max(0, Math.min(1, step.t)),
+                  width: Math.max(0.1, step.width),
+                })),
+              } : {}),
+              ...((settings as any).lights ? { lights: { ...shape.patioData.lights, ...(settings as any).lights } } : {}),
+            },
+          };
+        }));
+      },
     };
 
     // ─────────────────────────────────────────────────────────────
