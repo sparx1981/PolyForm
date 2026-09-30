@@ -323,14 +323,14 @@ export const HOW_IT_WORKS: { n: string; title: string; body: string }[] = [
   { n: '01', title: 'Connect PolyForm to Claude', body: 'Add PolyForm as a custom connector in Claude and sign in with your Google account.' },
   { n: '02', title: 'Ask in plain words', body: 'Describe the building, the garden or the change you want. Claude builds it in your account.' },
   { n: '03', title: 'Check, then open it', body: 'Claude shows a 3D view and a floor plan of every level. Open the model in PolyForm to keep going.' },
-  { n: '04', title: 'Keep going with any change', body: 'Everything PolyForm can do, Claude can ask for: restyle a door or window, reshape the terrain, turn on procedural grass or a wildflower meadow, or change the weather.' },
+  { n: '04', title: 'Keep refining the design', body: 'Use the connector for supported remote workflows: restyle objects, reshape terrain, furnish detected rooms, add flowing water, change the weather, or undo a connector change.' },
 ];
 
 export const CAPABILITY_GROUPS: { icon: LucideIcon; kind: string; text: string; tools: string[] }[] = [
-  { icon: Eye, kind: 'Read', text: 'List your models and inspect what is in them.', tools: ['list_models', 'get_model', 'list_objects', 'get_object', 'list_catalog'] },
+  { icon: Eye, kind: 'Read', text: 'List models, inspect objects and rooms, and check model health.', tools: ['list_models', 'get_model', 'list_objects', 'get_object', 'list_rooms', 'check_model_health', 'list_catalog'] },
   { icon: Camera, kind: 'See', text: 'Take pictures from perspective, plan, front, back, left or right.', tools: ['screenshot'] },
   { icon: LayoutDashboard, kind: 'Preview', text: 'A 3D picture plus a floor plan of each level, with rooms, doors, windows and stairs.', tools: ['preview_model'] },
-  { icon: Hammer, kind: 'Build', text: 'Rooms, walls, openings, roofs, stairs, terrain, planting, fences, ponds and patios.', tools: ['create_model', 'add_room', 'add_wall', 'add_opening', 'add_roof', 'add_stairs', 'add_terrain', 'add_plant', 'add_fence', 'add_pond', 'add_patio'] },
+  { icon: Hammer, kind: 'Build', text: 'Rooms, walls, roofs, terrain, planting, flowing water, patios and collision-aware interiors.', tools: ['create_model', 'add_shape', 'add_room', 'add_wall', 'add_opening', 'add_roof', 'add_stairs', 'add_terrain', 'import_site', 'set_street_life', 'flatten_terrain', 'add_plant', 'add_fence', 'add_pond', 'add_patio', 'add_interior_furniture', 'furnish_room'] },
   { icon: PencilRuler, kind: 'Edit', text: 'Move, restyle, rename and delete objects, change the weather, or step back a change.', tools: ['transform_objects', 'set_appearance', 'set_weather', 'rename_object', 'delete_objects', 'undo_last_change'] },
 ];
 
