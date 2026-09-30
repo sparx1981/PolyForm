@@ -88,16 +88,21 @@ function toMetres(
   observation: ImageReconstructionObservation,
 ): [number, number] {
   if (!finitePoint(point)) throw new Error('Recognition coordinates must be finite.');
-  if (observation.transform.coordinateSpace === 'metres') return point;
 
-  const mpp = observation.transform.metresPerPixel;
-  if (!(mpp && mpp > 0) || !Number.isFinite(mpp)) {
-    throw new Error('Pixel recognition requires a positive metresPerPixel calibration.');
+  let x: number;
+  let z: number;
+  if (observation.transform.coordinateSpace === 'metres') {
+    [x, z] = point;
+  } else {
+    const mpp = observation.transform.metresPerPixel;
+    if (!(mpp && mpp > 0) || !Number.isFinite(mpp)) {
+      throw new Error('Pixel recognition requires a positive metresPerPixel calibration.');
+    }
+    const origin = observation.transform.pixelOrigin
+      ?? (observation.imageSize ? [observation.imageSize[0] / 2, observation.imageSize[1] / 2] as [number, number] : [0, 0]);
+    x = (point[0] - origin[0]) * mpp;
+    z = (point[1] - origin[1]) * mpp;
   }
-  const origin = observation.transform.pixelOrigin
-    ?? (observation.imageSize ? [observation.imageSize[0] / 2, observation.imageSize[1] / 2] as [number, number] : [0, 0]);
-  const x = (point[0] - origin[0]) * mpp;
-  const z = (point[1] - origin[1]) * mpp;
   const a = observation.transform.rotationY ?? 0;
   const c = Math.cos(a), s = Math.sin(a);
   return [x * c + z * s, -x * s + z * c];
