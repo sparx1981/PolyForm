@@ -100,7 +100,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('createDoor', 'sdk.architecture.createDoor({ width?, height?, depth?, position?, rotation?, color?, style?, hostWallId?, name? })', 'Shape', 'Create a styled door/archway assembly. style accepts the same architectural door styles used by the Style Library.'),
       m('createWindow', 'sdk.architecture.createWindow({ width?, height?, depth?, position?, rotation?, color?, style?, hostWallId?, name? })', 'Shape', 'Create a styled window assembly using the Style Library window identifiers.'),
       m('setWallTransparency', 'sdk.architecture.setWallTransparency({ overall?, exterior?, interior? })', 'void', 'Set how see-through walls are.'),
-      m('generateTimberFraming', 'sdk.architecture.generateTimberFraming({ roofId?, spacing?, rafterWidth?, … })', 'Shape[]', 'Generate studs, plates, headers, noggins, rafters and ridges.'),
+      m('generateTimberFraming', 'sdk.architecture.generateTimberFraming({ roofId?, spacing?, memberWidth?, memberDepth?, species?, grade?, includeWalls?, includeFloors?, includeRoof?, color?, … })', 'Shape[]', 'Generate studs, plates, headers, noggins, joists and roof framing with the same Timber Frame parameters as the app. roofId scopes generation to one roof; rafterWidth/rafterDepth remain compatibility aliases for memberWidth/memberDepth.'),
       m('clearTimberFraming', 'sdk.architecture.clearTimberFraming()', 'void', 'Remove all generated timber framing.'),
       m('configureRoofDefaults', 'sdk.architecture.configureRoofDefaults(settings)', 'void', 'Set the defaults new roofs are created with.'),
       m('getRoofDefaults', 'sdk.architecture.getRoofDefaults()', 'RoofConfigDefaults', 'Read the current roof defaults.'),
