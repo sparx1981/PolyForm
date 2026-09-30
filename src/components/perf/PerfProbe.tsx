@@ -89,6 +89,7 @@ export default function PerfProbe() {
   const { gl, scene, camera } = useThree();
   const { perfProfilerEnabled, shadowsEnabled, ambientOcclusionEnabled, godRaysEnabled, edgeLinesEnabled, graphicsSettings, shapes, autoOrbitEnabled } = useApp();
   const settingsRef = useRef<PerfRun['settings']>({});
+  const runSettingsRef = useRef<PerfRun['settings'] | null>(null);
   settingsRef.current = {
     shadows: shadowsEnabled, ambientOcclusion: ambientOcclusionEnabled, godRays: godRaysEnabled, edgeLines: edgeLinesEnabled,
     weather: graphicsSettings.weather.enabled, clouds: graphicsSettings.weather.cloudsMode,
@@ -128,13 +129,18 @@ export default function PerfProbe() {
 
   const finish = (cancel = false) => {
     const b = bench.current;
+    const runSettings: PerfRun['settings'] = { ...(runSettingsRef.current ?? settingsRef.current) };
     if (b) {
+      runSettings.benchmarkRadius = +Math.hypot(b.offset.x, b.offset.z).toFixed(3);
+      runSettings.benchmarkElevation = +b.offset.y.toFixed(3);
+      runSettings.benchmarkTarget = `${b.target.x.toFixed(3)},${b.target.y.toFixed(3)},${b.target.z.toFixed(3)}`;
       const controls = scene.userData.controls as { enabled: boolean; autoRotate: boolean; target: THREE.Vector3; update: () => void } | undefined;
       if (controls) { controls.enabled = b.wasEnabled; controls.autoRotate = b.wasRotating; }
       camera.position.copy(b.target).add(b.offset); camera.lookAt(b.target);
       bench.current = null;
     }
-    perfStore.finish({ device: deviceInfo(gl, !!gpu.current.ext), settings: settingsRef.current, scene: measureSceneCost(gl, scene) }, cancel);
+    perfStore.finish({ device: deviceInfo(gl, !!gpu.current.ext), settings: runSettings, scene: measureSceneCost(gl, scene) }, cancel);
+    runSettingsRef.current = null;
   };
 
   useFrame(() => {
@@ -178,8 +184,11 @@ export default function PerfProbe() {
     }
 
     const phase = perfStore.getState().phase;
-    if (phase.kind === 'idle') { f.t0 = 0; return; }
-    if (!f.t0) f.t0 = now;
+    if (phase.kind === 'idle') { f.t0 = 0; runSettingsRef.current = null; return; }
+    if (!f.t0) {
+      f.t0 = now;
+      runSettingsRef.current = { ...settingsRef.current };
+    }
 
     if (phase.kind === 'benchmark') {
       const elapsed = now - phase.startedAt;
