@@ -7,6 +7,7 @@ import { roofBuilding, type RoofTileLook } from '../lib/buildingRoofs';
 import { buildRoomAssembly } from '../lib/archRoomAssembly';
 import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 import { makeGuideArgs, isGuideShape } from '../tools/tapeGuides';
+import { GUIDE_REACH, type ProtractorArgs } from '../components/ProtractorTool';
 import { withShapeIds } from '../lib/shapeIds';
 import { buildTextShape, editTextShape, type TextOptions } from '../lib/textShapes';
 import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
@@ -648,6 +649,7 @@ export interface SDK {
     addAreaLabel: (faceId: number, anchor?: [number, number, number], position?: [number, number, number]) => Shape | null;
     addLeader: (target: [number, number, number], anchor: [number, number, number], text: string) => Shape;
     addGuide: (point: [number, number, number], direction: [number, number, number], distance?: number, reach?: number) => Shape;
+    addProtractor: (options: { centre: [number, number, number]; base: [number, number, number]; normal?: [number, number, number]; angle: number; radius?: number }) => Shape;
     listGuides: () => Shape[];
     deleteGuides: () => number;
     measureDistance: (p1: [number, number, number], p2: [number, number, number]) => {
@@ -849,6 +851,12 @@ export interface SDK {
     surface: (points: DrawingPoint[]) => number[];
     shape: (points: DrawingPoint[]) => number[];
     bezier: (curve: { knots: BezierKnotInput[]; resolution?: number; normal?: DrawingPoint }) => number[];
+    rectangle: (spec: { centre?: DrawingPoint; width: number; depth: number; normal?: DrawingPoint; rotationDeg?: number }) => number[];
+    circle: (spec: { centre?: DrawingPoint; radius: number; segments?: number; normal?: DrawingPoint }) => number[];
+    polygon: (spec: { centre?: DrawingPoint; radius: number; sides: number; rotationDeg?: number; normal?: DrawingPoint }) => number[];
+    triangle: (spec: { centre?: DrawingPoint; radius: number; rotationDeg?: number; normal?: DrawingPoint }) => number[];
+    pie: (spec: { centre?: DrawingPoint; radius: number; startAngleDeg?: number; sweepDeg: number; segments?: number; normal?: DrawingPoint }) => number[];
+    freehand: (points: DrawingPoint[], closed?: boolean) => number[];
     followMe: (
       profileFaceId: number,
       path: { edgeId: number } | { faceId: number } | { points: DrawingPoint[]; closed?: boolean },
@@ -2388,6 +2396,43 @@ export class DeveloperSDK implements SDK {
         this.setShapes(prev => [...prev, shape]);
         return shape;
       },
+      addProtractor: (options) => {
+        const centre = new THREE.Vector3(...options.centre);
+        const base = new THREE.Vector3(...options.base);
+        const normal = new THREE.Vector3(...(options.normal ?? [0, 1, 0]));
+        if (base.lengthSq() < 1e-12 || normal.lengthSq() < 1e-12) throw new Error('Protractor base and normal must not be zero.');
+        normal.normalize();
+        // Remove any component of the base along the normal so the saved protractor is planar.
+        base.addScaledVector(normal, -base.dot(normal));
+        if (base.lengthSq() < 1e-12) throw new Error('Protractor base must not be parallel to its normal.');
+        base.normalize();
+        const direction = base.clone().applyAxisAngle(normal, THREE.MathUtils.degToRad(options.angle)).normalize();
+        const start = centre.clone().addScaledVector(direction, -GUIDE_REACH);
+        const end = centre.clone().addScaledVector(direction, GUIDE_REACH);
+        const args: ProtractorArgs = {
+          kind: 'protractor',
+          centre: centre.toArray() as [number, number, number],
+          base: base.toArray() as [number, number, number],
+          direction: direction.toArray() as [number, number, number],
+          normal: normal.toArray() as [number, number, number],
+          angle: options.angle,
+          radius: THREE.MathUtils.clamp(options.radius ?? 1.5, 0.3, 3),
+          start: start.toArray() as [number, number, number],
+          end: end.toArray() as [number, number, number],
+          distance: GUIDE_REACH * 2,
+        };
+        const shape: Shape = {
+          id: Math.random().toString(36).slice(2, 11),
+          name: `Angle ${Math.abs(options.angle).toFixed(1)}°`,
+          type: 'measurement',
+          position: options.centre,
+          args,
+          color: '#0ea5e9',
+          tags: ['annotation', 'protractor', 'guide', 'measurement'],
+        };
+        this.setShapes(prev => [...prev, shape]);
+        return shape;
+      },
       listGuides: () => this.shapes.filter(isGuideShape),
       deleteGuides: () => {
         const ids = new Set(this.shapes.filter(isGuideShape).map(shape => shape.id));
@@ -2974,6 +3019,64 @@ export class DeveloperSDK implements SDK {
         changed();
         return r.ok ? r.faces : [];
       },
+      rectangle: (spec) => {
+        const c = toVec(spec.centre ?? [0, 0, 0]);
+        const n = toVec(spec.normal ?? [0, 1, 0]).normalize();
+        const ref = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+        const u = new THREE.Vector3().crossVectors(ref, n).normalize();
+        const v = new THREE.Vector3().crossVectors(n, u).normalize();
+        const rot = THREE.MathUtils.degToRad(spec.rotationDeg ?? 0);
+        u.applyAxisAngle(n, rot); v.applyAxisAngle(n, rot);
+        const hw = Math.max(0.001, spec.width) / 2, hd = Math.max(0.001, spec.depth) / 2;
+        const p = (a: number, b: number): DrawingPoint => {
+          const q = c.clone().addScaledVector(u, a).addScaledVector(v, b);
+          return [q.x, q.y, q.z];
+        };
+        return this.drawing.shape([p(-hw, -hd), p(hw, -hd), p(hw, hd), p(-hw, hd)]);
+      },
+      circle: (spec) => this.drawing.polygon({ ...spec, sides: Math.max(8, Math.floor(spec.segments ?? 32)) }),
+      polygon: (spec) => {
+        const c = toVec(spec.centre ?? [0, 0, 0]);
+        const n = toVec(spec.normal ?? [0, 1, 0]).normalize();
+        const ref = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+        const u = new THREE.Vector3().crossVectors(ref, n).normalize();
+        const v = new THREE.Vector3().crossVectors(n, u).normalize();
+        const sides = Math.max(3, Math.min(1000, Math.floor(spec.sides)));
+        const radius = Math.max(0.001, spec.radius);
+        const phase = THREE.MathUtils.degToRad(spec.rotationDeg ?? 0);
+        const points: DrawingPoint[] = Array.from({ length: sides }, (_, i) => {
+          const a = phase + i * Math.PI * 2 / sides;
+          const q = c.clone().addScaledVector(u, Math.cos(a) * radius).addScaledVector(v, Math.sin(a) * radius);
+          return [q.x, q.y, q.z];
+        });
+        return this.drawing.shape(points);
+      },
+      triangle: (spec) => this.drawing.polygon({ ...spec, sides: 3 }),
+      pie: (spec) => {
+        const c = toVec(spec.centre ?? [0, 0, 0]);
+        const n = toVec(spec.normal ?? [0, 1, 0]).normalize();
+        const ref = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+        const u = new THREE.Vector3().crossVectors(ref, n).normalize();
+        const v = new THREE.Vector3().crossVectors(n, u).normalize();
+        const count = Math.max(2, Math.floor(spec.segments ?? Math.ceil(Math.abs(spec.sweepDeg) / 10)));
+        const start = THREE.MathUtils.degToRad(spec.startAngleDeg ?? 0);
+        const sweep = THREE.MathUtils.degToRad(spec.sweepDeg);
+        const points: DrawingPoint[] = [[c.x, c.y, c.z]];
+        for (let i = 0; i <= count; i++) {
+          const a = start + sweep * i / count;
+          const q = c.clone().addScaledVector(u, Math.cos(a) * spec.radius).addScaledVector(v, Math.sin(a) * spec.radius);
+          points.push([q.x, q.y, q.z]);
+        }
+        return this.drawing.shape(points);
+      },
+      freehand: (points, closed = false) => {
+        if (points.length < 2) return [];
+        if (closed && points.length >= 3) return this.drawing.shape(points);
+        const ids: number[] = [];
+        for (let i = 1; i < points.length; i++) ids.push(...this.drawing.line(points[i - 1]!, points[i]!));
+        return ids;
+      },
+
       followMe: (profileFaceId, pathSpec) => {
         const host = kernel();
         if (!host) return false;
