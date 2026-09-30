@@ -7,7 +7,7 @@ import { roofBuilding, type RoofTileLook } from '../lib/buildingRoofs';
 import { buildRoomAssembly } from '../lib/archRoomAssembly';
 import { createScaleFigureGeometry, SCALE_FIGURE_CHARACTERS } from '../lib/scaleFigureGeometry';
 import { makeGuideArgs, isGuideShape } from '../tools/tapeGuides';
-import { GUIDE_REACH, type ProtractorArgs } from '../components/ProtractorTool';
+import type { ProtractorArgs } from '../components/ProtractorTool';
 import { withShapeIds } from '../lib/shapeIds';
 import { buildTextShape, editTextShape, type TextOptions } from '../lib/textShapes';
 import { buildFence, buildPatio, buildWaterBody, type FenceOptions, type PatioOptions, type PondOptions } from '../lib/siteBuilders';
@@ -2407,8 +2407,8 @@ export class DeveloperSDK implements SDK {
         if (base.lengthSq() < 1e-12) throw new Error('Protractor base must not be parallel to its normal.');
         base.normalize();
         const direction = base.clone().applyAxisAngle(normal, THREE.MathUtils.degToRad(options.angle)).normalize();
-        const start = centre.clone().addScaledVector(direction, -GUIDE_REACH);
-        const end = centre.clone().addScaledVector(direction, GUIDE_REACH);
+        const start = centre.clone().addScaledVector(direction, -40);
+        const end = centre.clone().addScaledVector(direction, 40);
         const args: ProtractorArgs = {
           kind: 'protractor',
           centre: centre.toArray() as [number, number, number],
@@ -2419,7 +2419,7 @@ export class DeveloperSDK implements SDK {
           radius: THREE.MathUtils.clamp(options.radius ?? 1.5, 0.3, 3),
           start: start.toArray() as [number, number, number],
           end: end.toArray() as [number, number, number],
-          distance: GUIDE_REACH * 2,
+          distance: 40 * 2,
         };
         const shape: Shape = {
           id: Math.random().toString(36).slice(2, 11),
