@@ -55,7 +55,7 @@ export function resolvePlacementCandidate(
 
 function axes(footprint: OrientedFootprint): [[number, number], [number, number]] {
   const c = Math.cos(footprint.rotationY), s = Math.sin(footprint.rotationY);
-  return [[c, s], [-s, c]];
+  return [[c, -s], [s, c]];
 }
 
 function corners(footprint: OrientedFootprint): Array<[number, number]> {

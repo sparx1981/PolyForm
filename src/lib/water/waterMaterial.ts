@@ -41,6 +41,7 @@ export interface WaterUniforms {
   uRainTime: { value: number };
   /** Directional current used only for stream-style moving water. */
   uFlowDir: { value: THREE.Vector2 };
+  uFlowOffset: { value: THREE.Vector2 };
   uFlowSpeed: { value: number };
   uFlowTurbulence: { value: number };
   uFlowTime: { value: number };
@@ -55,7 +56,7 @@ export function createWaterUniforms(): WaterUniforms {
     uHeights: { value: null }, uBounds: { value: new THREE.Vector4(0, 0, 1, 1) }, uBaseY: { value: 0 }, uHasTerrain: { value: 0 },
     uReflection: { value: null }, uReflectionMatrix: { value: new THREE.Matrix4() }, uUseReflection: { value: 0 },
     uRain: { value: 0 }, uRainTime: { value: 0 },
-    uFlowDir: { value: new THREE.Vector2(1, 0) }, uFlowSpeed: { value: 0 },
+    uFlowDir: { value: new THREE.Vector2(1, 0) }, uFlowOffset: { value: new THREE.Vector2() }, uFlowSpeed: { value: 0 },
     uFlowTurbulence: { value: 0 }, uFlowTime: { value: 0 },
   };
 }
@@ -66,7 +67,7 @@ uniform mat4 uReflectionMatrix;
 uniform float uUseReflection;
 uniform vec2 uCausShift;
 uniform float uL, uLevel, uFallbackDepth, uLakeWaves, uBaseY, uHasTerrain, uRain, uRainTime;
-uniform vec2 uFlowDir;
+uniform vec2 uFlowDir, uFlowOffset;
 uniform float uFlowSpeed, uFlowTurbulence, uFlowTime;
 uniform vec3 uAbsorb, uScatter, uSunDir;
 uniform vec4 uBounds;
@@ -107,7 +108,7 @@ float gSlopeVariance;
 vec3 waterNormal(vec2 xz, float distanceToEye) {
   const mat2 M = mat2(0.8, -0.6, 0.6, 0.8);
   const mat2 M3 = mat2(0.28, 0.96, -0.96, 0.28);
-  vec2 flow = uFlowDir * uFlowSpeed * uFlowTime;
+  vec2 flow = uFlowOffset;
   vec2 flowFine = flow * (1.25 + 0.35 * uFlowTurbulence);
   vec2 flowSwell = flow * (0.42 + 0.18 * uFlowTurbulence);
   vec4 A = texture(uSurf, (xz - flow) / uL);
@@ -118,8 +119,15 @@ vec3 waterNormal(vec2 xz, float distanceToEye) {
     + 0.6 * uLakeWaves * (transpose(M3) * D.yz);
   if (uFlowSpeed > 0.0) {
     vec2 across = vec2(-uFlowDir.y, uFlowDir.x);
-    float streak = sin(dot(xz, across) * 5.5 + uFlowTime * (3.0 + 4.0 * uFlowSpeed));
-    slope += across * streak * 0.018 * uFlowTurbulence;
+    vec2 advected = xz - flow;
+    float along = dot(advected, uFlowDir);
+    float crossFlow = dot(advected, across);
+    float strength = smoothstep(0.0, 0.8, uFlowSpeed);
+    // Coherent ripples travel in the requested direction, independent of FFT wind waves.
+    slope += uFlowDir * (sin(along * 9.0 + sin(crossFlow * 2.4) * uFlowTurbulence) * 0.085
+      + sin(along * 17.0 + crossFlow * 1.7) * 0.035) * strength;
+    slope += across * sin(crossFlow * 7.0 + sin(along * 4.0 + uFlowTime * 1.6))
+      * 0.14 * uFlowTurbulence * strength;
   }
   if (uRain > 0.0) slope += rainRipples(xz) * uRain * (1.0 - smoothstep(15.0, 45.0, distanceToEye));
   // Sub-pixel slope spread (LEAN mapping): widens distant glints instead of sparkling noise.
@@ -232,7 +240,7 @@ export function createWaterSurfaceMaterial(uniforms: WaterUniforms): THREE.MeshS
       #if NUM_DIR_LIGHTS > 0
       {
         // Caustics: sunlight focused by the waves onto the bed, seen back through the water.
-        vec3 gCaus = texture(uCaus, (gWater.bedXZ - uCausShift) / uL, 1.0).rgb;
+        vec3 gCaus = texture(uCaus, (gWater.bedXZ - uCausShift - uFlowOffset) / uL, 1.0).rgb;
         float gShallow = smoothstep(0.02, 0.25, gWater.depth);
         vec3 gSun = directionalLights[0].color * max(normalize(uSunDir).y, 0.0);
         // Only the focused light above the average is added (the bed is already lit by the sun);
@@ -262,6 +270,6 @@ export function createWaterSurfaceMaterial(uniforms: WaterUniforms): THREE.MeshS
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-water-surface-v4';
+  material.customProgramCacheKey = () => 'polyform-water-surface-v5';
   return material;
 }

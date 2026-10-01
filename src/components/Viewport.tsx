@@ -24,6 +24,7 @@ import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
 import { groundUnderRay } from '../lib/terrain/groundRay';
 import { GlassWeatherDriver, WetGlassMaterial, useGlassWeather } from './graphics/WetGlass';
+import { CurtainMesh } from './interiors/CurtainMesh';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
 import { PatioMesh } from './landscape/PatioMesh';
@@ -12078,6 +12079,10 @@ function Scene() {
               )}
             </React.Fragment>
           );
+        }
+
+        if (shape.customData?.furnitureType === 'curtain' && shape.geometryData?.positions) {
+          return <CurtainMesh key={shape.id} shape={shape} meshProps={meshProps} selectionHighlight={selectionHighlight} />;
         }
 
         if (shape.type === 'water' && shape.waterData) {

@@ -15,9 +15,9 @@ const PRESETS: Array<{
   description: string;
   icon: React.ReactNode;
 }> = [
-  { id: 'bedroom', label: 'Bedroom', description: 'Bed and storage arranged against suitable walls.', icon: <BedDouble size={17} /> },
-  { id: 'living-room', label: 'Living room', description: 'Sofa and cabinet with functional clearances.', icon: <Sofa size={17} /> },
-  { id: 'soft-furnishings', label: 'Soft furnishings', description: 'Sofa plus draped curtains, with optional baked soft-body/cloth settling.', icon: <Sparkles size={17} /> },
+  { id: 'bedroom', label: 'Bedroom', description: 'Bed, paired bedside tables, wardrobe, console and a reading chair.', icon: <BedDouble size={17} /> },
+  { id: 'living-room', label: 'Living room', description: 'Sofa, coffee table, lounge chairs and supporting storage.', icon: <Sofa size={17} /> },
+  { id: 'soft-furnishings', label: 'Soft furnishings', description: 'Upholstered seating and draped curtains fitted inside real windows.', icon: <Sparkles size={17} /> },
   { id: 'storage', label: 'Storage', description: 'Three cabinets distributed around available walls.', icon: <Box size={17} /> },
   { id: 'minimal', label: 'Minimal', description: 'One sofa placed conservatively.', icon: <Armchair size={17} /> },
 ];
@@ -98,7 +98,7 @@ export default function InteriorStudio() {
               <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Armchair size={18} className="text-polyform-blue" /> Interior Studio
               </h2>
-              <p className="text-xs text-gray-500 mt-0.5">Collision-aware room furnishing with native furniture, curtains and optional soft-body/cloth settling.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Complete room arrangements with access space, upholstered furniture and window-fitted curtains.</p>
             </div>
             <button onClick={() => setOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close">
               <X size={18} />

@@ -3,8 +3,8 @@ import { createInteriorFurnitureGeometry, createInteriorFurnitureShape, interior
 import { billOfMaterials } from '../presentation/bom';
 
 describe('parametric interior furniture', () => {
-  it('ships the first four native interior definitions', () => {
-    expect(interiorFurnitureCatalog().map(x => x.type)).toEqual(['bed', 'sofa', 'cabinet', 'curtain']);
+  it('ships primary furniture and supporting room pieces', () => {
+    expect(interiorFurnitureCatalog().map(x => x.type)).toEqual(['bed', 'sofa', 'cabinet', 'curtain', 'nightstand', 'coffee-table', 'armchair', 'console']);
   });
 
   it('generates furniture at requested dimensions', () => {
@@ -45,4 +45,14 @@ describe('parametric interior furniture', () => {
     expect(cabinet.customData.semanticComponent.params.width).toBe(1.5);
     expect(cabinet.customData.semanticComponent.placement.preferredHost).toBe('wall');
   });
+  it('builds every catalog piece with finite geometry and normals', () => {
+    for (const entry of interiorFurnitureCatalog()) {
+      const g = createInteriorFurnitureGeometry(entry.type);
+      expect(g.getAttribute('position').count).toBeGreaterThan(30);
+      expect(Array.from(g.getAttribute('position').array).every(Number.isFinite)).toBe(true);
+      expect(g.getAttribute('normal').count).toBe(g.getAttribute('position').count);
+      g.dispose();
+    }
+  });
+
 });

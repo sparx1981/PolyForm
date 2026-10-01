@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { Shape } from '../../types';
 import type { ComponentDefinition, PlacementProfile, SimulationProfile } from '../semantics/componentTypes';
 
-export type InteriorFurnitureType = 'bed' | 'sofa' | 'cabinet' | 'curtain';
+export type InteriorFurnitureType = 'bed' | 'sofa' | 'cabinet' | 'curtain' | 'nightstand' | 'coffee-table' | 'armchair' | 'console';
 
 export interface FurnitureParams {
   width?: number;
@@ -27,7 +28,7 @@ export interface InteriorFurnitureOptions {
   roomId?: string;
 }
 
-const profiles: Record<InteriorFurnitureType, {
+const profiles: Record<string, {
   definition: ComponentDefinition<Record<string, unknown>>;
   defaults: Required<FurnitureParams>;
   color: string;
@@ -85,6 +86,29 @@ const profiles: Record<InteriorFurnitureType, {
   },
 };
 
+// Supporting pieces complete a room without filling every wall with wardrobes.
+for (const [type, name, width, height, depth] of [
+  ['nightstand', 'Bedside table', 0.48, 0.52, 0.42],
+  ['coffee-table', 'Coffee table', 1.05, 0.38, 0.55],
+  ['armchair', 'Lounge chair', 0.86, 0.86, 0.84],
+  ['console', 'Low console', 1.5, 0.65, 0.4],
+] as const) {
+  profiles[type] = {
+    definition: { ...profiles[type === 'armchair' ? 'sofa' : 'cabinet'].definition,
+      id: `polyform:interior/${type}`, name,
+      placement: { hosts: ['floor', 'wall'], preferredHost: type === 'coffee-table' ? 'floor' : 'wall',
+        clearanceM: { front: type === 'armchair' ? 0.55 : 0.25 } },
+      bom: { group: 'Fixtures & furniture', item: name, unit: 'no.' } },
+    defaults: { ...profiles[type === 'armchair' ? 'sofa' : 'cabinet'].defaults, width, height, depth },
+    color: type === 'armchair' ? '#b8a18b' : '#a98968',
+  };
+}
+function padded(width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
+  const g = new RoundedBoxGeometry(width, height, depth, 3, Math.min(0.065, height / 4, depth / 4));
+  g.translate(x, y, z);
+  return g;
+}
+
 function box(width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(Math.max(0.01, width), Math.max(0.01, height), Math.max(0.01, depth));
   g.translate(x, y, z);
@@ -92,7 +116,9 @@ function box(width: number, height: number, depth: number, x: number, y: number,
 }
 
 function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const result = mergeGeometries(parts, false);
+  const flat = parts.map(part => part.index ? part.toNonIndexed() : part);
+  const result = mergeGeometries(flat, false);
+  for (const part of flat) if (!parts.includes(part)) part.dispose();
   for (const part of parts) part.dispose();
   if (!result) throw new Error('Could not merge furniture geometry');
   result.computeVertexNormals();
@@ -106,9 +132,12 @@ function bedGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
   const leg = 0.08;
   const parts: THREE.BufferGeometry[] = [
     box(p.width, frameH, p.depth, 0, frameH / 2, 0),
-    box(p.width * 0.96, p.mattressHeight, p.depth * 0.94, 0, frameH + p.mattressHeight / 2, 0),
+    padded(p.width * 0.96, p.mattressHeight, p.depth * 0.94, 0, frameH + p.mattressHeight / 2, 0),
     box(p.width, p.headboardHeight, 0.1, 0, p.headboardHeight / 2, -p.depth / 2 + 0.05),
   ];
+  parts.push(padded(p.width * 0.97, 0.12, p.depth * 0.65, 0, p.height + 0.025, p.depth * 0.14));
+  for (const x of [-p.width * 0.24, p.width * 0.24])
+    parts.push(padded(p.width * 0.42, 0.16, 0.42, x, p.height + 0.08, -p.depth * 0.3));
   const lx = p.width / 2 - leg / 2, lz = p.depth / 2 - leg / 2;
   for (const x of [-lx, lx]) for (const z of [-lz, lz]) parts.push(box(leg, 0.12, leg, x, 0.06, z));
   return merge(parts);
@@ -120,17 +149,17 @@ function sofaGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
   const cushionH = 0.16;
   const backH = Math.max(0.3, p.height - p.seatHeight);
   const parts: THREE.BufferGeometry[] = [
-    box(p.width, 0.18, p.depth * 0.78, 0, p.seatHeight - 0.09, 0.06),
-    box(p.width - arm * 2.2, cushionH, seatDepth, 0, p.seatHeight + cushionH / 2, 0.08),
-    box(p.width, backH, 0.18, 0, p.seatHeight + backH / 2, -p.depth / 2 + 0.09),
-    box(arm, p.height * 0.62, p.depth, -p.width / 2 + arm / 2, p.height * 0.31, 0),
-    box(arm, p.height * 0.62, p.depth, p.width / 2 - arm / 2, p.height * 0.31, 0),
+    padded(p.width, 0.18, p.depth * 0.78, 0, p.seatHeight - 0.09, 0.06),
+    padded(p.width, backH, 0.18, 0, p.seatHeight + backH / 2, -p.depth / 2 + 0.09),
+    padded(arm, p.height * 0.62, p.depth, -p.width / 2 + arm / 2, p.height * 0.31, 0),
+    padded(arm, p.height * 0.62, p.depth, p.width / 2 - arm / 2, p.height * 0.31, 0),
   ];
-  const cushionCount = Math.max(2, Math.round(p.width / 0.72));
+  const cushionCount = Math.max(1, Math.round(p.width / 0.72));
   const cushionW = (p.width - arm * 2.5) / cushionCount;
   for (let i = 0; i < cushionCount; i++) {
     const x = -p.width / 2 + arm * 1.25 + cushionW * (i + 0.5);
-    parts.push(box(cushionW * 0.94, backH * 0.58, 0.14, x, p.seatHeight + cushionH + backH * 0.29, -p.depth / 2 + 0.2));
+    parts.push(padded(cushionW * 0.96, cushionH, seatDepth, x, p.seatHeight + cushionH / 2, 0.08));
+    parts.push(padded(cushionW * 0.94, backH * 0.58, 0.14, x, p.seatHeight + cushionH + backH * 0.29, -p.depth / 2 + 0.2));
   }
   return merge(parts);
 }
@@ -142,6 +171,7 @@ function cabinetGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
     box(t, p.height, p.depth, p.width / 2 - t / 2, p.height / 2, 0),
     box(p.width - t * 2, t, p.depth, 0, t / 2, 0),
     box(p.width - t * 2, t, p.depth, 0, p.height - t / 2, 0),
+    box(p.width - t * 2, p.height - t * 2, t, 0, p.height / 2, -p.depth / 2 + t / 2),
     box(p.width - t * 2, t, p.depth * 0.92, 0, p.height * 0.52, 0),
   ];
   const doors = Math.max(1, Math.min(6, Math.round(p.doorCount)));
@@ -155,8 +185,8 @@ function cabinetGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
 }
 
 function drapedPanel(width: number, height: number, foldDepth: number, xOffset: number, folds: number): THREE.BufferGeometry {
-  const segX = Math.max(12, Math.round(folds * 6));
-  const segY = 12;
+  const segX = Math.max(48, Math.round(folds * 12));
+  const segY = 28;
   const g = new THREE.PlaneGeometry(width, height, segX, segY);
   const pos = g.getAttribute('position') as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
@@ -207,8 +237,12 @@ export function createInteriorFurnitureGeometry(type: InteriorFurnitureType, par
   const p = { ...profiles[type].defaults, ...params };
   switch (type) {
     case 'bed': return bedGeometry(p);
-    case 'sofa': return sofaGeometry(p);
-    case 'cabinet': return cabinetGeometry(p);
+    case 'sofa':
+    case 'armchair': return sofaGeometry(p);
+    case 'cabinet':
+    case 'nightstand':
+    case 'console': return cabinetGeometry(p);
+    case 'coffee-table': return merge([padded(p.width, 0.065, p.depth, 0, p.height - 0.0325, 0), ...[-1, 1].flatMap(x => [-1, 1].map(z => box(0.045, p.height - 0.065, 0.045, x * (p.width / 2 - 0.1), (p.height - 0.065) / 2, z * (p.depth / 2 - 0.1))))]);
     case 'curtain': return curtainGeometry(p);
   }
 }

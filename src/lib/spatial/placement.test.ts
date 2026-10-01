@@ -29,7 +29,8 @@ describe('semantic placement engine', () => {
     const a = { center: [0, 0] as [number, number], halfSize: [1, 0.25] as [number, number], rotationY: Math.PI / 4 };
     const b = { center: [1.1, 1.1] as [number, number], halfSize: [0.3, 0.3] as [number, number], rotationY: 0 };
     expect(footprintsOverlap(a, b)).toBe(false);
-    expect(footprintsOverlap(a, { ...b, center: [0.55, 0.55] })).toBe(true);
+    expect(footprintsOverlap(a, { ...b, center: [0.55, 0.55] })).toBe(false);
+    expect(footprintsOverlap(a, { ...b, center: [0.55, -0.55] })).toBe(true);
   });
 
   it('distinguishes functional-clearance collisions from visible intersections', () => {

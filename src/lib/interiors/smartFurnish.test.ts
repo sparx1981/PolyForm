@@ -26,7 +26,8 @@ describe('smart room furnishing', () => {
     const plan = planRoomFurnishing(shapes, room, 'bedroom');
     expect(plan.shapes.some(shape => shape.customData?.furnitureType === 'bed')).toBe(true);
     expect(plan.shapes.every(shape => shape.customData?.semanticComponent?.roomId === room.id)).toBe(true);
-    expect(plan.unplaced.length).toBeLessThan(3);
+    expect(plan.shapes.length).toBeGreaterThanOrEqual(5);
+    expect(plan.shapes.filter(s => s.customData.furnitureType === 'nightstand')).toHaveLength(2);
   });
 
   it('exposes a soft-furnishings preset with soft-body and cloth geometry', () => {
@@ -35,6 +36,7 @@ describe('smart room furnishing', () => {
     // into the smaller collision/clearance fixture used by other tests.
     const shapes: Shape[] = [
       wall('north', 0, -5, 10),
+      { id: 'window', type: 'window', hostWallId: 'north', position: [0, 1.5, -5], args: [1.8, 1.3, 0.2], color: '#fff' },
       wall('south', 0, 5, 10),
       wall('west', -5, 0, 10, Math.PI / 2),
       wall('east', 5, 0, 10, Math.PI / 2),
@@ -62,7 +64,12 @@ describe('smart room furnishing', () => {
     const plan = planRoomFurnishing(shapes, room, 'soft-furnishings');
     expect(plan.unplaced).not.toContain('sofa');
     expect(plan.unplaced).not.toContain('curtain');
-    expect(plan.shapes.map(shape => shape.customData?.furnitureType).sort()).toEqual(['curtain', 'sofa']);
+    expect(plan.shapes.some(shape => shape.customData?.furnitureType === 'curtain')).toBe(false);
+    for (const shape of plan.shapes.filter(s => s.customData.furnitureType === 'sofa')) {
+      const yaw = shape.rotation![1];
+      const toCentre = [-shape.position[0], -shape.position[2]];
+      expect(Math.sin(yaw)*toCentre[0] + Math.cos(yaw)*toCentre[1]).toBeGreaterThan(0);
+    }
   });
 
   it('reserves access space around a hosted door', () => {
@@ -98,6 +105,34 @@ describe('smart room furnishing', () => {
     };
     const plan = planRoomFurnishing([...shapes, blocker], room, 'bedroom');
     expect(plan.shapes).toHaveLength(0);
-    expect(plan.unplaced).toHaveLength(3);
+    expect(plan.unplaced).toHaveLength(6);
   });
+  it('fits curtains inside reversed window walls and avoids duplicate treatments', () => {
+    const shapes = roomShapes();
+    shapes[0].rotation = [0, Math.PI, 0];
+    shapes.push({ id: 'window', type: 'window', hostWallId: 'north', position: [0, 1.5, -3], args: [1.8, 1.3, 0.2], color: '#fff' });
+    const room = detectRooms(shapes, { cell: 0.1 })[0];
+    const first = planRoomFurnishing(shapes, room, 'bedroom');
+    const curtains = first.shapes.filter(s => s.customData.furnitureType === 'curtain');
+    expect(curtains).toHaveLength(1);
+    expect(curtains[0].position[2]).toBeGreaterThan(-2.9);
+    expect(Math.cos(curtains[0].rotation![1])).toBeCloseTo(1);
+    expect(curtains[0].customData.windowId).toBe('window');
+    const second = planRoomFurnishing([...shapes, ...first.shapes], room, 'bedroom');
+    expect(second.shapes.filter(s => s.customData.furnitureType === 'curtain')).toHaveLength(0);
+  });
+
+  it('keeps the entire furniture footprint within the room', () => {
+    const shapes = roomShapes();
+    const room = detectRooms(shapes, { cell: 0.1 })[0];
+    for (const s of planRoomFurnishing(shapes, room, 'living-room').shapes) {
+      const p = s.customData.semanticComponent.params;
+      const yaw = s.rotation![1];
+      for (const x of [-p.width/2, p.width/2]) for (const z of [-p.depth/2, p.depth/2]) {
+        expect(Math.abs(s.position[0] + Math.cos(yaw)*x + Math.sin(yaw)*z)).toBeLessThan(2.91);
+        expect(Math.abs(s.position[2] - Math.sin(yaw)*x + Math.cos(yaw)*z)).toBeLessThan(2.91);
+      }
+    }
+  });
+
 });

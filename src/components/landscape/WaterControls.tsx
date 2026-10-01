@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../AppContext';
 import { WATER_CLARITY, type WaterClarity, type WaterFlowProfile } from '../../lib/water/waterBody';
 import { cn } from '../../lib/utils';
@@ -10,6 +10,8 @@ import { cn } from '../../lib/utils';
 export function WaterControls() {
   const { waterToolSettings, setWaterToolSettings, shapes, setShapes, selectedId } = useApp();
   const selected = shapes.find(shape => shape.id === selectedId && shape.type === 'water' && shape.waterData);
+  const [levelRange, setLevelRange] = useState({ id: selected?.id, centre: selected?.position[1] ?? 0 });
+  if (levelRange.id !== selected?.id) setLevelRange({ id: selected?.id, centre: selected?.position[1] ?? 0 });
   const depth = selected?.waterData?.depth ?? waterToolSettings.depth;
   const clarity = selected?.waterData?.clarity ?? waterToolSettings.clarity;
   const flow = selected?.waterData?.flow ?? { mode: 'still' as const };
@@ -21,7 +23,7 @@ export function WaterControls() {
       setShapes(prev => prev.map(shape => shape.id !== selected.id ? shape : {
         ...shape,
         position: level === undefined ? shape.position : [shape.position[0], level, shape.position[2]],
-        waterData: { ...selected.waterData!, ...toolPatch, ...(dig === undefined ? {} : { dig }), ...(flowPatch === undefined ? {} : { flow: flowPatch }) },
+        waterData: { ...shape.waterData!, ...toolPatch, ...(dig === undefined ? {} : { dig }), ...(flowPatch === undefined ? {} : { flow: flowPatch }) },
       }));
     }
   };
@@ -60,7 +62,7 @@ export function WaterControls() {
               <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Water level</label>
               <span className="text-[10px] font-mono text-polyform-blue">{selected.position[1].toFixed(2)} m</span>
             </div>
-            <input type="range" className="w-full" min={selected.position[1] - 2} max={selected.position[1] + 2} step={0.05}
+            <input type="range" className="w-full" aria-label="Water level" min={levelRange.centre - 2} max={levelRange.centre + 2} step={0.05}
               value={selected.position[1]} onChange={event => update({ level: parseFloat(event.target.value) })} />
           </div>
           <label className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-300">

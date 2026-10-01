@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import type { Shape } from '../types';
 import { useApp } from '../AppContext';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
+import { advanceWaterFlow } from '../lib/water/waterMotion';
 import { WaterSim } from '../lib/water/waterSim';
 import { WaterReflection } from '../lib/water/waterReflection';
 import { WATER_CLARITY, deepestPoint, offsetOutline, waterMargin, waterWorldOutline } from '../lib/water/waterBody';
@@ -86,6 +87,7 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
       const [fx, fz] = flow.direction ?? [1, 0];
       const length = Math.hypot(fx, fz) || 1;
       uniforms.uFlowDir.value.set(fx / length, fz / length);
+      if (fx === 0 && fz === 0) uniforms.uFlowDir.value.set(1, 0);
       uniforms.uFlowSpeed.value = THREE.MathUtils.clamp(flow.speed ?? 0.45, 0, 4);
       uniforms.uFlowTurbulence.value = THREE.MathUtils.clamp(flow.turbulence ?? 0.35, 0, 1);
     } else {
@@ -129,7 +131,7 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
   useFrame(({ gl, scene, clock, camera }, delta) => {
     uniforms.uRain.value = rain;
     if (rain > 0) uniforms.uRainTime.value += delta;
-    if (uniforms.uFlowSpeed.value > 0) uniforms.uFlowTime.value += delta;
+    advanceWaterFlow(uniforms, delta);
     if (!sharedSim) return;
     const frame = gl.info.render.frame;
     if (clock.elapsedTime - lastSunLookup > 1) { findSun(scene, sunDirection); lastSunLookup = clock.elapsedTime; }

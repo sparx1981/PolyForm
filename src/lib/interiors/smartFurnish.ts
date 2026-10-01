@@ -8,6 +8,7 @@ import {
 import type { SpatialRoom } from '../spatial/rooms';
 import {
   placementCollisions,
+  clearanceFootprint,
   wallPlacementCandidate,
   type OrientedFootprint,
 } from '../spatial/placement';
@@ -22,15 +23,20 @@ export interface FurnishingPlan {
 }
 
 const PRESETS: Record<FurnishingPreset, InteriorFurnitureType[]> = {
-  bedroom: ['bed', 'cabinet', 'cabinet'],
-  'living-room': ['sofa', 'cabinet'],
-  'soft-furnishings': ['sofa', 'curtain'],
+  bedroom: ['bed', 'nightstand', 'nightstand', 'cabinet', 'console', 'armchair'],
+  'living-room': ['sofa', 'coffee-table', 'armchair', 'armchair', 'console', 'nightstand'],
+  'soft-furnishings': ['sofa', 'armchair', 'armchair', 'coffee-table'],
   storage: ['cabinet', 'cabinet', 'cabinet'],
   minimal: ['sofa'],
 };
 
 function rotationY(shape: Shape): number {
-  return shape.rotation?.[1] ?? 0;
+  if (shape.rotation) return shape.rotation[1] ?? 0;
+  if (shape.quaternion) {
+    const [x, y, z, w] = shape.quaternion;
+    return Math.atan2(2 * (w*y + x*z), 1 - 2 * (y*y + z*z));
+  }
+  return 0;
 }
 
 function pointInPolygon(point: [number, number], polygon: Array<[number, number]>): boolean {
@@ -111,105 +117,90 @@ function candidateFootprint(
   };
 }
 
-function candidateTs(count: number): number[] {
-  if (count <= 1) return [0];
-  return [-0.3, 0.3, 0, -0.15, 0.15];
+
+/** Validate the complete footprint and access zone, including concave room boundaries. */
+function fitsRoom(f: OrientedFootprint, room: SpatialRoom): boolean {
+  if (room.boundary.length < 3) return false;
+  const c = Math.cos(f.rotationY), s = Math.sin(f.rotationY);
+  for (let ix = 0; ix <= 16; ix++) {
+    const x = f.halfSize[0] * (ix / 8 - 1);
+    for (let iz = 0; iz <= 16; iz++) {
+      const z = f.halfSize[1] * (iz / 8 - 1);
+      if (!pointInPolygonOrNear([f.center[0] + c*x + s*z, f.center[1] - s*x + c*z], room.boundary, 0.04)) return false;
+    }
+  }
+  return true;
 }
 
-export function planRoomFurnishing(
-  allShapes: readonly Shape[],
-  room: SpatialRoom,
-  preset: FurnishingPreset,
-): FurnishingPlan {
-  const walls = room.boundaryWallIds
-    .map(id => allShapes.find(shape => shape.id === id))
-    .filter((shape): shape is Shape => Boolean(shape && shape.type === 'wall'))
-    .sort((a, b) => (Array.isArray(b.args) ? Number(b.args[0]) : 0) - (Array.isArray(a.args) ? Number(a.args[0]) : 0));
+export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoom, preset: FurnishingPreset): FurnishingPlan {
+  const walls = allShapes.filter(s => room.boundaryWallIds.includes(s.id) && s.type === 'wall' && !s.hidden)
+    .sort((a,b) => Number(b.args?.[0]) - Number(a.args?.[0]));
+  const obstacles = allShapes.filter(s => !s.hidden && Math.abs(s.position[1] - room.elevation) < 2.8)
+    .flatMap(s => { const f = semanticFootprint(s) ?? openingFootprint(s); return f ? [clearanceFootprint(f, s.customData?.semanticComponent?.placement?.clearanceM)] : []; });
+  const planned: Shape[] = [], unplaced: InteriorFurnitureType[] = [];
+  const add = (shape: Shape, ignoreId?: string) => {
+    const f = semanticFootprint(shape)!;
+    const profile = interiorFurnitureDefinition(shape.customData.furnitureType).placement;
+    if (!fitsRoom(clearanceFootprint(f, profile.clearanceM), room)
+      || placementCollisions(f, obstacles.filter(o => o.id !== ignoreId), profile).length) return false;
+    planned.push(shape);
+    obstacles.push(clearanceFootprint(f, profile.clearanceM));
+    return true;
+  };
 
-  const obstacles: OrientedFootprint[] = allShapes
-    .filter(shape => !shape.hidden)
-    .flatMap(shape => {
-      const semantic = semanticFootprint(shape);
-      if (semantic) return [semantic];
-      const opening = openingFootprint(shape);
-      return opening ? [opening] : [];
-    });
-
-  const planned: Shape[] = [];
-  const unplaced: InteriorFurnitureType[] = [];
-  const types = PRESETS[preset];
-
-  for (const type of types) {
-    const defaults = furnitureDefaults(type);
-    const profile = interiorFurnitureDefinition(type).placement;
-    let placed: Shape | null = null;
-
-    for (const wall of walls) {
-      for (const t of candidateTs(types.length)) {
-        const candidate = wallPlacementCandidate(wall, t, defaults.depth);
-        if (!candidate) continue;
-
-        // A wall's local +Z is not guaranteed to face the room. Imported walls, rooms drawn in
-        // the opposite winding direction and older models may legitimately point the other way.
-        // The placement helper gives one face; try its mirror across the wall centreline too and
-        // let the room-boundary/collision checks choose the valid side. This keeps furnishing
-        // independent of wall orientation instead of silently losing wall-hosted items.
-        const dx = candidate.position[0] - wall.position[0];
-        const dz = candidate.position[2] - wall.position[2];
-        const angle = candidate.rotationY ?? 0;
-        const nx = Math.sin(angle), nz = Math.cos(angle);
-        const normalOffset = dx * nx + dz * nz;
-        const candidatePositions: [number, number, number][] = [
-          [candidate.position[0], room.elevation, candidate.position[2]],
-          [
-            candidate.position[0] - 2 * normalOffset * nx,
-            room.elevation,
-            candidate.position[2] - 2 * normalOffset * nz,
-          ],
-        ];
-
-        for (const position of candidatePositions) {
-          const yaw = candidate.rotationY ?? 0;
-          const footprint = candidateFootprint(type, position, yaw);
-          // Room detection is raster-derived, so its hull can sit a few centimetres inside the
-          // actual wall face. Treat a centre very close to that hull as inside; this matters for
-          // shallow wall-hosted objects such as curtains while still rejecting the mirrored
-          // candidate on the outside face.
-          if (room.boundary.length >= 3 && !pointInPolygonOrNear(footprint.center, room.boundary)) continue;
-          if (placementCollisions(footprint, obstacles, profile).length > 0) continue;
-
-          placed = createInteriorFurnitureShape(type, {
-            position,
-            rotationY: yaw,
-            roomId: room.id,
-          });
-          const placedFootprint = semanticFootprint(placed);
-          if (placedFootprint) obstacles.push(placedFootprint);
-          planned.push(placed);
-          break;
-        }
-        if (placed) break;
-      }
-      if (placed) break;
+  // Each actual window receives its own treatment, on the room-facing side only.
+  if (preset !== 'storage' && preset !== 'minimal') for (const window of allShapes.filter(s => s.type === 'window' && !s.hidden && room.openingIds.includes(s.id))) {
+    if (allShapes.some(s => !s.hidden && s.customData?.windowId === window.id && s.customData?.semanticComponent?.roomId === room.id)) continue;
+    const wall = walls.find(w => w.id === window.hostWallId);
+    if (!wall || !Array.isArray(window.args)) continue;
+    const angle = rotationY(wall), nx = Math.sin(angle), nz = Math.cos(angle);
+    const width = Number(window.args[0]) + 0.32;
+    const top = window.position[1] + Number(window.args[1]) / 2 + 0.15;
+    const height = top - room.elevation - 0.025;
+    if (!(height > 0.3 && height < 6)) continue;
+    const offset = Number(wall.args?.[2] ?? 0.2) / 2 + 0.15;
+    let dressed = false;
+    for (const side of [1, -1]) {
+      const curtain = createInteriorFurnitureShape('curtain', {
+        position: [window.position[0] + nx*offset*side, room.elevation + 0.025, window.position[2] + nz*offset*side],
+        rotationY: angle + (side < 0 ? Math.PI : 0), roomId: room.id,
+        params: { width, height, openAmount: 0.65, depth: 0.18 },
+      });
+      curtain.customData.windowId = window.id;
+      if (add(curtain, window.id)) { dressed = true; break; }
     }
-
-    if (!placed) {
-      // Centre fallback is only used for floor-hostable furniture and still
-      // respects collision/clearance rules.
-      if (profile.hosts.includes('floor') || profile.hosts.includes('room')) {
-        const position: [number, number, number] = [room.at[0], room.elevation, room.at[1]];
-        const footprint = candidateFootprint(type, position, 0);
-        if (placementCollisions(footprint, obstacles, profile).length === 0) {
-          placed = createInteriorFurnitureShape(type, { position, roomId: room.id });
-          const placedFootprint = semanticFootprint(placed);
-          if (placedFootprint) obstacles.push(placedFootprint);
-          planned.push(placed);
-        }
-      }
-    }
-
-    if (!placed) unplaced.push(type);
+    if (!dressed) unplaced.push('curtain');
   }
 
+  for (const type of PRESETS[preset]) {
+    const defaults = furnitureDefaults(type);
+    const candidates: Array<{ position: [number, number, number]; yaw: number }> = [];
+    const anchor = planned.find(s => s.customData.furnitureType === (type === 'nightstand' && preset === 'bedroom' ? 'bed' : 'sofa'));
+    if (anchor && (type === 'nightstand' || type === 'coffee-table' || type === 'armchair')) {
+      const yaw = rotationY(anchor), c = Math.cos(yaw), s = Math.sin(yaw);
+      const local = type === 'coffee-table' ? [[0, 1.48]] : type === 'nightstand' ? [[-1.13, -0.7], [1.13, -0.7]] : [[-1.8, 1.4], [1.8, 1.4]];
+      for (const [x,z] of local) candidates.push({ position: [anchor.position[0]+c*x+s*z, room.elevation, anchor.position[2]-s*x+c*z], yaw: yaw + (type === 'armchair' ? Math.PI : 0) });
+    }
+    if (type !== 'coffee-table') for (const wall of walls) {
+      for (const t of [0, -0.25, 0.25, -0.38, 0.38, -0.12, 0.12]) {
+        const candidate = wallPlacementCandidate(wall, t, defaults.depth + 0.06);
+        if (!candidate) continue;
+        const angle = candidate.rotationY ?? 0, nx = Math.sin(angle), nz = Math.cos(angle);
+        const offset = (candidate.position[0]-wall.position[0])*nx + (candidate.position[2]-wall.position[2])*nz;
+        for (const side of [1, -1]) candidates.push({
+          position: [candidate.position[0] - (side === -1 ? 2*offset*nx : 0), room.elevation, candidate.position[2] - (side === -1 ? 2*offset*nz : 0)],
+          yaw: angle + (side === -1 ? Math.PI : 0),
+        });
+      }
+    }
+    let placed = false;
+    for (const candidate of candidates) {
+      const footprint = candidateFootprint(type, candidate.position, candidate.yaw);
+      const profile = interiorFurnitureDefinition(type).placement;
+      if (!fitsRoom(clearanceFootprint(footprint, profile.clearanceM), room) || placementCollisions(footprint, obstacles, profile).length) continue;
+      if (add(createInteriorFurnitureShape(type, { position: candidate.position, rotationY: candidate.yaw, roomId: room.id }))) { placed = true; break; }
+    }
+    if (!placed) unplaced.push(type);
+  }
   return { roomId: room.id, preset, shapes: planned, unplaced };
 }
