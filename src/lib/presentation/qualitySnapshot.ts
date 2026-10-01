@@ -1,16 +1,18 @@
 import * as THREE from 'three';
+import { StaticGeometryGenerator } from 'three-mesh-bvh';
 export interface QualitySnapshot {
     scene: THREE.Scene;
     camera: THREE.Camera;
     raster: string;
     warnings: string[];
+    exposure?: number;
     dispose: () => void;
 }
 export const qualityCapture: {
     current: (() => QualitySnapshot) | null;
 } = { current: null };
 /** Copies only visible model surfaces; never transfers live geometry, material hooks or editor helpers. */
-export function freezeQualityScene(source: THREE.Scene, sourceCamera: THREE.Camera, raster = ''): QualitySnapshot {
+export function freezeQualityScene(source: THREE.Scene, sourceCamera: THREE.Camera, raster = '', exposure = 1): QualitySnapshot {
     source.updateMatrixWorld(true);
     const scene = new THREE.Scene(), warnings = new Set<string>();
     const geometry = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
@@ -21,11 +23,14 @@ export function freezeQualityScene(source: THREE.Scene, sourceCamera: THREE.Came
         scene.environment = source.environment;
     else
         warnings.add('The procedural sky and clouds use a still environment approximation.');
+    scene.backgroundIntensity = source.backgroundIntensity;
+    scene.backgroundRotation.copy(source.backgroundRotation);
     scene.environmentIntensity = source.environmentIntensity;
     scene.environmentRotation.copy(source.environmentRotation);
     let triangles = 0;
     try {
         source.traverseVisible(object => {
+            if (!sourceCamera.layers.test(object.layers)) return;
             if ((object as THREE.Light).isLight) {
                 const light = object as THREE.Light;
                 if ((light as THREE.AmbientLight).isAmbientLight || (light as THREE.HemisphereLight).isHemisphereLight)
@@ -54,6 +59,7 @@ export function freezeQualityScene(source: THREE.Scene, sourceCamera: THREE.Came
                 return;
             }
             const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            if (list.every(m => !m.visible || (m.transparent && m.opacity === 0))) return;
             if (list.some(m => !('isMeshStandardMaterial' in m) && !('isMeshBasicMaterial' in m) && !('isMeshPhysicalMaterial' in m))) {
                 warnings.add('Custom shader surfaces such as animated water are omitted; Save raster retains them.');
                 return;
@@ -70,11 +76,13 @@ export function freezeQualityScene(source: THREE.Scene, sourceCamera: THREE.Came
                 throw new Error('This view exceeds the quality still geometry budget. Reduce vegetation or save the raster image.');
             if (list.some(m => m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile))
                 warnings.add('Wind and fabric shader deformation are frozen in their rest pose.');
-            if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
-                warnings.add('Animated characters are omitted from quality stills.');
-                return;
-            }
-            const geo = mesh.geometry.clone();
+            let geo: THREE.BufferGeometry;
+            if ((mesh as THREE.SkinnedMesh).isSkinnedMesh || mesh.morphTargetInfluences?.some(value => value !== 0)) {
+                const generator = new StaticGeometryGenerator(mesh.clone(false)); // Children are traversed independently.
+                generator.applyWorldTransforms = false;
+                geo = generator.generate();
+                warnings.add('Animated poses are frozen at the moment this view was captured.');
+            } else geo = mesh.geometry.clone();
             geometry.add(geo);
             const mats = list.map(m => {
                 let copy: THREE.MeshStandardMaterial;
@@ -119,5 +127,5 @@ export function freezeQualityScene(source: THREE.Scene, sourceCamera: THREE.Came
     sourceCamera.getWorldPosition(camera.position);
     sourceCamera.getWorldQuaternion(camera.quaternion);
     camera.updateMatrixWorld();
-    return { scene, camera, raster, warnings: [...warnings], dispose: () => { geometry.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); } };
+    return { scene, camera, raster, warnings: [...warnings], exposure: Number.isFinite(exposure) ? Math.max(.01, exposure) : 1, dispose: () => { geometry.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); } };
 }
