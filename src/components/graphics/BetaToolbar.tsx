@@ -1,10 +1,11 @@
 import { createPortal } from 'react-dom';
 import { motion, useDragControls } from 'motion/react';
 import { usePhoneLayout } from '../../lib/phoneLayout';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { FlaskConical, X, PanelRightClose, GripVertical } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { defaultBetaEnvironment, type BetaEnvironmentSettings } from '../../lib/graphics/betaEnvironment';
+import { getBetaTime, subscribeBetaTime } from '../../lib/graphics/betaDayCycle';
 import { GraphicsSlider } from './WeatherControls';
 
 /** Available in every editor layout, including the phone; opening it never enables effects. */
@@ -24,13 +25,15 @@ export function BetaToolbar() {
   }, [open, docked]);
   const { graphicsSettings, setGraphicsSettings, theme, setRightPanelVisible, toolbarVisibility } = useApp();
   const s = graphicsSettings.beta;
+  const clock = useSyncExternalStore(subscribeBetaTime, getBetaTime, getBetaTime);
+  const displayedDate = s.enabled && s.animateDayCycle && clock.seed === s.date ? clock.date : s.date;
   const update = (changes: Partial<BetaEnvironmentSettings>) => setGraphicsSettings(p => ({ ...p, beta: { ...p.beta, ...changes } }));
-  const toggle = (key: 'enabled' | 'sky' | 'stars' | 'clouds' | 'atmosphere' | 'flare' | 'grading', title: string) =>
-    <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={s[key]} onChange={e => update({ [key]: e.target.checked })} />{title}</label>;
+  const toggle = (key: 'enabled' | 'animateDayCycle' | 'clouds' | 'atmosphere' | 'flare' | 'grading', title: string) =>
+    <label className="flex items-center gap-2 font-medium"><input type="checkbox" checked={s[key]} onChange={e => update({ [key]: e.target.checked, ...((key === 'animateDayCycle' || key === 'enabled') && !e.target.checked ? { date: displayedDate } : {}) })} />{title}</label>;
   const slider = (key: keyof BetaEnvironmentSettings, label: string, min: number, max: number, step = 0.01, unit = '') =>
     <GraphicsSlider label={label} value={s[key] as number} min={min} max={max} step={step} unit={unit} onChange={v => update({ [key]: v })} />;
   const selectClass = 'block w-full rounded border bg-white text-gray-900 p-1 dark:bg-gray-800 dark:text-gray-100';
-  const commitDate = (value: string) => { if (value && Number.isFinite(Date.parse(value + 'Z'))) update({ date: value.slice(0,16) }); };
+  const commitTime = (value: string) => { if (/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(value)) update({ date: `${s.date.slice(0,10)}T${value.slice(0,5)}` }); };
   const embedded = docked && Boolean(slot);
   const panel = <motion.section key={`${isPhone}:${embedded}`} role="dialog" aria-label="Beta environment lab"
     drag={!embedded && !isPhone} dragListener={false} dragControls={dragControls} dragMomentum={false}
@@ -46,12 +49,15 @@ export function BetaToolbar() {
       <fieldset disabled={!s.enabled} className="space-y-3 disabled:opacity-50">
         <label className="flex items-center gap-2"><input type="checkbox" checked={s.useSite} onChange={e => update({ useSite: e.target.checked })} />Use imported site location</label>
         {!s.useSite && <>{slider('latitude','Latitude',-89.9,89.9,0.1,'°')}{slider('longitude','Longitude',-180,180,0.1,'°')}{slider('elevation','Elevation',-100,9000,10,' m')}</>}
-        <label className="block">Date and time (UTC)<input aria-label="Environment date and time UTC" type="datetime-local" className={selectClass} value={s.date} onChange={e => commitDate(e.target.value)} onInput={e => commitDate(e.currentTarget.value)} onBlur={e => commitDate(e.currentTarget.value)} /></label>
-        {toggle('sky','Physical sky')}
-        {toggle('stars','Stars')}{s.stars && slider('starIntensity','Star intensity',0,10,0.1)}
+        <label className="block">Time (UTC)<input aria-label="Environment time UTC" type="time" className={selectClass} value={displayedDate.slice(11,16)} onChange={e => commitTime(e.target.value)} onInput={e => commitTime(e.currentTarget.value)} /></label>
+        {toggle('animateDayCycle','Animate day cycle')}
+        {s.animateDayCycle && <div className="space-y-2">
+          {slider('dayCycleSpeed','Day cycle speed',0.05,2,0.05,' h/s')}
+          <p className="text-gray-500">One full day takes {Math.round(24 / s.dayCycleSpeed)} seconds. Physical sky and stars follow the time automatically.</p>
+        </div>}
         {toggle('clouds','Volumetric clouds')}
         {s.clouds && <div className="space-y-2 pl-3">
-          <p className="text-gray-500">Cloud shadows require Physical sky and the viewport Shadows setting. Higher quality improves cloud detail and uses more GPU time.</p>
+          <p className="text-gray-500">Cloud shadows require the viewport Shadows setting. Higher quality improves cloud detail and uses more GPU time.</p>
           {slider('coverage','Cloud coverage',0,1)}
           <label>Cloud type<select className={selectClass} value={s.cloudType} onChange={e => update({ cloudType: e.target.value as typeof s.cloudType })}><option value="cumulus">Cumulus</option><option value="stratus">Stratus</option><option value="cirrus">Cirrus</option></select></label>
           {slider('altitude','Cloud altitude',200,12000,100,' m')}{slider('thickness','Cloud thickness',100,6000,100,' m')}

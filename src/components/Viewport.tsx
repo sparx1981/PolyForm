@@ -3550,7 +3550,7 @@ function Scene() {
   const lastTransformBroadcastRef = useRef<number>(0);
 
   useFrame((state, delta) => {
-    if (!animateSun || (graphicsSettings.beta.enabled && graphicsSettings.beta.sky)) {
+    if (!animateSun || (graphicsSettings.beta.enabled)) {
       sunAnimRef.current = null;
     } else {
       // The sun circles sunOrbitCenter at the height and distance it already has. `delta` is the
@@ -11061,14 +11061,14 @@ function Scene() {
       <Fog />
       
       <ambientLight
-        intensity={graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 0 : (skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity) * scaleForDaylight(daylightFactor(sunIntensity))}
+        intensity={graphicsSettings.beta.enabled ? 0 : (skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity) * scaleForDaylight(daylightFactor(sunIntensity))}
         color={nightAmbientColor}
       />
       <directionalLight 
         ref={directionalLightRef}
         position={lightPosition} 
-        intensity={graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 0 : sunIntensity} 
-        castShadow={shadowsEnabled && !(graphicsSettings.beta.enabled && graphicsSettings.beta.sky)} 
+        intensity={graphicsSettings.beta.enabled ? 0 : sunIntensity}
+        castShadow={shadowsEnabled && !graphicsSettings.beta.enabled}
       />
       <ShareMainScene />
       <PresentationDriver />
@@ -11106,7 +11106,7 @@ function Scene() {
         </group>
       )}
       
-      {gridEnabled && (
+      {gridEnabled && !presentationActive && (
         <Grid 
           infiniteGrid 
           fadeDistance={500} 
@@ -11120,7 +11120,7 @@ function Scene() {
         />
       )}
 
-      {miniAxisIndicatorEnabled && (
+      {miniAxisIndicatorEnabled && !presentationActive && (
         <GizmoHelper
           alignment="bottom-left"
           margin={[60, 60]}
@@ -11396,7 +11396,7 @@ function Scene() {
       <SceneWeather />
       <InstancedVegetation plants={batchedPlants} onSelect={handleMeshClick} onContextMenu={handleContextMenu} />
 
-      {axisIndicatorEnabled && (
+      {axisIndicatorEnabled && !presentationActive && (
         <group>
           <mesh position={[50, 0, 0]}>
             <boxGeometry args={[100, 0.1, 0.1]} />
@@ -13509,7 +13509,7 @@ function EnvironmentLighting() {
   const { gl, scene } = useThree();
   const { assets: environmentAssets } = useAssetCatalog('hdri');
   // Sun at 0 means night: the sky, environment and hemisphere light all fade down with it.
-  const daylight = graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 0 : scaleForDaylight(daylightFactor(sunIntensity));
+  const daylight = graphicsSettings.beta.enabled ? 0 : scaleForDaylight(daylightFactor(sunIntensity));
   const managerRef = useRef<EnvironmentManager | null>(null);
 
   useEffect(() => {
@@ -13524,7 +13524,7 @@ function EnvironmentLighting() {
   useEffect(() => {
     const manager = managerRef.current;
     if (!manager) return;
-    if (graphicsSettings.beta.enabled && graphicsSettings.beta.sky) return;
+    if (graphicsSettings.beta.enabled) return;
     if (!environment.ref) {
       void manager.apply(scene, environment, null);
       return;
@@ -13556,7 +13556,7 @@ function EnvironmentLighting() {
   useFrame(() => {
     const sceneWithIntensity = scene as THREE.Scene & { environmentIntensity: number; backgroundIntensity: number };
     const usingAsset = !!environment.ref;
-    sceneWithIntensity.environmentIntensity = graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 1 : (usingAsset ? environment.intensity : environmentIntensity) * daylight;
+    sceneWithIntensity.environmentIntensity = graphicsSettings.beta.enabled ? 1 : (usingAsset ? environment.intensity : environmentIntensity) * daylight;
     sceneWithIntensity.backgroundIntensity = (usingAsset ? environment.backgroundIntensity : 1) * daylight;
   });
 
@@ -13570,7 +13570,7 @@ function EnvironmentLighting() {
     return null;
   }, [skybox]);
 
-  if (graphicsSettings.beta.enabled && graphicsSettings.beta.sky) return null;
+  if (graphicsSettings.beta.enabled) return null;
   if (environment.ref) return <hemisphereLight intensity={0.25 * daylight} groundColor="#444444" />;
 
   if (skybox === 'none' || !isHDRSupported) {

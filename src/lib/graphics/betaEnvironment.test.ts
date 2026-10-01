@@ -24,3 +24,11 @@ it('maps local east, up and south into ECEF without Google visual lift', () => {
   for (const [local,expected] of [[new Vector3(1,0,0),new Vector3(...basis.east)],[new Vector3(0,1,0),new Vector3(...basis.up)],[new Vector3(0,0,1),new Vector3(...basis.north).negate()]])
     expect(local.applyMatrix4(toECEF).sub(origin).distanceTo(expected)).toBeLessThan(1e-7);
 });
+
+it('keeps physical sky and stars on and intensity fixed when loading older models', () => {
+  const result = normalizeBetaEnvironment({ sky:false, stars:false, starIntensity:0, animateDayCycle:true, dayCycleSpeed:200 });
+  expect(result.sky).toBe(true); expect(result.stars).toBe(true); expect(result.starIntensity).toBe(10);
+  expect(result.animateDayCycle).toBe(true); expect(result.dayCycleSpeed).toBe(2);
+  expect(normalizeBetaEnvironment({dayCycleSpeed:NaN}).dayCycleSpeed).toBe(0.2);
+  expect(normalizeBetaEnvironment({dayCycleSpeed:0}).dayCycleSpeed).toBe(0.05);
+});

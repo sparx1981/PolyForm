@@ -1,5 +1,6 @@
 export interface BetaEnvironmentSettings {
   enabled: boolean;
+  animateDayCycle: boolean; dayCycleSpeed: number;
   sky: boolean; stars: boolean; clouds: boolean; atmosphere: boolean; flare: boolean; grading: boolean;
   date: string; latitude: number; longitude: number; elevation: number; useSite: boolean;
   starIntensity: number; coverage: number; cloudType: 'cumulus' | 'stratus' | 'cirrus';
@@ -9,9 +10,9 @@ export interface BetaEnvironmentSettings {
 }
 
 export function defaultBetaEnvironment(): BetaEnvironmentSettings {
-  return { enabled: false, sky: true, stars: true, clouds: false, atmosphere: true, flare: false, grading: false,
+  return { enabled: false, animateDayCycle: false, dayCycleSpeed: 0.2, sky: true, stars: true, clouds: false, atmosphere: true, flare: false, grading: false,
     date: '2026-06-21T12:00', latitude: 51.5074, longitude: -0.1278, elevation: 0, useSite: true,
-    starIntensity: 2, coverage: 0.35, cloudType: 'cumulus', altitude: 1500, thickness: 1000, layers: 1,
+    starIntensity: 10, coverage: 0.35, cloudType: 'cumulus', altitude: 1500, thickness: 1000, layers: 1,
     quality: 'low', windScale: 1, flareIntensity: 0.08, ghosts: 0.15, halo: 0.15,
     grade: 'neutral', gradeStrength: 0.5, exposure: 1 };
 }
@@ -20,10 +21,10 @@ export function normalizeBetaEnvironment(input: unknown): BetaEnvironmentSetting
   const d = defaultBetaEnvironment();
   const r = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const result = { ...d };
-  for (const k of ['enabled', 'sky', 'stars', 'clouds', 'atmosphere', 'flare', 'grading', 'useSite'] as const)
+  for (const k of ['enabled', 'animateDayCycle', 'clouds', 'atmosphere', 'flare', 'grading', 'useSite'] as const)
     if (typeof r[k] === 'boolean') result[k] = r[k];
   const ranges = { latitude: [-89.9,89.9], longitude: [-180,180], elevation: [-100,9000],
-    starIntensity: [0,10], coverage: [0,1], altitude: [200,12000], thickness: [100,6000], layers: [1,3],
+    dayCycleSpeed: [0.05,2], coverage: [0,1], altitude: [200,12000], thickness: [100,6000], layers: [1,3],
     windScale: [0,5], flareIntensity: [0,1], ghosts: [0,1], halo: [0,1], gradeStrength: [0,1], exposure: [0.1,4] };
   for (const k of Object.keys(ranges) as Array<keyof typeof ranges>) {
     const v = r[k];

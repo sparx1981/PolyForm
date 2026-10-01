@@ -105,7 +105,7 @@ export const STAGES = [
   { n: '04', name: 'Built', caption: 'A place to come home to', detail: 'Material · light · life' },
 ] as const;
 
-/** Seconds for the transitions after the separate 24–42 second pencil drawing. */
+/** Seconds for the transitions after the separate 18–31.5 second pencil drawing. */
 export const STAGE_PLAY_SECONDS = 18;
 
 /** True while any effect changes how the model looks. */

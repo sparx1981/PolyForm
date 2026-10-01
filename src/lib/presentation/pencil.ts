@@ -50,7 +50,7 @@ export function pencilDrawing(edges: THREE.BufferGeometry): PencilDrawing {
   return {geometry,ends,duration,strokes};
 }
 
-export function pencilSeconds(strokes:number) { return Math.min(42,Math.max(24,strokes*0.12)); }
+export function pencilSeconds(strokes:number) { return 0.75 * Math.min(42,Math.max(24,strokes*0.12)); }
 
 /** Include the current segment; the shader trims it to the moving pencil tip. */
 export function pencilDrawCount(ends:number[], distance:number) {

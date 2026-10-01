@@ -69,6 +69,12 @@ const CARD_SKY = new THREE.Color('#eceae5');
 const DUSK_SKY = new THREE.Color('#1e2a40');
 const SUNSET = new THREE.Color('#ff9a57');
 
+/** Sketch shows roof form, including flat decks and gable infill, before trim and tiles. */
+function isBasicRoof(shape: Shape | undefined): boolean {
+  if (!shape) return false;
+  return !shape.tags?.includes('roof-part') || Boolean(shape.tags?.some(tag => tag === 'roof-deck' || tag === 'roof-pediment'));
+}
+
 function rootsOf(scene: THREE.Object3D) {
   const roots: { obj: THREE.Object3D; id: string | null; batched?: boolean; instance?: { mesh: THREE.InstancedMesh; index: number } }[] = [];
   const walk = (o: THREE.Object3D) => {
@@ -391,7 +397,7 @@ export class PresentationEngine {
     if (e.batched) { p.drop = 0; p.scale = 1; }
     // Fittings and the timber frame show from the Detailed stage on, as before.
     const shape = this.shapes.get(e.instance ? this.instanceId(e) : String(e.obj.userData.id));
-    const detail = e.category === 'other' || e.category === 'opening' || e.category === 'floorFrame' || e.category === 'frame' || e.category === 'roofFrame' || shape?.tags?.includes('roof-part');
+    const detail = e.category === 'other' || e.category === 'opening' || e.category === 'floorFrame' || e.category === 'frame' || e.category === 'roofFrame' || (shape?.tags?.includes('roof-part') && !isBasicRoof(shape));
     const byStage = e.plant ? look.plants : detail ? look.furniture : true;
     const dy = e.lift * this.explodeNow + p.drop;
     o.position.copy(e.base);
@@ -516,7 +522,7 @@ export class PresentationEngine {
         const small = mesh.geometry.attributes.position.count < 20000;
         if (ghosted && !instanced && small) this.addAux(mesh, new THREE.LineSegments(this.edgesFor(mesh.geometry), this.edgeMat));
         // Pencil outlines over the model.
-        if (!ghosted && modelLook && look.pencil > 0 && !glassy && !instanced && small && e.category !== 'terrain') {
+        if (!ghosted && modelLook && look.pencil > 0 && !glassy && !instanced && (small || (e.category === 'roof' && isBasicRoof(this.shapes.get(String(e.obj.userData.id))))) && e.category !== 'terrain') {
           this.addSketchLines(mesh, e);
         }
         // Detailed → Built: the real materials show through a fading model layer.
@@ -582,6 +588,7 @@ export class PresentationEngine {
 
   private addSketchLines(mesh: THREE.Mesh, e: Entry) {
     if (!['slab','wall','roof','kernel','stair'].includes(e.category)) return;
+    if (e.category === 'roof' && !isBasicRoof(this.shapes.get(String(e.obj.userData.id)))) return;
     const drawing = this.sketchEdgesFor(mesh.geometry);
     const geometry = drawing.geometry.clone();
     const slot = this.schedule.get(e.key) ?? { start: 0, span: 1 };

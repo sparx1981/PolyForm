@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { createPortal, useFrame, useThree } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import { LUT, SMAA, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
-import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, Color, Data3DTexture, DataTexture, Matrix4, TextureLoader, Vector2, Vector3, RedFormat, UnsignedByteType, RepeatWrapping, LinearFilter, NearestFilter, RGBAFormat, type Texture } from 'three';
+import { CubeCamera, WebGLCubeRenderTarget, HalfFloatType, Scene, PointsMaterial, AdditiveBlending, BufferGeometry, Float32BufferAttribute, Color, Data3DTexture, DataTexture, Matrix4, TextureLoader, Vector2, Vector3, RedFormat, UnsignedByteType, RepeatWrapping, LinearFilter, NearestFilter, RGBAFormat, type Texture } from 'three';
 import { Atmosphere, Sky, SunLight, SkyLight, AtmosphereContext, type AtmosphereApi } from '@takram/three-atmosphere/r3f';
 import { PrecomputedTexturesLoader, type PrecomputedTextures } from '@takram/three-atmosphere';
 import { Clouds, CloudLayer } from '@takram/three-clouds/r3f';
@@ -15,6 +15,8 @@ import { getSunDirectionECI, getECIToECEFRotationMatrix } from '@takram/three-at
 import { useApp } from '../../AppContext';
 import { tilesToSiteMatrix } from '../../lib/worldSite/googleTiles';
 import { createContext, useContext } from 'react';
+
+import { advanceBetaDay, publishBetaTime } from '../../lib/graphics/betaDayCycle';
 
 const base = `${import.meta.env.BASE_URL}beta/`;
 const groundAlbedo = new Color(0.12,0.13,0.11);
@@ -70,17 +72,20 @@ export function BetaEnvironmentRuntime({ onEffects, onError }: { onEffects: (eff
   const worldToECEF = useMemo(() => new Matrix4().fromArray(tilesToSiteMatrix(site?.lat ?? s.latitude, site?.lng ?? s.longitude, site?.elevation ?? s.elevation)).invert(),
     [site?.lat, site?.lng, site?.elevation, s.latitude, s.longitude, s.elevation]);
   const date = useMemo(() => new Date(s.date + 'Z'), [s.date]);
-  // Priority -1 runs before the library's sky, cloud and lighting updates.
-  useFrame(() => {
+  // Priority -2 runs before the library's sky, cloud and lighting updates.
+  useFrame((_, delta) => {
+    // Ignore long background-tab gaps; resuming should not skip hours of daylight.
+    if (s.animateDayCycle && assets) advanceBetaDay(date, Math.min(delta, 0.25), s.dayCycleSpeed);
+    publishBetaTime(s.date, date);
     atmosphere.current?.worldToECEFMatrix.copy(worldToECEF);
     if (atmosphere.current && lastDate.current !== +date) { atmosphere.current.updateByDate(date); lastDate.current = +date; }
-  }, -1);
+  }, -2);
   if (!assets) return null;
   return <AssetsContext.Provider value={assets}><Atmosphere ref={atmosphere} textures={assets.atmosphere} date={date}>
     <PublishEffects onEffects={onEffects} />
     <CelestialScene worldToECEF={worldToECEF} date={date} />
-    {s.clouds && s.sky && <CloudMaterialShadows />}
-    {s.sky && <Environment key={`${s.date}:${worldToECEF.elements.join(',')}`} frames={3} resolution={128}><Sky groundAlbedo={groundAlbedo} /></Environment>}
+    {s.clouds && <CloudMaterialShadows />}
+    <SkyEnvironment date={date} worldToECEF={worldToECEF} animated={s.animateDayCycle} />
   </Atmosphere></AssetsContext.Provider>;
 }
 
@@ -96,43 +101,59 @@ function PublishEffects({ onEffects }: { onEffects: (effects: ReactNode) => void
 }
 
 function CelestialScene({ worldToECEF, date }: { worldToECEF: Matrix4; date: Date }) {
-  const { graphicsSettings, shadowsEnabled, lightPosition, setLightPosition } = useApp();
-  const originalLightPosition = useRef(lightPosition);
-  const publishLight = useRef(setLightPosition); publishLight.current = setLightPosition;
+  const { graphicsSettings, shadowsEnabled } = useApp();
   const sunLight = useRef<import('@takram/three-atmosphere').SunDirectionalLight>(null);
   const s = graphicsSettings.beta, assets = useContext(AssetsContext)!;
   const { camera, gl } = useThree();
-  const direction = useMemo(() => getSunDirectionECI(date, new Vector3()).applyMatrix4(getECIToECEFRotationMatrix(date, new Matrix4())).transformDirection(worldToECEF.clone().invert()), [date,worldToECEF]);
-  const daylight = Math.max(0, Math.min(1, (direction.y + 0.08) / 0.15));
-  useEffect(() => {
-    if (!s.sky) return;
-    publishLight.current(direction.clone().multiplyScalar(100).toArray() as [number,number,number]);
-    return () => publishLight.current(originalLightPosition.current);
-  }, [direction,s.sky]);
-  useFrame(({camera}) => { sunLight.current?.target.position.set(camera.position.x,0,camera.position.z); }, -1);
+  const direction = useMemo(() => new Vector3(), []);
+  const rotation = useMemo(() => new Matrix4(), []);
+  const toLocal = useMemo(() => worldToECEF.clone().invert(), [worldToECEF]);
+  useFrame(({camera}) => {
+    getSunDirectionECI(date, direction).applyMatrix4(getECIToECEFRotationMatrix(date, rotation)).transformDirection(toLocal);
+    sunLight.current?.target.position.set(camera.position.x,0,camera.position.z);
+  }, -1);
   useEffect(() => { const previous = gl.toneMappingExposure; gl.toneMappingExposure = s.exposure; return () => { gl.toneMappingExposure = previous; }; }, [gl, s.exposure]);
   return <>
-    {s.sky && <Sky groundAlbedo={groundAlbedo} renderOrder={-1000} />}
-    {s.stars && <LocalStars data={assets.stars} date={date} worldToECEF={worldToECEF} intensity={s.starIntensity * (1 - daylight)} />}
-    {s.sky && <><SunLight ref={sunLight} position={[camera.position.x, 0, camera.position.z]} distance={100} intensity={1} castShadow={shadowsEnabled}
+    <Sky groundAlbedo={groundAlbedo} renderOrder={-1000} />
+    <LocalStars data={assets.stars} date={date} worldToECEF={worldToECEF} sunDirection={direction} />
+    <SunLight ref={sunLight} position={[camera.position.x, 0, camera.position.z]} distance={100} intensity={1} castShadow={shadowsEnabled}
       shadow-mapSize={[2048,2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={40} shadow-camera-bottom={-40} shadow-camera-far={250} shadow-bias={-0.0001} />
-      <SkyLight intensity={1} /></>}
+      <SkyLight intensity={1} />
   </>;
 }
 
-/** Catalogue directions live in ECI; use ordinary Three points in local coordinates
- * so celestial points retain their light through the editor's composed render. */
-function LocalStars({ data, date, worldToECEF, intensity }: { data: ArrayBuffer; date: Date; worldToECEF: Matrix4; intensity: number }) {
+/** Retain one HDR cubemap and refresh it at most four times a second while cycling.
+ * Updating celestial time must not recreate PMREM targets or the editor camera. */
+function SkyEnvironment({ date, worldToECEF, animated }: { date: Date; worldToECEF: Matrix4; animated: boolean }) {
+  const [virtualScene] = useState(() => new Scene());
+  const target = useMemo(() => new WebGLCubeRenderTarget(128, { type: HalfFloatType }), []);
+  const cubeCamera = useMemo(() => new CubeCamera(0.1, 1000, target), [target]);
+  const capture = useRef({ frames: 3, elapsed: 0 });
+  useEffect(() => { capture.current.frames = 3; }, [date, worldToECEF, animated]);
+  useEffect(() => () => target.dispose(), [target]);
+  useFrame(({ gl }, delta) => {
+    const c = capture.current;
+    c.elapsed += delta;
+    if (c.frames <= 0 && (!animated || c.elapsed < 0.25)) return;
+    const previous = gl.autoClear;
+    try { gl.autoClear = true; cubeCamera.update(gl, virtualScene); }
+    finally { gl.autoClear = previous; }
+    c.frames = Math.max(0, c.frames - 1); c.elapsed = 0;
+  });
+  return <><Environment map={target.texture} />{createPortal(<Sky groundAlbedo={groundAlbedo} />, virtualScene)}</>;
+}
+
+/** Keep the full catalogue in ECI and rotate it on the GPU as the day advances. */
+function LocalStars({ data, date, worldToECEF, sunDirection }: { data: ArrayBuffer; date: Date; worldToECEF: Matrix4; sunDirection: Vector3 }) {
   const { camera } = useThree();
   const points = useRef<import('three').Points>(null);
+  const toLocal = useMemo(() => new Matrix4().extractRotation(worldToECEF.clone().invert()), [worldToECEF]);
+  const rotation = useMemo(() => new Matrix4(), []);
+  const earthRotation = useMemo(() => new Matrix4(), []);
   const geometry = useMemo(() => {
     const view = new DataView(data), positions: number[] = [], colours: number[] = [];
-    const transform = new Matrix4().extractRotation(worldToECEF.clone().invert()).multiply(getECIToECEFRotationMatrix(date, new Matrix4()));
-    const direction = new Vector3();
     for (let i = 0; i + 9 < data.byteLength; i += 10) {
-      direction.set(view.getInt16(i,true)/32767,view.getInt16(i+2,true)/32767,view.getInt16(i+4,true)/32767).transformDirection(transform);
-      if (direction.y <= 0) continue;
-      positions.push(direction.x,direction.y,direction.z);
+      positions.push(view.getInt16(i,true)/32767,view.getInt16(i+2,true)/32767,view.getInt16(i+4,true)/32767);
       const magnitude = -2 + view.getUint8(i+6)/255*10;
       const brightness = Math.min(1,Math.pow(10,-(magnitude-1)/2.5));
       colours.push(view.getUint8(i+7)/255*brightness,view.getUint8(i+8)/255*brightness,view.getUint8(i+9)/255*brightness);
@@ -141,13 +162,29 @@ function LocalStars({ data, date, worldToECEF, intensity }: { data: ArrayBuffer;
     result.setAttribute('position',new Float32BufferAttribute(positions,3));
     result.setAttribute('color',new Float32BufferAttribute(colours,3));
     return result;
-  }, [data,date,worldToECEF]);
-  useEffect(() => () => geometry.dispose(),[geometry]);
-  useFrame(() => { if (points.current) { points.current.position.copy(camera.position); points.current.scale.setScalar(camera.far*0.8); } });
+  }, [data]);
+  const material = useMemo(() => {
+    const result = new PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, transparent: true,
+      blending: AdditiveBlending, depthWrite: false, toneMapped: false, fog: false });
+    result.onBeforeCompile = shader => {
+      shader.vertexShader = 'varying float horizonHeight;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nhorizonHeight = (modelMatrix * vec4(position, 0.0)).y;');
+      shader.fragmentShader = 'varying float horizonHeight;\n' + shader.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (horizonHeight <= 0.0) discard;');
+    };
+    result.customProgramCacheKey = () => 'beta-stars-horizon';
+    return result;
+  }, []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  useFrame(() => {
+    if (!points.current) return;
+    points.current.position.copy(camera.position); points.current.scale.setScalar(camera.far*0.8);
+    rotation.copy(toLocal).multiply(getECIToECEFRotationMatrix(date, earthRotation));
+    points.current.quaternion.setFromRotationMatrix(rotation);
+    const daylight = Math.max(0, Math.min(1, (sunDirection.y + 0.08) / 0.15));
+    material.color.setScalar(10 * (1 - daylight));
+  });
   if (!(camera as {isPerspectiveCamera?: boolean}).isPerspectiveCamera) return null;
-  return <points ref={points} geometry={geometry} frustumCulled={false} raycast={() => null}>
-    <pointsMaterial size={2} sizeAttenuation={false} vertexColors color={new Color().setScalar(intensity)} transparent blending={AdditiveBlending} depthWrite={false} toneMapped={false} fog={false} />
-  </points>;
+  return <points ref={points} geometry={geometry} material={material} frustumCulled={false} raycast={() => null} />;
 }
 
 /** Original Hald grades, generated in memory: no third-party LUT dependency or colour cast at neutral. */

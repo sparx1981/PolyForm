@@ -51,8 +51,9 @@ it('keeps freehand offsets deterministic, preserves source geometry, and settles
   expect(a.geometry.attributes.pencilOffset.array).toEqual(b.geometry.attributes.pencilOffset.array);
   expect(a.geometry.attributes.pencilOffset.array.some(n=>Math.abs(n)>0.002)).toBe(true);
   expect(a.geometry.attributes.position.count).toBeLessThanOrEqual(24000);
-  expect(pencilSeconds(a.strokes)).toBeGreaterThanOrEqual(24);
-  expect(pencilSeconds(10000)).toBe(42);
+  expect(pencilSeconds(a.strokes)).toBeGreaterThanOrEqual(18);
+  expect(pencilSeconds(10000)).toBe(31.5);
+  expect(pencilSeconds(0)).toBe(18);
   expect(lookAt(0).pencilRoughness).toBe(1);
   expect(lookAt(1).pencilRoughness).toBeCloseTo(0.22);
   expect(lookAt(2).pencilRoughness).toBe(0);
@@ -72,4 +73,31 @@ it('can pause before the first Sketch frame without drawing in the background', 
   engine.update({...paused,stagePlaying:true},0.1);
   expect(lines.some(line=>line.geometry.drawRange.count>0)).toBe(true);
   engine.dispose(); geometry.dispose();
+});
+
+it('includes high-detail roof form, gable infill and flat decks during Sketch, leaving tiles for Detailed', () => {
+  const scene = new THREE.Scene();
+  const shapes: Shape[] = [
+    {id:'slopes',type:'roof',position:[0,4,0],args:[],color:'#fff',tags:['roof-slopes']},
+    {id:'gable',type:'custom',position:[0,4,0],args:[],color:'#fff',tags:['roof-part','roof-pediment']},
+    {id:'deck',type:'custom',position:[0,4,0],args:[],color:'#fff',tags:['roof-part','roof-deck']},
+    {id:'tiles',type:'custom',position:[0,4,0],args:[],color:'#fff',tags:['roof-part','roof-tiles']},
+  ];
+  const meshes = shapes.map(shape => {
+    // The roof slopes exceed the old 20,000-vertex cutoff even though their outline is simple.
+    const geometry = shape.id === 'slopes' ? new THREE.BoxGeometry(6,1,4,60,60,60) : new THREE.BoxGeometry(6,0.2,4);
+    const mesh = new THREE.Mesh(geometry,new THREE.MeshStandardMaterial());
+    mesh.position.set(...shape.position); mesh.userData={isShape:true,id:shape.id};scene.add(mesh);return mesh;
+  });
+  const engine=new PresentationEngine(scene);engine.sync(shapes);
+  for(let i=0;i<330;i++) engine.update({...INITIAL_PRESENTATION,active:true,stage:0,stagePlaying:true},0.1);
+  for(const mesh of meshes.slice(0,3)) {
+    expect(mesh.visible).toBe(true);
+    const lines=mesh.children.filter(o=>o.userData.presentationAux) as THREE.LineSegments[];
+    expect(lines).toHaveLength(2);expect(lines[0].geometry.drawRange.count).toBe(Infinity);
+  }
+  expect(meshes[3].visible).toBe(false);expect(meshes[3].children).toHaveLength(0);
+  engine.dispose();
+  expect(meshes.every(mesh=>mesh.visible)).toBe(true);
+  meshes.forEach(mesh=>{mesh.geometry.dispose();(mesh.material as THREE.Material).dispose();});
 });
