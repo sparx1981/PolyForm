@@ -964,6 +964,14 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
       name: 'Architecture',
       tools: [
         {
+          id: 'interior_studio',
+          label: 'Interior Studio',
+          subtitle: 'Soft furnishings, furniture and curtains for detected rooms',
+          icon: <Armchair size={19} className="text-violet-400" />,
+          onClick: () => window.dispatchEvent(new CustomEvent('polyform:interior-studio')),
+          keywords: ['interior', 'soft furnishings', 'furniture', 'sofa', 'bed', 'curtains', 'room']
+        },
+        {
           id: 'wall',
           tool: 'wall',
           label: 'Wall Tool',

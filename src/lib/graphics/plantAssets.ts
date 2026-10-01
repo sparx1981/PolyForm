@@ -61,6 +61,7 @@ export function proceduralPlantPrimitives(speciesId: string): PlantPrimitive[] {
   return fallbacks.get(speciesId)!;
 }
 export function loadPlantPrimitives(speciesId: string, variation?: string, detail: TreeDetail = 0): Promise<PlantPrimitive[]> {
+  if (detail === 3) detail = 2; // Atlas callers keep this geometry until their renderer-specific bake is ready.
   const species = PLANT_SPECIES_CATALOG.find(item => item.id === speciesId);
   const chosen = variation || species?.variations?.[0] || '';
   const lodUrl = treeLodUrl(speciesId, detail);

@@ -1347,6 +1347,7 @@ export default function TopBar() {
                       { tool: 'step', label: 'Single Step / Riser' },
                       { tool: 'staircase', label: 'Staircase Flight' },
                       { tool: 'scale_figure', label: 'Scale Figure (Person)' },
+                      { tool: 'interior_studio', label: 'Interior Studio / Soft Furnishings' },
                       { tool: 'stack_story', label: 'Stack Story Level' },
                       { tool: 'roof', label: 'Parametric Roof Generator' },
                       { tool: 'timber-frame', label: 'Timber Frame Engine' },

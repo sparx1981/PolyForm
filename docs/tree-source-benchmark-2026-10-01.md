@@ -69,3 +69,7 @@ Open `http://localhost:3013/scripts/benchmarks/trees.html`. Choose source, place
 EZ-Tree code/leaf textures are MIT (Daniel Greenheck); the reference bark textures are ambientCG CC0. The reference checkout retains its licence and texture attribution. Existing Poly Haven assets keep their current provenance. No third-party tree generator or texture assets were vendored into the application.
 
 Verification: benchmark page renders all three sources without shader errors; shared production vegetation/loading tests: 23 passed across three files; TypeScript and benchmark JavaScript syntax checks passed. Browser close and distant views inspected with matching cameras. No full-renderer rewrite or saved-model migration occurred.
+
+## Atlas follow-up
+
+The experimental colour atlas in this report used viewport coordinates incorrectly at non-unit device pixel ratios. Its timing is not an appearance-faithful comparison and is superseded by the production follow-up in [tree-grass-mobile-followup-2026-10-01.md](tree-grass-mobile-followup-2026-10-01.md). The geometry comparisons remain valid. The benchmark script now uses render-target pixel coordinates.

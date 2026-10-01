@@ -334,7 +334,7 @@ float gTaper = pow(max(1.0 - t, 0.0), 0.9) * (1.0 - t * 0.1);
 // A distant tuft faces the render camera, with the same root, colours and wind seed.
 vec2 gCardSide = vec2(gView.z, -gView.x);
 gCardSide = length(gCardSide) > 1e-5 ? normalize(gCardSide) : gSideDir;
-float gCardWidth = max(uSpacing * 0.85, gPixel * 2.0);
+float gCardWidth = max(uSpacing * 1.3, gPixel * 2.0);
 vec3 gPos = gRoot + gSpine + vec3(gCardSide.x, 0.0, gCardSide.y) * side * gCardWidth * 0.5;
 #else
 vec3 gPos = gRoot + gSpine + gSide3 * (side * gWidth * 0.5 * gTaper);
@@ -394,7 +394,7 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
         float gHeightFraction = vT / gTip;
         float gLocalSide = fract(gLane) - 0.5;
         float gCentreBend = sin(gHeightFraction*2.0+vBladeTone*6.28)*0.12*gHeightFraction;
-        float gHalfWidth = mix(0.22,0.015,clamp(gHeightFraction,0.0,1.0));
+        float gHalfWidth = mix(0.45,0.015,clamp(gHeightFraction,0.0,1.0));
         if (gHeightFraction > 1.0 || abs(gLocalSide-gCentreBend) > gHalfWidth) discard;
       #endif
       // vT can dip a hair below 0 when interpolated; pow() of a negative is NaN on GPUs.
@@ -426,6 +426,6 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => `polyform-blade-grass-v4:${Boolean(options.patches)}:${Boolean(options.clumps)}`;
+  material.customProgramCacheKey = () => `polyform-blade-grass-v5:${Boolean(options.patches)}:${Boolean(options.clumps)}`;
   return material;
 }

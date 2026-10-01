@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PLANT_SPECIES_CATALOG } from '../plantLibrary';
 import catalog from './polyhavenModelCatalog.json';
 
-export type TreeDetail = 0 | 1 | 2;
+export type TreeDetail = 0 | 1 | 2 | 3;
 
 const lodUrls = new Map<string, [string, string]>(
   (catalog.assets as { sourceId: string; lodUrls?: [string, string] }[])
@@ -12,7 +12,7 @@ const lodUrls = new Map<string, [string, string]>(
 
 export function hasTreeLod(speciesId: string) { return lodUrls.has(speciesId); }
 export function treeLodUrl(speciesId: string, detail: TreeDetail): string | undefined {
-  return detail ? lodUrls.get(speciesId)?.[detail - 1] : undefined;
+  return detail && detail < 3 ? lodUrls.get(speciesId)?.[detail - 1] : undefined;
 }
 
 /** Approximate projected height in screen pixels, including orthographic cameras. */
@@ -30,7 +30,9 @@ export function treeScreenHeight(camera: THREE.Camera, viewportHeight: number, p
 }
 
 /** Hysteresis prevents a tree from swapping assets at every small camera movement. */
-export function chooseTreeDetail(pixels: number, previous: TreeDetail = 0): TreeDetail {
+export function chooseTreeDetail(pixels: number, previous: TreeDetail = 0, allowImpostor = false): TreeDetail {
+  if (allowImpostor && pixels < 32) return 3;
+  if (previous === 3) previous = 2;
   if (previous === 0) return pixels < 50 ? 2 : pixels < 150 ? 1 : 0;
   if (previous === 1) return pixels < 50 ? 2 : pixels > 190 ? 0 : 1;
   return pixels > 190 ? 0 : pixels > 68 ? 1 : 2;
@@ -38,4 +40,11 @@ export function chooseTreeDetail(pixels: number, previous: TreeDetail = 0): Tree
 
 export function treeHeight(speciesId: string, scaleY = 1): number {
   return (PLANT_SPECIES_CATALOG.find(species => species.id === speciesId)?.defaultHeight ?? 4) * scaleY;
+}
+
+/** Horizontal atlas captures are unsuitable for plan views or steep camera elevations. */
+export function treeImpostorView(camera: THREE.Camera,position: THREE.Vector3): boolean {
+  if (!(camera instanceof THREE.PerspectiveCamera)) return false;
+  const dx=camera.position.x-position.x,dz=camera.position.z-position.z;
+  return Math.abs(camera.position.y-position.y) < Math.hypot(dx,dz)*0.3;
 }

@@ -234,7 +234,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
         subtitle={`${currentScaleChar.name} (${currentScaleHeight.toFixed(2)}m eye-level datum)`}
       />
 
-      <button
+      {toolbarVisibility?.interior_studio !== false && <button
         id="arch-interior-studio-btn"
         onClick={() => window.dispatchEvent(new CustomEvent('polyform:interior-studio'))}
         aria-label="Interior Studio"
@@ -245,7 +245,7 @@ export default function ArchitectureToolbar({ dock = 'left' }: ArchitectureToolb
         )}
       >
         <Armchair size={18} />
-      </button>
+      </button>}
 
       {((toolbarVisibility?.stack_story !== false) || (toolbarVisibility?.roof !== false) || (toolbarVisibility?.['timber-frame'] !== false && toolbarVisibility?.timber_frame !== false)) && (
         <div className={cn("my-1 border-t", horizontal ? "h-6 border-l border-t-0 my-0 mx-1" : "w-8", theme === 'dark' ? "border-gray-700" : "border-gray-200")} />

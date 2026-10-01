@@ -1,0 +1,25 @@
+import { it, expect } from 'vitest';
+import * as THREE from 'three';
+import { createGrassCanopyGeometry, createGrassCanopyMaterial } from './grassCanopy';
+import { createGrassField } from './bladeGrass';
+import { createBladeGrassUniforms } from './bladeGrassMaterial';
+import { DEFAULT_GRASS_SETTINGS, type Shape } from '../../types';
+it('covers the entire raised terrain and follows its original height grid without camera-radius truncation', () => {
+    const terrain: Shape = { id: 't', type: 'terrain', position: [30, 5, 20], args: [], color: 'white', terrainData: { width: 150, depth: 150, gridX: 3, gridY: 2, heights: [0, 1, 2, 3, 4, 5] } };
+    const field = createGrassField(terrain, [], [], DEFAULT_GRASS_SETTINGS), geometry = createGrassCanopyGeometry(field);
+    geometry.computeBoundingBox();
+    expect(geometry.boundingBox!.min.x).toBe(-45);
+    expect(geometry.boundingBox!.max.x).toBe(105);
+    expect(geometry.attributes.position.getY(5)).toBeCloseTo(10.003);
+    expect(geometry.index!.count / 3).toBe(4);
+    const shared = createBladeGrassUniforms();
+    shared.uMask.value = field.mask;
+    const material = createGrassCanopyMaterial(shared), shader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+    material.onBeforeCompile(shader as any, {} as any);
+    expect(shader.uniforms['uMask']).toBe(shared.uMask);
+    expect(shader.uniforms['uRootColor']).toBe(shared.uRootColor);
+    geometry.dispose();
+    material.dispose();
+    field.heights.dispose();
+    field.mask.dispose();
+});

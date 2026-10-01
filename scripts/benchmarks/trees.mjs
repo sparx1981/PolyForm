@@ -86,18 +86,17 @@ const bakeCam = new T.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0.1, 500)
 renderer.setRenderTarget(atlas);
 renderer.setClearColor(0, 0);
 renderer.clear();
-renderer.setScissorTest(true);
+atlas.scissorTest = true;
 for (let i = 0; i < 8; i++) {
   const angle = i * Math.PI / 4;
   bakeCam.position.set(Math.sin(angle) * 100, cy, Math.cos(angle) * 100);
   bakeCam.lookAt(0, cy, 0);
-  renderer.setViewport(i % 4 * 512, Math.floor(i / 4) * 512, 512, 512);
-  renderer.setScissor(i % 4 * 512, Math.floor(i / 4) * 512, 512, 512);
+  atlas.viewport.set(i % 4 * 512, Math.floor(i / 4) * 512, 512, 512);
+  atlas.scissor.copy(atlas.viewport);
+  renderer.setRenderTarget(atlas);
   renderer.render(bakeScene, bakeCam);
 }
-renderer.setScissorTest(false);
 renderer.setRenderTarget(null);
-renderer.setViewport(0, 0, innerWidth, innerHeight);
 renderer.setClearColor("#b9d3e5", 1);
 const cardGeo = new T.PlaneGeometry(w, h);
 cardGeo.translate(0, cy, 0);

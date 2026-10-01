@@ -13,6 +13,7 @@ import {
 } from '../../lib/terrain/bladeGrassMaterial';
 
 import { GrassPatchBatch, grassPatchCapacity } from '../../lib/terrain/grassPatches';
+import { createGrassCanopyGeometry, createGrassCanopyMaterial } from '../../lib/terrain/grassCanopy';
 import { registerVegetationPreparation } from '../../lib/terrain/vegetationRenderPreparation';
 
 interface ProceduralGrassProps {
@@ -99,6 +100,14 @@ export function ProceduralGrass({
   const rings = useMemo(() => grassRings(grassSettings),
     [grassSettings.density, grassSettings.baseHeight, grassSettings.heightVariance]);
   const shared = useMemo(() => createBladeGrassUniforms(), []);
+  const canopy = useMemo(() => {
+    if (!field) return null;
+    const mesh = new THREE.Mesh(createGrassCanopyGeometry(field),createGrassCanopyMaterial(shared));
+    mesh.name='procedural-grass-canopy';mesh.receiveShadow=true;mesh.raycast=()=>{};
+    mesh.userData={isGrass:true,isObstacle:false,grassKind:'canopy'};
+    return mesh;
+  },[field,shared]);
+  useEffect(() => () => { canopy?.geometry.dispose();canopy?.material.dispose(); },[canopy]);
   const trail = useMemo(() => new GrassTrail(), []);
   useEffect(() => { shared.uTrail.value = trail.points; shared.uTrailRecovery.value = TRAIL_RECOVERY_SECONDS; }, [shared, trail]);
 
@@ -221,6 +230,7 @@ export function ProceduralGrass({
 
   return (
     <group name="procedural-grass" key={`grass-${terrainShape.id}`}>
+      {canopy && <primitive object={canopy} dispose={null} />}
       {meshes.map(mesh => <primitive key={mesh.uuid} object={mesh} dispose={null} />)}
     </group>
   );

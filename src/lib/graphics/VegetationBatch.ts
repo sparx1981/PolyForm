@@ -28,6 +28,9 @@ export class VegetationBatch {
     if (maxWindStrength < wind.maxStrength) throw new RangeError('Batch bounds must cover wind.maxStrength');
     // Only materials need private shader hooks. Geometry is immutable and shared across cells.
     this.mesh = new THREE.InstancedMesh(geometry, material.clone(), capacity);
+    // Material.clone does not retain shader hooks (tree atlas, for example).
+    this.mesh.material.onBeforeCompile = material.onBeforeCompile;
+    this.mesh.material.customProgramCacheKey = material.customProgramCacheKey;
     this.mesh.count = 0;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.castShadow = this.mesh.receiveShadow = true;
