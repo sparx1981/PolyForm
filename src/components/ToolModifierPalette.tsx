@@ -90,6 +90,7 @@ export const ToolModifierPalette: React.FC = () => {
     'bevel', 
     'deform', 
     'orbit',
+    'walk',
     'wall',
     'bezier',
     'polygon',
@@ -102,7 +103,6 @@ export const ToolModifierPalette: React.FC = () => {
     'section'
     , 'lamp'
     , 'worldview'
-    , 'section'
   ].includes(activeTool);
 
   if (!hasSettings) return null;

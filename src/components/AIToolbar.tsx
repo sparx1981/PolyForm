@@ -15,11 +15,12 @@ interface AIToolButtonProps {
 }
 
 function AIToolButton({ id, icon, label, subtitle, onClick }: AIToolButtonProps) {
-  const { bannerColor, theme } = useApp();
+  const { bannerColor, theme, toolbarVisibility } = useApp();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
   const flyoutSide = useContext(FlyoutSideContext);
 
+  if (toolbarVisibility[id] === false) return null;
   return (
     <div className="relative group">
       <button
@@ -74,10 +75,10 @@ export default function AIToolbar({ dock = 'left' }: AIToolbarProps = {}) {
           theme === 'dark' ? "bg-gray-850 border-gray-700" : "bg-slate-50/90 border-gray-200"
         )}
       >
-        <AIToolButton id="query" icon={<Sparkles size={19} />} label="AI Query" subtitle="Ask AI assistant about your model & scene" onClick={() => setIsAIQueryOpen(true)} />
-        <AIToolButton id="generate" icon={<Wand2 size={19} />} label="AI Generate" subtitle="Generate 3D geometry from text prompt" onClick={() => setIsAIGenerateOpen(true)} />
-        <AIToolButton id="renderer" icon={<Search size={19} />} label="AI Renderer" subtitle="Generate photorealistic AI render from view" onClick={() => setIsAIRendererOpen(true)} />
-        <AIToolButton id="photo3d" icon={<Camera size={19} />} label="Photo to 3D (AI)" subtitle="Turn a photo into a 3D model" onClick={() => window.dispatchEvent(new CustomEvent('polyform:photo-to-3d'))} />
+        <AIToolButton id="ai_query" icon={<Sparkles size={19} />} label="AI Query" subtitle="Ask AI assistant about your model & scene" onClick={() => setIsAIQueryOpen(true)} />
+        <AIToolButton id="ai_generate" icon={<Wand2 size={19} />} label="AI Generate" subtitle="Generate 3D geometry from text prompt" onClick={() => setIsAIGenerateOpen(true)} />
+        <AIToolButton id="ai_renderer" icon={<Search size={19} />} label="AI Renderer" subtitle="Generate photorealistic AI render from view" onClick={() => setIsAIRendererOpen(true)} />
+        <AIToolButton id="photo_to_3d" icon={<Camera size={19} />} label="Photo to 3D (AI)" subtitle="Turn a photo into a 3D model" onClick={() => window.dispatchEvent(new CustomEvent('polyform:photo-to-3d'))} />
       </aside>
     </FlyoutSideContext.Provider>
   );

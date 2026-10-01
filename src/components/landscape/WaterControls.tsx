@@ -114,6 +114,7 @@ export function WaterControls() {
                   <input type="range" className="w-full" min={0} max={1} step={0.05} value={flow.turbulence ?? 0.35}
                     onChange={event => update({ flow: { ...flow, mode: 'stream', turbulence: parseFloat(event.target.value) } })} />
                 </div>
+                <p className="text-[10px] text-gray-500">Enable Weather and adjust its wind for lake waves. Current turbulence adds irregular crests; shallow fast flow and steep waves produce foam.</p>
                 <div>
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Flow direction</label>

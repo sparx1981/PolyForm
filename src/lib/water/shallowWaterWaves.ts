@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export interface SurfaceForcing { speed: number; direction: [number, number]; turbulence: number }
+export interface SurfaceForcing { speed: number; direction: [number, number]; turbulence: number; wind?: [number, number] }
 const GRAVITY = 9.81;
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const smooth = (lo: number, hi: number, x: number) => { const t = clamp((x-lo)/(hi-lo), 0, 1); return t*t*(3-2*t); };
@@ -71,10 +71,17 @@ export class ShallowWaterWaves {
     this.pending += clamp(delta, 0, 0.1);
     if (this.pending < 1/30 || this.maxDepth === 0) return;
     const elapsed = this.pending; this.pending=0;
-    if (this.time===0 && input.speed<=0 && this.heights.every(h=>h===0)) return;
+    if (this.time===0 && input.speed<=0 && !Math.hypot(...(input.wind ?? [0,0])) && this.heights.every(h=>h===0)) return;
     const n=this.size, speed=clamp(input.speed,0,4), turbulence=clamp(input.turbulence,0,1);
     const length=Math.hypot(...input.direction) || 1;
     const cx=input.direction[0]/length*speed, cz=input.direction[1]/length*speed;
+    const windX=input.wind?.[0] ?? 0, windZ=input.wind?.[1] ?? 0;
+    const windSpeed=Math.min(25,Math.hypot(windX,windZ));
+    const wx=windX/(Math.hypot(windX,windZ)||1), wz=windZ/(Math.hypot(windX,windZ)||1);
+    // Fetch-limited wind pressure, with a finite-depth dispersion relation per cell.
+    const fetch=Math.min(this.bounds.z,this.bounds.w);
+    const windAmplitude=Math.min(.18,windSpeed*windSpeed*.0007)*smooth(1,12,fetch);
+    const windK=2*Math.PI/Math.max(Math.max(this.dx,this.dz)*5,Math.min(8,1+windSpeed*.25));
     const safeDt=0.35*Math.min(this.dx,this.dz)/(Math.sqrt(GRAVITY*this.maxDepth)+speed+1e-3);
     const steps=Math.max(1,Math.ceil(elapsed/safeDt)), dt=elapsed/steps;
     for (let step=0; step<steps; step++) {
@@ -93,7 +100,10 @@ export class ShallowWaterWaves {
         // A changing pressure field supplies small-scale energy; the solver propagates it.
         const stirring=amplitude*(Math.sin(k*px+0.7*Math.sin(k*pz-this.time*1.7))
           +.45*Math.sin(k*pz*1.3+this.time*2.1));
-        this.pressure[i]=this.advected[i]+stirring;
+        const omega=Math.sqrt(GRAVITY*windK*Math.tanh(windK*this.depth[i]));
+        const phase=windK*((x+.5)*this.dx*wx+(z+.5)*this.dz*wz)-omega*this.time;
+        const windPressure=windAmplitude*(Math.sin(phase)+.28*Math.sin(phase*1.7+.8));
+        this.pressure[i]=this.advected[i]+stirring+windPressure;
         total+=this.advected[i]; wet++;
       }
       // Semi-Lagrangian transport diffuses some volume at irregular banks. Correct its mean.
@@ -115,9 +125,8 @@ export class ShallowWaterWaves {
       }
       for(let z=0;z<n;z++) for(let x=0;x<n;x++) {
         const i=z*n+x, d=this.depth[i]; if(!d) continue;
-        const faceDepth=(other:number)=>Math.min(d,this.depth[other] ?? 0);
-        const fluxX=this.u[z*(n+1)+x+1]*faceDepth(i+1)-this.u[z*(n+1)+x]*faceDepth(i-1);
-        const fluxZ=this.v[(z+1)*n+x]*faceDepth(i+n)-this.v[z*n+x]*faceDepth(i-n);
+        const fluxX=this.u[z*(n+1)+x+1]*Math.min(d,this.depth[i+1]??0)-this.u[z*(n+1)+x]*Math.min(d,this.depth[i-1]??0);
+        const fluxZ=this.v[(z+1)*n+x]*Math.min(d,this.depth[i+n]??0)-this.v[z*n+x]*Math.min(d,this.depth[i-n]??0);
         this.heights[i]=clamp(this.advected[i]-dt*(fluxX/this.dx+fluxZ/this.dz), -d*.22, d*.22);
         this.foam[i]=this.advFoam[i];
       }
@@ -131,7 +140,11 @@ export class ShallowWaterWaves {
       // Whitecaps are an aeration closure: steep positive crests plus fast shallow currents.
       const breaking=smooth(.10,.32,steepness)*smooth(.025,.12,h);
       const rapids=smooth(.6,1.2,froude)*smooth(.06,.24,steepness);
-      const source=Math.max(breaking,rapids)*smooth(.25,.85,turbulence)*smooth(.1,.8,speed);
+      const convergence=Math.max(0,-((this.u[z*(n+1)+x+1]-this.u[z*(n+1)+x])/this.dx
+        +(this.v[(z+1)*n+x]-this.v[z*n+x])/this.dz));
+      const compression=smooth(.3,2,convergence)*smooth(.04,.18,h/Math.max(d,.05));
+      const energy=Math.max(smooth(.25,.85,turbulence)*smooth(.1,.8,speed),smooth(7,16,windSpeed));
+      const source=Math.max(breaking,rapids,compression)*energy;
       this.foam[i]=d ? Math.max(this.foam[i],source) : 0;
       this.pixels[i*4]=h; this.pixels[i*4+1]=sx; this.pixels[i*4+2]=sz; this.pixels[i*4+3]=this.foam[i];
     }

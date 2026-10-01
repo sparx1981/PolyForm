@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../../AppContext';
-import type { BetaEffects } from './BetaEnvironmentRuntime';
 
-export const BetaEffectsContext = createContext<typeof BetaEffects | null>(null);
+export const BetaEffectsContext = createContext<ReactNode>(null);
 type Runtime = typeof import('./BetaEnvironmentRuntime');
 let loading: Promise<Runtime> | undefined;
 
@@ -17,6 +16,7 @@ export function BetaEnvironmentRoot({ children }: { children: ReactNode }) {
   const { graphicsSettings, setGraphicsSettings, setMeasurements } = useApp();
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const enabled = graphicsSettings.beta.enabled;
+  const [effects, setEffects] = useState<ReactNode>(null);
   const fail = () => {
     setGraphicsSettings(p => ({ ...p, beta: { ...p.beta, enabled: false } }));
     setMeasurements('Beta environment could not load. Existing rendering restored; try enabling Beta again.');
@@ -28,11 +28,15 @@ export function BetaEnvironmentRoot({ children }: { children: ReactNode }) {
     loading.then(module => { if (active) setRuntime(module); }).catch(() => { loading = undefined; if (active) fail(); });
     return () => { active = false; };
   }, [enabled, runtime]);
-  if (!enabled || !runtime) return <>{children}</>;
-  return <BetaFailureBoundary fallback={children} onError={fail}><runtime.BetaEnvironmentRuntime onError={fail}>{children}</runtime.BetaEnvironmentRuntime></BetaFailureBoundary>;
+  // Keep cameras, controls and material owners at the same React path throughout loading.
+  return <BetaEffectsContext.Provider value={enabled && effects ? <BetaFailureBoundary fallback={null} onError={fail}>{effects}</BetaFailureBoundary> : null}>
+    {children}
+    {enabled && runtime && <BetaFailureBoundary fallback={null} onError={fail}>
+      <runtime.BetaEnvironmentRuntime onError={fail} onEffects={setEffects} />
+    </BetaFailureBoundary>}
+  </BetaEffectsContext.Provider>;
 }
 
 export function BetaEnvironmentEffects() {
-  const Effects = useContext(BetaEffectsContext);
-  return Effects ? <Effects /> : null;
+  return useContext(BetaEffectsContext);
 }

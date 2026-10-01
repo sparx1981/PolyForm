@@ -105,6 +105,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
   const flyoutSide: 'right' | 'bottom' = horizontal ? 'bottom' : 'right';
   const { 
     isBasicToolbarEnabled,
+    toolbarVisibility,
     theme, 
     activeTool, 
     setActiveTool,
@@ -305,12 +306,13 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <div 
         className="relative"
         ref={lineGroupRef}
+        style={['line','poly','bezier','arc'].every(id => toolbarVisibility[id] === false) ? {display:'none'} : undefined}
         onMouseEnter={handleLineEnter}
         onMouseLeave={handleLineLeave}
       >
         <button 
           aria-label="Line and curve tools"
-          onClick={() => setActiveTool('line')}
+          onClick={() => { const tool = (['line','poly','bezier','arc'] as ToolType[]).find(id => toolbarVisibility[id] !== false); if (tool) setActiveTool(tool); }}
           className={cn(
             "toolbar-btn transition-colors relative",
             (activeTool === 'line' || activeTool === 'poly' || activeTool === 'bezier' || activeTool === 'arc') && "toolbar-btn-active"
@@ -358,6 +360,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   )}
                 >
                   <button 
+                    style={toolbarVisibility['line'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('line')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -368,6 +371,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Line Tool (L)</span>
                   </button>
                   <button 
+                    style={toolbarVisibility['poly'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('poly')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -378,6 +382,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Poly Line Tool</span>
                   </button>
                   <button 
+                    style={toolbarVisibility['bezier'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('bezier')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -388,6 +393,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Bézier Curve Tool</span>
                   </button>
                   <button
+                    style={toolbarVisibility['arc'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('arc')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -408,12 +414,13 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <div 
         className="relative"
         ref={circleGroupRef}
+        style={['rectangle','circle','polygon','triangle'].every(id => toolbarVisibility[id] === false) ? {display:'none'} : undefined}
         onMouseEnter={handleCircleEnter}
         onMouseLeave={handleCircleLeave}
       >
         <button 
           aria-label="Shape tools"
-          onClick={() => setActiveTool('rectangle')}
+          onClick={() => { const tool = (['rectangle','circle','polygon','triangle'] as ToolType[]).find(id => toolbarVisibility[id] !== false); if (tool) setActiveTool(tool); }}
           className={cn(
             "toolbar-btn transition-colors relative",
             (activeTool === 'circle' || activeTool === 'polygon' || activeTool === 'triangle' || activeTool === 'rectangle') && "toolbar-btn-active"
@@ -444,6 +451,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   )}
                 >
                   <button 
+                    style={toolbarVisibility['circle'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('circle')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -454,6 +462,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Circle Tool (C)</span>
                   </button>
                   <button 
+                    style={toolbarVisibility['polygon'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('polygon')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -464,6 +473,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Polygon Tool (Pg)</span>
                   </button>
                   <button 
+                    style={toolbarVisibility['triangle'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('triangle')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -474,6 +484,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Triangle (T)</span>
                   </button>
                   <button 
+                    style={toolbarVisibility['rectangle'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('rectangle')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -493,6 +504,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <div 
         className="relative"
         ref={threeDGroupRef}
+        style={['sphere','cone','pyramid','donut','dome'].every(id => toolbarVisibility[id] === false) ? {display:'none'} : undefined}
         onMouseEnter={handle3DEnter}
         onMouseLeave={handle3DLeave}
       >
@@ -528,7 +540,8 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   )}
                 >
               <button 
-                onClick={() => setActiveTool('sphere')}
+                style={toolbarVisibility['sphere'] === false ? {display:'none'} : undefined}
+                    onClick={() => setActiveTool('sphere')}
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
                   activeTool === 'sphere' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
@@ -538,7 +551,8 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                 <span>Sphere</span>
               </button>
               <button 
-                onClick={() => setActiveTool('cone')}
+                style={toolbarVisibility['cone'] === false ? {display:'none'} : undefined}
+                    onClick={() => setActiveTool('cone')}
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
                   activeTool === 'cone' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
@@ -548,7 +562,8 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                 <span>Cone</span>
               </button>
               <button 
-                onClick={() => setActiveTool('pyramid')}
+                style={toolbarVisibility['pyramid'] === false ? {display:'none'} : undefined}
+                    onClick={() => setActiveTool('pyramid')}
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
                   activeTool === 'pyramid' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
@@ -558,7 +573,8 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                 <span>Pyramid</span>
               </button>
               <button 
-                onClick={() => setActiveTool('donut')}
+                style={toolbarVisibility['donut'] === false ? {display:'none'} : undefined}
+                    onClick={() => setActiveTool('donut')}
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
                   activeTool === 'donut' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
@@ -568,7 +584,8 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                 <span>Donut</span>
               </button>
               <button 
-                onClick={() => setActiveTool('dome')}
+                style={toolbarVisibility['dome'] === false ? {display:'none'} : undefined}
+                    onClick={() => setActiveTool('dome')}
                 className={cn(
                   "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
                   activeTool === 'dome' ? (theme === 'dark' ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900") : (theme === 'dark' ? "hover:bg-gray-700 text-gray-300" : "hover:bg-gray-50 text-gray-700")
@@ -587,12 +604,14 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <div 
         className="relative"
         ref={bevelGroupRef}
+        style={['bevel'].every(id => toolbarVisibility[id] === false) ? {display:'none'} : undefined}
         onMouseEnter={handleBevelEnter}
         onMouseLeave={handleBevelLeave}
       >
         <button 
           aria-label="Bevel"
-          onClick={() => setActiveTool('bevel')}
+          style={toolbarVisibility['bevel'] === false ? {display:'none'} : undefined}
+                    onClick={() => setActiveTool('bevel')}
           className={cn(
             "toolbar-btn transition-colors relative",
             activeTool === 'bevel' && "toolbar-btn-active"
@@ -623,6 +642,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   )}
                 >
                   <button 
+                    style={toolbarVisibility.bevel_radius === false ? {display:'none'} : undefined}
                     onClick={() => { setActiveTool('bevel'); setActiveBevelType('radius'); }}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -633,6 +653,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Radius (Fillet)</span>
                   </button>
                   <button 
+                    style={toolbarVisibility.bevel_chamfer === false ? {display:'none'} : undefined}
                     onClick={() => { setActiveTool('bevel'); setActiveBevelType('chamfer'); }}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -658,12 +679,13 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
       <div 
         className="relative"
         ref={measureGroupRef}
+        style={['tape','protractor','dimensions_toggle'].every(id => toolbarVisibility[id] === false) ? {display:'none'} : undefined}
         onMouseEnter={handleMeasureEnter}
         onMouseLeave={handleMeasureLeave}
       >
         <button 
           aria-label="Tape measure"
-          onClick={() => setActiveTool('tape')}
+          onClick={() => { const tool = (['tape','protractor'] as ToolType[]).find(id => toolbarVisibility[id] !== false); if (tool) setActiveTool(tool); }}
           className={cn(
             "toolbar-btn transition-colors relative",
             (activeTool === 'tape' || activeTool === 'protractor') && "toolbar-btn-active"
@@ -694,6 +716,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                   )}
                 >
                   <button 
+                    style={toolbarVisibility['tape'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('tape')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -704,6 +727,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Measuring Tape</span>
                   </button>
                   <button 
+                    style={toolbarVisibility['protractor'] === false ? {display:'none'} : undefined}
                     onClick={() => setActiveTool('protractor')}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -714,6 +738,7 @@ export default function LeftToolbar({ layoutMode, dock = 'left' }: LeftToolbarPr
                     <span>Protractor</span>
                   </button>
                   <button 
+                    style={toolbarVisibility.dimensions_toggle === false ? {display:'none'} : undefined}
                     onClick={() => setShowAllDimensions(!showAllDimensions)}
                     className={cn(
                       "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",

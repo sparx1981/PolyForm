@@ -4,7 +4,7 @@ import { Environment } from '@react-three/drei';
 import { LUT, SMAA, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, Color, Data3DTexture, DataTexture, Matrix4, TextureLoader, Vector2, Vector3, RedFormat, UnsignedByteType, RepeatWrapping, LinearFilter, NearestFilter, RGBAFormat, type Texture } from 'three';
-import { Atmosphere, Sky, SunLight, SkyLight, type AtmosphereApi } from '@takram/three-atmosphere/r3f';
+import { Atmosphere, Sky, SunLight, SkyLight, AtmosphereContext, type AtmosphereApi } from '@takram/three-atmosphere/r3f';
 import { PrecomputedTexturesLoader, type PrecomputedTextures } from '@takram/three-atmosphere';
 import { Clouds, CloudLayer } from '@takram/three-clouds/r3f';
 import { AerialPerspective } from '@takram/three-atmosphere/r3f';
@@ -14,7 +14,6 @@ import { createHaldLookupTexture } from '@takram/three-geospatial-effects';
 import { getSunDirectionECI, getECIToECEFRotationMatrix } from '@takram/three-atmosphere';
 import { useApp } from '../../AppContext';
 import { tilesToSiteMatrix } from '../../lib/worldSite/googleTiles';
-import { BetaEffectsContext } from './BetaEnvironmentBridge';
 import { createContext, useContext } from 'react';
 
 const base = `${import.meta.env.BASE_URL}beta/`;
@@ -23,7 +22,7 @@ interface Assets { atmosphere: PrecomputedTextures; stars: ArrayBuffer; weather:
 const AssetsContext = createContext<Assets | null>(null);
 
 /** Own every loaded GPU texture, including partial loads; failure restores the legacy scene. */
-export function BetaEnvironmentRuntime({ children, onError }: { children: ReactNode; onError: () => void }) {
+export function BetaEnvironmentRuntime({ onEffects, onError }: { onEffects: (effects: ReactNode) => void; onError: () => void }) {
   const { gl } = useThree();
   const { graphicsSettings, shapes, setMeasurements } = useApp();
   const s = graphicsSettings.beta;
@@ -76,15 +75,24 @@ export function BetaEnvironmentRuntime({ children, onError }: { children: ReactN
     atmosphere.current?.worldToECEFMatrix.copy(worldToECEF);
     if (atmosphere.current && lastDate.current !== +date) { atmosphere.current.updateByDate(date); lastDate.current = +date; }
   }, -1);
-  if (!assets) return <>{children}</>;
+  if (!assets) return null;
   return <AssetsContext.Provider value={assets}><Atmosphere ref={atmosphere} textures={assets.atmosphere} date={date}>
-    <BetaEffectsContext.Provider value={BetaEffects}>
-      <CelestialScene worldToECEF={worldToECEF} date={date} />
-      {s.clouds && s.sky && <CloudMaterialShadows />}
-      {s.sky && <Environment key={`${s.date}:${worldToECEF.elements.join(',')}`} frames={3} resolution={128}><Sky groundAlbedo={groundAlbedo} /></Environment>}
-      {children}
-    </BetaEffectsContext.Provider>
+    <PublishEffects onEffects={onEffects} />
+    <CelestialScene worldToECEF={worldToECEF} date={date} />
+    {s.clouds && s.sky && <CloudMaterialShadows />}
+    {s.sky && <Environment key={`${s.date}:${worldToECEF.elements.join(',')}`} frames={3} resolution={128}><Sky groundAlbedo={groundAlbedo} /></Environment>}
   </Atmosphere></AssetsContext.Provider>;
+}
+
+/** The composer receives the same atmosphere state without reparenting the editor scene. */
+function PublishEffects({ onEffects }: { onEffects: (effects: ReactNode) => void }) {
+  const atmosphere = useContext(AtmosphereContext);
+  const assets = useContext(AssetsContext);
+  useEffect(() => {
+    onEffects(<AssetsContext.Provider value={assets}><AtmosphereContext.Provider value={atmosphere}><BetaEffects /></AtmosphereContext.Provider></AssetsContext.Provider>);
+    return () => onEffects(null);
+  }, [onEffects, atmosphere, assets, AssetsContext]);
+  return null;
 }
 
 function CelestialScene({ worldToECEF, date }: { worldToECEF: Matrix4; date: Date }) {
@@ -167,6 +175,7 @@ export function BetaEffects() {
   const quality = size.width < 768 ? 'low' : s.quality;
   const wind = useMemo(() => new Vector2(graphicsSettings.weather.windX, graphicsSettings.weather.windZ).multiplyScalar(s.windScale * 0.00005), [graphicsSettings.weather.windX, graphicsSettings.weather.windZ, s.windScale]);
   const perspective = (camera as { isPerspectiveCamera?: boolean }).isPerspectiveCamera;
+  if (!assets) return null;
   return <>
     {/* Temporal upscale samples only one pixel in each 4x4 block and bypasses
         accumulation for fresh pixels. Use the library's TAA resolve instead. */}

@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import { FlaskConical, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { motion, useDragControls } from 'motion/react';
+import { usePhoneLayout } from '../../lib/phoneLayout';
+import { useEffect, useState } from 'react';
+import { FlaskConical, X, PanelRightClose, GripVertical } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { defaultBetaEnvironment, type BetaEnvironmentSettings } from '../../lib/graphics/betaEnvironment';
 import { GraphicsSlider } from './WeatherControls';
@@ -7,7 +10,19 @@ import { GraphicsSlider } from './WeatherControls';
 /** Available in every editor layout, including the phone; opening it never enables effects. */
 export function BetaToolbar() {
   const [open, setOpen] = useState(false);
-  const { graphicsSettings, setGraphicsSettings, theme } = useApp();
+  const [docked, setDocked] = useState(() => { try { return localStorage.getItem('polyform-beta-docked') === 'true'; } catch { return false; } });
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const { isPhone } = usePhoneLayout();
+  const dragControls = useDragControls();
+  useEffect(() => {
+    if (!open || !docked) { setSlot(null); return; }
+    const findSlot = () => setSlot(document.getElementById('beta-environment-dock'));
+    findSlot();
+    const observer = new MutationObserver(findSlot);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [open, docked]);
+  const { graphicsSettings, setGraphicsSettings, theme, setRightPanelVisible, toolbarVisibility } = useApp();
   const s = graphicsSettings.beta;
   const update = (changes: Partial<BetaEnvironmentSettings>) => setGraphicsSettings(p => ({ ...p, beta: { ...p.beta, ...changes } }));
   const toggle = (key: 'enabled' | 'sky' | 'stars' | 'clouds' | 'atmosphere' | 'flare' | 'grading', title: string) =>
@@ -16,10 +31,15 @@ export function BetaToolbar() {
     <GraphicsSlider label={label} value={s[key] as number} min={min} max={max} step={step} unit={unit} onChange={v => update({ [key]: v })} />;
   const selectClass = 'block w-full rounded border bg-white text-gray-900 p-1 dark:bg-gray-800 dark:text-gray-100';
   const commitDate = (value: string) => { if (value && Number.isFinite(Date.parse(value + 'Z'))) update({ date: value.slice(0,16) }); };
-  return <div className="fixed right-3 bottom-16 z-40" data-testid="beta-toolbar">
-    <button className="flex items-center gap-2 rounded border border-blue-500 bg-gray-900 text-white px-3 py-2 text-xs shadow-lg" title="Beta environment lab" aria-expanded={open} onClick={() => setOpen(v => !v)}><FlaskConical size={16} />Beta</button>
-    {open && <section role="dialog" aria-label="Beta environment lab" className={`absolute right-0 bottom-12 w-[min(360px,calc(100vw-24px))] max-h-[75dvh] overflow-y-auto rounded-lg border shadow-xl p-4 text-xs space-y-3 ${theme === 'dark' ? 'bg-gray-900 text-gray-100 border-gray-700' : 'bg-white text-gray-900 border-gray-200'}`}>
-      <div className="flex justify-between items-center"><h2 className="font-semibold text-sm">Environment lab · Beta</h2><button aria-label="Close environment lab" onClick={() => setOpen(false)}><X size={18} /></button></div>
+  const embedded = docked && Boolean(slot);
+  const panel = <motion.section key={`${isPhone}:${embedded}`} role="dialog" aria-label="Beta environment lab"
+    drag={!embedded && !isPhone} dragListener={false} dragControls={dragControls} dragMomentum={false}
+    className={`${embedded ? 'relative w-full' : 'fixed right-3 bottom-28 w-[min(360px,calc(100vw-24px))]'} z-[85] max-h-[75dvh] overflow-y-auto rounded-lg border shadow-xl p-4 text-xs space-y-3 ${theme === 'dark' ? 'bg-gray-900 text-gray-100 border-gray-700' : 'bg-white text-gray-900 border-gray-200'}`}>
+      <div className="flex justify-between items-center gap-2">
+        <h2 className={`font-semibold text-sm flex items-center gap-1 ${!embedded && !isPhone ? 'cursor-grab touch-none' : ''}`} onPointerDown={e => { if (!embedded && !isPhone) dragControls.start(e); }}><GripVertical size={16} />Environment lab · Beta</h2>
+        <button aria-label={docked ? 'Undock environment lab' : 'Dock environment lab'} onClick={() => { const next = !docked; setDocked(next); try { localStorage.setItem('polyform-beta-docked', String(next)); } catch { /* Docking still works without browser storage. */ } if (next) setRightPanelVisible(true); }}><PanelRightClose size={18} /></button>
+        <button aria-label="Close environment lab" onClick={() => setOpen(false)}><X size={18} /></button>
+      </div>
       {toggle('enabled', 'Enable Beta environment')}
       <p className="text-gray-500">Saved with this model. Clouds use Weather wind. Quality starts at Low; disable clouds to keep the sky on slower devices.</p>
       <button className="text-blue-500 underline" onClick={() => setGraphicsSettings(p => ({ ...p, beta: defaultBetaEnvironment() }))}>Reset to existing environment</button>
@@ -43,6 +63,12 @@ export function BetaToolbar() {
         {toggle('grading','Colour grading')}{s.grading && <><label>Grading preset<select className={selectClass} value={s.grade} onChange={e => update({ grade: e.target.value as typeof s.grade })}><option value="neutral">Neutral architecture</option><option value="warm">Warm</option><option value="cool">Cool</option></select></label>{slider('gradeStrength','Grading strength',0,1)}</>}
         {slider('exposure','Exposure',0.1,4,0.05)}
       </fieldset>
-    </section>}
-  </div>;
+    </motion.section>;
+  if (toolbarVisibility.beta_lab === false) return null;
+  return <>
+    <div className="fixed right-3 bottom-16 z-[85]" data-testid="beta-toolbar">
+      <button className="flex items-center gap-2 rounded border border-blue-500 bg-gray-900 text-white px-3 py-2 text-xs shadow-lg" title="Beta environment lab" aria-expanded={open} onClick={() => { setOpen(v => !v); if (docked) setRightPanelVisible(true); }}><FlaskConical size={16} />Beta</button>
+    </div>
+    {open && (embedded ? createPortal(panel, slot!) : panel)}
+  </>;
 }

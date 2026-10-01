@@ -1,8 +1,10 @@
+import { registerVegetationPreparation } from '../../lib/terrain/vegetationRenderPreparation';
 import { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Shape, TerrainModifier, WildflowerSettings, DEFAULT_WILDFLOWER_SETTINGS } from '../../types';
 import { useApp } from '../../AppContext';
+import { extractExclusionFootprints } from '../../lib/terrain/grassGeometry';
 import { inject } from '../../lib/graphics/shaderHooks';
 import {
   createFlowerGeometry, generateWildflowerInstances, meadowKinds, FLOWER_KINDS, FLOWER_HEIGHT_SCALE,
@@ -18,6 +20,7 @@ interface ProceduralWildflowersProps {
 /** Uniforms every species shares: wind, height settings, foliage colours. */
 interface SharedFlowerUniforms {
   uTime: { value: number };
+  uLodRange: { value: THREE.Vector2 };
   uWindStrength: { value: number };
   uWindDir: { value: THREE.Vector2 };
   uBaseHeight: { value: number };
@@ -87,6 +90,8 @@ attribute float aHeightVariance;
 attribute float aAttach;
 attribute float aPart;
 attribute float aShade;
+uniform vec2 uLodRange;
+varying float vLod;
 uniform float uTime;
 uniform float uWindStrength;
 uniform vec2 uWindDir;
@@ -110,7 +115,9 @@ transformed.y = (position.y - aAttach) + aAttach * fHeight;
 float fBend = aAttach * aAttach;
 transformed.xz += aShapeOffset.xy * fBend * fHeight;
 #ifdef USE_INSTANCING
-  vec2 fRoot = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+  vec3 fRoot3 = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  vLod = smoothstep(uLodRange.x, uLodRange.y, distance(fRoot3, cameraPosition));
+  vec2 fRoot = fRoot3.xz;
   mat3 fInstance = mat3(instanceMatrix);
 #else
   vec2 fRoot = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
@@ -166,7 +173,7 @@ if (vPart < 0.5) {
 diffuseColor.rgb *= fColor;
 `;
 
-function createFlowerMaterial(shared: SharedFlowerUniforms, species: SpeciesUniforms): THREE.MeshStandardMaterial {
+function createFlowerMaterial(shared: SharedFlowerUniforms, species: SpeciesUniforms, coarse = false): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.65, metalness: 0, side: THREE.DoubleSide });
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, shared, species);
@@ -190,7 +197,16 @@ function createFlowerMaterial(shared: SharedFlowerUniforms, species: SpeciesUnif
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-wildflower-v2';
+  const compile = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    compile.call(material, shader, renderer);
+    shader.fragmentShader = 'varying float vLod;\n' + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace('void main() {', `void main() {
+      float threshold = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
+      if (${coarse ? 'threshold >= vLod' : 'threshold < vLod'}) discard;
+    `);
+  };
+  material.customProgramCacheKey = () => `polyform-wildflower-v3-${coarse}`;
   return material;
 }
 
@@ -210,6 +226,7 @@ export function ProceduralWildflowers({
   terrainModifiers = []
 }: ProceduralWildflowersProps) {
   const { graphicsSettings } = useApp();
+  const { scene } = useThree();
   const flowerSettings: WildflowerSettings = useMemo(() => ({
     ...DEFAULT_WILDFLOWER_SETTINGS,
     ...(terrainShape.terrainData?.flowers || {})
@@ -219,16 +236,18 @@ export function ProceduralWildflowers({
   const species = useMemo(() => meadowKinds(flowerSettings.flowerType), [flowerSettings.flowerType]);
   const mixed = species.length > 1;
 
+  const footprintKey = useMemo(() => JSON.stringify(extractExclusionFootprints(shapes, terrainModifiers)), [shapes, terrainModifiers]);
   const instanceData = useMemo(() => visible
     ? generateWildflowerInstances(terrainShape, shapes, terrainModifiers, flowerSettings)
     : null,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [visible, terrainShape.id, terrainShape.terrainData?.heights, terrainShape.terrainData?.width,
-    terrainShape.terrainData?.depth, terrainShape.position, shapes, terrainModifiers,
+    terrainShape.terrainData?.depth, terrainShape.position, footprintKey,
     flowerSettings.density, flowerSettings.maxSlopeAngle, flowerSettings.flowerType]);
 
   const shared = useMemo<SharedFlowerUniforms>(() => ({
     uTime: { value: 0 },
+    uLodRange: { value: new THREE.Vector2(12, 20) },
     uWindStrength: { value: 0.02 },
     uWindDir: { value: new THREE.Vector2(Math.SQRT1_2, Math.SQRT1_2) },
     uBaseHeight: { value: 0.05 },
@@ -271,38 +290,112 @@ export function ProceduralWildflowers({
     shared.uWindDir.value.set(Math.cos(radians), Math.sin(radians));
   }, [shared, windDirection]);
 
-  // One instanced mesh per species that grows in this meadow.
+  // Spatial batches allow both the main camera and water reflection cameras to cull independently.
   const meshes = useMemo(() => {
     if (!instanceData || instanceData.instanceCount === 0) return [];
+    const buckets = new Map<FlowerKind, { picked: number[]; tiles: Map<string, { picked: number[]; bounds: THREE.Box3 }> }>();
+    for (let i = 0; i < instanceData.instanceCount; i++) {
+      const kind = FLOWER_KINDS[instanceData.kinds[i]];
+      if (!buckets.has(kind)) buckets.set(kind, { picked: [], tiles: new Map() });
+      const bucket = buckets.get(kind)!;
+      const x = instanceData.matrices[i*16+12], y = instanceData.matrices[i*16+13], z = instanceData.matrices[i*16+14];
+      const key = `${Math.floor(x/16)}:${Math.floor(z/16)}`;
+      if (!bucket.tiles.has(key)) bucket.tiles.set(key, { picked: [], bounds: new THREE.Box3() });
+      const tile = bucket.tiles.get(key)!;
+      tile.picked.push(i); tile.bounds.expandByPoint(new THREE.Vector3(x,y,z)); bucket.picked.push(i);
+    }
+    const materials = new Map<string, THREE.MeshStandardMaterial>();
+    const getMaterial = (kind: FlowerKind, coarse: boolean) => {
+      const key = `${kind}:${coarse}`;
+      if (!materials.has(key)) materials.set(key, createFlowerMaterial(shared, speciesUniforms[kind], coarse));
+      return materials.get(key)!;
+    };
     const matrix = new THREE.Matrix4();
-    return species.flatMap(kind => {
-      const kindIndex = FLOWER_KINDS.indexOf(kind);
-      const picked: number[] = [];
-      for (let i = 0; i < instanceData.instanceCount; i++) if (instanceData.kinds[i] === kindIndex) picked.push(i);
-      if (picked.length === 0) return [];
-      const geometry = createFlowerGeometry(kind);
+    return Array.from(buckets.entries()).flatMap(([kind, { picked, tiles }]) => [false, true].map(coarse => {
+      const geometry = createFlowerGeometry(kind, coarse);
       const offsets = new Float32Array(picked.length * 4);
       const variances = new Float32Array(picked.length);
+      const bounds = new THREE.Box3();
       picked.forEach((source, i) => {
         offsets.set(instanceData.shapeOffsets.subarray(source * 4, source * 4 + 4), i * 4);
         variances[i] = instanceData.heightVariances[source];
+        bounds.expandByPoint(new THREE.Vector3().fromArray(instanceData.matrices, source * 16 + 12));
       });
       geometry.setAttribute('aShapeOffset', new THREE.InstancedBufferAttribute(offsets, 4));
       geometry.setAttribute('aHeightVariance', new THREE.InstancedBufferAttribute(variances, 1));
-      const mesh = new THREE.InstancedMesh(geometry, createFlowerMaterial(shared, speciesUniforms[kind]), picked.length);
+      const mesh = new THREE.InstancedMesh(geometry, getMaterial(kind, coarse), picked.length);
       picked.forEach((source, i) => mesh.setMatrixAt(i, matrix.fromArray(instanceData.matrices, source * 16)));
       mesh.instanceMatrix.needsUpdate = true;
       mesh.name = 'procedural-wildflowers-mesh';
-      // Flowers are spread over the whole terrain and bent in the shader.
-      mesh.frustumCulled = false;
+      // Model bounds contain unit attachment heights; pad for actual shader height and wind below.
+      mesh.boundingBox = bounds;
+      mesh.boundingSphere = bounds.getBoundingSphere(new THREE.Sphere());
+      mesh.frustumCulled = true;
       mesh.receiveShadow = true;
       mesh.castShadow = false;
       mesh.raycast = () => {};
-      mesh.userData = { isFlowers: true, isObstacle: false };
-      return [mesh];
-    });
-  }, [instanceData, species, shared, speciesUniforms]);
-  useEffect(() => () => meshes.forEach(mesh => { mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); mesh.dispose(); }), [meshes]);
+      mesh.userData = { isFlowers: true, isObstacle: false, coarse, rootBounds: bounds.clone() };
+      // Per-camera decisions run for the main view AND mirrors. Do not set mesh.visible from the main camera.
+      const cameraPosition = new THREE.Vector3(), previousPosition = new THREE.Vector3(Infinity,Infinity,Infinity);
+      const previousRotation = new THREE.Quaternion(), previousProjection = new THREE.Matrix4();
+      const frustum = new THREE.Frustum(), viewProjection = new THREE.Matrix4();
+      const tileBounds = new THREE.Box3(), root = new THREE.Sphere();
+      let previousCamera: THREE.Camera | null = null;
+      let previousRange = '';
+      mesh.userData.prepareForCamera = (camera: THREE.Camera) => {
+        camera.getWorldPosition(cameraPosition);
+        const range = `${shared.uLodRange.value.x}:${shared.uLodRange.value.y}:${mesh.userData.pad}`;
+        if (camera === previousCamera && range === previousRange && previousProjection.equals(camera.projectionMatrix)
+          && previousPosition.distanceToSquared(cameraPosition) < .0625 && previousRotation.angleTo(camera.quaternion) < .003) return;
+        previousCamera = camera; previousRange = range; previousPosition.copy(cameraPosition);
+        previousRotation.copy(camera.quaternion); previousProjection.copy(camera.projectionMatrix);
+        frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+        const pad = mesh.userData.pad ?? 2;
+        root.radius = pad + 1;
+        let count = 0;
+        // Cull patches on the CPU but submit ONE instanced draw per species/LOD.
+        // Keep overlap at the view edges and LOD boundaries for smooth movement.
+        for (const tile of tiles.values()) {
+          tileBounds.copy(tile.bounds).expandByScalar(pad + 1);
+          if (!frustum.intersectsBox(tileBounds)) continue;
+          for (const source of tile.picked) {
+            const start = source * 16;
+            root.center.fromArray(instanceData.matrices,start+12);
+            if (!frustum.intersectsSphere(root)) continue;
+            const distance = root.center.distanceTo(cameraPosition);
+            if (coarse ? distance < shared.uLodRange.value.x-1 : distance > shared.uLodRange.value.y+1) continue;
+            mesh.setMatrixAt(count, matrix.fromArray(instanceData.matrices, start));
+            offsets.set(instanceData.shapeOffsets.subarray(source*4,source*4+4),count*4);
+            variances[count] = instanceData.heightVariances[source]; count++;
+          }
+        }
+        mesh.count = count;
+        mesh.instanceMatrix.needsUpdate = true;
+        geometry.getAttribute('aShapeOffset').needsUpdate = true;
+        geometry.getAttribute('aHeightVariance').needsUpdate = true;
+      };
+      return mesh;
+    }));
+  }, [instanceData, shared, speciesUniforms]);
+  useEffect(() => registerVegetationPreparation(scene, camera => {
+    for (const mesh of meshes) mesh.userData.prepareForCamera(camera);
+  }), [scene, meshes]);
+  useEffect(() => {
+    const height = Math.max(.2, ((flowerSettings.baseHeight ?? .05) + (flowerSettings.heightVariance ?? .3)) * 1.45);
+    const pad = height * (1 + Math.abs(flowerSettings.animationStrength ?? .02)) + .3;
+    // Heads keep their real centimetre size even on taller stems.
+    shared.uLodRange.value.set(10, 18);
+    for (const mesh of meshes) {
+      mesh.userData.pad = pad;
+      mesh.boundingBox!.copy(mesh.userData.rootBounds).expandByScalar(pad);
+      mesh.boundingBox!.getBoundingSphere(mesh.boundingSphere!);
+    }
+  }, [meshes, shared, flowerSettings.baseHeight, flowerSettings.heightVariance, flowerSettings.animationStrength]);
+  useEffect(() => () => {
+    const materials = new Set(meshes.map(mesh => mesh.material as THREE.Material));
+    meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); });
+    materials.forEach(material => material.dispose());
+  }, [meshes]);
 
   useFrame((_, delta) => {
     if (isAnimated) shared.uTime.value += delta * (flowerSettings.windSpeed ?? 2.0);

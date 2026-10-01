@@ -26,6 +26,7 @@ type Vec3 = [number, number, number];
  * longer stem, not bigger petals. Position y is stored as attach + offset.
  */
 class FlowerBuilder {
+  constructor(private coarse = false) {}
   positions: number[] = [];
   attach: number[] = [];
   part: number[] = [];
@@ -51,7 +52,8 @@ class FlowerBuilder {
     width: (s: number) => number; cup?: number; segments?: number; attach: number; part: number;
     transform?: THREE.Matrix4; crinkle?: number; twist?: number;
   }) {
-    const { origin, yaw, length, tiltStart, tiltEnd, width, cup = 0, segments = 3, attach, part, transform, crinkle = 0, twist = 0 } = opts;
+    const { origin, yaw, length, tiltStart, tiltEnd, width, cup = 0, attach, part, transform, crinkle = 0, twist = 0 } = opts;
+    const segments = this.coarse ? Math.min(2, opts.segments ?? 3) : (opts.segments ?? 3);
     const radial = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
     const side = new THREE.Vector3(-Math.sin(yaw), 0, Math.cos(yaw));
     const spine = new THREE.Vector3(...origin);
@@ -69,7 +71,7 @@ class FlowerBuilder {
       const up = new THREE.Vector3(0, Math.cos(tilt), 0).addScaledVector(radial, -Math.sin(tilt));
       const sideDir = side.clone().applyAxisAngle(radial, twist * s);
       const row: number[] = [];
-      for (const t of [-1, 0, 1]) {
+      for (const t of (this.coarse ? [-1,1] : [-1,0,1])) {
         const wobble = crinkle * Math.sin((s * 7 + t * 3.1 + yaw * 5) * 2.3) * w;
         const p = spine.clone().addScaledVector(sideDir, t * w).addScaledVector(up, Math.abs(t) * cup * w + wobble * Math.abs(t));
         if (transform) p.applyMatrix4(transform);
@@ -79,12 +81,14 @@ class FlowerBuilder {
     }
     for (let k = 0; k < segments; k++) {
       const a = rows[k], b = rows[k + 1];
-      this.indices.push(a[0], a[1], b[1], a[0], b[1], b[0], a[1], a[2], b[2], a[1], b[2], b[1]);
+      if (this.coarse) this.indices.push(a[0], a[1], b[1], a[0], b[1], b[0]);
+      else this.indices.push(a[0], a[1], b[1], a[0], b[1], b[0], a[1], a[2], b[2], a[1], b[2], b[1]);
     }
   }
 
   /** A thin three-sided stem from `from` (attach a0) to `to` (attach a1), in sections. */
   stem(from: Vec3, to: Vec3, a0: number, a1: number, radius: number, sections = 3, part: number = FLOWER_PART.stem) {
+    if (this.coarse) sections = 1;
     const rings: number[][] = [];
     for (let k = 0; k <= sections; k++) {
       const s = k / sections;
@@ -109,6 +113,7 @@ class FlowerBuilder {
 
   /** A low dome (flower centre / seed pod) of `radius` and `height` around the head origin. */
   dome(radius: number, height: number, attach: number, part: number, transform?: THREE.Matrix4, sides = 8, lift = 0) {
+    if (this.coarse) sides = 4;
     const place = (x: number, y: number, z: number) => {
       const p = new THREE.Vector3(x, y + lift, z);
       if (transform) p.applyMatrix4(transform);
@@ -135,12 +140,13 @@ class FlowerBuilder {
     const up = this.vertex([centre[0], centre[1] + size * 1.2, centre[2]], attach, FLOWER_PART.floret, shade);
     const down = this.vertex([centre[0], centre[1] - size * 0.6, centre[2]], attach, FLOWER_PART.floret, shade * 0.8);
     const ring: number[] = [];
-    for (let j = 0; j < 4; j++) {
-      const angle = yaw + (j / 4) * Math.PI * 2;
+    const sides = this.coarse ? 3 : 4;
+    for (let j = 0; j < sides; j++) {
+      const angle = yaw + (j / sides) * Math.PI * 2;
       ring.push(this.vertex([centre[0] + Math.cos(angle) * size, centre[1], centre[2] + Math.sin(angle) * size], attach, FLOWER_PART.floret, shade));
     }
-    for (let j = 0; j < 4; j++) {
-      const j2 = (j + 1) % 4;
+    for (let j = 0; j < sides; j++) {
+      const j2 = (j + 1) % sides;
       this.indices.push(up, ring[j2], ring[j], down, ring[j], ring[j2]);
     }
   }
@@ -187,8 +193,8 @@ function rosette(b: FlowerBuilder, count: number, length: number, width: number,
   }
 }
 
-function buildDaisy(): THREE.BufferGeometry {
-  const b = new FlowerBuilder();
+function buildDaisy(coarse = false): THREE.BufferGeometry {
+  const b = new FlowerBuilder(coarse);
   b.stem([0, 0, 0], [0, 0, 0], 0, 1, 0.0011, 4);
   rosette(b, 5, 0.032, 0.011, 25, 8, 0.25);
   const head = headTransform(12);
@@ -207,8 +213,8 @@ function buildDaisy(): THREE.BufferGeometry {
   return b.build();
 }
 
-function buildPoppy(): THREE.BufferGeometry {
-  const b = new FlowerBuilder();
+function buildPoppy(coarse = false): THREE.BufferGeometry {
+  const b = new FlowerBuilder(coarse);
   // Slightly curved hairy stem with a pair of lobed leaves low down.
   b.stem([0, 0, 0], [0.004, 0, 0.002], 0, 1, 0.0014, 4);
   rosette(b, 4, 0.05, 0.016, 35, 10, 0.2);
@@ -233,8 +239,8 @@ function buildPoppy(): THREE.BufferGeometry {
   return b.build();
 }
 
-function buildButtercup(): THREE.BufferGeometry {
-  const b = new FlowerBuilder();
+function buildButtercup(coarse = false): THREE.BufferGeometry {
+  const b = new FlowerBuilder(coarse);
   b.stem([0, 0, 0], [0, 0, 0], 0, 1, 0.0011, 4);
   // Deeply lobed basal leaves: three broad lobes per leaf.
   for (let i = 0; i < 3; i++) {
@@ -261,8 +267,8 @@ function buildButtercup(): THREE.BufferGeometry {
   return b.build();
 }
 
-function buildLavender(): THREE.BufferGeometry {
-  const b = new FlowerBuilder();
+function buildLavender(coarse = false): THREE.BufferGeometry {
+  const b = new FlowerBuilder(coarse);
   // A small clump: narrow grey-green leaves and three flower spikes of different heights.
   for (let i = 0; i < 7; i++) {
     const yaw = (i / 7) * Math.PI * 2 + 0.3;
@@ -293,8 +299,8 @@ function buildLavender(): THREE.BufferGeometry {
   return b.build();
 }
 
-function buildAlpine(): THREE.BufferGeometry {
-  const b = new FlowerBuilder();
+function buildAlpine(coarse = false): THREE.BufferGeometry {
+  const b = new FlowerBuilder(coarse);
   rosette(b, 6, 0.016, 0.006, 20, 5, 0.3);
   // A little cushion of three short stems, each with a starry five-petalled flower.
   const heads: Array<{ top: Vec3; reach: number; nod: number; yaw: number }> = [
@@ -318,13 +324,13 @@ function buildAlpine(): THREE.BufferGeometry {
   return b.build();
 }
 
-const BUILDERS: Record<FlowerKind, () => THREE.BufferGeometry> = {
+const BUILDERS: Record<FlowerKind, (coarse?: boolean) => THREE.BufferGeometry> = {
   daisy: buildDaisy, poppy: buildPoppy, buttercup: buildButtercup, lavender: buildLavender, alpine: buildAlpine,
 };
 
 /** Detailed geometry for one flower species (see FlowerBuilder for the attribute layout). */
-export function createFlowerGeometry(kind: FlowerKind): THREE.BufferGeometry {
-  return BUILDERS[kind]();
+export function createFlowerGeometry(kind: FlowerKind, coarse = false): THREE.BufferGeometry {
+  return BUILDERS[kind](coarse);
 }
 
 /** Stem height multiplier per species, relative to the meadow's height settings. */

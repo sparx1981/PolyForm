@@ -27,6 +27,14 @@ describe('flower geometry', () => {
     expect(parts.has(kind === 'lavender' ? FLOWER_PART.floret : FLOWER_PART.petal)).toBe(true);
   });
 
+  it.each(FLOWER_KINDS)('%s: distant models keep species parts while reducing triangles', kind => {
+    const near=createFlowerGeometry(kind), far=createFlowerGeometry(kind,true);
+    expect(far.index!.count).toBeLessThan(near.index!.count*.8);
+    const parts=(g:THREE.BufferGeometry)=>new Set(Array.from(g.getAttribute('aPart').array));
+    expect(parts(far)).toEqual(parts(near));
+    for(const attribute of ['position','normal','aAttach','aPart','aShade']) expect(Array.from(far.getAttribute(attribute).array).every(Number.isFinite)).toBe(true);
+    near.dispose();far.dispose();
+  });
   it('a mixed meadow grows every species; a single-species meadow only that one', () => {
     expect(meadowKinds('mixed')).toEqual(FLOWER_KINDS);
     expect(meadowKinds('poppy')).toEqual(['poppy']);

@@ -933,6 +933,7 @@ export default function RightPanelStack() {
       theme === 'dark' ? "bg-gray-800 border-l border-gray-700" : "panel-bg"
     )}>
       <div className="flex-1 overflow-y-auto">
+        <div id="beta-environment-dock" />
         {panelVisibility['entity'] !== false && (
           <Panel 
             id="entity" 

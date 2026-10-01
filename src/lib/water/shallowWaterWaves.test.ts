@@ -8,6 +8,19 @@ describe('shallow-water surface dynamics',()=>{
     for(let i=0;i<120;i++)s.update(1/30,{...forcing,speed:0,turbulence:0});
     expect(metrics(s)).toEqual({height:0,foam:0});s.dispose();
   });
+  it('weather wind drives waves independently of current and stops generating energy when removed',()=>{
+    const s=new ShallowWaterWaves([0,0,20,20],()=>2,24);
+    for(let i=0;i<150;i++) s.update(1/30,{speed:0,direction:[1,0],turbulence:0,wind:[14,0]});
+    const peak=metrics(s).height;
+    expect(peak).toBeGreaterThan(.025);
+    for(let i=0;i<300;i++) s.update(1/30,{speed:0,direction:[1,0],turbulence:0});
+    expect(metrics(s).height).toBeLessThan(peak*.1);s.dispose();
+  });
+  it('fast laminar deep current does not paint blanket foam',()=>{
+    const s=new ShallowWaterWaves([0,0,20,20],()=>6,24);
+    for(let i=0;i<100;i++) s.update(1/30,{speed:4,direction:[1,0],turbulence:0});
+    expect(metrics(s)).toEqual({height:0,foam:0});s.dispose();
+  });
   it('produces displaced crests and whitecaps at high turbulence',()=>{
     const calm=new ShallowWaterWaves([0,0,8,8],()=>1,24), rough=new ShallowWaterWaves([0,0,8,8],()=>1,24);
     for(let i=0;i<150;i++){calm.update(1/30,{...forcing,turbulence:0.1});rough.update(1/30,forcing);}

@@ -1294,6 +1294,7 @@ export default function TopBar() {
                       isVisible={isAIToolbarEnabled}
                       onToggle={() => setIsAIToolbarEnabled(!isAIToolbarEnabled)}
                     />
+                    <VisibilityToggle label="Beta Environment Lab" isVisible={toolbarVisibility.beta_lab !== false} onToggle={() => setToolbarVisibility({...toolbarVisibility,beta_lab:toolbarVisibility.beta_lab === false})} />
                     <div className="mt-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40">
                       <VisibilityToggle
                         label="Edit Toolbar Locations"
@@ -1307,10 +1308,10 @@ export default function TopBar() {
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Standard Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-2">
-                    {['select', 'eraser', 'paint', 'rectangle', 'circle', 'line', 'move', 'rotate', 'scale', 'pushpull', 'component'].map(tool => (
+                    {['select', 'lasso', 'eraser', 'paint', 'component', 'line', 'poly', 'bezier', 'arc', 'rectangle', 'circle', 'polygon', 'triangle', 'sphere', 'cone', 'pyramid', 'donut', 'dome', 'pushpull', 'followme', 'offset', 'combine', 'bevel', 'bevel_radius', 'bevel_chamfer', 'tape', 'dimensions', 'arealabel', 'leader', 'protractor', 'text', 'text3d', 'dimensions_toggle', 'move', 'rotate', 'scale'].map(tool => (
                       <VisibilityToggle 
                         key={tool}
-                        label={tool === 'component' ? 'Make Component' : tool.charAt(0).toUpperCase() + tool.slice(1)}
+                        label={({component:'Make Component',poly:'Polyline',bezier:'Bézier Curve',donut:'Donut / Torus',pushpull:'Extrude',followme:'Follow Me',bevel_radius:'Bevel Radius',bevel_chamfer:'Bevel Chamfer',tape:'Measuring Tape',dimensions:'Dimension',arealabel:'Area Label',leader:'Leader Label',text3d:'3D Text',dimensions_toggle:'Show Dimensions'} as Record<string,string>)[tool] ?? tool.charAt(0).toUpperCase() + tool.slice(1)}
                         isVisible={toolbarVisibility[tool] !== false}
                         onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
                       />
@@ -1325,6 +1326,7 @@ export default function TopBar() {
                       { tool: 'look', label: 'Look Around' },
                       { tool: 'teleport', label: 'Portal Navigation' },
                       { tool: 'walk', label: 'Walk Mode' },
+                      { tool: 'section', label: 'Section Plane' },
                       { tool: 'reset_camera', label: 'Reset Camera Position' },
                       { tool: 'clipping', label: 'Camera Depth Clipping' },
                     ].map(({ tool, label }) => (
@@ -1359,20 +1361,8 @@ export default function TopBar() {
                     ))}
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Camera Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg px-2">
-                    {[
-                      { tool: 'teleport', label: 'Portal Navigation' },
-                      { tool: 'walk', label: 'Walk Mode' },
-                      { tool: 'reset_camera', label: 'Reset Camera Position' },
-                      { tool: 'clipping', label: 'Camera Depth Clipping' },
-                    ].map(({ tool, label }) => (
-                      <VisibilityToggle 
-                        key={tool}
-                        label={label}
-                        isVisible={toolbarVisibility[tool] !== false}
-                        onToggle={() => setToolbarVisibility({ ...toolbarVisibility, [tool]: toolbarVisibility[tool] === false })}
-                      />
-                    ))}
+                  <CollapsibleSection title="AI Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg px-2">
+                    {[{tool:'ai_query',label:'AI Query'}, {tool:'ai_generate',label:'AI Generate'}, {tool:'ai_renderer',label:'AI Renderer'}, {tool:'photo_to_3d',label:'Photo to 3D'}].map(({tool,label}) => <VisibilityToggle key={tool} label={label} isVisible={toolbarVisibility[tool] !== false} onToggle={() => setToolbarVisibility({...toolbarVisibility,[tool]:toolbarVisibility[tool] === false})} />)}
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Landscapes Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-2">

@@ -48,6 +48,9 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
   const transmittance = useMemo(() => createWaterTransmittanceMaterial(uniforms), [uniforms]);
   const surface = useMemo(() => createWaterSurfaceMaterial(uniforms), [uniforms]);
   useEffect(() => () => { transmittance.dispose(); surface.dispose(); }, [transmittance, surface]);
+  const mirrorElapsed = useRef(0);
+  const lastMirrorLevel = useRef(NaN);
+  const lastMirrorCamera = useRef(new THREE.Matrix4().makeScale(0,0,0));
   const reflection = useMemo(() => new WaterReflection(), []);
   useEffect(() => () => reflection.dispose(), [reflection]);
   useEffect(() => { uniforms.uReflection.value = reflection.target.texture; }, [uniforms, reflection]);
@@ -146,7 +149,7 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
     uniforms.uRain.value = rain;
     if (rain > 0) uniforms.uRainTime.value += delta;
     advanceWaterFlow(uniforms, delta);
-    waveSim.update(delta,{ speed:uniforms.uFlowSpeed.value, direction:[uniforms.uFlowDir.value.x,uniforms.uFlowDir.value.y], turbulence:uniforms.uFlowTurbulence.value });
+    waveSim.update(delta,{ speed:uniforms.uFlowSpeed.value, direction:[uniforms.uFlowDir.value.x,uniforms.uFlowDir.value.y], turbulence:uniforms.uFlowTurbulence.value, wind:graphicsSettings.weather.enabled ? [graphicsSettings.weather.windX,graphicsSettings.weather.windZ] : [0,0] });
     uniforms.uDynamicsBounds.value.copy(waveSim.bounds);
     uniforms.uDynamicsBounds.value.x+=shape.position[0]; uniforms.uDynamicsBounds.value.y+=shape.position[2];
     if (!sharedSim) return;
@@ -171,7 +174,12 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
     const useMirror = perspective && visible;
     uniforms.uUseReflection.value = useMirror ? 1 : 0;
     surface.envMapIntensity = useMirror ? 0 : 1;
-    if (useMirror) {
+    mirrorElapsed.current += delta;
+    const cameraMoved = !lastMirrorCamera.current.equals(camera.matrixWorld);
+    if (useMirror && (cameraMoved || lastMirrorLevel.current !== uniforms.uLevel.value || mirrorElapsed.current >= 1/30)) {
+      mirrorElapsed.current = 0;
+      lastMirrorCamera.current.copy(camera.matrixWorld);
+      lastMirrorLevel.current = uniforms.uLevel.value;
       reflection.render(gl, scene, camera, uniforms.uLevel.value,
         object => object.name === 'procedural-grass-mesh' || object.userData?.isWater === true
           // Falling rain and snow mirrored in the water reads as streaks under the surface.
