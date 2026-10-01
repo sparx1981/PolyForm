@@ -42,6 +42,8 @@ const INCH = 0.0254;
 
 /** "7'2\"", "10' 5", "8'", "3600", "3.6 m", "3,600 mm" -> metres, or null. */
 export function parseDimension(raw: string): number | null {
+  // A plain number never starts with a zero (0998 is a misread 3998), unless it is a decimal.
+  if (/^0\d/.test(raw.trim())) return null;
   // Ticks read as ' or " depending on the resolution, so structure decides: feet mark, inches mark.
   const text = raw.replace(/[′’ʹ`]/g, "'").replace(/[″”ʺ]/g, '"').replace(/\s+/g, ' ').trim();
   // Two marks in a row are one inch mark; a lone mark after digits is feet unless it is the last one.
@@ -238,10 +240,12 @@ function findChain(strip: Gray, alongLen: number, u: number): { line: number; ti
     return n;
   };
   const flush = () => { if (run.length) { ticks.push(run.reduce((a, b) => a + b, 0) / run.length); run = []; } };
+  // Tick marks do not grow with the image the way text does, so they are judged more leniently on big plans.
+  const tu = Math.min(u, 1.2);
   // A tick is a short stroke across the line: dark rows unbroken above and below it add up to a few pixels.
   for (let x = 0; x < strip.w; x++) {
     const up = reach(x, Math.floor(top) - 1, -1), down = reach(x, Math.ceil(bottom) + 1, 1);
-    if (up >= 1.7 * u && down >= 1.7 * u && up + down >= 5.1 * u && up <= 12.5 * u && down <= 12.5 * u) run.push(x); else if (run.length && x - run[run.length - 1]! > 1) flush();
+    if (up >= 1.5 * tu && down >= 1.5 * tu && up + down >= 4.2 * tu && up <= 12.5 * u && down <= 12.5 * u) run.push(x); else if (run.length && x - run[run.length - 1]! > 1) flush();
   }
   flush();
   return ticks.length >= 2 ? { line, ticks } : null;
@@ -266,7 +270,7 @@ function readChain(strip: Gray, alongLen: number, u: number, back: Chain['back']
   const glyphComps = comps.filter(c => {
     const h = c.y1 - c.y0 + 1, w = c.x1 - c.x0 + 1;
     if (h >= 0.75 * H && h <= 1.3 * H && w <= 1.7 * H) return true;
-    return h >= 0.18 * H && h < 0.75 * H && w <= 0.9 * H && c.area >= 2; // marks and points
+    return h >= 0.18 * H && h < 0.9 * H && w <= 1.15 * H && c.area >= 2; // marks, points and the letter m
   });
   // Split fused pairs (two digits, or a digit and a mark, touching).
   const split: Comp[] = [];
@@ -378,6 +382,8 @@ export function estimateScaleFromDimensions(input: DimensionScaleInput, prior?: 
     if (support > bestSupport || (support === bestSupport && cost < bestCost)) { bestSupport = support; bestScale = s; bestCost = cost; }
   }
   if (!bestSupport) return null;
+  // One or two labels agreeing could be chance: they must also fit the typical door width closely.
+  if (bestSupport < 3 && prior && Math.abs(bestScale / prior.metresPerPixel - 1) > 0.18) return null;
   const chosen = new Map<number, Vote>();
   for (const v of votes) {
     if (Math.abs(v.valueM / v.pixels - bestScale) / bestScale > 0.025) continue;
@@ -389,7 +395,7 @@ export function estimateScaleFromDimensions(input: DimensionScaleInput, prior?: 
   const groups = new Set(votes.map(v => v.group)).size;
   const readings: DimensionReading[] = used.map(v => ({ text: v.text, valueM: v.valueM, pixels: v.pixels, a: v.a, b: v.b, side: v.side, confidence: Math.max(0, 1 - v.cost) }));
   const longest = used[0]!;
-  const confidence = bestSupport >= 3 ? Math.min(0.97, 0.8 + 0.05 * bestSupport) : bestSupport === 2 ? 0.7 : 0.4;
+  const confidence = bestSupport >= 3 ? Math.min(0.97, 0.8 + 0.05 * bestSupport) : bestSupport === 2 ? 0.55 : 0.4;
   return {
     metresPerPixel,
     source: 'dimension-text',

@@ -286,7 +286,7 @@ interface ArcEvidence { score: number; run: number; leaf: number; hinge: 'start'
  * leaf (a straight line from that jamb). Real plans draw these a pixel or two off the wall centre line
  * and often open past 90 degrees, so the search allows for both.
  */
-function doorArc(lum: Uint8Array, wallMask: Uint8Array, w: number, h: number, gap: Gap, u: number): ArcEvidence {
+function doorArc(lum: Uint8Array, wallMask: Uint8Array, w: number, h: number, gap: Gap, u: number, wallT: number): ArcEvidence {
   const g = gap.a1 - gap.a0;
   let best: ArcEvidence = { score: 0, run: 0, leaf: 0, hinge: 'start', swing: 1 };
   const bestValue = (e: ArcEvidence) => e.score * 0.4 + e.run * 0.4 + e.leaf * 0.2;
@@ -297,17 +297,22 @@ function doorArc(lum: Uint8Array, wallMask: Uint8Array, w: number, h: number, ga
   };
   const reach = Math.max(1, Math.round(u));
   // Quick look first: with no trace of an arc on the plain geometry, do not search the variations.
+  const reachQ = Math.round(wallT / 2 + 2 * u);
   const quick = (hinge: 'start' | 'end', swing: 1 | -1) => {
     const dir = hinge === 'start' ? 1 : -1, hingeA = hinge === 'start' ? gap.a0 : gap.a1;
-    let hits = 0, samples = 0;
-    for (let phi = 6; phi <= 100; phi += 6) {
-      const rad = (phi * Math.PI) / 180;
-      const a = hingeA + dir * Math.cos(rad) * g, c = gap.c + swing * Math.sin(rad) * g;
-      samples++;
-      const x = gap.o === 'h' ? a : c, y = gap.o === 'h' ? c : a;
-      if (ink(x, y)) hits++;
+    let top = 0;
+    for (const dc of [-reachQ, 0, reachQ]) {
+      let hits = 0, samples = 0;
+      for (let phi = 6; phi <= 100; phi += 6) {
+        const rad = (phi * Math.PI) / 180;
+        const a = hingeA + dir * Math.cos(rad) * g, c = gap.c + dc + swing * Math.sin(rad) * g;
+        samples++;
+        const x = gap.o === 'h' ? a : c, y = gap.o === 'h' ? c : a;
+        if (ink(x, y)) hits++;
+      }
+      top = Math.max(top, hits / samples);
     }
-    return hits / samples;
+    return top;
   };
   let worth = false;
   for (const hinge of ['start', 'end'] as const) for (const swing of [1, -1] as const) if (quick(hinge, swing) >= 0.2) worth = true;
@@ -316,8 +321,10 @@ function doorArc(lum: Uint8Array, wallMask: Uint8Array, w: number, h: number, ga
     const dir = hinge === 'start' ? 1 : -1;
     const hingeA = hinge === 'start' ? gap.a0 : gap.a1;
     for (const swing of [1, -1] as const) {
-      for (const dc0 of [-3, -2, -1, 0, 1, 2, 3]) {
-        const dc = Math.round(dc0 * u);
+      // Arcs are drawn from the wall's centre line or from either face of it.
+      const reachC = Math.round(wallT / 2 + 2 * u);
+      const offsets = [...new Set([-reachC, -Math.round(reachC / 2), -Math.round(u), 0, Math.round(u), Math.round(reachC / 2), reachC])];
+      for (const dc of offsets) {
         const point = (along: number, across: number): [number, number] => {
           const a = hingeA + dir * along, c = gap.c + dc + swing * across;
           return gap.o === 'h' ? [a, c] : [c, a];
@@ -354,28 +361,36 @@ function doorArc(lum: Uint8Array, wallMask: Uint8Array, w: number, h: number, ga
 }
 
 /** Glazing lines: rows across the wall thickness that are ink along (nearly) the whole gap. */
-function glazingLines(lum: Uint8Array, w: number, gap: Gap, thickness: number): number {
-  let lines = 0, inLine = false;
+function glazingLines(lum: Uint8Array, w: number, gap: Gap, thickness: number, white: number): number {
+  let lines = 0, inLine = false, covered = 0, bestCovered = 0;
   const c0 = Math.round(gap.c - thickness / 2 - 1), c1 = Math.round(gap.c + thickness / 2 + 1);
   const a0 = Math.round(gap.a0 + 2), a1 = Math.round(gap.a1 - 2);
   for (let c = c0; c <= c1; c++) {
-    let ink = 0, total = 0;
+    let ink = 0, soft = 0, total = 0;
     for (let a = a0; a < a1; a++) {
       total++;
       const v = gap.o === 'h' ? lum[c * w + a]! : lum[a * w + c]!;
-      if (v < 225) ink++;
+      if (v < white - 30) ink++;
+      if (v < white - 20 && v > 90) soft++;
     }
     const isLine = total > 0 && ink / total >= 0.7;
     if (isLine && !inLine) lines++;
     inLine = isLine;
+    if (total > 0 && soft / total >= 0.8) covered++; else covered = 0;
+    bestCovered = Math.max(bestCovered, covered);
   }
-  return lines;
+  // Blur and compression smear a window's separate glazing lines into one band, but a band that
+  // is more than a line wide and runs the whole opening is still glazing (a door gap has none).
+  return Math.max(lines, bestCovered >= 3 ? 2 : lines);
 }
 
 export function detectPlanGeometry(image: PlanRaster, options: PlanGeometryOptions = {}): PlanGeometry {
   const { width, height } = image;
   if (!(width > 1) || !(height > 1) || image.data.length < width * height * 4) throw new Error('Raster image data is invalid.');
   const lum = luminanceOf(image);
+  // The paper's brightness: scans and photos are rarely pure white.
+  const sorted = Uint8Array.from(lum).sort();
+  const white = sorted[Math.floor(sorted.length * 0.85)]!;
   const threshold = clamp(options.darkThreshold ?? otsu(lum), 60, 150);
   const dark = new Uint8Array(width * height);
   for (let i = 0; i < dark.length; i++) dark[i] = lum[i]! <= threshold ? 1 : 0;
@@ -470,17 +485,17 @@ export function detectPlanGeometry(image: PlanRaster, options: PlanGeometryOptio
   for (const gap of gaps) {
     const host = bands[gap.first]!;
     const t = thick(host);
-    const glass = glazingLines(lum, width, gap, t);
-    // A door leaf is roughly 0.6 to 1.3 m: about 4% to 8.5% of a house's width.
+    const glass = glazingLines(lum, width, gap, t, white);
+    // A door leaf is roughly 0.6 to 1.3 m: about 3.5% to 12.5% of the plan width, depending on the size of the house.
     const doorWidth = gap.a1 - gap.a0, extent = Math.max(x1 - x0, y1 - y0);
-    const doorSized = doorWidth >= extent * 0.038 && doorWidth <= extent * 0.085;
+    const doorSized = doorWidth >= extent * 0.035 && doorWidth <= extent * 0.125;
     const arc: ArcEvidence = glass < 2 && doorSized
-      ? doorArc(lum, wallMask, width, height, gap, Math.max(0.5, (x1 - x0) / 706))
+      ? doorArc(lum, wallMask, width, height, gap, Math.max(0.5, (x1 - x0) / 706), t)
       : { score: 0, run: 0, leaf: 0, hinge: 'start', swing: 1 };
     let kind: PlanOpeningKind;
     let confidence: number;
     let evidence: string;
-    if (glass < 2 && doorSized && ((arc.score >= 0.45 && arc.run >= 0.35) || (arc.leaf >= 0.85 && arc.score >= 0.35 && arc.run >= 0.25))) {
+    if (glass < 2 && doorSized && ((arc.score >= 0.45 && arc.run >= 0.35) || (arc.leaf >= 0.7 && arc.score >= 0.35 && arc.run >= 0.3))) {
       kind = 'door'; confidence = clamp(0.6 + arc.score * 0.38, 0.6, 0.98); evidence = `door swing (arc ${Math.round(arc.score * 100)}%, leaf ${Math.round(arc.leaf * 100)}%)`;
     } else if (glass >= 2) {
       kind = 'window'; confidence = clamp(0.7 + glass * 0.08, 0.7, 0.95); evidence = `${glass} glazing lines`;
