@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { smoothPatchNormals } from './upholsteryNormals';
 import type { Shape } from '../../types';
 import type { SimulationProfile } from '../semantics/componentTypes';
 
@@ -17,7 +18,8 @@ function rebuildNormals(positions: number[], uvs?: number[]) {
 }
 
 /**
- * Settles a bakeable semantic simulation into ordinary geometry. This is
+ * Saves a deterministic relaxed shape for a semantic deformation profile.
+ * The legacy softbody/cloth metadata describes the profile; this is not a physical solver. This is
  * intentionally deterministic: runtime physics is optional, while saved
  * projects always retain the same settled mesh.
  */
@@ -42,7 +44,12 @@ export function bakeSemanticSimulation(shape: Shape, strength = 0.35): Shape {
   const depth = Math.max(0.001, maxZ - minZ);
   const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
 
+  const groups = shape.customData?.furnitureMaterialGroups as Array<{ start: number; count: number; materialIndex: number }> | undefined;
+  const fabric = groups?.length ? new Uint8Array(next.length / 3) : undefined;
+  for (const group of groups ?? []) if (group.materialIndex === 1) fabric?.fill(1, group.start, group.start + group.count);
+
   for (let i = 0; i < next.length; i += 3) {
+    if (simulation.type === 'softbody' && fabric && !fabric[i / 3]) continue;
     const x = next[i], y = next[i + 1], z = next[i + 2];
     const nx = Math.max(-1, Math.min(1, (x - cx) / (width / 2)));
     const nz = Math.max(-1, Math.min(1, (z - cz) / (depth / 2)));
@@ -66,6 +73,12 @@ export function bakeSemanticSimulation(shape: Shape, strength = 0.35): Shape {
   }
 
   const normals = rebuildNormals(next, shape.geometryData?.uvs);
+  if (simulation.type === 'softbody' && groups) for (const group of groups) {
+    if (group.materialIndex !== 1) continue;
+    const start=group.start*3, length=group.count*3;
+    const smooth = smoothPatchNormals(next.slice(start,start+length));
+    for(let i=0;i<smooth.length;i++) normals[start+i]=smooth[i];
+  }
   return {
     ...shape,
     geometryData: {

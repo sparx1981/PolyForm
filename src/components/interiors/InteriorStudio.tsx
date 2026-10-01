@@ -154,8 +154,8 @@ export default function InteriorStudio() {
                   <input type="checkbox" checked={settleSoft} onChange={e => setSettleSoft(e.target.checked)} />
                   <Sparkles size={16} className="text-polyform-blue" />
                   <span className="flex-1">
-                    <span className="block text-sm font-semibold">Settle soft furnishings</span>
-                    <span className="block text-[11px] text-gray-500">Bake a gentle soft-body/cloth settle into beds, sofas and curtains when supported.</span>
+                    <span className="block text-sm font-semibold">Relax upholstery and drape</span>
+                    <span className="block text-[11px] text-gray-500">Save a relaxed upholstery shape and curtain drape. Beds and sofas remain static. Curtains use Animate plant wind, Plant wind strength and Plant wind speed under Vegetation rendering, plus nearby movement in Walk Mode.</span>
                   </span>
                 </label>
 

@@ -24,4 +24,14 @@ describe('bakeable furniture simulation', () => {
     const cabinet = createInteriorFurnitureShape('cabinet');
     expect(() => bakeSemanticSimulation(cabinet)).toThrow(/bakeable/);
   });
+  it('keeps bed frames rigid while relaxing upholstery patches', () => {
+    const bed=createInteriorFurnitureShape('bed');
+    const baked=bakeSemanticSimulation(bed,.8);
+    for(const group of bed.customData.furnitureMaterialGroups) if(group.materialIndex===0) {
+      const start=group.start*3, end=(group.start+group.count)*3;
+      expect(baked.geometryData.positions.slice(start,end)).toEqual(bed.geometryData.positions.slice(start,end));
+    }
+    expect(baked.geometryData.positions).not.toEqual(bed.geometryData.positions);
+  });
+
 });

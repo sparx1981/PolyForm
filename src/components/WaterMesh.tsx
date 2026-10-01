@@ -5,9 +5,12 @@ import type { Shape } from '../types';
 import { useApp } from '../AppContext';
 import { sampleTerrainElevation } from '../lib/archRoomAssembly';
 import { advanceWaterFlow } from '../lib/water/waterMotion';
+import { ShallowWaterWaves } from '../lib/water/shallowWaterWaves';
+import { createWaveSurfaceGeometry } from '../lib/water/waveSurfaceGeometry';
+import { pointInPolygon } from '../lib/water/waterBody';
 import { WaterSim } from '../lib/water/waterSim';
 import { WaterReflection } from '../lib/water/waterReflection';
-import { WATER_CLARITY, deepestPoint, offsetOutline, waterMargin, waterWorldOutline } from '../lib/water/waterBody';
+import { WATER_CLARITY, deepestPoint, waterMargin, waterWorldOutline } from '../lib/water/waterBody';
 import { createHeightTexture } from '../lib/terrain/bladeGrass';
 import { createWaterSurfaceMaterial, createWaterTransmittanceMaterial, createWaterUniforms } from '../lib/water/waterMaterial';
 
@@ -63,13 +66,24 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
   // Reaches the basin's dug margin; wherever the ground is above the level it hides the extra.
   const margin = waterMargin(terrain);
   const geometry = useMemo(() => {
-    const outline = new THREE.Shape(offsetOutline(data.points, margin).map(([x, z]) => new THREE.Vector2(x, -z)));
-    const g = new THREE.ShapeGeometry(outline);
-    g.rotateX(-Math.PI / 2);
-    g.computeBoundingSphere();
-    return g;
+    return createWaveSurfaceGeometry(data.points, margin);
   }, [data.points, margin]);
   useEffect(() => () => geometry.dispose(), [geometry]);
+
+  const waveSim = useMemo(() => {
+    const xs=data.points.map(p=>p[0]), zs=data.points.map(p=>p[1]);
+    const minX=Math.min(...xs), minZ=Math.min(...zs);
+    const width=Math.max(0.2,Math.max(...xs)-minX), depth=Math.max(0.2,Math.max(...zs)-minZ);
+    const outline=data.points.map(([x,z])=>({x,z}));
+    return new ShallowWaterWaves([minX,minZ,width,depth], (x,z) => {
+      if(!pointInPolygon(x,z,outline)) return 0;
+      return terrain ? Math.max(0,shape.position[1]-sampleTerrainElevation(x+shape.position[0],z+shape.position[2],terrain)) : data.depth;
+    });
+  }, [data.points, data.depth, terrain, shape.position]);
+  useEffect(() => {
+    uniforms.uDynamics.value=waveSim.texture; uniforms.uUseDynamics.value=1;
+    return () => { uniforms.uUseDynamics.value=0; waveSim.dispose(); };
+  }, [waveSim,uniforms]);
 
   const heights = useMemo(() => (terrain?.terrainData ? createHeightTexture(terrain) : null), [terrain?.terrainData?.heights, terrain?.terrainData?.gridX]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => heights?.dispose(), [heights]);
@@ -132,6 +146,9 @@ export function WaterMesh({ shape, terrain, meshProps, selectionHighlight }: Pro
     uniforms.uRain.value = rain;
     if (rain > 0) uniforms.uRainTime.value += delta;
     advanceWaterFlow(uniforms, delta);
+    waveSim.update(delta,{ speed:uniforms.uFlowSpeed.value, direction:[uniforms.uFlowDir.value.x,uniforms.uFlowDir.value.y], turbulence:uniforms.uFlowTurbulence.value });
+    uniforms.uDynamicsBounds.value.copy(waveSim.bounds);
+    uniforms.uDynamicsBounds.value.x+=shape.position[0]; uniforms.uDynamicsBounds.value.y+=shape.position[2];
     if (!sharedSim) return;
     const frame = gl.info.render.frame;
     if (clock.elapsedTime - lastSunLookup > 1) { findSun(scene, sunDirection); lastSunLookup = clock.elapsedTime; }

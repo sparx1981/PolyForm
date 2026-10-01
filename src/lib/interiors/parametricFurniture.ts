@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { smoothPatchNormals } from './upholsteryNormals';
 import type { Shape } from '../../types';
 import type { ComponentDefinition, PlacementProfile, SimulationProfile } from '../semantics/componentTypes';
 
@@ -105,6 +106,16 @@ for (const [type, name, width, height, depth] of [
 }
 function padded(width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
   const g = new RoundedBoxGeometry(width, height, depth, 3, Math.min(0.065, height / 4, depth / 4));
+  const position = g.getAttribute('position');
+  for (let i=0;i<position.count;i++) {
+    const px=position.getX(i), py=position.getY(i), pz=position.getZ(i);
+    const envelope=Math.max(0,1-(2*px/width)**2)*Math.max(0,1-(2*pz/depth)**2);
+    const loft=height*0.12*envelope;
+    const wrinkle=Math.sin(px*28 + pz*11)*height*0.018*envelope;
+    position.setY(i, py + Math.sign(py)*(loft+wrinkle));
+  }
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(smoothPatchNormals(position.array), 3));
+  g.userData.fabric = true;
   g.translate(x, y, z);
   return g;
 }
@@ -118,10 +129,17 @@ function box(width: number, height: number, depth: number, x: number, y: number,
 function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const flat = parts.map(part => part.index ? part.toNonIndexed() : part);
   const result = mergeGeometries(flat, false);
+  if (result) {
+    let start=0;
+    for (let i=0;i<flat.length;i++) {
+      const count=flat[i].getAttribute('position').count;
+      result.addGroup(start,count,parts[i].userData.fabric ? 1 : 0);
+      start+=count;
+    }
+  }
   for (const part of flat) if (!parts.includes(part)) part.dispose();
   for (const part of parts) part.dispose();
   if (!result) throw new Error('Could not merge furniture geometry');
-  result.computeVertexNormals();
   result.computeBoundingBox();
   result.computeBoundingSphere();
   return result;
@@ -266,6 +284,7 @@ export function createInteriorFurnitureShape(
   const params = { ...profile.defaults, ...(options.params ?? {}) };
   const geometry = createInteriorFurnitureGeometry(type, params);
   const data = geometryData(geometry);
+  const furnitureMaterialGroups = geometry.groups.map(group => ({ ...group }));
   geometry.dispose();
   const placement: PlacementProfile = profile.definition.placement;
   const simulation: SimulationProfile | undefined = profile.definition.simulation;
@@ -283,6 +302,7 @@ export function createInteriorFurnitureShape(
     geometryData: data,
     customData: {
       furnitureType: type,
+      furnitureMaterialGroups,
       semanticComponent: {
         definitionId: profile.definition.id,
         kind: profile.definition.kind,

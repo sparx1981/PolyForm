@@ -45,6 +45,9 @@ export interface WaterUniforms {
   uFlowSpeed: { value: number };
   uFlowTurbulence: { value: number };
   uFlowTime: { value: number };
+  uDynamics: { value: THREE.Texture | null };
+  uDynamicsBounds: { value: THREE.Vector4 };
+  uUseDynamics: { value: number };
 }
 
 export function createWaterUniforms(): WaterUniforms {
@@ -58,10 +61,28 @@ export function createWaterUniforms(): WaterUniforms {
     uRain: { value: 0 }, uRainTime: { value: 0 },
     uFlowDir: { value: new THREE.Vector2(1, 0) }, uFlowOffset: { value: new THREE.Vector2() }, uFlowSpeed: { value: 0 },
     uFlowTurbulence: { value: 0 }, uFlowTime: { value: 0 },
+    uDynamics: { value: null }, uDynamicsBounds: { value: new THREE.Vector4(0,0,1,1) }, uUseDynamics: { value: 0 },
   };
 }
 
-const common = /* glsl */ `
+// Shared by vertex and fragment passes, with portable bilinear sampling of float textures.
+const dynamics = /* glsl */ `
+uniform sampler2D uDynamics;
+uniform vec4 uDynamicsBounds;
+uniform float uUseDynamics;
+vec4 sampleDynamics(vec2 xz) {
+  if (uUseDynamics < 0.5) return vec4(0.0);
+  vec2 uv=(xz-uDynamicsBounds.xy)/uDynamicsBounds.zw;
+  if(any(lessThan(uv,vec2(0.0))) || any(greaterThan(uv,vec2(1.0)))) return vec4(0.0);
+  ivec2 size=textureSize(uDynamics,0);
+  vec2 g=clamp(uv*vec2(size)-0.5,vec2(0.0),vec2(size-1));
+  ivec2 a=ivec2(floor(g)), b=min(a+1,size-1); vec2 f=fract(g);
+  return mix(mix(texelFetch(uDynamics,a,0),texelFetch(uDynamics,ivec2(b.x,a.y),0),f.x),
+    mix(texelFetch(uDynamics,ivec2(a.x,b.y),0),texelFetch(uDynamics,b,0),f.x),f.y);
+}
+`;
+
+const common = dynamics + /* glsl */ `
 uniform sampler2D uSurf, uCaus, uHeights, uReflection;
 uniform mat4 uReflectionMatrix;
 uniform float uUseReflection;
@@ -77,6 +98,12 @@ float rainHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
+}
+
+float waterNoise(vec2 p) {
+  vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+  return mix(mix(rainHash(i),rainHash(i+vec2(1.0,0.0)),f.x),
+    mix(rainHash(i+vec2(0.0,1.0)),rainHash(i+vec2(1.0,1.0)),f.x),f.y);
 }
 
 // Raindrop rings: each cell of a few offset grids holds one drop at a random time and place,
@@ -129,9 +156,11 @@ vec3 waterNormal(vec2 xz, float distanceToEye) {
     slope += across * sin(crossFlow * 7.0 + sin(along * 4.0 + uFlowTime * 1.6))
       * 0.14 * uFlowTurbulence * strength;
   }
+  vec2 dynamicSlope = sampleDynamics(xz).yz;
+  slope += dynamicSlope;
   if (uRain > 0.0) slope += rainRipples(xz) * uRain * (1.0 - smoothstep(15.0, 45.0, distanceToEye));
   // Sub-pixel slope spread (LEAN mapping): widens distant glints instead of sparkling noise.
-  gSlopeVariance = calm * calm * (max(A.w - dot(A.yz, A.yz), 0.0) + 0.01 * max(B.w - dot(B.yz, B.yz), 0.0));
+  gSlopeVariance = calm * calm * (max(A.w - dot(A.yz, A.yz), 0.0) + 0.01 * max(B.w - dot(B.yz, B.yz), 0.0)) + 0.15 * dot(dynamicSlope,dynamicSlope);
   return normalize(vec3(-slope.x, 1.0, -slope.y));
 }
 
@@ -158,7 +187,7 @@ float bedHeight(vec2 xz) {
   return uBaseY + mix(mix(h00, h10, f.x), mix(h01, h11, f.x), f.y);
 }
 
-struct WaterSample { vec3 n; float F; vec3 viewT; vec3 bedT; float depth; vec2 bedXZ; float sunCos; };
+struct WaterSample { vec3 n; float F; vec3 viewT; vec3 bedT; float depth; float foam; vec2 bedXZ; float sunCos; };
 
 WaterSample sampleWater(vec3 P) {
   WaterSample w;
@@ -168,7 +197,11 @@ WaterSample sampleWater(vec3 P) {
   if (nv < 0.02) { w.n = normalize(w.n + v * (0.02 - nv)); nv = dot(w.n, v); }
   w.F = waterFresnel(nv);
   vec3 tr = refract(-v, w.n, 1.0 / WATER_IOR);
-  w.depth = max(uLevel - bedHeight(P.xz), 0.0);
+  w.depth = max(P.y - bedHeight(P.xz), 0.0);
+  vec4 dynamicsSample = sampleDynamics(P.xz);
+  vec2 foamXZ = P.xz-uFlowOffset;
+  float bubbles = smoothstep(0.2,0.65,0.65*waterNoise(foamXZ*7.0)+0.35*waterNoise(foamXZ*19.0));
+  w.foam = dynamicsSample.w * bubbles * smoothstep(0.01,0.12,w.depth);
   float s = w.depth / max(-tr.y, 0.12);
   w.bedXZ = P.xz + tr.xz * s;
   vec3 sunT = refract(-normalize(uSunDir), vec3(0.0, 1.0, 0.0), 1.0 / WATER_IOR);
@@ -188,16 +221,17 @@ varying vec3 vWaterPos;
 export function createWaterTransmittanceMaterial(uniforms: WaterUniforms): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: uniforms as unknown as Record<string, THREE.IUniform>,
-    vertexShader: vertexVarying + /* glsl */ `
+    vertexShader: dynamics + vertexVarying + /* glsl */ `
       void main() {
         vec4 world = modelMatrix * vec4(position, 1.0);
+        world.y += sampleDynamics(world.xz).x;
         vWaterPos = world.xyz;
         gl_Position = projectionMatrix * viewMatrix * world;
       }`,
     fragmentShader: common + vertexVarying + /* glsl */ `
       void main() {
         WaterSample w = sampleWater(vWaterPos);
-        gl_FragColor = vec4(w.bedT * (1.0 - w.F), 1.0);
+        gl_FragColor = vec4(w.bedT * (1.0 - w.F) * (1.0 - w.foam), 1.0);
       }`,
     transparent: true,
     depthWrite: false,
@@ -219,7 +253,12 @@ export function createWaterSurfaceMaterial(uniforms: WaterUniforms): THREE.MeshS
   material.blendDst = THREE.OneFactor;
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = vertexVarying + shader.vertexShader;
+    shader.vertexShader = dynamics + vertexVarying + shader.vertexShader;
+    shader.vertexShader = inject(shader.vertexShader, "#include <begin_vertex>", `
+      #include <begin_vertex>
+      vec2 waveXZ = (modelMatrix * vec4(transformed, 1.0)).xz;
+      transformed.y += sampleDynamics(waveXZ).x;
+    `);
     shader.vertexShader = inject(shader.vertexShader, '#include <project_vertex>', `
       #include <project_vertex>
       vWaterPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
@@ -230,13 +269,14 @@ export function createWaterSurfaceMaterial(uniforms: WaterUniforms): THREE.MeshS
       gWater = sampleWater(vWaterPos);
       // Light scattered back out of the water column: grows with depth, tinted by what survives.
       vec3 gAlbedo = uScatter / (uAbsorb + uScatter);
-      diffuseColor.rgb = gAlbedo * (1.0 - gWater.viewT) * 0.12;
+      diffuseColor.rgb = mix(gAlbedo * (1.0 - gWater.viewT) * 0.12, vec3(0.86,0.90,0.88), gWater.foam);
     `);
     shader.fragmentShader = inject(shader.fragmentShader, '#include <normal_fragment_maps>', `
       #include <normal_fragment_maps>
       normal = normalize((viewMatrix * vec4(gWater.n, 0.0)).xyz);
     `);
     shader.fragmentShader = inject(shader.fragmentShader, '#include <opaque_fragment>', `
+      outgoingLight *= 1.0 - gWater.foam;
       #if NUM_DIR_LIGHTS > 0
       {
         // Caustics: sunlight focused by the waves onto the bed, seen back through the water.
@@ -267,9 +307,12 @@ export function createWaterSurfaceMaterial(uniforms: WaterUniforms): THREE.MeshS
         vec3 gMirror = texture(uReflection, gProj.xy / gProj.w).rgb;
         outgoingLight += gMirror * gWater.F;
       }
+      // Foam is an opaque lit surface: replace the water contribution rather than only
+      // adding white on top of the bed (which would overexpose or leave dark bed visible).
+      outgoingLight = mix(outgoingLight, vec3(0.86,0.90,0.88) * (0.35 + 0.65 * max(uSunDir.y,0.0)), gWater.foam);
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-water-surface-v5';
+  material.customProgramCacheKey = () => 'polyform-water-surface-v6';
   return material;
 }

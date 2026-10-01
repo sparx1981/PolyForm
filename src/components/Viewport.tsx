@@ -24,6 +24,7 @@ import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
 import { groundUnderRay } from '../lib/terrain/groundRay';
 import { GlassWeatherDriver, WetGlassMaterial, useGlassWeather } from './graphics/WetGlass';
+import { UpholsteredFurnitureMesh } from './interiors/UpholsteredFurnitureMesh';
 import { CurtainMesh } from './interiors/CurtainMesh';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
@@ -12079,6 +12080,10 @@ function Scene() {
               )}
             </React.Fragment>
           );
+        }
+
+        if (['bed','sofa','armchair'].includes(shape.customData?.furnitureType) && shape.geometryData?.positions) {
+          return <UpholsteredFurnitureMesh key={shape.id} shape={shape} meshProps={meshProps} selectionHighlight={selectionHighlight} />;
         }
 
         if (shape.customData?.furnitureType === 'curtain' && shape.geometryData?.positions) {
