@@ -3565,7 +3565,6 @@ export default function RightPanelStack() {
                       <option value="studio">Studio</option>
                     </optgroup>
                   </select>
-                  <div className="text-[9px] text-gray-400">Material library · CC0 · restricted pilot categories</div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
@@ -3809,7 +3808,39 @@ export default function RightPanelStack() {
                       )} />
                     </button>
                   </div>
-
+                  <div className="pb-2 border-b border-gray-100 dark:border-gray-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">God Rays</span>
+                      <button
+                        onClick={() => setGodRaysEnabled(!godRaysEnabled)}
+                        className={cn(
+                          "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
+                          godRaysEnabled ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
+                          godRaysEnabled ? "left-4.5" : "left-0.5"
+                        )} />
+                      </button>
+                    </div>
+                    {godRaysEnabled && (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
+                          <span>God Rays Intensity</span>
+                          <span>{godRaysIntensity.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range" min="0.05" max="2" step="0.05"
+                          value={godRaysIntensity}
+                          onChange={(e) => setGodRaysIntensity(parseFloat(e.target.value))}
+                          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <Fold title="Sun Light" icon={<Sun size={13} className="text-gray-400" />} defaultOpen>
+                    <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-gray-400 uppercase">Animate Sun Rotation</span>
                     <button 
@@ -3920,43 +3951,12 @@ export default function RightPanelStack() {
                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue" 
                     />
                   </div>
-
-                  <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase">God Rays</span>
-                      <button
-                        onClick={() => setGodRaysEnabled(!godRaysEnabled)}
-                        className={cn(
-                          "w-8 h-4 rounded-full relative transition-colors cursor-pointer",
-                          godRaysEnabled ? "bg-polyform-blue" : "bg-gray-300 dark:bg-gray-600"
-                        )}
-                      >
-                        <div className={cn(
-                          "absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all",
-                          godRaysEnabled ? "left-4.5" : "left-0.5"
-                        )} />
-                      </button>
                     </div>
-                    <p className="text-[9px] text-gray-400 -mt-1">Screen-space sun shafts through whatever occludes the sun (buildings, terrain, trees). Moderate render cost.</p>
-                    {godRaysEnabled && (
-                      <div className="space-y-1 pt-1">
-                        <div className="flex justify-between text-[10px] text-gray-500 uppercase font-bold">
-                          <span>God Rays Intensity</span>
-                          <span>{godRaysIntensity.toFixed(2)}</span>
-                        </div>
-                        <input
-                          type="range" min="0.05" max="2" step="0.05"
-                          value={godRaysIntensity}
-                          onChange={(e) => setGodRaysIntensity(parseFloat(e.target.value))}
-                          className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-polyform-blue"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
+                  </Fold>
+                  <Fold title="Custom Lights" icon={<Sparkles size={13} className="text-gray-400" />} defaultOpen={customLights.length > 0}>
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase">Custom Lights</span>
+                      <span className="text-[10px] text-gray-400">{customLights.length} {customLights.length === 1 ? 'light' : 'lights'}</span>
                       <button 
                     onClick={() => {
                       const newLight: any = {
@@ -4321,8 +4321,9 @@ export default function RightPanelStack() {
                   ))}
                 </div>
               </div>
-            </div>
-          </SubSection>
+                  </Fold>
+                </div>
+              </SubSection>
 
               <SubSection title="Edge Lines" defaultOpen={false}>
                 <div className="space-y-3 px-2 py-1">
