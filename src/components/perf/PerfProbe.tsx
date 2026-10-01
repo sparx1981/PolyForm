@@ -87,13 +87,20 @@ function deviceInfo(gl: THREE.WebGLRenderer, gpuTimer: boolean): DeviceInfo {
  */
 export default function PerfProbe() {
   const { gl, scene, camera } = useThree();
-  const { perfProfilerEnabled, shadowsEnabled, ambientOcclusionEnabled, godRaysEnabled, edgeLinesEnabled, graphicsSettings, shapes, autoOrbitEnabled } = useApp();
+  const { perfProfilerEnabled, shadowsEnabled, ambientOcclusionEnabled, godRaysEnabled, edgeLinesEnabled, graphicsSettings, shapes, autoOrbitEnabled, currentModelId } = useApp();
+  useEffect(()=>perfStore.setContext({modelId:currentModelId}),[currentModelId]);
   const settingsRef = useRef<PerfRun['settings']>({});
   const runSettingsRef = useRef<PerfRun['settings'] | null>(null);
   settingsRef.current = {
     shadows: shadowsEnabled, ambientOcclusion: ambientOcclusionEnabled, godRays: godRaysEnabled, edgeLines: edgeLinesEnabled,
     weather: graphicsSettings.weather.enabled, clouds: graphicsSettings.weather.cloudsMode,
     vegetationInstancing: graphicsSettings.vegetation.instancing, shapes: shapes.length, autoOrbit: autoOrbitEnabled,
+    beta: graphicsSettings.beta.enabled, betaClouds: graphicsSettings.beta.clouds, betaQuality: graphicsSettings.beta.quality,
+    betaAtmosphere: graphicsSettings.beta.atmosphere, betaFlare: graphicsSettings.beta.flare, betaGrading: graphicsSettings.beta.grading,
+    betaCoverage: graphicsSettings.beta.coverage, betaDayCycle: graphicsSettings.beta.animateDayCycle,
+    vegetationWind: graphicsSettings.vegetation.windEnabled,
+    cameraType: camera.type, cameraProjection: camera.projectionMatrix.elements.map(v=>+v.toFixed(5)).join(','),
+    exposure: gl.toneMappingExposure,
     toneMapping: gl.toneMapping, shadowMapType: gl.shadowMap.enabled ? gl.shadowMap.type : 0,
   };
   const gpu = useRef({ ext: null as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null, pending: [] as WebGLQuery[], last: null as number | null });

@@ -215,6 +215,36 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isOwner(userId);
 
+      // Private benchmark records. No geometry or identifying object/texture names.
+      // Required metadata, numeric summaries and bounded settings/timeline; owner UID is the path.
+      match /perfRuns/{runId} {
+        function validPerfRun(data) {
+          return data.keys().hasOnly(['id','kind','label','startedAt','context','device','settings','scene','stats','diagnosis','timeline','schemaVersion','savedAt']) &&
+            data.keys().hasAll(['id','kind','label','startedAt','context','device','settings','scene','stats','diagnosis','timeline','schemaVersion','savedAt']) &&
+            data.schemaVersion == 1 && data.id == runId && runId.size() <= 100 &&
+            data.kind in ['benchmark','recording'] && data.label is string && data.label.size() <= 160 &&
+            data.startedAt is string && data.startedAt.size() <= 40 &&
+            data.context is map && data.context.keys().hasOnly(['scenario','modelId','revision']) &&
+            data.context.scenario is string && data.context.scenario.size() <= 120 &&
+            (data.context.modelId == null || (data.context.modelId is string && data.context.modelId.size() <= 256)) &&
+            data.context.revision is string && data.context.revision.size() <= 100 &&
+            data.device is map && data.device.userAgent == '' && data.device.gpu is string && data.device.gpu.size() <= 500 &&
+            data.device.gpuTimer is bool && data.device.pixelRatio is number && data.device.pixelRatio > 0 &&
+            data.settings is map && data.settings.size() <= 200 &&
+            data.scene is map && data.scene.heaviest == [] && data.scene.biggestTextures == [] &&
+            data.scene.triangles is number && data.scene.triangles >= 0 &&
+            data.stats is map && data.stats.frames is number && data.stats.frames >= 10 &&
+            data.stats.frameMs is map && data.stats.frameMs.avg is number && data.stats.frameMs.avg >= 0 &&
+            data.stats.fpsAvg is number && data.stats.fpsAvg >= 0 &&
+            data.diagnosis == [] && data.timeline is list && data.timeline.size() <= 600 &&
+            data.savedAt == request.time;
+        }
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId) && request.query.limit != null && request.query.limit <= 100;
+        allow create, update: if isOwner(userId) && validPerfRun(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
       match /counters/{counterId} {
         allow read: if isOwner(userId);
         allow write: if false;

@@ -1,11 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 function gitCommitHash(): string {
   try {
-    return execSync('git rev-parse --short HEAD').toString().trim();
+    return execFileSync('git', ['-c', `safe.directory=${process.cwd()}`, 'rev-parse', '--short', 'HEAD']).toString().trim();
   } catch {
     return 'unknown';
   }

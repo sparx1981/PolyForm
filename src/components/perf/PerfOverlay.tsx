@@ -1,6 +1,8 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../../AppContext';
 import { perfStore, runToMarkdown, type PerfRun } from '../../lib/perf/profilerStore';
+
+const PerfHistory = lazy(()=>import('./PerfHistory'));
 
 function download(name: string, text: string, type = 'application/json') {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -16,6 +18,7 @@ const ms = (n: number | null, d = 1) => n === null ? 'n/a' : n.toFixed(d);
 export default function PerfOverlay() {
   const { perfProfilerEnabled } = useApp();
   const state = useSyncExternalStore(perfStore.subscribe, perfStore.getState);
+  const [history, setHistory] = useState(false);
   const [open, setOpen] = useState(true);
   const [now, setNow] = useState(0);
   const running = state.phase.kind !== 'idle';
@@ -48,6 +51,8 @@ export default function PerfOverlay() {
   const btn = 'px-2 py-1 rounded-md border border-gray-600 bg-gray-800 hover:bg-gray-700 text-white text-[10px] font-semibold disabled:opacity-40';
 
   return (
+    <>
+    {history&&<Suspense fallback={<div role="status" className="fixed z-[130] inset-0 bg-slate-900/90 text-white p-8">Loading benchmark history…</div>}><PerfHistory onClose={()=>setHistory(false)}/></Suspense>}
     <div className="fixed bottom-28 left-4 z-[60] w-[300px] max-w-[calc(100vw-2rem)] select-none" role="region" aria-label="Performance profiler">
       <div className="bg-gray-900/90 text-white text-[11px] font-mono rounded-lg shadow-xl border border-gray-700 overflow-hidden">
         <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
@@ -78,6 +83,7 @@ export default function PerfOverlay() {
             {notice && <div className="text-amber-400">{notice}</div>}
 
             <div className="flex flex-wrap gap-1.5">
+              <button type="button" className={btn} disabled={running} onClick={()=>setHistory(true)}>History ({runs.length})</button>
               {phase.kind === 'idle' && <>
                 <button type="button" className={btn} onClick={() => perfStore.startBenchmark()} title="Orbits the camera once round the model, the same way every time (about 14 s)">Run benchmark</button>
                 <button type="button" className={btn} onClick={() => perfStore.startRecording()}>Record</button>
@@ -116,5 +122,6 @@ export default function PerfOverlay() {
         )}
       </div>
     </div>
+    </>
   );
 }
