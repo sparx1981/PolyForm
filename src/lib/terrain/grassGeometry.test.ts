@@ -21,6 +21,20 @@ function generateGrassInstances(terrain: Shape, shapes: Shape[], modifiers: Terr
 }
 
 describe('Procedural grass placement (presence mask)', () => {
+  it('excludes bending clearance outside a polygon slab, not just its bounds',()=>{
+    const slab={id:'poly-floor',type:'poly',position:[0,0,0],color:'#fff',tags:['floor-slab'],args:{vertices:[[-2,-1],[2,-1],[2,1],[-2,1]],height:0.2}} as unknown as Shape;
+    const footprints=extractExclusionFootprints([slab]);
+    expect(isPointExcluded(2.3,0,0,footprints)).toBe(true);
+    expect(isPointExcluded(2.6,0,0,footprints)).toBe(false);
+    expect(isPointExcluded(2.3,4,0,footprints)).toBe(false);
+  });
+  it('uses the rendered Three rotation for asymmetric quaternion slab footprints',()=>{
+    const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI/2).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2));
+    const slab={id:'rotated-floor',type:'poly',position:[5,0,5],quaternion:q.toArray(),color:'#fff',tags:['floor-slab'],args:{vertices:[[0,0],[4,0],[4,1],[0,1]],height:0.2}} as unknown as Shape;
+    const footprints=extractExclusionFootprints([slab]);
+    expect(isPointExcluded(5.5,0,2,footprints)).toBe(true);
+    expect(isPointExcluded(4.5,0,8,footprints)).toBe(false);
+  });
   it('discards grass instances located within floor slab footprints', () => {
     // Floor slab placed in center [0, 0, 0] with width 10m x depth 10m
     const slabShape: Shape = {

@@ -28,7 +28,8 @@ import { GlassWeatherDriver, WetGlassMaterial, useGlassWeather } from './graphic
 import { UpholsteredFurnitureMesh } from './interiors/UpholsteredFurnitureMesh';
 import { CurtainMesh } from './interiors/CurtainMesh';
 import { detectRooms } from '../lib/spatial/rooms';
-import { wallAttachmentPoint } from '../lib/spatial/wallAttachment';
+import { interiorPlacementAllowed, interiorWallCorner, preserveWallAxis, wallAttachmentPoint } from '../lib/spatial/wallAttachment';
+import { exposedWallEdges, resolveWallJunctions } from '../lib/spatial/wallJunctions';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
 import { PatioMesh } from './landscape/PatioMesh';
@@ -1545,11 +1546,11 @@ function pressHitsGeometry(e: { intersections?: { object: THREE.Object3D }[] }):
  * Edge lines like drei's Edges (drawn from the parent mesh's geometry), leaving out the lines
  * lying in the given planes: where a wall piece joins the next piece of its run.
  */
-function RunEdges({ planes, singleSided = false, ...props }: { planes: { point: THREE.Vector3; normal: THREE.Vector3 }[]; singleSided?: boolean } & Record<string, any>) {
+function RunEdges({ planes, singleSided = false, wall, neighbours, ...props }: { planes: { point: THREE.Vector3; normal: THREE.Vector3 }[]; singleSided?: boolean; wall?: Shape; neighbours?: Shape[] } & Record<string, any>) {
   const ref = useRef<any>(null);
   const seed = useMemo(() => [0, 0, 0, 1, 0, 0], []);
   const memo = useRef<{ geometry: THREE.BufferGeometry | null; key: string }>({ geometry: null, key: '' });
-  const key = planes.map(p => `${p.point.toArray().map(v => v.toFixed(4))}|${p.normal.toArray().map(v => v.toFixed(4))}`).join(';') + (singleSided ? '|1' : '');
+  const key = planes.map(p => `${p.point.toArray().map(v => v.toFixed(4))}|${p.normal.toArray().map(v => v.toFixed(4))}`).join(';') + (singleSided ? '|1' : '') + (wall ? JSON.stringify(neighbours?.map(s => [s.id,s.position,s.args,s.quaternion,s.rotation,s.wallMiterFootprint])) : '');
   useLayoutEffect(() => {
     const line = ref.current;
     const geometry = line?.parent?.geometry as THREE.BufferGeometry | undefined;
@@ -1558,7 +1559,10 @@ function RunEdges({ planes, singleSided = false, ...props }: { planes: { point: 
     memo.current = { geometry, key };
     // A double-sided mesh (roofs) would otherwise draw every triangle's edges.
     const source = singleSided ? singleSidedGeometry(geometry) : geometry;
-    const kept = edgesOffPlanes(new THREE.EdgesGeometry(source, 15).attributes.position.array, planes);
+    const edges = new THREE.EdgesGeometry(source, 15);
+    const filtered = edgesOffPlanes(edges.attributes.position.array, planes);
+    const kept = wall && neighbours ? exposedWallEdges(filtered, wall, neighbours) : filtered;
+    edges.dispose();
     if (source !== geometry) source.dispose();
     line.geometry.setPositions(kept.length ? kept : [0, 0, 0, 0, 0, 0]);
     line.visible = kept.length > 0;
@@ -1764,6 +1768,9 @@ function Scene() {
   const { raycaster, mouse, camera, scene, gl } = useThree();
   // Walls joined into runs (a curved wall of many pieces, or pieces in line) act as one wall.
   const wallRunInfo = useMemo(() => wallRuns(shapes), [shapes]);
+  const wallJunctionKey = JSON.stringify(shapes.filter(s => s.type === 'wall').map(s => [s.id,s.hidden,s.position,s.args,s.quaternion,s.rotation,s.tags,s.wallMiterFootprint]));
+  const wallJunctionShapes = useMemo(() => resolveWallJunctions(shapes), [wallJunctionKey]);
+  const junctionWalls = useMemo(() => [...wallJunctionShapes.values()], [wallJunctionShapes]);
   // Ground-floor slab outlines: the terrain mesh is cut away under them.
   const slabFootprintsKey = useMemo(() => JSON.stringify(groundSlabFootprints(shapes).map(f => f.poly.map(p => [+p[0].toFixed(3), +p[1].toFixed(3)]))), [shapes]);
   const slabFootprints = useMemo(() => JSON.parse(slabFootprintsKey) as [number, number][][], [slabFootprintsKey]);
@@ -4262,40 +4269,8 @@ function Scene() {
   const wallRooms = useMemo(() => detectRooms(shapes.filter(shape => shape.type === 'wall')), [wallRoomKey]);
 
   // Helper to test if a 2D position lies inside an existing enclosed room or floor slab
-  const isPointInsideRoom = useCallback((point: THREE.Vector3): boolean => {
-    const wallShapes = shapes.filter(s => s.type === 'wall' && !s.hidden);
-    if (wallShapes.length === 0) return false;
-
-    // 1. Check floor slab shapes
-    const floorSlabs = shapes.filter(s => (s.tags?.includes('floor-slab') || s.type === 'poly') && !s.hidden);
-    for (const slab of floorSlabs) {
-      if (Array.isArray(slab.args) && slab.args.length >= 3) {
-        const [w, , d] = slab.args;
-        const hw = (w || 1) / 2 + 0.15;
-        const hd = (d || 1) / 2 + 0.15;
-        if (Math.abs(point.x - slab.position[0]) <= hw && Math.abs(point.z - slab.position[2]) <= hd) {
-          return true;
-        }
-      }
-    }
-
-    // 2. Check room envelope derived from walls
-    const envelope = getRoomBoundingEnvelope(wallShapes);
-    if (envelope) {
-      const margin = 0.20; // allowance for clicking right along interior wall faces
-      if (
-        point.x >= envelope.minX - margin &&
-        point.x <= envelope.maxX + margin &&
-        point.z >= envelope.minZ - margin &&
-        point.z <= envelope.maxZ + margin
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  }, [shapes]);
-
+  const isPointInsideRoom = useCallback((point: THREE.Vector3): boolean =>
+    interiorPlacementAllowed(point, shapes, wallRooms), [shapes, wallRooms]);
   const closeWallLoopAndAssembleRoom = useCallback(() => {
     if (wallVertices.length < 2) return;
 
@@ -5858,12 +5833,12 @@ function Scene() {
           }
         }
 
-        if (wallJustification === 'interior') {
+        if (wallJustification === 'interior' && !pointToPlace) {
           const hitId = e.object?.userData?.id;
           const hitWall = shapes.find(shape => shape.id === hitId && shape.type === 'wall');
           if (hitWall) {
             const hit = e.point.clone(); hit.y = hitWall.position[1] - Number(hitWall.args[1] ?? 2.8) / 2;
-            p = wallAttachmentPoint(hitWall, hit, true, wallRooms);
+            p = interiorWallCorner(hit, junctionWalls, wallRooms) ?? wallAttachmentPoint(hitWall, hit, true, wallRooms);
           }
         }
 
@@ -7209,12 +7184,13 @@ function Scene() {
       const target = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, target)) {
         let finalPos = target.clone();
+        let lockedWallAxis: THREE.Vector3 | null = null;
         if (!wallVertices.length && wallJustification === 'interior') {
           const visible = raycaster.intersectObjects(scene.children, true).find(hit => hit.object.userData?.isShape);
           const hitWall = visible ? shapes.find(shape => shape.id === visible.object.userData.id && shape.type === 'wall') : undefined;
           if (hitWall && visible) {
             const hit = visible.point.clone(); hit.y = hitWall.position[1] - Number(hitWall.args[1] ?? 2.8) / 2;
-            finalPos = wallAttachmentPoint(hitWall, hit, true, wallRooms);
+            finalPos = interiorWallCorner(hit, junctionWalls, wallRooms) ?? wallAttachmentPoint(hitWall, hit, true, wallRooms);
           }
         }
 
@@ -7286,6 +7262,7 @@ function Scene() {
               }
             }
             finalPos = bestCand;
+            lockedWallAxis = bestCand.clone().sub(lastVertex);
 
             // 2b. Check inference alignment with start node (wallVertices[0])
             let alignedWithStart = false;
@@ -7370,11 +7347,16 @@ function Scene() {
               finalPos.x = lastVertex.x;
               finalPos.z = target.z;
             }
+            lockedWallAxis = finalPos.clone().sub(lastVertex);
             setSnapIndicator(null);
             setTrackingGuide(null);
           }
         }
 
+        // Later face/midpoint/inference snaps may refine length, not release the 90° lock.
+        if (lockedWallAxis && lockedWallAxis.lengthSq() > 1e-9) {
+          finalPos = preserveWallAxis(finalPos, wallVertices[wallVertices.length-1], lockedWallAxis);
+        }
         // Prevent wall segment from passing through existing obstacle walls
         if (wallVertices.length > 0 && !isClosingLoop) {
           const lastV = wallVertices[wallVertices.length - 1];
@@ -7441,7 +7423,7 @@ function Scene() {
           });
 
           if (snapTarget) {
-            finalPos = snapTarget;
+            finalPos = wallJustification === 'interior' ? interiorWallCorner(finalPos, junctionWalls, wallRooms) ?? snapTarget : snapTarget;
             setSnapIndicator({ point: [snapTarget.x, snapTarget.y + 0.1, snapTarget.z], type: snapType, tooltip: snapTooltip });
           } else {
             setSnapIndicator(null);
@@ -11537,7 +11519,9 @@ function Scene() {
         edgeLinesThickness={edgeLinesThickness}
       />
 
-      {shapes.map((shape) => {
+      {shapes.map((storedShape) => {
+      const junctionFootprint = wallJunctionShapes.get(storedShape.id)?.wallMiterFootprint;
+      const shape = junctionFootprint ? { ...storedShape, wallMiterFootprint: junctionFootprint } : storedShape;
       if (shape.hidden) return null;
         // Google's own ground stands in for the editable one once it is actually showing (its data still drives heights).
         if (googleLayer?.site.googleGround === 'google' && googleStatus.state === 'showing' && shape.id === googleLayer.groundId) return null;
@@ -12413,8 +12397,8 @@ function Scene() {
             };
             // A piece of a wall run draws no lines where it joins the next piece.
             const ends = shape.type === 'wall' ? wallRunInfo.joined.get(shape.id) : undefined;
-            if (ends && (ends.start || ends.end)) {
-              return <RunEdges planes={joinedEndPlanes(shape, ends)} {...lineProps} />;
+            if (shape.type === 'wall') {
+              return <RunEdges planes={ends ? joinedEndPlanes(shape, ends) : []} wall={shape} neighbours={junctionWalls} {...lineProps} />;
             }
             // Custom meshes (roofs, parapets, combined objects) are often stored double-sided.
             if (shape.type === 'custom') return <RunEdges planes={[]} singleSided {...lineProps} />;

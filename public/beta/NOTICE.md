@@ -4,7 +4,7 @@ Locally hosted assets from the pinned npm distributions of Takram three-geospati
 
 * Atmosphere 0.19.1: precomputed scattering EXRs and `stars.bin`.
 * Clouds 0.7.6: local weather, shape, detail and turbulence textures.
-* The three package-specific LICENSE files and root MIT notice are included here.
+* The four package-specific LICENSE files and root MIT notice are included here.
 * Stars contain factual astronomical measurements (9,096 J2000 directions, magnitudes and black-body colours) from Yale Bright Star Catalog 5, as documented by the upstream atmosphere README: https://github.com/takram-design-engineering/three-geospatial/tree/main/packages/atmosphere#stars
 
 `stbn.bin` is Polyform's original high-pass ranked noise volume, reproduced by

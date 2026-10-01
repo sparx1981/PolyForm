@@ -10,6 +10,8 @@ import { offsetOutline } from '../water/waterBody';
  */
 export interface SlabFootprint {
   polygon?: Array<[number, number]>;
+  /** Clearance for blade bending and interpolated mask cells at building edges. */
+  margin?: number;
   boxMinX?: number;
   boxMaxX?: number;
   boxMinZ?: number;
@@ -126,16 +128,16 @@ export function extractExclusionFootprints(
 
       if (s.type === 'poly' && Array.isArray((s.args as any)?.vertices)) {
         const polyVerts = (s.args as any).vertices as Array<[number, number] | { x: number; y?: number; z?: number }>;
-        const yaw = s.rotation ? s.rotation[1] : 0;
-        const cosY = Math.cos(yaw);
-        const sinY = Math.sin(yaw);
+        const rotation = s.quaternion ? new THREE.Quaternion(...s.quaternion) : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(s.rotation ?? [0,0,0])));
+        // PolyGeometry is drawn in local XY. Architectural slabs rotate that
+        // plane onto the ground; retain XZ support for older unrotated slab data.
+        const usesXY = Math.abs(new THREE.Vector3(0,0,1).applyQuaternion(rotation).y) > 0.5;
 
         const worldPoly: Array<[number, number]> = polyVerts.map(v => {
           const vx = Array.isArray(v) ? v[0] : (v.x ?? 0);
           const vz = Array.isArray(v) ? v[1] : (v.z ?? (v as any).y ?? 0);
-          const rx = cosY * vx - sinY * vz;
-          const rz = sinY * vx + cosY * vz;
-          return [pos[0] + rx, pos[2] + rz];
+          const p = (usesXY ? new THREE.Vector3(vx,vz,0) : new THREE.Vector3(vx,0,vz)).applyQuaternion(rotation);
+          return [pos[0] + p.x, pos[2] + p.z];
         });
 
         // Compute AABB for fast bounding rejection
@@ -149,10 +151,11 @@ export function extractExclusionFootprints(
 
         footprints.push({
           polygon: worldPoly,
-          boxMinX: minX - 0.2,
-          boxMaxX: maxX + 0.2,
-          boxMinZ: minZ - 0.2,
-          boxMaxZ: maxZ + 0.2,
+          margin: isSlab ? 0.45 : 0.2,
+          boxMinX: minX - 0.45,
+          boxMaxX: maxX + 0.45,
+          boxMinZ: minZ - 0.45,
+          boxMaxZ: maxZ + 0.45,
           ceilingY
         });
       } else if (s.type === 'circle') {
@@ -174,23 +177,19 @@ export function extractExclusionFootprints(
         const [w, , d] = (Array.isArray(s.args) ? s.args : [2, 0.2, 2]) as number[];
         const width = w || 1;
         const depth = d || (s.type === 'rect' ? (s.args as any)[1] : width) || 1;
-        const halfW = width / 2 + 0.2;
-        const halfD = depth / 2 + 0.2;
+        const halfW = width / 2 + (isSlab ? 0.45 : 0.2);
+        const halfD = depth / 2 + (isSlab ? 0.45 : 0.2);
 
         const yaw = s.rotation ? s.rotation[1] : 0;
-        if (Math.abs(yaw) > 0.01) {
+        if (s.quaternion || Math.abs(yaw) > 0.01) {
           // Rotated box: polygon corners
-          const cosY = Math.cos(yaw);
-          const sinY = Math.sin(yaw);
+          const rotation = s.quaternion ? new THREE.Quaternion(...s.quaternion) : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(s.rotation ?? [0,0,0])));
           const corners: Array<[number, number]> = [
             [-halfW, -halfD],
             [halfW, -halfD],
             [halfW, halfD],
             [-halfW, halfD]
-          ].map(([cx, cz]) => [
-            pos[0] + (cosY * cx - sinY * cz),
-            pos[2] + (sinY * cx + cosY * cz)
-          ]);
+          ].map(([cx, cz]) => { const p = new THREE.Vector3(cx,0,cz).applyQuaternion(rotation); return [pos[0]+p.x,pos[2]+p.z] as [number,number]; });
 
           let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
           for (const [px, pz] of corners) {
@@ -302,6 +301,7 @@ export function extractExclusionFootprints(
  * Checks if candidate point (x, y, z) falls within any floor slab, pad, or road exclusion footprint.
  */
 export function isPointExcluded(x: number, y: number, z: number, footprints: SlabFootprint[]): boolean {
+  const inside = (fp: SlabFootprint) => !!fp.polygon && (isPointInPolygon2D(x,z,fp.polygon) || !!fp.margin && fp.polygon.some((a,i) => { const b=fp.polygon![(i+1)%fp.polygon!.length]; return distancePointToLineSegment2D(x,z,a[0],a[1],b[0],b[1]).distance <= fp.margin!; }));
   for (const fp of footprints) {
     // If candidate point elevation is above ceiling threshold, it's above the slab/road.
     // Otherwise, it is at or below the slab/road, so it is strictly culled.
@@ -311,7 +311,7 @@ export function isPointExcluded(x: number, y: number, z: number, footprints: Sla
     if (fp.boxMinX !== undefined && fp.boxMaxX !== undefined && fp.boxMinZ !== undefined && fp.boxMaxZ !== undefined) {
       if (x >= fp.boxMinX && x <= fp.boxMaxX && z >= fp.boxMinZ && z <= fp.boxMaxZ) {
         if (fp.polygon && fp.polygon.length >= 3) {
-          if (isPointInPolygon2D(x, z, fp.polygon)) {
+          if (inside(fp)) {
             return true;
           }
         } else {
@@ -323,7 +323,7 @@ export function isPointExcluded(x: number, y: number, z: number, footprints: Sla
 
     // Polygon check (for rotated shapes or poly slabs)
     if (fp.polygon && fp.polygon.length >= 3) {
-      if (isPointInPolygon2D(x, z, fp.polygon)) {
+      if (inside(fp)) {
         return true;
       }
     }
