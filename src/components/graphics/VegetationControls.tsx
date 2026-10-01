@@ -13,6 +13,6 @@ export function VegetationControls() {
     <GraphicsSlider label="Plant wind strength" value={settings.strength} min={0} max={0.4} onChange={strength => update({ strength })} />
     <GraphicsSlider label="Plant wind speed" value={settings.speed} min={0} max={5} step={0.1} onChange={speed => update({ speed })} />
     <GraphicsSlider label="Plant wind direction" value={settings.direction} min={0} max={360} step={1} unit="°" onChange={direction => update({ direction })} />
-    <p className="text-[10px] text-gray-500">Strength and speed also animate Interior Studio curtains. Curtain motion does not use plant wind direction or Weather wind. Selected plants stay individually editable.</p>
+    <p className="text-[10px] text-gray-500">Interior Studio curtains use plant wind strength, speed and direction, plus enabled grass and flower wind on the terrain beneath them. Weather wind also contributes when enabled. Strength controls billowing; speed controls gust frequency. Selected plants stay individually editable.</p>
   </details>;
 }

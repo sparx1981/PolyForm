@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { smoothPatchNormals } from './upholsteryNormals';
+import { relaxCurtainPositions } from './curtainCloth';
 import type { Shape } from '../../types';
 import type { SimulationProfile } from '../semantics/componentTypes';
 
@@ -64,12 +65,17 @@ export function bakeSemanticSimulation(shape: Shape, strength = 0.35): Shape {
       const sideSoftness = height * 0.012 * amount * Math.sin(ny * Math.PI);
       next[i] = x + Math.sign(nx || 1) * sideSoftness * (1 - Math.abs(nx));
       next[i + 2] = z + Math.sign(nz || 1) * sideSoftness * (1 - Math.abs(nz));
-    } else if (simulation.type === 'cloth') {
+    } else if (simulation.type === 'cloth' && shape.customData?.furnitureType !== 'curtain') {
       const verticalSag = (1 - ny) * amount;
       const wave = Math.sin((nx + 1) * Math.PI * 7 + ny * 1.3);
       next[i + 2] = z + wave * depth * 0.18 * verticalSag;
       next[i + 1] = y - height * 0.012 * amount * (1 - nx * nx) * verticalSag;
     }
+  }
+
+  if (simulation.type === 'cloth' && shape.customData?.furnitureType === 'curtain') {
+    const params = shape.customData.semanticComponent.params;
+    relaxCurtainPositions(next, Number(params.width), Number(params.height), amount);
   }
 
   const normals = rebuildNormals(next, shape.geometryData?.uvs);

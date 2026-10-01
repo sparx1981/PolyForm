@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { smoothPatchNormals } from './upholsteryNormals';
+import { createCurtainPanels } from './curtainCloth';
 import type { Shape } from '../../types';
 import type { ComponentDefinition, PlacementProfile, SimulationProfile } from '../semantics/componentTypes';
 
@@ -202,38 +203,9 @@ function cabinetGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
   return merge(parts);
 }
 
-function drapedPanel(width: number, height: number, foldDepth: number, xOffset: number, folds: number): THREE.BufferGeometry {
-  const segX = Math.max(48, Math.round(folds * 12));
-  const segY = 28;
-  const g = new THREE.PlaneGeometry(width, height, segX, segY);
-  const pos = g.getAttribute('position') as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const u = width > 0 ? x / width + 0.5 : 0;
-    const vertical = Math.max(0.2, Math.min(1, (height / 2 - y) / Math.max(height, 0.01) + 0.3));
-    pos.setZ(i, Math.sin(u * Math.PI * 2 * folds) * foldDepth * vertical);
-    pos.setX(i, x + xOffset);
-    pos.setY(i, y + height / 2);
-  }
-  pos.needsUpdate = true;
-  g.computeVertexNormals();
-  return g;
-}
-
 function curtainGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
-  const open = Math.max(0, Math.min(1, p.openAmount));
-  const gap = p.width * open * 0.62;
-  const panelW = Math.max(0.12, (p.width - gap) / 2);
-  const folds = Math.max(3, Math.round(5 * Math.max(1, p.fullness)));
-  const leftX = -(gap / 2 + panelW / 2);
-  const rightX = gap / 2 + panelW / 2;
   const rod = box(p.width + 0.12, 0.035, 0.035, 0, p.height + 0.055, -0.01);
-  return merge([
-    drapedPanel(panelW, p.height, p.foldDepth, leftX, folds),
-    drapedPanel(panelW, p.height, p.foldDepth, rightX, folds),
-    rod,
-  ]);
+  return merge([...createCurtainPanels(p), rod]);
 }
 
 export function interiorFurnitureDefinition(type: InteriorFurnitureType) {
