@@ -20,7 +20,11 @@ This is a bounded first implementation for architectural stills. It rejects unco
 
 ### Effects
 
-Bloom intensity (off by default) and depth of field (off by default) use the existing EffectComposer, avoiding a second full-screen postprocessing pipeline. Bloom uses a high luminance threshold and half-resolution mip blur. Depth of field has a focus-distance control in metres, restrained bokeh and a bounded 480-pixel processing height. Exiting Present disables them.
+Bloom intensity (off by default) and depth of field (off by default) use the existing EffectComposer, avoiding a second full-screen postprocessing pipeline. Bloom uses a high luminance threshold and half-resolution mip blur. Depth of field has adjustable blur strength, an in-focus depth from 0.1 to 20 metres and a bounded 480-pixel processing height.
+
+**Pick focus on model** accepts a click or tap on a visible surface, using the existing model raycaster. The selected world point remains the focus target as the camera moves. Focus uses depth along the camera direction, rather than radial distance, and respects camera near/far clipping limits. If a picked point goes behind the camera, the saved manual distance is used. Escape or Cancel focus pick cancels picking; Use distance returns to a manual focus distance, now supporting 0.1 to 5,000 metres for terrain scenes. Focus distance, in-focus depth and blur update the existing DOF uniforms each frame without allocating vectors or reconstructing the effect.
+
+**Show original / Show effects** temporarily bypasses these optional effects while retaining their settings. The expensive bloom and DOF passes unmount while bypassed, disabled or at zero strength. Other environment settings remain in force. **Reset effects** restores only these optional effects, preserving Glass, stage, cuts and build settings. Exiting Present disables them.
 
 ### Near grass
 
@@ -33,3 +37,7 @@ Full-density coverage now extends to 72% of each ring radius instead of 55%; CPU
 70 focused tests pass, covering presentation regressions, camera crop ray identity, split-view/orthographic support, instance snapshot transforms/tints, geometry budgets, hidden/clipped surfaces, asynchronous cancellation/cleanup, raster fallback, grass template cost and transition/culling consistency. TypeScript checking and production Vite build pass. The build includes the separate lazy path-tracer chunk and BVH workers; copying unchanged public assets was skipped.
 
 Browser control reported no available browsers/apps during this implementation, so there is **no live GPU/shader or visual verification claim**. A backend-free preview is at `/.test-cache/presentation-tools.html` on the running port 3013 development server and was queued in Codex. Before calling this visually verified, inspect the loupe with composer on/off and Beta active, drag it on mobile, render/cancel/export a quality still, compare bloom/focus changes, and compare near grass on the user's phone and full model. The existing font import and large-chunk build warnings remain.
+
+### Optional effects follow-up validation
+
+54 presentation tests pass, including nine new tests for camera-relative/world-space focus, behind-camera and invalid-distance bounds, actual postprocessing DOF uniform updates, distant manual focus, pick/cancel/manual control flow, bypass and selective reset. TypeScript checking and production Vite build pass (unchanged public asset copying skipped). Browser control again returned no available browsers or apps, so real GPU appearance, touch picking and interaction with Beta clouds remain unverified.

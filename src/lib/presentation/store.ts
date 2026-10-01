@@ -25,6 +25,10 @@ export interface PresentationState {
   bloom: number;
   depthOfField: boolean;
   focusDistance: number;
+  focusPoint: [number, number, number] | null;
+  focusRange: number;
+  blurStrength: number;
+  effectsBypassed: boolean;
   /**
    * Look stage, 0-3: 0 Sketch (pencil lines on paper), 1 Massing (a plain white model),
    * 2 Detailed (white, with glass and furniture), 3 Built (the real materials; normal).
@@ -61,6 +65,10 @@ export const INITIAL_PRESENTATION: PresentationState = {
   bloom: 0,
   depthOfField: false,
   focusDistance: 10,
+  focusPoint: null,
+  focusRange: 1.5,
+  blurStrength: 0.5,
+  effectsBypassed: false,
   stage: 3,
   stagePlaying: false,
   stagePlaybackStarted: false,

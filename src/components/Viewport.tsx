@@ -19,6 +19,8 @@ import { setTextPlacement } from '../lib/textPlacement';
 import PresentationDriver from './presentation/PresentationDriver';
 import DetailLoupe from './presentation/DetailLoupe';
 import QualityCaptureBridge from './presentation/QualityCaptureBridge';
+import PresentationEffects from './presentation/PresentationEffects';
+import { presentationEffectsActive as hasPresentationEffects } from '../lib/presentation/effects';
 import { cutForDormers, dormerFingerprint, layoutsOf } from '../lib/dormers';
 import { SceneWeather } from './graphics/SceneWeather';
 import { BetaEnvironmentRoot, BetaEnvironmentEffects } from './graphics/BetaEnvironmentBridge';
@@ -66,7 +68,7 @@ import {
   GizmoHelper,
   GizmoViewport
 } from '@react-three/drei';
-import { EffectComposer, N8AO, GodRays, Bloom, DepthOfField } from '@react-three/postprocessing';
+import { EffectComposer, N8AO, GodRays } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as THREE from 'three';
 import { SUBTRACTION, ADDITION, INTERSECTION, Evaluator, Brush } from 'three-bvh-csg';
@@ -10023,7 +10025,7 @@ function Scene() {
 
   const fogPostprocessingActive = fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1));
   const presentationView = usePresentation();
-  const presentationEffectsActive = presentationView.active && (presentationView.bloom > 0 || presentationView.depthOfField);
+  const presentationEffectsActive = hasPresentationEffects(presentationView);
   const postprocessingActive = presentationEffectsActive || ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive || graphicsSettings.beta.enabled;
 
   useEffect(() => {
@@ -13486,8 +13488,7 @@ function Scene() {
               samples={60}
             />
           )}
-          {presentationView.active && presentationView.bloom > 0 && <Bloom intensity={presentationView.bloom} luminanceThreshold={1} luminanceSmoothing={.2} mipmapBlur resolutionScale={.5} />}
-          {presentationView.active && presentationView.depthOfField && <DepthOfField worldFocusDistance={presentationView.focusDistance} worldFocusRange={Math.max(.3,presentationView.focusDistance*.15)} focalLength={.025} bokehScale={1.5} height={480} />}
+          <PresentationEffects />
           <BetaEnvironmentEffects />
         </EffectComposer>
       )}

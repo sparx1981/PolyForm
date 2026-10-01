@@ -19,6 +19,7 @@ import { findSiteGround } from '../../lib/worldSite/site';
 import { STREET_LIFE_LEVELS, withSiteSettings } from '../../lib/worldSite/streets';
 import { actionLabel } from '../../lib/macroRecorder';
 import LoupeHandle from './LoupeHandle';
+import PresentationEffectsControls from './PresentationEffectsControls';
 import type { StreetLifeLevel } from '../../types';
 
 const QualityRenderDialog = React.lazy(() => import('./QualityRenderDialog'));
@@ -176,18 +177,7 @@ export default function PresentationPanel() {
               onChange={v => presentation.set({ loupeRadius: v })} format={v => `${Math.round(v * 2)} px`} />
           </Popover>
         )}
-        {open === 'effects' && (
-          <Popover title="Presentation effects">
-            <Slider label="Bloom" value={s.bloom} min={0} max={.8} step={.05}
-              onChange={v => presentation.set({ bloom: v })} format={v => `${Math.round(v * 100)}%`} />
-            <label className="flex gap-2 text-xs my-3">
-              <input type="checkbox" checked={s.depthOfField} onChange={e => presentation.set({ depthOfField: e.target.checked })} />
-              Depth of field
-            </label>
-            {s.depthOfField && <Slider label="Focus distance" value={s.focusDistance} min={.5} max={100} step={.5}
-              onChange={v => presentation.set({ focusDistance: v })} format={v => `${v.toFixed(1)} m`} />}
-          </Popover>
-        )}
+        {open === 'effects' && <PresentationEffectsControls />}
         {open === 'labels' && <LabelsEditor />}
         {open === 'tour' && <TourEditor />}
         {open === 'comments' && <Popover title="Client comments" hint="From your client page"><DesignerCommentsList /></Popover>}
