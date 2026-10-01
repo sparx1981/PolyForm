@@ -26,6 +26,8 @@ import { groundUnderRay } from '../lib/terrain/groundRay';
 import { GlassWeatherDriver, WetGlassMaterial, useGlassWeather } from './graphics/WetGlass';
 import { UpholsteredFurnitureMesh } from './interiors/UpholsteredFurnitureMesh';
 import { CurtainMesh } from './interiors/CurtainMesh';
+import { detectRooms } from '../lib/spatial/rooms';
+import { wallAttachmentPoint } from '../lib/spatial/wallAttachment';
 import { WaterMesh } from './WaterMesh';
 import { WaterEditHandles } from './WaterEditHandles';
 import { PatioMesh } from './landscape/PatioMesh';
@@ -4144,7 +4146,7 @@ function Scene() {
       const wL = Array.isArray(sh.args) ? sh.args[0] || 3.0 : 3.0;
       const wH = Array.isArray(sh.args) ? sh.args[1] || 2.8 : 2.8;
       const wPos = new THREE.Vector3(...sh.position);
-      const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion();
+      const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(sh.rotation ?? [0, 0, 0])));
 
       // Check vertical story level overlap
       const wallMinY = wPos.y - wH / 2;
@@ -4252,6 +4254,11 @@ function Scene() {
     recordAction(actionLabel(`Wall tool: ${dist.toFixed(2)} m wall`));
     return newShape;
   }, [activeMaterial, activePBR, addShape, commitHistory, shapes, recordAction, wallToolSettings, wallJustification, activeStory]);
+
+  const wallRoomKey = shapes.filter(shape => shape.type === 'wall' && !shape.hidden)
+    .map(shape => `${shape.id}:${shape.position.join(',')}:${JSON.stringify(shape.quaternion ?? shape.rotation)}:${JSON.stringify(shape.args)}`).join('|');
+  // Furniture/terrain edits must not re-rasterize every room during a drag.
+  const wallRooms = useMemo(() => detectRooms(shapes.filter(shape => shape.type === 'wall')), [wallRoomKey]);
 
   // Helper to test if a 2D position lies inside an existing enclosed room or floor slab
   const isPointInsideRoom = useCallback((point: THREE.Vector3): boolean => {
@@ -5850,6 +5857,15 @@ function Scene() {
           }
         }
 
+        if (wallJustification === 'interior') {
+          const hitId = e.object?.userData?.id;
+          const hitWall = shapes.find(shape => shape.id === hitId && shape.type === 'wall');
+          if (hitWall) {
+            const hit = e.point.clone(); hit.y = hitWall.position[1] - Number(hitWall.args[1] ?? 2.8) / 2;
+            p = wallAttachmentPoint(hitWall, hit, true, wallRooms);
+          }
+        }
+
         // Enforce: Interior walls must only be drawn inside an existing room
         if (wallJustification === 'interior') {
           if (!isPointInsideRoom(p)) {
@@ -7192,7 +7208,15 @@ function Scene() {
       const target = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, target)) {
         let finalPos = target.clone();
-        
+        if (!wallVertices.length && wallJustification === 'interior') {
+          const visible = raycaster.intersectObjects(scene.children, true).find(hit => hit.object.userData?.isShape);
+          const hitWall = visible ? shapes.find(shape => shape.id === visible.object.userData.id && shape.type === 'wall') : undefined;
+          if (hitWall && visible) {
+            const hit = visible.point.clone(); hit.y = hitWall.position[1] - Number(hitWall.args[1] ?? 2.8) / 2;
+            finalPos = wallAttachmentPoint(hitWall, hit, true, wallRooms);
+          }
+        }
+
         // 1. Check start vertex snap to close wall loop
         let isClosingLoop = false;
         if (wallVertices.length >= 2) {
@@ -7298,7 +7322,7 @@ function Scene() {
                 const wH = Array.isArray(sh.args) ? sh.args[1] || 2.8 : 2.8;
                 const wT = Array.isArray(sh.args) ? sh.args[2] || 0.2 : 0.2;
                 const wPos = new THREE.Vector3(...sh.position);
-                const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion();
+                const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(sh.rotation ?? [0, 0, 0])));
 
                 const vRun = new THREE.Vector3(1, 0, 0).applyQuaternion(wQuat).normalize();
                 const vNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(wQuat).normalize();
@@ -7310,7 +7334,7 @@ function Scene() {
                 const centerlinePt = pA.clone().add(vRun.clone().multiplyScalar(t));
                 centerlinePt.y = lastVertex.y;
 
-                const innerFacePt = centerlinePt.clone().sub(vNormal.clone().multiplyScalar(wT / 2));
+                const innerFacePt = wallAttachmentPoint(sh, new THREE.Vector3(target.x, centerlinePt.y, target.z), true, wallRooms);
                 const dInner = target.distanceTo(innerFacePt);
                 const dCenter = target.distanceTo(centerlinePt);
 
@@ -7376,7 +7400,7 @@ function Scene() {
               const wH = Array.isArray(sh.args) ? sh.args[1] || 2.8 : 2.8;
               const wT = Array.isArray(sh.args) ? sh.args[2] || 0.2 : 0.2;
               const wPos = new THREE.Vector3(...sh.position);
-              const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion();
+              const wQuat = sh.quaternion ? new THREE.Quaternion(...sh.quaternion) : new THREE.Quaternion().setFromEuler(new THREE.Euler(...(sh.rotation ?? [0, 0, 0])));
 
               const vRun = new THREE.Vector3(1, 0, 0).applyQuaternion(wQuat).normalize();
               const vNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(wQuat).normalize();
@@ -7388,7 +7412,7 @@ function Scene() {
               const centerlinePt = pA.clone().add(vRun.clone().multiplyScalar(t));
               centerlinePt.y = wPos.y - wH / 2;
 
-              const innerFacePt = centerlinePt.clone().sub(vNormal.clone().multiplyScalar(wT / 2));
+              const innerFacePt = wallAttachmentPoint(sh, new THREE.Vector3(finalPos.x, centerlinePt.y, finalPos.z), true, wallRooms);
               const dInner = finalPos.distanceTo(innerFacePt);
               const dCenter = finalPos.distanceTo(centerlinePt);
 
@@ -11983,6 +12007,17 @@ function Scene() {
           displacementScale: shape.displacementMapUrl ? (shape.displacementScale ?? 0.1) : undefined,
         };
 
+        const furnishingSurface: THREE.MeshPhysicalMaterialParameters = {
+          ...pbrMapProps,
+          map: objectBinding?.baseColorTexture ?? (objectBinding?.baseColorUrl ? getCachedTexture(objectBinding.baseColorUrl) : isTextureUrl(shape.color) ? getCachedTexture(shape.color) : undefined),
+          color: objectBinding?.color ?? (isTextureUrl(shape.color) ? '#ffffff' : shape.color),
+          roughness: objectBinding?.roughness ?? shape.roughness ?? 0.92,
+          metalness: objectBinding?.metalness ?? shape.metalness ?? 0,
+          opacity: Math.min(effectiveOpacity, objectBinding?.opacity ?? 1),
+          transparent: Math.min(effectiveOpacity, objectBinding?.opacity ?? 1) < 1,
+          depthWrite: Math.min(effectiveOpacity, objectBinding?.opacity ?? 1) >= 0.85,
+        };
+
         const materialElements = shape.type === 'box' && shape.surfaceMaterials && !shape.bevelAmount ? (
           [0, 2, 4, 6, 8, 10].map((idx) => {
             const mat = shape.surfaceMaterials?.[idx] || shape.color;
@@ -12083,11 +12118,11 @@ function Scene() {
         }
 
         if (['bed','sofa','armchair'].includes(shape.customData?.furnitureType) && shape.geometryData?.positions) {
-          return <UpholsteredFurnitureMesh key={shape.id} shape={shape} meshProps={meshProps} selectionHighlight={selectionHighlight} />;
+          return <UpholsteredFurnitureMesh key={shape.id} shape={shape} meshProps={meshProps} surface={furnishingSurface} selectionHighlight={selectionHighlight} />;
         }
 
         if (shape.customData?.furnitureType === 'curtain' && shape.geometryData?.positions) {
-          return <CurtainMesh key={shape.id} shape={shape} meshProps={meshProps} selectionHighlight={selectionHighlight} />;
+          return <CurtainMesh key={shape.id} shape={shape} meshProps={meshProps} surface={furnishingSurface} selectionHighlight={selectionHighlight} />;
         }
 
         if (shape.type === 'water' && shape.waterData) {

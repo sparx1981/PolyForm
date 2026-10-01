@@ -5,8 +5,8 @@ import { smoothPatchNormals } from '../../lib/interiors/upholsteryNormals';
 import type { Shape } from '../../types';
 
 /** Saved sculpted upholstery with woven micro-normal detail and fabric sheen; no live solver. */
-export function UpholsteredFurnitureMesh({shape,meshProps,selectionHighlight}: {
-  shape: Shape; meshProps: any; selectionHighlight?: React.ReactNode;
+export function UpholsteredFurnitureMesh({shape,meshProps,surface,selectionHighlight}: {
+  shape: Shape; meshProps: any; surface?: THREE.MeshPhysicalMaterialParameters; selectionHighlight?: React.ReactNode;
 }) {
   const geometry=useMemo(()=>{
     const g=new THREE.BufferGeometry(), data=shape.geometryData!;
@@ -40,15 +40,14 @@ export function UpholsteredFurnitureMesh({shape,meshProps,selectionHighlight}: {
     const t=new THREE.DataTexture(data,size,size);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(18,18);
     t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;t.generateMipmaps=true;t.needsUpdate=true;return t;
   },[]);
-  const materials=useMemo(()=>[
-    new THREE.MeshStandardMaterial({color:'#76604a',roughness:0.6}),
-    new THREE.MeshPhysicalMaterial({color:shape.color,roughness:0.92,normalMap:weave,normalScale:new THREE.Vector2(.25,.25),sheen:.5,sheenRoughness:.85,sheenColor:new THREE.Color(shape.color)}),
-  ],[shape.color,weave]);
   useEffect(()=>()=>geometry.dispose(),[geometry]);
   useEffect(()=>()=>weave.dispose(),[weave]);
-  useEffect(()=>()=>materials.forEach(m=>m.dispose()),[materials]);
   return <group {...meshProps}>
-    <mesh geometry={geometry} material={materials} castShadow={meshProps.castShadow} receiveShadow={meshProps.receiveShadow} userData={{isShape:true,id:shape.id}} />
+    <mesh geometry={geometry} castShadow={meshProps.castShadow} receiveShadow={meshProps.receiveShadow} userData={{isShape:true,id:shape.id}}>
+      <meshStandardMaterial attach="material-0" color="#76604a" roughness={0.6} opacity={surface?.opacity ?? 1} transparent={surface?.transparent ?? false} depthWrite={surface?.depthWrite ?? true} />
+      <meshPhysicalMaterial attach="material-1" color={shape.color.startsWith('#') ? shape.color : '#ffffff'} roughness={0.92}
+        sheen={0.5} sheenRoughness={0.85} sheenColor={surface?.color ?? '#ffffff'} {...surface} normalMap={surface?.normalMap ?? weave} normalScale={surface?.normalMap ? surface.normalScale ?? [1, 1] : [0.25, 0.25]} />
+    </mesh>
     {selectionHighlight}
   </group>;
 }

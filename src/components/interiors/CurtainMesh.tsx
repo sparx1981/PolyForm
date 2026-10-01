@@ -6,8 +6,8 @@ import { useApp } from '../../AppContext';
 import { createCurtainPanels, CurtainCloth, relaxCurtainPositions } from '../../lib/interiors/curtainCloth';
 import { curtainTerrain, curtainWind } from '../../lib/interiors/curtainWind';
 
-export function CurtainMesh({ shape, meshProps, selectionHighlight }: {
-  shape: Shape; meshProps: any; selectionHighlight?: React.ReactNode;
+export function CurtainMesh({ shape, meshProps, surface, selectionHighlight }: {
+  shape: Shape; meshProps: any; surface?: THREE.MeshPhysicalMaterialParameters; selectionHighlight?: React.ReactNode;
 }) {
   const { graphicsSettings, walkModePhase, shapes } = useApp();
   const group = useRef<THREE.Group>(null);
@@ -48,7 +48,7 @@ export function CurtainMesh({ shape, meshProps, selectionHighlight }: {
   });
   return <group {...meshProps} ref={group}>
     {panels.map((geometry, index) => <mesh key={index} geometry={geometry} castShadow={meshProps.castShadow} receiveShadow={meshProps.receiveShadow} userData={{ isShape: true, id: shape.id }}>
-      <meshPhysicalMaterial color={shape.color} roughness={0.96} sheen={0.65} sheenRoughness={0.85} sheenColor={shape.color} side={THREE.DoubleSide} />
+      <meshPhysicalMaterial color={shape.color.startsWith('#') ? shape.color : '#ffffff'} roughness={0.96} sheen={0.65} sheenRoughness={0.85} sheenColor={surface?.color ?? '#ffffff'} {...surface} side={THREE.DoubleSide} />
     </mesh>)}
     <mesh position={[0, height + 0.055, -0.01]} userData={{ isShape: true, id: shape.id }}>
       <boxGeometry args={[width + 0.12, 0.035, 0.035]} />

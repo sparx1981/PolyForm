@@ -48,9 +48,10 @@ function handlePreviewError(e: React.SyntheticEvent<HTMLImageElement>) {
 interface OpenModelProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenLocalFile?: () => void;
 }
 
-export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
+export default function OpenModel({ isOpen, onClose, onOpenLocalFile }: OpenModelProps) {
   const { 
     user, 
     setShapes, 
@@ -566,6 +567,12 @@ export default function OpenModel({ isOpen, onClose }: OpenModelProps) {
               </button>
             </div>
           </div>
+
+          {onOpenLocalFile && <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-gray-500">Have a file on this device?</span>
+            <button onClick={() => { onOpenLocalFile(); onClose(); }} className="text-polyform-blue font-semibold underline underline-offset-2">Open a local file...</button>
+            <span className="text-xs text-gray-500">.polyform, .json, .skp or .gltf</span>
+          </div>}
 
           {/* Toolbar */}
           <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-900">

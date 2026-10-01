@@ -52,7 +52,7 @@ function pointInPolygon(point: [number, number], polygon: Array<[number, number]
   return inside;
 }
 
-function pointInPolygonOrNear(point: [number, number], polygon: Array<[number, number]>, tolerance = 0.08): boolean {
+export function pointInPolygonOrNear(point: [number, number], polygon: Array<[number, number]>, tolerance = 0.08): boolean {
   if (pointInPolygon(point, polygon)) return true;
   if (polygon.length < 2) return false;
   const [px, pz] = point;

@@ -801,8 +801,7 @@ export default function TopBar() {
                   : "absolute left-0 top-full mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-modus-4 border border-gray-200 dark:border-gray-700 py-2 text-gray-700 dark:text-gray-200"}
               >
                 <MenuButton icon={<FilePlus size={16} />} label="New" onClick={handleNew} />
-                <MenuButton icon={<FolderOpen size={16} />} label="Open File..." onClick={handleOpenLocalFile} />
-                <MenuButton icon={<Cloud size={16} />} label="Cloud Models..." onClick={handleOpen} />
+                <MenuButton icon={<FolderOpen size={16} />} label="Open File..." onClick={handleOpen} />
                 <MenuButton icon={<Save size={16} />} label="Save" onClick={handleSave} />
                 <MenuButton icon={<Save size={16} />} label="Save As..." onClick={() => { setIsSaveAsOpen(true); setIsMenuOpen(false); }} />
                 
@@ -958,7 +957,8 @@ export default function TopBar() {
 
       <OpenModel 
         isOpen={isSavedModelsOpen} 
-        onClose={() => setIsSavedModelsOpen(false)} 
+        onClose={() => setIsSavedModelsOpen(false)}
+        onOpenLocalFile={handleOpenLocalFile}
       />
       {isCmsOpen && isCmsAdmin(user) && <Suspense fallback={<div role="status" className="fixed inset-0 z-[1000] bg-white p-12 text-slate-700">Loading content studio…</div>}><CmsAdmin onClose={() => setIsCmsOpen(false)} /></Suspense>}
 

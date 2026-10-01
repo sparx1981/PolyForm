@@ -3,9 +3,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Armchair, BedDouble, Box, Check, Loader2, Sofa, Sparkles, X } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { detectRooms } from '../../lib/spatial/rooms';
-import { planRoomFurnishing, type FurnishingPreset } from '../../lib/interiors/smartFurnish';
-import { bakeSemanticSimulation } from '../../lib/interiors/bakeSimulation';
-import { checkModelHealth } from '../../lib/reconstruction/modelHealth';
+import { type FurnishingPreset } from '../../lib/interiors/smartFurnish';
+import { furnishRooms, furnishingsInRoom, type RoomFurnishingRequest } from '../../lib/interiors/furnishBatch';
+import { RoomFloorPlan } from './RoomFloorPlan';
 import { useModalA11y } from '../ui/useModalA11y';
 import { cn } from '../../lib/utils';
 
@@ -28,6 +28,8 @@ export default function InteriorStudio() {
   const dialogRef = useModalA11y<HTMLDivElement>(open, () => setOpen(false));
   const [roomId, setRoomId] = useState<string>('');
   const [preset, setPreset] = useState<FurnishingPreset>('bedroom');
+  const [queue, setQueue] = useState<RoomFurnishingRequest[]>([]);
+  const [replaceExisting, setReplaceExisting] = useState(false);
   const [settleSoft, setSettleSoft] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -38,42 +40,43 @@ export default function InteriorStudio() {
     return () => window.removeEventListener('polyform:interior-studio', handler);
   }, []);
 
-  const rooms = useMemo(() => detectRooms(shapes), [shapes]);
+  const rooms = useMemo(() => open ? detectRooms(shapes).map((room, i) => ({ ...room, name: room.name ?? `Room ${i + 1}` })) : [], [shapes, open]);
 
   useEffect(() => {
+    if (!open) return;
     if (!rooms.length) {
       setRoomId('');
       return;
     }
     if (!roomId || !rooms.some(room => room.id === roomId)) setRoomId(rooms[0].id);
-  }, [rooms, roomId]);
+  }, [rooms, roomId, open]);
 
   const selectedRoom = rooms.find(room => room.id === roomId);
+  const selectRoom = (id: string) => {
+    setRoomId(id);
+    const pending = queue.find(item => item.roomId === id);
+    if (pending) setPreset(pending.preset);
+    setReplaceExisting(pending?.replaceExisting ?? false);
+  };
+  const enqueue = () => {
+    if (!selectedRoom) return;
+    setQueue(previous => [...previous.filter(item => item.roomId !== roomId), { roomId, preset, replaceExisting }]);
+    setMessage(`${selectedRoom.name} queued. Pick another room, or apply the queue below.`);
+  };
 
   const furnish = () => {
-    if (!selectedRoom) return;
+    if (!queue.length) return;
     setBusy(true);
     setMessage(null);
     try {
-      const plan = planRoomFurnishing(shapes, selectedRoom, preset);
-      const inserted = settleSoft
-        ? plan.shapes.map(shape => {
-            const sim = shape.customData?.semanticComponent?.simulation;
-            return sim?.bakeable ? bakeSemanticSimulation(shape, sim.type === 'cloth' ? 0.32 : 0.42) : shape;
-          })
-        : plan.shapes;
-
-      const combined = [...shapes, ...inserted];
-      const health = checkModelHealth(combined);
-      setShapes(previous => [...previous, ...inserted]);
-
-      const placedLabel = inserted.length === 1 ? '1 item' : `${inserted.length} items`;
-      const skipped = plan.unplaced.length
-        ? ` ${plan.unplaced.length} item${plan.unplaced.length === 1 ? '' : 's'} could not be placed without a collision.`
-        : '';
-      setMessage(
-        `Placed ${placedLabel} in ${selectedRoom.name ?? `Room ${selectedRoom.level}`}.${skipped} Model health: ${health.errors} errors, ${health.warnings} warnings.`,
-      );
+      const batch = furnishRooms(shapes, rooms, queue, settleSoft);
+      setShapes(batch.shapes);
+      setQueue([]);
+      const summary = batch.results.map(result => {
+        const room = rooms.find(room => room.id === result.roomId)!;
+        return `${room.name}: ${result.placed} placed${result.removed ? `, ${result.removed} replaced` : ''}${result.skipped ? `, ${result.skipped} could not fit` : ''}`;
+      }).join(' · ');
+      setMessage(`${summary}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not furnish this room.');
     } finally {
@@ -91,7 +94,7 @@ export default function InteriorStudio() {
           initial={{ opacity: 0, scale: 0.96, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
-          className="w-full max-w-3xl max-h-[88vh] overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl"
+          className="w-full max-w-4xl max-h-[88vh] overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl"
         >
           <header className="px-5 py-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
             <div>
@@ -112,16 +115,22 @@ export default function InteriorStudio() {
               </div>
             ) : (
               <>
-                <section className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Room</label>
-                  <select value={roomId} onChange={e => setRoomId(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
-                    {rooms.map((room, index) => (
-                      <option key={room.id} value={room.id}>
-                        {room.name ?? `Room ${index + 1}`} · Level {room.level} · {room.areaM2.toFixed(1)} m²
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid lg:grid-cols-2 gap-5">
+                <section className="space-y-2 lg:sticky lg:top-0 self-start">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-xs font-semibold text-gray-600 dark:text-gray-300" htmlFor="interior-floor">Choose a floor, then pick a room</label>
+                    <select id="interior-floor" value={selectedRoom?.level ?? rooms[0].level} onChange={e => selectRoom(rooms.find(room => room.level === Number(e.target.value))!.id)}
+                      className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
+                      {[...new Set(rooms.map(room => room.level))].map(level => <option key={level} value={level}>Level {level} · {rooms.find(room => room.level === level)!.elevation.toFixed(1)} m elevation</option>)}
+                    </select>
+                  </div>
+                  <RoomFloorPlan rooms={rooms.filter(room => room.level === selectedRoom?.level)} shapes={shapes} selectedId={roomId} queue={queue} onSelect={selectRoom} />
+                  <div className="flex flex-wrap gap-2" aria-label="Rooms on this floor">
+                    {rooms.filter(room => room.level === selectedRoom?.level).map(room => <button key={room.id} aria-pressed={room.id === roomId} onClick={() => selectRoom(room.id)}
+                      className={cn('rounded-lg border px-3 py-2 text-xs', room.id === roomId ? 'border-polyform-blue bg-blue-50 dark:bg-blue-950/30' : 'border-gray-200 dark:border-gray-700')}>
+                      {room.name} · {room.areaM2.toFixed(1)} m²{queue.some(item => item.roomId === room.id) ? ' · queued' : ''}
+                    </button>)}
+                  </div>
                   {selectedRoom && (
                     <p className="text-[11px] text-gray-500">
                       {selectedRoom.boundaryWallIds.length} bounding walls · {selectedRoom.openingIds.length} hosted openings · {selectedRoom.perimeterM.toFixed(1)} m perimeter
@@ -129,11 +138,12 @@ export default function InteriorStudio() {
                   )}
                 </section>
 
+                <div className="space-y-4">
                 <section className="space-y-2">
                   <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">Furnishing preset</div>
                   <div className="grid sm:grid-cols-2 gap-2">
                     {PRESETS.map(option => (
-                      <button key={option.id} onClick={() => setPreset(option.id)}
+                      <button key={option.id} onClick={() => setPreset(option.id)} aria-pressed={preset === option.id}
                         className={cn(
                           'text-left rounded-xl border p-3 flex gap-3 transition-colors',
                           preset === option.id
@@ -155,15 +165,33 @@ export default function InteriorStudio() {
                   <Sparkles size={16} className="text-polyform-blue" />
                   <span className="flex-1">
                     <span className="block text-sm font-semibold">Relax upholstery and drape</span>
-                    <span className="block text-[11px] text-gray-500">Save a relaxed upholstery shape and curtain drape. Beds and sofas remain static. Curtains use Animate plant wind, Plant wind strength and Plant wind speed under Vegetation rendering, plus nearby movement in Walk Mode.</span>
+                    <span className="block text-[11px] text-gray-500">Save a relaxed upholstery shape and curtain drape. Beds and sofas remain static. Curtains respond to plant wind, enabled grass/flower wind beneath the room, Weather wind and nearby movement in Walk Mode.</span>
                   </span>
                 </label>
 
-                <button onClick={furnish} disabled={!selectedRoom || busy}
-                  className="w-full rounded-xl bg-polyform-blue text-white py-3 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                  {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                  Furnish selected room
+                <label className="flex items-start gap-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 cursor-pointer">
+                  <input type="checkbox" checked={replaceExisting} onChange={e => setReplaceExisting(e.target.checked)} className="mt-1" />
+                  <span><span className="block text-sm font-semibold">Replace existing furnishings in {selectedRoom?.name}</span>
+                    <span className="text-xs text-gray-500">Off by default. {selectedRoom ? furnishingsInRoom(shapes, selectedRoom, rooms).length : 0} existing furniture items in this room. Walls, doors and windows are kept.</span></span>
+                </label>
+                <button onClick={enqueue} disabled={!selectedRoom || busy} className="w-full rounded-xl border border-polyform-blue text-polyform-blue py-3 text-sm font-bold disabled:opacity-50">
+                  {queue.some(item => item.roomId === roomId) ? 'Update queued room' : `Add ${selectedRoom?.name ?? 'room'} to queue`}
                 </button>
+                <section className="space-y-2 rounded-xl border border-gray-200 dark:border-gray-700 p-3" aria-label="Furnishing queue">
+                  <h3 className="text-sm font-semibold">Furnishing queue · {queue.length} rooms</h3>
+                  {!queue.length && <p className="text-xs text-gray-500">Choose a room and preset, add it, then repeat on any floor. Apply when ready.</p>}
+                  {queue.map(item => <div key={item.roomId} className="flex items-center gap-2 text-xs py-1">
+                    <button onClick={() => selectRoom(item.roomId)} className="flex-1 text-left text-polyform-blue underline underline-offset-2">
+                      {rooms.find(room => room.id === item.roomId)?.name ?? 'Room no longer exists'} · Level {rooms.find(room => room.id === item.roomId)?.level ?? '?'} · {PRESETS.find(option => option.id === item.preset)?.label} · {item.replaceExisting ? 'replace furniture' : 'keep existing'}
+                    </button>
+                    <button aria-label={`Remove ${rooms.find(room => room.id === item.roomId)?.name ?? 'room'} from queue`} onClick={() => setQueue(previous => previous.filter(entry => entry.roomId !== item.roomId))} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"><X size={14} /></button>
+                  </div>)}
+                  <button onClick={furnish} disabled={!queue.length || busy} className="w-full rounded-xl bg-polyform-blue text-white py-3 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                    {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Apply {queue.length || ''} queued rooms
+                  </button>
+                </section>
+                </div>
+                </div>
               </>
             )}
 
