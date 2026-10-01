@@ -4,10 +4,10 @@ import { sampleTerrainElevation } from '../archRoomAssembly';
 import { extractExclusionFootprints, isPointExcluded, computeTerrainNormal } from './grassGeometry';
 
 /**
- * Dense single-blade grass. Blades are not stored anywhere: each ring is one draw of a blade
+ * Dense blades nearby and inexpensive tuft cards in the distance. Blades are not stored anywhere: each ring is one draw of a blade
  * template instanced over a camera-following grid, and the shader derives every blade's root,
  * shape, clump and colour from a hash of its world-space grid cell. Moving the camera slides the
- * grid by whole cells, so blades stay put in the world. The CPU only bakes a terrain-sized
+ * grid by whole cells, so blades stay put in the world. The CPU culls compact spatial patches, bakes a terrain-sized
  * presence mask (slope, slabs, roads, pads) and uploads the terrain height grid.
  */
 
@@ -22,6 +22,7 @@ export interface GrassRing {
   stride: number;
   /** Curve segments per blade. */
   segments: number;
+  kind: 'blade' | 'clump';
   /** Blades per grid side. */
   cells: number;
   /**
@@ -31,8 +32,21 @@ export interface GrassRing {
   widthScale: number;
 }
 
-/** Instanced blades per ring (near, middle, far) are capped to keep a GPU budget. */
-export const MAX_RING_BLADES = [300_000, 280_000, 160_000];
+/** Mirrors the shader's integer hierarchy for identity checks and diagnostics. */
+export function grassRootCell(blockX: number, blockZ: number, stride: number): [number,number] {
+  let x = blockX * stride, z = blockZ * stride;
+  for (let step = stride; step > 1; step /= 2) {
+    let n = (Math.imul(x,1664525) + Math.imul(z,1013904223) + Math.imul(step,374761393)) >>> 0;
+    n = Math.imul(n ^ (n >>> 16),2246822519) >>> 0;
+    n = Math.imul(n ^ (n >>> 13),3266489917) >>> 0;
+    n = (n ^ (n >>> 16)) >>> 0;
+    x += (n & 1) * step / 2; z += ((n >>> 1) & 1) * step / 2;
+  }
+  return [x,z];
+}
+
+/** Instanced roots per ring (near, middle, far blades, distant tuft cards) are capped to keep a GPU budget. */
+export const MAX_RING_BLADES = [300_000, 280_000, 160_000, 80_000];
 
 /** Blades per square metre for the 1–25 density slider (a real lawn has thousands). */
 export function bladesPerSquareMetre(density: number): number {
@@ -45,7 +59,8 @@ export function bladesPerSquareMetre(density: number): number {
  * radius at twice the spacing or more. Far ring: coarse blades to the horizon. Middle blades are
  * at most 2x wider, far ones (a pixel or two across) at most 4x; distance itself keeps blades at
  * least a pixel wide in the shader, so nearby grass never reads as a different, fatter model. Taller grass stays
- * visible further away, so its rings are larger.
+ * visible further away, so its rings are larger. A fourth two-triangle tuft layer extends
+ * coverage to 180–450 m without extending the expensive blade rings.
  */
 export function grassRings(settings: Pick<GrassSettings, 'density' | 'baseHeight' | 'heightVariance'>): GrassRing[] {
   const height = settings.baseHeight + settings.heightVariance;
@@ -53,9 +68,10 @@ export function grassRings(settings: Pick<GrassSettings, 'density' | 'baseHeight
   const wanted = 1 / Math.sqrt(bladesPerSquareMetre(settings.density));
   const nearRadius = THREE.MathUtils.clamp(Math.sqrt(MAX_RING_BLADES[0]) * wanted / 2, 5 * reach, 12 * reach);
   const specs = [
-    { radius: nearRadius, spacing: wanted, segments: 4, maxWiden: 1 },
-    { radius: nearRadius * 2, spacing: wanted * 2, segments: 3, maxWiden: 2 },
-    { radius: 60 * reach, spacing: wanted * 6, segments: 2, maxWiden: 4 },
+    { radius: nearRadius, spacing: wanted, segments: 4, kind: 'blade' as const, maxWiden: 1 },
+    { radius: nearRadius * 2, spacing: wanted * 2, segments: 3, kind: 'blade' as const, maxWiden: 2 },
+    { radius: 60 * reach, spacing: wanted * 6, segments: 2, kind: 'blade' as const, maxWiden: 4 },
+    { radius: 180 * reach, spacing: wanted * 16, segments: 1, kind: 'clump' as const, maxWiden: 4 },
   ];
   let nearSpacing = wanted;
   let previousStride = 1;
@@ -96,6 +112,15 @@ export function createBladeTemplate(segments: number): THREE.InstancedBufferGeom
   return geometry;
 }
 
+/** A camera-facing tuft card. Its shader cuts several individual grass silhouettes. */
+export function createGrassClumpTemplate(): THREE.InstancedBufferGeometry {
+  const geometry = new THREE.InstancedBufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([-1,0,0,1,0,0,-1,1,0,1,1,0],3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute([0,1,0,0,1,0,0,1,0,0,1,0],3));
+  geometry.setIndex([0,1,2,2,1,3]);
+  return geometry;
+}
+
 /** Terrain footprint shared by the height and mask textures. */
 export interface GrassField {
   /** World-space min corner (x, z) and size (width, depth). */
@@ -104,6 +129,9 @@ export interface GrassField {
   mask: THREE.DataTexture;
   /** Terrain base elevation, used where the terrain has no height grid. */
   baseY: number;
+  minY: number; maxY: number;
+  /** Summed-area table of eligible mask texels, for conservative empty-patch rejection. */
+  occupancy: Uint32Array; maskWidth: number; maskHeight: number;
 }
 
 /**
@@ -164,7 +192,18 @@ export function createGrassField(terrain: Shape, shapes: Shape[], terrainModifie
   mask.minFilter = mask.magFilter = THREE.LinearFilter;
   mask.wrapS = mask.wrapT = THREE.ClampToEdgeWrapping;
   mask.needsUpdate = true;
+  const occupancy = new Uint32Array((baked.width + 1) * (baked.height + 1));
+  for (let z = 0; z < baked.height; z++) {
+    let row = 0;
+    for (let x = 0; x < baked.width; x++) {
+      row += baked.data[z * baked.width + x] > 0 ? 1 : 0;
+      occupancy[(z + 1) * (baked.width + 1) + x + 1] = occupancy[z * (baked.width + 1) + x + 1] + row;
+    }
+  }
+  let minY = terrain.position[1], maxY = minY;
+  for (const height of terrain.terrainData!.heights ?? []) { minY = Math.min(minY, terrain.position[1] + height); maxY = Math.max(maxY, terrain.position[1] + height); }
   return {
+    occupancy, maskWidth: baked.width, maskHeight: baked.height, minY, maxY,
     bounds: new THREE.Vector4(terrain.position[0] - width / 2, terrain.position[2] - depth / 2, width, depth),
     heights: createHeightTexture(terrain),
     mask,

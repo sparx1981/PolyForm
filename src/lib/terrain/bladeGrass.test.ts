@@ -28,7 +28,7 @@ describe('Dense blade grass', () => {
     expect(bladesPerSquareMetre(DEFAULT_GRASS_SETTINGS.density)).toBeGreaterThanOrEqual(300);
     for (const density of [1, 10, 25]) {
       const rings = grassRings({ ...DEFAULT_GRASS_SETTINGS, density });
-      expect(rings).toHaveLength(3);
+      expect(rings).toHaveLength(4);
       rings.forEach((ring, i) => {
         expect(ring.cells * ring.cells).toBeLessThanOrEqual(MAX_RING_BLADES[i] * 1.02);
         expect(ring.cells * ring.spacing).toBeGreaterThanOrEqual(2 * ring.radius - 1e-6);

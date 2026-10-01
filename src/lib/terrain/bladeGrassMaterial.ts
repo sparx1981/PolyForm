@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { inject } from '../graphics/shaderHooks';
+import { GRASS_PATCH_SIDE } from './grassPatches';
 import { TRAIL_LENGTH, ringOrigin, type GrassRing } from './bladeGrass';
 
 /**
@@ -26,7 +27,7 @@ export interface BladeGrassUniforms {
   uHeights: { value: THREE.Texture | null };
   uMask: { value: THREE.Texture | null };
   uBaseY: { value: number };
-  /** Distance is measured from here; y is ignored for orthographic plan views. */
+  /** Distance is measured from here; elevated and orthographic views use ground distance. */
   uLodOrigin: { value: THREE.Vector3 };
   uLodVertical: { value: number };
   uLodBias: { value: number };
@@ -124,6 +125,14 @@ export function bladeWindStrength(animationStrength: number): number {
 }
 
 const common = /* glsl */ `
+// Integer child selection makes every coarse root a fine root, without aligned coarse rows.
+uint gRootHash(ivec2 cell, uint salt) {
+  uvec2 p = uvec2(cell);
+  uint n = p.x * 1664525u + p.y * 1013904223u + salt;
+  n = (n ^ (n >> 16u)) * 2246822519u;
+  n = (n ^ (n >> 13u)) * 3266489917u;
+  return n ^ (n >> 16u);
+}
 float gHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
   p3 += dot(p3, p3.yzx + 33.33);
@@ -137,6 +146,9 @@ float gNoise(vec2 p) {
 `;
 
 const vertexDeclarations = /* glsl */ `
+#ifdef GRASS_PATCH_SIDE
+attribute vec2 grassPatchOrigin;
+#endif
 uniform float uTime;
 uniform float uClock;
 uniform float uWindStrength;
@@ -211,20 +223,35 @@ vSide = side;
 
 // Grid cell for this blade; hashes use the world cell so blades stay put as the grid slides.
 float gIndex = float(gl_InstanceID);
+#ifdef GRASS_PATCH_SIDE
+float gPatchIndex = mod(gIndex, float(GRASS_PATCH_SIDE * GRASS_PATCH_SIDE));
+vec2 gCellLocal = vec2(mod(gPatchIndex, float(GRASS_PATCH_SIDE)), floor(gPatchIndex / float(GRASS_PATCH_SIDE)));
+vec2 gCell = (grassPatchOrigin + gCellLocal) * uStride;
+#else
 vec2 gCellLocal = vec2(mod(gIndex, uCells), floor(gIndex / uCells));
 vec2 gCell = (floor(uOrigin / uSpacing + 0.5) + gCellLocal) * uStride;
+#endif
+float gRootStep = uStride;
+for (int level = 0; level < 16; level++) {
+  if (gRootStep <= 1.0) break;
+  uint child = gRootHash(ivec2(gCell), uint(gRootStep) * 374761393u);
+  gRootStep *= 0.5;
+  gCell += vec2(float(child & 1u), float((child >> 1u) & 1u)) * gRootStep;
+}
 vec2 gRootXZ = (gCell + 0.1 + 0.8 * gHash2(gCell)) * uBaseSpacing;
 float gSeed = gHash(gCell + 41.7);
 
 // Voronoi clump: blades in a clump share height, facing and tone, and lean outward.
 vec2 gClumpCell = floor(gRootXZ / uClumpSize);
 float gBestD = 1e9; vec2 gBestC = gClumpCell, gBestP = gRootXZ;
+#ifndef GRASS_CLUMP_CARD
 for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
   vec2 c = gClumpCell + vec2(float(i), float(j));
   vec2 p = (c + 0.15 + 0.7 * gHash2(c + 3.3)) * uClumpSize;
   float d = dot(p - gRootXZ, p - gRootXZ);
   if (d < gBestD) { gBestD = d; gBestC = c; gBestP = p; }
 }
+#endif
 float gClumpSeed = gHash(gBestC + 9.1);
 vec2 gFromCentre = gRootXZ - gBestP;
 float gFromLen = length(gFromCentre);
@@ -247,7 +274,7 @@ vec4 gClip = projectionMatrix * viewMatrix * vec4(gRoot + vec3(0.0, gReach * 0.5
 float gMargin = gClip.w * 1.15 + gReach * 2.0;
 if (gClip.w < -gReach || abs(gClip.x) > gMargin || abs(gClip.y) > gMargin) gKeep = 0.0;
 // Shading fades toward the ground by true distance where there is one (perspective views).
-vFar = smoothstep(6.0, 40.0, uLodVertical > 0.5 ? distance(cameraPosition, gRoot) : gDist);
+vFar = smoothstep(6.0, 40.0, uPixelAngle > 0.0 ? distance(cameraPosition, gRoot) : gDist);
 
 // Blade shape.
 float gHeight = (uBaseHeight + uHeightVariance * mix(gClumpSeed, gSeed, 0.35)) * (0.75 + 0.5 * gHash(gCell + 5.2));
@@ -270,6 +297,7 @@ float gWind = uWindStrength * (0.25 + 0.85 * gGust) + uWindStrength * 0.18 * gSw
 
 // Walk trail: blades are pushed flat away from recent footprints and spring back.
 vec2 gPush = vec2(0.0);
+#ifndef GRASS_CLUMP_CARD
 for (int k = 0; k < ${TRAIL_LENGTH}; k++) {
   vec4 fp = uTrail[k];
   vec2 away = gRootXZ - fp.xy;
@@ -279,6 +307,7 @@ for (int k = 0; k < ${TRAIL_LENGTH}; k++) {
     * (1.0 - smoothstep(0.0, uTrailRecovery, age));
   gPush += (d > 1e-4 ? away / d : gFacing) * w;
 }
+#endif
 float gPushLen = min(length(gPush), 1.0);
 
 // Lean vector in angle units: rest bend along the facing, wind, then trampling.
@@ -301,7 +330,15 @@ vec3 gView = normalize(cameraPosition - (gRoot + gSpine));
 if (dot(gNormal, gView) < 0.0) gNormal = -gNormal;
 
 float gTaper = pow(max(1.0 - t, 0.0), 0.9) * (1.0 - t * 0.1);
+#ifdef GRASS_CLUMP_CARD
+// A distant tuft faces the render camera, with the same root, colours and wind seed.
+vec2 gCardSide = vec2(gView.z, -gView.x);
+gCardSide = length(gCardSide) > 1e-5 ? normalize(gCardSide) : gSideDir;
+float gCardWidth = max(uSpacing * 0.85, gPixel * 2.0);
+vec3 gPos = gRoot + gSpine + vec3(gCardSide.x, 0.0, gCardSide.y) * side * gCardWidth * 0.5;
+#else
 vec3 gPos = gRoot + gSpine + gSide3 * (side * gWidth * 0.5 * gTaper);
+#endif
 // Raised centre ridge: a V cross-section with rounded normals.
 gPos += gNormal * (1.0 - abs(side)) * gWidth * 0.25 * gTaper;
 vec3 gShadeNormal = normalize(gNormal + gSide3 * side * 0.55);
@@ -328,8 +365,9 @@ varying float vDry;
 varying float vFar;
 `;
 
-export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: BladeRingUniforms): THREE.MeshStandardMaterial {
+export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: BladeRingUniforms, options: { patches?: boolean; clumps?: boolean } = {}): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0, side: THREE.DoubleSide });
+  material.defines = { ...(options.patches ? { GRASS_PATCH_SIDE } : {}), ...(options.clumps ? { GRASS_CLUMP_CARD: 1 } : {}) };
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, shared, ring);
     shader.vertexShader = vertexDeclarations + shader.vertexShader;
@@ -348,6 +386,17 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
       // Corresponding roots hand pixels to the coarse LOD while retaining identity.
       float gDither = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056,0.00583715))));
       if (gDither < 1.0 - vLodCoverage.x || gDither >= vLodCoverage.y) discard;
+      #ifdef GRASS_CLUMP_CARD
+        // Six blades cut from one card, with individual tips and slight wind-shaped curvature.
+        float gLane = (vSide * 0.5 + 0.5) * 6.0;
+        float gBlade = floor(gLane);
+        float gTip = mix(0.65,1.0,fract(sin(gBlade*17.3+vBladeTone*81.7)*43758.5453));
+        float gHeightFraction = vT / gTip;
+        float gLocalSide = fract(gLane) - 0.5;
+        float gCentreBend = sin(gHeightFraction*2.0+vBladeTone*6.28)*0.12*gHeightFraction;
+        float gHalfWidth = mix(0.22,0.015,clamp(gHeightFraction,0.0,1.0));
+        if (gHeightFraction > 1.0 || abs(gLocalSide-gCentreBend) > gHalfWidth) discard;
+      #endif
       // vT can dip a hair below 0 when interpolated; pow() of a negative is NaN on GPUs.
       float gVT = clamp(vT, 0.0, 1.0);
       float gT = pow(gVT, 1.2);
@@ -377,6 +426,6 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-blade-grass-v3-related-lod';
+  material.customProgramCacheKey = () => `polyform-blade-grass-v4:${Boolean(options.patches)}:${Boolean(options.clumps)}`;
   return material;
 }

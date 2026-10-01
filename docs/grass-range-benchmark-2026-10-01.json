@@ -1,0 +1,264 @@
+{
+  "baselineCommit": "e6ed219",
+  "scenario": {
+    "terrainMetres": [
+      500,
+      500
+    ],
+    "density": 10,
+    "baseHeight": 0.3,
+    "heightVariance": 0.2,
+    "browserViewport": [
+      1280,
+      720
+    ],
+    "drawingBuffer": [
+      1920,
+      1080
+    ],
+    "fov": 55,
+    "renderer": "WebGL2",
+    "passes": "single raster pass; no AO, shadows, Beta or water mirrors",
+    "warmupFrames": 120,
+    "sampleWindow": 240
+  },
+  "runs": {
+    "walkingNew": {
+      "triangles": 1830926,
+      "drawCalls": 6,
+      "rings": [
+        {
+          "kind": "blade",
+          "instances": 81408,
+          "patches": 318,
+          "candidates": 1260
+        },
+        {
+          "kind": "blade",
+          "instances": 20992,
+          "patches": 82,
+          "candidates": 324
+        },
+        {
+          "kind": "blade",
+          "instances": 29952,
+          "patches": 117,
+          "candidates": 552
+        },
+        {
+          "kind": "clump",
+          "instances": 18432,
+          "patches": 72,
+          "candidates": 306
+        }
+      ],
+      "gpuMedianMs": 0.429344,
+      "gpuP95Ms": 0.438304,
+      "cpuMedianMs": 0.10000000149011612,
+      "samples": 240,
+      "camera": [
+        0,
+        1.8,
+        12
+      ]
+    },
+    "walkingOld": {
+      "triangles": 6719678,
+      "drawCalls": 5,
+      "rings": [
+        {
+          "kind": "blade",
+          "instances": 300304
+        },
+        {
+          "kind": "blade",
+          "instances": 75076
+        },
+        {
+          "kind": "blade",
+          "instances": 126736
+        }
+      ],
+      "gpuMedianMs": 0.809344,
+      "gpuP95Ms": 0.821728,
+      "cpuMedianMs": 0.10000000149011612,
+      "samples": 240,
+      "camera": [
+        0,
+        1.8,
+        12
+      ]
+    },
+    "elevatedNew": {
+      "triangles": 3598350,
+      "drawCalls": 6,
+      "rings": [
+        {
+          "kind": "blade",
+          "instances": 167168,
+          "patches": 653,
+          "candidates": 1260
+        },
+        {
+          "kind": "blade",
+          "instances": 38144,
+          "patches": 149,
+          "candidates": 324
+        },
+        {
+          "kind": "blade",
+          "instances": 52480,
+          "patches": 205,
+          "candidates": 529
+        },
+        {
+          "kind": "clump",
+          "instances": 23040,
+          "patches": 90,
+          "candidates": 306
+        }
+      ],
+      "gpuMedianMs": 0.454784,
+      "gpuP95Ms": 0.46384,
+      "cpuMedianMs": 0.10000000149011612,
+      "samples": 240,
+      "camera": [
+        30,
+        45,
+        65
+      ]
+    },
+    "elevatedOld": {
+      "triangles": 6719678,
+      "drawCalls": 5,
+      "rings": [
+        {
+          "kind": "blade",
+          "instances": 300304
+        },
+        {
+          "kind": "blade",
+          "instances": 75076
+        },
+        {
+          "kind": "blade",
+          "instances": 126736
+        }
+      ],
+      "gpuMedianMs": 0.76576,
+      "gpuP95Ms": 0.772992,
+      "cpuMedianMs": 0.10000000149011612,
+      "samples": 240,
+      "camera": [
+        30,
+        45,
+        65
+      ]
+    },
+    "overviewNew": {
+      "triangles": 3633166,
+      "drawCalls": 6,
+      "rings": [
+        {
+          "kind": "blade",
+          "instances": 165888,
+          "patches": 648,
+          "candidates": 1260
+        },
+        {
+          "kind": "blade",
+          "instances": 37376,
+          "patches": 146,
+          "candidates": 324
+        },
+        {
+          "kind": "blade",
+          "instances": 59648,
+          "patches": 233,
+          "candidates": 552
+        },
+        {
+          "kind": "clump",
+          "instances": 26624,
+          "patches": 104,
+          "candidates": 306
+        }
+      ],
+      "gpuMedianMs": 0.473248,
+      "gpuP95Ms": 0.483552,
+      "cpuMedianMs": 0.10000000149011612,
+      "samples": 240,
+      "camera": [
+        0,
+        110,
+        130
+      ]
+    },
+    "overviewOld": {
+      "triangles": 6719678,
+      "drawCalls": 5,
+      "rings": [
+        {
+          "kind": "blade",
+          "instances": 300304
+        },
+        {
+          "kind": "blade",
+          "instances": 75076
+        },
+        {
+          "kind": "blade",
+          "instances": 126736
+        }
+      ],
+      "gpuMedianMs": 0.765504,
+      "gpuP95Ms": 0.776128,
+      "cpuMedianMs": 0.10000000149011612,
+      "samples": 240,
+      "camera": [
+        0,
+        110,
+        130
+      ]
+    },
+    "walkingMovingNew": {
+      "triangles": 1821698,
+      "drawCalls": 5,
+      "rings": [
+        {
+          "kind": "blade",
+          "instances": 81920,
+          "patches": 320,
+          "candidates": 1260
+        },
+        {
+          "kind": "blade",
+          "instances": 20480,
+          "patches": 80,
+          "candidates": 324
+        },
+        {
+          "kind": "blade",
+          "instances": 30720,
+          "patches": 120,
+          "candidates": 552
+        },
+        {
+          "kind": "clump",
+          "instances": 9728,
+          "patches": 38,
+          "candidates": 324
+        }
+      ],
+      "gpuMedianMs": 0.427392,
+      "gpuP95Ms": 0.437312,
+      "cpuMedianMs": 0.20000000298023224,
+      "samples": 240,
+      "camera": [
+        0,
+        1.8,
+        -93.78359999999715
+      ]
+    }
+  }
+}

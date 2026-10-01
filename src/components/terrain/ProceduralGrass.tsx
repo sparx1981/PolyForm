@@ -1,16 +1,19 @@
 import { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Shape, TerrainModifier, GrassSettings, DEFAULT_GRASS_SETTINGS } from '../../types';
 import { useApp } from '../../AppContext';
 import { sampleTerrainElevation } from '../../lib/archRoomAssembly';
 import { extractExclusionFootprints } from '../../lib/terrain/grassGeometry';
 import { groundUnderRay } from '../../lib/terrain/groundRay';
-import { createBladeTemplate, createGrassField, grassRings, GrassTrail, TRAIL_RECOVERY_SECONDS } from '../../lib/terrain/bladeGrass';
+import { createBladeTemplate, createGrassClumpTemplate, createGrassField, grassRings, GrassTrail, TRAIL_RECOVERY_SECONDS } from '../../lib/terrain/bladeGrass';
 import {
   bladeWindStrength, createBladeGrassMaterial, createBladeGrassUniforms, createBladeRingUniforms,
   setBladeColors, updateRingUniforms
 } from '../../lib/terrain/bladeGrassMaterial';
+
+import { GrassPatchBatch, grassPatchCapacity } from '../../lib/terrain/grassPatches';
+import { registerVegetationPreparation } from '../../lib/terrain/vegetationRenderPreparation';
 
 interface ProceduralGrassProps {
   terrainShape: Shape;
@@ -71,6 +74,9 @@ export function ProceduralGrass({
   terrainModifiers = []
 }: ProceduralGrassProps) {
   const { graphicsSettings, walkModePhase } = useApp();
+  const { scene } = useThree();
+  const patchCentre = useMemo(() => new THREE.Vector3(), []);
+  const renderPosition = useMemo(() => new THREE.Vector3(), []);
   const grassSettings: GrassSettings = useMemo(() => ({
     ...DEFAULT_GRASS_SETTINGS,
     ...(terrainShape.terrainData?.grass || {})
@@ -98,9 +104,11 @@ export function ProceduralGrass({
 
   const meshes = useMemo(() => rings.map(ring => {
     const ringUniforms = createBladeRingUniforms();
-    const geometry = createBladeTemplate(ring.segments);
-    geometry.instanceCount = ring.cells * ring.cells;
-    const mesh = new THREE.Mesh(geometry, createBladeGrassMaterial(shared, ringUniforms));
+    const geometry = ring.kind === 'clump' ? createGrassClumpTemplate() : createBladeTemplate(ring.segments);
+    const patchBatch = new GrassPatchBatch(grassPatchCapacity(ring));
+    geometry.setAttribute('grassPatchOrigin', patchBatch.origins);
+    geometry.instanceCount = 0;
+    const mesh = new THREE.Mesh(geometry, createBladeGrassMaterial(shared, ringUniforms, { patches:true, clumps:ring.kind === 'clump' }));
     // The rings follow the camera and are built in world space in the shader.
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = false;
@@ -109,10 +117,28 @@ export function ProceduralGrass({
     mesh.name = 'procedural-grass-mesh';
     // Disable raycasting and assign visual-only obstacle flag for Walk Mode
     mesh.raycast = () => {};
-    mesh.userData = { isGrass: true, isObstacle: false, ringUniforms };
+    mesh.userData = { isGrass: true, isObstacle: false, ringUniforms, patchBatch, grassKind:ring.kind };
     return mesh;
   }), [rings, shared]);
   useEffect(() => () => meshes.forEach(mesh => { mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); }), [meshes]);
+
+  // Prepare per render camera (including water mirrors) before Three uploads instance buffers.
+  useEffect(() => {
+    if (!field) return;
+    return registerVegetationPreparation(scene, camera => {
+      camera.getWorldPosition(renderPosition);
+      const reach = (grassSettings.baseHeight + grassSettings.heightVariance) * 1.3;
+      meshes.forEach((mesh,index) => {
+        const ring = rings[index];
+        const distance = renderPosition.distanceTo(patchCentre) + ring.radius * 1.5 + Math.max(Math.abs(field.minY),Math.abs(field.maxY));
+        const margin = reach * 1.5 + 2 * Math.max(ring.spacing, shared.uPixelWorld.value + shared.uPixelAngle.value * distance);
+        mesh.geometry.instanceCount = (mesh.userData.patchBatch as GrassPatchBatch).prepare({
+          camera, field, ring, finer:rings[index-1], centreX:patchCentre.x, centreZ:patchCentre.z,
+          lodOrigin:shared.uLodOrigin.value, lodVertical:shared.uLodVertical.value, lodBias:shared.uLodBias.value, margin,
+        });
+      });
+    });
+  }, [scene, field, meshes, rings, shared, patchCentre, renderPosition, grassSettings.baseHeight, grassSettings.heightVariance]);
 
   const isAnimated = grassSettings.animate !== false;
   const animationStrength = isAnimated
@@ -163,18 +189,15 @@ export function ProceduralGrass({
       shared.uPixelWorld.value = 0;
       shared.uPixelAngle.value = 2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) / Math.max(1, size.height);
     }
-    const viewDistance = cameraPosition.distanceTo(focus);
     if (walking || !orthographic) {
-      // Perspective views: density always falls off with the true distance from the camera, so
-      // the ground nearest the viewer is always the densest. Measuring from the look-at point
-      // instead left a dense band far away and only coarse, sparse blades at the viewer's feet.
-      shared.uLodOrigin.value.copy(cameraPosition);
-      shared.uLodVertical.value = 1;
-      // From high up, the nearest visible ground still gets the finest ring: distances are
-      // counted from there rather than from the camera itself.
+      // Walking retains true camera distance; elevated views anchor to the nearest visible ground.
       const near = walking ? cameraPosition : nearestVisibleGround(camera, terrainShape, nearGround);
       const nearDistance = cameraPosition.distanceTo(near);
-      shared.uLodBias.value = walking ? 0 : -Math.max(0, nearDistance - 2);
+      // Elevated views use distance along the ground from the closest visible point.
+      // Subtracting camera height from a 3D distance compressed the fade into a hard square.
+      shared.uLodOrigin.value.copy(near);
+      shared.uLodVertical.value = walking ? 1 : 0;
+      shared.uLodBias.value = 0;
       // Centre slightly ahead of the nearest ground: blades behind or below the view are never seen.
       const start = walking || nearDistance < 2 ? cameraPosition : near;
       const ahead = Math.min(horizontalDistance(start, focus), rings[0].radius * 0.3);
@@ -188,6 +211,7 @@ export function ProceduralGrass({
       shared.uLodBias.value = Math.max(0, viewSpan - 15) * 0.3;
       centre.copy(focus);
     }
+    patchCentre.copy(centre);
     meshes.forEach((mesh, index) => updateRingUniforms(mesh.userData.ringUniforms, rings[index], rings[index - 1], centre.x, centre.z));
   });
 
