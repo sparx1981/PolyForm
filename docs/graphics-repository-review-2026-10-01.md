@@ -43,7 +43,7 @@ Replacing every existing tree would **not automatically improve performance or s
 
 Recommended experiment: add EZ-Tree as an optional source, generate a small shared set of seed variations, feed raw LOD geometry through the existing vegetation batches, and compare 100/1,000-tree scenes at the same species height, canopy coverage, camera, resolution, wind and shadows. Record GPU/frame percentiles, draw calls, submitted triangles across passes, texture memory, download bytes, generation time and LOD continuity. Keep existing models until the comparison proves a benefit. SeedThree is the stronger reference for future far-tree cards/impostors and species authoring.
 
-The supplied benchmark is principally a **wildflower** workload: about 3.586M of 3.627M scene triangles, with roughly 32M submitted triangles across rendering passes. Optimising flowers and shadow/detail policy is more likely to improve this particular model than replacing trees. There is no measured tree comparison yet.
+The supplied benchmark is principally a **wildflower** workload: about 3.586M of 3.627M scene triangles, with roughly 32M submitted triangles across rendering passes. Optimising flowers and shadow/detail policy is more likely to improve this particular model than replacing trees. A subsequent [tree-source benchmark](tree-source-benchmark-2026-10-01.md) compares existing pine groves, matched three-trunk EZ-Tree groves and an experimental existing-tree atlas. It recommends distant impostors first and procedural species as additional choices; production tree sources have not been replaced.
 
 ## Firestore benchmark history and AI proposals
 

@@ -40,3 +40,7 @@ Run `node scripts/polyhaven/buildTreeLods.mjs` to regenerate the assets or pass 
 Texture conversion is a lower priority for these six assets because embedded images total less than 1 MiB per tree. [KTX2](https://threejs.org/docs/pages/KTX2Loader.html) remains useful for larger texture-heavy assets.
 
 Before choosing exact thresholds, compare 1, 10, and 50 tree scenes at near, middle, and far views. Record GPU frame time, draw calls, rendered triangles, memory, load time, and side-by-side screenshots. Accept a tier only when silhouette and foliage density remain convincing at its switching distance.
+
+## Subsequent source comparison
+
+The [1 October tree-source benchmark](tree-source-benchmark-2026-10-01.md) measures existing pine tiers against matched three-trunk EZ-Tree groves and an experimental eight-angle atlas. Distant impostors offer the largest measured saving, but require runtime lighting and transition work before production integration. Existing catalogue trees remain in place.

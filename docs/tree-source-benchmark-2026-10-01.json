@@ -1,0 +1,348 @@
+{
+  "date": "2026-10-01",
+  "polyformCommit": "e109184",
+  "ezTreeCommit": "dcf309bd86bd521083d9c70f01f2de45fdc7c457",
+  "method": {
+    "canvasCss": [
+      1280,
+      720
+    ],
+    "drawingBuffer": [
+      1920,
+      1080
+    ],
+    "fovDegrees": 55,
+    "warmupFrames": 120,
+    "gpuSamplesPerRun": 240,
+    "placementSpacingMetres": 18,
+    "cellSizeMetres": 48,
+    "trunksPerPlacement": 3,
+    "windStrength": 0.12,
+    "windSpeed": 1.6,
+    "shadowMap": {
+      "resolution": [
+        1024,
+        1024
+      ],
+      "type": "PCFShadowMap"
+    },
+    "gpuTimer": "EXT_disjoint_timer_query_webgl2",
+    "notes": [
+      "Tier forced per named view; not automatic production LOD selection.",
+      "Existing and EZ-Tree silhouettes/canopy density differ despite matched height, trunk count and placements.",
+      "Shadow-proxy batches submit once invisibly in the main pass and once in the shadow pass, as the current production batch code does.",
+      "Only raster render time; no Beta, water mirrors, postprocessing or editor overhead.",
+      "GPU clock/background scheduling affects short measurements; frame rate is not measured."
+    ]
+  },
+  "assets": {
+    "benchmarkVersion": 2,
+    "trunksPerPlacement": 3,
+    "height": 8.5,
+    "originalLoadMs": 1480.5,
+    "generationMs": 228,
+    "bakeMs": 74.30000000447035,
+    "original": [
+      {
+        "triangles": 2970695,
+        "geometryBytes": 304823144
+      },
+      {
+        "triangles": 731530,
+        "geometryBytes": 90696318
+      },
+      {
+        "triangles": 148466,
+        "geometryBytes": 19833300
+      }
+    ],
+    "ez": [
+      {
+        "triangles": 59616,
+        "geometryBytes": 2864352
+      },
+      {
+        "triangles": 24744,
+        "geometryBytes": 1332624
+      },
+      {
+        "triangles": 10368,
+        "geometryBytes": 630144
+      }
+    ],
+    "card": {
+      "triangles": 2,
+      "geometryBytes": 140
+    },
+    "atlasBytesWithMipmaps": 11184810.666666666
+  },
+  "runs": [
+    {
+      "source": "ez",
+      "count": 1,
+      "view": "near",
+      "shadows": true,
+      "triangles": 109106,
+      "drawCalls": 7,
+      "gpuMedianMs": 0.045504,
+      "gpuP95Ms": 3.425632,
+      "cpuMedianMs": 0.20000000298023224,
+      "samples": 240,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        4.25,
+        28
+      ]
+    },
+    {
+      "source": "original",
+      "count": 1,
+      "view": "near",
+      "shadows": true,
+      "triangles": 4433757,
+      "drawCalls": 19,
+      "gpuMedianMs": 2.237472,
+      "gpuP95Ms": 3.901728,
+      "cpuMedianMs": 0.29999999701976776,
+      "samples": 240,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        4.25,
+        28
+      ]
+    },
+    {
+      "source": "original",
+      "count": 100,
+      "view": "mid",
+      "shadows": true,
+      "triangles": 102846202,
+      "drawCalls": 289,
+      "gpuMedianMs": 9.372288,
+      "gpuP95Ms": 9.75904,
+      "cpuMedianMs": 1.9000000059604645,
+      "samples": 240,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        40,
+        211
+      ]
+    },
+    {
+      "source": "ez",
+      "count": 100,
+      "view": "mid",
+      "shadows": true,
+      "triangles": 4548002,
+      "drawCalls": 97,
+      "gpuMedianMs": 3.118112,
+      "gpuP95Ms": 4.72672,
+      "cpuMedianMs": 0.7000000029802322,
+      "samples": 240,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        40,
+        211
+      ]
+    },
+    {
+      "source": "ez",
+      "count": 1000,
+      "view": "far",
+      "shadows": false,
+      "triangles": 10368002,
+      "drawCalls": 289,
+      "gpuMedianMs": 4.291168,
+      "gpuP95Ms": 5.981088,
+      "cpuMedianMs": 2.2000000029802322,
+      "samples": 240,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        859
+      ]
+    },
+    {
+      "source": "original",
+      "count": 1000,
+      "view": "far",
+      "shadows": false,
+      "triangles": 148466002,
+      "drawCalls": 865,
+      "gpuMedianMs": 14.987296,
+      "gpuP95Ms": 15.925376,
+      "cpuMedianMs": 7.399999998509884,
+      "samples": 240,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        859
+      ]
+    },
+    {
+      "source": "card",
+      "count": 1000,
+      "view": "far",
+      "shadows": false,
+      "triangles": 2002,
+      "drawCalls": 145,
+      "gpuMedianMs": 0.291872,
+      "gpuP95Ms": 3.796832,
+      "cpuMedianMs": 1,
+      "samples": 240,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        859
+      ]
+    },
+    {
+      "source": "original",
+      "count": 100,
+      "view": "far",
+      "shadows": false,
+      "triangles": 14846602,
+      "drawCalls": 97,
+      "gpuMedianMs": 3.988608,
+      "gpuP95Ms": 5.458016,
+      "cpuMedianMs": 1.1000000014901161,
+      "samples": 240,
+      "cpuSamples": 240,
+      "gpuTimingAvailable": true,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        661
+      ],
+      "repeat": "published-harness"
+    },
+    {
+      "source": "card",
+      "count": 100,
+      "view": "far",
+      "shadows": false,
+      "triangles": 202,
+      "drawCalls": 17,
+      "gpuMedianMs": 0.556736,
+      "gpuP95Ms": 3.480928,
+      "cpuMedianMs": 0.29999999701976776,
+      "samples": 240,
+      "cpuSamples": 240,
+      "gpuTimingAvailable": true,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        661
+      ],
+      "repeat": "published-harness"
+    },
+    {
+      "source": "original",
+      "count": 1000,
+      "view": "far",
+      "shadows": false,
+      "triangles": 148466002,
+      "drawCalls": 865,
+      "gpuMedianMs": 14.738144,
+      "gpuP95Ms": 15.184832,
+      "cpuMedianMs": 7,
+      "samples": 240,
+      "cpuSamples": 240,
+      "gpuTimingAvailable": true,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        859
+      ],
+      "repeat": "published-harness"
+    },
+    {
+      "source": "ez",
+      "count": 1000,
+      "view": "far",
+      "shadows": false,
+      "triangles": 10368002,
+      "drawCalls": 289,
+      "gpuMedianMs": 4.633344,
+      "gpuP95Ms": 5.971264,
+      "cpuMedianMs": 2.2000000029802322,
+      "samples": 240,
+      "cpuSamples": 240,
+      "gpuTimingAvailable": true,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        859
+      ],
+      "repeat": "published-harness"
+    },
+    {
+      "source": "card",
+      "count": 1000,
+      "view": "far",
+      "shadows": false,
+      "triangles": 2002,
+      "drawCalls": 145,
+      "gpuMedianMs": 0.565728,
+      "gpuP95Ms": 4.02048,
+      "cpuMedianMs": 1,
+      "samples": 240,
+      "cpuSamples": 240,
+      "gpuTimingAvailable": true,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "camera": [
+        0,
+        140,
+        859
+      ],
+      "repeat": "published-harness"
+    }
+  ]
+}
