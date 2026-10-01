@@ -24,9 +24,9 @@ export function SceneWeather() {
       const layer = settings.layers[kind];
       // Lazy allocation: disabled layers are hidden, never simulated on the CPU.
       if (layer.enabled) weather.configureLayer(kind, layer);
-      weather.setEnabled(kind, layer.enabled);
+      weather.setEnabled(kind, layer.enabled && !(kind === 'clouds' && graphicsSettings.beta.enabled && graphicsSettings.beta.clouds));
     }
-  }, [settings]);
+  }, [settings, graphicsSettings.beta.enabled, graphicsSettings.beta.clouds]);
   useEffect(() => { system.current?.resize(gl); }, [gl, size.width, size.height, viewport.dpr, settings.enabled]);
   useFrame(({ camera }, delta) => {
     if (!system.current) return;

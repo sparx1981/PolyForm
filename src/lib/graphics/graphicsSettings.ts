@@ -1,8 +1,10 @@
 import type { WeatherKind, WeatherLayerOptions } from './WeatherSystem';
 import { WEATHER_DEFAULTS } from './WeatherSystem';
+import { defaultBetaEnvironment, normalizeBetaEnvironment, type BetaEnvironmentSettings } from './betaEnvironment';
 
 export interface WeatherLayerSettings extends WeatherLayerOptions { enabled: boolean; color: string }
 export interface GraphicsSettings {
+  beta: BetaEnvironmentSettings;
   vegetation: { instancing: boolean; windEnabled: boolean; strength: number; speed: number; direction: number };
   weather: {
     enabled: boolean; windX: number; windZ: number; width: number; height: number;
@@ -13,6 +15,7 @@ export interface GraphicsSettings {
 
 export function defaultGraphicsSettings(): GraphicsSettings {
   return {
+    beta: defaultBetaEnvironment(),
     vegetation: { instancing: true, windEnabled: true, strength: 0.12, speed: 1.6, direction: 20 },
     weather: { enabled: false, windX: 1.2, windZ: 0.3, width: 160, height: 50, cloudsMode: 'fast',
       layers: Object.fromEntries(Object.entries(WEATHER_DEFAULTS).map(([kind, options]) =>
@@ -28,6 +31,7 @@ export function normalizeGraphicsSettings(input: unknown): GraphicsSettings {
   const defaults = defaultGraphicsSettings(), root = record(input), v = record(root.vegetation), w = record(root.weather);
   const bool = (value: unknown, fallback: boolean) => typeof value === 'boolean' ? value : fallback;
   const result = defaultGraphicsSettings();
+  result.beta = normalizeBetaEnvironment(root.beta);
   result.vegetation = { instancing: bool(v.instancing, true), windEnabled: bool(v.windEnabled, true),
     strength: number(v.strength, 0.12, 0, 0.4), speed: number(v.speed, 1.6, 0, 5), direction: number(v.direction, 20, 0, 360) };
   Object.assign(result.weather, { enabled: bool(w.enabled, false), windX: number(w.windX, 1.2, -20, 20),

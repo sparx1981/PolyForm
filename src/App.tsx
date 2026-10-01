@@ -53,6 +53,7 @@ import PerfOverlay from './components/perf/PerfOverlay';
 import BakeModal from './components/terrain/BakeModal';
 import ReconstructionStudio from './components/reconstruction/ReconstructionStudio';
 import InteriorStudio from './components/interiors/InteriorStudio';
+import { BetaToolbar } from './components/graphics/BetaToolbar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShieldAlert, RefreshCw } from 'lucide-react';
 import { upgradeRoofsWhenReady } from './lib/roofUpgrade';
@@ -404,6 +405,7 @@ function AppContent() {
       <BakeModal />
       <ReconstructionStudio />
       <InteriorStudio />
+      <BetaToolbar />
     </>
   );
 

@@ -17,6 +17,9 @@ export interface GrassRing {
   radius: number;
   /** Distance between neighbouring grid cells (one blade per cell), metres. */
   spacing: number;
+  /** All rings share one lattice. Coarse roots are nested subsets of finer roots. */
+  baseSpacing: number;
+  stride: number;
   /** Curve segments per blade. */
   segments: number;
   /** Blades per grid side. */
@@ -55,12 +58,16 @@ export function grassRings(settings: Pick<GrassSettings, 'density' | 'baseHeight
     { radius: 60 * reach, spacing: wanted * 6, segments: 2, maxWiden: 4 },
   ];
   let nearSpacing = wanted;
+  let previousStride = 1;
   return specs.map(({ maxWiden, ...spec }, index) => {
     // Widen the spacing (never shrink the area further) until the ring fits its blade budget.
     const minSpacing = (2 * spec.radius) / Math.sqrt(MAX_RING_BLADES[index]);
-    const spacing = Math.max(spec.spacing, minSpacing);
-    if (index === 0) nearSpacing = spacing;
-    return { ...spec, spacing, widthScale: Math.min(maxWiden, spacing / nearSpacing), cells: Math.ceil((2 * spec.radius) / spacing) };
+    if (index === 0) nearSpacing = Math.max(wanted, minSpacing);
+    const wantedStride = Math.max(spec.spacing, minSpacing) / nearSpacing;
+    const stride = index === 0 ? 1 : 2 ** Math.ceil(Math.log2(Math.max(previousStride * 2, wantedStride)));
+    previousStride = stride;
+    const spacing = nearSpacing * stride;
+    return { ...spec, spacing, baseSpacing: nearSpacing, stride, widthScale: Math.min(maxWiden, stride), cells: Math.ceil((2 * spec.radius) / spacing) };
   });
 }
 

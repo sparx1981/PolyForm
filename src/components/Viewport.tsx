@@ -19,6 +19,7 @@ import { setTextPlacement } from '../lib/textPlacement';
 import PresentationDriver from './presentation/PresentationDriver';
 import { cutForDormers, dormerFingerprint, layoutsOf } from '../lib/dormers';
 import { SceneWeather } from './graphics/SceneWeather';
+import { BetaEnvironmentRoot, BetaEnvironmentEffects } from './graphics/BetaEnvironmentBridge';
 import { InstancedVegetation } from './graphics/InstancedVegetation';
 import { SurfaceDepthBinding } from './graphics/SurfaceDepthBinding';
 import { FenceMesh, FenceEditHandles, fenceWorldPoints, terrainUnder } from './FenceMesh';
@@ -822,11 +823,11 @@ const FogEffect = React.forwardRef(({ settings, camera, sunPosition, sunIntensit
 });
 
 function Fog() {
-  const { fogSettings } = useApp();
+  const { fogSettings, graphicsSettings } = useApp();
   const { scene } = useThree();
 
   useEffect(() => {
-    if (fogSettings.enabled) {
+    if (fogSettings.enabled && !(graphicsSettings.beta.enabled && graphicsSettings.beta.atmosphere)) {
       // We use the custom post-processing effect for both types now
       // but we still set a basic scene fog for objects that might not be in the composer
       scene.fog = new THREE.FogExp2(
@@ -836,7 +837,7 @@ function Fog() {
     } else {
       scene.fog = null;
     }
-  }, [fogSettings, scene]);
+  }, [fogSettings, scene, graphicsSettings.beta.enabled, graphicsSettings.beta.atmosphere]);
 
   return null;
 }
@@ -3542,7 +3543,7 @@ function Scene() {
   const lastTransformBroadcastRef = useRef<number>(0);
 
   useFrame((state, delta) => {
-    if (!animateSun) {
+    if (!animateSun || (graphicsSettings.beta.enabled && graphicsSettings.beta.sky)) {
       sunAnimRef.current = null;
     } else {
       // The sun circles sunOrbitCenter at the height and distance it already has. `delta` is the
@@ -9888,7 +9889,7 @@ function Scene() {
         tempCanvas.height = h;
         const ctx = tempCanvas.getContext('2d');
         
-        gl.render(scene, camera);
+        if (!graphicsSettings.beta.enabled) gl.render(scene, camera);
         if (ctx) {
           ctx.drawImage(canvas, 0, 0, w, h);
           const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.3); // 0.3 quality + downscaled for ultra fast upload
@@ -9908,7 +9909,7 @@ function Scene() {
       console.log("[Viewport] Scene save requested:", e.detail.name);
       const { name } = e.detail;
       try {
-        gl.render(scene, camera);
+        if (!graphicsSettings.beta.enabled) gl.render(scene, camera);
         const previewUrl = gl.domElement.toDataURL('image/jpeg', 0.5);
         
         const newScene = {
@@ -10037,7 +10038,7 @@ function Scene() {
   effectiveCameraDefaultsRef.current = { near: effectiveCameraNear, far: effectiveCameraFar };
 
   const fogPostprocessingActive = fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1));
-  const postprocessingActive = ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive;
+  const postprocessingActive = ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive || graphicsSettings.beta.enabled;
 
   useEffect(() => {
     if (camera && (camera as any).isPerspectiveCamera) {
@@ -11038,7 +11039,7 @@ function Scene() {
   };
 
   return (
-    <>
+    <BetaEnvironmentRoot>
       <PerfProbe />
       <PerspectiveCamera 
         makeDefault 
@@ -11078,14 +11079,14 @@ function Scene() {
       <Fog />
       
       <ambientLight
-        intensity={(skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity) * scaleForDaylight(daylightFactor(sunIntensity))}
+        intensity={graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 0 : (skybox === 'none' ? (theme === 'dark' ? 0.4 : 0.6) : (theme === 'dark' ? 0.2 : 0.3)) * (1.2 - shadowOpacity) * scaleForDaylight(daylightFactor(sunIntensity))}
         color={nightAmbientColor}
       />
       <directionalLight 
         ref={directionalLightRef}
         position={lightPosition} 
-        intensity={sunIntensity} 
-        castShadow={shadowsEnabled} 
+        intensity={graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 0 : sunIntensity} 
+        castShadow={shadowsEnabled && !(graphicsSettings.beta.enabled && graphicsSettings.beta.sky)} 
       />
       <ShareMainScene />
       <PresentationDriver />
@@ -13459,7 +13460,7 @@ function Scene() {
         // needs it off - it renders an extra internal occlusion pass, and without
         // this, occlusion by scene geometry looks wrong (see the console warning
         // @react-three/postprocessing's own GodRays logs if this is missing).
-        <EffectComposer autoClear={!godRaysEnabled}>
+        <EffectComposer autoClear={!godRaysEnabled} multisampling={graphicsSettings.beta.enabled ? 0 : 8}>
           {ambientOcclusionEnabled && (
             // N8AO (GTAO-style) instead of the older SSAO effect: SSAO's fixed
             // world-space sample radius caused halo/self-occlusion artifacts that
@@ -13475,7 +13476,7 @@ function Scene() {
               quality="medium"
             />
           )}
-          {fogPostprocessingActive && (
+          {fogPostprocessingActive && !(graphicsSettings.beta.enabled && graphicsSettings.beta.atmosphere) && (
             <FogEffect 
               settings={fogSettings} 
               camera={camera}
@@ -13495,6 +13496,7 @@ function Scene() {
               samples={60}
             />
           )}
+          <BetaEnvironmentEffects />
         </EffectComposer>
       )}
       {hoveredFace && ['pushpull', 'offset', 'paint', 'select', 'eraser'].includes(activeTool) && !pushPullState && (
@@ -13505,7 +13507,7 @@ function Scene() {
         />
       )}
 
-    </>
+    </BetaEnvironmentRoot>
   );
 }
 
@@ -13518,11 +13520,12 @@ function EnvironmentLighting() {
     theme,
     environment,
     sunIntensity,
+    graphicsSettings,
   } = useApp();
   const { gl, scene } = useThree();
   const { assets: environmentAssets } = useAssetCatalog('hdri');
   // Sun at 0 means night: the sky, environment and hemisphere light all fade down with it.
-  const daylight = scaleForDaylight(daylightFactor(sunIntensity));
+  const daylight = graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 0 : scaleForDaylight(daylightFactor(sunIntensity));
   const managerRef = useRef<EnvironmentManager | null>(null);
 
   useEffect(() => {
@@ -13537,6 +13540,7 @@ function EnvironmentLighting() {
   useEffect(() => {
     const manager = managerRef.current;
     if (!manager) return;
+    if (graphicsSettings.beta.enabled && graphicsSettings.beta.sky) return;
     if (!environment.ref) {
       void manager.apply(scene, environment, null);
       return;
@@ -13551,7 +13555,7 @@ function EnvironmentLighting() {
       }).catch(() => false);
     }
     return () => controller.abort();
-  }, [environment, environmentAssets, scene]);
+  }, [environment, environmentAssets, scene, graphicsSettings.beta.enabled, graphicsSettings.beta.sky]);
 
   useEffect(() => {
     const rotation = (skyboxRotation * Math.PI) / 180;
@@ -13568,7 +13572,7 @@ function EnvironmentLighting() {
   useFrame(() => {
     const sceneWithIntensity = scene as THREE.Scene & { environmentIntensity: number; backgroundIntensity: number };
     const usingAsset = !!environment.ref;
-    sceneWithIntensity.environmentIntensity = (usingAsset ? environment.intensity : environmentIntensity) * daylight;
+    sceneWithIntensity.environmentIntensity = graphicsSettings.beta.enabled && graphicsSettings.beta.sky ? 1 : (usingAsset ? environment.intensity : environmentIntensity) * daylight;
     sceneWithIntensity.backgroundIntensity = (usingAsset ? environment.backgroundIntensity : 1) * daylight;
   });
 
@@ -13582,6 +13586,7 @@ function EnvironmentLighting() {
     return null;
   }, [skybox]);
 
+  if (graphicsSettings.beta.enabled && graphicsSettings.beta.sky) return null;
   if (environment.ref) return <hemisphereLight intensity={0.25 * daylight} groundColor="#444444" />;
 
   if (skybox === 'none' || !isHDRSupported) {

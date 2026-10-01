@@ -14,6 +14,16 @@ const terrain = (heights = new Array(16 * 16).fill(0)): Shape => ({
 });
 
 describe('Dense blade grass', () => {
+  it('uses nested root identities at every density within the existing budgets', () => {
+    for (const density of [1,10,25]) {
+      const rings = grassRings({ ...DEFAULT_GRASS_SETTINGS, density });
+      rings.forEach((ring,i) => {
+        expect(ring.spacing).toBeCloseTo(ring.baseSpacing * ring.stride);
+        expect(ring.baseSpacing).toBe(rings[0].baseSpacing);
+        if (i) expect(ring.stride % rings[i-1].stride).toBe(0);
+      });
+    }
+  });
   it('draws hundreds of blades per square metre and stays within the ring budgets', () => {
     expect(bladesPerSquareMetre(DEFAULT_GRASS_SETTINGS.density)).toBeGreaterThanOrEqual(300);
     for (const density of [1, 10, 25]) {

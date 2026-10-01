@@ -1,6 +1,6 @@
 # Polyform Beta environment proposal
 
-Reviewed 1 October 2026 against [sparx1981/three-geospatial](https://github.com/sparx1981/three-geospatial), commit `b012ad06d858fc035d88aacfd73f092f93c994e4`. This is a proposal; no Beta rendering code or dependencies have been added.
+Reviewed 1 October 2026 against [sparx1981/three-geospatial](https://github.com/sparx1981/three-geospatial), commit `b012ad06d858fc035d88aacfd73f092f93c994e4`. The approved first Beta stage is implemented; implementation and verification notes follow below. The water section remains a separate proposal.
 
 ## Recommended integration
 
@@ -42,6 +42,18 @@ There are two distinct lighting approaches in the atmosphere guide. The globe ex
 * Check context loss, toggling/reset, project save/open and lazy loading. Failure to load Beta assets should leave the existing scene usable.
 
 Approval requested: implement this as one opt-in Environment lab containing all six controls, using the existing WebGL viewport and local site coordinates, with mobile cloud quality/fallback settings.
+
+## Implemented first stage
+
+The Beta Environment lab supplies all six features, model-persisted settings, date/location controls, shared physical solar lighting, local assets, asynchronous loading and immediate reset to the existing environment. Dependencies are pinned to atmosphere 0.19.1, clouds 0.7.6, effects 0.6.4 and core 0.9.1. One composer integrates clouds, atmospheric distance haze, flare, tone mapping, original neutral/warm/cool grades, SMAA and dithering. The legacy sky, clouds and fog yield ownership only while their Beta replacements are enabled. Captures retain the composed frame.
+
+Catalogue stars are decoded from the upstream factual catalogue into ordinary Three points, rotated from ECI through ECEF into the local east/up/south frame, and faded by solar altitude. This avoids the library star shader's dark output in the editor's composed pipeline. Cloud noise is an original generated volume; no NVIDIA STBN assets are distributed. Asset notices are in `public/beta/NOTICE.md`.
+
+Browser verification covered daytime sky/clouds, night stars, feature toggles, date changes, neutral/warm grading, reset and the scrollable panel at 390px width. Settings/import and nested grass-root tests pass, as do TypeScript and production bundling. Phone-width testing is not a mobile GPU benchmark. Cloud reflections in the captured sky environment are not included; orthographic views omit volumetric effects. Photographic tiles retain their existing surface materials and need representative site visual review before this Beta becomes a default.
+
+Grass now uses nested world-space root identities and complementary pixel dithering. Existing distance and instance budgets remain in place. Distant cards and spatial tile culling remain the next performance stage before extending the radius; smoothing transitions alone does not establish additional GPU headroom.
+
+The supplied RTX 5090 benchmark is dominated by wildflowers: about 3.586M of 3.627M scene triangles, and roughly 32M triangles submitted across all passes. Average GPU time is approximately 13ms. It is a baseline, not evidence of a Beta speed improvement. Wildflower detail/LOD and shadow work deserve measurement before increasing vegetation range.
 
 ## Pond/lake water: separate work
 

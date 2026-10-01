@@ -42,6 +42,8 @@ export interface BladeGrassUniforms {
 export interface BladeRingUniforms {
   uOrigin: { value: THREE.Vector2 };
   uSpacing: { value: number };
+  uBaseSpacing: { value: number };
+  uStride: { value: number };
   uCells: { value: number };
   /** Distance band over which the ring thins in (the finer ring hands over); x > y disables it. */
   uFadeIn: { value: THREE.Vector2 };
@@ -83,6 +85,8 @@ export function createBladeRingUniforms(): BladeRingUniforms {
   return {
     uOrigin: { value: new THREE.Vector2() },
     uSpacing: { value: 0.05 },
+    uBaseSpacing: { value: 0.05 },
+    uStride: { value: 1 },
     uCells: { value: 1 },
     uFadeIn: { value: new THREE.Vector2(0, -1) },
     uFade: { value: new THREE.Vector2(1e5, 1e5) },
@@ -97,6 +101,8 @@ export function createBladeRingUniforms(): BladeRingUniforms {
 export function updateRingUniforms(uniforms: BladeRingUniforms, ring: GrassRing, finer: GrassRing | undefined, x: number, z: number) {
   ringOrigin(ring, x, z, uniforms.uOrigin.value);
   uniforms.uSpacing.value = ring.spacing;
+  uniforms.uBaseSpacing.value = ring.baseSpacing;
+  uniforms.uStride.value = ring.stride;
   uniforms.uCells.value = ring.cells;
   uniforms.uWidthScale.value = ring.widthScale;
   // Hand over gradually across the outer part of each ring, so density falls off smoothly.
@@ -150,6 +156,8 @@ uniform float uTrailRadius;
 uniform float uTrailRecovery;
 uniform vec2 uOrigin;
 uniform float uSpacing;
+uniform float uBaseSpacing;
+uniform float uStride;
 uniform float uCells;
 uniform vec2 uFadeIn;
 uniform vec2 uFade;
@@ -162,6 +170,7 @@ varying float vClumpTone;
 varying float vBladeTone;
 varying float vDry;
 varying float vFar;
+varying vec2 vLodCoverage;
 ${common}
 
 // Bilinear sample of the terrain height grid, matching sampleTerrainElevation.
@@ -203,8 +212,8 @@ vSide = side;
 // Grid cell for this blade; hashes use the world cell so blades stay put as the grid slides.
 float gIndex = float(gl_InstanceID);
 vec2 gCellLocal = vec2(mod(gIndex, uCells), floor(gIndex / uCells));
-vec2 gCell = floor(uOrigin / uSpacing + 0.5) + gCellLocal;
-vec2 gRootXZ = (gCell + 0.1 + 0.8 * gHash2(gCell)) * uSpacing;
+vec2 gCell = (floor(uOrigin / uSpacing + 0.5) + gCellLocal) * uStride;
+vec2 gRootXZ = (gCell + 0.1 + 0.8 * gHash2(gCell)) * uBaseSpacing;
 float gSeed = gHash(gCell + 41.7);
 
 // Voronoi clump: blades in a clump share height, facing and tone, and lean outward.
@@ -228,9 +237,10 @@ float gDist = length(gLodDelta) + uLodBias;
 
 // Presence: terrain mask times this ring's density. Rings cross-fade by dropping blades in
 // hash order (each blade shrinks over a short band) instead of shrinking every blade at once.
-float gDensity = 1.0 - smoothstep(uFade.x, uFade.y, gDist);
-if (uFadeIn.x < uFadeIn.y) gDensity *= smoothstep(uFadeIn.x, uFadeIn.y, gDist);
-float gKeep = gPresence(gRootXZ) * smoothstep(gSeed * 0.9, gSeed * 0.9 + 0.1, gDensity);
+float gOut = 1.0 - smoothstep(uFade.x, uFade.y, gDist);
+float gIn = uFadeIn.x < uFadeIn.y ? smoothstep(uFadeIn.x, uFadeIn.y, gDist) : 1.0;
+vLodCoverage = vec2(gIn, gOut);
+float gKeep = gPresence(gRootXZ) * step(0.0001, gIn * gOut);
 // Skip blades behind the camera or well outside the view: they collapse to zero-area triangles.
 float gReach = uBaseHeight + uHeightVariance;
 vec4 gClip = projectionMatrix * viewMatrix * vec4(gRoot + vec3(0.0, gReach * 0.5, 0.0), 1.0);
@@ -305,6 +315,7 @@ vec3 transformed = gPos;
 `;
 
 const fragmentDeclarations = /* glsl */ `
+varying vec2 vLodCoverage;
 uniform vec3 uRootColor;
 uniform vec3 uTipColor;
 uniform vec3 uDryColor;
@@ -334,6 +345,9 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
     shader.fragmentShader = fragmentDeclarations + shader.fragmentShader;
     shader.fragmentShader = inject(shader.fragmentShader, '#include <color_fragment>', `
       #include <color_fragment>
+      // Corresponding roots hand pixels to the coarse LOD while retaining identity.
+      float gDither = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056,0.00583715))));
+      if (gDither < 1.0 - vLodCoverage.x || gDither >= vLodCoverage.y) discard;
       // vT can dip a hair below 0 when interpolated; pow() of a negative is NaN on GPUs.
       float gVT = clamp(vT, 0.0, 1.0);
       float gT = pow(gVT, 1.2);
@@ -363,6 +377,6 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => 'polyform-blade-grass-v2';
+  material.customProgramCacheKey = () => 'polyform-blade-grass-v3-related-lod';
   return material;
 }
