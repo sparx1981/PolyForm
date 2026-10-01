@@ -31,6 +31,7 @@ export function BetaToolbar() {
         {toggle('stars','Stars')}{s.stars && slider('starIntensity','Star intensity',0,10,0.1)}
         {toggle('clouds','Volumetric clouds')}
         {s.clouds && <div className="space-y-2 pl-3">
+          <p className="text-gray-500">Cloud shadows require Physical sky and the viewport Shadows setting. Higher quality improves cloud detail and uses more GPU time.</p>
           {slider('coverage','Cloud coverage',0,1)}
           <label>Cloud type<select className={selectClass} value={s.cloudType} onChange={e => update({ cloudType: e.target.value as typeof s.cloudType })}><option value="cumulus">Cumulus</option><option value="stratus">Stratus</option><option value="cirrus">Cirrus</option></select></label>
           {slider('altitude','Cloud altitude',200,12000,100,' m')}{slider('thickness','Cloud thickness',100,6000,100,' m')}

@@ -8,7 +8,8 @@ import { Atmosphere, Sky, SunLight, SkyLight, type AtmosphereApi } from '@takram
 import { PrecomputedTexturesLoader, type PrecomputedTextures } from '@takram/three-atmosphere';
 import { Clouds, CloudLayer } from '@takram/three-clouds/r3f';
 import { AerialPerspective } from '@takram/three-atmosphere/r3f';
-import { LensFlare, Dithering } from '@takram/three-geospatial-effects/r3f';
+import { LensFlare } from '@takram/three-geospatial-effects/r3f';
+import { CloudMaterialShadows } from './CloudMaterialShadows';
 import { createHaldLookupTexture } from '@takram/three-geospatial-effects';
 import { getSunDirectionECI, getECIToECEFRotationMatrix } from '@takram/three-atmosphere';
 import { useApp } from '../../AppContext';
@@ -79,6 +80,7 @@ export function BetaEnvironmentRuntime({ children, onError }: { children: ReactN
   return <AssetsContext.Provider value={assets}><Atmosphere ref={atmosphere} textures={assets.atmosphere} date={date}>
     <BetaEffectsContext.Provider value={BetaEffects}>
       <CelestialScene worldToECEF={worldToECEF} date={date} />
+      {s.clouds && s.sky && <CloudMaterialShadows />}
       {s.sky && <Environment key={`${s.date}:${worldToECEF.elements.join(',')}`} frames={3} resolution={128}><Sky groundAlbedo={groundAlbedo} /></Environment>}
       {children}
     </BetaEffectsContext.Provider>
@@ -166,7 +168,9 @@ export function BetaEffects() {
   const wind = useMemo(() => new Vector2(graphicsSettings.weather.windX, graphicsSettings.weather.windZ).multiplyScalar(s.windScale * 0.00005), [graphicsSettings.weather.windX, graphicsSettings.weather.windZ, s.windScale]);
   const perspective = (camera as { isPerspectiveCamera?: boolean }).isPerspectiveCamera;
   return <>
-    {s.clouds && perspective && <Clouds disableDefaultLayers qualityPreset={quality} temporalUpscale resolutionScale={quality === 'low' ? 0.5 : quality === 'medium' ? 0.75 : 1}
+    {/* Temporal upscale samples only one pixel in each 4x4 block and bypasses
+        accumulation for fresh pixels. Use the library's TAA resolve instead. */}
+    {s.clouds && perspective && <Clouds disableDefaultLayers qualityPreset={quality} temporalUpscale={false} resolutionScale={quality === 'low' ? 0.5 : quality === 'medium' ? 0.75 : 1}
       coverage={s.coverage} localWeatherVelocity={wind} shapeVelocity={[wind.x,0,wind.y]} shadow-farScale={0.25}
       localWeatherTexture={assets.weather} shapeTexture={assets.shape} shapeDetailTexture={assets.detail} turbulenceTexture={assets.turbulence} stbnTexture={assets.noise}>
       {Array.from({ length: s.layers }, (_, i) => <CloudLayer key={i} index={i} altitude={s.altitude + i * (s.thickness + 500)} height={s.thickness}
@@ -176,6 +180,6 @@ export function BetaEffects() {
     {s.flare && <LensFlare intensity={s.flareIntensity} featuresMaterial-ghostAmount={s.ghosts} featuresMaterial-haloAmount={s.halo} />}
     <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     {s.grading && <Grade />}
-    <SMAA /><Dithering />
+    <SMAA />
   </>;
 }
