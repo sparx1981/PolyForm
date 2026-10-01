@@ -111,9 +111,9 @@ export function ProceduralGrass({
   const trail = useMemo(() => new GrassTrail(), []);
   useEffect(() => { shared.uTrail.value = trail.points; shared.uTrailRecovery.value = TRAIL_RECOVERY_SECONDS; }, [shared, trail]);
 
-  const meshes = useMemo(() => rings.map(ring => {
+  const meshes = useMemo(() => rings.map((ring,index) => {
     const ringUniforms = createBladeRingUniforms();
-    const geometry = ring.kind === 'clump' ? createGrassClumpTemplate() : createBladeTemplate(ring.segments);
+    const geometry = ring.kind === 'clump' ? createGrassClumpTemplate() : createBladeTemplate(index < 2 ? 2 : ring.segments, index < 2 ? 2 : 1);
     const patchBatch = new GrassPatchBatch(grassPatchCapacity(ring));
     geometry.setAttribute('grassPatchOrigin', patchBatch.origins);
     geometry.instanceCount = 0;

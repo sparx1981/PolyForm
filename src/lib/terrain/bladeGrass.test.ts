@@ -60,6 +60,13 @@ describe('Dense blade grass', () => {
     geometry.dispose();
   });
 
+  it('pairs close blades within the former near-ring triangle cost',()=>{
+    const single=createBladeTemplate(4),paired=createBladeTemplate(2,2);
+    expect(paired.getIndex()!.count).toBe(single.getIndex()!.count);
+    expect(new Set(Array.from(paired.getAttribute('grassBladeIndex').array))).toEqual(new Set([0,1]));
+    single.dispose();paired.dispose();
+  });
+
   it('snaps ring grids to whole cells so blades stay put as the camera moves', () => {
     const [ring] = grassRings(DEFAULT_GRASS_SETTINGS);
     const a = ringOrigin(ring, 3.217, -8.9), b = ringOrigin(ring, 3.217 + ring.spacing * 0.4, -8.9);

@@ -18,6 +18,13 @@ export interface PresentationState {
   /** Keep the other side of a section instead. */
   cutFlip: boolean;
   xray: boolean;
+  loupe: boolean;
+  loupeZoom: number;
+  loupeRadius: number;
+  loupePosition: [number, number];
+  bloom: number;
+  depthOfField: boolean;
+  focusDistance: number;
   /**
    * Look stage, 0-3: 0 Sketch (pencil lines on paper), 1 Massing (a plain white model),
    * 2 Detailed (white, with glass and furniture), 3 Built (the real materials; normal).
@@ -47,6 +54,13 @@ export const INITIAL_PRESENTATION: PresentationState = {
   cutAt: 1.2,
   cutFlip: false,
   xray: false,
+  loupe: false,
+  loupeZoom: 2.5,
+  loupeRadius: 110,
+  loupePosition: [0.5, 0.45],
+  bloom: 0,
+  depthOfField: false,
+  focusDistance: 10,
   stage: 3,
   stagePlaying: false,
   stagePlaybackStarted: false,
@@ -110,5 +124,5 @@ export const STAGE_PLAY_SECONDS = 18;
 
 /** True while any effect changes how the model looks. */
 export function effectsInUse(s: PresentationState) {
-  return s.explode > 0 || s.cut !== 'off' || s.xray || s.build < 1 || s.buildPlaying || s.stage < 3 || s.dusk;
+  return s.explode > 0 || s.cut !== 'off' || s.xray || s.build < 1 || s.buildPlaying || s.stage < 3 || s.dusk || s.loupe || s.bloom > 0 || s.depthOfField;
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ringOrigin, type GrassField, type GrassRing } from './bladeGrass';
+import { ringOrigin, GRASS_FADE_START, GRASS_FADE_END, type GrassField, type GrassRing } from './bladeGrass';
 
 export const GRASS_PATCH_SIDE = 16;
 export const GRASS_PATCH_BLADES = GRASS_PATCH_SIDE ** 2;
@@ -67,7 +67,7 @@ export class GrassPatchBatch {
       for (let z = startZ; z < endZ; z++) for (let x = startX; x < endX; x++)
         this.occupied[i++] = grassPatchOccupied(field,x*size,z*size,(x+1)*size,(z+1)*size) ? 1 : 0;
     }
-    const outer = ring.radius * 0.97 - lodBias, inner = finer ? finer.radius * 0.55 - lodBias : -1;
+    const outer = ring.radius * GRASS_FADE_END - lodBias, inner = finer ? finer.radius * GRASS_FADE_START - lodBias : -1;
     let count = 0, changed = false, maskIndex = 0;
     this.candidatePatches = (endX - startX) * (endZ - startZ);
     for (let z = startZ; z < endZ; z++) for (let x = startX; x < endX; x++) {

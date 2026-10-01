@@ -17,6 +17,8 @@ import { findSiteGround, siteSatelliteUrl } from '../lib/worldSite/site';
 import { TextPlacementDialog } from './TextPlacementDialog';
 import { setTextPlacement } from '../lib/textPlacement';
 import PresentationDriver from './presentation/PresentationDriver';
+import DetailLoupe from './presentation/DetailLoupe';
+import QualityCaptureBridge from './presentation/QualityCaptureBridge';
 import { cutForDormers, dormerFingerprint, layoutsOf } from '../lib/dormers';
 import { SceneWeather } from './graphics/SceneWeather';
 import { BetaEnvironmentRoot, BetaEnvironmentEffects } from './graphics/BetaEnvironmentBridge';
@@ -64,7 +66,7 @@ import {
   GizmoHelper,
   GizmoViewport
 } from '@react-three/drei';
-import { EffectComposer, N8AO, GodRays } from '@react-three/postprocessing';
+import { EffectComposer, N8AO, GodRays, Bloom, DepthOfField } from '@react-three/postprocessing';
 import { Effect, EffectAttribute } from 'postprocessing';
 import * as THREE from 'three';
 import { SUBTRACTION, ADDITION, INTERSECTION, Evaluator, Brush } from 'three-bvh-csg';
@@ -10020,7 +10022,9 @@ function Scene() {
   effectiveCameraDefaultsRef.current = { near: effectiveCameraNear, far: effectiveCameraFar };
 
   const fogPostprocessingActive = fogSettings.enabled && (fogSettings.type === 'super-mega' || (fogSettings.type === 'standard' && fogSettings.colorCount > 1));
-  const postprocessingActive = ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive || graphicsSettings.beta.enabled;
+  const presentationView = usePresentation();
+  const presentationEffectsActive = presentationView.active && (presentationView.bloom > 0 || presentationView.depthOfField);
+  const postprocessingActive = presentationEffectsActive || ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive || graphicsSettings.beta.enabled;
 
   useEffect(() => {
     if (camera && (camera as any).isPerspectiveCamera) {
@@ -10756,7 +10760,7 @@ function Scene() {
   // the active cut). Drag an existing plane's square to slide it along its direction.
   // See tools/sectionPlanes.ts and SectionCutter.tsx.
   // ---------------------------------------------------------------------------
-  const { active: presentationActive } = usePresentation();
+  const presentationActive = presentationView.active;
   const activeSectionArgs = useMemo(() => activeSection(shapes)?.args ?? null, [shapes]);
   // Cool moonlight tint on the ambient light as the sun goes down (white by day).
   const nightAmbientColor = useMemo(
@@ -11072,6 +11076,8 @@ function Scene() {
       />
       <ShareMainScene />
       <PresentationDriver />
+      <QualityCaptureBridge />
+      {presentationView.active && presentationView.loupe && <DetailLoupe composerActive={postprocessingActive} />}
       {/* The active section plane cuts the model (presentation mode does its own cuts). */}
       <SectionCutter section={presentationActive ? null : activeSectionArgs} shapes={shapes} />
       <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />
@@ -13480,6 +13486,8 @@ function Scene() {
               samples={60}
             />
           )}
+          {presentationView.active && presentationView.bloom > 0 && <Bloom intensity={presentationView.bloom} luminanceThreshold={1} luminanceSmoothing={.2} mipmapBlur resolutionScale={.5} />}
+          {presentationView.active && presentationView.depthOfField && <DepthOfField worldFocusDistance={presentationView.focusDistance} worldFocusRange={Math.max(.3,presentationView.focusDistance*.15)} focalLength={.025} bokehScale={1.5} height={480} />}
           <BetaEnvironmentEffects />
         </EffectComposer>
       )}

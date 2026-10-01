@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-  Presentation, X, Hammer, PenLine, Tag, Route, MessageSquare, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2, Footprints,
+  ZoomIn, Aperture, Presentation, X, Hammer, PenLine, Tag, Route, MessageSquare, Layers, Scissors, ScanEye, RotateCw, Sparkles, Circle, Square, Share2, FlipHorizontal2, Loader2, Footprints,
 } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
@@ -18,7 +18,10 @@ import ShareWithClientDialog from './ShareWithClientDialog';
 import { findSiteGround } from '../../lib/worldSite/site';
 import { STREET_LIFE_LEVELS, withSiteSettings } from '../../lib/worldSite/streets';
 import { actionLabel } from '../../lib/macroRecorder';
+import LoupeHandle from './LoupeHandle';
 import type { StreetLifeLevel } from '../../types';
+
+const QualityRenderDialog = React.lazy(() => import('./QualityRenderDialog'));
 
 /** Frames the whole building from a three-quarter view. */
 export function frameModel(shapes: { id: string; type: string }[]) {
@@ -81,7 +84,8 @@ export default function PresentationPanel() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [showcaseStep, setShowcaseStep] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | 'comments' | 'street' | null>(null);
+  const [qualityOpen,setQualityOpen]=useState(false);
+  const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | 'comments' | 'street' | 'loupe' | 'effects' | null>(null);
   const unread = useUnreadComments();
   const { comments } = useDesignerComments();
   const abort = useRef<AbortController | null>(null);
@@ -97,17 +101,17 @@ export default function PresentationPanel() {
     if (s.active) return;
     abort.current?.abort();
     if (orbitBefore.current !== null) { app.setAutoOrbitEnabled(orbitBefore.current); orbitBefore.current = null; }
-    setOpen(null);
+    setOpen(null);setQualityOpen(false);
   }, [s.active]);
 
   useEffect(() => {
     if (!s.active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !shareOpen) closePresentation();
+      if (e.key === 'Escape' && !shareOpen && !qualityOpen) closePresentation();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [s.active, shareOpen]);
+  }, [s.active, shareOpen, qualityOpen]);
 
   if (!s.active) return null;
 
@@ -164,6 +168,26 @@ export default function PresentationPanel() {
         className="fixed left-1/2 -translate-x-1/2 bottom-6 z-[80] max-w-[calc(100vw-16px)]"
         onPointerDown={e => e.stopPropagation()}
       >
+        {open === 'loupe' && (
+          <Popover title="Detail loupe" hint="Drag the glass to inspect a detail">
+            <Slider label="Magnification" value={s.loupeZoom} min={1.5} max={6} step={.1}
+              onChange={v => presentation.set({ loupeZoom: v })} format={v => `${v.toFixed(1)}×`} />
+            <Slider label="Lens size" value={s.loupeRadius} min={70} max={180} step={5}
+              onChange={v => presentation.set({ loupeRadius: v })} format={v => `${Math.round(v * 2)} px`} />
+          </Popover>
+        )}
+        {open === 'effects' && (
+          <Popover title="Presentation effects">
+            <Slider label="Bloom" value={s.bloom} min={0} max={.8} step={.05}
+              onChange={v => presentation.set({ bloom: v })} format={v => `${Math.round(v * 100)}%`} />
+            <label className="flex gap-2 text-xs my-3">
+              <input type="checkbox" checked={s.depthOfField} onChange={e => presentation.set({ depthOfField: e.target.checked })} />
+              Depth of field
+            </label>
+            {s.depthOfField && <Slider label="Focus distance" value={s.focusDistance} min={.5} max={100} step={.5}
+              onChange={v => presentation.set({ focusDistance: v })} format={v => `${v.toFixed(1)} m`} />}
+          </Popover>
+        )}
         {open === 'labels' && <LabelsEditor />}
         {open === 'tour' && <TourEditor />}
         {open === 'comments' && <Popover title="Client comments" hint="From your client page"><DesignerCommentsList /></Popover>}
@@ -229,6 +253,9 @@ export default function PresentationPanel() {
             <Tool icon={<Footprints size={18} />} label="Street" active={open === 'street' || streetLevel !== 'off'} onClick={() => setOpen(open === 'street' ? null : 'street')}
               title="Moving cars and people on the imported site: off, quiet, normal or busy" />
           )}
+          <Tool icon={<ZoomIn size={18} />} label="Glass" active={s.loupe} onClick={()=>{presentation.set({loupe:!s.loupe});setOpen(s.loupe?null:'loupe');}} title="Magnify a detail through a draggable glass loupe" />
+          <Tool icon={<Sparkles size={18} />} label="Quality still" onClick={()=>setQualityOpen(true)} title="Render a frozen view with indirect light and reflections" />
+          <Tool icon={<Aperture size={18} />} label="Effects" active={open==='effects' || s.bloom>0 || s.depthOfField} onClick={()=>setOpen(open==='effects'?null:'effects')} />
           <Divider />
           <Tool icon={<Tag size={18} />} label="Labels" active={open === 'labels'} onClick={() => setOpen(open === 'labels' ? null : 'labels')} disabled={!!showcaseStep} />
           <Tool icon={<Route size={18} />} label="Tour" active={open === 'tour'} onClick={() => setOpen(open === 'tour' ? null : 'tour')} disabled={!!showcaseStep} />
@@ -257,6 +284,7 @@ export default function PresentationPanel() {
           </button>
         </div>
       </div>
+      {s.loupe && <LoupeHandle />}
       {open === 'comments' && <PinLayer pins={[...pinNumbers(comments)].map(([id, n]) => ({
         id: `c-${id}`, position: comments.find(c => c.id === id)!.anchor!, node: <CommentPinMarker n={n} />,
       }))} />}
@@ -264,6 +292,7 @@ export default function PresentationPanel() {
         id: l.id, position: l.position, node: <LabelCallout text={l.text} detail={l.detail} serif={SERIF} />,
       }))} />
       {(open === 'stages' || showcaseStep === 'Stages') && <StageCaption className="fixed left-6 bottom-28 z-[79]" dark={s.dusk} />}
+      {qualityOpen && <React.Suspense fallback={<div className="fixed inset-0 z-[130] bg-black/70 text-white grid place-items-center">Loading quality renderer…</div>}><QualityRenderDialog onClose={()=>setQualityOpen(false)} /></React.Suspense>}
       {shareOpen && <ShareWithClientDialog onClose={() => setShareOpen(false)} />}
     </>
   );

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { inject } from '../graphics/shaderHooks';
 import { GRASS_PATCH_SIDE } from './grassPatches';
-import { TRAIL_LENGTH, ringOrigin, type GrassRing } from './bladeGrass';
+import { TRAIL_LENGTH, GRASS_FADE_START, GRASS_FADE_END, ringOrigin, type GrassRing } from './bladeGrass';
 
 /**
  * Lit single-blade grass on MeshStandardMaterial, so blades get the scene's sun, shadows, fog,
@@ -107,8 +107,8 @@ export function updateRingUniforms(uniforms: BladeRingUniforms, ring: GrassRing,
   uniforms.uCells.value = ring.cells;
   uniforms.uWidthScale.value = ring.widthScale;
   // Hand over gradually across the outer part of each ring, so density falls off smoothly.
-  uniforms.uFade.value.set(ring.radius * 0.55, ring.radius * 0.97);
-  if (finer) uniforms.uFadeIn.value.set(finer.radius * 0.55, finer.radius * 0.97);
+  uniforms.uFade.value.set(ring.radius * GRASS_FADE_START, ring.radius * GRASS_FADE_END);
+  if (finer) uniforms.uFadeIn.value.set(finer.radius * GRASS_FADE_START, finer.radius * GRASS_FADE_END);
   else uniforms.uFadeIn.value.set(0, -1);
 }
 
@@ -239,7 +239,13 @@ for (int level = 0; level < 16; level++) {
   gCell += vec2(float(child & 1u), float((child >> 1u) & 1u)) * gRootStep;
 }
 vec2 gRootXZ = (gCell + 0.1 + 0.8 * gHash2(gCell)) * uBaseSpacing;
+#ifndef GRASS_CLUMP_CARD
+// Paired close blades spread each root into a small tuft; the primary blade keeps its nested identity.
+gRootXZ += grassBladeIndex * uBaseSpacing * vec2(0.28, -0.22);
+float gSeed = gHash(gCell + 41.7 + grassBladeIndex * 13.7);
+#else
 float gSeed = gHash(gCell + 41.7);
+#endif
 
 // Voronoi clump: blades in a clump share height, facing and tone, and lean outward.
 vec2 gClumpCell = floor(gRootXZ / uClumpSize);
@@ -284,7 +290,10 @@ gHeight *= gKeep;
 float gWidth = (mix(0.0035, 0.008, gHash(gCell + 2.9)) + gHeight * 0.012) * uWidthScale;
 float gPixel = uPixelWorld + uPixelAngle * distance(cameraPosition, gRoot);
 gWidth = max(gWidth, gPixel * 1.2) * step(1e-4, gHeight);
-float gYaw = atan(gOutward.y, gOutward.x) + (gHash(gCell + 8.8) - 0.5) * 2.4;
+float gYaw = atan(gOutward.y, gOutward.x) + (gSeed - 0.5) * 2.4;
+#ifndef GRASS_CLUMP_CARD
+gYaw += grassBladeIndex * 1.7;
+#endif
 vec2 gFacing = vec2(cos(gYaw), sin(gYaw));
 vec2 gSideDir = vec2(-gFacing.y, gFacing.x);
 float gRestBend = mix(0.15, 0.6, gHash(gCell + 6.1)) + 0.35 * vFar;
@@ -370,6 +379,7 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
   material.defines = { ...(options.patches ? { GRASS_PATCH_SIDE } : {}), ...(options.clumps ? { GRASS_CLUMP_CARD: 1 } : {}) };
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, shared, ring);
+    shader.vertexShader = '#ifndef GRASS_CLUMP_CARD\nattribute float grassBladeIndex;\n#endif\n' + shader.vertexShader;
     shader.vertexShader = vertexDeclarations + shader.vertexShader;
     // The blade is built in world space; beginnormal runs first, so compute everything there.
     shader.vertexShader = inject(shader.vertexShader, '#include <beginnormal_vertex>', `${vertexBody}
@@ -426,6 +436,6 @@ export function createBladeGrassMaterial(shared: BladeGrassUniforms, ring: Blade
       #include <opaque_fragment>
     `);
   };
-  material.customProgramCacheKey = () => `polyform-blade-grass-v5:${Boolean(options.patches)}:${Boolean(options.clumps)}`;
+  material.customProgramCacheKey = () => `polyform-blade-grass-v6:${Boolean(options.patches)}:${Boolean(options.clumps)}`;
   return material;
 }

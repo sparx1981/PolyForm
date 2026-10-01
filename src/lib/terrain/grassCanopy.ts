@@ -49,7 +49,7 @@ export function createGrassCanopyMaterial(shared: BladeGrassUniforms): THREE.Mes
       float canopyMask=smoothstep(.35,.85,texture2D(uMask,canopyUv).r);
       float canopyDistance=distance(cameraPosition,canopyPosition);
       // Blend while the middle ring is still populated, before its sparse roots expose the soil.
-      float canopyCoverage=canopyMask*smoothstep(7.,24.,canopyDistance);
+      float canopyCoverage=canopyMask*smoothstep(.75,6.,canopyDistance);
       if(uBaseHeight+uHeightVariance<=.0001) discard;
       float canopyDither=fract(52.9829189*fract(dot(floor(gl_FragCoord.xy),vec2(.06711056,.00583715))));
       if(canopyDither>=canopyCoverage) discard;
@@ -57,9 +57,10 @@ export function createGrassCanopyMaterial(shared: BladeGrassUniforms): THREE.Mes
       float canopyDry=smoothstep(.7,.95,canopyNoise(canopyPosition.xz*.12+7.));
       vec3 canopyColor=mix(uRootColor,uTipColor,.48+.12*canopyTone);
       canopyColor=mix(canopyColor,uDryColor,canopyDry*.25);
+      canopyColor=mix(uRootColor*.48,canopyColor,smoothstep(1.,8.,canopyDistance));
       diffuseColor.rgb*=canopyColor*mix(.66,.9,canopyTone);
     `);
     };
-    material.customProgramCacheKey = () => 'polyform-grass-canopy-v1';
+    material.customProgramCacheKey = () => 'polyform-grass-canopy-v2';
     return material;
 }

@@ -45,6 +45,10 @@ export function grassRootCell(blockX: number, blockZ: number, stride: number): [
   return [x,z];
 }
 
+// Shared by shader fades and CPU patch culling. Keep close foliage at full density longer.
+export const GRASS_FADE_START = 0.72;
+export const GRASS_FADE_END = 0.97;
+
 /** Instanced roots per ring (near, middle, far blades, distant tuft cards) are capped to keep a GPU budget. */
 export const MAX_RING_BLADES = [300_000, 280_000, 160_000, 80_000];
 
@@ -92,19 +96,25 @@ export function grassRings(settings: Pick<GrassSettings, 'density' | 'baseHeight
  * so the blade has a V cross-section that catches light like a real leaf.
  * position.x is the side (-1, 0, 1); position.y is the height fraction t in [0, 1].
  */
-export function createBladeTemplate(segments: number): THREE.InstancedBufferGeometry {
+export function createBladeTemplate(segments: number, bladesPerRoot = 1): THREE.InstancedBufferGeometry {
   const positions: number[] = [];
   const indices: number[] = [];
-  for (let row = 0; row <= segments; row++) {
-    const t = row / segments;
-    positions.push(-1, t, 0, 0, t, 0, 1, t, 0);
-  }
-  for (let row = 0; row < segments; row++) {
-    const a = row * 3, b = a + 3;
-    // Left panel then right panel of this segment.
-    indices.push(a, a + 1, b + 1, a, b + 1, b, a + 1, a + 2, b + 2, a + 1, b + 2, b + 1);
+  const bladeIndices: number[] = [];
+  for (let blade = 0; blade < bladesPerRoot; blade++) {
+    const offset = positions.length / 3;
+    for (let row = 0; row <= segments; row++) {
+      const t = row / segments;
+      positions.push(-1, t, 0, 0, t, 0, 1, t, 0);
+      bladeIndices.push(blade, blade, blade);
+    }
+    for (let row = 0; row < segments; row++) {
+      const a = offset + row * 3, b = a + 3;
+      // Left panel then right panel of this segment.
+      indices.push(a, a + 1, b + 1, a, b + 1, b, a + 1, a + 2, b + 2, a + 1, b + 2, b + 1);
+    }
   }
   const geometry = new THREE.InstancedBufferGeometry();
+  geometry.setAttribute('grassBladeIndex', new THREE.Float32BufferAttribute(bladeIndices, 1));
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   // Normals are rebuilt in the shader; the attribute only satisfies the standard material.
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(positions.length).fill(0).map((_, i) => i % 3 === 2 ? 1 : 0), 3));
