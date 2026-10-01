@@ -31,7 +31,7 @@ function Driver() {
   useFrame((_, delta) => {
     const s = presentation.get();
     if (s.buildPlaying) { const build = Math.min(1, s.build + delta / 12); presentation.set({ build, buildPlaying: build < 1 }); }
-    if (s.stagePlaying) { const stage = Math.min(3, s.stage + delta * 3 / STAGE_PLAY_SECONDS); presentation.set({ stage, stagePlaying: stage < 3 }); }
+    if (s.stagePlaying && !engine.current?.holdsSketch(s.stage)) { const stage = Math.min(3, s.stage + delta * 3 / STAGE_PLAY_SECONDS); presentation.set({ stage, stagePlaying: stage < 3 }); }
     engine.current?.update(presentation.get(), Math.min(delta, 0.1), camera);
   });
   return null;

@@ -207,6 +207,8 @@ export interface Look {
   whiteness: number;
   /** Pencil outline opacity (0 = no outlines). */
   pencil: number;
+  /** Fixed freehand wobble settles into cleaner massing contours. */
+  pencilRoughness: number;
   /** Opacity of the clay layer over the real materials in 'fade'. */
   clayOver: number;
   /** Glass shows as glass (from Detailed on); before that windows are open holes. */
@@ -231,7 +233,8 @@ export function lookAt(stage: number): Look {
     surfaceOpacity: easeInOutCubic(clamp01(s)),
     mode: s >= 2.98 ? 'built' : s > 2 ? 'fade' : 'clay',
     whiteness: clamp01(s),
-    pencil: s < 1 ? lerp(0.85, 0.3, s) : s < 2 ? lerp(0.3, 0.1, s - 1) : 0,
+    pencil: s < 1 ? lerp(0.85, 0.5, s) : s < 2 ? lerp(0.5, 0.1, s - 1) : 0,
+    pencilRoughness: s < 1 ? lerp(1, 0.22, s) : lerp(0.22, 0, s - 1),
     clayOver: s > 2 ? clamp01(3 - s) : 1,
     glass: s >= 1.5,
     furniture: s >= 1.5,

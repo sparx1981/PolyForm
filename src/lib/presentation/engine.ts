@@ -6,6 +6,7 @@ import {
 } from './classify';
 import { floorPlans } from './floorPlans';
 import { plantHeight, plantSpread } from './plants';
+import { pencilDrawing, pencilDrawCount, pencilMaterial, pencilSeconds, type PencilDrawing } from './pencil';
 import type { PresentationState } from './store';
 
 /**
@@ -59,8 +60,6 @@ interface LightRecord {
 }
 
 const AUX = 'presentationAux';
-/** Seconds the Sketch stage takes to draw the design. */
-const SKETCH_SECONDS = 7;
 const EPS = 1e-4;
 
 const PAPER = new THREE.Color('#f1ebdf');
@@ -160,8 +159,11 @@ export class PresentationEngine {
   /** How much of the Sketch stage's pencil drawing has been drawn so far (0-1). */
   private sketchT = 1;
   private inSketch = false;
-  private sketchLines: { line: THREE.LineSegments; segments: number; start: number; span: number }[] = [];
-  private sketchEdgeCache = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+  private sketchLines: { line: THREE.LineSegments; drawing: PencilDrawing; rank: number; start: number; span: number }[] = [];
+  private sketchEdgeCache = new Map<THREE.BufferGeometry, PencilDrawing>();
+  private sketchScheduleDirty = false;
+  private sketchControlled = false;
+  private hiddenEdges = new Map<THREE.Object3D, boolean>();
   private roomLights: THREE.Group | null = null;
   private lights = new Map<THREE.Light, LightRecord>();
   private envIntensity: number | null = null;
@@ -201,9 +203,11 @@ export class PresentationEngine {
     emissive: CARD.clone(), emissiveIntensity: 0.28,
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
-  private readonly pencil = new THREE.LineBasicMaterial({ color: '#4d463e', transparent: true, opacity: 0.8 });
+  private readonly pencilInk = pencilMaterial('#4d463e');
+  private readonly pencil = this.pencilInk.material;
   /** A second, fainter and slightly offset pass over each line, so the drawing looks hand-made. */
-  private readonly pencilSoft = new THREE.LineBasicMaterial({ color: '#6b6258', transparent: true, opacity: 0.4 });
+  private readonly pencilSoftInk = pencilMaterial('#6b6258',true);
+  private readonly pencilSoft = this.pencilSoftInk.material;
   private readonly treePencil = new THREE.LineBasicMaterial({ color: '#6b6258', transparent: true, opacity: 0.9, depthWrite: false });
 
   constructor(private scene: THREE.Scene) {}
@@ -308,10 +312,13 @@ export class PresentationEngine {
       return Math.abs(target - next) < snap ? target : next;
     };
     this.explodeNow = ease(this.explodeNow, state.active ? state.explode : 0, 5, 0.001);
+    // Start a fresh sheet immediately, rather than briefly flashing the complete
+    // model while the old Built state eases down to Sketch.
+    if (state.active && state.stage < 0.02 && !this.inSketch) this.stageNow = 0;
     this.stageNow = ease(this.stageNow, state.active ? state.stage : 3, 7, 0.004);
     this.duskNow = ease(this.duskNow, state.active && state.dusk ? 1 : 0, 1.6, 0.003);
     const look = lookAt(this.stageNow);
-    this.advanceSketch(state.active, dt);
+    this.advanceSketch(state, dt);
 
     const build = state.active ? state.build : 1;
     const moving = this.explodeNow > 0 || build < 1 || !look.furniture || !look.plants;
@@ -360,10 +367,14 @@ export class PresentationEngine {
     this.clayOver.opacity = look.clayOver;
     this.pencil.opacity = look.pencil;
     this.pencilSoft.opacity = look.pencil * 0.45;
+    this.pencilInk.roughness.value = look.pencilRoughness;
+    this.pencilSoftInk.roughness.value = look.pencilRoughness;
+    this.pencilInk.progress.value = this.pencilSoftInk.progress.value = this.sketchT;
+    this.updateSourceEdges(state.active && look.pencil > 0);
     this.drawSketch();
 
     // Trees are pencilled in last, once the building has been drawn.
-    const treesIn = this.sketchT >= 1 ? 1 : Math.min(1, Math.max(0, (this.sketchT - 0.75) / 0.25));
+    const treesIn = this.sketchT >= 1 ? 1 : Math.min(1, Math.max(0, (this.sketchT - 0.85) / 0.15));
     this.updateTreeSketch(state.active ? look.treeSketch * treesIn : 0, look, camera);
     this.updateGrass(state.active && !look.plants);
     this.updateBackground(state.active, look, xray);
@@ -529,18 +540,34 @@ export class PresentationEngine {
     return stage < 0.02 && (this.stageNow > 0.05 || this.sketchT < 1);
   }
 
-  private advanceSketch(active: boolean, dt: number) {
-    if (!active) { this.sketchT = 1; this.inSketch = false; return; }
-    if (this.stageNow < 0.02 && !this.inSketch) { this.inSketch = true; this.sketchT = 0; }
+  private advanceSketch(state: PresentationState, dt: number) {
+    if (!state.active) { this.sketchT = 1; this.inSketch = false; return; }
+    if (this.stageNow < 0.02 && !this.inSketch) { this.inSketch = true; this.sketchT = 0; this.sketchControlled = state.stagePlaying || state.stagePlaybackStarted; }
     else if (this.stageNow > 0.05) { this.inSketch = false; this.sketchT = 1; }
-    if (this.inSketch) this.sketchT = Math.min(1, this.sketchT + dt / SKETCH_SECONDS);
+    if (state.stagePlaying) this.sketchControlled = true;
+    if (this.inSketch && (!this.sketchControlled || state.stagePlaying)) {
+      this.sketchT = Math.min(1, this.sketchT + dt / pencilSeconds(this.sketchLines.reduce((n,s)=>n+s.drawing.strokes,0)));
+    }
   }
 
   /** Reveals each part's pencil lines in build order, so the design is drawn stroke by stroke. */
   private drawSketch() {
+    if (this.sketchScheduleDirty) {
+      this.sketchScheduleDirty = false;
+      this.sketchLines.sort((a,b)=>a.rank-b.rank);
+      const total = this.sketchLines.reduce((n,s)=>n+s.drawing.duration,0) || 1;
+      let cursor = 0;
+      for (const s of this.sketchLines) {
+        s.start = cursor / total * 0.85; s.span = s.drawing.duration / total * 0.85;
+        const times = s.line.geometry.attributes.pencilTime;
+        const source = s.drawing.geometry.attributes.pencilTime;
+        for(let i=0;i<times.count;i++) times.setX(i,s.start+source.getX(i)/s.drawing.duration*s.span);
+        times.needsUpdate = true; cursor += s.drawing.duration;
+      }
+    }
     for (const s of this.sketchLines) {
-      const f = this.sketchT >= 1 ? 1 : Math.min(1, Math.max(0, (this.sketchT - s.start) / Math.max(0.02, s.span)));
-      s.line.geometry.setDrawRange(0, f >= 1 ? Infinity : Math.floor(s.segments * f) * 2);
+      const f = this.sketchT >= 1 ? 1 : Math.min(1, Math.max(0, (this.sketchT - s.start) / Math.max(1e-8, s.span)));
+      s.line.geometry.setDrawRange(0, f >= 1 ? Infinity : pencilDrawCount(s.drawing.ends,f*s.drawing.duration));
     }
   }
 
@@ -548,37 +575,34 @@ export class PresentationEngine {
   private sketchEdgesFor(geometry: THREE.BufferGeometry) {
     let sorted = this.sketchEdgeCache.get(geometry);
     if (sorted) return sorted;
-    const edges = this.edgesFor(geometry);
-    const pos = edges.attributes.position;
-    const n = pos.count / 2;
-    const order = Array.from({ length: n }, (_, i) => i);
-    const key = (i: number) => Math.round(Math.min(pos.getY(i * 2), pos.getY(i * 2 + 1)) * 20) * 1000 + (pos.getX(i * 2) + pos.getZ(i * 2));
-    order.sort((a, b) => key(a) - key(b));
-    const out = new Float32Array(n * 6);
-    order.forEach((src, dst) => {
-      for (let k = 0; k < 2; k++) {
-        out[dst * 6 + k * 3] = pos.getX(src * 2 + k);
-        out[dst * 6 + k * 3 + 1] = pos.getY(src * 2 + k);
-        out[dst * 6 + k * 3 + 2] = pos.getZ(src * 2 + k);
-      }
-    });
-    sorted = new THREE.BufferGeometry();
-    sorted.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    sorted = pencilDrawing(this.edgesFor(geometry));
     this.sketchEdgeCache.set(geometry, sorted);
     return sorted;
   }
 
   private addSketchLines(mesh: THREE.Mesh, e: Entry) {
-    const geometry = this.sketchEdgesFor(mesh.geometry);
+    if (!['slab','wall','roof','kernel','stair'].includes(e.category)) return;
+    const drawing = this.sketchEdgesFor(mesh.geometry);
+    const geometry = drawing.geometry.clone();
     const slot = this.schedule.get(e.key) ?? { start: 0, span: 1 };
-    const segments = geometry.attributes.position.count / 2;
     const main = new THREE.LineSegments(geometry, this.pencil);
     const soft = new THREE.LineSegments(geometry, this.pencilSoft);
-    soft.position.set(0.012, 0.008, -0.006);
-    soft.rotation.z = 0.002;
     this.addAux(mesh, main);
     this.addAux(mesh, soft);
-    this.sketchLines.push({ line: main, segments, start: slot.start, span: slot.span });
+    this.sketchLines.push({ line: main, drawing, rank: slot.start, start: 0, span: 1 });
+    this.sketchScheduleDirty = true;
+  }
+
+  private updateSourceEdges(hide: boolean) {
+    if (!hide) {
+      for (const [line,visible] of this.hiddenEdges) line.visible = visible;
+      this.hiddenEdges.clear(); return;
+    }
+    for (const e of this.entries.values()) e.obj.traverse(line => {
+      if (!(line as THREE.Line).isLine || line.userData[AUX]) return;
+      if (!this.hiddenEdges.has(line)) this.hiddenEdges.set(line,line.visible);
+      line.visible = false;
+    });
   }
 
   private addAux(parent: THREE.Object3D, child: THREE.Object3D) {
@@ -596,6 +620,7 @@ export class PresentationEngine {
       mesh.castShadow = rec.castShadow;
     }
     this.materials.clear();
+    for (const s of this.sketchLines) s.line.geometry.dispose();
     for (const a of this.aux) a.removeFromParent();
     this.aux = [];
     this.sketchLines = [];
@@ -806,7 +831,10 @@ export class PresentationEngine {
     this.cutClones.forEach(c => c.dispose());
     this.cutClones.clear();
     this.edgeCache.forEach(g => g.dispose());
-    this.sketchEdgeCache.forEach(g => g.dispose());
+    this.updateSourceEdges(false);
+    this.sketchEdgeCache.forEach(g => g.geometry.dispose());
+    this.sketchEdgeCache.clear();
+    for (const material of [this.ghost,this.ghostSlab,this.edgeMat,this.capMat,this.clay,this.groundClay,this.glass,this.hidden,this.clayOver,this.pencil,this.pencilSoft,this.treePencil]) material.dispose();
     this.edgeCache.clear();
     this.entries.clear();
     this.explodeNow = 0;

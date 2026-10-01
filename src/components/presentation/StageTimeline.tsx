@@ -19,7 +19,7 @@ export function StageTimeline({ className }: { className?: string }) {
     if (!el) return;
     const r = el.getBoundingClientRect();
     const t = Math.min(1, Math.max(0, (clientX - r.left) / Math.max(1, r.width)));
-    presentation.set({ stage: t * 3, stagePlaying: false, build: 1, buildPlaying: false });
+    presentation.set({ stage: t * 3, stagePlaying: false, stagePlaybackStarted: false, build: 1, buildPlaying: false });
   };
 
   const current = Math.min(3, Math.max(0, Math.round(s.stage)));
@@ -28,7 +28,7 @@ export function StageTimeline({ className }: { className?: string }) {
       onPointerDown={e => e.stopPropagation()}>
       <div className="flex items-center gap-4">
         <button
-          onClick={() => (s.stagePlaying ? presentation.set({ stagePlaying: false }) : s.stage >= 2.99 ? playStages() : presentation.set({ stagePlaying: true }))}
+          onClick={() => (s.stagePlaying ? presentation.set({ stagePlaying: false }) : s.stage >= 2.99 ? playStages() : presentation.set({ stagePlaying: true, stagePlaybackStarted: true }))}
           className="shrink-0 w-9 h-9 rounded-full bg-[#2f3a33] text-white flex items-center justify-center hover:bg-[#1f2722]"
           aria-label={s.stagePlaying ? 'Pause' : 'Play from sketch to built'}
           title={s.stagePlaying ? 'Pause' : 'Play from sketch to built'}
@@ -38,7 +38,7 @@ export function StageTimeline({ className }: { className?: string }) {
         <div className="flex-1 min-w-0">
           <div className="grid grid-cols-4 gap-2">
             {STAGES.map((st, i) => (
-              <button key={st.n} onClick={() => presentation.set({ stage: i, stagePlaying: false, build: 1, buildPlaying: false })}
+              <button key={st.n} onClick={() => presentation.set({ stage: i, stagePlaying: false, stagePlaybackStarted: false, build: 1, buildPlaying: false })}
                 className={cn('text-left min-w-0', i === current ? 'text-[#2a241e]' : 'text-[#8b8177] hover:text-[#4a4239]')}>
                 <span className="block text-[9px] tracking-widest">{st.n}</span>
                 <span className={cn('block text-[11px] sm:text-xs truncate', i === current && 'font-semibold')}>{st.name}</span>
@@ -62,10 +62,10 @@ export function StageTimeline({ className }: { className?: string }) {
             tabIndex={0}
             onKeyDown={e => {
               if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) e.preventDefault();
-              if (e.key === 'Home') presentation.set({ stage: 0, stagePlaying: false });
-              if (e.key === 'End') presentation.set({ stage: 3, stagePlaying: false });
-              if (e.key === 'ArrowRight') presentation.set({ stage: Math.min(3, s.stage + 0.1), stagePlaying: false });
-              if (e.key === 'ArrowLeft') presentation.set({ stage: Math.max(0, s.stage - 0.1), stagePlaying: false });
+              if (e.key === 'Home') presentation.set({ stage: 0, stagePlaying: false, stagePlaybackStarted: false });
+              if (e.key === 'End') presentation.set({ stage: 3, stagePlaying: false, stagePlaybackStarted: false });
+              if (e.key === 'ArrowRight') presentation.set({ stage: Math.min(3, s.stage + 0.1), stagePlaying: false, stagePlaybackStarted: false });
+              if (e.key === 'ArrowLeft') presentation.set({ stage: Math.max(0, s.stage - 0.1), stagePlaying: false, stagePlaybackStarted: false });
             }}
           >
             <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-[#cfc7bb]" />
@@ -83,7 +83,7 @@ export function StageTimeline({ className }: { className?: string }) {
           {s.dusk ? <Moon size={15} /> : <Sun size={15} />}
         </button>
       </div>
-      <p className="mt-2 text-[10px] text-[#70675e]">Line drawing → white volumes → glass, structure and fittings → finished materials. Use Build for construction order.</p>
+      <p className="mt-2 text-[10px] text-[#70675e]">Pencil strokes → soft white volumes → glass, structure and fittings → finished materials. Use Build for construction order.</p>
     </div>
   );
 }

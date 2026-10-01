@@ -26,6 +26,8 @@ export interface PresentationState {
   stage: number;
   /** The stage timeline is playing from Sketch to Built. */
   stagePlaying: boolean;
+  /** Distinguishes a paused timeline from a manually selected Sketch. */
+  stagePlaybackStarted: boolean;
   /** Evening light: the sun goes down and the rooms light up. */
   dusk: boolean;
   /** Build-up progress, 0-1. 1 = everything in place. */
@@ -47,6 +49,7 @@ export const INITIAL_PRESENTATION: PresentationState = {
   xray: false,
   stage: 3,
   stagePlaying: false,
+  stagePlaybackStarted: false,
   dusk: false,
   build: 1,
   buildPlaying: false,
@@ -87,12 +90,12 @@ export function usePresentation(): PresentationState {
 
 /** Starts the build-up from an empty site. */
 export function playBuild() {
-  presentation.set({ build: 0, buildPlaying: true, stage: 3, stagePlaying: false, explode: 0 });
+  presentation.set({ build: 0, buildPlaying: true, stage: 3, stagePlaying: false, stagePlaybackStarted: false, explode: 0 });
 }
 
 /** Plays the look stages from Sketch to Built. */
 export function playStages() {
-  presentation.set({ stage: 0, stagePlaying: true, build: 1, buildPlaying: false, explode: 0 });
+  presentation.set({ stage: 0, stagePlaying: true, stagePlaybackStarted: true, build: 1, buildPlaying: false, explode: 0 });
 }
 
 export const STAGES = [
@@ -102,8 +105,8 @@ export const STAGES = [
   { n: '04', name: 'Built', caption: 'A place to come home to', detail: 'Material · light · life' },
 ] as const;
 
-/** Seconds the timeline takes from Sketch to Built. */
-export const STAGE_PLAY_SECONDS = 10;
+/** Seconds for the transitions after the separate 24–42 second pencil drawing. */
+export const STAGE_PLAY_SECONDS = 18;
 
 /** True while any effect changes how the model looks. */
 export function effectsInUse(s: PresentationState) {
