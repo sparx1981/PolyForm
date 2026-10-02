@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { buildInstancedScene, buildScene, toGLB, toInstancedGLB } from 'openskp';
 import type { SkpWorkerMessage } from './skpImport.worker';
+import { LeanSkpUnsupported, readSkpToGlbLean } from '../lib/skp/skpLeanReader';
+import { isOutOfMemoryError } from '../lib/skp/outOfMemory';
 
 /** Largest .skp the browser can be asked to read: a single ArrayBuffer tops out near 2 GB. */
 const MAX_SKP_BYTES = 1.5 * 1024 * 1024 * 1024;
@@ -18,6 +20,8 @@ const STAGE_LABELS: Record<string, string> = {
   tlv_walk: 'Reading the file',
   legacy_defs: 'Reading components',
   build_scene: 'Building the model',
+  scan_placements: 'Checking which components the model uses',
+  retry_used_only: 'Memory is tight: reading only the components the model uses',
 };
 
 const OUT_OF_MEMORY_HINT = 'The browser ran out of memory reading this model. Try closing other tabs, or in SketchUp use Window > Model Info > Statistics > Purge Unused, then save a smaller copy, or export to glTF/GLB and import that instead.';
@@ -25,9 +29,7 @@ const OUT_OF_MEMORY_HINT = 'The browser ran out of memory reading this model. Tr
 /** Turns whatever a reader threw into a message that says what to do about it. */
 export function describeSkpError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err ?? '');
-  if (err instanceof RangeError || /out of memory|allocation failed|invalid array length|invalid typed array length|memory/i.test(message)) {
-    return OUT_OF_MEMORY_HINT;
-  }
+  if (isOutOfMemoryError(err)) return OUT_OF_MEMORY_HINT;
   return `Could not read this SKP file (${message || 'unknown error'}). It may use an SKP version or feature that isn't supported yet. Exporting it from SketchUp as glTF/GLB or DAE is a reliable alternative.`;
 }
 
@@ -40,11 +42,18 @@ function readSkpToGlbHere(buffer: ArrayBuffer, onProgress?: (p: SkpImportProgres
   };
   let glb: Uint8Array;
   try {
-    glb = toInstancedGLB(buildInstancedScene(buffer, options));
-  } catch {
-    glb = toGLB(buildScene(buffer, options));
+    glb = readSkpToGlbLean(buffer, options);
+  } catch (leanError) {
+    if (isOutOfMemoryError(leanError)) throw leanError;
+    if (!(leanError instanceof LeanSkpUnsupported)) console.warn('[SkpService] Low-memory reader could not read this file, trying the standard reader', leanError);
+    try {
+      glb = toInstancedGLB(buildInstancedScene(buffer, options));
+    } catch (instancedError) {
+      if (isOutOfMemoryError(instancedError)) throw instancedError;
+      glb = toGLB(buildScene(buffer, options));
+    }
   }
-  return glb.slice().buffer as ArrayBuffer;
+  return (glb.byteOffset === 0 && glb.byteLength === glb.buffer.byteLength ? glb.buffer : glb.slice().buffer) as ArrayBuffer;
 }
 
 /** Reads a .skp into a GLB in a worker, so the page stays responsive and can show progress. */
