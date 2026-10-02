@@ -116,8 +116,8 @@ function bedGeometry(p: FurnitureSize): THREE.BufferGeometry {
   if (dressed) {
     const pw = Math.min(0.62, mattW * 0.42);
     for (const x of [-1, 1]) {
-      parts.push(padded(pw, 0.15, 0.42, x * (pw / 2 + 0.04), top + 0.1, -p.depth / 2 + 0.34, { role: 'pillow', rotation: [-0.2, 0, 0], radius: 0.07 }));
-      parts.push(padded(pw * 0.72, 0.1, 0.3, x * (pw * 0.4), top + 0.25, -p.depth / 2 + 0.7, { role: 'scatter', rotation: [-0.95, x * 0.22, 0], accent: true, radius: 0.055 }));
+      parts.push(padded(pw, 0.15, 0.42, x * (pw / 2 + 0.04), top + 0.1, -p.depth / 2 + 0.34, { role: 'pillow', rotation: [0.2, 0, 0], radius: 0.07 }));
+      parts.push(padded(pw * 0.72, 0.1, 0.3, x * (pw * 0.4), top + 0.27, -p.depth / 2 + 0.62, { role: 'scatter', rotation: [0.95, -x * 0.18, 0], accent: true, radius: 0.055 }));
     }
     // A folded throw across the foot of the bed.
     parts.push(padded(p.width * 0.94, 0.05, 0.5, 0, top + 0.2, p.depth / 2 - 0.3, { role: 'throw', accent: true, radius: 0.024, edge: Math.min(0.95, mattW / (p.width * 0.94)), fineBeyond: Math.min(0.95, mattW / (p.width * 0.94)) - 0.02 }));
@@ -152,7 +152,7 @@ function sofaGeometry(p: FurnitureSize): THREE.BufferGeometry {
   if (dressed) {
     const sc = Math.min(0.42, inner / 2.4 + 0.1);
     const spots = p.width >= 1.7 ? [-1, 1] : [1];
-    for (const side of spots) parts.push(padded(sc, 0.13, sc, side * (inner / 2 - sc / 2 - 0.02), p.seatHeight + 0.16, -p.depth / 2 + 0.36, { role: 'scatter', rotation: [-1.0, side * 0.3, side * 0.12], accent: true, radius: 0.058 }));
+    for (const side of spots) parts.push(padded(sc, 0.13, sc, side * (inner / 2 - sc / 2 - 0.02), p.seatHeight + 0.2, -p.depth / 2 + 0.5, { role: 'scatter', rotation: [1.0, -side * 0.25, 0], accent: true, radius: 0.058 }));
     if (p.width >= 1.9) {
       // A throw laid over one seat and arm, hanging down the outside.
       const x0 = p.width / 2 - arm;
