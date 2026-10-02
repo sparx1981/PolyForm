@@ -7,6 +7,7 @@ import {
   type InteriorFurnitureType,
 } from './parametricFurniture';
 import type { SpatialRoom } from '../spatial/rooms';
+import { wallRect } from '../buildingRoofs';
 import {
   placementCollisions,
   clearanceFootprint,
@@ -27,7 +28,7 @@ export interface FurnishingPlan {
   unplaced: InteriorFurnitureType[];
 }
 
-interface PresetItem {
+export interface PresetItem {
   type: InteriorFurnitureType;
   params?: FurnitureParams;
   /** Widths to try, widest first, so a run of units fills as much of the wall as fits. */
@@ -203,6 +204,22 @@ function candidateFootprint(
 
 type Candidate = { position: [number, number, number]; yaw: number; wallId?: string };
 
+/**
+ * Which way the room is from a wall's window: the unit normal pointing into the room, and the wall's thickness.
+ * Found by testing which side of the wall lies inside the room's outline, so it does not depend on how the wall was
+ * drawn (rotated, reversed, or built along z with its length and thickness swapped). Null when neither side, or both
+ * sides, are inside the room (the window is not on this room's boundary).
+ */
+export function roomSideOfWall(wall: Shape, window: Shape, room: SpatialRoom): { nx: number; nz: number; thickness: number } | null {
+  const { rect, thickness } = wallRect(wall);
+  const tx = rect[2]![0] - rect[1]![0], tz = rect[2]![1] - rect[1]![1], length = Math.hypot(tx, tz) || 1;
+  const nx = tx / length, nz = tz / length, reach = thickness / 2 + 0.3;
+  const inside = (sign: number) => pointInPolygon([window.position[0] + nx * reach * sign, window.position[2] + nz * reach * sign], room.boundary);
+  const a = inside(1), b = inside(-1);
+  if (a === b) return null;
+  return a ? { nx, nz, thickness } : { nx: -nx, nz: -nz, thickness };
+}
+
 function boundaryCentroid(room: SpatialRoom): [number, number] {
   const n = room.boundary.length || 1;
   return [room.boundary.reduce((sum, p) => sum + p[0], 0) / n, room.boundary.reduce((sum, p) => sum + p[1], 0) / n];
@@ -223,7 +240,16 @@ function fitsRoom(f: OrientedFootprint, room: SpatialRoom): boolean {
   return true;
 }
 
-export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoom, preset: FurnishingPreset): FurnishingPlan {
+export interface PlanOptions {
+  /** Plan exactly these pieces instead of the preset's own list (the gallery adds one at a time). */
+  items?: PresetItem[];
+  /** Leave windows undressed (default: dress them as the preset says). */
+  curtains?: boolean;
+  /** Pieces already in the room a new one can relate to: a chair finds a desk or table that is already there. */
+  anchors?: readonly Shape[];
+}
+
+export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoom, preset: FurnishingPreset, options: PlanOptions = {}): FurnishingPlan {
   const walls = allShapes.filter(s => room.boundaryWallIds.includes(s.id) && s.type === 'wall' && !s.hidden)
     .sort((a,b) => Number(b.args?.[0]) - Number(a.args?.[0]));
   const placedBefore = allShapes.filter(s => !s.hidden && Math.abs(s.position[1] - room.elevation) < 2.8);
@@ -247,27 +273,25 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
   };
 
   // Each actual window receives its own treatment, on the room-facing side only.
-  if (CURTAIN_PRESETS.has(preset)) for (const window of allShapes.filter(s => s.type === 'window' && !s.hidden && room.openingIds.includes(s.id))) {
+  if (options.curtains !== false && !options.items && CURTAIN_PRESETS.has(preset)) for (const window of allShapes.filter(s => s.type === 'window' && !s.hidden && room.openingIds.includes(s.id))) {
     if (allShapes.some(s => !s.hidden && s.customData?.windowId === window.id && s.customData?.semanticComponent?.roomId === room.id)) continue;
     const wall = walls.find(w => w.id === window.hostWallId);
     if (!wall || !Array.isArray(window.args)) continue;
-    const angle = rotationY(wall), nx = Math.sin(angle), nz = Math.cos(angle);
+    // Curtains hang on the room's side of the wall, whichever way the wall or window happens to be rotated.
+    const side = roomSideOfWall(wall, window, room);
+    if (!side) continue;
     const width = Number(window.args[0]) + 0.32;
     const top = window.position[1] + Number(window.args[1]) / 2 + 0.15;
     const height = top - room.elevation - 0.025;
     if (!(height > 0.3 && height < 6)) continue;
-    const offset = Number(wall.args?.[2] ?? 0.2) / 2 + 0.15;
-    let dressed = false;
-    for (const side of [1, -1]) {
-      const curtain = createInteriorFurnitureShape('curtain', {
-        position: [window.position[0] + nx*offset*side, room.elevation + 0.025, window.position[2] + nz*offset*side],
-        rotationY: angle + (side < 0 ? Math.PI : 0), roomId: room.id,
-        params: { width, height, openAmount: 0.65, depth: 0.18 },
-      });
-      curtain.customData.windowId = window.id;
-      if (add(curtain, window.id)) { dressed = true; break; }
-    }
-    if (!dressed) unplaced.push('curtain');
+    const offset = side.thickness / 2 + 0.15;
+    const curtain = createInteriorFurnitureShape('curtain', {
+      position: [window.position[0] + side.nx * offset, room.elevation + 0.025, window.position[2] + side.nz * offset],
+      rotationY: Math.atan2(side.nx, side.nz), roomId: room.id,
+      params: { width, height, openAmount: 0.65, depth: 0.18 },
+    });
+    curtain.customData.windowId = window.id;
+    if (!add(curtain, window.id)) unplaced.push('curtain');
   }
 
   const chaired = new Set<string>();
@@ -276,7 +300,8 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
   const openingsOf = (kind: 'door' | 'window') => allShapes.filter(s => s.type === kind && !s.hidden && room.openingIds.includes(s.id));
   const context: RoomContext = { area: room.areaM2, minSide: Math.min(...room.size), maxSide: Math.max(...room.size), doors: openingsOf('door').length, windows: openingsOf('window').length };
   const rules = PRESETS[preset];
-  const presetItems = typeof rules === 'function' ? rules(context) : rules;
+  const presetItems = options.items ?? (typeof rules === 'function' ? rules(context) : rules);
+  const anchorPool = () => [...planned, ...(options.anchors ?? [])];
   const doorWalls = new Map<string, number>(), windowWalls = new Map<string, number>();
   for (const door of openingsOf('door')) if (door.hostWallId) doorWalls.set(door.hostWallId, (doorWalls.get(door.hostWallId) ?? 0) + 1);
   for (const window of openingsOf('window')) if (window.hostWallId) windowWalls.set(window.hostWallId, (windowWalls.get(window.hostWallId) ?? 0) + 1);
@@ -295,14 +320,14 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
       let areaClearance: PlacementProfileClearance | undefined;
 
       if (type === 'office-chair') {
-        const desk = planned.find(s => s.customData.furnitureType === 'desk' && !chaired.has(s.id));
+        const desk = anchorPool().find(s => s.customData.furnitureType === 'desk' && !chaired.has(s.id));
         if (!desk) { skip = true; break; }
         const yaw = rotationY(desk), c = Math.cos(yaw), s = Math.sin(yaw);
         const deskDepth = Number(desk.customData.semanticComponent.params.depth ?? 0.8);
         for (const [x, z] of [[0, deskDepth / 2 + size.depth / 2 + 0.07], [0.25, deskDepth / 2 + size.depth / 2 + 0.07], [-0.25, deskDepth / 2 + size.depth / 2 + 0.07]] as const)
           candidates.push({ position: [desk.position[0] + c * x + s * z, room.elevation, desk.position[2] - s * x + c * z], yaw: yaw + Math.PI, wallId: desk.id });
       } else if (type === 'dining-chair') {
-        const table = planned.find(s => s.customData.furnitureType === 'dining-table');
+        const table = anchorPool().find(s => s.customData.furnitureType === 'dining-table');
         if (!table) { skip = true; break; }
         const yaw = rotationY(table), c = Math.cos(yaw), s = Math.sin(yaw);
         const tw = Number(table.customData.semanticComponent.params.width ?? 1.4), td = Number(table.customData.semanticComponent.params.depth ?? 0.85);
@@ -324,7 +349,7 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
         const alongX = room.size[0] >= room.size[1];
         for (const [x, z] of spots.slice(0, 80)) for (const yaw of alongX ? [0, Math.PI / 2] : [Math.PI / 2, 0]) candidates.push({ position: [x, room.elevation, z], yaw });
       } else {
-        const anchor = planned.find(s => s.customData.furnitureType === (type === 'nightstand' && preset === 'bedroom' ? 'bed' : 'sofa'));
+        const anchor = anchorPool().find(s => s.customData.furnitureType === (type === 'nightstand' ? 'bed' : 'sofa'));
         if (anchor && (type === 'nightstand' || type === 'coffee-table' || type === 'armchair' || type === 'side-table')) {
           const yaw = rotationY(anchor), c = Math.cos(yaw), s = Math.sin(yaw);
           // Offsets follow the sofa's actual size, so a smaller sofa gets chairs and tables close to it.

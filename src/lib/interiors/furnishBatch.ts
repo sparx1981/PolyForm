@@ -1,6 +1,7 @@
 import type { Shape } from '../../types';
 import type { SpatialRoom } from '../spatial/rooms';
-import { planRoomFurnishing, pointInPolygonOrNear, type FurnishingPreset } from './smartFurnish';
+import { planRoomFurnishing, pointInPolygonOrNear, type FurnishingPreset, type PresetItem } from './smartFurnish';
+import type { InteriorFurnitureType } from './parametricFurniture';
 import { bakeSemanticSimulation } from './bakeSimulation';
 import { planRoomLighting, lightingTypeForPreset } from './roomLighting';
 
@@ -47,4 +48,25 @@ export function furnishRooms(shapes: readonly Shape[], rooms: readonly SpatialRo
     results.push({ roomId: room.id, placed: inserted.length, removed: removed.length, skipped: plan.unplaced.length, lights });
   }
   return { shapes: next, results };
+}
+
+/**
+ * Adds one piece from the gallery to a room, using the same placement rules as furnishing: against a wall for
+ * wall-hosted pieces, clear of doors and other furniture, related to what is already there (a chair goes to a desk
+ * or table in the room, a bedside table to the bed). Pieces that need no wall (or a chair with no desk or table to
+ * go to) stand in open floor space instead. `placed` is false when nothing fits.
+ */
+export function addFurnitureToRoom(shapes: readonly Shape[], room: SpatialRoom, rooms: readonly SpatialRoom[], type: InteriorFurnitureType, relax: boolean) {
+  const anchors = furnishingsInRoom(shapes, room, rooms);
+  const attempts: PresetItem[] = [{ type }, { type, free: { clearance: 0.35 } }, { type, free: { clearance: 0.1 } }];
+  for (const item of attempts) {
+    const plan = planRoomFurnishing(shapes, room, 'storage', { items: [item], curtains: false, anchors });
+    if (!plan.shapes.length) continue;
+    const added = relax ? plan.shapes.map(shape => {
+      const sim = shape.customData?.semanticComponent?.simulation;
+      return sim?.bakeable ? bakeSemanticSimulation(shape, sim.type === 'cloth' ? 0.32 : 0.42) : shape;
+    }) : plan.shapes;
+    return { shapes: [...shapes, ...added], placed: true, added };
+  }
+  return { shapes: [...shapes], placed: false, added: [] as Shape[] };
 }

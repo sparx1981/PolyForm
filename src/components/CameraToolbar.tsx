@@ -3,12 +3,13 @@ import { Aperture, RotateCcw, Crop, Footprints, Orbit, Hand, Eye, ZoomIn, Slice,
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
 import { cn } from '../lib/utils';
+import { presentation, usePresentation } from '../lib/presentation/store';
 import { FlyoutPortal } from './ui/FlyoutPortal';
 
 const FlyoutSideContext = createContext<'right' | 'bottom'>('right');
 
 interface CameraToolButtonProps {
-  tool: ToolType | 'reset_camera';
+  tool: ToolType | 'reset_camera' | 'glass';
   icon: React.ReactNode;
   label: string;
   subtitle: string;
@@ -75,6 +76,7 @@ interface CameraToolbarProps {
 }
 
 export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}) {
+  const { glassOn } = usePresentation();
   const horizontal = dock !== 'left';
   const flyoutSide: 'right' | 'bottom' = horizontal ? 'bottom' : 'right';
   const { 
@@ -174,10 +176,12 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
           tool="glass"
           icon={<ScanSearch size={19} />}
           label="Glass Lens"
-          subtitle="A refracting magnifier: drag it over a detail, or let it follow the cursor"
+          subtitle="Toggle a refracting magnifier on or off; it stays on while you use other tools"
+          isActive={glassOn}
           onClick={() => {
-            setActiveTool('glass');
-            if (isToolModifierDocked && !rightPanelVisible) setRightPanelVisible(true);
+            const on = !presentation.get().glassOn;
+            presentation.set({ glassOn: on });
+            if (on && isToolModifierDocked && !rightPanelVisible) setRightPanelVisible(true);
           }}
         />
 

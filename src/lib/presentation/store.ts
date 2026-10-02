@@ -20,6 +20,8 @@ export interface PresentationState extends GlassSettings {
   cutFlip: boolean;
   xray: boolean;
   loupe: boolean;
+  /** The Camera toolbar's Glass is switched on (it works alongside any tool); never saved. */
+  glassOn: boolean;
   loupeZoom: number;
   loupeRadius: number;
   loupePosition: [number, number];
@@ -62,6 +64,7 @@ export const INITIAL_PRESENTATION: PresentationState = {
   cutFlip: false,
   xray: false,
   loupe: false,
+  glassOn: false,
   loupeZoom: 2.5,
   loupeRadius: 110,
   loupePosition: [0.5, 0.45],
@@ -105,7 +108,7 @@ export const presentation = {
   /** Everything back to normal (effects off), keeping `active` as given. */
   reset(active = state.active) {
     // The glass look and its lens size, zoom and follow setting are preferences, not effects, so they stay.
-    const keep = Object.fromEntries([...GLASS_KEYS, 'loupeZoom', 'loupeRadius'].map(key => [key, (state as any)[key]]));
+    const keep = Object.fromEntries([...GLASS_KEYS, 'loupeZoom', 'loupeRadius', 'glassOn'].map(key => [key, (state as any)[key]]));
     state = { ...INITIAL_PRESENTATION, ...keep, active, bounds: state.bounds, storeys: state.storeys, buildSeconds: state.buildSeconds };
     listeners.forEach(l => l());
   },

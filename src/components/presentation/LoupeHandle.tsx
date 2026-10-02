@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { presentation, usePresentation } from '../../lib/presentation/store';
-import { useApp } from '../../AppContext';
 import { glassDimensions } from '../../lib/presentation/glass';
 
 /**
@@ -52,7 +51,6 @@ export default function LoupeHandle() {
 
 /** The Camera toolbar's Glass tool: the same draggable handle, shown while that tool is active outside Presentation mode. */
 export function GlassToolHandle() {
-    const { activeTool } = useApp();
-    const presenting = usePresentation().active;
-    return activeTool === 'glass' && !presenting ? <LoupeHandle /> : null;
+    const { active, glassOn } = usePresentation();
+    return glassOn && !active ? <LoupeHandle /> : null;
 }

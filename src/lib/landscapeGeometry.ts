@@ -1181,22 +1181,31 @@ function createChandelierGeometry(height: number): THREE.BufferGeometry {
   return safeMergeGeometries(geometries, '#b45309');
 }
 
+/**
+ * A recessed downlight in its own frame: y = 0 is the underside of the ceiling it sits in. Only the trim ring and the
+ * lens show below that plane; the can stands above it, inside the ceiling slab (a slab is at least 15 cm thick, the
+ * can is 11 cm). The light itself comes from just below the lens (see getLampLightAnchor) so no part of the fixture
+ * can sit between it and the room.
+ */
+export const RECESSED_TRIM_DROP = 0.01;
+export const RECESSED_CAN_HEIGHT = 0.11;
 function createRecessedDownlightGeometry(): THREE.BufferGeometry {
   const geometries: THREE.BufferGeometry[] = [];
 
-  const trim = new THREE.CylinderGeometry(0.09, 0.1, 0.015, 20);
+  const trim = new THREE.CylinderGeometry(0.1, 0.1, RECESSED_TRIM_DROP, 24);
+  trim.translate(0, -RECESSED_TRIM_DROP / 2, 0);
   geometries.push(trim);
 
-  const can = new THREE.CylinderGeometry(0.075, 0.08, 0.12, 20);
-  can.translate(0, 0.06, 0);
+  const can = new THREE.CylinderGeometry(0.075, 0.075, RECESSED_CAN_HEIGHT, 20);
+  can.translate(0, RECESSED_CAN_HEIGHT / 2, 0);
   geometries.push(can);
 
-  const lens = new THREE.CylinderGeometry(0.065, 0.065, 0.01, 20);
-  lens.translate(0, -0.01, 0);
+  const lens = new THREE.CylinderGeometry(0.058, 0.058, 0.004, 20);
+  lens.translate(0, -RECESSED_TRIM_DROP - 0.002 + 0.0005, 0);
   applyGeometryVertexColors(lens, '#fffaf0');
   geometries.push(lens);
 
-  return safeMergeGeometries(geometries, '#e7e5e4');
+  return safeMergeGeometries(geometries, '#f1efe9');
 }
 
 function createTrackLightGeometry(): THREE.BufferGeometry {
@@ -1473,7 +1482,8 @@ export function getLampLightAnchor(height: number = 3.2, style: string = 'classi
     case 'solar-path': return [0, solarPathPostHeight(height) + 0.02, 0];
     case 'pendant': { const d = pendantDrop(height); return [0, -d - 0.14, 0]; }
     case 'chandelier': { const d = chandelierDrop(height); return [0, -d * 0.6, 0]; }
-    case 'recessed': return [0, -0.01, 0];
+    // Just below the lens, in open air, so neither the trim nor the lens can shadow the beam.
+    case 'recessed': return [0, -RECESSED_TRIM_DROP - 0.012, 0];
     case 'track': return [0, -0.09, 0];
     case 'floor-lamp': { const h = floorLampHeight(height); return [0, h - 0.13, 0]; }
     case 'desk-lamp': { const h = deskLampHeight(height); return [h * 0.62, h * 0.88, 0]; }

@@ -6,6 +6,7 @@ import WorldViewPanel from './WorldView';
 import { SectionToolPanel } from './SectionToolPanel';
 import { CameraTypePanel } from './CameraTypePanel';
 import { GlassSettingsPanel } from './presentation/GlassSettingsPanel';
+import { presentation, usePresentation } from '../lib/presentation/store';
 import { Settings, Info, Zap, RotateCw, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Spline, Hexagon, Lasso, SquareDashed, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe, Slice, ScanSearch, Camera } from 'lucide-react';
 import { buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
@@ -103,13 +104,14 @@ export const ToolModifierPalette: React.FC = () => {
     'scale_figure',
     'clipping',
     'section'
-    , 'glass'
     , 'camera_type'
     , 'lamp'
     , 'worldview'
   ].includes(activeTool);
 
-  if (!hasSettings) return null;
+  // The Glass works alongside any tool, so its settings show whatever tool is active.
+  const glassOn = usePresentation().glassOn;
+  if (!hasSettings && !glassOn) return null;
 
   const handleCloseRoom = () => {
     // 1. Dispatch custom event so Viewport cleanly closes the active in-flight wall loop
@@ -262,8 +264,6 @@ export const ToolModifierPalette: React.FC = () => {
             <Slice size={14} className="text-sky-500" />
           ) : activeTool === 'camera_type' ? (
             <Camera size={14} className="text-sky-500" />
-          ) : activeTool === 'glass' ? (
-            <ScanSearch size={14} className="text-sky-500" />
           ) : activeTool === 'worldview' ? (
             <Globe size={14} className="text-polyform-blue" />
           ) : activeTool === 'lamp' ? (
@@ -276,7 +276,7 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-polyform-blue" />
           )}
           <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 dark:text-gray-100">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'worldview' ? 'WorldView Modifiers' : activeTool === 'section' ? 'Section Plane Modifiers' : activeTool === 'glass' ? 'Glass Modifiers' : activeTool === 'camera_type' ? 'Camera Type' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'worldview' ? 'WorldView Modifiers' : activeTool === 'section' ? 'Section Plane Modifiers' : !hasSettings ? 'Glass Modifiers' : activeTool === 'camera_type' ? 'Camera Type' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -308,7 +308,6 @@ export const ToolModifierPalette: React.FC = () => {
         {activeTool === 'worldview' && <WorldViewPanel />}
         {activeTool === 'section' && <SectionToolPanel />}
         {activeTool === 'camera_type' && <CameraTypePanel />}
-        {activeTool === 'glass' && <GlassSettingsPanel tone="themed" follow />}
         {activeTool === 'wall' && (
           <div className="space-y-3">
             {/* Justification Selector */}
@@ -962,6 +961,19 @@ export const ToolModifierPalette: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {glassOn && (
+          <div className={cn('space-y-3', hasSettings && 'pt-3 border-t border-gray-200 dark:border-gray-700')}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-700 dark:text-gray-100">
+                <ScanSearch size={14} className="text-sky-500" />Glass
+              </div>
+              <button type="button" onClick={() => presentation.set({ glassOn: false })}
+                className="text-[10px] font-semibold text-gray-500 hover:text-gray-800 dark:hover:text-gray-100 underline">Turn off</button>
+            </div>
+            <GlassSettingsPanel tone="themed" follow />
           </div>
         )}
       </div>

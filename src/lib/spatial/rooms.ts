@@ -182,6 +182,108 @@ function convexHull(points: Array<[number, number]>): Array<[number, number]> {
   return lower.concat(upper);
 }
 
+
+type V2 = [number, number];
+const area2 = (poly: V2[]) => poly.reduce((s, p, i) => { const q = poly[(i + 1) % poly.length]!; return s + p[0] * q[1] - q[0] * p[1]; }, 0);
+
+/** Outer outline of a set of raster cells, as a counter-clockwise polygon on the cell grid's corners. */
+function traceCellOutline(cells: number[], nx: number, nz: number, minX: number, minZ: number, cell: number): V2[] {
+  const inside = new Uint8Array(nx * nz);
+  for (const k of cells) inside[k] = 1;
+  const has = (i: number, j: number) => i >= 0 && j >= 0 && i < nx && j < nz && inside[j * nx + i] === 1;
+  const out = new Map<number, number[]>();
+  const vertex = (i: number, j: number) => j * (nx + 1) + i;
+  const edge = (a: number, b: number) => { const list = out.get(a); if (list) list.push(b); else out.set(a, [b]); };
+  for (const k of cells) {
+    const i = k % nx, j = (k - i) / nx;
+    if (!has(i, j - 1)) edge(vertex(i, j), vertex(i + 1, j));
+    if (!has(i + 1, j)) edge(vertex(i + 1, j), vertex(i + 1, j + 1));
+    if (!has(i, j + 1)) edge(vertex(i + 1, j + 1), vertex(i, j + 1));
+    if (!has(i - 1, j)) edge(vertex(i, j + 1), vertex(i, j));
+  }
+  const point = (v: number): V2 => { const i = v % (nx + 1); return [minX + i * cell, minZ + ((v - i) / (nx + 1)) * cell]; };
+  let best: V2[] = [];
+  for (const [start, first] of out) {
+    if (!first.length) continue;
+    const loop: V2[] = [];
+    let v = start;
+    for (let guard = 0; guard < out.size * 4 + 8; guard++) {
+      const nextList = out.get(v);
+      if (!nextList?.length) break;
+      loop.push(point(v));
+      v = nextList.pop()!;
+      if (v === start) break;
+    }
+    if (loop.length >= 3 && Math.abs(area2(loop)) > Math.abs(area2(best))) best = loop;
+  }
+  if (area2(best) < 0) best.reverse();
+  return best;
+}
+
+/** Drops vertices that lie on the line between their neighbours. */
+function dropCollinear(poly: V2[], tolerance = 1e-9): V2[] {
+  return poly.filter((p, i) => {
+    const a = poly[(i + poly.length - 1) % poly.length]!, b = poly[(i + 1) % poly.length]!;
+    return Math.abs((p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0])) > tolerance;
+  });
+}
+
+function distanceToLine(p: V2, a: V2, b: V2): number {
+  const dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
+  return len < 1e-12 ? Math.hypot(p[0] - a[0], p[1] - a[1]) : Math.abs((p[0] - a[0]) * dz - (p[1] - a[1]) * dx) / len;
+}
+
+/** Ramer-Douglas-Peucker on a closed polygon: straightens the stair-steps a raster leaves along a diagonal wall. */
+function simplifyClosed(poly: V2[], epsilon: number): V2[] {
+  if (poly.length < 4) return poly;
+  let far = 0, farDistance = -1;
+  for (let i = 1; i < poly.length; i++) { const d = Math.hypot(poly[i]![0] - poly[0]![0], poly[i]![1] - poly[0]![1]); if (d > farDistance) { farDistance = d; far = i; } }
+  const open = (points: V2[]): V2[] => {
+    if (points.length < 3) return points;
+    const a = points[0]!, b = points[points.length - 1]!;
+    let index = 0, worst = 0;
+    for (let i = 1; i < points.length - 1; i++) { const d = distanceToLine(points[i]!, a, b); if (d > worst) { worst = d; index = i; } }
+    if (worst <= epsilon) return [a, b];
+    return [...open(points.slice(0, index + 1)).slice(0, -1), ...open(points.slice(index))];
+  };
+  const first = open(poly.slice(0, far + 1)), second = open([...poly.slice(far), poly[0]!]);
+  return [...first.slice(0, -1), ...second.slice(0, -1)];
+}
+
+/** Moves every edge of a counter-clockwise polygon inwards by `amount`, joining neighbouring edges at their meeting point. */
+function insetOutline(poly: V2[], amount: number): V2[] {
+  const n = poly.length;
+  const lines = poly.map((p, i) => {
+    const q = poly[(i + 1) % n]!, dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz) || 1;
+    return { point: [p[0] - (dz / len) * amount, p[1] + (dx / len) * amount] as V2, dir: [dx / len, dz / len] as V2 };
+  });
+  const result: V2[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = lines[(i + n - 1) % n]!, b = lines[i]!;
+    const cross = a.dir[0] * b.dir[1] - a.dir[1] * b.dir[0];
+    if (Math.abs(cross) < 1e-9) { result.push(b.point); continue; }
+    const t = ((b.point[0] - a.point[0]) * b.dir[1] - (b.point[1] - a.point[1]) * b.dir[0]) / cross;
+    result.push([a.point[0] + a.dir[0] * t, a.point[1] + a.dir[1] * t]);
+  }
+  return result;
+}
+
+/**
+ * The room's outline: the edge of its free floor traced from the raster, so an L-shaped room is an L (not the
+ * convex hull that filled its notch), straightened along diagonal walls and drawn through the cell centres, the same
+ * distance from the walls as before. Falls back to the hull if the trace degenerates.
+ */
+function roomOutline(cells: number[], centres: V2[], nx: number, nz: number, minX: number, minZ: number, cell: number): V2[] {
+  try {
+    const traced = simplifyClosed(dropCollinear(traceCellOutline(cells, nx, nz, minX, minZ, cell)), Math.max(cell * 1.5, 0.1));
+    const clean = dropCollinear(traced, 1e-9);
+    if (clean.length < 3) return convexHull(centres);
+    const inset = insetOutline(clean, cell / 2);
+    if (inset.length < 3 || area2(inset) <= 0 || inset.some(p => !Number.isFinite(p[0]) || !Number.isFinite(p[1]))) return convexHull(centres);
+    return inset;
+  } catch { return convexHull(centres); }
+}
+
 /** Detect enclosed rooms from visible walls. */
 export function detectRooms(shapes: Shape[], options: RoomDetectionOptions = {}): SpatialRoom[] {
   const cell = Math.max(0.02, options.cell ?? DEFAULT_CELL);
@@ -269,9 +371,7 @@ export function detectRooms(shapes: Shape[], options: RoomDetectionOptions = {})
         .map(o => o.id)
         .sort();
 
-      // Hull is intentionally an approximation for the first reusable spatial
-      // milestone. Exact wall-face polygonisation will replace it later.
-      const boundary = convexHull(centres);
+      const boundary = roomOutline(cells, centres, nx, nz, minX, minZ, cell);
       const xs = centres.map(p => p[0]), zs = centres.map(p => p[1]);
       const size: [number, number] = [
         Math.max(...xs) - Math.min(...xs) + cell,

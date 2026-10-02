@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { 
   DOOR_STYLES, 
+  DOOR_TAGS,
+  type DoorTag,
   WINDOW_STYLES, 
   STAIR_STYLES, 
   WALL_STYLES,
@@ -301,6 +303,86 @@ function StyleDiagram({ style }: { style: ArchStyleDef }) {
             <circle cx="20" cy="152" r="3" fill="#0284c7" />
             <line x1="20" y1="8" x2="20" y2="152" stroke="#0284c7" strokeWidth="1" strokeDasharray="3 3" />
             <rect x="78" y="25" width="3" height="105" fill="#64748b" rx="1" />
+          </svg>
+        );
+      case 'garage-sectional':
+      case 'garage-sectional-glazed': {
+        const glazed = style.id === 'garage-sectional-glazed';
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <rect x="6" y="20" width="88" height="130" fill="#f1f5f9" stroke="currentColor" strokeWidth="3" />
+            {[0, 1, 2, 3].map(i => (
+              <g key={i}>
+                <rect x="9" y={23 + i * 31} width="82" height="29" fill={glazed && i === 0 ? '#e0f2fe' : '#e2e8f0'} stroke="currentColor" strokeWidth="1.2" />
+                {[0, 1, 2].map(k => glazed && i === 0
+                  ? <rect key={k} x={13 + k * 27} y={30} width="22" height="14" fill="#7dd3fc" fillOpacity="0.6" stroke="currentColor" strokeWidth="1" />
+                  : <rect key={k} x={13 + k * 27} y={28 + i * 31} width="22" height="19" fill="#f8fafc" stroke="currentColor" strokeWidth="0.8" />)}
+              </g>
+            ))}
+            <rect x="42" y="68" width="16" height="3" fill="#475569" />
+            <path d="M 6,14 L 94,14" stroke="currentColor" strokeWidth="2" strokeDasharray="4 3" />
+          </svg>
+        );
+      }
+      case 'garage-canopy':
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <rect x="6" y="20" width="88" height="130" fill="#f8fafc" stroke="currentColor" strokeWidth="3" />
+            {Array.from({ length: 12 }, (_, i) => <line key={i} x1={12 + i * 7} y1="38" x2={12 + i * 7} y2="132" stroke="currentColor" strokeWidth="1.2" opacity="0.6" />)}
+            <rect x="9" y="23" width="82" height="12" fill="#e2e8f0" stroke="currentColor" strokeWidth="1" />
+            <rect x="9" y="135" width="82" height="12" fill="#e2e8f0" stroke="currentColor" strokeWidth="1" />
+            <rect x="42" y="82" width="16" height="6" fill="#475569" rx="1" />
+            <path d="M 94,20 L 80,6" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" />
+          </svg>
+        );
+      case 'garage-roller':
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <rect x="4" y="12" width="92" height="22" fill="#cbd5e1" stroke="currentColor" strokeWidth="2" rx="2" />
+            <rect x="6" y="34" width="6" height="118" fill="#94a3b8" stroke="currentColor" strokeWidth="1.5" />
+            <rect x="88" y="34" width="6" height="118" fill="#94a3b8" stroke="currentColor" strokeWidth="1.5" />
+            {Array.from({ length: 14 }, (_, i) => <rect key={i} x="12" y={36 + i * 8.2} width="76" height="7" fill="#f1f5f9" stroke="currentColor" strokeWidth="0.8" />)}
+            <rect x="12" y="148" width="76" height="5" fill="#475569" />
+          </svg>
+        );
+      case 'garage-carriage':
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <rect x="4" y="10" width="92" height="144" fill="#f8fafc" stroke="currentColor" strokeWidth="3" />
+            <line x1="50" y1="10" x2="50" y2="154" stroke="currentColor" strokeWidth="2" />
+            {[8, 54].map(x => (
+              <g key={x}>
+                <rect x={x + 4} y="20" width="34" height="42" fill="#bae6fd" fillOpacity="0.5" stroke="currentColor" strokeWidth="1.5" />
+                <line x1={x + 21} y1="20" x2={x + 21} y2="62" stroke="currentColor" strokeWidth="1" />
+                <line x1={x + 4} y1="41" x2={x + 38} y2="41" stroke="currentColor" strokeWidth="1" />
+                <rect x={x + 4} y="72" width="34" height="68" fill="#e2e8f0" stroke="currentColor" strokeWidth="1.5" />
+                <line x1={x + 4} y1="72" x2={x + 38} y2="140" stroke="currentColor" strokeWidth="2" />
+                <line x1={x + 38} y1="72" x2={x + 4} y2="140" stroke="currentColor" strokeWidth="2" />
+              </g>
+            ))}
+            <circle cx="46" cy="82" r="3" fill="none" stroke="#0f172a" strokeWidth="1.5" />
+            <circle cx="54" cy="82" r="3" fill="none" stroke="#0f172a" strokeWidth="1.5" />
+          </svg>
+        );
+      case 'workshop-sliding':
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <rect x="2" y="8" width="96" height="5" fill="#1e293b" />
+            <circle cx="30" cy="10" r="3.5" fill="#475569" />
+            <circle cx="70" cy="10" r="3.5" fill="#475569" />
+            <rect x="10" y="16" width="80" height="138" fill="#e2e8f0" stroke="currentColor" strokeWidth="3" />
+            {Array.from({ length: 9 }, (_, i) => <line key={i} x1="16" y1={28 + i * 14} x2="84" y2={28 + i * 14} stroke="currentColor" strokeWidth="1.5" opacity="0.6" />)}
+            <rect x="74" y="72" width="7" height="14" fill="#0f172a" rx="1" />
+          </svg>
+        );
+      case 'workshop-personnel':
+        return (
+          <svg viewBox="0 0 100 160" className="w-full h-32 text-gray-700 dark:text-gray-300">
+            <rect x="14" y="5" width="72" height="150" fill="#e2e8f0" stroke="currentColor" strokeWidth="3" rx="2" />
+            <rect x="34" y="22" width="32" height="46" fill="#7dd3fc" fillOpacity="0.55" stroke="currentColor" strokeWidth="2" />
+            <rect x="20" y="132" width="60" height="18" fill="#cbd5e1" stroke="currentColor" strokeWidth="1" />
+            <line x1="26" y1="88" x2="74" y2="88" stroke="#475569" strokeWidth="3" strokeLinecap="round" />
+            <rect x="22" y="8" width="16" height="5" fill="#475569" />
           </svg>
         );
       case 'archway-square':
@@ -864,11 +946,13 @@ export default function StyleLibraryModal({
 
   if (!isOpen || !targetShape) return null;
 
-  const categories = ['All', ...Array.from(new Set(styles.map(s => s.category)))];
+  // Design categories, then (for doors) where and how they are used.
+  const categories: string[] = ['All', ...Array.from(new Set(styles.map(s => s.category)))];
+  const tagFilters: string[] = DOOR_TAGS.filter(tag => styles.some(s => s.tags?.includes(tag)));
 
   const filteredStyles = activeCategory === 'All'
     ? styles
-    : styles.filter(s => s.category === activeCategory);
+    : styles.filter(s => s.category === activeCategory || s.tags?.includes(activeCategory as DoorTag));
 
   const handleSelectStyle = (style: ArchStyleDef) => {
     setSelectedStyleId(style.id);
@@ -951,7 +1035,7 @@ export default function StyleLibraryModal({
         </div>
 
         {/* Categories Bar */}
-        {categories.length > 2 && (
+        {(categories.length > 2 || tagFilters.length > 0) && (
           <div className="px-6 py-2.5 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2 overflow-x-auto">
             {categories.map((cat) => (
               <button
@@ -965,6 +1049,22 @@ export default function StyleLibraryModal({
                 )}
               >
                 {cat}
+              </button>
+            ))}
+            {tagFilters.length > 0 && <span aria-hidden className="w-px h-5 bg-gray-300 dark:bg-gray-700 mx-1 shrink-0" />}
+            {tagFilters.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setActiveCategory(tag)}
+                aria-pressed={activeCategory === tag}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all border",
+                  activeCategory === tag
+                    ? "bg-polyform-blue text-white border-polyform-blue shadow-sm"
+                    : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                )}
+              >
+                {tag}
               </button>
             ))}
           </div>

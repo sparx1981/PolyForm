@@ -1,3 +1,4 @@
+import { presentation, usePresentation } from '../lib/presentation/store';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { VegetationControls } from './graphics/VegetationControls';
 import {
@@ -119,6 +120,7 @@ interface UnifiedToolRailProps {
 
 export default function UnifiedToolRail({ variant = 'rail', landscape = false, morePanelOpen = false, onMore }: UnifiedToolRailProps = {}) {
   const app = useApp();
+  usePresentation(); // re-render when the Glass is switched on or off
   const {
     theme,
     bannerColor,
@@ -1178,14 +1180,14 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         },
         {
           id: 'glass',
-          tool: 'glass',
           label: 'Glass Lens',
-          subtitle: 'A refracting magnifier glass: drag it over a detail, or let it follow the cursor',
+          subtitle: 'Toggle a refracting magnifier glass on or off; it stays on while you use other tools',
           icon: <ScanSearch size={19} className="text-sky-500 dark:text-sky-400" />,
-          isActive: (s) => s.activeTool === 'glass',
+          isActive: () => presentation.get().glassOn,
           onClick: (s) => {
-            s.setActiveTool('glass');
-            if (s.isToolModifierDocked && !s.rightPanelVisible) s.setRightPanelVisible(true);
+            const on = !presentation.get().glassOn;
+            presentation.set({ glassOn: on });
+            if (on && s.isToolModifierDocked && !s.rightPanelVisible) s.setRightPanelVisible(true);
           },
           keywords: ['glass', 'lens', 'magnify', 'magnifier', 'loupe', 'zoom', 'refraction', 'detail', 'follow cursor']
         },

@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import * as polygonClippingModule from 'polygon-clipping';
 import type { Shape } from '../types';
-import { buildRoofAssemblyForRoom, insetPolygon2D, type RoofParams } from './archRoofGenerator';
+import { buildCeilingSlabForRoom, buildRoofAssemblyForRoom, insetPolygon2D, type RoofParams } from './archRoofGenerator';
 import { tidy, type ExtensionKind } from './extensionRoof';
 import type { V2 } from './roofSurface';
 
@@ -254,6 +254,46 @@ export function buildRoofsForBuilding(shapes: Shape[], params: RoofParams, exten
   return { shapes: out, notes };
 }
 
+/** Thickness of the ceiling slab under a roof: room for a recessed downlight's can (11 cm). */
+export const CEILING_SLAB_THICKNESS = 0.15;
+export const isCeilingSlab = (s: Shape) => !!s.tags?.includes('ceiling-slab');
+
+/** The underside of a slab: what it is, seen from the room below. */
+const slabUnderside = (s: Shape) => s.position[1] - (typeof (s.args as { height?: number } | undefined)?.height === 'number' ? (s.args as { height: number }).height : 0.2) / 2;
+
+/**
+ * A ceiling for every storey nothing is built over (the top storey and any extensions): a thin slab whose
+ * underside is exactly the top of its walls, pulled in to their inside faces. Ceiling lights are placed at that
+ * level, so recessed ones sit with only their trim showing. A storey with a slab already over it (Stack Next
+ * Story's floor slab, or a ceiling from an earlier roofing) is left alone.
+ */
+export function ceilingSlabsFor(shapes: Shape[]): Shape[] {
+  const storeys = storeysOf(shapes);
+  const slabs = shapes.filter(s => s.type === 'poly' && !s.hidden && s.tags?.includes('floor-slab') && !isCeilingSlab(s));
+  const out: Shape[] = [];
+  if (!storeys.length) {
+    // Walls that do not quite close into a room (open corners, a gap) still get one ceiling across them all.
+    const walls = shapes.filter(s => s.type === 'wall' && !s.hidden);
+    if (!walls.length) return out;
+    const top = Math.max(...walls.map(w => w.position[1] + (nums(w)[1] ?? 2.8) / 2));
+    if (slabs.some(s => Math.abs(slabUnderside(s) - top) < 0.05)) return out;
+    const slab = buildCeilingSlabForRoom(walls, CEILING_SLAB_THICKNESS, '#f3f1ec', shapes);
+    if (slab) { slab.name = 'Ceiling Slab (Story 1)'; slab.tags = ['architecture', 'story-1', 'ceiling-slab']; slab.roughness = 0.9; out.push(slab); }
+    return out;
+  }
+  storeys.forEach((storey, index) => {
+    if (storeys.some(other => other !== storey && Math.abs(other.base - storey.top) < LEVEL_GAP)) return;
+    if (slabs.some(s => Math.abs(slabUnderside(s) - storey.top) < 0.05)) return;
+    const slab = buildCeilingSlabForRoom(storey.walls, CEILING_SLAB_THICKNESS, '#f3f1ec', shapes, { wallThickness: storey.wallThickness });
+    if (!slab) return;
+    slab.name = `Ceiling Slab (Story ${index + 1})`;
+    slab.tags = ['architecture', `story-${index + 1}`, 'ceiling-slab'];
+    slab.roughness = 0.9;
+    out.push(slab);
+  });
+  return out;
+}
+
 /** Anything that is part of an existing roof (what the roof buttons replace). */
 export const isExistingRoofPart = (s: Shape) =>
   s.type === 'roof' ||
@@ -278,7 +318,9 @@ export function roofWholeBuilding(shapes: Shape[], params: RoofParams): { shapes
   }
   const roofs = made.filter(s => s.tags?.includes('roof-assembly'));
   const main = roofs.reduce((m, s) => (s.position[1] > m.position[1] ? s : m), roofs[0]);
-  return { shapes: [...shapes.filter(s => !isExistingRoofPart(s)), ...made], roofs, mainRoofId: main.id, notes };
+  // Ceilings are remade with the roof: the walls may have changed since the last one.
+  const kept = shapes.filter(s => !isExistingRoofPart(s) && !isCeilingSlab(s));
+  return { shapes: [...kept, ...made, ...ceilingSlabsFor(kept)], roofs, mainRoofId: main.id, notes };
 }
 
 /** The tile look the Roof panel gives pitched roofs: its texture and the settings it was made from. */

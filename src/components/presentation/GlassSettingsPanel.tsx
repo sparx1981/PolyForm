@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { presentation, usePresentation } from '../../lib/presentation/store';
 import { DEFAULT_GLASS, GLASS_KEYS, GLASS_PROFILES, type GlassSettings } from '../../lib/presentation/glass';
 import { cn } from '../../lib/utils';
@@ -56,6 +58,8 @@ export function GlassSettingsPanel({ tone = 'dark', follow = false }: { tone?: T
   const set = (patch: Parameters<typeof presentation.set>[0]) => presentation.set(patch);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const rounded = s.loupeShape === 'rounded';
+  // Everything from Refraction down is for fine-tuning, so it starts folded away.
+  const [advanced, setAdvanced] = useState(false);
   const row = (label: string, key: keyof GlassSettings & ('loupeAspect' | 'loupeRoundness' | 'glassBezel' | 'glassThickness' | 'glassIndex' | 'glassRefraction' | 'glassChromatic' | 'glassSpecular' | 'glassSpecularAngle' | 'glassSpecularWidth' | 'glassShadow' | 'glassShadowBlur' | 'glassTintAmount' | 'glassEdgeBlur'),
     min: number, max: number, step: number, format: (v: number) => string) =>
     <Row tone={tone} label={label} value={s[key]} min={min} max={max} step={step} format={format} onChange={v => set({ [key]: v })} />;
@@ -81,48 +85,58 @@ export function GlassSettingsPanel({ tone = 'dark', follow = false }: { tone?: T
         {rounded && row('Corner roundness', 'loupeRoundness', .15, 1, .05, pct)}
       </Group>
 
-      <Group title="Refraction" tone={tone}>
-        <Choice tone={tone} label="Edge profile" value={s.glassProfile} onChange={v => set({ glassProfile: v })}
-          options={GLASS_PROFILES.map(p => ({ id: p.id as number, name: p.name, hint: p.hint }))} />
-        {row('Bezel width', 'glassBezel', .08, .6, .01, pct)}
-        {row('Thickness', 'glassThickness', 2, 40, 1, v => `${Math.round(v)} px`)}
-        {row('Refractive index', 'glassIndex', 1.05, 2.4, .01, v => v.toFixed(2))}
-        {row('Refraction strength', 'glassRefraction', 0, 2, .05, pct)}
-        {row('Colour fringing', 'glassChromatic', 0, 1, .05, pct)}
-        {row('Edge blur', 'glassEdgeBlur', 0, 1, .05, pct)}
-      </Group>
+      <div className="space-y-4">
+        <button type="button" aria-expanded={advanced} onClick={() => setAdvanced(v => !v)}
+          className={cn('w-full flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider', text(tone).heading, tone === 'dark' ? 'hover:text-white' : 'hover:text-gray-800 dark:hover:text-gray-100')}>
+          {advanced ? <ChevronDown size={14} /> : <ChevronRight size={14} />}Advanced
+        </button>
+        {advanced && (
+          <div className="space-y-4">
+        <Group title="Refraction" tone={tone}>
+          <Choice tone={tone} label="Edge profile" value={s.glassProfile} onChange={v => set({ glassProfile: v })}
+            options={GLASS_PROFILES.map(p => ({ id: p.id as number, name: p.name, hint: p.hint }))} />
+          {row('Bezel width', 'glassBezel', .08, .6, .01, pct)}
+          {row('Thickness', 'glassThickness', 2, 40, 1, v => `${Math.round(v)} px`)}
+          {row('Refractive index', 'glassIndex', 1.05, 2.4, .01, v => v.toFixed(2))}
+          {row('Refraction strength', 'glassRefraction', 0, 2, .05, pct)}
+          {row('Colour fringing', 'glassChromatic', 0, 1, .05, pct)}
+          {row('Edge blur', 'glassEdgeBlur', 0, 1, .05, pct)}
+        </Group>
 
-      <Group title="Highlight" tone={tone}>
-        {row('Specular', 'glassSpecular', 0, 1, .05, pct)}
-        {row('Light angle', 'glassSpecularAngle', 0, 360, 5, v => `${Math.round(v)}°`)}
-        {row('Highlight width', 'glassSpecularWidth', .5, 10, .1, v => `${v.toFixed(1)} px`)}
-      </Group>
+        <Group title="Highlight" tone={tone}>
+          {row('Specular', 'glassSpecular', 0, 1, .05, pct)}
+          {row('Light angle', 'glassSpecularAngle', 0, 360, 5, v => `${Math.round(v)}°`)}
+          {row('Highlight width', 'glassSpecularWidth', .5, 10, .1, v => `${v.toFixed(1)} px`)}
+        </Group>
 
-      <Group title="Shadow and tint" tone={tone}>
-        {row('Shadow', 'glassShadow', 0, .7, .02, pct)}
-        {row('Shadow softness', 'glassShadowBlur', 2, 60, 1, v => `${Math.round(v)} px`)}
-        {row('Tint amount', 'glassTintAmount', 0, .6, .02, pct)}
-        <label className={cn('flex items-center justify-between text-[11px]', text(tone).label)}>
-          <span>Tint colour</span>
-          <input type="color" value={s.glassTint} onChange={e => set({ glassTint: e.target.value })} className="h-6 w-10 rounded border-0 bg-transparent p-0" aria-label="Glass tint colour" />
+        <Group title="Shadow and tint" tone={tone}>
+          {row('Shadow', 'glassShadow', 0, .7, .02, pct)}
+          {row('Shadow softness', 'glassShadowBlur', 2, 60, 1, v => `${Math.round(v)} px`)}
+          {row('Tint amount', 'glassTintAmount', 0, .6, .02, pct)}
+          <label className={cn('flex items-center justify-between text-[11px]', text(tone).label)}>
+            <span>Tint colour</span>
+            <input type="color" value={s.glassTint} onChange={e => set({ glassTint: e.target.value })} className="h-6 w-10 rounded border-0 bg-transparent p-0" aria-label="Glass tint colour" />
+          </label>
+        </Group>
+
+        <label className="flex items-center justify-between gap-3 cursor-pointer">
+          <span className={cn('text-xs font-semibold', tone === 'dark' ? 'text-white' : 'text-gray-800 dark:text-gray-100')}>
+            Liquid motion
+            <span className={cn('block text-[10px] font-normal', text(tone).heading)}>The glass squashes and stretches as it moves</span>
+          </span>
+          <input type="checkbox" role="switch" checked={s.glassLiquid} onChange={e => set({ glassLiquid: e.target.checked })} className="h-4 w-4 accent-sky-500" />
         </label>
-      </Group>
 
-      <label className="flex items-center justify-between gap-3 cursor-pointer">
-        <span className={cn('text-xs font-semibold', tone === 'dark' ? 'text-white' : 'text-gray-800 dark:text-gray-100')}>
-          Liquid motion
-          <span className={cn('block text-[10px] font-normal', text(tone).heading)}>The glass squashes and stretches as it moves</span>
-        </span>
-        <input type="checkbox" role="switch" checked={s.glassLiquid} onChange={e => set({ glassLiquid: e.target.checked })} className="h-4 w-4 accent-sky-500" />
-      </label>
-
-      <button type="button" onClick={() => {
-        const patch: Record<string, unknown> = { loupeZoom: 2.5, loupeRadius: 110 };
-        for (const k of GLASS_KEYS) if (k !== 'loupeFollow') patch[k] = DEFAULT_GLASS[k];
-        set(patch as Parameters<typeof presentation.set>[0]);
-      }} className={cn('w-full px-2 py-1.5 rounded-md text-xs font-semibold', text(tone).off)}>
-        Reset glass settings
-      </button>
+        <button type="button" onClick={() => {
+          const patch: Record<string, unknown> = { loupeZoom: 2.5, loupeRadius: 110 };
+          for (const k of GLASS_KEYS) if (k !== 'loupeFollow') patch[k] = DEFAULT_GLASS[k];
+          set(patch as Parameters<typeof presentation.set>[0]);
+        }} className={cn('w-full px-2 py-1.5 rounded-md text-xs font-semibold', text(tone).off)}>
+          Reset glass settings
+        </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

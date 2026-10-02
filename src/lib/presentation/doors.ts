@@ -11,15 +11,24 @@ import { easeInOutCubic } from './classify';
  * a hinge. Closing puts the original geometry back.
  */
 
-export type DoorMotion = 'swing' | 'double' | 'slide' | 'slide-half' | 'pivot' | 'none';
+export type DoorMotion = 'swing' | 'double' | 'slide' | 'slide-half' | 'pivot' | 'lift' | 'roll' | 'none';
 
 export function doorMotion(style: string | undefined): DoorMotion {
   switch (style) {
     case 'double-french':
     case 'bifold':
+    case 'garage-carriage':
       return 'double';
     case 'barn':
+    case 'workshop-sliding':
       return 'slide';
+    // Overhead doors tilt up and in under the ceiling; a roller shutter rolls up into its box.
+    case 'garage-sectional':
+    case 'garage-sectional-glazed':
+    case 'garage-canopy':
+      return 'lift';
+    case 'garage-roller':
+      return 'roll';
     case 'patio-sliding':
       return 'slide-half';
     case 'pivot':
@@ -119,8 +128,11 @@ function subset(source: THREE.BufferGeometry, tris: Set<number>, offset: THREE.V
 interface Leaf {
   pivot: THREE.Group;
   mesh: THREE.Mesh;
-  /** 'swing': turn about the hinge by up to `amount` radians; 'slide': move along x by `amount` metres. */
-  kind: 'swing' | 'slide';
+  /**
+   * 'swing': turn about the hinge by up to `amount` radians; 'slide': move along x by `amount` metres;
+   * 'tilt': turn about the top edge (an overhead door going up and in); 'roll': squash upwards into the header.
+   */
+  kind: 'swing' | 'slide' | 'tilt' | 'roll';
   amount: number;
 }
 
@@ -158,7 +170,7 @@ export class DoorOpener {
     const original = mesh.geometry;
     const all = pieces(original);
     const frameTris = new Set<number>();
-    const leafSets: { tris: Set<number>; hingeX: number; kind: 'swing' | 'slide'; sign: number; amount: number }[] = [];
+    const leafSets: { tris: Set<number>; hingeX: number; kind: 'swing' | 'slide' | 'tilt' | 'roll'; sign: number; amount: number }[] = [];
     const inner = width / 2 - FRAME;
     // Doors open away from whoever is looking: the side of the door the camera is on.
     const local = mesh.worldToLocal(viewer.clone());
@@ -166,6 +178,9 @@ export class DoorOpener {
     const left = { tris: new Set<number>(), hingeX: -inner, kind: 'swing' as const, sign: away, amount: SWING };
     const right = { tris: new Set<number>(), hingeX: inner, kind: 'swing' as const, sign: -away, amount: SWING };
     const panel = { tris: new Set<number>(), hingeX: 0, kind: 'slide' as const, sign: 1, amount: 0 };
+    // Overhead doors hang from the top edge of the opening.
+    const hingeY = height / 2 - FRAME;
+    const overhead = { tris: new Set<number>(), hingeX: 0, kind: (motion === 'roll' ? 'roll' : 'tilt') as 'tilt' | 'roll', sign: away, amount: motion === 'roll' ? 0.94 : THREE.MathUtils.degToRad(88) };
     const materials = triangleMaterials(original);
     for (const p of all) {
       // A glass pane that runs edge to edge is the leaf's glazing, not frame: left behind in the
@@ -173,14 +188,16 @@ export class DoorOpener {
       const glassOnly = p.tris.length > 0 && p.tris.every(t => materials.get(t) === 1);
       if (!glassOnly && isFramePiece(p.box, width, height)) { p.tris.forEach(t => frameTris.add(t)); continue; }
       const cx = p.box.getCenter(new THREE.Vector3()).x;
-      const target = motion === 'double' ? (cx < 0 ? left : right)
+      const target = motion === 'lift' || motion === 'roll' ? overhead
+        : motion === 'double' ? (cx < 0 ? left : right)
         : motion === 'slide-half' ? (cx > 0 ? panel : null)
         : motion === 'slide' ? panel
         : left;
       if (target) p.tris.forEach(t => target.tris.add(t));
       else p.tris.forEach(t => frameTris.add(t));
     }
-    if (motion === 'double') leafSets.push(left, right);
+    if (motion === 'lift' || motion === 'roll') leafSets.push(overhead);
+    else if (motion === 'double') leafSets.push(left, right);
     else if (motion === 'slide') leafSets.push({ ...panel, amount: inner * 2 * 0.96 });
     else if (motion === 'slide-half') leafSets.push({ ...panel, amount: -inner * 0.96 });
     else if (motion === 'pivot') leafSets.push({ ...left, hingeX: -inner + 0.12 });
@@ -190,18 +207,19 @@ export class DoorOpener {
 
     const frame = subset(original, frameTris, new THREE.Vector3());
     const leaves: Leaf[] = usable.map(l => {
-      const hinge = new THREE.Vector3(l.hingeX, 0, 0);
-      const geo = subset(original, l.tris, l.kind === 'swing' ? hinge : new THREE.Vector3());
+      const overheadLeaf = l.kind === 'tilt' || l.kind === 'roll';
+      const hinge = new THREE.Vector3(l.hingeX, overheadLeaf ? hingeY : 0, 0);
+      const geo = subset(original, l.tris, l.kind === 'swing' || overheadLeaf ? hinge : new THREE.Vector3());
       const pivot = new THREE.Group();
       pivot.userData[AUX] = true;
-      if (l.kind === 'swing') pivot.position.copy(hinge);
+      if (l.kind === 'swing' || overheadLeaf) pivot.position.copy(hinge);
       const leafMesh = new THREE.Mesh(geo, mesh.material);
       leafMesh.userData[AUX] = true;
       leafMesh.castShadow = mesh.castShadow;
       leafMesh.receiveShadow = mesh.receiveShadow;
       pivot.add(leafMesh);
       mesh.add(pivot);
-      return { pivot, mesh: leafMesh, kind: l.kind, amount: l.kind === 'swing' ? l.amount * l.sign : l.amount };
+      return { pivot, mesh: leafMesh, kind: l.kind, amount: l.kind === 'swing' || l.kind === 'tilt' ? l.amount * l.sign : l.amount };
     });
     mesh.geometry = frame;
     const door = { mesh, original, frame, leaves, t: 0, target: 1 as const, hiddenOverlays: new Map<THREE.Object3D, boolean>() };
@@ -237,6 +255,8 @@ export class DoorOpener {
       for (const l of d.leaves) {
         l.mesh.material = mesh.material;
         if (l.kind === 'swing') l.pivot.rotation.y = l.amount * e;
+        else if (l.kind === 'tilt') l.pivot.rotation.x = l.amount * e;
+        else if (l.kind === 'roll') l.pivot.scale.y = 1 - l.amount * e;
         else l.pivot.position.x = l.amount * e;
       }
       if (d.t === 0 && d.target === 0) this.drop(d, true);

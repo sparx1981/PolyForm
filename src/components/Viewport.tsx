@@ -11148,7 +11148,7 @@ function Scene() {
           }
         }}
         mouseButtons={{
-          LEFT: activeTool === 'orbit' || activeTool === 'glass' || activeTool === 'camera_type' ? THREE.MOUSE.ROTATE : (activeTool === 'pan' ? THREE.MOUSE.PAN : (activeTool === 'zoom' ? THREE.MOUSE.DOLLY : null)),
+          LEFT: activeTool === 'orbit' || activeTool === 'camera_type' ? THREE.MOUSE.ROTATE : (activeTool === 'pan' ? THREE.MOUSE.PAN : (activeTool === 'zoom' ? THREE.MOUSE.DOLLY : null)),
           MIDDLE: THREE.MOUSE.ROTATE,
           RIGHT: THREE.MOUSE.PAN
         }}
@@ -11172,7 +11172,7 @@ function Scene() {
       <ShareMainScene />
       <PresentationDriver />
       <QualityCaptureBridge />
-      {(presentationView.active ? presentationView.loupe : activeTool === 'glass') && <DetailLoupe composerActive={postprocessingActive} />}
+      {(presentationView.active ? presentationView.loupe : presentationView.glassOn) && <DetailLoupe composerActive={postprocessingActive} />}
       {/* The active section plane cuts the model (presentation mode does its own cuts). */}
       <SectionCutter section={presentationActive ? null : activeSectionArgs} shapes={shapes} />
       <SunShadowRig lightRef={directionalLightRef} sunPosition={lightPosition} enabled={shadowsEnabled} walking={walkModePhase === 'walking'} />

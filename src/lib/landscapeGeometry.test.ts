@@ -102,6 +102,22 @@ describe('lamp styles', () => {
     }
   });
 
+  it('recesses a downlight into the ceiling: trim flush, can above, light in open air below everything', () => {
+    const geometry = createLampGeometry(3.2, 'recessed');
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox!;
+    const [, lightY] = getLampLightAnchor(3.2, 'recessed');
+    // Nothing of the fixture shows more than a lens-thickness below the ceiling plane, and the light sits below all of it,
+    // so neither the trim, the lens nor a slab above can shadow the beam.
+    expect(box.min.y).toBeGreaterThan(-0.02);
+    expect(lightY).toBeLessThan(box.min.y);
+    // The can stands inside a ceiling slab of CEILING_SLAB_THICKNESS (15 cm).
+    expect(box.max.y).toBeGreaterThan(0.05);
+    expect(box.max.y).toBeLessThanOrEqual(0.15);
+    expect(findLampStyle('recessed').light.intensity).toBe(40);
+    geometry.dispose();
+  });
+
   it('tags every style with where it actually mounts', () => {
     for (const style of LAMP_STYLES) {
       expect(['floor', 'ceiling', 'wall']).toContain(style.mount);

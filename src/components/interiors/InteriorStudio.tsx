@@ -1,10 +1,12 @@
 import { useMemo, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Armchair, Bath, BedDouble, Box, Briefcase, Check, CookingPot, Laptop, Lightbulb, Loader2, Sofa, Sparkles, Toilet, Wrench, X } from 'lucide-react';
+import { Armchair, Bath, BedDouble, Box, Briefcase, Check, CookingPot, Laptop, Lightbulb, Loader2, Plus, Sofa, Sparkles, Toilet, Wrench, X } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { detectRooms } from '../../lib/spatial/rooms';
 import { type FurnishingPreset } from '../../lib/interiors/smartFurnish';
-import { furnishRooms, furnishingsInRoom, type RoomFurnishingRequest } from '../../lib/interiors/furnishBatch';
+import { addFurnitureToRoom, furnishRooms, furnishingsInRoom, type RoomFurnishingRequest } from '../../lib/interiors/furnishBatch';
+import { galleryItems } from '../../lib/interiors/gallery';
+import { FurnitureThumbnail } from './FurnitureThumbnail';
 import { RoomFloorPlan } from './RoomFloorPlan';
 import { useModalA11y } from '../ui/useModalA11y';
 import { cn } from '../../lib/utils';
@@ -15,15 +17,15 @@ const PRESETS: Array<{
   description: string;
   icon: React.ReactNode;
 }> = [
-  { id: 'bedroom', label: 'Bedroom', description: 'Bed, paired bedside tables, wardrobe, console and a reading chair.', icon: <BedDouble size={17} /> },
-  { id: 'living-room', label: 'Living room', description: 'Sofa, tables, chairs and a TV unit scaled to the room, kept off doors and facing the sofa, with curtains at windows.', icon: <Sofa size={17} /> },
-  { id: 'storage', label: 'Storage', description: 'Three cabinets distributed around available walls.', icon: <Box size={17} /> },
-  { id: 'office', label: 'Office', description: 'Up to three desks, each with its chair, plus a bookcase and filing cabinets.', icon: <Briefcase size={17} /> },
-  { id: 'home-office', label: 'Home office', description: 'A desk and chair, bookcase, reading chair and curtains at the window.', icon: <Laptop size={17} /> },
-  { id: 'kitchen', label: 'Kitchen', description: 'Base and wall units with sink and hob sized to the wall, a fridge freezer and, if there is space, a dining table and chairs.', icon: <CookingPot size={17} /> },
-  { id: 'bathroom', label: 'Bathroom', description: 'Bath, toilet, basin and a shower if it fits. Fixtures sit on walls and share a wet wall.', icon: <Bath size={17} /> },
-  { id: 'toilet', label: 'Toilet', description: 'A toilet and a small basin with proper space in front.', icon: <Toilet size={17} /> },
-  { id: 'workshop', label: 'Garage / Workshop', description: 'Workbenches, tool chests, shelving racks and machines scaled to the space, with a free-standing bench in big rooms.', icon: <Wrench size={17} /> },
+  { id: 'bedroom', label: 'Bedroom', description: 'Bed, bedside tables, wardrobe, chair', icon: <BedDouble size={17} /> },
+  { id: 'living-room', label: 'Living room', description: 'Sofa, tables, chairs, TV, curtains', icon: <Sofa size={17} /> },
+  { id: 'storage', label: 'Storage', description: 'Cabinets around the walls', icon: <Box size={17} /> },
+  { id: 'office', label: 'Office', description: 'Desks and chairs, bookcase, filing', icon: <Briefcase size={17} /> },
+  { id: 'home-office', label: 'Home office', description: 'Desk, chair, bookcase, curtains', icon: <Laptop size={17} /> },
+  { id: 'kitchen', label: 'Kitchen', description: 'Units, sink, hob, fridge, dining', icon: <CookingPot size={17} /> },
+  { id: 'bathroom', label: 'Bathroom', description: 'Bath, toilet, basin, shower', icon: <Bath size={17} /> },
+  { id: 'toilet', label: 'Toilet', description: 'Toilet and small basin', icon: <Toilet size={17} /> },
+  { id: 'workshop', label: 'Garage / Workshop', description: 'Benches, tool chests, racks, machines', icon: <Wrench size={17} /> },
 ];
 
 export default function InteriorStudio() {
@@ -37,6 +39,9 @@ export default function InteriorStudio() {
   const [settleSoft, setSettleSoft] = useState(true);
   const [lighting, setLighting] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<'furnish' | 'gallery'>('furnish');
+  const [galleryGroup, setGalleryGroup] = useState('seating');
+  const gallery = useMemo(galleryItems, []);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -90,6 +95,13 @@ export default function InteriorStudio() {
     }
   };
 
+  const addPiece = (type: Parameters<typeof addFurnitureToRoom>[3], name: string) => {
+    if (!selectedRoom) return;
+    const result = addFurnitureToRoom(shapes, selectedRoom, rooms, type, settleSoft);
+    if (result.placed) { setShapes(result.shapes); setMessage(`${name} added to ${selectedRoom.name}.`); }
+    else setMessage(`There is no room for a ${name.toLowerCase()} in ${selectedRoom.name}.`);
+  };
+
   if (!open) return null;
 
   return (
@@ -100,28 +112,33 @@ export default function InteriorStudio() {
           initial={{ opacity: 0, scale: 0.96, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
-          className="w-full max-w-4xl max-h-[88vh] overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl"
+          className="w-full max-w-6xl min-h-[min(640px,90vh)] max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl"
         >
-          <header className="px-5 py-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
-            <div>
-              <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Armchair size={18} className="text-polyform-blue" /> Interior Studio
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">Complete room arrangements with access space, upholstered furniture and window-fitted curtains.</p>
+          <header className="px-5 py-3 flex items-center gap-4 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 shrink-0">
+              <Armchair size={18} className="text-polyform-blue" /> Interior Studio
+            </h2>
+            <div role="tablist" aria-label="Interior Studio" className="flex gap-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-1">
+              {([['furnish', 'Furnish rooms'], ['gallery', 'Gallery']] as const).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+                  className={cn('px-3 py-1 rounded-md text-xs font-semibold', tab === id ? 'bg-white dark:bg-gray-700 shadow-sm text-polyform-blue' : 'text-gray-600 dark:text-gray-300')}>
+                  {label}
+                </button>
+              ))}
             </div>
-            <button onClick={() => setOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close">
+            <button onClick={() => setOpen(false)} className="ml-auto p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close">
               <X size={18} />
             </button>
           </header>
 
-          <div className="p-5 space-y-5 overflow-y-auto max-h-[calc(88vh-72px)]">
+          <div className="p-5 space-y-5 overflow-y-auto max-h-[calc(90vh-60px)]">
             {!rooms.length ? (
               <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-5 text-sm text-amber-800 dark:text-amber-200">
                 No enclosed rooms were detected. Create or import a closed wall layout first, then reopen Interior Studio.
               </div>
             ) : (
               <>
-                <div className="grid lg:grid-cols-2 gap-5">
+                <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-5">
                 <section className="space-y-2 lg:sticky lg:top-0 self-start">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-xs font-semibold text-gray-600 dark:text-gray-300" htmlFor="interior-floor">Choose a floor, then pick a room</label>
@@ -145,21 +162,22 @@ export default function InteriorStudio() {
                 </section>
 
                 <div className="space-y-4">
+                {tab === 'furnish' ? (<>
                 <section className="space-y-2">
                   <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">Furnishing preset</div>
-                  <div className="grid sm:grid-cols-2 gap-2">
+                  <div className="grid sm:grid-cols-3 gap-2">
                     {PRESETS.map(option => (
-                      <button key={option.id} onClick={() => setPreset(option.id)} aria-pressed={preset === option.id}
+                      <button key={option.id} onClick={() => setPreset(option.id)} aria-pressed={preset === option.id} title={option.description}
                         className={cn(
-                          'text-left rounded-xl border p-3 flex gap-3 transition-colors',
+                          'text-left rounded-xl border p-2.5 flex items-start gap-2 transition-colors',
                           preset === option.id
                             ? 'border-polyform-blue bg-blue-50 dark:bg-blue-950/30'
                             : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800',
                         )}>
-                        <span className={cn('mt-0.5', preset === option.id ? 'text-polyform-blue' : 'text-gray-500')}>{option.icon}</span>
-                        <span>
-                          <span className="block text-sm font-semibold">{option.label}</span>
-                          <span className="block text-[11px] text-gray-500 mt-0.5">{option.description}</span>
+                        <span className={cn('mt-0.5 shrink-0', preset === option.id ? 'text-polyform-blue' : 'text-gray-500')}>{option.icon}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold leading-tight">{option.label}</span>
+                          <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">{option.description}</span>
                         </span>
                       </button>
                     ))}
@@ -171,7 +189,7 @@ export default function InteriorStudio() {
                   <Sparkles size={16} className="text-polyform-blue" />
                   <span className="flex-1">
                     <span className="block text-sm font-semibold">Relax upholstery and drape</span>
-                    <span className="block text-[11px] text-gray-500">Save a relaxed upholstery shape and curtain drape. Beds and sofas remain static. Curtains respond to plant wind, enabled grass/flower wind beneath the room, Weather wind and nearby movement in Walk Mode.</span>
+                    <span className="block text-[11px] text-gray-500">Soft, settled sofas, beds and curtains.</span>
                   </span>
                 </label>
 
@@ -180,21 +198,21 @@ export default function InteriorStudio() {
                   <Lightbulb size={16} className="text-polyform-blue" />
                   <span className="flex-1">
                     <span className="block text-sm font-semibold">Add lighting for the room type</span>
-                    <span className="block text-[11px] text-gray-500">Ceiling lights, lamps, pendants, vanity and task lights chosen for what the room is. They are ordinary fixtures you can edit, and furnishing the room again replaces them.</span>
+                    <span className="block text-[11px] text-gray-500">Ceiling and task lights to suit the room. Editable fixtures.</span>
                   </span>
                 </label>
 
                 <label className="flex items-start gap-3 rounded-xl border border-gray-200 dark:border-gray-700 p-3 cursor-pointer">
                   <input type="checkbox" checked={replaceExisting} onChange={e => setReplaceExisting(e.target.checked)} className="mt-1" />
                   <span><span className="block text-sm font-semibold">Replace existing furnishings in {selectedRoom?.name}</span>
-                    <span className="text-xs text-gray-500">Off by default. {selectedRoom ? furnishingsInRoom(shapes, selectedRoom, rooms).length : 0} existing furniture items in this room. Walls, doors and windows are kept.</span></span>
+                    <span className="text-xs text-gray-500">{selectedRoom ? furnishingsInRoom(shapes, selectedRoom, rooms).length : 0} items in this room now. Walls, doors and windows stay.</span></span>
                 </label>
                 <button onClick={enqueue} disabled={!selectedRoom || busy} className="w-full rounded-xl border border-polyform-blue text-polyform-blue py-3 text-sm font-bold disabled:opacity-50">
                   {queue.some(item => item.roomId === roomId) ? 'Update queued room' : `Add ${selectedRoom?.name ?? 'room'} to queue`}
                 </button>
                 <section className="space-y-2 rounded-xl border border-gray-200 dark:border-gray-700 p-3" aria-label="Furnishing queue">
                   <h3 className="text-sm font-semibold">Furnishing queue · {queue.length} rooms</h3>
-                  {!queue.length && <p className="text-xs text-gray-500">Choose a room and preset, add it, then repeat on any floor. Apply when ready.</p>}
+                  {!queue.length && <p className="text-xs text-gray-500">Add rooms here, then apply them together.</p>}
                   {queue.map(item => <div key={item.roomId} className="flex items-center gap-2 text-xs py-1">
                     <button onClick={() => selectRoom(item.roomId)} className="flex-1 text-left text-polyform-blue underline underline-offset-2">
                       {rooms.find(room => room.id === item.roomId)?.name ?? 'Room no longer exists'} · Level {rooms.find(room => room.id === item.roomId)?.level ?? '?'} · {PRESETS.find(option => option.id === item.preset)?.label} · {item.replaceExisting ? 'replace furniture' : 'keep existing'}
@@ -205,6 +223,39 @@ export default function InteriorStudio() {
                     {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Apply {queue.length || ''} queued rooms
                   </button>
                 </section>
+                </>) : (
+                <section className="space-y-3" aria-label="Asset gallery">
+                  <div className="flex flex-wrap gap-1.5">
+                    {gallery.map(group => (
+                      <button key={group.id} onClick={() => setGalleryGroup(group.id)} aria-pressed={galleryGroup === group.id}
+                        className={cn('px-3 py-1 rounded-full text-xs font-semibold', galleryGroup === group.id ? 'bg-polyform-blue text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300')}>
+                        {group.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-gray-500">Adds to {selectedRoom?.name ?? 'the room'}, against a wall and clear of doors and other furniture.</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {(gallery.find(group => group.id === galleryGroup)?.items ?? []).map(item => (
+                      <button key={item.type} onClick={() => addPiece(item.type, item.name)} disabled={!selectedRoom}
+                        aria-label={`Add ${item.name} to ${selectedRoom?.name ?? 'room'}`}
+                        className="group rounded-xl border border-gray-200 dark:border-gray-700 p-2 text-left hover:border-polyform-blue hover:bg-blue-50/60 dark:hover:bg-blue-950/20 disabled:opacity-50">
+                        <FurnitureThumbnail type={item.type} />
+                        <span className="mt-1.5 flex items-center justify-between gap-1">
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold leading-tight truncate">{item.name}</span>
+                            <span className="block text-[10px] text-gray-500">{item.size}</span>
+                          </span>
+                          <Plus size={16} className="shrink-0 text-gray-400 group-hover:text-polyform-blue" />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                    <input type="checkbox" checked={settleSoft} onChange={e => setSettleSoft(e.target.checked)} />
+                    Relax soft pieces (sofas, beds)
+                  </label>
+                </section>
+                )}
                 </div>
                 </div>
               </>

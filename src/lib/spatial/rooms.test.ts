@@ -59,4 +59,40 @@ describe('spatial room intelligence', () => {
     expect(reconciled[0].id).toBe(before[0].id);
     expect(reconciled[0].name).toBe('Living room');
   });
+
+  it('outlines an L-shaped room as an L, not the convex hull that fills its notch', () => {
+    // 8 x 6 footprint with a 4 x 3 corner missing: (4..8, 3..6) is outside.
+    const seg = (id: string, a: [number, number], b: [number, number]) => {
+      const dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz);
+      return wall(id, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, length + 0.2, Math.atan2(-dz, dx));
+    };
+    const shapes = [
+      seg('a', [0, 0], [8, 0]), seg('b', [8, 0], [8, 3]), seg('c', [8, 3], [4, 3]),
+      seg('d', [4, 3], [4, 6]), seg('e', [4, 6], [0, 6]), seg('f', [0, 6], [0, 0]),
+    ];
+    const room = detectRooms(shapes, { cell: 0.05 })[0]!;
+    expect(room).toBeDefined();
+    const inside = (p: [number, number]) => {
+      let c = false;
+      for (let i = 0, j = room.boundary.length - 1; i < room.boundary.length; j = i++) {
+        const a = room.boundary[i]!, b = room.boundary[j]!;
+        if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) c = !c;
+      }
+      return c;
+    };
+    expect(inside([2, 4.5])).toBe(true);
+    expect(inside([6, 1.5])).toBe(true);
+    expect(inside([6, 4.5])).toBe(false); // the notch is outside the building
+    expect(inside([5, 3.6])).toBe(false);
+    // The outline's own area agrees with the room's area to within a few percent.
+    let a2 = 0;
+    room.boundary.forEach((p, i) => { const q = room.boundary[(i + 1) % room.boundary.length]!; a2 += p[0] * q[1] - q[0] * p[1]; });
+    expect(Math.abs(a2) / 2).toBeCloseTo(room.areaM2, -0.3);
+    expect(room.boundary.length).toBeLessThanOrEqual(8);
+  });
+
+  it('keeps a rectangular room to four corners', () => {
+    const shapes = [wall('n', 0, -2, 4), wall('s', 0, 2, 4), wall('w', -2, 0, 4, Math.PI / 2), wall('e', 2, 0, 4, Math.PI / 2)];
+    expect(detectRooms(shapes, { cell: 0.1 })[0]!.boundary).toHaveLength(4);
+  });
 });

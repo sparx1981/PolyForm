@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Shape } from '../types';
-import { buildRoofsForBuilding, extensionsOf, rebuildExtensionRoof, storeysOf } from './buildingRoofs';
+import { buildRoofsForBuilding, ceilingSlabsFor, extensionsOf, rebuildExtensionRoof, roofWholeBuilding, storeysOf } from './buildingRoofs';
 import { buildRoofAssemblyForRoom } from './archRoofGenerator';
 import { upgradeRoofs } from './roofUpgrade';
 import { frameSkeletonRoof } from './roofFraming';
@@ -112,5 +112,39 @@ describe('roofing a building storey by storey', () => {
     expect(roofs).toHaveLength(2);
     expect(roofs.some(r => r.roofData.extension?.kind === 'lean-to')).toBe(true);
     expect(roofs.find(r => !r.roofData.extensionSite)!.position[1]).toBeCloseTo(5.6);
+  });
+});
+
+describe('ceilings under a roof', () => {
+  const house = wallsOf([[0, 0], [6, 0], [6, 4], [0, 4]], 0);
+  const roofing = { roofType: 'gable' as const, pitchAngleDeg: 35, usePitchAngle: true };
+
+  it('gives a roofed single storey a ceiling whose underside is the top of its walls', () => {
+    const ceilings = ceilingSlabsFor(house);
+    expect(ceilings).toHaveLength(1);
+    const slab = ceilings[0];
+    expect(slab.tags).toContain('ceiling-slab');
+    const height = (slab.args as { height: number }).height;
+    expect(slab.position[1] - height / 2).toBeCloseTo(2.8, 6);
+    expect(height).toBeGreaterThanOrEqual(0.15);
+  });
+
+  it('is added with the roof and replaced, not doubled, when roofing again', () => {
+    const first = roofWholeBuilding(house, roofing)!;
+    expect(first.shapes.filter(s => s.tags?.includes('ceiling-slab'))).toHaveLength(1);
+    const second = roofWholeBuilding(first.shapes, roofing)!;
+    expect(second.shapes.filter(s => s.tags?.includes('ceiling-slab'))).toHaveLength(1);
+  });
+
+  it('only ceils the top of the building: a lower storey has the upper floor slab over it instead', () => {
+    const two = [...house, ...wallsOf([[0, 0], [6, 0], [6, 4], [0, 4]], 2.8)];
+    const ceilings = ceilingSlabsFor(two);
+    expect(ceilings).toHaveLength(1);
+    expect(ceilings[0].position[1]).toBeGreaterThan(5.6);
+  });
+
+  it('leaves a storey alone when a floor slab already sits on its walls', () => {
+    const slab = { id: 'fs', type: 'poly', name: 'Floor Slab', position: [3, 2.9, 2], args: { vertices: [], height: 0.2, holes: [] }, tags: ['floor-slab'] } as unknown as Shape;
+    expect(ceilingSlabsFor([...house, slab])).toHaveLength(0);
   });
 });

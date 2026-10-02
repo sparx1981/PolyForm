@@ -2,13 +2,19 @@ export interface ArchStyleDef {
   id: string;
   type: 'door' | 'window' | 'staircase' | 'wall' | 'scale_figure';
   name: string;
-  category: 'Modern' | 'Classic' | 'Commercial' | 'Specialty' | 'Layout' | 'Structure' | 'Overlapping' | 'Interlocking' | 'Inline / Flush' | 'Masonry' | 'Professional' | 'Site & Construction' | 'Casual & Public' | 'Minimal & Silhouette';
+  category: 'Modern' | 'Classic' | 'Commercial' | 'Specialty' | 'Garage & Workshop' | 'Layout' | 'Structure' | 'Overlapping' | 'Interlocking' | 'Inline / Flush' | 'Masonry' | 'Professional' | 'Site & Construction' | 'Casual & Public' | 'Minimal & Silhouette';
   description: string;
   defaultDimensions: [number, number, number]; // [width, height, depth/length]
   hasGlass: boolean;
   features: string[];
   claddingCategory?: 'Overlapping' | 'Interlocking' | 'Inline / Flush' | 'Masonry';
+  /** Where and how it is used, for the library's filter chips (doors). */
+  tags?: DoorTag[];
 }
+
+export type DoorTag = 'Interior' | 'Exterior' | 'Patio' | 'Archways' | 'Sliding' | 'Folding' | 'Pairs';
+/** Filter chips offered beside the design categories in the door library. */
+export const DOOR_TAGS: readonly DoorTag[] = ['Interior', 'Exterior', 'Patio', 'Archways', 'Sliding', 'Folding', 'Pairs'];
 
 export interface StairStructureOption {
   id: 'closed' | 'open' | 'floating' | 'mono-stringer';
@@ -160,6 +166,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Clean minimalist architectural flat panel with contemporary stainless lever handle.',
     defaultDimensions: [0.9, 2.1, 0.15],
     hasGlass: false,
+    tags: ['Interior', 'Exterior'],
     features: ['Minimalist Flush Leaf', 'Stainless Lever Handle', 'Concealed Frame']
   },
   {
@@ -170,6 +177,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Traditional solid timber door with four recessed moulded panels and brass round knob.',
     defaultDimensions: [0.9, 2.1, 0.15],
     hasGlass: false,
+    tags: ['Interior', 'Exterior'],
     features: ['4 Moulded Bevel Panels', 'Classic Round Knob', 'Traditional Casing']
   },
   {
@@ -180,6 +188,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Full-height 6-pane divided light glass door providing natural daylight flow.',
     defaultDimensions: [0.9, 2.1, 0.15],
     hasGlass: true,
+    tags: ['Interior', 'Exterior'],
     features: ['6 Clear Glass Lights', 'Perimeter Timber Stile', 'Decorative Muntins']
   },
   {
@@ -190,6 +199,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Upper half dual clear glass panes with lower solid recessed shaker panel.',
     defaultDimensions: [0.9, 2.1, 0.15],
     hasGlass: true,
+    tags: ['Interior', 'Exterior'],
     features: ['Upper Dual Glass Panes', 'Lower Solid Shaker', 'Architectural Handle']
   },
   {
@@ -200,6 +210,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Grand dual-leaf pair with 12 divided clear glass panes and central astragal.',
     defaultDimensions: [1.8, 2.1, 0.15],
     hasGlass: true,
+    tags: ['Interior', 'Exterior', 'Patio', 'Pairs'],
     features: ['Dual Master Leafs', '12 Clear Glass Panes', 'Central Astragal & Locks']
   },
   {
@@ -210,6 +221,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Rustic contemporary sliding barn door with diagonal Z-brace battens and top header rail.',
     defaultDimensions: [1.0, 2.15, 0.15],
     hasGlass: false,
+    tags: ['Interior', 'Sliding'],
     features: ['Z-Brace Diagonal Battens', 'Top Roller Track Guide', 'Black Metal Pull Bar']
   },
   {
@@ -220,6 +232,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Modern entrance door with 5 horizontal shadow reveal lines and long stainless pull.',
     defaultDimensions: [0.95, 2.1, 0.15],
     hasGlass: false,
+    tags: ['Exterior'],
     features: ['5 Shadow Reveal Grooves', 'Extended Pull Handle', 'Contemporary Styling']
   },
   {
@@ -230,6 +243,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Oversized luxury entrance door with offset pivot axis and full-height vertical bar pull.',
     defaultDimensions: [1.2, 2.4, 0.18],
     hasGlass: false,
+    tags: ['Exterior'],
     features: ['Offset Pivot Pins', '1.8m Vertical Pull Bar', 'Oversized Luxury Scale']
   },
   {
@@ -240,6 +254,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Architectural multi-panel concertina folding patio doors with slim aluminum sightlines and flush floor track.',
     defaultDimensions: [2.4, 2.1, 0.15],
     hasGlass: true,
+    tags: ['Exterior', 'Patio', 'Folding'],
     features: ['3-Leaf Concertina Folding Panels', 'Overhead Top Roller Track', 'Flush Floor Threshold', 'Full-Width Outdoor Opening']
   },
   {
@@ -250,6 +265,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Wide dual-panel sliding glass door with large expansive view and heavy-duty sliding rollers.',
     defaultDimensions: [2.0, 2.1, 0.15],
     hasGlass: true,
+    tags: ['Exterior', 'Patio', 'Sliding'],
     features: ['Dual Expansive Glass Panes', 'Heavy Duty Roller Guides', 'Integrated Security Deadbolt', 'Seamless Patio Access']
   },
   {
@@ -260,7 +276,85 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'Full-lite French glass doors flanked by authentic operable louvered exterior timber shutters with wrought iron strap hinges.',
     defaultDimensions: [1.8, 2.1, 0.18],
     hasGlass: true,
+    tags: ['Exterior', 'Patio', 'Pairs'],
     features: ['Dual French Glass Leafs', 'Operable Louvered Shutters', 'Wrought Iron Strap Hinges', 'Traditional Architectural Charm']
+  },
+  {
+    id: 'garage-sectional',
+    type: 'door',
+    name: 'Sectional Garage Door (Panelled)',
+    category: 'Garage & Workshop',
+    description: 'Insulated overhead sectional door: horizontal sections with raised panels, hinge plates, a pull handle and a bottom seal. Sections and panels follow the opening size.',
+    defaultDimensions: [2.4, 2.1, 0.15],
+    hasGlass: false,
+    tags: ['Exterior'],
+    features: ['Insulated Horizontal Sections', 'Raised Panels That Follow the Width', 'Hinge Plates & Bottom Seal', 'Lifts Overhead']
+  },
+  {
+    id: 'garage-sectional-glazed',
+    type: 'door',
+    name: 'Sectional Garage Door (Glazed Top Row)',
+    category: 'Garage & Workshop',
+    description: 'Sectional overhead door with a row of glazed lights in the top section for daylight, over panelled sections below.',
+    defaultDimensions: [2.4, 2.1, 0.15],
+    hasGlass: true,
+    tags: ['Exterior'],
+    features: ['Glazed Top Section', 'Panelled Lower Sections', 'Daylight Into the Garage', 'Lifts Overhead']
+  },
+  {
+    id: 'garage-canopy',
+    type: 'door',
+    name: 'Up-and-Over Canopy Door',
+    category: 'Garage & Workshop',
+    description: 'Traditional one-piece boarded garage door that tilts up and over, with vertical ribs, top and bottom rails and a central lock.',
+    defaultDimensions: [2.4, 2.1, 0.15],
+    hasGlass: false,
+    tags: ['Exterior'],
+    features: ['One-Piece Boarded Leaf', 'Vertical Ribs', 'Central Lock Handle', 'Tilts Up and Over']
+  },
+  {
+    id: 'garage-roller',
+    type: 'door',
+    name: 'Roller Shutter Door',
+    category: 'Garage & Workshop',
+    description: 'Interlocking aluminium slats that roll up into a shutter box over the opening, running in side guide rails.',
+    defaultDimensions: [2.4, 2.1, 0.18],
+    hasGlass: false,
+    tags: ['Exterior'],
+    features: ['Rolling Slats', 'Shutter Box Above the Opening', 'Side Guide Rails', 'Bottom Bar']
+  },
+  {
+    id: 'garage-carriage',
+    type: 'door',
+    name: 'Carriage House Doors (Side-Hinged)',
+    category: 'Garage & Workshop',
+    description: 'Side-hinged pair (two pairs when wide) with X-braced lower panels, glazed upper lights, strap hinges and ring pulls.',
+    defaultDimensions: [3.0, 2.4, 0.18],
+    hasGlass: true,
+    tags: ['Exterior', 'Pairs'],
+    features: ['X-Braced Panels', 'Glazed Upper Lights', 'Strap Hinges & Ring Pulls', 'Pair or Two Pairs by Width']
+  },
+  {
+    id: 'workshop-sliding',
+    type: 'door',
+    name: 'Industrial Sliding Workshop Door',
+    category: 'Garage & Workshop',
+    description: 'Ribbed steel-clad leaf in a heavy frame on an overhead rail with trolleys and a floor guide, for workshops and plant rooms.',
+    defaultDimensions: [3.0, 2.6, 0.18],
+    hasGlass: false,
+    tags: ['Exterior', 'Sliding'],
+    features: ['Ribbed Steel Leaf', 'Overhead Rail & Trolleys', 'Floor Guide', 'Heavy-Duty Pull Handle']
+  },
+  {
+    id: 'workshop-personnel',
+    type: 'door',
+    name: 'Steel Personnel Door (Vision Panel)',
+    category: 'Garage & Workshop',
+    description: 'Insulated flush steel door for garages and workshops with a vision panel, kick plate, push bar and overhead closer.',
+    defaultDimensions: [0.95, 2.1, 0.15],
+    hasGlass: true,
+    tags: ['Interior', 'Exterior'],
+    features: ['Flush Steel Leaf', 'Vision Panel', 'Push Bar & Door Closer', 'Kick Plate']
   },
   {
     id: 'archway-square',
@@ -270,6 +364,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'An open doorway with a plain rectangular casing and no physical door leaf - just a walk-through opening.',
     defaultDimensions: [1.0, 2.1, 0.15],
     hasGlass: false,
+    tags: ['Interior', 'Archways'],
     features: ['No Door Leaf', 'Plain Rectangular Casing', 'Open Walk-Through']
   },
   {
@@ -280,6 +375,7 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     description: 'An open doorway with a true semicircular arched head and no physical door leaf, for a classic archway look.',
     defaultDimensions: [1.0, 2.2, 0.15],
     hasGlass: false,
+    tags: ['Interior', 'Archways'],
     features: ['No Door Leaf', 'Semicircular Arched Head', 'Open Walk-Through']
   }
 ];

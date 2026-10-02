@@ -1,3 +1,4 @@
+import { usePresentation } from '../lib/presentation/store';
 import { NoteCard } from './NoteCard';
 import { sliderToSun, sunToSlider } from '../lib/graphics/daylight';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -309,10 +310,16 @@ export default function RightPanelStack() {
     commitHistory();
   };
 
+  const glassOn = usePresentation().glassOn;
   const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame']);
 
+  // Switching the Glass on opens the modifier panel, where its settings live.
   useEffect(() => {
-    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping', 'section', 'glass', 'camera_type'].includes(activeTool)) {
+    if (glassOn) setOpenPanels(prev => prev.includes('toolModifiers') ? prev : [...prev, 'toolModifiers']);
+  }, [glassOn]);
+
+  useEffect(() => {
+    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping', 'section', 'camera_type'].includes(activeTool)) {
       setOpenPanels(prev => prev.includes('toolModifiers') ? prev : [...prev, 'toolModifiers']);
     }
     if (activeTool === 'timber-frame') {
@@ -4708,7 +4715,7 @@ export default function RightPanelStack() {
           </Panel>
         )}
 
-        {isToolModifierDocked && hasSettings && !isPhone && (
+        {isToolModifierDocked && (hasSettings || glassOn) && !isPhone && (
           <Panel 
             id="toolModifiers" 
             title="Tool Modifiers" 

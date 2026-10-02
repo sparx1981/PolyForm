@@ -5,6 +5,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'October 4, 2026',
+    items: [
+      'Recessed downlights are now truly recessed: only a flush trim ring and lens show below the ceiling, the can sits above it (inside a ceiling slab), and the light comes from open air just below the lens so nothing shadows it. Their default strength is 40. Roofing a building (the roof buttons and sdk.architecture.roofBuilding) now also adds a ceiling slab under the roof, with its underside at the top of the walls where room lights are placed; Stack Next Story already provides one as its floor slab.',
+      'Interior Studio: rooms were outlined by a convex hull, so an L-shaped room claimed its notch outside the walls. Rooms now keep their true outline, which also fixes curtains (and any furniture) being placed on the outside of windows; curtains now hang on the room side of the wall whichever way the wall is drawn.',
+      'Interior Studio is wider and tidier, with two tabs: Furnish rooms (shorter descriptions) and a Gallery of every piece with a picture, size and one-click Add that places it in the chosen room using the furnishing rules (chairs go to desks and tables already there).',
+      'The Glass Lens is now an on/off icon on the Camera toolbar that stays on while you use any other tool. Its settings appear as a Glass section at the bottom of the Tool Modifiers panel; everything from Refraction down sits in an Advanced section that starts folded.',
+      'New Garage / Workshop doors: sectional (panelled and glazed top row), up-and-over canopy, roller shutter, side-hinged carriage doors, industrial sliding door and a steel personnel door. Overhead doors tilt up and in when opened in Presentation and Walk modes, and roller shutters roll up. Sections, panels, lights and leaves follow the width and height.',
+      'The door style library has new filters: Interior, Exterior, Patio, Archways, Sliding, Folding and Pairs, beside the design categories.',
+      'Bi-Fold, Sliding Glass Patio and French Doors with Louvered Shutters are now built to suit their width: bi-fold leaves of 0.6 to 0.9 m (2 to 8), sliding panels of about 1.2 m (fixed at the back, sliders in front), and French doors as one leaf, a pair or two pairs with shutters and pane grids sized to fit.',
+    ],
+  },
+  {
     date: 'October 3, 2026',
     items: [
       'New Camera Type tool on the Camera toolbar. Switch the main view between Perspective and Orthographic (parallel lines stay parallel, no size change with distance); your viewpoint and framing carry across the switch. Perspective has Wide, Standard, Telephoto and Long lens presets plus a field-of-view slider. One-click Plan, Front, Rear, Left and Right views and four Isometric views (south-east, south-west, north-east, north-west) are framed to fit the whole model. The Perspective chip now reads Orthographic when that is on, and its Plan and Elevation views use the same framing. Walk and Portal Navigation switch back to Perspective while they run, and the Developer SDK\'s camera.setProjection now works.',

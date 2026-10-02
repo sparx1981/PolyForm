@@ -33,7 +33,6 @@ text: 'Click a surface or the ground to place a flat text label, then type the w
 text3d: 'Click the ground or a wall to place solid 3D letters, then type the words.',
 axes: 'Click to reposition the model axes.',
 section: 'Click to place a section cutting plane.',
-glass: 'Drag the glass over a detail to magnify it, or turn on Always follow cursor.',
 camera_type: 'Choose Perspective or Orthographic, a lens, or a plan, elevation or isometric view.',
 orbit: 'Click and drag to orbit the camera.',
 pan: 'Click and drag to pan the view.',

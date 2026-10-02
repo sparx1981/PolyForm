@@ -1,3 +1,4 @@
+import { buildSizedDoor } from './doorStyles';
 import * as THREE from 'three';
 // @ts-ignore
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -468,7 +469,10 @@ export function createDoorGeometry(
   }
 
   // 2. Door Style Specific Leaf Geometry
-  switch (style) {
+  // Patio, shutter, garage and workshop doors are built to suit their width and height (see doorStyles.ts).
+  const sized = buildSizedDoor(style, { width, height, frameDepth, frameThick, panelThick, panelWidth, panelHeight });
+  if (sized) { frameParts.push(...sized.frame); glassParts.push(...sized.glass); hardwareParts.push(...sized.hardware); }
+  switch (sized ? '__sized' : style) {
     case '4panel': {
       // Base leaf
       const leaf = new THREE.BoxGeometry(panelWidth, panelHeight, panelThick * 0.7);
@@ -783,259 +787,6 @@ export function createDoorGeometry(
       break;
     }
 
-    case 'bifold': {
-      // 3-Leaf / 4-Leaf Bi-Fold Concertina Folding Patio Door
-      const numLeaves = width > 2.2 ? 4 : 3;
-      const leafW = (panelWidth - (numLeaves - 1) * 0.008) / numLeaves;
-      const stileW = 0.065;
-      const topRailH = 0.08;
-      const botRailH = 0.12;
-
-      // Top guide track & bottom flush track
-      const topTrack = new THREE.BoxGeometry(panelWidth, 0.035, frameDepth * 0.9);
-      topTrack.translate(0, height / 2 - frameThick / 2 - 0.015, 0);
-      hardwareParts.push(topTrack);
-
-      const botTrack = new THREE.BoxGeometry(panelWidth, 0.015, frameDepth * 0.9);
-      botTrack.translate(0, -height / 2 + 0.01, 0);
-      hardwareParts.push(botTrack);
-
-      // Generate folding leaves with slight concertina angle
-      for (let i = 0; i < numLeaves; i++) {
-        const foldAngle = (i % 2 === 0 ? 0.18 : -0.18);
-        const leafCenterX = -panelWidth / 2 + leafW / 2 + i * (leafW + 0.008);
-        const leafZ = (i % 2 === 0 ? 0.02 : -0.02);
-
-        // Leaf outer stile & rail frame
-        const frameL = new THREE.BoxGeometry(stileW, panelHeight - 0.06, panelThick * 0.85);
-        frameL.rotateY(foldAngle);
-        frameL.translate(leafCenterX - leafW / 2 + stileW / 2, -frameThick / 2, leafZ);
-        frameParts.push(frameL);
-
-        const frameR = new THREE.BoxGeometry(stileW, panelHeight - 0.06, panelThick * 0.85);
-        frameR.rotateY(foldAngle);
-        frameR.translate(leafCenterX + leafW / 2 - stileW / 2, -frameThick / 2, leafZ);
-        frameParts.push(frameR);
-
-        const frameT = new THREE.BoxGeometry(leafW - stileW * 2, topRailH, panelThick * 0.85);
-        frameT.rotateY(foldAngle);
-        frameT.translate(leafCenterX, -frameThick / 2 + (panelHeight - 0.06) / 2 - topRailH / 2, leafZ);
-        frameParts.push(frameT);
-
-        const frameB = new THREE.BoxGeometry(leafW - stileW * 2, botRailH, panelThick * 0.85);
-        frameB.rotateY(foldAngle);
-        frameB.translate(leafCenterX, -frameThick / 2 - (panelHeight - 0.06) / 2 + botRailH / 2, leafZ);
-        frameParts.push(frameB);
-
-        // Glass Pane
-        const glassW = leafW - stileW * 2;
-        const glassH = panelHeight - 0.06 - topRailH - botRailH;
-        const glassY = -frameThick / 2 + (topRailH - botRailH) / 2;
-        const glass = new THREE.BoxGeometry(glassW, glassH, 0.008);
-        glass.rotateY(foldAngle);
-        glass.translate(leafCenterX, glassY, leafZ);
-        glassParts.push(glass);
-
-        // Intermediate Hinge Cylinders
-        if (i < numLeaves - 1) {
-          const hingeX = leafCenterX + leafW / 2;
-          const hingeT = new THREE.CylinderGeometry(0.010, 0.010, 0.08, 12);
-          hingeT.translate(hingeX, 0.5, leafZ + 0.02);
-          hardwareParts.push(hingeT);
-
-          const hingeB = new THREE.CylinderGeometry(0.010, 0.010, 0.08, 12);
-          hingeB.translate(hingeX, -0.5, leafZ + 0.02);
-          hardwareParts.push(hingeB);
-        }
-      }
-
-      // Master Bi-fold Lever Handle
-      const handle = new THREE.CylinderGeometry(0.012, 0.012, 0.12, 12);
-      handle.rotateZ(Math.PI / 2);
-      handle.translate(panelWidth / 2 - leafW + 0.06, -0.05, panelThick / 2 + 0.04);
-      hardwareParts.push(handle);
-      break;
-    }
-
-    case 'patio-sliding': {
-      // 2-Panel Wide Sliding Glass Patio Door
-      const leafW = panelWidth / 2 + 0.03;
-      const stileW = 0.08;
-      const topRailH = 0.09;
-      const botRailH = 0.14;
-
-      // Sliding Top & Bottom Dual Tracks
-      const trackT = new THREE.BoxGeometry(panelWidth, 0.035, frameDepth * 0.95);
-      trackT.translate(0, height / 2 - frameThick / 2 - 0.015, 0);
-      hardwareParts.push(trackT);
-
-      const trackB = new THREE.BoxGeometry(panelWidth, 0.025, frameDepth * 0.95);
-      trackB.translate(0, -height / 2 + 0.012, 0);
-      hardwareParts.push(trackB);
-
-      // Left fixed leaf (slightly inward -Z) and Right sliding leaf (slightly outward +Z)
-      const leaves = [
-        { cx: -panelWidth / 4 + 0.015, z: -0.025, isSlider: false },
-        { cx: panelWidth / 4 - 0.015, z: 0.025, isSlider: true }
-      ];
-
-      leaves.forEach(({ cx, z, isSlider }) => {
-        // Frame stiles & rails
-        const frameL = new THREE.BoxGeometry(stileW, panelHeight - 0.05, panelThick * 0.85);
-        frameL.translate(cx - leafW / 2 + stileW / 2, -frameThick / 2, z);
-        frameParts.push(frameL);
-
-        const frameR = new THREE.BoxGeometry(stileW, panelHeight - 0.05, panelThick * 0.85);
-        frameR.translate(cx + leafW / 2 - stileW / 2, -frameThick / 2, z);
-        frameParts.push(frameR);
-
-        const frameT = new THREE.BoxGeometry(leafW - stileW * 2, topRailH, panelThick * 0.85);
-        frameT.translate(cx, -frameThick / 2 + (panelHeight - 0.05) / 2 - topRailH / 2, z);
-        frameParts.push(frameT);
-
-        const frameB = new THREE.BoxGeometry(leafW - stileW * 2, botRailH, panelThick * 0.85);
-        frameB.translate(cx, -frameThick / 2 - (panelHeight - 0.05) / 2 + botRailH / 2, z);
-        frameParts.push(frameB);
-
-        // Expansive Glass
-        const gw = leafW - stileW * 2;
-        const gh = panelHeight - 0.05 - topRailH - botRailH;
-        const gy = -frameThick / 2 + (topRailH - botRailH) / 2;
-        const glass = new THREE.BoxGeometry(gw, gh, 0.008);
-        glass.translate(cx, gy, z);
-        glassParts.push(glass);
-
-        if (isSlider) {
-          // Sliding D-Handle & Mortise Lock
-          const dHandle = new THREE.BoxGeometry(0.025, 0.22, 0.04);
-          dHandle.translate(cx - leafW / 2 + stileW + 0.03, -0.05, z + panelThick / 2 + 0.02);
-          hardwareParts.push(dHandle);
-
-          const lockThumb = new THREE.CylinderGeometry(0.012, 0.012, 0.03, 12);
-          lockThumb.rotateX(Math.PI / 2);
-          lockThumb.translate(cx - leafW / 2 + stileW + 0.03, 0.1, z + panelThick / 2 + 0.02);
-          hardwareParts.push(lockThumb);
-        }
-      });
-      break;
-    }
-
-    case 'shutters': {
-      // Full-Lite French Doors flanked by authentic Louvered Timber Shutters
-      const doorAreaW = panelWidth * 0.65;
-      const shutterW = (panelWidth - doorAreaW) / 2 - 0.02;
-      const leafW = doorAreaW / 2 - 0.005;
-      const stileW = 0.075;
-
-      // Central Dual French Glass Doors
-      [-doorAreaW / 4, doorAreaW / 4].forEach((leafCenterX) => {
-        const frameL = new THREE.BoxGeometry(stileW, panelHeight, panelThick * 0.85);
-        frameL.translate(leafCenterX - leafW / 2 + stileW / 2, -frameThick / 2, 0);
-        frameParts.push(frameL);
-
-        const frameR = new THREE.BoxGeometry(stileW, panelHeight, panelThick * 0.85);
-        frameR.translate(leafCenterX + leafW / 2 - stileW / 2, -frameThick / 2, 0);
-        frameParts.push(frameR);
-
-        const frameT = new THREE.BoxGeometry(leafW - stileW * 2, 0.1, panelThick * 0.85);
-        frameT.translate(leafCenterX, -frameThick / 2 + panelHeight / 2 - 0.05, 0);
-        frameParts.push(frameT);
-
-        const frameB = new THREE.BoxGeometry(leafW - stileW * 2, 0.14, panelThick * 0.85);
-        frameB.translate(leafCenterX, -frameThick / 2 - panelHeight / 2 + 0.07, 0);
-        frameParts.push(frameB);
-
-        // Glass Pane & Muntin Grid
-        const gw = leafW - stileW * 2;
-        const gh = panelHeight - 0.24;
-        const vm = new THREE.BoxGeometry(0.018, gh, panelThick * 0.7);
-        vm.translate(leafCenterX, -frameThick / 2 - 0.02, 0);
-        frameParts.push(vm);
-
-        const hm1 = new THREE.BoxGeometry(gw, 0.018, panelThick * 0.7);
-        hm1.translate(leafCenterX, -frameThick / 2 + gh / 4 - 0.02, 0);
-        frameParts.push(hm1);
-
-        const hm2 = new THREE.BoxGeometry(gw, 0.018, panelThick * 0.7);
-        hm2.translate(leafCenterX, -frameThick / 2 - gh / 4 - 0.02, 0);
-        frameParts.push(hm2);
-
-        const glass = new THREE.BoxGeometry(gw, gh, 0.008);
-        glass.translate(leafCenterX, -frameThick / 2 - 0.02, 0);
-        glassParts.push(glass);
-      });
-
-      // Left & Right Louvered Exterior Shutters
-      const shutterZ = frameDepth / 2 + 0.02;
-      const shutterH = panelHeight * 0.98;
-      const shutterStileW = 0.05;
-
-      [-panelWidth / 2 + shutterW / 2, panelWidth / 2 - shutterW / 2].forEach((shutX, sIdx) => {
-        // Shutter Outer Frame
-        const shutL = new THREE.BoxGeometry(shutterStileW, shutterH, 0.028);
-        shutL.translate(shutX - shutterW / 2 + shutterStileW / 2, -frameThick / 2, shutterZ);
-        frameParts.push(shutL);
-
-        const shutR = new THREE.BoxGeometry(shutterStileW, shutterH, 0.028);
-        shutR.translate(shutX + shutterW / 2 - shutterStileW / 2, -frameThick / 2, shutterZ);
-        frameParts.push(shutR);
-
-        const shutT = new THREE.BoxGeometry(shutterW - shutterStileW * 2, 0.06, 0.028);
-        shutT.translate(shutX, -frameThick / 2 + shutterH / 2 - 0.03, shutterZ);
-        frameParts.push(shutT);
-
-        const shutM = new THREE.BoxGeometry(shutterW - shutterStileW * 2, 0.05, 0.028);
-        shutM.translate(shutX, -frameThick / 2, shutterZ);
-        frameParts.push(shutM);
-
-        const shutB = new THREE.BoxGeometry(shutterW - shutterStileW * 2, 0.08, 0.028);
-        shutB.translate(shutX, -frameThick / 2 - shutterH / 2 + 0.04, shutterZ);
-        frameParts.push(shutB);
-
-        // Angled Louver Slats (14 upper slats, 14 lower slats)
-        const louverW = shutterW - shutterStileW * 2;
-        const numLouvers = 12;
-        const subH = shutterH / 2 - 0.07;
-
-        for (let l = 1; l <= numLouvers; l++) {
-          // Upper section
-          const yTop = -frameThick / 2 + 0.03 + (subH / (numLouvers + 1)) * l;
-          const louver1 = new THREE.BoxGeometry(louverW, 0.03, 0.006);
-          louver1.rotateX(0.45);
-          louver1.translate(shutX, yTop, shutterZ);
-          frameParts.push(louver1);
-
-          // Lower section
-          const yBot = -frameThick / 2 - shutterH / 2 + 0.05 + (subH / (numLouvers + 1)) * l;
-          const louver2 = new THREE.BoxGeometry(louverW, 0.03, 0.006);
-          louver2.rotateX(0.45);
-          louver2.translate(shutX, yBot, shutterZ);
-          frameParts.push(louver2);
-        }
-
-        // Wrought Iron Strap Hinges & Shutter Tiebacks
-        const hinge1 = new THREE.BoxGeometry(shutterW * 0.75, 0.02, 0.008);
-        hinge1.translate(shutX + (sIdx === 0 ? 0.02 : -0.02), -frameThick / 2 + shutterH / 2 - 0.08, shutterZ + 0.016);
-        hardwareParts.push(hinge1);
-
-        const hinge2 = new THREE.BoxGeometry(shutterW * 0.75, 0.02, 0.008);
-        hinge2.translate(shutX + (sIdx === 0 ? 0.02 : -0.02), -frameThick / 2 - shutterH / 2 + 0.08, shutterZ + 0.016);
-        hardwareParts.push(hinge2);
-      });
-
-      // Dual Brass French Knobs
-      const knob1 = new THREE.CylinderGeometry(0.014, 0.014, 0.04, 16);
-      knob1.rotateX(Math.PI / 2);
-      knob1.translate(-0.03, -0.05, panelThick / 2 + 0.03);
-      hardwareParts.push(knob1);
-
-      const knob2 = new THREE.CylinderGeometry(0.014, 0.014, 0.04, 16);
-      knob2.rotateX(Math.PI / 2);
-      knob2.translate(0.03, -0.05, panelThick / 2 + 0.03);
-      hardwareParts.push(knob2);
-      break;
-    }
-
     case 'archway-square': {
       // Open doorway: the straight jambs and header built above are the whole thing -
       // no leaf, glass or hardware, just a plain casing around the opening.
@@ -1089,6 +840,9 @@ export function createDoorGeometry(
       }
       break;
     }
+
+    case '__sized':
+      break; // already built above
 
     case 'flush':
     default: {

@@ -25,7 +25,7 @@ export type ToolType =
   | 'select' | 'lasso' | 'eraser' | 'paint' | 'component'
   | 'line' | 'poly' | 'bezier' | 'freehand' | 'rectangle' | 'circle' | 'polygon' | 'arc' | 'pie' | 'triangle'
   | 'move' | 'rotate' | 'scale' | 'pushpull' | 'followme' | 'offset' | 'combine' | 'flip'
-  | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section' | 'glass' | 'camera_type'
+  | 'tape' | 'protractor' | 'dimensions' | 'text' | 'text3d' | 'axes' | 'section' | 'camera_type'
   | 'orbit' | 'pan' | 'zoom' | 'zoomextents' | 'teleport' | 'walk' | 'look'
   | 'sphere' | 'cone' | 'pyramid' | 'donut' | 'dome'
   | 'bevel' | 'subtract' | 'note' | 'deform'
