@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- **AI plan recognition in Reconstruction Studio**: a new "AI recognise and review" action reads a floor-plan image with Gemini and proposes walls at any angle, doors, windows and room names. Local clean-up then aligns walls to the drawn lines, joins corners and T-junctions, merges duplicates and hosts each opening on its nearest wall. Room names are reviewable and commit as floor text labels.
+
+### Fixed
+- Reconstruction Studio produced scattered, unrecognisable walls on text-heavy, dimensioned or non-orthogonal plans. The local detector is kept as an offline option for clean right-angled plans and is now labelled as such.
+
 ## [1.10.5] - 2026-09-16
 ### Added
 - **Procedural Grass Feature in Terrain Floating Panel**:

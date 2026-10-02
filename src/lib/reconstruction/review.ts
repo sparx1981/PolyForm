@@ -1,4 +1,5 @@
 import {
+  roomHintId,
   validateReconstructionDraft,
   type ReconstructionDraft,
   type ReconstructionIssue,
@@ -8,7 +9,7 @@ export type ReconstructionReviewStatus = 'accepted' | 'review' | 'error';
 
 export interface ReconstructionReviewItem {
   id: string;
-  kind: 'wall' | 'opening' | 'furniture';
+  kind: 'wall' | 'opening' | 'furniture' | 'room';
   confidence: number;
   status: ReconstructionReviewStatus;
   issues: ReconstructionIssue[];
@@ -52,6 +53,9 @@ export function buildReconstructionReview(
   for (const wall of draft.walls) add(wall.id, 'wall', wall.confidence);
   for (const opening of draft.openings ?? []) add(opening.id, 'opening', opening.confidence);
   for (const item of draft.furniture ?? []) add(item.id, 'furniture', item.confidence);
+  (draft.rooms ?? []).forEach((room, index) => {
+    if (room.name?.trim()) add(roomHintId(room, index), 'room', room.confidence);
+  });
 
   return {
     items,
@@ -77,5 +81,8 @@ export function applyReconstructionReview(
     walls,
     openings: (draft.openings ?? []).filter(opening => keep(opening.id) && wallIds.has(opening.wallId)),
     furniture: (draft.furniture ?? []).filter(item => keep(item.id)),
+    rooms: (draft.rooms ?? [])
+      .map((room, index) => ({ ...room, id: roomHintId(room, index) }))
+      .filter(room => keep(room.id)),
   };
 }
