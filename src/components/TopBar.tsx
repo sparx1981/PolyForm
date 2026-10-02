@@ -70,7 +70,7 @@ export default function TopBar() {
   const { isPhone } = usePhoneLayout();
   const [openSubmenu, setOpenSubmenu] = useState<'export' | 'dev' | null>(null);
   const submenuClass = (id: 'export' | 'dev', desktop: string) => isPhone
-    ? (openSubmenu === id ? "block pl-4 bg-gray-50 border-y border-gray-100 py-1" : "hidden")
+    ? (openSubmenu === id ? "block pl-4 bg-gray-50 dark:bg-gray-900 border-y border-gray-100 dark:border-gray-700 py-1" : "hidden")
     : desktop;
     const appApi = useApp();
     const {
@@ -722,7 +722,7 @@ export default function TopBar() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 className={isPhone
-                  ? "fixed left-0 right-0 top-10 bottom-0 overflow-y-auto bg-white shadow-modus-4 border-t border-gray-200 py-2 text-gray-700 z-[200]"
+                  ? "fixed left-0 right-0 top-10 bottom-0 overflow-y-auto bg-white dark:bg-gray-800 shadow-modus-4 border-t border-gray-200 dark:border-gray-700 py-2 text-gray-700 dark:text-gray-200 z-[200]"
                   : "absolute left-0 top-full mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-modus-4 border border-gray-200 dark:border-gray-700 py-2 text-gray-700 dark:text-gray-200"}
               >
                 <MenuButton icon={<FilePlus size={16} />} label="New" onClick={handleNew} />
@@ -730,14 +730,14 @@ export default function TopBar() {
                 <MenuButton icon={<Save size={16} />} label="Save" onClick={handleSave} />
                 <MenuButton icon={<Save size={16} />} label="Save As..." onClick={() => { setIsSaveAsOpen(true); setIsMenuOpen(false); }} />
                 
-                <div className="h-px bg-gray-100 my-1" />
+                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                 
-                <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Project</div>
+                <div className="px-4 py-2 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Project</div>
                 
                 <div className="relative group/export">
                   <div
                     onClick={() => setOpenSubmenu(prev => prev === 'export' ? null : 'export')}
-                    className={cn("flex items-center justify-between px-4 text-sm hover:bg-gray-50 cursor-pointer transition-colors", isPhone ? "py-3" : "py-2")}
+                    className={cn("flex items-center justify-between px-4 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors", isPhone ? "py-3" : "py-2")}
                   >
                     <div className="flex items-center gap-3">
                       <Download size={16} className="text-gray-500" />
@@ -746,21 +746,21 @@ export default function TopBar() {
                     <ChevronRight size={14} className={cn("text-gray-400 transition-transform", isPhone && openSubmenu === 'export' && "rotate-90")} />
                   </div>
                   
-                  <div className={submenuClass('export', "absolute left-full top-0 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/export:block z-[150]")}>
+                  <div className={submenuClass('export', "absolute left-full top-0 w-56 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-2 hidden group-hover/export:block z-[150]")}>
                     <div className="absolute -left-2 top-0 w-2 h-full" />
                     <MenuButton icon={<Download size={14} />} label="Save File (.polyform)" onClick={() => { downloadProjectFile(); setIsMenuOpen(false); }} />
                     <MenuButton icon={<FolderOpen size={14} />} label="Open File (.polyform)" onClick={handleOpenLocalFile} />
-                    <div className="h-px bg-gray-100 my-1" />
+                    <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                     <MenuButton icon={<Download size={14} />} label="Import SKP / 3D" onClick={handleImportSKP} />
                     <MenuButton icon={<Camera size={14} />} label="Photo to 3D (AI)" onClick={handlePhotoTo3D} />
-                    <div className="h-px bg-gray-100 my-1" />
+                    <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                     <MenuButton icon={<Share2 size={14} />} label="Export GLTF" onClick={() => handleExport('gltf')} />
                     <MenuButton icon={<Share2 size={14} />} label="Export STL" onClick={() => handleExport('stl')} />
                     <MenuButton icon={<Share2 size={14} />} label="Export SKP" onClick={() => handleExport('skp')} />
                   </div>
                 </div>
                 
-                <div className="h-px bg-gray-100 my-1" />
+                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                 
                 <MenuButton icon={<Settings size={16} />} label="Settings" onClick={() => { setIsSettingsOpen(true); setIsMenuOpen(false); }} />
                 <MenuButton icon={<HelpCircle size={16} />} label="Help" onClick={() => { setIsChangelogOpen(true); setIsMenuOpen(false); }} />
@@ -768,12 +768,12 @@ export default function TopBar() {
                   <MenuButton icon={<ShieldAlert size={16} />} label="Activity" onClick={() => { setIsLoginActivityOpen(true); setIsMenuOpen(false); }} />
                 )}
                 
-                <div className="h-px bg-gray-100 my-1" />
+                <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                 
                 <div className="relative group/dev">
                   <div
                     onClick={() => setOpenSubmenu(prev => prev === 'dev' ? null : 'dev')}
-                    className={cn("flex items-center justify-between px-4 text-sm hover:bg-gray-50 cursor-pointer transition-colors", isPhone ? "py-3" : "py-2")}
+                    className={cn("flex items-center justify-between px-4 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors", isPhone ? "py-3" : "py-2")}
                   >
                     <div className="flex items-center gap-3">
                       <Terminal size={16} className="text-gray-500" />
@@ -782,13 +782,13 @@ export default function TopBar() {
                     <ChevronRight size={14} className={cn("text-gray-400 transition-transform", isPhone && openSubmenu === 'dev' && "rotate-90")} />
                   </div>
                   
-                  <div className={submenuClass('dev', "absolute left-full top-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-2 hidden group-hover/dev:block z-[150]")}>
+                  <div className={submenuClass('dev', "absolute left-full top-0 w-52 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-2 hidden group-hover/dev:block z-[150]")}>
                     <div className="absolute -left-2 top-0 w-2 h-full" /> {/* Bridge the gap for hover */}
                     <MenuButton icon={<Terminal size={14} />} label="Console" onClick={() => { setIsDeveloperConsoleOpen(true); setActiveDeveloperTab('console'); setIsMenuOpen(false); }} />
                     <MenuButton icon={<BookOpen size={14} />} label="Library" onClick={() => { setIsDeveloperConsoleOpen(true); setActiveDeveloperTab('library'); setIsMenuOpen(false); }} />
                     <MenuButton icon={<FileText size={14} />} label="Documentation" onClick={() => { setIsDeveloperConsoleOpen(true); setActiveDeveloperTab('docs'); setIsMenuOpen(false); }} />
                     <MenuButton icon={<Layers size={14} />} label="Product Spec" onClick={() => { setIsDeveloperConsoleOpen(true); setActiveDeveloperTab('spec'); setIsMenuOpen(false); }} />
-                    <div className="h-px bg-gray-100 my-1" />
+                    <div className="h-px bg-gray-100 dark:bg-gray-700 my-1" />
                     <MenuButton icon={<Terminal size={14} />} label="AI Diagnostic Log" onClick={() => { setIsDiagnosticLogOpen(true); setIsMenuOpen(false); }} />
                   </div>
                 </div>
@@ -1495,7 +1495,7 @@ function MenuButton({ icon, label, onClick, className }: { icon: React.ReactNode
     <button 
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 transition-colors",
+        "w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors",
         className
       )}
     >

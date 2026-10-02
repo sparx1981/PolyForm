@@ -321,10 +321,10 @@ function readInstance(el: TlvNode): InstanceRecord {
 
 /**
  * Reads a vertex record straight from its bytes, without building a tree of objects for it. Vertices are by far the
- * most numerous records. Returns false (having done nothing) when the record is not in the usual plain shape, in which
- * case {@link extractEntity} must be used.
+ * most numerous records. Returns the vertex's id, or -1 (having done nothing) when the record is not in the usual plain
+ * shape, in which case {@link extractEntity} must be used.
  */
-export function extractVertexFast(body: Uint8Array, sink: EntitySink): boolean {
+export function extractVertexFast(body: Uint8Array, sink: EntitySink): number {
   const n = body.length;
   let pos = 0;
   let id = -1;
@@ -334,7 +334,7 @@ export function extractVertexFast(body: Uint8Array, sink: EntitySink): boolean {
     const tag = (body[pos] << 8) | body[pos + 1];
     const size = (body[pos + 2] | (body[pos + 3] << 8) | (body[pos + 4] << 16) | (body[pos + 5] << 24)) >>> 0;
     if (pos + 6 + size > n) break;
-    if (size > 0 && CONTAINER_TAGS.has(tag)) return false;
+    if (size > 0 && CONTAINER_TAGS.has(tag)) return -1;
     if (!haveId && (tag === TAG.ENTITY_ID || tag === TAG.ENTITY_ID_INNER)) {
       const payload = body.subarray(pos + 6, pos + 6 + size);
       id = tag === TAG.ENTITY_ID ? entityIdFromPayload(payload) : parseVarInt(payload, 0, payload.length);
@@ -344,17 +344,20 @@ export function extractVertexFast(body: Uint8Array, sink: EntitySink): boolean {
     }
     pos += 6 + size;
   }
-  if (!haveId) return false;
+  if (!haveId || !(id >= 0)) return -1;
   if (positionAt >= 0) sink.vertex(id, readF64(body, positionAt), readF64(body, positionAt + 8), readF64(body, positionAt + 16));
-  return true;
+  return id;
 }
 
-/** The same shortcut for an edge record. The edge's display flags are not needed, so its flags block is stepped over. */
-export function extractEdgeFast(body: Uint8Array, sink: EntitySink): boolean {
+/**
+ * The same shortcut for an edge record. Newer files keep an edge's id inside its flags block (D007), so that block is
+ * looked into one level; the edge's display flags themselves are not needed. Returns the id, or -1 to use the full path.
+ */
+export function extractEdgeFast(body: Uint8Array, sink: EntitySink): number {
   const n = body.length;
   let pos = 0;
-  let id = -1;
-  let haveId = false;
+  let direct = -1;
+  let via = -1;
   let v1 = -1;
   let v2 = -1;
   let haveV1 = false;
@@ -363,11 +366,26 @@ export function extractEdgeFast(body: Uint8Array, sink: EntitySink): boolean {
     const tag = (body[pos] << 8) | body[pos + 1];
     const size = (body[pos + 2] | (body[pos + 3] << 8) | (body[pos + 4] << 16) | (body[pos + 5] << 24)) >>> 0;
     if (pos + 6 + size > n) break;
-    if (size > 0 && tag !== TAG.FLAGS_BLOCK && CONTAINER_TAGS.has(tag)) return false;
-    if (!haveId && (tag === TAG.ENTITY_ID || tag === TAG.ENTITY_ID_INNER)) {
+    if (tag === TAG.FLAGS_BLOCK && size > 0) {
+      // The id of the flags block's first id record counts as the edge's id when it has none of its own.
+      let inner = pos + 6;
+      const innerEnd = pos + 6 + size;
+      while (inner <= innerEnd - 6) {
+        const itag = (body[inner] << 8) | body[inner + 1];
+        const isize = (body[inner + 2] | (body[inner + 3] << 8) | (body[inner + 4] << 16) | (body[inner + 5] << 24)) >>> 0;
+        if (inner + 6 + isize > innerEnd) break;
+        if (isize > 0 && CONTAINER_TAGS.has(itag)) return -1;
+        if (via < 0 && (itag === TAG.ENTITY_ID || itag === TAG.ENTITY_ID_INNER)) {
+          const payload = body.subarray(inner + 6, inner + 6 + isize);
+          via = itag === TAG.ENTITY_ID ? entityIdFromPayload(payload) : parseVarInt(payload, 0, payload.length);
+        }
+        inner += 6 + isize;
+      }
+    } else if (size > 0 && CONTAINER_TAGS.has(tag)) {
+      return -1;
+    } else if (direct < 0 && (tag === TAG.ENTITY_ID || tag === TAG.ENTITY_ID_INNER)) {
       const payload = body.subarray(pos + 6, pos + 6 + size);
-      id = tag === TAG.ENTITY_ID ? entityIdFromPayload(payload) : parseVarInt(payload, 0, payload.length);
-      haveId = true;
+      direct = tag === TAG.ENTITY_ID ? entityIdFromPayload(payload) : parseVarInt(payload, 0, payload.length);
     } else if (tag === TAG.EDGE_START && !haveV1) {
       v1 = parseVarInt(body, pos + 6, size);
       haveV1 = true;
@@ -377,9 +395,10 @@ export function extractEdgeFast(body: Uint8Array, sink: EntitySink): boolean {
     }
     pos += 6 + size;
   }
-  if (!haveId) return false;
+  const id = direct >= 0 ? direct : via;
+  if (!(id >= 0)) return -1;
   sink.edge(id, v1, v2, -1);
-  return true;
+  return id;
 }
 
 /** Hands one record (and everything inside it) to the sink if it is a vertex, edge, face or instance. */

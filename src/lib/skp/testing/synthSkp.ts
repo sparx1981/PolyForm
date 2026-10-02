@@ -3,7 +3,7 @@
 import { zipSync } from 'fflate';
 
 type Payload = Buffer | Buffer[];
-export interface FaceOptions { material?: number; backMaterial?: number; hidden?: boolean; uvFront?: number[] }
+export interface FaceOptions { material?: number; backMaterial?: number; hidden?: boolean; uvFront?: number[]; idInFlags?: boolean; nestedLoops?: boolean }
 export interface InstanceOptions { name?: string; material?: number; layer?: number; hidden?: boolean; attributes?: [string, string, string] }
 
 const u32 = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32LE(n >>> 0); return b; };
@@ -20,14 +20,24 @@ export const rec = (tag: string, payload: Payload = Buffer.alloc(0)): Buffer => 
 const idRec = (id: number) => { const v = varint(id); return rec('DC05', Buffer.concat([Buffer.from([0xde, 0x05]), u32(v.length), v])); };
 
 export const vertex = (id: number, x: number, y: number, z: number) => rec('C409', [idRec(id), rec('C509', f64s(x, y, z))]);
-export const edge = (id: number, v1: number, v2: number, flags?: number) => rec('B80B', [idRec(id), rec('B90B', varint(v1)), rec('BA0B', varint(v2)), ...(flags === undefined ? [] : [rec('D007', [rec('D307', Buffer.from([flags]))])])]);
+/** An edge record. With `idInFlags` the id sits in the flags block instead of directly in the record, as in newer files. */
+export const edge = (id: number, v1: number, v2: number, flags?: number, idInFlags = false) =>
+  rec('B80B', [
+    ...(idInFlags ? [rec('D007', [idRec(id), rec('D307', Buffer.from([flags ?? 0]))])] : [idRec(id)]),
+    rec('B90B', varint(v1)),
+    rec('BA0B', varint(v2)),
+    ...(idInFlags || flags === undefined ? [] : [rec('D007', [rec('D307', Buffer.from([flags]))])]),
+  ]);
 export const face = (id: number, nx: number, ny: number, nz: number, loops: Array<Array<[number, number]>>, opts: FaceOptions = {}) => {
-  const loopRecs = loops.map((coedges) => rec('9411', coedges.map(([edgeId, orient]) => rec('A00F', [rec('A10F', varint(edgeId)), rec('A20F', varint(orient))]))));
-  const d007: Buffer[] = [];
+  const loopRecs = loops.map((coedges) => {
+    const edges = coedges.map(([edgeId, orient]) => rec('A00F', [rec('A10F', varint(edgeId)), rec('A20F', varint(orient))]));
+    return rec('9411', opts.nestedLoops ? [rec('9511', edges)] : edges);
+  });
+  const d007: Buffer[] = opts.idInFlags ? [idRec(id)] : [];
   if (opts.material !== undefined) d007.push(rec('D107', varint(opts.material)));
   if (opts.hidden) d007.push(rec('D307', Buffer.from([1])));
   if (opts.uvFront) d007.push(rec('DC05', rec('DD05', rec('B136', rec('B236', rec('1027', rec('1127', rec('1327', rec('1527', f64s(...opts.uvFront))))))))));
-  return rec('AC0D', [idRec(id), rec('AD0D', f64s(nx, ny, nz)), rec('AE0D', loopRecs), ...(d007.length ? [rec('D007', d007)] : []), ...(opts.backMaterial !== undefined ? [rec('AF0D', varint(opts.backMaterial))] : [])]);
+  return rec('AC0D', [...(opts.idInFlags ? [] : [idRec(id)]), rec('AD0D', f64s(nx, ny, nz)), rec('AE0D', loopRecs), ...(d007.length ? [rec('D007', d007)] : []), ...(opts.backMaterial !== undefined ? [rec('AF0D', varint(opts.backMaterial))] : [])]);
 };
 export const instance = (defIdx: number, matrix13: number[], opts: InstanceOptions = {}) => rec('6419', [
   rec('6819', Buffer.alloc(16, 7)),
@@ -43,6 +53,48 @@ export const layer = (id: number, name: string, hidden = false) => rec('993A', [
 export const materialEntry = (id: number, name: string) => rec('C832', [idRec(id), rec('CC32', Buffer.from(name))]);
 export const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1];
 export const translation = (x: number, y: number, z: number) => [1, 0, 0, 0, 1, 0, 0, 0, 1, x, y, z, 1];
+
+/**
+ * A grid of unit quads as separate vertex, edge and face lists, with ids and nesting the way newer SketchUp files
+ * write them (edge and face ids in their flags blocks, loops nested one level deeper).
+ */
+export function gridParts(w: number, h: number, size = 10, material?: number): { vertices: Buffer[]; edges: Buffer[]; faces: Buffer[] } {
+  const vertices: Buffer[] = [];
+  const edges: Buffer[] = [];
+  const faces: Buffer[] = [];
+  const vid = (i: number, j: number) => 1 + i * (h + 1) + j;
+  for (let i = 0; i <= w; i++) for (let j = 0; j <= h; j++) vertices.push(vertex(vid(i, j), i * size, j * size, 0));
+  let eid = 1;
+  const hEdge = new Map<string, number>(), vEdge = new Map<string, number>();
+  for (let i = 0; i < w; i++) for (let j = 0; j <= h; j++) { hEdge.set(`${i},${j}`, eid); edges.push(edge(eid++, vid(i, j), vid(i + 1, j), 0, true)); }
+  for (let i = 0; i <= w; i++) for (let j = 0; j < h; j++) { vEdge.set(`${i},${j}`, eid); edges.push(edge(eid++, vid(i, j), vid(i, j + 1), 0, true)); }
+  let fid = 1;
+  for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) {
+    faces.push(face(fid++, 0, 0, 1, [[
+      [hEdge.get(`${i},${j}`)!, 0], [vEdge.get(`${i + 1},${j}`)!, 0], [hEdge.get(`${i},${j + 1}`)!, 1], [vEdge.get(`${i},${j}`)!, 1],
+    ]], { ...(material === undefined ? {} : { material }), idInFlags: true, nestedLoops: true }));
+  }
+  return { vertices, edges, faces };
+}
+
+/**
+ * A definition laid out as in SketchUp 2025: its records sit in one container with the vertices, edges, faces and
+ * placements each in their own, and the definition's own id is in a flags block rather than directly on it.
+ * With `idLast` that flags block comes after the geometry instead of before it.
+ */
+export function definition2025(id: number, name: string, parts: { vertices?: Buffer[]; edges?: Buffer[]; faces?: Buffer[]; instances?: Buffer[] }, idLast = false): Buffer {
+  const flags = rec('D007', [idRec(id)]);
+  const body = [
+    ...(idLast ? [] : [flags]),
+    rec('8E13', Buffer.from([4, 1, 2, 3])),
+    rec('8913', parts.vertices ?? []),
+    rec('8A13', parts.edges ?? []),
+    rec('8B13', parts.faces ?? []),
+    ...(parts.instances?.length ? [rec('8C13', parts.instances)] : []),
+    ...(idLast ? [flags] : []),
+  ];
+  return rec('7C15', [rec('7D15', Buffer.alloc(16, id & 255)), rec('7E15', Buffer.from(name, 'utf8')), rec('8813', body)]);
+}
 
 /** A grid of w by h unit quads (with shared vertices), as vertex/edge/face records. */
 export function gridGeometry(w: number, h: number, size = 10, material?: number): Buffer[] {

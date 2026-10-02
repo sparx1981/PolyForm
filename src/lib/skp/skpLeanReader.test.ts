@@ -9,7 +9,7 @@ import { readSkpToGlb } from './skpRead';
 import { GeometryAccumulator } from './leanGeometry';
 import { IdMap } from './idMap';
 import type { FaceOptions } from './testing/synthSkp';
-import { buildSkp, definition, edge, face, gridGeometry, instance, layer, materialEntry, materialXml, rec, translation, vertex, IDENTITY } from './testing/synthSkp';
+import { buildSkp, definition, definition2025, edge, face, gridGeometry, gridParts, instance, layer, materialEntry, materialXml, rec, translation, vertex, IDENTITY } from './testing/synthSkp';
 
 /** Splits a GLB into its JSON and binary parts. */
 function splitGlb(glb: Uint8Array) {
@@ -136,6 +136,38 @@ describe('readSkpToGlbLean', () => {
     expect(() => readSkpToGlbLean(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]).buffer)).toThrow(LeanSkpUnsupported);
     const legacy = Buffer.concat([Buffer.from([0xff, 0xfe, 0xff, 0x0e]), Buffer.from('xxxxxxxx CVersionMap xxxxxxxx')]);
     expect(() => readSkpToGlbLean(toArrayBuffer(legacy))).toThrow(LeanSkpUnsupported);
+  });
+
+  it('reads definitions laid out as in SketchUp 2025 and builds what OpenSKP builds', () => {
+    const chair = gridParts(2, 2, 10, 1);
+    const seat = gridParts(3, 1, 10);
+    const model = [
+      materialEntry(1, 'Red'),
+      rec('F901', [rec('7017', [rec('7117', [
+        definition2025(11, 'Chair', chair),
+        definition2025(12, 'Set', { ...seat, instances: [instance(11, translation(0, 0, 0)), instance(11, translation(40, 0, 0), { name: 'Second' })] }),
+      ])])]),
+      rec('F601', [rec('8813', [rec('8D13', [rec('4C1D', [instance(12, translation(0, 0, 0))]), rec('4C1D', [instance(11, translation(100, 0, 0))])])])]),
+    ];
+    const skp = buildSkp({ model, files: { 'Materials/Red/material.xml': new Uint8Array(materialXml('Red', 200, 20, 20)) } });
+    const { json } = expectSameAsOpenSkp(skp);
+    expect(json.meshes.length).toBeGreaterThan(1);
+    expect(json.nodes.some((n: { name?: string }) => n.name === 'Second')).toBe(true);
+  });
+
+  it('still finds the right components when the id in a definition comes after its geometry', () => {
+    const chair = gridParts(2, 2);
+    const model = [
+      rec('F901', [rec('7017', [rec('7117', [definition2025(500, 'Chair', chair, true), definition2025(501, 'Pair', { instances: [instance(500, translation(0, 0, 0)), instance(500, translation(30, 0, 0))] }, true)])])]),
+      rec('F601', [instance(501, translation(0, 0, 0))]),
+    ];
+    const glb = readSkpToGlbLean(toArrayBuffer(buildSkp({ model })), { respectEdgeVisibility: true });
+    const { json } = splitGlb(glb);
+    expect(json.meshes.length).toBe(1);
+    expect(json.nodes.filter((n: { mesh?: number }) => n.mesh !== undefined)).toHaveLength(2);
+    // Skipping unplaced components must not lose them either.
+    const trimmed = splitGlb(readSkpToGlbLean(toArrayBuffer(buildSkp({ model })), { respectEdgeVisibility: true, onlyUsedDefinitions: true }));
+    expect(trimmed.json.nodes.filter((n: { mesh?: number }) => n.mesh !== undefined)).toHaveLength(2);
   });
 
   it('can skip components nothing places and still build the same model', () => {

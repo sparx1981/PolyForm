@@ -14,6 +14,7 @@ import {
   TAG,
   entityIdFromPayload,
   extractEdgeFast,
+  extractEntityId,
   extractEntity,
   extractVertexFast,
   findChildTag,
@@ -50,21 +51,37 @@ const cleanText = (bytes: Uint8Array): string => utf8.decode(bytes).replace(/\0/
 const MAX_ENTITY_BYTES = 256 * 1024 * 1024;
 
 interface Frame {
+  tag: number;
   end: number;
   accumulator: GeometryAccumulator | null;
-  definition: { id: number | null; name: string; skip: boolean } | null;
+  /** Set on the record of a component definition. */
+  definition: { name: string; skip: boolean; altId: number | null } | null;
+  /** The definition this record sits in (or is), if any. */
+  owner: Frame | null;
+  /**
+   * How a definition's id is found, following OpenSKP: an id record that is a direct child wins; failing that, the
+   * first id found by searching the children in order. On a record inside a definition these hold what that search
+   * has turned up so far for this record.
+   */
+  idDirect: number | null;
+  idVia: number | null;
   wrapper: boolean;
 }
+
+/** Which of a definition's two candidate ids placements refer to. See {@link chooseKeys}. */
+type KeyKind = 'id' | 'alt';
 
 interface ReadMode {
   /** Only note where components are placed; skip all their geometry. */
   placementsOnly?: boolean;
-  /** Skip the geometry of definitions not in this set. */
+  /** Skip the geometry of definitions not in this set (their ids, as chosen by `keys`). */
   used?: ReadonlySet<number>;
+  keys?: KeyKind;
 }
 
 interface ModelRecords {
-  definitions: Map<number, DefTemplate>;
+  /** Every definition read, with both candidate ids recorded on it. */
+  templates: DefTemplate[];
   root: DefTemplate;
   layerIdToName: Map<number, string>;
   materialIdToName: Map<number, string>;
@@ -75,12 +92,14 @@ function nodeFromBody(tag: number, body: Uint8Array): TlvNode {
   return { tag, children, payload: children.length > 0 ? new Uint8Array(0) : body };
 }
 
+const idOf = (tag: number, payload: Uint8Array): number => (tag === TAG.ENTITY_ID ? entityIdFromPayload(payload) : parseVarInt(payload, 0, payload.length));
+
 /**
  * Reads model.dat as it is inflated. Component definitions are turned into compact triangle meshes the moment their
  * records end, so memory use follows the size of one definition, not the size of the file.
  */
 function readModelRecords(archive: SkpArchiveStream, mode: ReadMode = {}): ModelRecords {
-  const definitions = new Map<number, DefTemplate>();
+  const templates: DefTemplate[] = [];
   const layerIdToName = new Map<number, string>();
   const materialIdToName = new Map<number, string>();
   const rootAccumulator = new GeometryAccumulator();
@@ -103,11 +122,26 @@ function readModelRecords(archive: SkpArchiveStream, mode: ReadMode = {}): Model
     },
   };
 
-  const closeFrame = (frame: Frame) => {
+  const closeTop = () => {
+    const frame = stack.pop()!;
+    const parent = stack[stack.length - 1];
+    if (frame.owner && !frame.definition) {
+      const result = frame.idDirect ?? frame.idVia;
+      if (result !== null && parent && parent.idVia === null) parent.idVia = result;
+    }
     if (!frame.accumulator) return;
     active.pop();
     if (frame.definition) {
-      if (frame.definition.id !== null && !frame.definition.skip) definitions.set(frame.definition.id, frame.accumulator.finalize(frame.definition.name));
+      const id = frame.idDirect ?? frame.idVia;
+      const altId = frame.definition.altId;
+      const key = mode.keys === 'alt' ? altId : id;
+      const unused = mode.used !== undefined && key !== null && !mode.used.has(key);
+      if (!frame.definition.skip && !unused && (id !== null || altId !== null)) {
+        const template = frame.accumulator.finalize(frame.definition.name);
+        template.id = id;
+        template.altId = altId;
+        templates.push(template);
+      }
       pool.push(frame.accumulator);
     }
   };
@@ -135,7 +169,7 @@ function readModelRecords(archive: SkpArchiveStream, mode: ReadMode = {}): Model
       const left = top.end - archive.pos;
       if (left >= 6) break;
       if (left > 0) archive.skip(left);
-      closeFrame(stack.pop()!);
+      closeTop();
     }
     const header = archive.readHeader();
     if (!header) break;
@@ -146,32 +180,57 @@ function readModelRecords(archive: SkpArchiveStream, mode: ReadMode = {}): Model
       // A record that claims to run past the one holding it: the rest of the holder is not read.
       const left = parent.end - archive.pos;
       if (left > 0) archive.skip(left);
-      closeFrame(stack.pop()!);
+      closeTop();
+      continue;
+    }
+    const owner = parent ? parent.owner : null;
+
+    if (parent?.definition && tag === TAG.DEFINITION_NAME) {
+      const payload = archive.take(size);
+      if (!payload) break;
+      parent.definition.name = cleanText(payload);
       continue;
     }
 
-    if (parent?.definition) {
-      if (tag === TAG.DEFINITION_NAME || tag === TAG.ENTITY_ID || tag === TAG.ENTITY_ID_INNER) {
+    // Id records inside a definition. Most are skipped; these are the ones that can name the definition.
+    if (owner && (tag === TAG.ENTITY_ID || tag === TAG.ENTITY_ID_INNER)) {
+      const atDefinition = parent.definition !== null;
+      const wantDirect = atDefinition ? owner.idDirect === null : owner.idVia === null && parent.idDirect === null;
+      const grand = stack[stack.length - 2];
+      const great = stack[stack.length - 3];
+      // The id in a definition's own flags block (definition > container > D007 > id) is a second candidate.
+      const wantAlt = tag === TAG.ENTITY_ID && owner.definition!.altId === null && parent.tag === TAG.FLAGS_BLOCK && !!grand && !grand.definition && great === owner;
+      if (wantDirect || wantAlt) {
         const payload = archive.take(size);
         if (!payload) break;
-        if (tag === TAG.DEFINITION_NAME) parent.definition.name = cleanText(payload);
-        else if (parent.definition.id === null) {
-          const id = tag === TAG.ENTITY_ID ? entityIdFromPayload(payload) : parseVarInt(payload, 0, payload.length);
-          parent.definition.id = id;
-          if (mode.used && !mode.used.has(id)) {
-            // Nothing places this component, so the rest of it need not be read.
-            parent.definition.skip = true;
-            const left = parent.end - archive.pos;
-            if (left > 0 && !archive.skip(left)) break;
+        const value = idOf(tag, payload);
+        if (wantDirect) {
+          if (atDefinition) {
+            owner.idDirect = value;
+            if (mode.used && mode.keys !== 'alt' && !mode.used.has(value)) {
+              // Nothing places this component, so the rest of it need not be read.
+              owner.definition!.skip = true;
+              const left = parent.end - archive.pos;
+              if (left > 0 && !archive.skip(left)) break;
+            }
+          } else {
+            parent.idDirect = value;
           }
         }
+        if (wantAlt) owner.definition!.altId = value;
         continue;
       }
     }
 
     const collecting = active.length > 0;
-    if (collecting && mode.placementsOnly && isGeometryEntity(tag) && tag !== TAG.INSTANCE) {
-      if (!archive.skip(size)) break;
+    const needVia = !!owner && owner.idVia === null && parent.idVia === null;
+    if (collecting && isGeometryEntity(tag) && mode.placementsOnly && tag !== TAG.INSTANCE) {
+      // Only the id of the first such record in a holder can matter, and only when a definition's id is still being searched for.
+      if (needVia && size <= MAX_ENTITY_BYTES) {
+        const body = archive.take(size);
+        if (!body) break;
+        parent.idVia = extractEntityId(nodeFromBody(tag, body));
+      } else if (!archive.skip(size)) break;
       continue;
     }
     if ((collecting && isGeometryEntity(tag)) || tag === TAG.LAYER_TABLE || tag === TAG.MATERIAL_ENTRY) {
@@ -181,36 +240,82 @@ function readModelRecords(archive: SkpArchiveStream, mode: ReadMode = {}): Model
       }
       const body = archive.take(size);
       if (!body) break;
-      if (tag === TAG.VERTEX && extractVertexFast(body, sink)) continue;
-      if (tag === TAG.EDGE && extractEdgeFast(body, sink)) continue;
-      const node = nodeFromBody(tag, body);
-      if (tag === TAG.LAYER_TABLE) readLayerTable(node);
-      else if (tag === TAG.MATERIAL_ENTRY) readMaterialEntry(node);
-      else extractEntity(node, sink);
+      let entityId = -1;
+      if (tag === TAG.VERTEX) entityId = extractVertexFast(body, sink);
+      else if (tag === TAG.EDGE) entityId = extractEdgeFast(body, sink);
+      if (entityId < 0) {
+        const node = nodeFromBody(tag, body);
+        if (tag === TAG.LAYER_TABLE) readLayerTable(node);
+        else if (tag === TAG.MATERIAL_ENTRY) readMaterialEntry(node);
+        else {
+          extractEntity(node, sink);
+          if (needVia) {
+            const found = extractEntityId(node);
+            if (found !== null) entityId = found;
+          }
+        }
+      }
+      if (needVia && entityId >= 0) parent.idVia = entityId;
       continue;
     }
 
+    const newFrame = (accumulator: GeometryAccumulator | null, definition: Frame['definition'], wrapper: boolean): Frame => {
+      const frame: Frame = { tag, end, accumulator, definition, owner: null, idDirect: null, idVia: null, wrapper };
+      frame.owner = definition ? frame : owner;
+      return frame;
+    };
     if (tag === TAG.DEFINITION) {
       const accumulator = pool.pop() ?? new GeometryAccumulator();
       accumulator.reset();
       active.push(accumulator);
-      stack.push({ end, accumulator, definition: { id: null, name: '', skip: false }, wrapper: false });
+      stack.push(newFrame(accumulator, { name: '', skip: false, altId: null }, false));
       continue;
     }
     const atTop = stack.length === 0 || (stack.length === 1 && stack[0].wrapper);
     if (tag === TAG.ROOT_GEOMETRY && atTop) {
       active.push(rootAccumulator);
-      stack.push({ end, accumulator: rootAccumulator, definition: null, wrapper: false });
+      stack.push(newFrame(rootAccumulator, null, false));
       continue;
     }
     if (size > 0 && CONTAINER_TAGS.has(tag)) {
-      stack.push({ end, accumulator: null, definition: null, wrapper: tag === TAG.FILE_WRAPPER && stack.length === 0 });
+      stack.push(newFrame(null, null, tag === TAG.FILE_WRAPPER && stack.length === 0));
       continue;
     }
     if (!archive.skip(size)) break;
   }
-  while (stack.length) closeFrame(stack.pop()!);
-  return { definitions, root: rootAccumulator.finalize('ROOT_MODEL'), layerIdToName, materialIdToName };
+  while (stack.length) closeTop();
+  return { templates, root: rootAccumulator.finalize('ROOT_MODEL'), layerIdToName, materialIdToName };
+}
+
+/**
+ * A definition's id as OpenSKP finds it can differ from the id its placements use, depending on where in the
+ * definition its records happen to be. Both candidates were recorded; use whichever one more of the file's
+ * placements refer to.
+ */
+function chooseKeys(templates: DefTemplate[], root: DefTemplate): { definitions: Map<number, DefTemplate>; keys: KeyKind } {
+  const byId = new Set<number>();
+  const byAlt = new Set<number>();
+  for (const t of templates) {
+    if (t.id != null) byId.add(t.id);
+    if (t.altId != null) byAlt.add(t.altId);
+  }
+  let idHits = 0;
+  let altHits = 0;
+  const count = (instances: DefTemplate['instances']) => {
+    for (const inst of instances) {
+      if (byId.has(inst.refIdx)) idHits++;
+      if (byAlt.has(inst.refIdx)) altHits++;
+    }
+  };
+  count(root.instances);
+  for (const t of templates) count(t.instances);
+  const keys: KeyKind = altHits > idHits ? 'alt' : 'id';
+  const definitions = new Map<number, DefTemplate>();
+  for (const t of templates) {
+    const key = keys === 'alt' ? t.altId : t.id;
+    if (key != null) definitions.set(key, t);
+  }
+  return { definitions, keys };
 }
 
 const IDENTITY_MATRIX13 = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1];
@@ -225,7 +330,7 @@ function toGltfMatrix(m: number[]): number[] {
   return [a, g, -d, 0, c, i, -f, 0, -b, -h, e, 0, tx * scale, tz * scale, -ty * scale, 1];
 }
 
-function buildScene(records: ModelRecords, tables: ReturnType<typeof buildMaterialTables>, options: LeanSkpOptions): Uint8Array {
+function buildScene(records: ModelRecords & { definitions: Map<number, DefTemplate> }, tables: ReturnType<typeof buildMaterialTables>, options: LeanSkpOptions): Uint8Array {
   const { definitions, root, layerIdToName, materialIdToName } = records;
   const { materialsMap, materialsByFolder, layerColors } = tables;
   const nodes = new NodeStore();
@@ -392,12 +497,13 @@ function checkContainer(data: Uint8Array): void {
   if (isLegacy) throw new LeanSkpUnsupported('Older SketchUp file format');
 }
 
-/** The ids of every component reachable from the model itself through placements. */
-function findUsedDefinitions(data: Uint8Array, options: LeanSkpOptions): Set<number> {
+/** The ids of every component reachable from the model itself through placements, and which kind of id they are. */
+function findUsedDefinitions(data: Uint8Array, options: LeanSkpOptions): { used: Set<number>; keys: KeyKind } {
   const archive = new SkpArchiveStream(data, (fed, total) => options.onProgress?.({ stage: 'scan_placements', current: fed, total }));
-  const { definitions, root } = readModelRecords(archive, { placementsOnly: true });
+  const scanned = readModelRecords(archive, { placementsOnly: true });
+  const { definitions, keys } = chooseKeys(scanned.templates, scanned.root);
   const used = new Set<number>();
-  const pending: DefTemplate[] = [root];
+  const pending: DefTemplate[] = [scanned.root];
   while (pending.length) {
     for (const inst of pending.pop()!.instances) {
       if (used.has(inst.refIdx)) continue;
@@ -406,15 +512,16 @@ function findUsedDefinitions(data: Uint8Array, options: LeanSkpOptions): Set<num
       if (child) pending.push(child);
     }
   }
-  return used;
+  return { used, keys };
 }
 
-function readOnce(data: Uint8Array, options: LeanSkpOptions, used: ReadonlySet<number> | undefined): Uint8Array {
+function readOnce(data: Uint8Array, options: LeanSkpOptions, only: { used: Set<number>; keys: KeyKind } | undefined): Uint8Array {
   const archive = new SkpArchiveStream(data, (fed, total) => options.onProgress?.({ stage: 'tlv_walk', current: fed, total }));
-  const records = readModelRecords(archive, { used });
+  const records = readModelRecords(archive, only ? { used: only.used, keys: only.keys } : {});
   archive.finish();
   const tables = buildMaterialTables(archive.materialXml, archive.otherFiles);
-  return buildScene(records, tables, options);
+  const { definitions } = chooseKeys(records.templates, records.root);
+  return buildScene({ ...records, definitions }, tables, options);
 }
 
 /**

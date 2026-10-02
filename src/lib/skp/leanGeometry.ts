@@ -25,6 +25,9 @@ export interface DefTemplate {
   /** Texture placement for the faces that have one. */
   uv: Map<number, { front: number[] | null; back: number[] | null }> | null;
   instances: InstanceRecord[];
+  /** The ids this definition can be known by (see the reader); set when it is read from a file. */
+  id?: number | null;
+  altId?: number | null;
 }
 
 const grow = <T extends Float64Array | Int32Array | Uint8Array | Int8Array>(array: T, needed: number): T => {
