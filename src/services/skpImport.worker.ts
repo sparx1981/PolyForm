@@ -1,6 +1,4 @@
-import { buildInstancedScene, buildScene, toGLB, toInstancedGLB } from 'openskp';
-import { LeanSkpUnsupported, readSkpToGlbLean } from '../lib/skp/skpLeanReader';
-import { isOutOfMemoryError } from '../lib/skp/outOfMemory';
+import { readSkpToGlb } from '../lib/skp/skpRead';
 
 /**
  * Reads a SketchUp file off the main thread, so a big file does not freeze the page and the page can
@@ -28,22 +26,7 @@ self.onmessage = (event: MessageEvent<SkpWorkerRequest>) => {
     onProgress: (info: { stage: string; current: number; total: number }) => post({ type: 'progress', ...info }),
   };
   try {
-    let glb: Uint8Array;
-    try {
-      glb = readSkpToGlbLean(buffer, options);
-    } catch (leanError) {
-      // Running out of memory is final: another reader would only need more of it.
-      if (isOutOfMemoryError(leanError)) throw leanError;
-      if (!(leanError instanceof LeanSkpUnsupported)) console.warn('[skpImport] Low-memory reader could not read this file, trying the standard reader', leanError);
-      try {
-        glb = toInstancedGLB(buildInstancedScene(buffer, options));
-      } catch (instancedError) {
-        if (isOutOfMemoryError(instancedError)) throw instancedError;
-        // Fall back to the flattened reader, which handles files the instanced one cannot.
-        console.warn('[skpImport] Instanced read failed, falling back to the flattened reader', instancedError);
-        glb = toGLB(buildScene(buffer, options));
-      }
-    }
+    const glb = readSkpToGlb(buffer, options);
     const whole = glb.byteOffset === 0 && glb.byteLength === glb.buffer.byteLength;
     const out = (whole ? glb.buffer : glb.slice().buffer) as ArrayBuffer;
     post({ type: 'done', glb: out }, [out]);

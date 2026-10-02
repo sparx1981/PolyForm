@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 // @ts-ignore
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { buildInstancedScene, buildScene, toGLB, toInstancedGLB } from 'openskp';
 import type { SkpWorkerMessage } from './skpImport.worker';
-import { LeanSkpUnsupported, readSkpToGlbLean } from '../lib/skp/skpLeanReader';
+import { readSkpToGlb as readSkpToGlbBytes } from '../lib/skp/skpRead';
 import { isOutOfMemoryError } from '../lib/skp/outOfMemory';
 
 /** Largest .skp the browser can be asked to read: a single ArrayBuffer tops out near 2 GB. */
@@ -40,19 +39,7 @@ function readSkpToGlbHere(buffer: ArrayBuffer, onProgress?: (p: SkpImportProgres
     onProgress: (info: { stage: string; current: number; total: number }) =>
       onProgress?.({ message: STAGE_LABELS[info.stage] ?? 'Reading the file', fraction: info.total ? info.current / info.total : undefined }),
   };
-  let glb: Uint8Array;
-  try {
-    glb = readSkpToGlbLean(buffer, options);
-  } catch (leanError) {
-    if (isOutOfMemoryError(leanError)) throw leanError;
-    if (!(leanError instanceof LeanSkpUnsupported)) console.warn('[SkpService] Low-memory reader could not read this file, trying the standard reader', leanError);
-    try {
-      glb = toInstancedGLB(buildInstancedScene(buffer, options));
-    } catch (instancedError) {
-      if (isOutOfMemoryError(instancedError)) throw instancedError;
-      glb = toGLB(buildScene(buffer, options));
-    }
-  }
+  const glb = readSkpToGlbBytes(buffer, options);
   return (glb.byteOffset === 0 && glb.byteLength === glb.buffer.byteLength ? glb.buffer : glb.slice().buffer) as ArrayBuffer;
 }
 

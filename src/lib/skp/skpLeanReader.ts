@@ -27,6 +27,9 @@ import type { EntitySink, FaceRecord, InstanceRecord, TlvNode } from './skpRecor
 /** The file is not one this reader handles (for example the pre-2021 format); the caller should use another reader. */
 export class LeanSkpUnsupported extends Error {}
 
+/** The file was read without trouble but nothing in it could be drawn: its layout is probably not one this reader knows. */
+export class LeanSkpEmpty extends Error {}
+
 export interface LeanSkpOptions {
   /** Leave out faces SketchUp itself hides. */
   respectEdgeVisibility?: boolean;
@@ -35,6 +38,8 @@ export interface LeanSkpOptions {
    * file. Used automatically as a second attempt when the browser runs out of memory; set it to force that behaviour.
    */
   onlyUsedDefinitions?: boolean;
+  /** Return a scene with nothing in it instead of throwing {@link LeanSkpEmpty}. */
+  allowEmptyScene?: boolean;
   onProgress?: (info: { stage: string; current: number; total: number }) => void;
 }
 
@@ -362,6 +367,9 @@ function buildScene(records: ModelRecords, tables: ReturnType<typeof buildMateri
   walk(root, rootNode, 'Layer0', undefined);
   nodes.setMesh(rootNode, meshFor('ROOT', root, undefined, 'Layer0'));
 
+  if (meshes.length === 0 && !options.allowEmptyScene) {
+    throw new LeanSkpEmpty(`Nothing to draw: ${definitions.size} components, ${root.instances.length} placements in the model, ${root.faceCount} loose faces`);
+  }
   return writeInstancedGlb(nodes, meshes, glbMaterials);
 }
 

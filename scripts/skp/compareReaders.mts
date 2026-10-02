@@ -7,6 +7,7 @@ export function splitGlb(glb: Uint8Array) {
   const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
   const jsonLength = view.getUint32(12, true);
   const json = JSON.parse(new TextDecoder().decode(glb.subarray(20, 20 + jsonLength)));
+  if (glb.byteLength <= 20 + jsonLength) return { json, bin: new Uint8Array(0) };
   const binLength = view.getUint32(20 + jsonLength, true);
   const bin = glb.subarray(28 + jsonLength, 28 + jsonLength + binLength);
   return { json, bin };
@@ -16,7 +17,9 @@ export function compareGlb(a: Uint8Array, b: Uint8Array): string[] {
   const problems: string[] = [];
   const A = splitGlb(a), B = splitGlb(b);
   delete A.json.asset.generator; delete B.json.asset.generator;
+  const emptyScene = A.bin.length === 0 && B.bin.length === 0;
   for (const key of new Set([...Object.keys(A.json), ...Object.keys(B.json)])) {
+    if (emptyScene && ['buffers', 'bufferViews', 'accessors'].includes(key)) continue;
     const x = JSON.stringify(A.json[key]), y = JSON.stringify(B.json[key]);
     if (x !== y) problems.push(`json.${key} differs (${x?.length} vs ${y?.length} chars)`);
   }

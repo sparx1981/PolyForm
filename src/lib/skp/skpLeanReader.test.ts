@@ -3,7 +3,9 @@ import * as THREE from 'three';
 // @ts-ignore three ships this loader without types
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { buildInstancedScene, toInstancedGLB } from 'openskp';
-import { LeanSkpUnsupported, readSkpToGlbLean } from './skpLeanReader';
+import { LeanSkpEmpty, LeanSkpUnsupported, readSkpToGlbLean } from './skpLeanReader';
+import { diagnoseSkp } from './skpDiagnostics';
+import { readSkpToGlb } from './skpRead';
 import { GeometryAccumulator } from './leanGeometry';
 import { IdMap } from './idMap';
 import type { FaceOptions } from './testing/synthSkp';
@@ -198,10 +200,27 @@ describe('readSkpToGlbLean', () => {
 
   it('writes a valid, empty scene for a model that has no geometry at all', () => {
     const skp = buildSkp({ model: [rec('F901', []), rec('F601', [])] });
-    const { json, bin } = splitGlb(readSkpToGlbLean(toArrayBuffer(skp)));
+    const { json, bin } = splitGlb(readSkpToGlbLean(toArrayBuffer(skp), { allowEmptyScene: true }));
     expect(json.nodes).toHaveLength(1);
     expect(json.buffers).toBeUndefined();
     expect(bin.length).toBe(0);
+  });
+
+  it('refuses to hand back an empty scene, so the standard reader can have a go', () => {
+    const skp = buildSkp({ model: [rec('F901', []), rec('F601', [])] });
+    expect(() => readSkpToGlbLean(toArrayBuffer(skp))).toThrow(LeanSkpEmpty);
+    // The fallback chain still returns something for a genuinely empty model (as OpenSKP builds it).
+    expect(() => readSkpToGlb(toArrayBuffer(skp), {})).not.toThrow();
+  });
+
+  it('describes the layout of a file: record kinds, counts and unfamiliar nested records', () => {
+    const odd = rec('7777', [rec('7778', Buffer.from([1, 2, 3])), rec('7779', Buffer.from([4]))]);
+    const skp = buildSkp({ model: [rec('F901', [definition(1, 'Slab', gridGeometry(2, 2)), odd]), rec('F601', [instance(1, IDENTITY)])] });
+    const report = diagnoseSkp(toArrayBuffer(skp));
+    expect(report).toMatch(/7C15=1/);
+    expect(report).toMatch(/AC0D=4/);
+    expect(report).toMatch(/7777 x1 .* nested1/);
+    expect(report).toMatch(/top level: .*F901/);
   });
 
   it('produces a GLB that three.js loads, with every placed mesh drawn', async () => {
