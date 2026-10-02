@@ -6,6 +6,7 @@ import { FlaskConical, X, PanelRightClose, GripVertical } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { defaultBetaEnvironment, type BetaEnvironmentSettings } from '../../lib/graphics/betaEnvironment';
 import { getBetaTime, subscribeBetaTime } from '../../lib/graphics/betaDayCycle';
+import { getCloudQuality, subscribeCloudQuality } from '../../lib/graphics/cloudQuality';
 import { GraphicsSlider } from './WeatherControls';
 
 /** Available in every editor layout, including the phone; opening it never enables effects. */
@@ -26,6 +27,7 @@ export function BetaToolbar() {
   const { graphicsSettings, setGraphicsSettings, theme, setRightPanelVisible, toolbarVisibility } = useApp();
   const s = graphicsSettings.beta;
   const clock = useSyncExternalStore(subscribeBetaTime, getBetaTime, getBetaTime);
+  const autoQuality = useSyncExternalStore(subscribeCloudQuality, getCloudQuality, getCloudQuality);
   const displayedDate = s.enabled && s.animateDayCycle && clock.seed === s.date ? clock.date : s.date;
   const update = (changes: Partial<BetaEnvironmentSettings>) => setGraphicsSettings(p => ({ ...p, beta: { ...p.beta, ...changes } }));
   const toggle = (key: 'enabled' | 'animateDayCycle' | 'clouds' | 'atmosphere' | 'flare' | 'grading', title: string) =>
@@ -44,7 +46,7 @@ export function BetaToolbar() {
         <button aria-label="Close environment lab" onClick={() => setOpen(false)}><X size={18} /></button>
       </div>
       {toggle('enabled', 'Enable Beta environment')}
-      <p className="text-gray-500">Saved with this model. Clouds use Weather wind. Quality starts at Low; disable clouds to keep the sky on slower devices.</p>
+      <p className="text-gray-500">Saved with this model. Clouds use Weather wind. Cloud quality is Auto by default: it adapts to this device. Disable clouds to keep the sky on slower devices.</p>
       <button className="text-blue-500 underline" onClick={() => setGraphicsSettings(p => ({ ...p, beta: defaultBetaEnvironment() }))}>Reset to existing environment</button>
       <fieldset disabled={!s.enabled} className="space-y-3 disabled:opacity-50">
         <label className="flex items-center gap-2"><input type="checkbox" checked={s.useSite} onChange={e => update({ useSite: e.target.checked })} />Use imported site location</label>
@@ -62,7 +64,7 @@ export function BetaToolbar() {
           <label>Cloud type<select className={selectClass} value={s.cloudType} onChange={e => update({ cloudType: e.target.value as typeof s.cloudType })}><option value="cumulus">Cumulus</option><option value="stratus">Stratus</option><option value="cirrus">Cirrus</option></select></label>
           {slider('altitude','Cloud altitude',200,12000,100,' m')}{slider('thickness','Cloud thickness',100,6000,100,' m')}
           {slider('layers','Cloud layers',1,3,1)}{slider('windScale','Weather wind multiplier',0,5,0.1)}
-          <label>Cloud quality<select className={selectClass} value={s.quality} onChange={e => update({ quality: e.target.value as typeof s.quality })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+          <label>Cloud quality<select className={selectClass} value={s.quality} onChange={e => update({ quality: e.target.value as typeof s.quality })}><option value="auto">Auto{s.quality === 'auto' ? ` (now ${autoQuality})` : ''}</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
         </div>}
         {toggle('atmosphere','Atmospheric distance haze')}
         {toggle('flare','Lens flare')}{s.flare && <>{slider('flareIntensity','Flare intensity',0,1)}{slider('ghosts','Flare ghosts',0,1)}{slider('halo','Flare halo',0,1)}</>}

@@ -33,6 +33,8 @@ text: 'Click a surface or the ground to place a flat text label, then type the w
 text3d: 'Click the ground or a wall to place solid 3D letters, then type the words.',
 axes: 'Click to reposition the model axes.',
 section: 'Click to place a section cutting plane.',
+glass: 'Drag the glass over a detail to magnify it, or turn on Always follow cursor.',
+camera_type: 'Choose Perspective or Orthographic, a lens, or a plan, elevation or isometric view.',
 orbit: 'Click and drag to orbit the camera.',
 pan: 'Click and drag to pan the view.',
 zoom: 'Click and drag up/down to zoom.',
@@ -68,7 +70,7 @@ return (
 <div className="flex items-center gap-1.5">
 <MousePointer2 size={12} className="text-polyform-blue" />
 <span className="font-medium uppercase tracking-tight">
-{activeTool.replace(/([A-Z])/g, ' $1')} Tool:
+{activeTool.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')} Tool:
 </span>
 <span>
 {TOOL_INSTRUCTIONS[activeTool] || 'Click to select objects. Shift to add/subtract.'}

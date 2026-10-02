@@ -17,6 +17,7 @@ import { findSiteGround, siteSatelliteUrl } from '../lib/worldSite/site';
 import { TextPlacementDialog } from './TextPlacementDialog';
 import { setTextPlacement } from '../lib/textPlacement';
 import PresentationDriver from './presentation/PresentationDriver';
+import { cameraView, useCameraView, frameView, orthoZoomFor, distanceForOrthoZoom, type StandardView } from '../lib/cameraView';
 import DetailLoupe from './presentation/DetailLoupe';
 import QualityCaptureBridge from './presentation/QualityCaptureBridge';
 import PresentationEffects from './presentation/PresentationEffects';
@@ -61,6 +62,7 @@ import {
   Line, 
   Edges,
   PerspectiveCamera, 
+  OrthographicCamera, 
   OrbitControls, 
   Grid, 
   TransformControls, 
@@ -1415,6 +1417,81 @@ export function modelledBounds(include: (id: string) => boolean): THREE.Box3 | n
   return box.isEmpty() ? null : box;
 }
 
+/**
+ * Keeps the viewpoint when the main camera swaps between perspective and orthographic (same place, same framing),
+ * answers the Camera Type tool's "frame this view" requests, and listens for the SDK's setProjection.
+ */
+function ProjectionManager({ projection, shapes }: { projection: 'perspective' | 'orthographic'; shapes: Shape[] }) {
+  const camera = useThree(s => s.camera);
+  const scene = useThree(s => s.scene);
+  const size = useThree(s => s.size);
+  const latest = useRef({ shapes, size, projection });
+  latest.current = { shapes, size, projection };
+  const last = useRef<{ position: THREE.Vector3; target: THREE.Vector3; ortho: boolean; zoom: number; fov: number } | null>(null);
+  const adopted = useRef<string | null>(null);
+  // A view asked for together with a projection change waits for the new camera to take over.
+  const pendingView = useRef<StandardView | null>(null);
+
+  // Remember the pose of the camera in use, once it has taken over from the previous one.
+  useFrame(() => {
+    const controls = scene.userData.controls;
+    if (!controls || adopted.current !== camera.uuid) return;
+    const ortho = !!(camera as any).isOrthographicCamera;
+    const pose = last.current ??= { position: new THREE.Vector3(), target: new THREE.Vector3(), ortho, zoom: 1, fov: 50 };
+    pose.position.copy(camera.position); pose.target.copy(controls.target);
+    pose.ortho = ortho; pose.zoom = camera.zoom;
+    pose.fov = ortho ? cameraView.get().fov : (camera as THREE.PerspectiveCamera).fov;
+  });
+
+  useEffect(() => {
+    const pose = last.current, ortho = !!(camera as any).isOrthographicCamera, controls = scene.userData.controls;
+    if (pose && pose.ortho !== ortho && controls) {
+      const height = latest.current.size.height, fov = pose.fov;
+      camera.position.copy(pose.position); controls.target.copy(pose.target);
+      if (ortho) {
+        camera.zoom = orthoZoomFor(pose.position.distanceTo(pose.target), fov, height);
+      } else {
+        const direction = pose.position.clone().sub(pose.target).normalize();
+        camera.position.copy(pose.target).addScaledVector(direction, distanceForOrthoZoom(pose.zoom, cameraView.get().fov, height));
+      }
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+    adopted.current = camera.uuid;
+    if (pendingView.current) {
+      const view = pendingView.current;
+      pendingView.current = null;
+      // After every camera-dependent handler has re-registered for the new camera.
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent('frame-view', { detail: { view } })), 0);
+    }
+  }, [camera, scene]);
+
+  useEffect(() => {
+    const onProjection = (e: Event) => {
+      const mode = (e as CustomEvent).detail?.mode;
+      if (mode === 'perspective' || mode === 'orthographic') cameraView.set({ projection: mode });
+    };
+    const onFrame = (e: Event) => {
+      const view = (e as CustomEvent).detail?.view as StandardView | undefined;
+      const wanted = (e as CustomEvent).detail?.projection;
+      if (!view) return;
+      if ((wanted === 'perspective' || wanted === 'orthographic') && wanted !== latest.current.projection) {
+        pendingView.current = view;
+        cameraView.set({ projection: wanted });
+        return;
+      }
+      const { shapes: current, size: viewport, projection: active } = latest.current;
+      const bounds = mainSceneBounds(computeMiniViewBounds(current));
+      const framed = frameView({ view, center: bounds.center, radius: bounds.radius, projection: active, fov: cameraView.get().fov, viewportWidth: viewport.width, viewportHeight: viewport.height });
+      window.dispatchEvent(new CustomEvent('set-camera', { detail: framed }));
+    };
+    window.addEventListener('set-camera-projection', onProjection);
+    window.addEventListener('frame-view', onFrame);
+    return () => { window.removeEventListener('set-camera-projection', onProjection); window.removeEventListener('frame-view', onFrame); };
+  }, []);
+  return null;
+}
+
 function MiniScene({ view }: { view: 'top' | 'front' | 'right' }) {
   const { shapes, theme, activeTool, kernelRevision } = useApp();
   const fallback = React.useMemo(() => computeMiniViewBounds(shapes), [shapes]);
@@ -1769,7 +1846,7 @@ function Scene() {
   }, [shapes, materialBindings, kernelHost, kernelRevision, catalogSummaries]);
   const { resolved: resolvedMaterialBindings } = useMaterialBindings(usedMaterialBindings, '2k');
 
-  const { raycaster, mouse, camera, scene, gl } = useThree();
+  const { raycaster, mouse, camera, scene, gl, size } = useThree();
   // Walls joined into runs (a curved wall of many pieces, or pieces in line) act as one wall.
   const wallRunInfo = useMemo(() => wallRuns(shapes), [shapes]);
   const wallJunctionKey = JSON.stringify(shapes.filter(s => s.type === 'wall').map(s => [s.id,s.hidden,s.position,s.args,s.quaternion,s.rotation,s.tags,s.wallMiterFootprint]));
@@ -3949,13 +4026,17 @@ function Scene() {
 
       if ((camera as any).isPerspectiveCamera) {
         const cam = camera as THREE.PerspectiveCamera;
-        cam.fov = 50; // three.js default - the app never overrides this outside a portal transition
+        cam.fov = cameraView.get().fov; // the lens chosen in the Camera Type tool; a portal transition may have changed it
         cam.near = effectiveCameraDefaultsRef.current.near;
         cam.far = effectiveCameraDefaultsRef.current.far;
       }
 
       if (zoom !== undefined) {
         camera.zoom = zoom;
+      } else if ((camera as any).isOrthographicCamera) {
+        // No zoom given: show what the perspective camera would have seen from there.
+        const from = new THREE.Vector3(...(position as [number, number, number])), to = new THREE.Vector3(...(target as [number, number, number]));
+        camera.zoom = orthoZoomFor(from.distanceTo(to), cameraView.get().fov, size.height);
       }
       camera.updateProjectionMatrix();
 
@@ -9972,6 +10053,10 @@ function Scene() {
     
     const handleTriggerViewReset = (e: any) => {
       const view = e.detail.view;
+      if (cameraView.get().projection === 'orthographic' && view in { plan: 1, front: 1, rear: 1, left: 1, right: 1 }) {
+        window.dispatchEvent(new CustomEvent('frame-view', { detail: { view } }));
+        return;
+      }
       let position = CAMERA_VIEWS[view]?.pos || CAMERA_VIEWS.perspective.pos;
       let target = CAMERA_VIEWS[view]?.target || CAMERA_VIEWS.perspective.target;
       
@@ -10028,13 +10113,21 @@ function Scene() {
   const presentationEffectsActive = hasPresentationEffects(presentationView);
   const postprocessingActive = presentationEffectsActive || ambientOcclusionEnabled || godRaysEnabled || fogPostprocessingActive || graphicsSettings.beta.enabled;
 
+  const cameraSetting = useCameraView();
+  // Walking, looking round and portal travel are perspective experiences; the chosen projection returns afterwards.
+  const projection: 'perspective' | 'orthographic' = cameraSetting.projection === 'orthographic'
+    && activeTool !== 'walk' && activeTool !== 'look' && activeTool !== 'teleport' && !portalTransitionActive ? 'orthographic' : 'perspective';
+  // An orthographic camera can sit anywhere along its line of sight, so let it see behind itself too
+  // unless the Camera Depth Clipping tool has asked for a specific slab.
+  const orthoNear = cameraDepthClippingEnabled ? effectiveCameraNear : -effectiveCameraFar;
+
   useEffect(() => {
-    if (camera && (camera as any).isPerspectiveCamera) {
-      camera.near = effectiveCameraNear;
+    if (camera && ((camera as any).isPerspectiveCamera || (camera as any).isOrthographicCamera)) {
+      camera.near = (camera as any).isOrthographicCamera ? orthoNear : effectiveCameraNear;
       camera.far = effectiveCameraFar;
       camera.updateProjectionMatrix();
     }
-  }, [camera, effectiveCameraNear, effectiveCameraFar]);
+  }, [camera, effectiveCameraNear, effectiveCameraFar, orthoNear]);
 
   // ─── Typed values (see tools/typedEntry.ts) ───────────────────────────────────
   // Type a number and press Enter to make the step exact: while dragging, between the clicks of a
@@ -11029,12 +11122,12 @@ function Scene() {
   return (
     <BetaEnvironmentRoot>
       <PerfProbe />
-      <PerspectiveCamera 
-        makeDefault 
-        position={defaultCameraPosition} 
-        near={effectiveCameraNear} 
-        far={effectiveCameraFar} 
-      />
+      {projection === 'orthographic' ? (
+        <OrthographicCamera key="ortho" makeDefault position={defaultCameraPosition} near={orthoNear} far={effectiveCameraFar} />
+      ) : (
+        <PerspectiveCamera key="persp" makeDefault position={defaultCameraPosition} fov={cameraSetting.fov} near={effectiveCameraNear} far={effectiveCameraFar} />
+      )}
+      <ProjectionManager projection={projection} shapes={shapes} />
       <OrbitControls 
         makeDefault 
         zoomToCursor
@@ -11055,7 +11148,7 @@ function Scene() {
           }
         }}
         mouseButtons={{
-          LEFT: activeTool === 'orbit' || activeTool === 'glass' ? THREE.MOUSE.ROTATE : (activeTool === 'pan' ? THREE.MOUSE.PAN : (activeTool === 'zoom' ? THREE.MOUSE.DOLLY : null)),
+          LEFT: activeTool === 'orbit' || activeTool === 'glass' || activeTool === 'camera_type' ? THREE.MOUSE.ROTATE : (activeTool === 'pan' ? THREE.MOUSE.PAN : (activeTool === 'zoom' ? THREE.MOUSE.DOLLY : null)),
           MIDDLE: THREE.MOUSE.ROTATE,
           RIGHT: THREE.MOUSE.PAN
         }}
@@ -15056,6 +15149,7 @@ export default function Viewport() {
   const [divideColumns, setDivideColumns] = useState(2);
   const [divideRows, setDivideRows] = useState(2);
   const [isPerspectiveOpen, setIsPerspectiveOpen] = useState(false);
+  const projectionLabel = useCameraView().projection === 'orthographic' ? 'Orthographic' : 'Perspective';
   const [quadView, setQuadView] = useState(false);
   const [panelViews, setPanelViews] = useState<Array<'perspective' | 'top' | 'front' | 'right'>>(['perspective', 'top', 'front', 'right']);
   const [perspectiveTimeout, setPerspectiveTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -15133,6 +15227,12 @@ export default function Viewport() {
   };
 
   const handleViewChange = (view: string) => {
+    if (cameraView.get().projection === 'orthographic') {
+      // Orthographic views are framed to the model rather than placed at a fixed distance.
+      window.dispatchEvent(new CustomEvent('frame-view', { detail: { view: view === 'perspective' || !view ? 'iso-se' : view } }));
+      setIsPerspectiveOpen(false);
+      return;
+    }
     let position = CAMERA_VIEWS[view]?.pos || CAMERA_VIEWS.perspective.pos;
     let target = CAMERA_VIEWS[view]?.target || CAMERA_VIEWS.perspective.target;
     
@@ -16484,7 +16584,7 @@ export default function Viewport() {
               theme === 'dark' ? "bg-gray-800/80 border-gray-700 text-gray-300" : "bg-white/80 border-gray-200 text-gray-600"
             )}
           >
-            Perspective
+            {projectionLabel}
           </button>
           
           {isPerspectiveOpen && (

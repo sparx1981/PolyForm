@@ -17,9 +17,11 @@ import { tilesToSiteMatrix } from '../../lib/worldSite/googleTiles';
 import { createContext, useContext } from 'react';
 
 import { advanceBetaDay, publishBetaTime } from '../../lib/graphics/betaDayCycle';
+import { CloudQualityGovernor, startingCloudQuality, publishCloudQuality } from '../../lib/graphics/cloudQuality';
 
 const base = `${import.meta.env.BASE_URL}beta/`;
-const groundAlbedo = new Color(0.12,0.13,0.11);
+/** What the sky shows below the horizon. The light editor floor reads as pale ground, not near-black soil. */
+const groundAlbedos = { light: new Color(0.8, 0.8, 0.78), dark: new Color(0.12, 0.13, 0.11) };
 interface Assets { atmosphere: PrecomputedTextures; stars: ArrayBuffer; weather: Texture; shape: Data3DTexture; detail: Data3DTexture; turbulence: Texture; noise: Data3DTexture }
 const AssetsContext = createContext<Assets | null>(null);
 
@@ -104,6 +106,7 @@ function CelestialScene({ worldToECEF, date }: { worldToECEF: Matrix4; date: Dat
   const { graphicsSettings, shadowsEnabled } = useApp();
   const sunLight = useRef<import('@takram/three-atmosphere').SunDirectionalLight>(null);
   const s = graphicsSettings.beta, assets = useContext(AssetsContext)!;
+  const groundAlbedo = groundAlbedos[useApp().theme === 'dark' ? 'dark' : 'light'];
   const { camera, gl } = useThree();
   const direction = useMemo(() => new Vector3(), []);
   const rotation = useMemo(() => new Matrix4(), []);
@@ -125,11 +128,12 @@ function CelestialScene({ worldToECEF, date }: { worldToECEF: Matrix4; date: Dat
 /** Retain one HDR cubemap and refresh it at most four times a second while cycling.
  * Updating celestial time must not recreate PMREM targets or the editor camera. */
 function SkyEnvironment({ date, worldToECEF, animated }: { date: Date; worldToECEF: Matrix4; animated: boolean }) {
+  const groundAlbedo = groundAlbedos[useApp().theme === 'dark' ? 'dark' : 'light'];
   const [virtualScene] = useState(() => new Scene());
   const target = useMemo(() => new WebGLCubeRenderTarget(128, { type: HalfFloatType }), []);
   const cubeCamera = useMemo(() => new CubeCamera(0.1, 1000, target), [target]);
   const capture = useRef({ frames: 3, elapsed: 0 });
-  useEffect(() => { capture.current.frames = 3; }, [date, worldToECEF, animated]);
+  useEffect(() => { capture.current.frames = 3; }, [date, worldToECEF, animated, groundAlbedo]);
   useEffect(() => () => target.dispose(), [target]);
   useFrame(({ gl }, delta) => {
     const c = capture.current;
@@ -209,7 +213,15 @@ export function BetaEffects() {
   const { graphicsSettings } = useApp();
   const s = graphicsSettings.beta, assets = useContext(AssetsContext)!;
   const { size, camera } = useThree();
-  const quality = size.width < 768 ? 'low' : s.quality;
+  // "Auto" watches frame times and settles on the best level this device can hold; a phone-width view starts low.
+  const governor = useMemo(() => new CloudQualityGovernor(startingCloudQuality(size.width)), []);
+  const [autoLevel, setAutoLevel] = useState(governor.quality);
+  useFrame((_, delta) => {
+    if (s.quality !== 'auto' || !s.clouds) return;
+    if (governor.update(delta)) setAutoLevel(governor.quality);
+  });
+  const quality = s.quality === 'auto' ? autoLevel : size.width < 768 ? 'low' : s.quality;
+  useEffect(() => { publishCloudQuality(quality); }, [quality]);
   const wind = useMemo(() => new Vector2(graphicsSettings.weather.windX, graphicsSettings.weather.windZ).multiplyScalar(s.windScale * 0.00005), [graphicsSettings.weather.windX, graphicsSettings.weather.windZ, s.windScale]);
   const perspective = (camera as { isPerspectiveCamera?: boolean }).isPerspectiveCamera;
   if (!assets) return null;

@@ -4,7 +4,7 @@ export interface BetaEnvironmentSettings {
   sky: boolean; stars: boolean; clouds: boolean; atmosphere: boolean; flare: boolean; grading: boolean;
   date: string; latitude: number; longitude: number; elevation: number; useSite: boolean;
   starIntensity: number; coverage: number; cloudType: 'cumulus' | 'stratus' | 'cirrus';
-  altitude: number; thickness: number; layers: number; quality: 'low' | 'medium' | 'high';
+  altitude: number; thickness: number; layers: number; quality: 'auto' | 'low' | 'medium' | 'high';
   windScale: number; flareIntensity: number; ghosts: number; halo: number;
   grade: 'neutral' | 'warm' | 'cool'; gradeStrength: number; exposure: number;
 }
@@ -13,7 +13,7 @@ export function defaultBetaEnvironment(): BetaEnvironmentSettings {
   return { enabled: false, animateDayCycle: false, dayCycleSpeed: 0.2, sky: true, stars: true, clouds: false, atmosphere: true, flare: false, grading: false,
     date: '2026-06-21T12:00', latitude: 51.5074, longitude: -0.1278, elevation: 0, useSite: true,
     starIntensity: 10, coverage: 0.35, cloudType: 'cumulus', altitude: 1500, thickness: 1000, layers: 1,
-    quality: 'low', windScale: 1, flareIntensity: 0.08, ghosts: 0.15, halo: 0.15,
+    quality: 'auto', windScale: 1, flareIntensity: 0.08, ghosts: 0.15, halo: 0.15,
     grade: 'neutral', gradeStrength: 0.5, exposure: 1 };
 }
 
@@ -31,7 +31,7 @@ export function normalizeBetaEnvironment(input: unknown): BetaEnvironmentSetting
     if (typeof v === 'number' && Number.isFinite(v)) result[k] = Math.max(ranges[k][0], Math.min(ranges[k][1], v));
   }
   result.layers = Math.round(result.layers);
-  if (['low','medium','high'].includes(String(r.quality))) result.quality = r.quality as typeof d.quality;
+  if (['auto','low','medium','high'].includes(String(r.quality))) result.quality = r.quality as typeof d.quality;
   if (['neutral','warm','cool'].includes(String(r.grade))) result.grade = r.grade as typeof d.grade;
   if (['cumulus','stratus','cirrus'].includes(String(r.cloudType))) result.cloudType = r.cloudType as typeof d.cloudType;
   // Always UTC, independent of the browser timezone; keep invalid imports out of astronomy.

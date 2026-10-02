@@ -12,7 +12,7 @@ it('leaves older models off and round trips every Beta control', () => {
 it('rejects invalid astronomy dates and clamps imported quality and physical ranges', () => {
   const result = normalizeBetaEnvironment({ date:'NaN', latitude:900, longitude:NaN, layers:50, quality:'ultra', coverage:-4, exposure:Infinity });
   expect(result.latitude).toBe(89.9); expect(result.longitude).toBe(defaultBetaEnvironment().longitude);
-  expect(result.layers).toBe(3); expect(result.coverage).toBe(0); expect(result.quality).toBe('low');
+  expect(result.layers).toBe(3); expect(result.coverage).toBe(0); expect(result.quality).toBe('auto');
   expect(result.date).toBe(defaultBetaEnvironment().date); expect(result.exposure).toBe(1);
 });
 it('maps local east, up and south into ECEF without Google visual lift', () => {

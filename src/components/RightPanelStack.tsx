@@ -312,7 +312,7 @@ export default function RightPanelStack() {
   const [openPanels, setOpenPanels] = useState<string[]>(['entity', 'toolModifiers', 'timberFrame']);
 
   useEffect(() => {
-    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping', 'section', 'glass'].includes(activeTool)) {
+    if (['wall', 'fence', 'railing', 'move', 'bevel', 'deform', 'orbit', 'clipping', 'section', 'glass', 'camera_type'].includes(activeTool)) {
       setOpenPanels(prev => prev.includes('toolModifiers') ? prev : [...prev, 'toolModifiers']);
     }
     if (activeTool === 'timber-frame') {

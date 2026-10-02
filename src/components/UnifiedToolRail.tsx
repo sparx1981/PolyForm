@@ -1164,6 +1164,19 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           keywords: ['section', 'cut', 'slice', 'plan cut', 'section plane', 'see inside']
         },
         {
+          id: 'camera_type',
+          tool: 'camera_type',
+          label: 'Camera Type',
+          subtitle: 'Perspective or orthographic, lens choice, and plan, elevation and isometric views',
+          icon: <Camera size={19} className="text-sky-500 dark:text-sky-400" />,
+          isActive: (s) => s.activeTool === 'camera_type',
+          onClick: (s) => {
+            s.setActiveTool('camera_type');
+            if (s.isToolModifierDocked && !s.rightPanelVisible) s.setRightPanelVisible(true);
+          },
+          keywords: ['camera', 'orthographic', 'perspective', 'isometric', 'plan', 'elevation', 'lens', 'fov', 'field of view', 'projection', 'parallel']
+        },
+        {
           id: 'glass',
           tool: 'glass',
           label: 'Glass Lens',

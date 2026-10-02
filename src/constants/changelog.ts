@@ -5,6 +5,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'October 3, 2026',
+    items: [
+      'New Camera Type tool on the Camera toolbar. Switch the main view between Perspective and Orthographic (parallel lines stay parallel, no size change with distance); your viewpoint and framing carry across the switch. Perspective has Wide, Standard, Telephoto and Long lens presets plus a field-of-view slider. One-click Plan, Front, Rear, Left and Right views and four Isometric views (south-east, south-west, north-east, north-west) are framed to fit the whole model. The Perspective chip now reads Orthographic when that is on, and its Plan and Elevation views use the same framing. Walk and Portal Navigation switch back to Perspective while they run, and the Developer SDK\'s camera.setProjection now works.',
+      'Beta environment: cloud quality now has an Auto setting (the new default). It starts at Low on phones and Medium elsewhere, steps down when frames stay slow, and tries one level higher after a long smooth stretch; the lab shows what it chose.',
+      'Beta environment: with the Beta sky on, the area below the horizon is now a pale ground in the light theme instead of near-black soil that clashed with the editor floor.',
+    ],
+  },
+  {
     date: 'October 2, 2026',
     items: [
       'The glass lens is now a real glass. It refracts light through a curved rim (choose Dome, Squircle, Bowl or Lip, then set the bezel width, thickness and refractive index), splits colours at the edge, has an adjustable specular highlight with its own angle and width, a soft drop shadow, optional tint and edge blur, and squashes and stretches like liquid as you press and drag it. The lens can be a circle or a rounded rectangle / pill. Your look is remembered.',

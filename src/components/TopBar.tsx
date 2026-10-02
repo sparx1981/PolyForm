@@ -1328,6 +1328,7 @@ export default function TopBar() {
                       { tool: 'walk', label: 'Walk Mode' },
                       { tool: 'section', label: 'Section Plane' },
                       { tool: 'glass', label: 'Glass Lens' },
+                      { tool: 'camera_type', label: 'Camera Type' },
                       { tool: 'reset_camera', label: 'Reset Camera Position' },
                       { tool: 'clipping', label: 'Camera Depth Clipping' },
                     ].map(({ tool, label }) => (
