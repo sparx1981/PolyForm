@@ -1,7 +1,144 @@
 import * as THREE from 'three';
 // @ts-ignore
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { buildScene, toGLB } from 'openskp';
+import { buildInstancedScene, buildScene, toGLB, toInstancedGLB } from 'openskp';
+import type { SkpWorkerMessage } from './skpImport.worker';
+
+/** Largest .skp the browser can be asked to read: a single ArrayBuffer tops out near 2 GB. */
+const MAX_SKP_BYTES = 1.5 * 1024 * 1024 * 1024;
+
+export interface SkpImportProgress {
+  /** Plain-language description of what is happening now. */
+  message: string;
+  /** 0 to 1 when known. */
+  fraction?: number;
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  tlv_walk: 'Reading the file',
+  legacy_defs: 'Reading components',
+  build_scene: 'Building the model',
+};
+
+const OUT_OF_MEMORY_HINT = 'The browser ran out of memory reading this model. Try closing other tabs, or in SketchUp use Window > Model Info > Statistics > Purge Unused, then save a smaller copy, or export to glTF/GLB and import that instead.';
+
+/** Turns whatever a reader threw into a message that says what to do about it. */
+export function describeSkpError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  if (err instanceof RangeError || /out of memory|allocation failed|invalid array length|invalid typed array length|memory/i.test(message)) {
+    return OUT_OF_MEMORY_HINT;
+  }
+  return `Could not read this SKP file (${message || 'unknown error'}). It may use an SKP version or feature that isn't supported yet. Exporting it from SketchUp as glTF/GLB or DAE is a reliable alternative.`;
+}
+
+/** Reads a .skp into a GLB on the main thread: used only where web workers are unavailable. */
+function readSkpToGlbHere(buffer: ArrayBuffer, onProgress?: (p: SkpImportProgress) => void): ArrayBuffer {
+  const options = {
+    respectEdgeVisibility: true,
+    onProgress: (info: { stage: string; current: number; total: number }) =>
+      onProgress?.({ message: STAGE_LABELS[info.stage] ?? 'Reading the file', fraction: info.total ? info.current / info.total : undefined }),
+  };
+  let glb: Uint8Array;
+  try {
+    glb = toInstancedGLB(buildInstancedScene(buffer, options));
+  } catch {
+    glb = toGLB(buildScene(buffer, options));
+  }
+  return glb.slice().buffer as ArrayBuffer;
+}
+
+/** Reads a .skp into a GLB in a worker, so the page stays responsive and can show progress. */
+function readSkpToGlb(buffer: ArrayBuffer, onProgress?: (p: SkpImportProgress) => void): Promise<ArrayBuffer> {
+  let worker: Worker;
+  try {
+    worker = new Worker(new URL('./skpImport.worker.ts', import.meta.url), { type: 'module' });
+  } catch {
+    return Promise.resolve(readSkpToGlbHere(buffer, onProgress));
+  }
+  return new Promise((resolve, reject) => {
+    worker.onmessage = (event: MessageEvent<SkpWorkerMessage>) => {
+      const data = event.data;
+      if (data.type === 'progress') {
+        onProgress?.({ message: STAGE_LABELS[data.stage] ?? 'Reading the file', fraction: data.total ? data.current / data.total : undefined });
+        return;
+      }
+      worker.terminate();
+      if (data.type === 'done') resolve(data.glb);
+      else reject(new Error(data.message));
+    };
+    worker.onerror = () => {
+      worker.terminate();
+      reject(new RangeError('The SKP reader stopped unexpectedly'));
+    };
+    worker.postMessage({ buffer }, [buffer]);
+  });
+}
+
+const parseGlb = (glbBuffer: ArrayBuffer): Promise<THREE.Group> => new Promise((resolve, reject) => {
+  new GLTFLoader().parse(
+    glbBuffer,
+    '',
+    (gltf: any) => resolve(gltf.scene),
+    (error: any) => {
+      console.error('[SkpService] GLB build error:', error);
+      reject(new Error('Read the SKP file but could not build a viewable model from it.'));
+    }
+  );
+});
+
+/**
+ * Joins every mesh in an imported model into one geometry in world space (what a custom shape holds).
+ * Writes straight into typed arrays sized up front, so a model with millions of triangles does not build
+ * millions-long JavaScript arrays or a clone of every mesh on the way.
+ */
+export function mergeImportedGroup(group: THREE.Object3D): THREE.BufferGeometry {
+  group.updateMatrixWorld(true);
+  const meshes: THREE.Mesh[] = [];
+  let total = 0;
+  let allUv = true;
+  group.traverse((child: any) => {
+    const position = child.isMesh && child.geometry?.attributes?.position;
+    if (!position) return;
+    meshes.push(child);
+    total += child.geometry.index ? child.geometry.index.count : position.count;
+    if (!child.geometry.attributes.uv) allUv = false;
+  });
+  if (meshes.length === 0) throw new Error('No mesh geometry found in the file.');
+
+  const positions = new Float32Array(total * 3);
+  const normals = new Float32Array(total * 3);
+  const uvs = allUv ? new Float32Array(total * 2) : null;
+  const point = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  const normalMatrix = new THREE.Matrix3();
+  let out = 0;
+  for (const mesh of meshes) {
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    if (!geometry.attributes.normal) geometry.computeVertexNormals();
+    const { position, normal: normalAttr, uv } = geometry.attributes;
+    const index = geometry.index;
+    normalMatrix.getNormalMatrix(mesh.matrixWorld);
+    // A mirrored placement turns its triangles inside out, so swap two corners of each to keep them facing outwards.
+    const mirrored = mesh.matrixWorld.determinant() < 0;
+    const count = index ? index.count : position.count;
+    for (let k = 0; k < count; k++) {
+      const corner = mirrored ? k - (k % 3) + [0, 2, 1][k % 3] : k;
+      const vertex = index ? index.getX(corner) : corner;
+      point.fromBufferAttribute(position, vertex).applyMatrix4(mesh.matrixWorld);
+      normal.fromBufferAttribute(normalAttr, vertex).applyMatrix3(normalMatrix).normalize();
+      if (mirrored) normal.negate();
+      positions[out * 3] = point.x; positions[out * 3 + 1] = point.y; positions[out * 3 + 2] = point.z;
+      normals[out * 3] = normal.x; normals[out * 3 + 1] = normal.y; normals[out * 3 + 2] = normal.z;
+      if (uvs) { uvs[out * 2] = uv.getX(vertex); uvs[out * 2 + 1] = uv.getY(vertex); }
+      out++;
+    }
+  }
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  if (uvs) merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  return merged;
+}
 
 /**
  * Opening SketchUp (.skp) files. Real .skp files are read natively with OpenSKP; older PolyForm
@@ -11,11 +148,10 @@ import { buildScene, toGLB } from 'openskp';
 export const SkpService = {
   /**
    * Imports an SKP file.
-   * In a real production environment, this would involve a server-side conversion or a WASM bridge.
-   * For this implementation, we accept .gltf files (which SKP-compatible tools can export/produce)
-   * as the high-fidelity bridge format.
+   * Real .skp files are read with OpenSKP in a worker (with progress and a memory-aware error message);
+   * glTF text saved with a .skp name is the older "bridge" format and still opens.
    */
-  importSKP: async (file: File): Promise<THREE.Group> => {
+  importSKP: async (file: File, onProgress?: (p: SkpImportProgress) => void): Promise<THREE.Group> => {
     const lowerName = file.name.toLowerCase();
 
     // Real binary .skp files: parse natively with OpenSKP (an open-source,
@@ -24,7 +160,16 @@ export const SkpService = {
     // bridge the result through GLTFLoader so it renders like any other
     // imported model.
     if (lowerName.endsWith('.skp')) {
-      const buffer = await file.arrayBuffer();
+      if (file.size > MAX_SKP_BYTES) {
+        throw new Error(`This file is ${(file.size / 1024 / 1024 / 1024).toFixed(1)} GB, which is more than the browser can read at once. In SketchUp, purge unused items and save a smaller copy, or export to glTF/GLB and import that instead.`);
+      }
+      onProgress?.({ message: 'Loading the file' });
+      let buffer: ArrayBuffer;
+      try {
+        buffer = await file.arrayBuffer();
+      } catch (err) {
+        throw new Error(describeSkpError(err instanceof Error ? err : new RangeError('allocation failed')));
+      }
       const head = new Uint8Array(buffer.slice(0, 4));
       // Our legacy "bridge" .skp files are just GLTF JSON text saved with a
       // .skp extension - they start with '{' (0x7b) or whitespace. Real
@@ -33,27 +178,14 @@ export const SkpService = {
 
       if (!looksLikeTextBridge) {
         try {
-          const scene = buildScene(buffer);
-          const glb = toGLB(scene);
-          const glbBuffer = glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength);
-          return await new Promise((resolve, reject) => {
-            const loader = new GLTFLoader();
-            loader.parse(
-              glbBuffer,
-              '',
-              (gltf: any) => {
-                console.log('[SkpService] Parsed native .skp via OpenSKP');
-                resolve(gltf.scene);
-              },
-              (error: any) => {
-                console.error('[SkpService] GLB build error:', error);
-                reject(new Error('Read the SKP file but could not build a viewable model from it.'));
-              }
-            );
-          });
+          const glb = await readSkpToGlb(buffer, onProgress);
+          onProgress?.({ message: 'Preparing the model', fraction: 1 });
+          const group = await parseGlb(glb);
+          console.log('[SkpService] Parsed native .skp via OpenSKP');
+          return group;
         } catch (err: any) {
           console.error('[SkpService] OpenSKP parse failed:', err);
-          throw new Error(`Could not read this SKP file (${err?.message || 'unknown error'}). It may use an SKP version or feature that isn't supported yet.`);
+          throw new Error(describeSkpError(err));
         }
       }
       // Falls through to the legacy text/GLTF-bridge path below for old

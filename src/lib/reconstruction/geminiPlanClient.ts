@@ -59,7 +59,7 @@ export function hasGeminiPlanKey(): boolean {
 /** Gemini-backed generator for {@link recogniseFloorPlanWithAi}. */
 export function createGeminiPlanGenerator(apiKey: string = getGeminiApiKey()): AiPlanGenerator {
   if (!apiKey) {
-    throw new Error('No Gemini API key is configured (GEMINI_API_KEY or VITE_GEMINI_API_KEY), so AI recognition is unavailable.');
+    throw new Error('No Gemini API key is configured. Add one in Settings → API to use AI recognition.');
   }
   return async ({ imageDataUrl, prompt }) => {
     const match = /^data:([^;,]+);base64,(.+)$/.exec(imageDataUrl);

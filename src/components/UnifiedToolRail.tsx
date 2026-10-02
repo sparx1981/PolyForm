@@ -1250,12 +1250,12 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
         },
         {
           id: 'photo_to_3d',
-          label: 'Photo to 3D (AI)',
-          subtitle: 'Turn a photo into a 3D model',
+          label: 'Reconstruction Studio',
+          subtitle: 'Turn photos and plans into 3D models',
           icon: <Camera size={19} />,
           isActive: () => false,
           onClick: () => window.dispatchEvent(new CustomEvent('polyform:photo-to-3d')),
-          keywords: ['ai', 'photo', 'image', '3d', 'convert', 'picture']
+          keywords: ['ai', 'photo', 'photo to 3d', 'reconstruction', 'image', '3d', 'convert', 'picture', 'plan']
         }
       ]
     },

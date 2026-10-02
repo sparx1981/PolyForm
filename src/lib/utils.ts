@@ -57,10 +57,26 @@ export async function runToolboxScript(code: string, paramNames: string[], param
   ]);
 }
 
+const GEMINI_KEY_STORAGE = 'polyform_gemini_key';
+
+/** A Gemini key the user pasted into Settings / API. Stored only in this browser. */
+export function getSavedGeminiApiKey(): string {
+  try { return localStorage.getItem(GEMINI_KEY_STORAGE) || ''; } catch { return ''; }
+}
+
+export function setSavedGeminiApiKey(key: string): void {
+  try {
+    const trimmed = key.trim();
+    if (trimmed) localStorage.setItem(GEMINI_KEY_STORAGE, trimmed);
+    else localStorage.removeItem(GEMINI_KEY_STORAGE);
+  } catch { /* storage unavailable */ }
+}
+
 /**
- * The Gemini API key. `process.env.GEMINI_API_KEY` is not a bug — this app's
+ * The Gemini API key. A key the user saved in Settings / API wins, so someone can always
+ * use their own. Otherwise `process.env.GEMINI_API_KEY` is not a bug — this app's
  * primary deployment target (AI Studio) injects it at runtime specifically
- * under that name (see .env.example), so that has to stay the first choice.
+ * under that name (see .env.example), so that stays the first deployment choice.
  * The problem it had was reading `process.env` unconditionally: outside AI
  * Studio (a plain `vite build` / static host), `process` itself is
  * undefined, so `process.env.GEMINI_API_KEY` throws a ReferenceError before
@@ -68,6 +84,8 @@ export async function runToolboxScript(code: string, paramNames: string[], param
  * fallback so a plain Vite deployment has a way to supply the key too.
  */
 export function getGeminiApiKey(): string {
+  const saved = getSavedGeminiApiKey();
+  if (saved) return saved;
   if (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) {
     return process.env.GEMINI_API_KEY;
   }

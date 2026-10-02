@@ -51,3 +51,12 @@ describe('camera view settings', () => {
     cameraView.set(DEFAULT_CAMERA_VIEW); off();
   });
 });
+
+describe('camera view reset', () => {
+  it('returns to perspective with the standard lens', () => {
+    cameraView.set({ projection: 'orthographic', fov: 18 });
+    expect(cameraView.get()).toEqual({ projection: 'orthographic', fov: 18 });
+    cameraView.reset();
+    expect(cameraView.get()).toEqual(DEFAULT_CAMERA_VIEW);
+  });
+});

@@ -52,6 +52,9 @@ interface Level {
 }
 
 const DEFAULT_CELL = 0.05;
+/** The raster is never allowed more cells than this. A 5 cm grid over a site a few hundred metres across has
+ * tens of millions of cells, which froze the page while walls were being drawn; past the cap the cell grows. */
+const MAX_RASTER_CELLS = 2_500_000;
 const LEVEL_GAP = 0.5;
 
 function nums(s: Shape): number[] {
@@ -286,27 +289,43 @@ function roomOutline(cells: number[], centres: V2[], nx: number, nz: number, min
 
 /** Detect enclosed rooms from visible walls. */
 export function detectRooms(shapes: Shape[], options: RoomDetectionOptions = {}): SpatialRoom[] {
-  const cell = Math.max(0.02, options.cell ?? DEFAULT_CELL);
+  const baseCell = Math.max(0.02, options.cell ?? DEFAULT_CELL);
   const minArea = Math.max(0, options.minAreaM2 ?? 1);
   const out: SpatialRoom[] = [];
 
   for (const level of buildingLevels(shapes)) {
-    const wallCorners = level.walls.flatMap(w => rectCorners(wallRect(w)));
+    // A wall with a missing or non-finite position, direction or size would turn the grid size into NaN.
+    const walls = level.walls.filter(w => {
+      const r = wallRect(w);
+      return r.centre.every(Number.isFinite) && r.dir.every(Number.isFinite) && Number.isFinite(r.length) && Number.isFinite(r.width);
+    });
+    const wallCorners = walls.flatMap(w => rectCorners(wallRect(w)));
     if (!wallCorners.length) continue;
-    const minX = Math.min(...wallCorners.map(p => p[0])) - 1;
-    const maxX = Math.max(...wallCorners.map(p => p[0])) + 1;
-    const minZ = Math.min(...wallCorners.map(p => p[1])) - 1;
-    const maxZ = Math.max(...wallCorners.map(p => p[1])) + 1;
+    let lowX = Infinity, highX = -Infinity, lowZ = Infinity, highZ = -Infinity;
+    for (const [x, z] of wallCorners) {
+      if (x < lowX) lowX = x; if (x > highX) highX = x;
+      if (z < lowZ) lowZ = z; if (z > highZ) highZ = z;
+    }
+    const minX = lowX - 1, maxX = highX + 1, minZ = lowZ - 1, maxZ = highZ + 1;
+    const cell = Math.max(baseCell, Math.sqrt(((maxX - minX) * (maxZ - minZ)) / MAX_RASTER_CELLS));
     const nx = Math.max(3, Math.ceil((maxX - minX) / cell));
     const nz = Math.max(3, Math.ceil((maxZ - minZ) / cell));
     const labels = new Int32Array(nx * nz);
-    const rects = level.walls.map(w => ({ wall: w, rect: wallRect(w) }));
+    const rects = walls.map(w => ({ wall: w, rect: wallRect(w) }));
 
-    for (let j = 0; j < nz; j++) {
-      const z = minZ + (j + 0.5) * cell;
-      for (let i = 0; i < nx; i++) {
-        const x = minX + (i + 0.5) * cell;
-        if (rects.some(({ rect }) => pointInRect(x, z, rect, cell))) labels[j * nx + i] = 1;
+    // Mark the cells each wall covers, looking only at the cells near that wall rather than testing every
+    // cell of the grid against every wall.
+    for (const { rect } of rects) {
+      const reach = Math.hypot(rect.length / 2 + rect.width / 2, Math.max(rect.width / 2, cell * 0.75) + 0.005);
+      const i0 = Math.max(0, Math.floor((rect.centre[0] - reach - minX) / cell));
+      const i1 = Math.min(nx - 1, Math.ceil((rect.centre[0] + reach - minX) / cell));
+      const j0 = Math.max(0, Math.floor((rect.centre[1] - reach - minZ) / cell));
+      const j1 = Math.min(nz - 1, Math.ceil((rect.centre[1] + reach - minZ) / cell));
+      for (let j = j0; j <= j1; j++) {
+        const z = minZ + (j + 0.5) * cell;
+        for (let i = i0; i <= i1; i++) {
+          if (pointInRect(minX + (i + 0.5) * cell, z, rect, cell)) labels[j * nx + i] = 1;
+        }
       }
     }
 

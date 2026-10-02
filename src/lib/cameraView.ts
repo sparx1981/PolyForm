@@ -105,6 +105,8 @@ export const cameraView = {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage unavailable */ }
     listeners.forEach(l => l());
   },
+  /** Back to the defaults: Perspective with the standard 50 degree lens. */
+  reset() { cameraView.set(DEFAULT_CAMERA_VIEW); },
 };
 
 export const useCameraView = () => useSyncExternalStore(cameraView.subscribe, cameraView.get, cameraView.get);

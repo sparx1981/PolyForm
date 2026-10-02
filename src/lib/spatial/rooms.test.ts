@@ -95,4 +95,33 @@ describe('spatial room intelligence', () => {
     const shapes = [wall('n', 0, -2, 4), wall('s', 0, 2, 4), wall('w', -2, 0, 4, Math.PI / 2), wall('e', 2, 0, 4, Math.PI / 2)];
     expect(detectRooms(shapes, { cell: 0.1 })[0]!.boundary).toHaveLength(4);
   });
+
+  it('stays fast and still finds rooms when a far-away wall makes the site huge', () => {
+    const shapes = [
+      wall('north', 0, -2, 4),
+      wall('south', 0, 2, 4),
+      wall('west', -2, 0, 4, Math.PI / 2),
+      wall('east', 2, 0, 4, Math.PI / 2),
+      // A stray wall 600 m away: at a 5 cm grid this site would be hundreds of millions of cells.
+      wall('stray', 600, 600, 3),
+    ];
+    const started = performance.now();
+    const rooms = detectRooms(shapes);
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(rooms).toHaveLength(1);
+    expect(rooms[0].boundaryWallIds).toEqual(['east', 'north', 'south', 'west']);
+    expect(rooms[0].areaM2).toBeGreaterThan(10);
+  });
+
+  it('ignores walls with non-finite positions instead of failing', () => {
+    const broken = wall('broken', NaN, 0, 4);
+    const shapes = [
+      wall('north', 0, -2, 4),
+      wall('south', 0, 2, 4),
+      wall('west', -2, 0, 4, Math.PI / 2),
+      wall('east', 2, 0, 4, Math.PI / 2),
+      broken,
+    ];
+    expect(detectRooms(shapes, { cell: 0.1 })).toHaveLength(1);
+  });
 });
