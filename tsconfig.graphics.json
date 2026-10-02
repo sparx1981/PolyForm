@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "types": ["vite/client", "node"] },
-  "include": ["src/lib/graphics/**/*.ts", "src/components/graphics/**/*.tsx", "src/components/PlantModelMesh.tsx", "examples/gpu-environment.ts"]
+  "include": ["src/lib/graphics/**/*.ts", "src/components/graphics/**/*.tsx", "src/components/PlantModelMesh.tsx", "examples/gpu-environment.ts", "src/build-info.d.ts"]
 }

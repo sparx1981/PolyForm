@@ -180,6 +180,9 @@ describe('connector over HTTP', () => {
     const client = await connect(token!);
     const { id } = parse(await client.callTool({ name: 'create_model', arguments: { name: 'Soft furnishings parity' } }));
     await client.callTool({ name: 'add_room', arguments: { model: id, width: 7, length: 6 } });
+    // Curtains are dressed per window, so the room needs one to receive cloth.
+    const walls = parse(await client.callTool({ name: 'list_objects', arguments: { model: id, type: 'wall' } }));
+    await client.callTool({ name: 'add_opening', arguments: { model: id, wall: walls.objects[0].id, kind: 'window' } });
     const rooms = parse(await client.callTool({ name: 'list_rooms', arguments: { model: id } }));
     expect(rooms.length).toBeGreaterThan(0);
     const furnished = parse(await client.callTool({

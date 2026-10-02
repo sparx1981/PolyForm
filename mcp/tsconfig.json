@@ -20,5 +20,5 @@
       "three/*": ["./node_modules/@types/three/*"]
     }
   },
-  "include": ["src", "test", "*.mjs"]
+  "include": ["src", "test", "*.mjs", "../src/build-info.d.ts"]
 }
