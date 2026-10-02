@@ -542,12 +542,13 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       room: z.string().describe('Room id from list_rooms'),
       preset: z.enum(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal', 'office', 'home-office', 'kitchen', 'bathroom', 'toilet', 'workshop']),
       settle_soft: z.boolean().default(true),
+      lighting: z.boolean().default(false).describe('Also add lighting suited to the room type: ceiling lights, lamps on bedside and side tables, pendants over the dining table, vanity lights over basins, task lights on desks and benches. Replaces this room\'s earlier interior lights.'),
       settle_strength: z.number().min(0).max(1).optional().describe('Override settling strength; when omitted PolyForm uses the Interior Studio defaults: 0.32 for cloth and 0.42 for soft bodies'),
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, `Furnished room (${a.preset})`, shapes => {
     const run = withSdk(shapes, sdk => {
-      const plan = sdk.interiors.furnishRoom(a.room, a.preset);
+      const plan = sdk.interiors.furnishRoom(a.room, a.preset, { lighting: a.lighting });
       if (a.settle_soft) {
         for (const item of plan.shapes) {
           const sim = item.customData?.semanticComponent?.simulation;
@@ -563,7 +564,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     return {
       shapes: run.shapes,
       made: run.created,
-      message: `Placed ${plan.shapes.length} item(s); ${plan.unplaced.length} could not be placed without a collision.`,
+      message: `Placed ${plan.shapes.length} item(s); ${plan.unplaced.length} could not be placed without a collision.${plan.lights?.length ? ` Added ${plan.lights.length} light fixture(s) for the room type.` : ''}`,
     };
   })));
 

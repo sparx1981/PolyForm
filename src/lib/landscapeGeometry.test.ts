@@ -96,7 +96,7 @@ describe('lamp styles', () => {
     // The housing itself can extend a little ABOVE the mounting plane (a recessed
     // can's body genuinely sits up in the ceiling cavity in real life) - it's the
     // light-emitting point that must be at or below where the fixture is mounted.
-    for (const id of ['pendant', 'chandelier', 'recessed', 'track', 'troffer', 'high-bay']) {
+    for (const id of ['pendant', 'chandelier', 'recessed', 'track', 'troffer', 'high-bay', 'flush-ceiling', 'linear-led']) {
       const [, y] = getLampLightAnchor(1, id);
       expect(y).toBeLessThanOrEqual(0.01);
     }

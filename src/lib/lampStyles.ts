@@ -97,6 +97,15 @@ export const LAMP_STYLES: LampStyleDef[] = [
   { id: 'nightstand', name: 'Nightstand Lamp', category: 'interior', mount: 'floor',
     description: 'Small bedside table lamp for a soft, low-level bedroom glow.',
     light: { type: 'point', color: '#ffd8a8', intensity: 0.35, distance: 2, decay: 2 } },
+  { id: 'flush-ceiling', name: 'Flush Ceiling Light', category: 'interior', mount: 'ceiling',
+    description: 'Low round drum with a frosted diffuser - soft, even light for bedrooms, halls and small rooms.',
+    light: { type: 'point', color: '#ffe9c8', intensity: 1.3, distance: 6, decay: 2 } },
+  { id: 'vanity-light', name: 'Vanity Light', category: 'interior', mount: 'wall',
+    description: 'Bar of three globes mounted over a bathroom mirror, for even light on the face.',
+    light: { type: 'point', color: '#fff0d8', intensity: 0.8, distance: 3.5, decay: 2 } },
+  { id: 'linear-led', name: 'Linear LED Batten', category: 'interior', mount: 'ceiling',
+    description: 'Slim cool-white strip light for workshops, garages and utility rooms.',
+    light: { type: 'rect', color: '#f2f7ff', intensity: 2.2, width: 1.2, height: 0.1 } },
 ];
 
 export function findLampStyle(id: string | undefined): LampStyleDef {

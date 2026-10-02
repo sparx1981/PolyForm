@@ -185,6 +185,7 @@ import {
   type FurnishingPreset,
 } from '../lib/interiors/smartFurnish';
 import { bakeSemanticSimulation } from '../lib/interiors/bakeSimulation';
+import { planRoomLighting, lightingTypeForPreset } from '../lib/interiors/roomLighting';
 import { detectRooms } from '../lib/spatial/rooms';
 import {
   commitReconstructionDraft,
@@ -549,7 +550,7 @@ export interface SDK {
       params?: FurnitureParams;
     }) => Shape;
     listCatalog: () => ReturnType<typeof interiorFurnitureCatalog>;
-    furnishRoom: (roomId: string, preset: FurnishingPreset) => ReturnType<typeof planRoomFurnishing>;
+    furnishRoom: (roomId: string, preset: FurnishingPreset, options?: { lighting?: boolean }) => ReturnType<typeof planRoomFurnishing> & { lights: Shape[] };
     bakeSimulation: (shapeId: string, strength?: number) => Shape;
   };
 
@@ -1910,15 +1911,17 @@ export class DeveloperSDK implements SDK {
 
       listCatalog: () => interiorFurnitureCatalog(),
 
-      furnishRoom: (roomId: string, preset: FurnishingPreset) => {
+      furnishRoom: (roomId: string, preset: FurnishingPreset, options?: { lighting?: boolean }) => {
         const room = detectRooms(this.shapes).find(candidate => candidate.id === roomId);
         if (!room) throw new Error(`Room not found: ${roomId}`);
         const plan = planRoomFurnishing(this.shapes, room, preset);
-        if (plan.shapes.length) {
-          this.setShapes(prev => [...prev, ...plan.shapes]);
+        // Optional room-type lighting: replaces this room's earlier interior lights rather than adding to them.
+        const lights = options?.lighting ? planRoomLighting([...this.shapes, ...plan.shapes], room, lightingTypeForPreset(preset)) : [];
+        if (plan.shapes.length || lights.length) {
+          this.setShapes(prev => [...(options?.lighting ? prev.filter(shape => shape.customData?.interiorLightRoom !== room.id) : prev), ...plan.shapes, ...lights]);
         }
-        this.log(`Furnished room ${roomId} with ${plan.shapes.length} items; ${plan.unplaced.length} unplaced.`);
-        return plan;
+        this.log(`Furnished room ${roomId} with ${plan.shapes.length} items${lights.length ? ` and ${lights.length} lights` : ''}; ${plan.unplaced.length} unplaced.`);
+        return { ...plan, lights };
       },
 
       bakeSimulation: (shapeId: string, strength?: number) => {

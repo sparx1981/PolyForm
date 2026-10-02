@@ -14,6 +14,8 @@ export const AUTO_FIXTURE_STYLES: { id: string; name: string }[] = [
   { id: 'pendant', name: 'Pendant light' },
   { id: 'chandelier', name: 'Chandelier' },
   { id: 'high-bay', name: 'Warehouse high-bay' },
+  { id: 'flush-ceiling', name: 'Flush ceiling light' },
+  { id: 'linear-led', name: 'Linear LED batten' },
 ];
 export const DEFAULT_AUTO_FIXTURE_STYLES = ['recessed'];
 export const AUTO_LIGHT_LIMIT = 24;
@@ -53,7 +55,7 @@ export function planAutoLighting(shapes: Shape[], lights: CustomLight[], source:
       // With several types ticked they share out between the rooms, so each one is used.
       const style = chosen[i % chosen.length]!;
       // A track light, pendant or chandelier is one fixture for the room, not a grid of them.
-      const spots = style.id === 'recessed' || style.id === 'troffer' || style.id === 'high-bay' ? fixtureSpots(room) : [[room.at[0], room.at[1]] as [number, number]];
+      const spots = style.id === 'recessed' || style.id === 'troffer' || style.id === 'high-bay' || style.id === 'linear-led' ? fixtureSpots(room) : [[room.at[0], room.at[1]] as [number, number]];
       for (const [x, z] of spots) {
         if (addShapes.length >= FIXTURE_LIMIT) return;
         addShapes.push({ id: `${AUTO_FIXTURE_PREFIX}${i}-${addShapes.length}`, name: `Room ${i + 1} ${style.name.toLowerCase()}`, type: 'lamp',

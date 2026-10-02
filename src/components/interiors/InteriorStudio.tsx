@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Armchair, Bath, BedDouble, Box, Briefcase, Check, CookingPot, Laptop, Loader2, Sofa, Sparkles, Toilet, Wrench, X } from 'lucide-react';
+import { Armchair, Bath, BedDouble, Box, Briefcase, Check, CookingPot, Laptop, Lightbulb, Loader2, Sofa, Sparkles, Toilet, Wrench, X } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { detectRooms } from '../../lib/spatial/rooms';
 import { type FurnishingPreset } from '../../lib/interiors/smartFurnish';
@@ -35,6 +35,7 @@ export default function InteriorStudio() {
   const [queue, setQueue] = useState<RoomFurnishingRequest[]>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [settleSoft, setSettleSoft] = useState(true);
+  const [lighting, setLighting] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -61,10 +62,11 @@ export default function InteriorStudio() {
     const pending = queue.find(item => item.roomId === id);
     if (pending) setPreset(pending.preset);
     setReplaceExisting(pending?.replaceExisting ?? false);
+    setLighting(pending?.lighting ?? true);
   };
   const enqueue = () => {
     if (!selectedRoom) return;
-    setQueue(previous => [...previous.filter(item => item.roomId !== roomId), { roomId, preset, replaceExisting }]);
+    setQueue(previous => [...previous.filter(item => item.roomId !== roomId), { roomId, preset, replaceExisting, lighting }]);
     setMessage(`${selectedRoom.name} queued. Pick another room, or apply the queue below.`);
   };
 
@@ -78,7 +80,7 @@ export default function InteriorStudio() {
       setQueue([]);
       const summary = batch.results.map(result => {
         const room = rooms.find(room => room.id === result.roomId)!;
-        return `${room.name}: ${result.placed} placed${result.removed ? `, ${result.removed} replaced` : ''}${result.skipped ? `, ${result.skipped} could not fit` : ''}`;
+        return `${room.name}: ${result.placed} placed${result.removed ? `, ${result.removed} replaced` : ''}${result.skipped ? `, ${result.skipped} could not fit` : ''}${result.lights ? `, ${result.lights} lights` : ''}`;
       }).join(' · ');
       setMessage(`${summary}.`);
     } catch (error) {
@@ -170,6 +172,15 @@ export default function InteriorStudio() {
                   <span className="flex-1">
                     <span className="block text-sm font-semibold">Relax upholstery and drape</span>
                     <span className="block text-[11px] text-gray-500">Save a relaxed upholstery shape and curtain drape. Beds and sofas remain static. Curtains respond to plant wind, enabled grass/flower wind beneath the room, Weather wind and nearby movement in Walk Mode.</span>
+                  </span>
+                </label>
+
+                <label className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={lighting} onChange={e => setLighting(e.target.checked)} />
+                  <Lightbulb size={16} className="text-polyform-blue" />
+                  <span className="flex-1">
+                    <span className="block text-sm font-semibold">Add lighting for the room type</span>
+                    <span className="block text-[11px] text-gray-500">Ceiling lights, lamps, pendants, vanity and task lights chosen for what the room is. They are ordinary fixtures you can edit, and furnishing the room again replaces them.</span>
                   </span>
                 </label>
 

@@ -168,7 +168,7 @@ export const SDK_REFERENCE: SdkTag[] = [
       m('listRooms', 'sdk.interiors.listRooms()', 'SpatialRoom[]', 'List detected enclosed rooms with stable room ids, level, area, perimeter and bounding walls.'),
       m('addFurniture', "sdk.interiors.addFurniture('bed' | 'sofa' | 'cabinet' | 'curtain' | 'desk' | 'office-chair' | 'bookcase' | 'filing-cabinet' | 'kitchen-run' | 'fridge' | 'dining-table' | 'dining-chair' | 'bath' | 'shower' | 'toilet' | 'basin' | 'side-table' | 'tv-unit' | 'workbench' | 'tool-cabinet' | 'shelving-rack' | 'machine', options?)", 'Shape', 'Add native parametric interior furniture, fixtures or a curtain.'),
       m('listCatalog', 'sdk.interiors.listCatalog()', 'InteriorFurnitureCatalogEntry[]', 'List available interior items, defaults, placement rules and simulation support.'),
-      m('furnishRoom', "sdk.interiors.furnishRoom(roomId, 'bedroom' | 'living-room' | 'soft-furnishings' | 'storage' | 'minimal' | 'office' | 'home-office' | 'kitchen' | 'bathroom' | 'toilet' | 'workshop')", 'FurnishingPlan', 'Collision-aware furnishing of a detected room using an Interior Studio preset.'),
+      m('furnishRoom', "sdk.interiors.furnishRoom(roomId, 'bedroom' | 'living-room' | 'soft-furnishings' | 'storage' | 'minimal' | 'office' | 'home-office' | 'kitchen' | 'bathroom' | 'toilet' | 'workshop')", 'FurnishingPlan', 'Collision-aware furnishing of a detected room using an Interior Studio preset. Pass { lighting: true } as a third argument to also add lighting suited to the room type; the result lists them in lights.'),
       m('bakeSimulation', 'sdk.interiors.bakeSimulation(shapeId, strength?)', 'Shape', 'Bake supported soft-body or cloth settling into deterministic saved mesh geometry.'),
     ],
   },

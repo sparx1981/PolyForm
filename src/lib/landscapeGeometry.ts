@@ -1376,6 +1376,60 @@ function createNightstandLampGeometry(height: number): THREE.BufferGeometry {
   return safeMergeGeometries(geometries, '#57534e');
 }
 
+/** Round flush-mount ceiling light: a low drum with a frosted diffuser, for small rooms and corridors. */
+function createFlushCeilingGeometry(): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const drum = new THREE.CylinderGeometry(0.24, 0.25, 0.05, 32);
+  drum.translate(0, -0.025, 0);
+  geometries.push(drum);
+  const trim = new THREE.CylinderGeometry(0.265, 0.265, 0.012, 32);
+  trim.translate(0, -0.056, 0);
+  applyGeometryVertexColors(trim, '#d6d3d1');
+  geometries.push(trim);
+  const diffuser = new THREE.CylinderGeometry(0.225, 0.225, 0.012, 32);
+  diffuser.translate(0, -0.066, 0);
+  applyGeometryVertexColors(diffuser, '#fff6e6');
+  geometries.push(diffuser);
+  return safeMergeGeometries(geometries, '#e7e5e4');
+}
+
+/** Bar of three globes over a bathroom mirror. Like the sconce it stands off a wall along +X. */
+function createVanityLightGeometry(): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const plate = new THREE.BoxGeometry(0.02, 0.07, 0.62);
+  plate.translate(0.01, 0, 0);
+  geometries.push(plate);
+  const bar = new THREE.BoxGeometry(0.03, 0.025, 0.56);
+  bar.translate(0.04, 0, 0);
+  applyGeometryVertexColors(bar, '#a8a29e');
+  geometries.push(bar);
+  for (const z of [-0.2, 0, 0.2]) {
+    const globe = new THREE.SphereGeometry(0.052, 14, 10);
+    globe.translate(0.085, 0.012, z);
+    applyGeometryVertexColors(globe, '#fffaf0');
+    geometries.push(globe);
+  }
+  return safeMergeGeometries(geometries, '#78716c');
+}
+
+/** Slim linear LED batten for workshops, garages and utility rooms. */
+function createLinearLedGeometry(): THREE.BufferGeometry {
+  const geometries: THREE.BufferGeometry[] = [];
+  const housing = new THREE.BoxGeometry(1.22, 0.05, 0.1);
+  housing.translate(0, -0.025, 0);
+  geometries.push(housing);
+  const diffuser = new THREE.BoxGeometry(1.16, 0.012, 0.07);
+  diffuser.translate(0, -0.056, 0);
+  applyGeometryVertexColors(diffuser, '#fbfdff');
+  geometries.push(diffuser);
+  for (const x of [-0.5, 0.5]) {
+    const clip = new THREE.BoxGeometry(0.03, 0.02, 0.12);
+    clip.translate(x, -0.01, 0);
+    geometries.push(clip);
+  }
+  return safeMergeGeometries(geometries, '#d4d4d8');
+}
+
 export function createLampGeometry(height: number = 3.2, style: string = 'classic'): THREE.BufferGeometry {
   switch (style) {
     case 'cobra': return createCobraLampGeometry(height);
@@ -1396,6 +1450,9 @@ export function createLampGeometry(height: number = 3.2, style: string = 'classi
     case 'high-bay': return createHighBayGeometry(height);
     case 'troffer': return createTrofferGeometry();
     case 'nightstand': return createNightstandLampGeometry(height);
+    case 'flush-ceiling': return createFlushCeilingGeometry();
+    case 'vanity-light': return createVanityLightGeometry();
+    case 'linear-led': return createLinearLedGeometry();
     case 'classic':
     default: return createClassicLampGeometry(height);
   }
@@ -1424,6 +1481,9 @@ export function getLampLightAnchor(height: number = 3.2, style: string = 'classi
     case 'high-bay': { const d = Math.max(0.3, Math.min(0.6, height * 0.08)); return [0, -d - 0.09, 0]; }
     case 'troffer': return [0, -0.025, 0];
     case 'nightstand': { const h = nightstandHeight(height); return [0, h - 0.06, 0]; }
+    case 'flush-ceiling': return [0, -0.075, 0];
+    case 'vanity-light': return [0.1, 0, 0];
+    case 'linear-led': return [0, -0.065, 0];
     case 'classic':
     default: return [0, height - 0.25, 0];
   }
