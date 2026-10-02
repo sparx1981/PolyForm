@@ -8,6 +8,7 @@ import { cn } from '../../lib/utils';
 import { playBuild, playStages, presentation, usePresentation, type CutMode } from '../../lib/presentation/store';
 import { SERIF, StageCaption, StageTimeline } from './StageTimeline';
 import { LabelsEditor, TourEditor } from './ContentEditor';
+import { TourPlayer } from './TourPlayer';
 import { LabelCallout, PinLayer } from './PinLayer';
 import { CommentPinMarker, DesignerCommentsList, DesignerCommentsSync, pinNumbers, useDesignerComments, useUnreadComments } from './Comments';
 import { downloadBlob, recordingSupported, startRecording, videoFileName, type Recording } from '../../lib/presentation/recorder';
@@ -87,6 +88,8 @@ export default function PresentationPanel() {
   const [showcaseStep, setShowcaseStep] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [qualityOpen,setQualityOpen]=useState(false);
+  // The guided tour is playing in the 3D view (a preview of what the client sees).
+  const [touring, setTouring] = useState(false);
   const [open, setOpen] = useState<'explode' | 'cut' | 'stages' | 'labels' | 'tour' | 'comments' | 'street' | 'loupe' | 'effects' | null>(null);
   const unread = useUnreadComments();
   const { comments } = useDesignerComments();
@@ -103,7 +106,7 @@ export default function PresentationPanel() {
     if (s.active) return;
     abort.current?.abort();
     if (orbitBefore.current !== null) { app.setAutoOrbitEnabled(orbitBefore.current); orbitBefore.current = null; }
-    setOpen(null);setQualityOpen(false);
+    setOpen(null);setQualityOpen(false);setTouring(false);
   }, [s.active]);
 
   useEffect(() => {
@@ -165,6 +168,10 @@ export default function PresentationPanel() {
 
   return (
     <>
+      {touring && app.presentationContent.tour.length > 0 && (
+        <TourPlayer stops={app.presentationContent.tour} onClose={() => setTouring(false)}
+          className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[85]" />
+      )}
       <div
         id="presentation-panel"
         className="fixed left-1/2 -translate-x-1/2 bottom-6 z-[80] max-w-[calc(100vw-16px)]"
@@ -177,7 +184,7 @@ export default function PresentationPanel() {
         )}
         {open === 'effects' && <PresentationEffectsControls />}
         {open === 'labels' && <LabelsEditor />}
-        {open === 'tour' && <TourEditor />}
+        {open === 'tour' && <TourEditor onPlay={() => { setOpen(null); setTouring(true); }} />}
         {open === 'comments' && <Popover title="Client comments" hint="From your client page"><DesignerCommentsList /></Popover>}
         {open === 'stages' && <StageTimeline className="mb-2 mx-auto w-[min(560px,calc(100vw-16px))]" />}
         {open === 'street' && site && (

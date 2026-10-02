@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { createDoorGeometry } from './archGeometry';
-import { DOOR_STYLES, DOOR_TAGS } from './archStyles';
+import { createDoorGeometry, createWindowGeometry } from './archGeometry';
+import { DOOR_STYLES, DOOR_TAGS, WINDOW_STYLES } from './archStyles';
 import { DoorOpener, doorMotion, pieces } from './presentation/doors';
-import { bifoldLeafCount, carriageLeafCount, garagePanelColumns, garageSectionCount, patioPanelCount, shutterLayout } from './doorStyles';
+import { bifoldLeafCount, carriageLeafCount, garagePanelColumns, garageSectionCount, patioPanelCount, shutterLayout, shutterPanels } from './doorStyles';
 
 /** Glass boxes in a door: material 1's triangles, twelve to a box. */
 function glassBoxes(geometry: THREE.BufferGeometry): number {
@@ -27,6 +27,14 @@ describe('door layout rules follow the width', () => {
   it('sliding patio doors use panels of about 1.2 m', () => {
     expect([1.0, 1.8, 2.4, 3.0, 3.6, 4.8, 6.0].map(patioPanelCount)).toEqual([2, 2, 2, 3, 3, 4, 5]);
   });
+  it('shutter panels fold back flat: about 0.6 m or less each, half the opening on each side', () => {
+    for (const w of [0.6, 0.9, 1.2, 1.8, 2.4, 3.0, 4.2]) {
+      const { shuttersPerSide, shutterWidth } = shutterPanels(w);
+      expect(shutterWidth).toBeLessThanOrEqual(0.6 + 1e-9);
+      expect(shuttersPerSide * shutterWidth).toBeGreaterThan(w / 2 - 0.02);
+      expect(shuttersPerSide * shutterWidth).toBeLessThanOrEqual(w / 2 + 1e-9);
+    }
+  });
   it('shutters, door leaves and panes suit the width and height', () => {
     const narrow = shutterLayout(1.0, 2.1), standard = shutterLayout(1.8, 2.1), wide = shutterLayout(4.2, 2.4);
     expect(narrow.leaves).toBe(1); expect(standard.leaves).toBe(2); expect(wide.leaves).toBe(4);
@@ -36,6 +44,8 @@ describe('door layout rules follow the width', () => {
     }
     expect(wide.columns).toBeGreaterThanOrEqual(standard.columns);
     expect(shutterLayout(1.8, 2.8).rows).toBeGreaterThan(shutterLayout(1.8, 1.8).rows);
+    // A standard pair of French doors is ten lights a leaf (two across, five down).
+    expect(standard.columns).toBe(2); expect(shutterLayout(1.8, 2.1).rows).toBe(5);
   });
   it('garage doors get sections, panels and leaves to suit the opening', () => {
     expect([1.8, 2.1, 2.4, 3.0].map(garageSectionCount)).toEqual([4, 4, 5, 6]);
@@ -69,7 +79,8 @@ describe('door geometry is built to the size', () => {
       expect(geometry.attributes.position!.count).toBeGreaterThan(30);
       for (const v of [box.min.x, box.max.x, box.min.y, box.max.y, box.min.z, box.max.z]) expect(Number.isFinite(v)).toBe(true);
       // Overhead rails run a little past the opening; nothing else may.
-      expect(box.max.x).toBeLessThanOrEqual(width / 2 + 0.16); expect(box.min.x).toBeGreaterThanOrEqual(-width / 2 - 0.16);
+      // The shutters hang on the wall either side of their doors, so they are measured separately below.
+      if (style.id !== 'shutters') { expect(box.max.x).toBeLessThanOrEqual(width / 2 + 0.16); expect(box.min.x).toBeGreaterThanOrEqual(-width / 2 - 0.16); }
       expect(box.min.y).toBeGreaterThanOrEqual(-height / 2 - 0.02); expect(box.max.y).toBeLessThanOrEqual(height / 2 + 0.1);
       if (style.hasGlass) expect(glassSize(geometry).x).toBeGreaterThan(0.1);
     }
@@ -126,5 +137,94 @@ describe('garage and workshop doors', () => {
     const geometry = createDoorGeometry(2.4, 2.1, 0.18, 'garage-roller');
     const frame = pieces(geometry).filter(p => p.box.min.x < -2.4 / 2 + 0.02 || p.box.max.x > 2.4 / 2 - 0.02 || p.box.max.y > 2.1 / 2 - 0.02);
     expect(frame.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/** Boxes of the glass (material 1) and every other piece, from the merged door or window geometry. */
+function glassAndSolids(geometry: THREE.BufferGeometry) {
+  const material = new Map<number, number>();
+  for (const g of geometry.groups) for (let i = g.start; i < g.start + g.count; i += 3) material.set(i / 3, g.materialIndex ?? 0);
+  const all = pieces(geometry);
+  const glass = all.filter(p => p.tris.every(t => material.get(t) === 1)).map(p => p.box);
+  const solids = all.filter(p => !p.tris.every(t => material.get(t) === 1)).map(p => p.box);
+  return { glass, solids };
+}
+describe('glazed garage and steel doors are see-through', () => {
+  it.each([
+    ['garage-sectional-glazed', 2.4, 2.1], ['garage-sectional-glazed', 4.8, 2.4], ['workshop-personnel', 0.9, 2.1], ['workshop-personnel', 1.2, 2.2],
+  ])('%s %sm wide: a ray through any part of a pane hits only glass, nothing solid behind or in front', (style, width, height) => {
+    const geometry = createDoorGeometry(width, height, 0.15, style);
+    const mesh = new THREE.Mesh(geometry, [0, 1, 2].map(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })));
+    mesh.updateMatrixWorld(true);
+    const { glass } = glassAndSolids(geometry);
+    expect(glass.length).toBeGreaterThan(0);
+    for (const box of glass) {
+      const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+      // The middle and the four quarter points, away from the slim bead round the edge.
+      for (const [fx, fy] of [[0, 0], [-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) {
+        const origin = new THREE.Vector3(c.x + fx * s.x, c.y + fy * s.y, 1);
+        for (const dir of [-1, 1]) {
+          const from = origin.clone(); from.z = dir;
+          const hits = new THREE.Raycaster(from, new THREE.Vector3(0, 0, -dir)).intersectObject(mesh);
+          expect(hits.length).toBeGreaterThan(0);
+          expect(hits.every(h => h.face!.materialIndex === 1)).toBe(true);
+        }
+      }
+    }
+  });
+});
+
+describe('French doors and windows with louvered shutters', () => {
+  const FACE = 0.18 / 2;
+  /** Boxes of the pieces that lie wholly outside the opening's width (the shutters and their ironwork). */
+  const outside = (geometry: THREE.BufferGeometry, width: number) => pieces(geometry).map(p => p.box).filter(b => b.min.x >= width / 2 - 1e-6 || b.max.x <= -width / 2 + 1e-6);
+
+  it.each([[1.0], [1.8], [2.4], [4.2]])('the %s m French doors are their own width, with the shutters outside it on the wall face', width => {
+    const geometry = createDoorGeometry(width, 2.1, 0.18, 'shutters');
+    // Every pane of glass is inside the opening: the doors are the whole width, shutters not included.
+    const { glass } = glassAndSolids(geometry);
+    expect(glass.length).toBe(shutterLayout(width, 2.1).leaves);
+    for (const g of glass) { expect(g.min.x).toBeGreaterThanOrEqual(-width / 2); expect(g.max.x).toBeLessThanOrEqual(width / 2); }
+    const doorSpan = new THREE.Box3(); glass.forEach(g => doorSpan.union(g));
+    expect(doorSpan.getSize(new THREE.Vector3()).x).toBeGreaterThan(width * 0.65);
+    // The shutters fill the wall beside the opening, each side the same, and stand proud of the outside face.
+    const shutters = outside(geometry, width);
+    expect(shutters.length).toBeGreaterThan(20);
+    const left = new THREE.Box3(), right = new THREE.Box3();
+    shutters.forEach(b => (b.max.x <= 0 ? left : right).union(b));
+    expect(left.max.x).toBeLessThan(-width / 2 + 1e-6); expect(right.min.x).toBeGreaterThan(width / 2 - 1e-6);
+    expect(right.getSize(new THREE.Vector3()).x).toBeGreaterThan(width / 2 - 0.05);
+    expect(right.getSize(new THREE.Vector3()).x).toBeCloseTo(left.getSize(new THREE.Vector3()).x, 2);
+    expect(left.min.z).toBeGreaterThanOrEqual(FACE - 1e-6);
+    expect(right.min.z).toBeGreaterThanOrEqual(FACE - 1e-6);
+    // Nothing of the doors themselves pokes beyond the opening.
+    const overall = new THREE.Box3().setFromBufferAttribute(geometry.attributes.position as THREE.BufferAttribute);
+    expect(overall.max.x).toBeGreaterThan(width / 2 + width / 2 - 0.05);
+  });
+  it('the doors swing open and the shutters stay where they are', () => {
+    expect(doorMotion('shutters')).toBe('double');
+    const doors = new DoorOpener();
+    const mesh = new THREE.Mesh(createDoorGeometry(1.8, 2.1, 0.18, 'shutters'), new THREE.MeshStandardMaterial());
+    doors.toggle(mesh, { width: 1.8, height: 2.1 }, 'shutters', new THREE.Vector3(0, 1, 5));
+    for (let i = 0; i < 30; i++) doors.update(0.05);
+    expect(mesh.children).toHaveLength(2);
+    const stay = new THREE.Box3().setFromBufferAttribute(mesh.geometry.attributes.position as THREE.BufferAttribute);
+    expect(stay.min.x).toBeLessThan(-1.8 / 2 - 0.3); expect(stay.max.x).toBeGreaterThan(1.8 / 2 + 0.3);
+    doors.dispose();
+  });
+  it('has a matching window style whose shutters sit outside its width', () => {
+    const style = WINDOW_STYLES.find(s => s.id === 'casement-shutters');
+    expect(style?.name).toMatch(/Louvered Shutters/);
+    for (const width of [0.9, 1.2, 1.8]) {
+      const geometry = createWindowGeometry(width, 1.5, 0.15, 'casement-shutters');
+      const { glass } = glassAndSolids(geometry);
+      expect(glass.length).toBe(2);
+      for (const g of glass) { expect(g.min.x).toBeGreaterThanOrEqual(-width / 2); expect(g.max.x).toBeLessThanOrEqual(width / 2); }
+      const shutters = outside(geometry, width);
+      expect(shutters.length).toBeGreaterThan(20);
+      for (const b of shutters) expect(b.min.z).toBeGreaterThanOrEqual(0.15 / 2 - 1e-6);
+      const overall = new THREE.Box3().setFromBufferAttribute(geometry.attributes.position as THREE.BufferAttribute);
+      expect(overall.max.x).toBeGreaterThan(width * 0.9);
+    }
   });
 });

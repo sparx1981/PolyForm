@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, Crosshair, ChevronUp, ChevronDown, Eye, Camera } from 'lucide-react';
+import { Plus, Trash2, Crosshair, ChevronUp, ChevronDown, Eye, Camera, Play } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
 import { currentView, flyTo, pickMode, pickPoint } from '../../lib/presentation/camera';
@@ -24,9 +24,11 @@ function overModel(e: PointerEvent): boolean {
   return t === canvas || !t?.closest?.('button, a, input, textarea, select, [role="slider"], [role="dialog"], #presentation-panel');
 }
 
-export function usePickOnModel(active: boolean, onPick: (point: [number, number, number]) => void, onCancel?: () => void) {
+export function usePickOnModel(active: boolean, onPick: (point: [number, number, number]) => void, onCancel?: () => void, onMiss?: () => void) {
   const pick = useRef(onPick);
   pick.current = onPick;
+  const miss = useRef(onMiss);
+  miss.current = onMiss;
   const cancel = useRef(onCancel);
   cancel.current = onCancel;
   useEffect(() => {
@@ -45,7 +47,7 @@ export function usePickOnModel(active: boolean, onPick: (point: [number, number,
       e.stopImmediatePropagation();
       if (moved > 6) return;
       const p = pickPoint(e.clientX, e.clientY);
-      if (p) pick.current(p);
+      if (p) pick.current(p); else miss.current?.();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -116,7 +118,8 @@ export function LabelsEditor() {
   );
 }
 
-export function TourEditor() {
+/** `onPlay` starts the tour in the 3D view (the panel closes so the view is clear). */
+export function TourEditor({ onPlay }: { onPlay?: () => void }) {
   const { content, update } = useContent();
   const set = (id: string, patch: Partial<TourStop>) =>
     update(c => ({ ...c, tour: c.tour.map(t => (t.id === id ? { ...t, ...patch } : t)) }));
@@ -153,9 +156,16 @@ export function TourEditor() {
           </div>
         ))}
       </div>
-      <button onClick={add} className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20">
-        <Plus size={14} /> Add this view
-      </button>
+      <div className="mt-3 flex gap-2">
+        <button onClick={add} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20">
+          <Plus size={14} /> Add this view
+        </button>
+        <button onClick={onPlay} disabled={!onPlay || content.tour.length === 0}
+          title={content.tour.length ? 'Play the tour in the 3D view, as your client will see it' : 'Add a stop to play the tour'}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:hover:bg-sky-600">
+          <Play size={14} /> Play tour
+        </button>
+      </div>
     </Popover>
   );
 }

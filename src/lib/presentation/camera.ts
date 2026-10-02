@@ -61,6 +61,25 @@ export function cancelFlight() {
   flight++;
 }
 
+/**
+ * Whether a ray hit should count as a surface the viewer sees. The depth-of-field pass only knows what the depth
+ * buffer holds, so a pick must ignore everything that never writes to it: invisible meshes, glass and haze
+ * (transparent without depth writes), the inside of the sky dome, and helpers. Doors and windows are multi-material,
+ * so the material is the one that was actually hit.
+ */
+export function isSeenSurface(hit: THREE.Intersection): boolean {
+  const mesh = hit.object as THREE.Mesh;
+  if (!mesh.isMesh) return false;
+  for (let o: THREE.Object3D | null = mesh; o; o = o.parent) {
+    if (!o.visible || o.userData?.presentationAux || o.userData?.isGrass || o.userData?.isPreview) return false;
+  }
+  const material = Array.isArray(mesh.material) ? mesh.material[hit.face?.materialIndex ?? 0] : mesh.material;
+  if (!material) return true;
+  if (material.visible === false || material.colorWrite === false || material.depthWrite === false) return false;
+  if (material.transparent && material.opacity < 0.05) return false;
+  return material.side !== THREE.BackSide;
+}
+
 /** The point on the model under a screen position, or null (ignores presentation helpers). */
 export function pickPoint(clientX: number, clientY: number): [number, number, number] | null {
   const scene = mainSceneRef.current, canvas = canvasRef.current, c = orbitControls();
@@ -69,17 +88,8 @@ export function pickPoint(clientX: number, clientY: number): [number, number, nu
   const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
   const ray = new THREE.Raycaster();
   ray.setFromCamera(ndc, c.object);
-  const hits = ray.intersectObjects(scene.children, true);
-  for (const h of hits) {
-    let o: THREE.Object3D | null = h.object, skip = false;
-    for (; o; o = o.parent) {
-      if (!o.visible || o.userData?.presentationAux || o.userData?.isGrass) { skip = true; break; }
-    }
-    const m = (h.object as THREE.Mesh).material as THREE.Material | undefined;
-    if (skip || !(h.object as THREE.Mesh).isMesh || (m && (m.visible === false || (m.transparent && m.opacity < 0.05)))) continue;
-    return h.point.toArray().map(n => Math.round(n * 1000) / 1000) as [number, number, number];
-  }
-  return null;
+  const hit = ray.intersectObjects(scene.children, true).find(isSeenSurface);
+  return hit ? hit.point.toArray().map(n => Math.round(n * 1000) / 1000) as [number, number, number] : null;
 }
 
 /** Screen position of a world point in the 3D view, or null when it's behind the camera. */

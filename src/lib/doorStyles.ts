@@ -41,27 +41,38 @@ export function bifoldLeafCount(width: number): number { return clamp(Math.ceil(
 export function patioPanelCount(width: number): number { return clamp(Math.round(width / 1.2), 2, 6); }
 
 export interface ShutterLayout {
-  /** Width of each shutter (one either side). */
-  shutterWidth: number;
-  /** Doors between the shutters: one leaf when narrow, a pair, or two pairs when wide. */
+  /** Doors across the opening: one leaf when narrow, a pair, or two pairs when wide. */
   leaves: 1 | 2 | 4;
   leafWidth: number;
   /** Panes across and down each leaf. */
   columns: number;
   rows: number;
+  /** Louvered shutter panels on each side of the opening, and how wide each one is. */
+  shuttersPerSide: number;
+  shutterWidth: number;
 }
-/** French doors flanked by louvered shutters: shutters take about a sixth of the width, the glazed doors the rest. */
+/**
+ * French doors with louvered shutters. The width of the door is the width of the doors themselves: a single leaf
+ * up to about 1.3 m, a pair up to 2.4 m, two pairs beyond that. The shutters are not part of that width; they hang
+ * on the outside face of the wall either side of the opening, and between them they cover half the opening each.
+ */
 export function shutterLayout(width: number, height: number): ShutterLayout {
-  const shutterWidth = clamp(width * 0.17, 0.28, 0.65);
-  const doorArea = Math.max(0.3, width - 2 * (shutterWidth + 0.02));
-  const leaves: 1 | 2 | 4 = doorArea < 0.95 ? 1 : doorArea < 2.6 ? 2 : 4;
-  const leafWidth = doorArea / leaves;
+  const leaves: 1 | 2 | 4 = width < 1.3 ? 1 : width < 2.4 ? 2 : 4;
+  const leafWidth = width / leaves;
   return {
-    shutterWidth, leaves, leafWidth,
-    columns: leafWidth < 0.55 ? 1 : leafWidth < 0.9 ? 2 : 3,
-    rows: clamp(Math.round((height - 0.4) / 0.5), 3, 6),
+    leaves, leafWidth,
+    columns: leafWidth < 0.55 ? 1 : leafWidth < 1.0 ? 2 : 3,
+    rows: clamp(Math.round((height - 0.3) / 0.36), 3, 8),
+    ...shutterPanels(width),
   };
 }
+/** Shutter panels on each side of an opening: panels of about 0.6 m or less, folded back flat against the wall. */
+export function shutterPanels(openingWidth: number): { shuttersPerSide: number; shutterWidth: number } {
+  const side = openingWidth / 2;
+  const shuttersPerSide = clamp(Math.ceil(side / 0.6 - 1e-9), 1, 4);
+  return { shuttersPerSide, shutterWidth: (side - (shuttersPerSide - 1) * SHUTTER_GAP) / shuttersPerSide };
+}
+const SHUTTER_GAP = 0.006;
 
 /** Sectional garage doors: horizontal sections of about half a metre, three at least. */
 export function garageSectionCount(height: number): number { return clamp(Math.round(height / 0.5), 3, 6); }
@@ -134,75 +145,173 @@ function patioSliding(c: DoorContext): DoorParts {
   return p;
 }
 
-/** French doors (one leaf, a pair or two pairs) flanked by louvered shutters. */
-function shutters(c: DoorContext): DoorParts {
-  const p = empty();
-  const layout = shutterLayout(c.width, c.height);
-  const { shutterWidth, leaves, leafWidth, columns, rows } = layout;
-  const doorArea = leaves * leafWidth, stileW = clamp(leafWidth * 0.1, 0.045, 0.075), cy = -c.frameThick / 2;
+export interface LouveredShutterOptions {
+  /** Width of the opening the shutters belong to; each side gets half of it, in panels. */
+  openingWidth: number;
+  /** Top and bottom of the shutters, in the same space as the opening. */
+  top: number;
+  bottom: number;
+  /** Where the outside face of the wall is (z); the shutters stand on it. */
+  wallFace: number;
+  /** Clear space between the opening and the nearest shutter edge (room for a sill or trim). */
+  clearance: number;
+}
 
-  for (let i = 0; i < leaves; i++) {
-    const x = -doorArea / 2 + leafWidth / 2 + i * leafWidth;
-    const w = leafWidth - 0.01;
-    p.frame.push(box(stileW, c.panelHeight, c.panelThick * 0.85, x - w / 2 + stileW / 2, cy, 0));
-    p.frame.push(box(stileW, c.panelHeight, c.panelThick * 0.85, x + w / 2 - stileW / 2, cy, 0));
-    p.frame.push(box(w - stileW * 2, 0.1, c.panelThick * 0.85, x, cy + c.panelHeight / 2 - 0.05, 0));
-    p.frame.push(box(w - stileW * 2, 0.14, c.panelThick * 0.85, x, cy - c.panelHeight / 2 + 0.07, 0));
-    const gw = w - stileW * 2, gh = c.panelHeight - 0.24, gy = cy - 0.02;
-    // Muntins: columns and rows of panes sized to the leaf.
-    for (let k = 1; k < columns; k++) p.frame.push(box(0.018, gh, c.panelThick * 0.7, x - gw / 2 + (gw / columns) * k, gy, 0));
-    for (let k = 1; k < rows; k++) p.frame.push(box(gw, 0.018, c.panelThick * 0.7, x, gy - gh / 2 + (gh / rows) * k, 0));
-    p.glass.push(box(gw, gh, 0.008, x, gy, 0));
-    // Knobs on the leaf edges that meet (or on the one leaf's free edge).
-    const meets = leaves === 1 ? [x + w / 2 - stileW - 0.03] : i % 2 === 0 ? [x + w / 2 - stileW - 0.03] : [x - w / 2 + stileW + 0.03];
-    for (const kx of meets) p.hardware.push(cylinder(0.014, 0.04, 'z', kx, -0.05, c.panelThick / 2 + 0.03, 16));
-  }
+/**
+ * Louvered exterior shutters, folded back flat against the outside face of the wall either side of an opening.
+ * Each panel is a timber frame (stiles, top, middle and bottom rails) with slanted slats in every field, a tilt rod,
+ * and iron strap hinges and pintles on the edge nearest the opening; the outer end of each side has a shutter dog.
+ * Panels and slats are frame parts (they take the door's colour); the ironwork is hardware.
+ */
+export function louveredShutters(o: LouveredShutterOptions): { frame: THREE.BufferGeometry[]; hardware: THREE.BufferGeometry[] } {
+  const frame: THREE.BufferGeometry[] = [], hardware: THREE.BufferGeometry[] = [];
+  const { shuttersPerSide, shutterWidth } = shutterPanels(o.openingWidth);
+  const t = 0.042, z = o.wallFace + 0.004 + t / 2;
+  const height = o.top - o.bottom, cy = (o.top + o.bottom) / 2;
+  const topRail = 0.09, botRail = 0.13, midRail = height > 1.2 ? 0.09 : 0;
+  const midY = o.bottom + botRail + (height - topRail - botRail - midRail) / 2 + midRail / 2;
+  // The slatted fields: above and below the middle rail, or one tall field on a low shutter.
+  const fields: [number, number][] = midRail
+    ? [[o.bottom + botRail, midY - midRail / 2], [midY + midRail / 2, o.top - topRail]]
+    : [[o.bottom + botRail, o.top - topRail]];
+  const angle = 0.55, pitch = 0.052, slatDepth = 0.056, slatThick = 0.012;
 
-  const z = c.frameDepth / 2 + 0.02, sh = c.panelHeight * 0.98, rail = 0.05;
-  const louverW = shutterWidth - rail * 2, louvers = clamp(Math.round((sh / 2 - 0.07) / 0.055), 4, 16), sub = sh / 2 - 0.07;
-  [-c.panelWidth / 2 + shutterWidth / 2, c.panelWidth / 2 - shutterWidth / 2].forEach((x, side) => {
-    p.frame.push(box(rail, sh, 0.028, x - shutterWidth / 2 + rail / 2, cy, z));
-    p.frame.push(box(rail, sh, 0.028, x + shutterWidth / 2 - rail / 2, cy, z));
-    p.frame.push(box(louverW, 0.06, 0.028, x, cy + sh / 2 - 0.03, z));
-    p.frame.push(box(louverW, 0.05, 0.028, x, cy, z));
-    p.frame.push(box(louverW, 0.08, 0.028, x, cy - sh / 2 + 0.04, z));
-    for (let l = 1; l <= louvers; l++) {
-      for (const base of [cy + 0.03, cy - sh / 2 + 0.05]) {
-        const slat = box(louverW, 0.03, 0.006, 0, 0, 0);
-        slat.rotateX(0.45);
-        slat.translate(x, base + (sub / (louvers + 1)) * l, z);
-        p.frame.push(slat);
+  for (const side of [-1, 1]) {
+    for (let n = 0; n < shuttersPerSide; n++) {
+      const edge = o.openingWidth / 2 + o.clearance + n * (shutterWidth + SHUTTER_GAP);
+      const x0 = side * (edge + shutterWidth / 2);
+      const hingeX = side * edge;
+      const stile = clamp(shutterWidth * 0.16, 0.05, 0.085);
+      const inner = shutterWidth - stile * 2;
+      frame.push(box(stile, height, t, x0 - shutterWidth / 2 + stile / 2, cy, z));
+      frame.push(box(stile, height, t, x0 + shutterWidth / 2 - stile / 2, cy, z));
+      frame.push(box(inner, topRail, t, x0, o.top - topRail / 2, z));
+      frame.push(box(inner, botRail, t, x0, o.bottom + botRail / 2, z));
+      if (midRail) frame.push(box(inner, midRail, t, x0, midY, z));
+      for (const [lo, hi] of fields) {
+        const count = Math.max(2, Math.round((hi - lo) / pitch)), step = (hi - lo) / count;
+        for (let i = 0; i < count; i++) {
+          // Each slat slopes down towards the street so rain runs off, and sits a little into the stiles.
+          const slat = box(inner + 0.01, slatDepth, slatThick, 0, 0, 0);
+          slat.rotateX(-angle);
+          slat.translate(x0, lo + step * (i + 0.5), z);
+          frame.push(slat);
+        }
+        // The tilt rod that links the slats, down the middle of the field.
+        frame.push(box(0.012, hi - lo - 0.04, 0.01, x0, (lo + hi) / 2, z + t / 2 + 0.002));
+      }
+      // Strap hinges run in from the edge next to the opening; a pintle pin through the end of each.
+      const strap = Math.min(0.45, shutterWidth * 0.85);
+      for (const y of [o.top - 0.2, o.bottom + 0.24]) {
+        hardware.push(box(strap, 0.04, 0.008, hingeX + side * strap / 2, y, z + t / 2 + 0.004));
+        hardware.push(cylinder(0.011, 0.07, 'y', hingeX + side * 0.015, y, z + t / 2 + 0.008, 10));
       }
     }
-    for (const y of [cy + sh / 2 - 0.08, cy - sh / 2 + 0.08]) p.hardware.push(box(shutterWidth * 0.75, 0.02, 0.008, x + (side === 0 ? 0.02 : -0.02), y, z + 0.016));
+    // A shutter dog on the wall just past the outer edge, holding the open shutters back.
+    const outer = o.openingWidth / 2 + o.clearance + shuttersPerSide * shutterWidth + (shuttersPerSide - 1) * SHUTTER_GAP;
+    hardware.push(box(0.035, 0.09, 0.02, side * (outer + 0.03), cy - 0.1, o.wallFace + 0.012));
+    hardware.push(cylinder(0.014, 0.03, 'z', side * (outer + 0.03), cy - 0.05, o.wallFace + 0.02, 10));
+  }
+  return { frame, hardware };
+}
+
+/**
+ * French doors (one leaf, a pair or two pairs) filling the opening, with louvered shutters folded back on the
+ * outside face of the wall either side of it. Each leaf has a stile and rail frame, a divided-light glazing grid
+ * (glass behind the muntins), and lever handles; a pair has an astragal and a surface-mounted espagnolette bolt.
+ */
+function shutters(c: DoorContext): DoorParts {
+  const p = empty();
+  const { leaves, columns, rows } = shutterLayout(c.width, c.height);
+  const gap = 0.006, leafW = (c.panelWidth - (leaves - 1) * gap) / leaves;
+  const stileW = clamp(leafW * 0.11, 0.07, 0.1), topRailH = 0.1, botRailH = 0.19;
+  const cy = -c.frameThick / 2, t = c.panelThick;
+  const gw = leafW - stileW * 2, gh = c.panelHeight - topRailH - botRailH;
+  const gy = cy + (botRailH - topRailH) / 2;
+
+  for (let i = 0; i < leaves; i++) {
+    const x = -c.panelWidth / 2 + leafW / 2 + i * (leafW + gap);
+    p.frame.push(box(stileW, c.panelHeight, t, x - leafW / 2 + stileW / 2, cy, 0));
+    p.frame.push(box(stileW, c.panelHeight, t, x + leafW / 2 - stileW / 2, cy, 0));
+    p.frame.push(box(gw, topRailH, t, x, cy + c.panelHeight / 2 - topRailH / 2, 0));
+    p.frame.push(box(gw, botRailH, t, x, cy - c.panelHeight / 2 + botRailH / 2, 0));
+    // A moulded bead frames the glass on the outside.
+    p.frame.push(box(gw, 0.02, t * 0.5, x, gy + gh / 2 - 0.01, t * 0.5 + 0.004));
+    p.frame.push(box(gw, 0.02, t * 0.5, x, gy - gh / 2 + 0.01, t * 0.5 + 0.004));
+    // Muntins: columns and rows of lights sized to the leaf (a 2 x 5 grid on a standard door).
+    for (let k = 1; k < columns; k++) p.frame.push(box(0.024, gh, t * 0.7, x - gw / 2 + (gw / columns) * k, gy, 0));
+    for (let k = 1; k < rows; k++) p.frame.push(box(gw, 0.024, t * 0.7, x, gy - gh / 2 + (gh / rows) * k, 0));
+    // One pane of glass per leaf, in the middle of the leaf's thickness with nothing solid behind it.
+    p.glass.push(box(gw, gh, 0.008, x, gy, 0));
+
+    // Lever handles, inside and out, on the stile that closes against its neighbour (or the free stile of a single leaf).
+    const towards = leaves === 1 ? 1 : i % 2 === 0 ? 1 : -1;
+    const hx = x + towards * (leafW / 2 - stileW / 2), hy = cy - 0.02;
+    for (const face of [1, -1]) {
+      p.hardware.push(box(0.04, 0.16, 0.008, hx, hy, face * (t / 2 + 0.004)));
+      p.hardware.push(cylinder(0.011, 0.12, 'x', hx - towards * 0.045, hy - 0.03, face * (t / 2 + 0.035)));
+      p.hardware.push(cylinder(0.011, 0.04, 'z', hx, hy - 0.03, face * (t / 2 + 0.02), 10));
+    }
+    // Hinges on the jamb side of the two outermost leaves (inside face).
+    if (i === 0 || i === leaves - 1) {
+      const hingeX = i === 0 ? x - leafW / 2 : x + leafW / 2;
+      for (const y of [cy + c.panelHeight / 2 - 0.25, cy, cy - c.panelHeight / 2 + 0.3]) p.hardware.push(box(0.02, 0.1, 0.012, hingeX, y, -t / 2 - 0.004));
+    }
+  }
+  // Where a pair meets: an astragal on the passive leaf, and an espagnolette rod and keeps on the active one.
+  for (let i = 0; i < leaves - 1; i += 2) {
+    const meetX = -c.panelWidth / 2 + (i + 1) * leafW + (i + 0.5) * gap;
+    p.frame.push(box(0.035, c.panelHeight - 0.02, t + 0.016, meetX + 0.012, cy, 0));
+    p.hardware.push(box(0.008, c.panelHeight * 0.82, 0.008, meetX - stileW / 2, cy, -t / 2 - 0.012));
+  }
+  // An aluminium weather threshold across the foot of the opening.
+  p.hardware.push(box(c.width - c.frameThick * 2, 0.022, c.frameDepth * 0.85, 0, -c.height / 2 + 0.011, 0));
+
+  // The shutters stand on the outside face of the wall (z = +frameDepth / 2), outside the width of the doors.
+  const s = louveredShutters({
+    openingWidth: c.width, top: c.height / 2 - 0.02, bottom: -c.height / 2 + 0.03,
+    wallFace: c.frameDepth / 2, clearance: 0.03,
   });
+  p.frame.push(...s.frame);
+  p.hardware.push(...s.hardware);
   return p;
 }
 
 // ---- Garage and workshop doors ----------------------------------------------------------------------------------
 
-/** Horizontal sections with raised panels (or, for the glazed version, a row of lights in the top section). */
+/**
+ * Horizontal sections with raised panels (or, for the glazed version, a row of lights in the top section).
+ * A glazed section is built round its lights, from rails and stiles, so the glass has nothing solid behind it.
+ */
 function sectional(c: DoorContext, glazedTop: boolean): DoorParts {
   const p = empty();
   const n = garageSectionCount(c.panelHeight), gap = 0.012, secH = c.panelHeight / n, cols = garagePanelColumns(c.panelWidth);
   const top = -c.frameThick / 2 + c.panelHeight / 2, t = c.panelThick;
   for (let i = 0; i < n; i++) {
     const y = top - secH * (i + 0.5), glazed = glazedTop && i === 0;
-    p.frame.push(box(c.panelWidth, secH - gap, t, 0, y, 0));
     const cw = c.panelWidth / cols;
-    for (let k = 0; k < cols; k++) {
-      const x = -c.panelWidth / 2 + cw * (k + 0.5);
-      if (glazed) {
-        // A glazed light with a slim frame around it.
-        const gw = cw - 0.1, gh = secH * 0.55;
-        p.glass.push(box(gw, gh, 0.01, x, y, t / 2 - 0.004));
+    if (glazed) {
+      const gw = cw - 0.1, gh = (secH - gap) * 0.62, rail = (secH - gap - gh) / 2;
+      p.frame.push(box(c.panelWidth, rail, t, 0, y + gh / 2 + rail / 2, 0));
+      p.frame.push(box(c.panelWidth, rail, t, 0, y - gh / 2 - rail / 2, 0));
+      for (let k = 0; k <= cols; k++) {
+        // The stiles between the lights (half-width at each end).
+        const w = k === 0 || k === cols ? (cw - gw) / 2 : cw - gw;
+        const x = -c.panelWidth / 2 + cw * k + (k === 0 ? w / 2 : k === cols ? -w / 2 : 0);
+        p.frame.push(box(w, gh, t, x, y, 0));
+      }
+      for (let k = 0; k < cols; k++) {
+        const x = -c.panelWidth / 2 + cw * (k + 0.5);
+        // A clear light in the middle of the section's thickness, with a slim bead round it.
+        p.glass.push(box(gw, gh, 0.01, x, y, 0));
         p.frame.push(box(gw + 0.04, 0.02, t + 0.016, x, y + gh / 2 + 0.01, 0));
         p.frame.push(box(gw + 0.04, 0.02, t + 0.016, x, y - gh / 2 - 0.01, 0));
         p.frame.push(box(0.02, gh + 0.04, t + 0.016, x - gw / 2 - 0.01, y, 0));
         p.frame.push(box(0.02, gh + 0.04, t + 0.016, x + gw / 2 + 0.01, y, 0));
-      } else {
-        p.frame.push(box(cw - 0.12, secH * 0.62, t + 0.014, x, y, 0));
       }
+    } else {
+      p.frame.push(box(c.panelWidth, secH - gap, t, 0, y, 0));
+      for (let k = 0; k < cols; k++) p.frame.push(box(cw - 0.12, secH * 0.62, t + 0.014, -c.panelWidth / 2 + cw * (k + 0.5), y, 0));
     }
     // Hinge plates at the joint under this section.
     if (i < n - 1) for (const hx of [-c.panelWidth / 2 + 0.12, 0, c.panelWidth / 2 - 0.12]) p.hardware.push(box(0.06, 0.04, 0.012, hx, y - secH / 2, t / 2 + 0.006));
@@ -299,21 +408,30 @@ function industrialSliding(c: DoorContext): DoorParts {
   return p;
 }
 
-/** Steel personnel door: a flush insulated leaf with a vision panel, kick plate, push bar and a door closer. */
+/**
+ * Steel personnel door: a flush insulated leaf with a vision panel, kick plate, push bar and a door closer.
+ * The leaf is built round the vision panel (skin above, below and either side), so the glass is see-through.
+ */
 function steelPersonnel(c: DoorContext): DoorParts {
   const p = empty();
-  const cy = -c.frameThick / 2, t = c.panelThick;
-  p.frame.push(box(c.panelWidth, c.panelHeight, t, 0, cy, 0));
-  const visionW = Math.min(0.4, c.panelWidth * 0.5), visionH = 0.6, visionY = cy + c.panelHeight * 0.18;
-  p.glass.push(box(visionW, visionH, 0.01, 0, visionY, t / 2 - 0.004));
-  p.frame.push(box(visionW + 0.05, 0.03, t + 0.01, 0, visionY + visionH / 2 + 0.015, 0));
-  p.frame.push(box(visionW + 0.05, 0.03, t + 0.01, 0, visionY - visionH / 2 - 0.015, 0));
+  const cy = -c.frameThick / 2, t = c.panelThick, w = c.panelWidth, h = c.panelHeight;
+  const visionW = Math.min(0.4, w * 0.5), visionH = 0.6, visionY = cy + h * 0.18;
+  const leafTop = cy + h / 2, leafBottom = cy - h / 2, visionTop = visionY + visionH / 2, visionBottom = visionY - visionH / 2;
+  p.frame.push(box(w, leafTop - visionTop, t, 0, (leafTop + visionTop) / 2, 0));
+  p.frame.push(box(w, visionBottom - leafBottom, t, 0, (visionBottom + leafBottom) / 2, 0));
+  const side = (w - visionW) / 2;
+  p.frame.push(box(side, visionH, t, -w / 2 + side / 2, visionY, 0));
+  p.frame.push(box(side, visionH, t, w / 2 - side / 2, visionY, 0));
+  // The glass sits in the middle of the leaf, with a steel glazing frame round it on both faces.
+  p.glass.push(box(visionW, visionH, 0.01, 0, visionY, 0));
+  p.frame.push(box(visionW + 0.05, 0.03, t + 0.01, 0, visionTop + 0.015, 0));
+  p.frame.push(box(visionW + 0.05, 0.03, t + 0.01, 0, visionBottom - 0.015, 0));
   p.frame.push(box(0.03, visionH + 0.06, t + 0.01, -visionW / 2 - 0.015, visionY, 0));
   p.frame.push(box(0.03, visionH + 0.06, t + 0.01, visionW / 2 + 0.015, visionY, 0));
-  p.frame.push(box(c.panelWidth - 0.06, 0.25, t + 0.01, 0, cy - c.panelHeight / 2 + 0.145, 0));
-  p.hardware.push(cylinder(0.014, c.panelWidth * 0.7, 'x', 0, cy - 0.05, t / 2 + 0.05));
-  for (const x of [-c.panelWidth * 0.3, c.panelWidth * 0.3]) p.hardware.push(box(0.03, 0.03, 0.05, x, cy - 0.05, t / 2 + 0.025));
-  p.hardware.push(box(0.28, 0.07, 0.07, -c.panelWidth / 2 + 0.2, c.height / 2 - c.frameThick - 0.05, t / 2 + 0.04));
+  p.frame.push(box(w - 0.06, 0.25, t + 0.01, 0, leafBottom + 0.145, 0));
+  p.hardware.push(cylinder(0.014, w * 0.7, 'x', 0, cy - 0.05, t / 2 + 0.05));
+  for (const x of [-w * 0.3, w * 0.3]) p.hardware.push(box(0.03, 0.03, 0.05, x, cy - 0.05, t / 2 + 0.025));
+  p.hardware.push(box(0.28, 0.07, 0.07, -w / 2 + 0.2, c.height / 2 - c.frameThick - 0.05, t / 2 + 0.04));
   return p;
 }
 

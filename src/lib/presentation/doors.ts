@@ -16,6 +16,7 @@ export type DoorMotion = 'swing' | 'double' | 'slide' | 'slide-half' | 'pivot' |
 export function doorMotion(style: string | undefined): DoorMotion {
   switch (style) {
     case 'double-french':
+    case 'shutters':
     case 'bifold':
     case 'garage-carriage':
       return 'double';

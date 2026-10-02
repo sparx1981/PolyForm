@@ -5,8 +5,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import * as THREE from 'three';
 import { presentation } from '../../lib/presentation/store';
 import PresentationEffectsControls from './PresentationEffectsControls';
-const pick=vi.hoisted(()=>({active:false,onPick:null as null|((point:[number,number,number])=>void),onCancel:null as null|(()=>void)}));
-vi.mock('./ContentEditor',()=>({usePickOnModel:(active:boolean,onPick:typeof pick.onPick,onCancel:typeof pick.onCancel)=>Object.assign(pick,{active,onPick,onCancel})}));
+const pick=vi.hoisted(()=>({active:false,onPick:null as null|((point:[number,number,number])=>void),onCancel:null as null|(()=>void),onMiss:null as null|(()=>void)}));
+vi.mock('./ContentEditor',()=>({usePickOnModel:(active:boolean,onPick:typeof pick.onPick,onCancel:typeof pick.onCancel,onMiss:typeof pick.onMiss)=>Object.assign(pick,{active,onPick,onCancel,onMiss})}));
 vi.mock('../../lib/presentation/camera',()=>({orbitControls:()=>({object:new THREE.PerspectiveCamera(50,1,.1,5000)})}));
 vi.mock('./PresentationPanel',()=>({
   Popover:({children}:React.PropsWithChildren)=> <div>{children}</div>,
@@ -35,6 +35,16 @@ describe('Presentation effect controls',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Use distance'}));
     expect(presentation.get().focusPoint).toBeNull();
     expect((screen.getByRole('spinbutton') as HTMLInputElement).value).toBe('150');
+  });
+  it('says so when a click lands on nothing solid, and keeps waiting for a better click',()=>{
+    render(<PresentationEffectsControls/>);fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button',{name:'Pick focus on model'}));
+    expect(screen.getByRole('status').textContent).toMatch(/Click or tap a surface/);
+    act(()=>pick.onMiss?.());
+    expect(screen.getByRole('status').textContent).toMatch(/No solid surface/);
+    expect(pick.active).toBe(true);
+    act(()=>pick.onPick?.([1,0,-5]));
+    expect(pick.active).toBe(false);expect(screen.queryByText(/No solid surface/)).toBeNull();
   });
   it('compares the original view while retaining effects and resets only effects',()=>{
     presentation.set({active:true,loupe:true,stage:1});render(<PresentationEffectsControls/>);

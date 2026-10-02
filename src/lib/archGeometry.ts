@@ -1,4 +1,4 @@
-import { buildSizedDoor } from './doorStyles';
+import { buildSizedDoor, louveredShutters } from './doorStyles';
 import * as THREE from 'three';
 // @ts-ignore
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -990,6 +990,30 @@ export function createWindowGeometry(
 
   // 3. Window Style Specific Glazing & Mullions
   switch (style) {
+    case 'casement-shutters': {
+      // A pair of divided-light casement sashes filling the frame; the louvered shutters stand on the outside
+      // wall face (+z) beyond the opening, folded back flat, clear of the projecting sill.
+      const sashes = 2, gapS = 0.006, sashW = (innerW - gapS * (sashes - 1)) / sashes;
+      const stile = 0.045, rail = 0.05;
+      const cols = sashW < 0.45 ? 1 : 2, rows = Math.max(2, Math.min(6, Math.round((innerH - 0.1) / 0.36)));
+      const sashT = frameDepth * 0.6;
+      for (let s = 0; s < sashes; s++) {
+        const x = -innerW / 2 + sashW / 2 + s * (sashW + gapS);
+        const gw = sashW - stile * 2, gh = innerH - rail * 2;
+        for (const dx of [-1, 1]) frameParts.push(new THREE.BoxGeometry(stile, innerH, sashT).translate(x + dx * (sashW / 2 - stile / 2), 0, 0));
+        for (const dy of [-1, 1]) frameParts.push(new THREE.BoxGeometry(gw, rail, sashT).translate(x, dy * (innerH / 2 - rail / 2), 0));
+        for (let k = 1; k < cols; k++) frameParts.push(new THREE.BoxGeometry(0.022, gh, sashT * 0.7).translate(x - gw / 2 + (gw / cols) * k, 0, 0));
+        for (let k = 1; k < rows; k++) frameParts.push(new THREE.BoxGeometry(gw, 0.022, sashT * 0.7).translate(x, -gh / 2 + (gh / rows) * k, 0));
+        glassParts.push(new THREE.BoxGeometry(gw, gh, 0.008).translate(x, 0, 0));
+        // Latch handle on the meeting stile.
+        const meet = s === 0 ? 1 : -1;
+        hardwareParts.push(new THREE.BoxGeometry(0.03, 0.1, 0.012).translate(x + meet * (sashW / 2 - stile / 2), 0, sashT / 2 + 0.006));
+      }
+      const set = louveredShutters({ openingWidth: width, top: height / 2 - 0.01, bottom: -height / 2 + 0.01, wallFace: frameDepth / 2, clearance: 0.07 });
+      frameParts.push(...set.frame);
+      hardwareParts.push(...set.hardware);
+      break;
+    }
     case 'picture': {
       // Single Unobstructed Panoramic Glass Pane
       const glass = new THREE.BoxGeometry(innerW, innerH, 0.008);
