@@ -9,6 +9,8 @@ import {
   type ClientEffects, type ClientPresentationDoc,
 } from '../../lib/presentation/share';
 import { plantName } from '../../lib/presentation/plants';
+import { detectRooms } from '../../lib/spatial/rooms';
+import { inferLightingType, LIGHTING_ROOM_LABELS } from '../../lib/interiors/roomLighting';
 import { canvasRef } from '../../lib/presentation/recorder';
 import { mainSceneRef } from '../Viewport';
 import { refreshDesignerComments } from './Comments';
@@ -47,6 +49,22 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
   // Rooms found on the plans, so the designer can name them for the client.
   const plans = useMemo(() => floorPlans(shapes, [], 400), [shapes]);
   const roomKey = (level: number, at: [number, number], id?: string) => id ?? `${level}:${at[0]}:${at[1]}`;
+
+  // Rooms already furnished in Interior Studio suggest their type as a name; the designer can change it.
+  const suggested = useMemo(() => {
+    const out: Record<string, string> = {};
+    const spatial = detectRooms(shapes);
+    for (const p of plans) for (const r of p.rooms) {
+      const room = r.id ? spatial.find(s => s.id === r.id) : undefined;
+      const type = room ? inferLightingType(shapes, room) : null;
+      if (type) out[roomKey(p.level, r.at, r.id)] = LIGHTING_ROOM_LABELS[type];
+    }
+    return out;
+  }, [shapes, plans]);
+  const roomName = (level: number, room: { at: [number, number]; id?: string; name?: string }) => {
+    const key = roomKey(level, room.at, room.id);
+    return names[key] ?? room.name ?? suggested[key] ?? '';
+  };
 
   useEffect(() => {
     let live = true;
@@ -98,7 +116,7 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
     try {
       const roomNames: RoomLabel[] = [];
       for (const p of plans) for (const r of p.rooms) {
-        const name = names[roomKey(p.level, r.at, r.id)]?.trim();
+        const name = roomName(p.level, r).trim();
         if (name) roomNames.push({ level: p.level, at: r.at, name });
       }
       const measured = mainSceneRef.current ? measureTopAreas(mainSceneRef.current, shapes) : {};
@@ -214,7 +232,7 @@ export default function ShareWithClientDialog({ onClose }: { onClose: () => void
                 {allRooms.map(({ level, room }, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="w-28 shrink-0 text-xs text-slate-500">Level {level} · {room.areaM2.toFixed(1)} m²{room.usableM2 !== undefined ? ` (${room.usableM2.toFixed(1)} usable)` : ''}</span>
-                    <input value={names[roomKey(level, room.at, room.id)] ?? room.name ?? ''} placeholder="e.g. Kitchen"
+                    <input value={roomName(level, room)} placeholder="e.g. Kitchen"
                       onChange={e => setNames({ ...names, [roomKey(level, room.at, room.id)]: e.target.value })} className={cn(input, 'py-1.5')} />
                   </div>
                 ))}

@@ -6,7 +6,13 @@ import { pointInPolygonOrNear, type FurnishingPreset } from './smartFurnish';
 /** The kinds of room the lighting rules know about. */
 export type LightingRoomType = 'living' | 'bedroom' | 'office' | 'home-office' | 'kitchen' | 'bathroom' | 'toilet' | 'workshop' | 'storage';
 
-export const INTERIOR_LIGHT_PREFIX = 'interior-light-';
+/** How each room type reads as a room name (matches the Interior Studio preset labels). */
+export const LIGHTING_ROOM_LABELS: Record<LightingRoomType, string> = {
+  living: 'Living room', bedroom: 'Bedroom', office: 'Office', 'home-office': 'Home office', kitchen: 'Kitchen',
+  bathroom: 'Bathroom', toilet: 'Toilet', workshop: 'Garage / Workshop', storage: 'Storage',
+};
+
+export const INTERIOR_LIGHT_PREFIX ='interior-light-';
 /** Lights per room are capped so a large room does not flood the scene with real-time lights. */
 const ROOM_LIGHT_LIMIT = 14;
 
