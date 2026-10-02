@@ -88,14 +88,18 @@ export function createApp(deps: AppDeps) {
         }
       }
       if (path === '/authorize/complete' && req.method === 'POST') {
-        const { pending, idToken } = JSON.parse(await readBody(req));
+        const { pending, idToken, driveToken, driveExpiresIn } = JSON.parse(await readBody(req));
         let user: VerifiedGoogleUser;
         try {
           user = await deps.verifyIdToken(idToken);
         } catch {
           throw new OAuthError('access_denied', 'Google sign-in could not be verified.', 401);
         }
-        return send(res, 200, { redirect: await finishAuthorization(deps.oauth, pending, user) });
+        // The sign-in page also hands over Google's Drive token (about an hour's worth) for saving exported files.
+        const drive = typeof driveToken === 'string' && driveToken.length > 0 && driveToken.length < 4096
+          ? { token: driveToken, expiresAt: Date.now() + Math.min(Math.max(Number(driveExpiresIn) || 3000, 60), 3600) * 1000 }
+          : undefined;
+        return send(res, 200, { redirect: await finishAuthorization(deps.oauth, pending, user, drive) });
       }
       if (path === '/token' && req.method === 'POST') {
         const raw = await readBody(req);

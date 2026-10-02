@@ -14,12 +14,16 @@ button.addEventListener('click', async () => {
   button.disabled = true;
   status.textContent = 'Signing in…';
   try {
-    const result = await signInWithPopup(auth, new GoogleAuthProvider());
+    // drive.file reaches only files PolyForm itself creates: used to save exported models to Drive.
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    const result = await signInWithPopup(auth, provider);
     const idToken = await result.user.getIdToken();
+    const driveToken = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
     const response = await fetch('/authorize/complete', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pending, idToken }),
+      body: JSON.stringify({ pending, idToken, driveToken, driveExpiresIn: 3500 }),
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error_description || 'Sign-in was refused.');

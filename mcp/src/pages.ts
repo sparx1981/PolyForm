@@ -18,6 +18,7 @@ export function loginPage(clientName: string, pending: string, firebaseConfig: o
 <main id="login" data-pending="${escape(pending)}" data-firebase="${escape(JSON.stringify(firebaseConfig))}">
   <h1>PolyForm</h1>
   <p>${escape(clientName)} wants to read and edit your PolyForm models. Sign in with the Google account you use for PolyForm.</p>
+  <p>Google will also ask to let PolyForm save files it creates (exported models) to your Drive. It cannot see your other files.</p>
   <button id="google">Continue with Google</button>
   <div id="status" role="status"></div>
 </main>

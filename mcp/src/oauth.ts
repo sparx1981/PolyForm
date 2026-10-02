@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import type { Caller } from './store';
 
@@ -25,6 +25,38 @@ export class OAuthError extends Error {
 
 const ISSUER = 'polyform-mcp';
 const key = (config: OAuthConfig) => new TextEncoder().encode(config.secret);
+
+/**
+ * The Google Drive token travels inside the connector's own tokens, which are signed but readable, so it is
+ * encrypted with a key derived from the same secret. Nothing is stored server-side.
+ */
+const driveKey = (config: OAuthConfig) => createHash('sha256').update(`${config.secret}:drive-token`).digest();
+
+export function sealDriveToken(config: OAuthConfig, token: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', driveKey(config), iv);
+  const body = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
+  return [iv, cipher.getAuthTag(), body].map(b => b.toString('base64url')).join('.');
+}
+
+export function openDriveToken(config: OAuthConfig, sealed: string | undefined): string | undefined {
+  if (!sealed) return undefined;
+  try {
+    const [iv, tag, body] = sealed.split('.').map(part => Buffer.from(part, 'base64url'));
+    const decipher = createDecipheriv('aes-256-gcm', driveKey(config), iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(body), decipher.final()]).toString('utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+/** A Google access token with the Drive permission, as the sign-in page obtained it. */
+export interface DriveGrant {
+  token: string;
+  /** Milliseconds since 1970 when Google stops accepting it. */
+  expiresAt: number;
+}
 
 async function sign(config: OAuthConfig, typ: string, claims: JWTPayload, ttlSeconds: number) {
   return new SignJWT({ ...claims, typ })
@@ -135,6 +167,7 @@ export async function finishAuthorization(
   config: OAuthConfig,
   pendingToken: string,
   user: VerifiedGoogleUser,
+  drive?: DriveGrant,
 ): Promise<string> {
   const pending = await open<{ client_id: string; redirect_uri: string; state?: string; code_challenge: string }>(config, pendingToken, 'pending', 'invalid_request');
   const email = (user.email ?? '').toLowerCase();
@@ -148,6 +181,7 @@ export async function finishAuthorization(
     client_id: pending.client_id,
     redirect_uri: pending.redirect_uri,
     code_challenge: pending.code_challenge,
+    ...(drive ? { dt: sealDriveToken(config, drive.token), dte: drive.expiresAt } : {}),
   }, 5 * 60);
   const url = new URL(pending.redirect_uri);
   url.searchParams.set('code', code);
@@ -159,9 +193,10 @@ function s256(verifier: string) {
   return createHash('sha256').update(verifier).digest('base64url');
 }
 
-async function issueTokens(config: OAuthConfig, who: { sub: string; email: string; name?: string; client_id: string }) {
+async function issueTokens(config: OAuthConfig, who: { sub: string; email: string; name?: string; client_id: string; dt?: string; dte?: number }) {
   const accessTtl = config.accessTtlSeconds ?? 3600;
-  const claims = { sub: who.sub, email: who.email, name: who.name, client_id: who.client_id };
+  // The Drive token is carried along unchanged, so it still expires when Google says it does.
+  const claims = { sub: who.sub, email: who.email, name: who.name, client_id: who.client_id, ...(who.dt ? { dt: who.dt, dte: who.dte } : {}) };
   return {
     access_token: await sign(config, 'access', claims, accessTtl),
     token_type: 'Bearer',
@@ -175,7 +210,7 @@ async function issueTokens(config: OAuthConfig, who: { sub: string; email: strin
 export async function exchangeToken(config: OAuthConfig, form: URLSearchParams) {
   const grant = form.get('grant_type');
   if (grant === 'authorization_code') {
-    const code = await open<{ sub: string; email: string; name?: string; client_id: string; redirect_uri: string; code_challenge: string }>(config, form.get('code') ?? undefined, 'code');
+    const code = await open<{ sub: string; email: string; name?: string; client_id: string; redirect_uri: string; code_challenge: string; dt?: string; dte?: number }>(config, form.get('code') ?? undefined, 'code');
     if (form.get('client_id') && form.get('client_id') !== code.client_id) throw new OAuthError('invalid_grant', 'Code was issued to another client');
     if (form.get('redirect_uri') && form.get('redirect_uri') !== code.redirect_uri) throw new OAuthError('invalid_grant', 'Redirect address does not match');
     const verifier = form.get('code_verifier');
@@ -184,7 +219,7 @@ export async function exchangeToken(config: OAuthConfig, form: URLSearchParams) 
     return issueTokens(config, code);
   }
   if (grant === 'refresh_token') {
-    const refresh = await open<{ sub: string; email: string; name?: string; client_id: string }>(config, form.get('refresh_token') ?? undefined, 'refresh');
+    const refresh = await open<{ sub: string; email: string; name?: string; client_id: string; dt?: string; dte?: number }>(config, form.get('refresh_token') ?? undefined, 'refresh');
     if (!config.allowedEmails.includes(refresh.email)) throw new OAuthError('access_denied', 'Account no longer allowed', 403);
     return issueTokens(config, refresh);
   }
@@ -194,7 +229,11 @@ export async function exchangeToken(config: OAuthConfig, form: URLSearchParams) 
 /** Checks a Bearer token on an /mcp request. */
 export async function verifyAccessToken(config: OAuthConfig, header: string | undefined): Promise<Caller> {
   const token = header?.match(/^Bearer\s+(.+)$/i)?.[1];
-  const claims = await open<{ sub: string; email: string; name?: string }>(config, token, 'access', 'invalid_token');
+  const claims = await open<{ sub: string; email: string; name?: string; dt?: string; dte?: number }>(config, token, 'access', 'invalid_token');
   if (!config.allowedEmails.includes(claims.email)) throw new OAuthError('invalid_token', 'Account not allowed', 401);
-  return { uid: claims.sub, email: claims.email, name: claims.name };
+  const driveToken = openDriveToken(config, claims.dt);
+  return {
+    uid: claims.sub, email: claims.email, name: claims.name,
+    ...(driveToken ? { driveToken, driveTokenExpiresAt: claims.dte } : {}),
+  };
 }

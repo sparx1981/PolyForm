@@ -12,6 +12,9 @@ import { initRoofSkeleton } from '../../src/lib/roofSkeleton';
 import { buildRoofsForBuilding } from '../../src/lib/buildingRoofs';
 import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
+import { buildProjectFile, projectFileName, type ProjectState } from '../../src/lib/storage/projectFile';
+import { buildOffline, MAX_STEPS } from './offline';
+import { driveTokenFor, saveToDrive } from './drive';
 import { floorPlans } from './plans';
 import { analyzeWallConversion, planWithThickness, heightWarnings, PIECE_MIN_FOR_DOOR, PIECE_MIN_FOR_WINDOW, type WallConversionPlan } from '../../src/tools/kernelConvertToWall';
 import { deleteGroupFacesAndEdges, groupContaining } from '../../src/tools/kernelSelection';
@@ -99,6 +102,8 @@ const isRoofShape = (s: Shape) =>
 const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 const DESTROY = { readOnlyHint: false, destructiveHint: true, openWorldHint: false } as const;
+/** Writes a file to the person's Google Drive. */
+const SAVE_FILE = { readOnlyHint: false, destructiveHint: false, openWorldHint: true } as const;
 
 export function registerTools(server: McpServer, ctx: ToolContext) {
   const { caller, store } = ctx;
@@ -368,6 +373,59 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     inputSchema: { name: z.string().min(1).max(200) },
     annotations: WRITE,
   }, safe(async ({ name }) => text({ id: await store.createModel(caller, name), name })));
+
+  // ── Files, for when the database is not working ───────────────────────────────────────────
+
+  /** Saves a project file to Drive and says how to open it. */
+  async function deliverFile(project: ProjectState) {
+    const fileName = projectFileName(project.name ?? 'PolyForm-Design');
+    const saved = await saveToDrive(caller, fileName, buildProjectFile(project));
+    return {
+      file: { name: saved.fileName, location: saved.location, link: saved.webUrl },
+      how_to_open: 'Open the link, download the file, then in PolyForm choose File > Open File and pick it. It opens as a new, unsaved model.',
+    };
+  }
+
+  server.registerTool('export_model', {
+    title: 'Export a model to Google Drive',
+    description: 'Saves a complete copy of a stored model as a .polyform file in the "PolyForm" folder of the user\'s Google Drive and returns the link. Use it when the user wants the file itself, or to keep a copy before risky edits. Needs the Drive permission given at sign-in (it lasts about an hour; the error says how to renew it).',
+    inputSchema: { model: modelRef },
+    annotations: SAVE_FILE,
+  }, safe(async ({ model }) => {
+    driveTokenFor(caller); // fail before the slow part if Drive is not available
+    const exported = await store.exportProject(caller, model);
+    return text({
+      model: `${exported.name} (${exported.id})`,
+      objects: exported.project.shapes.length,
+      ...(await deliverFile(exported.project)),
+    });
+  }));
+
+  server.registerTool('build_model', {
+    title: 'Build a model without the database',
+    description: `Builds a whole new model in memory from a list of tool steps and saves it as a .polyform file in the user's Google Drive, with no database involved. Use it when create_model or editing fails or times out because the PolyForm database is unavailable, or when the user asks for a file rather than a stored model. Each step is { tool, args } using the same tools and arguments as calling them one by one (add_terrain, add_room, add_curved_wall, draw_primitive, edit_drawn_faces, add_roof, add_pond, add_road, add_plant, set_appearance and so on); \`model\` is filled in for you, and create_model, list_models, screenshot and preview_model cannot be used. A later step can use an earlier result: "$3.created.0.id" is the first object made by step 3, and "$3.created.*.id" is the list of every object it made. Up to ${MAX_STEPS} steps in about 45 seconds (a few hundred objects is fine; import_site, add_stairs and furnish_room are the slow ones), and nothing is saved if any step fails, so send a build that is complete. The reply has the Drive link and the health and geometry checks. Needs the Drive permission given at sign-in (it lasts about an hour; the error says how to renew it).`,
+    inputSchema: {
+      name: z.string().min(1).max(200).describe('Name of the model, also used for the file name'),
+      steps: z.array(z.object({
+        tool: z.string().describe('A tool name, e.g. add_room'),
+        args: z.record(z.string(), z.unknown()).optional().describe('That tool\'s arguments, as when calling it directly'),
+      })).min(1).max(MAX_STEPS),
+    },
+    annotations: SAVE_FILE,
+  }, safe(async ({ name, steps }) => {
+    driveTokenFor(caller); // fail before building if the file could not be saved afterwards
+    const built = await buildOffline(caller, name, steps, { siteIO: ctx.siteIO, findPlace: ctx.findPlace });
+    return text({
+      model: name,
+      steps: built.steps,
+      objects: built.project.shapes.length,
+      overview: built.overview,
+      health: built.health,
+      geometry: built.geometry,
+      ...(await deliverFile(built.project)),
+      note: 'Nothing was stored in the database: this model exists only as the file.',
+    });
+  }));
 
   // ── Drawing kernel ─────────────────────────────────────────────────────
 

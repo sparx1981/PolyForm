@@ -4,16 +4,44 @@ import { hydrateOffloadedGeometry, offloadLargeGeometryForSave, withGeometryCach
 import { chunkedBlobIO } from '../../src/lib/blobCodec';
 import { assertModelFits, ModelTooLargeError } from '../../src/lib/firestoreDocSize';
 import { defaultGraphicsSettings, normalizeGraphicsSettings, type GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
+import type { ProjectState } from '../../src/lib/storage/projectFile';
 
 /** The signed-in person a request acts for. */
 export interface Caller {
   uid: string;
   email: string;
   name?: string;
+  /** Google access token with the drive.file permission, from the sign-in (lasts about an hour). */
+  driveToken?: string;
+  /** When `driveToken` stops working, in milliseconds since 1970. */
+  driveTokenExpiresAt?: number;
 }
 
 /** A problem to report back to Claude as a tool error, in plain words. */
 export class ToolError extends Error {}
+
+/**
+ * How long a database call may take. Firestore retries a stalled call silently until the host kills the
+ * request, which looks like a bare "timed out"; this turns it into an error that says what to do instead.
+ * Small calls get 20 s; opening or saving a whole model can legitimately take longer. Claude's own limit on a
+ * tool call is about 60 s, so nothing here waits past that.
+ */
+export const DB_DEADLINE_MS = 20_000;
+export const DB_HEAVY_DEADLINE_MS = 45_000;
+
+export function bounded<T>(work: Promise<T>, what: string, ms = DB_DEADLINE_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new ToolError(
+      `${what} did not finish within ${Math.round(ms / 1000)} seconds. The PolyForm database may be down, over its quota or unreachable. `
+      + 'The change may or may not have been saved, so check (list_models, get_model) before repeating it. '
+      + 'build_model can still build a design without the database and save it to Google Drive as a .polyform file you can open in PolyForm.',
+    )), ms);
+  });
+  // The stalled call may still settle later; make sure that is not reported as an unhandled rejection.
+  work.catch(() => undefined);
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+}
 
 /** No model with this id that the caller can open (it may still match a model name). */
 class ModelNotFound extends ToolError {
@@ -85,6 +113,21 @@ export interface ModelStore {
   /** Restores whichever persisted model field changed most recently; returns its note. */
   undo(caller: Caller, ref: string): Promise<ChangedModel & { note: string | null }>;
   createModel(caller: Caller, name: string): Promise<string>;
+  /** Everything the app saves in a .polyform file for this model (large geometry fetched back), by id or name. */
+  exportProject(caller: Caller, ref: string): Promise<{ id: string; name: string; project: ProjectState }>;
+}
+
+/** The project file's contents for a model that only has the fields the connector keeps. */
+export function projectFromParts(name: string, parts: { shapes: Shape[]; graphicsSettings: unknown; terrainModifiers: unknown[]; kernel: unknown | null }): ProjectState {
+  return {
+    name,
+    shapes: parts.shapes,
+    tags: [], scenes: [], customMaterials: [], animations: [], notes: [], customLights: [],
+    graphicsSettings: parts.graphicsSettings,
+    terrainModifiers: parts.terrainModifiers,
+    kernel: parts.kernel,
+    assetSchemaVersion: 1,
+  };
 }
 
 export function decodeShapes(raw: unknown): Shape[] {
@@ -231,6 +274,11 @@ export class MemoryStore implements ModelStore {
     return { id, name: m.name, note: entry.note };
   }
 
+  async exportProject(caller: Caller, ref: string) {
+    const loaded = await this.loadModel(caller, ref);
+    return { id: loaded.id, name: loaded.name, project: projectFromParts(loaded.name, loaded) };
+  }
+
   async createModel(caller: Caller, name: string) {
     const id = `m${this.next++}`;
     this.models.set(id, { name, userId: caller.uid, shapes: [], graphicsSettings: null, terrainModifiers: [], kernel: null, updatedAt: new Date().toISOString(), collaborators: [] });
@@ -273,7 +321,7 @@ export class FirestoreStore implements ModelStore {
   }
 
   async listModels(caller: Caller): Promise<ModelRow[]> {
-    const snap = await this.db.collection('models').where('userId', '==', caller.uid).select('name', 'updatedAt', 'storage').get();
+    const snap = await bounded(this.db.collection('models').where('userId', '==', caller.uid).select('name', 'updatedAt', 'storage').get(), 'Listing your models');
     return snap.docs
       .map(d => ({
         id: d.id,
@@ -284,7 +332,8 @@ export class FirestoreStore implements ModelStore {
       .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
   }
 
-  async loadModel(caller: Caller, ref: string): Promise<LoadedModel> {
+  /** The model document `ref` names (an id, else a name) after checking the caller may open it. */
+  private async openDoc(caller: Caller, ref: string) {
     let snap = looksLikeId(ref) ? await this.db.collection('models').doc(ref).get() : null;
     if (!snap?.exists || !(await this.canAccess(caller, snap.id, snap.data()))) {
       const row = matchModel(await this.listModels(caller), ref);
@@ -294,13 +343,51 @@ export class FirestoreStore implements ModelStore {
     if (!data || !(await this.canAccess(caller, snap.id, data))) throw new ToolError('Model not found.');
     const external = externalStorageError(String(data.name ?? 'This model'), data.storage);
     if (external) throw external;
-    return {
-      id: snap.id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: await this.readShapes(data.shapes, this.geometryIO(caller.uid)),
-      graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings),
-      terrainModifiers: Array.isArray(data.terrainModifiers) ? restoreFirestoreArraysAfterLoad(data.terrainModifiers) as TerrainModifier[] : [],
-      kernel: data.kernel ?? null,
-      updatedAt: toIso(data.updatedAt),
-    };
+    return { id: snap.id, data };
+  }
+
+  async loadModel(caller: Caller, ref: string): Promise<LoadedModel> {
+    return bounded((async () => {
+      const { id, data } = await this.openDoc(caller, ref);
+      return {
+        id, name: String(data.name ?? 'Untitled'), userId: data.userId, shapes: await this.readShapes(data.shapes, this.geometryIO(caller.uid)),
+        graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings),
+        terrainModifiers: Array.isArray(data.terrainModifiers) ? restoreFirestoreArraysAfterLoad(data.terrainModifiers) as TerrainModifier[] : [],
+        kernel: data.kernel ?? null,
+        updatedAt: toIso(data.updatedAt),
+      };
+    })(), 'Opening the model', DB_HEAVY_DEADLINE_MS);
+  }
+
+  async exportProject(caller: Caller, ref: string) {
+    return bounded((async () => {
+      const { id, data } = await this.openDoc(caller, ref);
+      const name = String(data.name ?? 'Untitled');
+      const restore = (value: unknown) => (value == null ? value : restoreFirestoreArraysAfterLoad(value as any));
+      const list = (value: unknown): unknown[] => (Array.isArray(value) ? restore(value) as unknown[] : []);
+      // Unlike the tools, an export needs every large mesh, image and terrain grid fetched back from where it is stored.
+      const shapes = await hydrateOffloadedGeometry(decodeShapes(data.shapes), this.geometryIO(caller.uid), { geometry: true, terrain: true, images: true });
+      const project: ProjectState = {
+        name,
+        shapes,
+        tags: list(data.tags),
+        scenes: list(data.scenes),
+        customMaterials: list(data.customMaterials),
+        graphicsSettings: normalizeGraphicsSettings(data.graphicsSettings),
+        animations: list(data.animations),
+        notes: list(data.notes),
+        customLights: list(data.customLights),
+        presentationContent: restore(data.presentationContent) ?? undefined,
+        timberFrameParams: restore(data.timberFrameParams) ?? undefined,
+        terrainModifiers: list(data.terrainModifiers),
+        environment: restore(data.environment) ?? undefined,
+        materialBindings: restore(data.materialBindings) ?? undefined,
+        kernel: data.kernel ?? null,
+        assetSchemaVersion: typeof data.assetSchemaVersion === 'number' ? data.assetSchemaVersion : undefined,
+        assetCatalogRelease: typeof data.assetCatalogRelease === 'string' ? data.assetCatalogRelease : undefined,
+      };
+      return { id, name, project };
+    })(), 'Exporting the model', DB_HEAVY_DEADLINE_MS - 5_000);
   }
 
   /**
@@ -311,12 +398,12 @@ export class FirestoreStore implements ModelStore {
   private async byRef<T>(caller: Caller, ref: string, fn: (id: string) => Promise<T>): Promise<T> {
     if (looksLikeId(ref)) {
       try {
-        return await fn(ref);
+        return await bounded(fn(ref), 'Saving the change', DB_HEAVY_DEADLINE_MS);
       } catch (e) {
         if (!(e instanceof ModelNotFound)) throw e;
       }
     }
-    return fn(matchModel(await this.listModels(caller), ref).id);
+    return bounded(fn(matchModel(await this.listModels(caller), ref).id), 'Saving the change', DB_HEAVY_DEADLINE_MS);
   }
 
   /** Reads the model inside a transaction and checks the caller may change it. */
@@ -431,7 +518,7 @@ export class FirestoreStore implements ModelStore {
   async createModel(caller: Caller, name: string) {
     const ref = this.db.collection('models').doc();
     // Same fields the app writes for a new model (minus the password fields its rules forbid).
-    await ref.set({
+    await bounded(ref.set({
       id: ref.id,
       name,
       userId: caller.uid,
@@ -452,7 +539,7 @@ export class FirestoreStore implements ModelStore {
       previewUrl: '',
       isPublic: false,
       hasPassword: false,
-    });
+    }), 'Creating the model');
     return ref.id;
   }
 }

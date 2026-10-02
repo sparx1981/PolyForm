@@ -284,6 +284,14 @@ Call this once when you finish creating or changing a design, so the user can se
 
 Starts a new, empty model. It appears in the app under Cloud Models.
 
+### `export_model`: Export a model to Google Drive
+
+Saves a complete copy of a stored model as a .polyform file in the "PolyForm" folder of the user's Google Drive and returns the link. Use it when the user wants the file itself, or to keep a copy before risky edits. Needs the Drive permission given at sign-in (it lasts about an hour; the error says how to renew it).
+
+### `build_model`: Build a model without the database
+
+Builds a whole new model in memory from a list of tool steps and saves it as a .polyform file in the user's Google Drive, with no database involved. Use it when create_model or editing fails or times out because the PolyForm database is unavailable, or when the user asks for a file rather than a stored model. Each step is { tool, args } using the same tools and arguments as calling them one by one (add_terrain, add_room, add_curved_wall, draw_primitive, edit_drawn_faces, add_roof, add_pond, add_road, add_plant, set_appearance and so on); `model` is filled in for you, and create_model, list_models, screenshot and preview_model cannot be used. A later step can use an earlier result: "$3.created.0.id" is the first object made by step 3, and "$3.created.*.id" is the list of every object it made. Up to 500 steps in about 45 seconds (a few hundred objects is fine; import_site, add_stairs and furnish_room are the slow ones), and nothing is saved if any step fails, so send a build that is complete. The reply has the Drive link and the health and geometry checks. Needs the Drive permission given at sign-in (it lasts about an hour; the error says how to renew it).
+
 ### `draw_line`: Draw a kernel line
 
 Draws a PolyForm Line-tool segment. Closing connected lines can create a face automatically.
