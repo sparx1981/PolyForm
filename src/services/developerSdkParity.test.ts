@@ -143,7 +143,7 @@ describe('Developer SDK ↔ in-app tool parity', () => {
       return rest;
     };
 
-    it.each(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal', 'office', 'home-office', 'kitchen', 'bathroom', 'toilet'] as const)(
+    it.each(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal', 'office', 'home-office', 'kitchen', 'bathroom', 'toilet', 'workshop'] as const)(
       'furnishRoom(%s) matches Interior Studio planning',
       preset => {
         const shapes = roomShapes();

@@ -9,12 +9,16 @@ import { BASE_PARAMS, box, cyl, merge, rbox, type FurnitureProfile } from './fur
 export type RoomFurnitureType =
   | 'desk' | 'office-chair' | 'bookcase' | 'filing-cabinet'
   | 'kitchen-run' | 'fridge' | 'dining-table' | 'dining-chair'
-  | 'bath' | 'shower' | 'toilet' | 'basin';
+  | 'bath' | 'shower' | 'toilet' | 'basin'
+  | 'side-table' | 'tv-unit'
+  | 'workbench' | 'tool-cabinet' | 'shelving-rack' | 'machine';
 
 export const ROOM_FURNITURE_TYPES: readonly RoomFurnitureType[] = [
   'desk', 'office-chair', 'bookcase', 'filing-cabinet',
   'kitchen-run', 'fridge', 'dining-table', 'dining-chair',
   'bath', 'shower', 'toilet', 'basin',
+  'side-table', 'tv-unit',
+  'workbench', 'tool-cabinet', 'shelving-rack', 'machine',
 ];
 
 const bom = (item: string) => ({ group: 'Fixtures & furniture', item, unit: 'no.' });
@@ -105,6 +109,47 @@ export const roomProfiles: Record<RoomFurnitureType, FurnitureProfile> = {
     defaults: { ...BASE_PARAMS, width: 0.6, height: 0.86, depth: 0.45, doorCount: 1 },
     color: '#f2f2ef',
     surface: CERAMIC,
+  },
+  'side-table': {
+    definition: { id: 'polyform:interior/side-table', name: 'Side table', kind: 'furniture', defaultParams: {},
+      placement: { hosts: ['floor', 'wall'], preferredHost: 'wall', clearanceM: { front: 0.15 } }, bom: bom('Side table') },
+    defaults: { ...BASE_PARAMS, width: 0.46, height: 0.5, depth: 0.46 },
+    color: '#a98968',
+  },
+  'tv-unit': {
+    definition: { id: 'polyform:interior/tv-unit', name: 'TV unit', kind: 'furniture', defaultParams: {},
+      placement: { hosts: ['wall'], preferredHost: 'wall', clearanceM: { front: 0.5 } }, bom: bom('TV unit') },
+    // height is the whole stack: a 0.5 m low unit with a flat screen above it.
+    defaults: { ...BASE_PARAMS, width: 1.6, height: 1.1, depth: 0.42, doorCount: 3 },
+    color: '#6f5a46',
+  },
+  workbench: {
+    definition: { id: 'polyform:interior/workbench', name: 'Workbench', kind: 'furniture', defaultParams: {},
+      placement: { hosts: ['floor', 'wall'], preferredHost: 'wall', clearanceM: { front: 0.8 } }, bom: bom('Workbench') },
+    // doorCount 1 adds a pegboard back panel; 0 leaves a free-standing bench.
+    defaults: { ...BASE_PARAMS, width: 1.8, height: 0.9, depth: 0.65, doorCount: 1 },
+    color: '#a07a4a',
+  },
+  'tool-cabinet': {
+    definition: { id: 'polyform:interior/tool-cabinet', name: 'Tool chest', kind: 'furniture', defaultParams: {},
+      placement: { hosts: ['wall'], preferredHost: 'wall', clearanceM: { front: 0.6 } }, bom: bom('Tool chest') },
+    defaults: { ...BASE_PARAMS, width: 0.7, height: 1.05, depth: 0.5, doorCount: 5 },
+    color: '#b3282d',
+    surface: { roughness: 0.4, metalness: 0.5 },
+  },
+  'shelving-rack': {
+    definition: { id: 'polyform:interior/shelving-rack', name: 'Shelving rack', kind: 'furniture', defaultParams: {},
+      placement: { hosts: ['wall'], preferredHost: 'wall', clearanceM: { front: 0.6 } }, bom: bom('Shelving rack') },
+    defaults: { ...BASE_PARAMS, width: 1.2, height: 1.9, depth: 0.45, doorCount: 5 },
+    color: '#6b7a8a',
+    surface: { roughness: 0.5, metalness: 0.45 },
+  },
+  machine: {
+    definition: { id: 'polyform:interior/machine', name: 'Pillar drill', kind: 'furniture', defaultParams: {},
+      placement: { hosts: ['floor', 'wall'], preferredHost: 'wall', clearanceM: { front: 0.8, left: 0.3, right: 0.3 } }, bom: bom('Pillar drill') },
+    defaults: { ...BASE_PARAMS, width: 0.55, height: 1.7, depth: 0.5 },
+    color: '#3f6b4d',
+    surface: { roughness: 0.45, metalness: 0.5 },
   },
 };
 
@@ -329,6 +374,116 @@ function basinGeometry(p: P): G {
   return merge(parts);
 }
 
+function sideTableGeometry(p: P): G {
+  const { width: w, height: h, depth: d } = p;
+  const r = Math.min(w, d) / 2;
+  return merge([
+    cyl(r, 0.035, 0, h - 0.0175, 0),
+    cyl(0.025, h - 0.08, 0, (h - 0.08) / 2 + 0.02, 0),
+    cyl(r * 0.62, 0.025, 0, 0.0125, 0),
+    cyl(r * 0.8, 0.02, 0, h - 0.045, 0, 1, r * 0.7),
+  ]);
+}
+
+function tvUnitGeometry(p: P): G {
+  const { width: w, height: h, depth: d } = p;
+  const unitH = 0.5, t = 0.03, doors = Math.max(1, Math.min(5, Math.round(p.doorCount)));
+  const parts: G[] = [
+    box(w, unitH - 0.1, d, 0, 0.1 + (unitH - 0.1) / 2, 0),
+    box(w - 0.06, 0.1, d - 0.08, 0, 0.05, -0.02),
+    box(w + 0.02, t, d + 0.02, 0, unitH - t / 2, 0),
+  ];
+  const doorW = (w - 0.04) / doors;
+  for (let i = 0; i < doors; i++) {
+    const x = -w / 2 + 0.02 + doorW * (i + 0.5);
+    parts.push(box(doorW - 0.012, unitH - 0.16, 0.018, x, 0.1 + (unitH - 0.16) / 2 + 0.03, d / 2 + 0.004));
+    parts.push(box(0.12, 0.014, 0.02, x, unitH - 0.1, d / 2 + 0.02));
+  }
+  // Flat screen on a low stand: a thin slab and bezel, set slightly back from the front.
+  const screenW = Math.min(w * 0.72, 1.4), screenH = Math.min(screenW * 0.5625, h - unitH - 0.1);
+  parts.push(box(screenW, screenH, 0.035, 0, unitH + 0.08 + screenH / 2, -d * 0.1));
+  parts.push(box(0.35, 0.02, 0.2, 0, unitH + 0.01, -d * 0.1));
+  parts.push(box(0.06, 0.08, 0.03, 0, unitH + 0.05, -d * 0.1));
+  return merge(parts);
+}
+
+function workbenchGeometry(p: P): G {
+  const { width: w, height: h, depth: d } = p;
+  const top = 0.05, leg = 0.07;
+  const parts: G[] = [
+    box(w, top, d, 0, h - top / 2, 0),
+    box(w - 0.1, 0.03, d - 0.12, 0, 0.25, 0),
+    box(w - 0.1, 0.12, 0.025, 0, h - top - 0.06, d / 2 - 0.06),
+  ];
+  for (const x of [-1, 1]) for (const z of [-1, 1])
+    parts.push(box(leg, h - top, leg, x * (w / 2 - leg), (h - top) / 2, z * (d / 2 - leg)));
+  parts.push(box(w - 2 * leg, 0.08, 0.03, 0, h - top - 0.04, -(d / 2 - leg)));
+  // A bench vice on the front corner.
+  parts.push(box(0.18, 0.11, 0.1, w / 2 - 0.2, h + 0.045, d / 2 - 0.08));
+  parts.push(box(0.14, 0.05, 0.03, w / 2 - 0.2, h + 0.1, d / 2 + 0.0));
+  parts.push(cyl(0.012, 0.18, w / 2 - 0.2, h + 0.03, d / 2 + 0.09, 1));
+  if (p.doorCount > 0) {
+    // Pegboard back panel with a few tools hung on it.
+    const pegH = 0.75;
+    parts.push(box(w, pegH, 0.025, 0, h + pegH / 2, -d / 2 + 0.0125));
+    parts.push(box(w, 0.04, 0.06, 0, h + pegH + 0.02, -d / 2 + 0.03));
+    for (const k of [-0.3, -0.1, 0.1, 0.3]) parts.push(box(0.025, 0.3, 0.03, w * k, h + 0.45, -d / 2 + 0.04));
+  }
+  return merge(parts);
+}
+
+function toolCabinetGeometry(p: P): G {
+  const { width: w, height: h, depth: d } = p;
+  const drawers = Math.max(2, Math.min(8, Math.round(p.doorCount)));
+  const caster = 0.1, bodyH = h - caster - 0.04;
+  const parts: G[] = [
+    box(w, bodyH, d, 0, caster + bodyH / 2, 0),
+    rbox(w + 0.02, 0.04, d + 0.02, 0, h - 0.02, 0, 0.012),
+    box(w - 0.04, 0.025, 0.06, 0, h - 0.07, d / 2 + 0.02),
+  ];
+  const gap = (bodyH - 0.06) / drawers;
+  for (let i = 0; i < drawers; i++) {
+    const y = caster + 0.03 + gap * (i + 0.5);
+    parts.push(box(w - 0.03, gap - 0.02, 0.022, 0, y, d / 2 + 0.005));
+    parts.push(box(w * 0.7, 0.02, 0.03, 0, y + gap * 0.25, d / 2 + 0.03));
+  }
+  for (const x of [-1, 1]) for (const z of [-1, 1]) parts.push(cyl(0.035, 0.07, x * (w / 2 - 0.07), 0.05, z * (d / 2 - 0.07)));
+  return merge(parts);
+}
+
+function shelvingRackGeometry(p: P): G {
+  const { width: w, height: h, depth: d } = p;
+  const post = 0.04, levels = Math.max(2, Math.min(7, Math.round(p.doorCount)));
+  const parts: G[] = [];
+  for (const x of [-1, 1]) for (const z of [-1, 1]) parts.push(box(post, h, post, x * (w / 2 - post / 2), h / 2, z * (d / 2 - post / 2)));
+  for (let i = 0; i < levels; i++) {
+    const y = 0.15 + ((h - 0.2) * i) / (levels - 1);
+    parts.push(box(w - 0.02, 0.03, d - 0.02, 0, y, 0));
+  }
+  // A few storage crates and boxes so the rack reads as in use.
+  const boxes: Array<[number, number, number, number, number]> = [[-0.3, 1, 0.34, 0.26, 0.3], [0.2, 1, 0.4, 0.22, 0.3], [-0.1, 2, 0.5, 0.3, 0.32], [0.35, 3, 0.3, 0.24, 0.28], [-0.25, 4, 0.36, 0.28, 0.3]];
+  for (const [fx, level, bw, bh, bd] of boxes) {
+    if (level >= levels) continue;
+    const y = 0.15 + ((h - 0.2) * level) / (levels - 1);
+    parts.push(box(Math.min(bw, w * 0.4), bh, Math.min(bd, d * 0.8), fx * w, y + 0.015 + bh / 2, 0));
+  }
+  return merge(parts);
+}
+
+function machineGeometry(p: P): G {
+  const { width: w, height: h, depth: d } = p;
+  const colX = 0, colZ = -d / 2 + 0.1;
+  return merge([
+    box(w, 0.06, d, 0, 0.03, 0),
+    cyl(0.04, h - 0.06, colX, 0.06 + (h - 0.06) / 2, colZ),
+    box(0.2, 0.2, 0.3, colX, h - 0.15, colZ + 0.1),
+    cyl(0.09, 0.14, colX, h - 0.32, colZ + 0.2),
+    cyl(0.02, 0.18, colX, h * 0.42, colZ + 0.2),
+    cyl(0.12, 0.02, colX, h * 0.5, colZ + 0.2),
+    box(0.04, 0.04, 0.18, colX + 0.14, h - 0.12, colZ + 0.06),
+  ]);
+}
+
 export function createRoomFurnitureGeometry(type: RoomFurnitureType, p: P): G {
   switch (type) {
     case 'desk': return deskGeometry(p);
@@ -343,5 +498,11 @@ export function createRoomFurnitureGeometry(type: RoomFurnitureType, p: P): G {
     case 'shower': return showerGeometry(p);
     case 'toilet': return toiletGeometry(p);
     case 'basin': return basinGeometry(p);
+    case 'side-table': return sideTableGeometry(p);
+    case 'tv-unit': return tvUnitGeometry(p);
+    case 'workbench': return workbenchGeometry(p);
+    case 'tool-cabinet': return toolCabinetGeometry(p);
+    case 'shelving-rack': return shelvingRackGeometry(p);
+    case 'machine': return machineGeometry(p);
   }
 }

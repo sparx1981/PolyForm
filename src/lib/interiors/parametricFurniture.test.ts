@@ -8,6 +8,7 @@ describe('parametric interior furniture', () => {
       'bed', 'sofa', 'cabinet', 'curtain', 'nightstand', 'coffee-table', 'armchair', 'console',
       'desk', 'office-chair', 'bookcase', 'filing-cabinet', 'kitchen-run', 'fridge', 'dining-table', 'dining-chair',
       'bath', 'shower', 'toilet', 'basin',
+      'side-table', 'tv-unit', 'workbench', 'tool-cabinet', 'shelving-rack', 'machine',
     ]);
   });
 

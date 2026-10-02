@@ -16,7 +16,7 @@ import {
 
 export type FurnishingPreset =
   | 'bedroom' | 'living-room' | 'soft-furnishings' | 'storage' | 'minimal'
-  | 'office' | 'home-office' | 'kitchen' | 'bathroom' | 'toilet';
+  | 'office' | 'home-office' | 'kitchen' | 'bathroom' | 'toilet' | 'workshop';
 
 type PlacementProfileClearance = { front?: number; back?: number; left?: number; right?: number };
 
@@ -34,16 +34,61 @@ interface PresetItem {
   widths?: number[];
   /** Left out silently when it does not fit, rather than reported as unplaced. */
   optional?: boolean;
+  /** Prefer walls without a door (or window) on them, so the piece does not crowd an opening. */
+  avoid?: { doors?: boolean; windows?: boolean };
+  /** Stand in the room rather than against a wall, reserving this much clear space all round. */
+  free?: { clearance: number };
+  /** Face the first sofa across the room (a TV unit). */
+  facesSofa?: boolean;
 }
 const items = (...entries: Array<InteriorFurnitureType | PresetItem>): PresetItem[] =>
   entries.map(entry => typeof entry === 'string' ? { type: entry } : entry);
 
-const PRESETS: Record<FurnishingPreset, PresetItem[]> = {
+/** What the rules can see about a room: its size and shape, and how many doors and windows it has. */
+interface RoomContext { area: number; minSide: number; maxSide: number; doors: number; windows: number }
+type PresetRules = PresetItem[] | ((room: RoomContext) => PresetItem[]);
+
+/**
+ * One living room for every sitting space. The seating, the tables and the media wall scale to the
+ * room: a narrow or tiny room gets a sofa and little else, a big room gets a second seating group.
+ * Seating keeps off the walls that carry a door, and the TV goes opposite the sofa, away from windows.
+ */
+function livingRoom({ area, minSide, maxSide }: RoomContext): PresetItem[] {
+  const widths = area < 9 ? [1.8, 1.5] : area < 16 ? [2.1, 1.8, 1.5] : [2.4, 2.1, 1.8, 1.5];
+  const sofa: PresetItem = { type: 'sofa', widths, avoid: { doors: true } };
+  const tv = (w: number[]): PresetItem => ({ type: 'tv-unit', widths: w, optional: true, avoid: { doors: true, windows: true }, facesSofa: true });
+  const side: PresetItem = { type: 'side-table', optional: true };
+  // A narrow or very small room cannot hold a conversation group.
+  if (minSide < 2.3 || area < 7) return [sofa, tv([1.2, 0.9]), side];
+  const elongated = maxSide / minSide > 2.2;
+  if (area < 9) return [sofa, tv([1.4, 1.1]), side];
+  if (area < 16) return [sofa, { type: 'coffee-table' }, ...(elongated ? [] : [{ type: 'armchair', optional: true }] as PresetItem[]), tv([1.6, 1.3, 1.1]), side];
+  const group: PresetItem[] = [sofa, { type: 'coffee-table' }, ...(elongated ? [] : [{ type: 'armchair' }, { type: 'armchair', optional: true }] as PresetItem[]),
+    tv([1.8, 1.5, 1.2]), side, side, { type: 'console', optional: true, avoid: { doors: true } }];
+  if (area > 28) group.push({ type: 'sofa', widths: [1.9, 1.6], optional: true, avoid: { doors: true } }, { type: 'bookcase', optional: true, avoid: { doors: true, windows: true } });
+  return group;
+}
+
+/** Benches, storage and racks scaled to the space; a large room also gets a free-standing bench. */
+function workshop({ area, minSide }: RoomContext): PresetItem[] {
+  const bench: PresetItem = { type: 'workbench', widths: [2.4, 1.8, 1.5, 1.2], avoid: { doors: true } };
+  const rack: PresetItem = { type: 'shelving-rack', widths: [1.2, 0.9], avoid: { doors: true, windows: true } };
+  const chest: PresetItem = { type: 'tool-cabinet', avoid: { doors: true } };
+  const machine: PresetItem = { type: 'machine', optional: true, avoid: { doors: true } };
+  if (area < 12) return [bench, chest, rack, machine];
+  const list: PresetItem[] = [bench, chest, rack, { ...bench, optional: true }, { ...rack, optional: true }, machine, { ...chest, optional: true }];
+  if (area > 25 && minSide > 4) list.push({ type: 'workbench', widths: [2.4, 1.8], params: { doorCount: 0 }, free: { clearance: 0.9 }, optional: true },
+    { ...machine }, { ...rack, optional: true });
+  return list;
+}
+
+const PRESETS: Record<FurnishingPreset, PresetRules> = {
   bedroom: items('bed', 'nightstand', 'nightstand', 'cabinet', 'console', 'armchair'),
-  'living-room': items('sofa', 'coffee-table', 'armchair', 'armchair', 'console', 'nightstand'),
-  'soft-furnishings': items('sofa', 'armchair', 'armchair', 'coffee-table'),
+  'living-room': livingRoom,
+  // Kept so older scripts keep working; the single Living room now covers both.
+  'soft-furnishings': livingRoom,
   storage: items('cabinet', 'cabinet', 'cabinet'),
-  minimal: items('sofa'),
+  minimal: livingRoom,
   // Each chair goes to the next desk that has none, pulled out slightly; a chair for a desk that did not fit is skipped.
   office: items('desk', 'office-chair', { type: 'desk', optional: true }, { type: 'office-chair', optional: true },
     { type: 'desk', optional: true }, { type: 'office-chair', optional: true }, 'bookcase', { type: 'filing-cabinet', optional: true }, { type: 'filing-cabinet', optional: true }, { type: 'cabinet', optional: true }),
@@ -52,11 +97,12 @@ const PRESETS: Record<FurnishingPreset, PresetItem[]> = {
     { type: 'kitchen-run', widths: [3.6, 3.0, 2.4, 1.8, 1.2] },
     { type: 'kitchen-run', widths: [2.4, 1.8, 1.2], optional: true },
     'fridge',
-    { type: 'dining-table', optional: true },
+    { type: 'dining-table', optional: true, free: { clearance: 0.6 } },
     ...Array.from({ length: 4 }, (): PresetItem => ({ type: 'dining-chair', optional: true })),
   ),
   bathroom: items('bath', 'toilet', 'basin', { type: 'shower', optional: true }),
   toilet: items('toilet', { type: 'basin', params: { width: 0.45, depth: 0.36, doorCount: 0 }, optional: true }),
+  workshop,
 };
 
 /** Rooms where windows get curtains; offices, kitchens and bathrooms are left for blinds. */
@@ -227,7 +273,15 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
   const chaired = new Set<string>();
   const wetCentres = () => planned.filter(shape => shape.customData.semanticComponent?.plumbing).map(shape => [shape.position[0], shape.position[2]] as const);
 
-  for (const entry of PRESETS[preset]) {
+  const openingsOf = (kind: 'door' | 'window') => allShapes.filter(s => s.type === kind && !s.hidden && room.openingIds.includes(s.id));
+  const context: RoomContext = { area: room.areaM2, minSide: Math.min(...room.size), maxSide: Math.max(...room.size), doors: openingsOf('door').length, windows: openingsOf('window').length };
+  const rules = PRESETS[preset];
+  const presetItems = typeof rules === 'function' ? rules(context) : rules;
+  const doorWalls = new Map<string, number>(), windowWalls = new Map<string, number>();
+  for (const door of openingsOf('door')) if (door.hostWallId) doorWalls.set(door.hostWallId, (doorWalls.get(door.hostWallId) ?? 0) + 1);
+  for (const window of openingsOf('window')) if (window.hostWallId) windowWalls.set(window.hostWallId, (windowWalls.get(window.hostWallId) ?? 0) + 1);
+
+  for (const entry of presetItems) {
     const { type } = entry;
     const definition = interiorFurnitureDefinition(type);
     const wet = !!definition.plumbing;
@@ -258,23 +312,34 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
           [end, 0, -Math.PI / 2], [-end, 0, Math.PI / 2],
         ];
         for (const [x, z, turn] of slots) candidates.push({ position: [table.position[0] + c * x + s * z, room.elevation, table.position[2] - s * x + c * z], yaw: yaw + turn });
-      } else if (type === 'dining-table') {
-        // Free-standing: reserve a chair's width all round, then favour the middle of the room.
-        areaClearance = { front: 0.6, back: 0.6, left: 0.6, right: 0.6 };
+      } else if (entry.free) {
+        // Free-standing: reserve the clear space all round, then favour the middle of the room.
+        const gap = entry.free.clearance;
+        areaClearance = { front: gap, back: gap, left: gap, right: gap };
         const [cx, cz] = boundaryCentroid(room);
         const xs = room.boundary.map(p => p[0]), zs = room.boundary.map(p => p[1]);
         const spots: Array<[number, number]> = [];
         for (let x = Math.min(...xs); x <= Math.max(...xs); x += 0.4) for (let z = Math.min(...zs); z <= Math.max(...zs); z += 0.4) spots.push([x, z]);
         spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
-        for (const [x, z] of spots.slice(0, 80)) for (const yaw of [0, Math.PI / 2]) candidates.push({ position: [x, room.elevation, z], yaw });
+        const alongX = room.size[0] >= room.size[1];
+        for (const [x, z] of spots.slice(0, 80)) for (const yaw of alongX ? [0, Math.PI / 2] : [Math.PI / 2, 0]) candidates.push({ position: [x, room.elevation, z], yaw });
       } else {
         const anchor = planned.find(s => s.customData.furnitureType === (type === 'nightstand' && preset === 'bedroom' ? 'bed' : 'sofa'));
-        if (anchor && (type === 'nightstand' || type === 'coffee-table' || type === 'armchair')) {
+        if (anchor && (type === 'nightstand' || type === 'coffee-table' || type === 'armchair' || type === 'side-table')) {
           const yaw = rotationY(anchor), c = Math.cos(yaw), s = Math.sin(yaw);
-          const local = type === 'coffee-table' ? [[0, 1.48]] : type === 'nightstand' ? [[-1.13, -0.7], [1.13, -0.7]] : [[-1.8, 1.4], [1.8, 1.4]];
+          // Offsets follow the sofa's actual size, so a smaller sofa gets chairs and tables close to it.
+          const halfWidth = Number(anchor.customData.semanticComponent.params.width ?? 2.2) / 2;
+          const sofaDepth = Number(anchor.customData.semanticComponent.params.depth ?? 0.9);
+          const local = type === 'coffee-table' ? [[0, sofaDepth / 2 + 0.75 + size.depth / 2]]
+            : type === 'nightstand' ? [[-1.13, -0.7], [1.13, -0.7]]
+            : type === 'side-table' ? [[-(halfWidth + size.width / 2 + 0.08), -0.1], [halfWidth + size.width / 2 + 0.08, -0.1]]
+            : [[-(halfWidth + 0.7), 1.4], [halfWidth + 0.7, 1.4]];
           for (const [x,z] of local) candidates.push({ position: [anchor.position[0]+c*x+s*z, room.elevation, anchor.position[2]-s*x+c*z], yaw: yaw + (type === 'armchair' ? Math.PI : 0) });
         }
-        if (type !== 'coffee-table' && definition.placement.hosts.some(host => host === 'wall')) for (const wall of walls) {
+        // Walls carrying a door (or window) the piece should keep off come last; otherwise longest first.
+        const penalty = (wall: Shape) => (entry.avoid?.doors ? 2 * (doorWalls.get(wall.id) ?? 0) : 0) + (entry.avoid?.windows ? 2 * (windowWalls.get(wall.id) ?? 0) : 0);
+        const ordered = entry.avoid ? [...walls].sort((a, b) => penalty(a) - penalty(b)) : walls;
+        if (type !== 'coffee-table' && !entry.free && definition.placement.hosts.some(host => host === 'wall')) for (const wall of ordered) {
           for (const t of LEGACY_TYPES.has(type) ? COARSE_T : [...COARSE_T, ...FINE_T]) {
             const candidate = wallPlacementCandidate(wall, t, size.depth + 0.06);
             if (!candidate) continue;
@@ -292,6 +357,13 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
         if (wetAt.length) {
           const spread = (c: Candidate) => Math.min(...wetAt.map(([x, z]) => Math.hypot(c.position[0] - x, c.position[2] - z)));
           candidates = candidates.map(c => [spread(c), c] as const).sort((a, b) => a[0] - b[0]).map(([, c]) => c);
+        }
+        // A TV unit goes on the wall the sofa faces: its front must point back at the sofa.
+        const sofa = entry.facesSofa ? planned.find(s => s.customData.furnitureType === 'sofa') : undefined;
+        if (sofa) {
+          const sofaYaw = rotationY(sofa);
+          const towardSofa = (c: Candidate) => 1 + Math.cos(c.yaw - sofaYaw);
+          candidates = candidates.map(c => [towardSofa(c), c] as const).sort((a, b) => a[0] - b[0]).map(([, c]) => c);
         }
       }
 

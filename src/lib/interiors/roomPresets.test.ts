@@ -149,3 +149,71 @@ describe('bathroom and toilet presets', () => {
     }
   });
 });
+
+describe('living room scales to the room', () => {
+  it('gives a tiny or narrow room a sofa and little else', () => {
+    const { shapes } = plan(room(2.4, 3.6), 'living-room');
+    expect(types(shapes)).toContain('sofa');
+    expect(types(shapes)).not.toContain('armchair');
+    expect(types(shapes)).not.toContain('coffee-table');
+  });
+
+  it('adds a coffee table, chairs and a TV facing the sofa in a mid-sized room', () => {
+    const { shapes, unplaced } = plan(room(5, 4.5), 'living-room');
+    const sofa = shapes.find(s => s.customData.furnitureType === 'sofa')!;
+    const tv = shapes.find(s => s.customData.furnitureType === 'tv-unit')!;
+    expect(types(shapes)).toEqual(expect.arrayContaining(['sofa', 'coffee-table', 'armchair', 'tv-unit']));
+    expect(unplaced).toEqual([]);
+    // The TV looks back along the sofa's line of sight.
+    expect(Math.cos(tv.rotation![1] - sofa.rotation![1])).toBeLessThan(-0.95);
+    expectNoOverlaps(shapes);
+  });
+
+  it('keeps the sofa off the wall that carries the door', () => {
+    const { shapes } = plan(room(5, 4), 'living-room');
+    const sofa = shapes.find(s => s.customData.furnitureType === 'sofa')!;
+    // The door is in the south wall (z = +2); the sofa should be on a different wall.
+    expect(sofa.position[2]).toBeLessThan(1.2);
+  });
+
+  it('puts a second seating group and bookcase into a large room', () => {
+    const { shapes } = plan(room(8, 6), 'living-room');
+    expect(shapes.filter(s => s.customData.furnitureType === 'sofa').length).toBeGreaterThanOrEqual(2);
+    expect(types(shapes)).toContain('bookcase');
+    expectNoOverlaps(shapes);
+  });
+
+  it('treats the older soft-furnishings and minimal names as the living room', () => {
+    const shapes = room(5, 4.5);
+    const reference = types(plan(shapes, 'living-room').shapes);
+    expect(types(plan(shapes, 'soft-furnishings').shapes)).toEqual(reference);
+    expect(types(plan(shapes, 'minimal').shapes)).toEqual(reference);
+  });
+
+  it('still dresses windows with curtains', () => {
+    const shapes = [...room(5, 4.5), { id: 'win', type: 'window', hostWallId: 'north', position: [0, 1.5, -2.25], args: [1.4, 1.2, 0.2], color: '#fff' } as Shape];
+    expect(types(plan(shapes, 'living-room').shapes)).toContain('curtain');
+  });
+});
+
+describe('garage / workshop preset', () => {
+  it('fits a bench, tool chest and rack into a small garage', () => {
+    const { shapes, unplaced } = plan(room(4, 3), 'workshop');
+    expect(types(shapes)).toEqual(expect.arrayContaining(['workbench', 'tool-cabinet', 'shelving-rack']));
+    expect(unplaced).toEqual([]);
+    expectNoOverlaps(shapes);
+  });
+
+  it('adds more benches, racks and a free-standing bench in a large workshop', () => {
+    const { shapes } = plan(room(9, 6.5), 'workshop');
+    expect(shapes.filter(s => s.customData.furnitureType === 'workbench').length).toBeGreaterThanOrEqual(3);
+    expect(shapes.filter(s => s.customData.furnitureType === 'shelving-rack').length).toBeGreaterThanOrEqual(2);
+    expect(shapes.some(s => s.customData.furnitureType === 'workbench' && Number(s.customData.semanticComponent.params.doorCount) === 0)).toBe(true);
+    expectNoOverlaps(shapes);
+  });
+
+  it('leaves windows undressed', () => {
+    const shapes = [...room(6, 5), { id: 'win', type: 'window', hostWallId: 'north', position: [0, 1.5, -2.5], args: [1.2, 1.2, 0.2], color: '#fff' } as Shape];
+    expect(types(plan(shapes, 'workshop').shapes)).not.toContain('curtain');
+  });
+});
