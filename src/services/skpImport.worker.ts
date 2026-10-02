@@ -23,6 +23,7 @@ self.onmessage = (event: MessageEvent<SkpWorkerRequest>) => {
   const options = {
     // Faces SketchUp itself hides stay hidden.
     respectEdgeVisibility: true,
+    appearance: 'polyform' as const,
     onProgress: (info: { stage: string; current: number; total: number }) => post({ type: 'progress', ...info }),
   };
   try {

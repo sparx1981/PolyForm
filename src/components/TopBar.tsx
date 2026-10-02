@@ -583,7 +583,7 @@ export default function TopBar() {
       // toJSON() here always failed to parse and silently fell back to a 1x1x1 placeholder box, which is
       // why every SKP import once appeared as "a small cube" regardless of the source model.
       const merged = mergeImportedGroup(group);
-      diagLog('Import', 'Imported 3D file', { name: file.name, triangles: Math.round(merged.attributes.position.count / 3) });
+      diagLog('Import', 'Imported 3D file', { name: file.name, triangles: Math.round((merged.index ? merged.index.count : merged.attributes.position.count) / 3) });
       return {
         id: Math.random().toString(36).substr(2, 9),
         name: file.name.split('.')[0],

@@ -36,6 +36,7 @@ export function describeSkpError(err: unknown): string {
 function readSkpToGlbHere(buffer: ArrayBuffer, onProgress?: (p: SkpImportProgress) => void): ArrayBuffer {
   const options = {
     respectEdgeVisibility: true,
+    appearance: 'polyform' as const,
     onProgress: (info: { stage: string; current: number; total: number }) =>
       onProgress?.({ message: STAGE_LABELS[info.stage] ?? 'Reading the file', fraction: info.total ? info.current / info.total : undefined }),
   };
@@ -82,32 +83,42 @@ const parseGlb = (glbBuffer: ArrayBuffer): Promise<THREE.Group> => new Promise((
   );
 });
 
+/** Largest imported mesh that keeps its texture coordinates. Past this they are dropped, since nothing here draws the textures. */
+const MAX_UV_VERTICES = 400_000;
+
 /**
- * Joins every mesh in an imported model into one geometry in world space (what a custom shape holds).
- * Writes straight into typed arrays sized up front, so a model with millions of triangles does not build
+ * Joins every mesh in an imported model into one geometry in world space (what a custom shape holds), keeping
+ * each material's colour as a vertex colour. Vertices stay shared as the source meshes share them, and everything is
+ * written straight into typed arrays sized up front, so a model with millions of triangles does not build
  * millions-long JavaScript arrays or a clone of every mesh on the way.
  */
 export function mergeImportedGroup(group: THREE.Object3D): THREE.BufferGeometry {
   group.updateMatrixWorld(true);
   const meshes: THREE.Mesh[] = [];
-  let total = 0;
+  let vertexTotal = 0;
+  let indexTotal = 0;
   let allUv = true;
   group.traverse((child: any) => {
     const position = child.isMesh && child.geometry?.attributes?.position;
     if (!position) return;
     meshes.push(child);
-    total += child.geometry.index ? child.geometry.index.count : position.count;
+    vertexTotal += position.count;
+    indexTotal += child.geometry.index ? child.geometry.index.count : position.count;
     if (!child.geometry.attributes.uv) allUv = false;
   });
   if (meshes.length === 0) throw new Error('No mesh geometry found in the file.');
 
-  const positions = new Float32Array(total * 3);
-  const normals = new Float32Array(total * 3);
-  const uvs = allUv ? new Float32Array(total * 2) : null;
+  const positions = new Float32Array(vertexTotal * 3);
+  const normals = new Float32Array(vertexTotal * 3);
+  const colors = new Float32Array(vertexTotal * 3).fill(1);
+  const keepUv = allUv && vertexTotal <= MAX_UV_VERTICES;
+  const uvs = keepUv ? new Float32Array(vertexTotal * 2) : null;
+  const indices = vertexTotal > 65535 ? new Uint32Array(indexTotal) : new Uint16Array(indexTotal);
   const point = new THREE.Vector3();
   const normal = new THREE.Vector3();
   const normalMatrix = new THREE.Matrix3();
-  let out = 0;
+  let vertexAt = 0;
+  let indexAt = 0;
   for (const mesh of meshes) {
     const geometry = mesh.geometry as THREE.BufferGeometry;
     if (!geometry.attributes.normal) geometry.computeVertexNormals();
@@ -116,23 +127,35 @@ export function mergeImportedGroup(group: THREE.Object3D): THREE.BufferGeometry 
     normalMatrix.getNormalMatrix(mesh.matrixWorld);
     // A mirrored placement turns its triangles inside out, so swap two corners of each to keep them facing outwards.
     const mirrored = mesh.matrixWorld.determinant() < 0;
-    const count = index ? index.count : position.count;
-    for (let k = 0; k < count; k++) {
-      const corner = mirrored ? k - (k % 3) + [0, 2, 1][k % 3] : k;
-      const vertex = index ? index.getX(corner) : corner;
-      point.fromBufferAttribute(position, vertex).applyMatrix4(mesh.matrixWorld);
-      normal.fromBufferAttribute(normalAttr, vertex).applyMatrix3(normalMatrix).normalize();
+    const material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial | undefined;
+    const color = material?.color;
+    for (let v = 0; v < position.count; v++) {
+      const o = (vertexAt + v) * 3;
+      point.fromBufferAttribute(position, v).applyMatrix4(mesh.matrixWorld);
+      normal.fromBufferAttribute(normalAttr, v).applyMatrix3(normalMatrix).normalize();
       if (mirrored) normal.negate();
-      positions[out * 3] = point.x; positions[out * 3 + 1] = point.y; positions[out * 3 + 2] = point.z;
-      normals[out * 3] = normal.x; normals[out * 3 + 1] = normal.y; normals[out * 3 + 2] = normal.z;
-      if (uvs) { uvs[out * 2] = uv.getX(vertex); uvs[out * 2 + 1] = uv.getY(vertex); }
-      out++;
+      positions[o] = point.x; positions[o + 1] = point.y; positions[o + 2] = point.z;
+      normals[o] = normal.x; normals[o + 1] = normal.y; normals[o + 2] = normal.z;
+      if (color) { colors[o] = color.r; colors[o + 1] = color.g; colors[o + 2] = color.b; }
+      if (uvs) { uvs[(vertexAt + v) * 2] = uv.getX(v); uvs[(vertexAt + v) * 2 + 1] = uv.getY(v); }
     }
+    const count = index ? index.count : position.count;
+    for (let k = 0; k < count; k += 3) {
+      const a = index ? index.getX(k) : k;
+      const b = index ? index.getX(k + 1) : k + 1;
+      const c = index ? index.getX(k + 2) : k + 2;
+      indices[indexAt++] = vertexAt + a;
+      indices[indexAt++] = vertexAt + (mirrored ? c : b);
+      indices[indexAt++] = vertexAt + (mirrored ? b : c);
+    }
+    vertexAt += position.count;
   }
   const merged = new THREE.BufferGeometry();
   merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  merged.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   if (uvs) merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  merged.setIndex(new THREE.BufferAttribute(indices, 1));
   return merged;
 }
 

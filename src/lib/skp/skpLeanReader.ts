@@ -39,6 +39,12 @@ export interface LeanSkpOptions {
    * file. Used automatically as a second attempt when the browser runs out of memory; set it to force that behaviour.
    */
   onlyUsedDefinitions?: boolean;
+  /**
+   * 'openskp' builds exactly what OpenSKP builds. 'polyform' is lighter and truer to SketchUp for PolyForm's viewport: a
+   * face with nothing painted on its back is one double-sided surface rather than two (about half the triangles on a
+   * typical model), and colours are converted from SketchUp's sRGB to the linear values glTF expects.
+   */
+  appearance?: 'openskp' | 'polyform';
   /** Return a scene with nothing in it instead of throwing {@link LeanSkpEmpty}. */
   allowEmptyScene?: boolean;
   onProgress?: (info: { stage: string; current: number; total: number }) => void;
@@ -318,6 +324,9 @@ function chooseKeys(templates: DefTemplate[], root: DefTemplate): { definitions:
   return { definitions, keys };
 }
 
+/** SketchUp stores colours as sRGB; glTF wants linear values. */
+const srgbToLinear = (c: number): number => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+
 const IDENTITY_MATRIX13 = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1];
 
 /** SketchUp's 3x3 + translation instance matrix as a glTF 4x4 (y up, metres). */
@@ -375,8 +384,9 @@ function buildScene(records: ModelRecords & { definitions: Map<number, DefTempla
     const key = `${color.r},${color.g},${color.b},${doubleSided},${textureIndex ?? -1},${transparency}`;
     const hit = materialIndexByKey.get(key);
     if (hit !== undefined) return hit;
+    const channel = (v: number) => (options.appearance === 'polyform' ? srgbToLinear(v / 255) : v / 255);
     const material: Record<string, unknown> = {
-      pbrMetallicRoughness: { baseColorFactor: [color.r / 255, color.g / 255, color.b / 255, transparency], metallicFactor: 0, roughnessFactor: 0.8 },
+      pbrMetallicRoughness: { baseColorFactor: [channel(color.r), channel(color.g), channel(color.b), transparency], metallicFactor: 0, roughnessFactor: 0.8 },
     };
     if (doubleSided) material.doubleSided = true;
     if (transparency < 1) material.alphaMode = 'BLEND';
@@ -415,7 +425,7 @@ function buildScene(records: ModelRecords & { definitions: Map<number, DefTempla
     const variant = `${definitionKey}|${materialKey(inherited)}|${lc.r},${lc.g},${lc.b}`;
     const hit = resourceByVariant.get(variant);
     if (hit !== undefined) return hit;
-    const ctx: MeshContext = { resolveMaterial, textureIndexFor, inheritedMaterial: inherited, fallbackLayerColor: lc, respectVisibility };
+    const ctx: MeshContext = { resolveMaterial, textureIndexFor, inheritedMaterial: inherited, fallbackLayerColor: lc, respectVisibility, mergeDefaultBacks: options.appearance === 'polyform' };
     const groups: FinishedGroup[] = buildFaceGroups(template, ctx);
     if (groups.length === 0) {
       resourceByVariant.set(variant, -1);

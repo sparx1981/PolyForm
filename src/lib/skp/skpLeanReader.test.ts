@@ -238,6 +238,42 @@ describe('readSkpToGlbLean', () => {
     expect(bin.length).toBe(0);
   });
 
+  it('in PolyForm mode draws an unpainted back as part of one double-sided surface, with colours converted to linear', () => {
+    const model = [
+      materialEntry(1, 'Red'),
+      rec('F901', [definition(1, 'Slab', gridGeometry(3, 3, 10, 1))]),
+      rec('F601', [instance(1, IDENTITY)]),
+    ];
+    const skp = buildSkp({ model, files: { 'Materials/Red/material.xml': new Uint8Array(materialXml('Red', 200, 20, 20)) } });
+    const triangles = (glb: Uint8Array) => {
+      const { json } = splitGlb(glb);
+      return json.accessors.filter((_: unknown, i: number) => i % 4 === 3).reduce((n: number, a: { count: number }) => n + a.count / 3, 0);
+    };
+    const ab = toArrayBuffer(skp);
+    const plain = readSkpToGlbLean(ab.slice(0), { respectEdgeVisibility: true });
+    const lean = readSkpToGlbLean(ab.slice(0), { respectEdgeVisibility: true, appearance: 'polyform' });
+    // OpenSKP's way gives the red front and a grey reversed back; the lean way keeps the red once.
+    expect(triangles(plain)).toBe(2 * triangles(lean));
+    const { json } = splitGlb(lean);
+    expect(json.materials).toHaveLength(1);
+    expect(json.materials[0].doubleSided).toBe(true);
+    const [r] = json.materials[0].pbrMetallicRoughness.baseColorFactor;
+    expect(r).toBeCloseTo(Math.pow((200 / 255 + 0.055) / 1.055, 2.4), 5);
+  });
+
+  it('still gives a face with a different colour on its back its own reversed surface in PolyForm mode', () => {
+    const model = [
+      materialEntry(1, 'Red'),
+      materialEntry(2, 'Blue'),
+      rec('F901', [definition(1, 'Panel', polygon({ v: 1, e: 1, f: 1 }, [[0, 0], [10, 0], [10, 10], [0, 10]], [], { material: 1, backMaterial: 2 }))]),
+      rec('F601', [instance(1, IDENTITY)]),
+    ];
+    const skp = buildSkp({ model, files: { 'Materials/Red/material.xml': new Uint8Array(materialXml('Red', 200, 20, 20)), 'Materials/Blue/material.xml': new Uint8Array(materialXml('Blue', 20, 20, 200)) } });
+    const { json } = splitGlb(readSkpToGlbLean(toArrayBuffer(skp), { respectEdgeVisibility: true, appearance: 'polyform' }));
+    expect(json.materials).toHaveLength(2);
+    expect(json.meshes[0].primitives).toHaveLength(2);
+  });
+
   it('refuses to hand back an empty scene, so the standard reader can have a go', () => {
     const skp = buildSkp({ model: [rec('F901', []), rec('F601', [])] });
     expect(() => readSkpToGlbLean(toArrayBuffer(skp))).toThrow(LeanSkpEmpty);

@@ -76,6 +76,7 @@ import * as THREE from 'three';
 import { SUBTRACTION, ADDITION, INTERSECTION, Evaluator, Brush } from 'three-bvh-csg';
 import { edgesOffPlanes, joinedEndPlanes, sameShapePart, wallRuns } from '../lib/wallRuns';
 import { singleSidedGeometry } from '../lib/edgeLines';
+import { isHeavyCustomShape, prepareHeavyGeometry } from '../lib/heavyMesh';
 import { cutTerrainUnderFootprints } from '../lib/terrain/terrainCut';
 import { COMBINE_SOLIDS_EVENT, setCombinePicks, useCombinePicks, type CombineSolid } from '../tools/combinePicks';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -11870,13 +11871,15 @@ function Scene() {
         }
 
 
+        // A model of hundreds of thousands of triangles (a big SketchUp import) gets no shadow pass and no edge lines.
+        const heavyCustom = isHeavyCustomShape(shape);
         const meshProps = {
           name: shape.id,
           position: (isDraggingRef.current && selectedId === shape.id) ? undefined : shape.position,
           quaternion: (isDraggingRef.current && selectedId === shape.id) ? undefined : (shape.quaternion ? new THREE.Quaternion(...shape.quaternion) : undefined),
           rotation: (isDraggingRef.current && selectedId === shape.id) ? undefined : ((!shape.quaternion && shape.rotation) ? shape.rotation : undefined),
           scale: (isDraggingRef.current && selectedId === shape.id) ? undefined : (shape.scale || [1, 1, 1]),
-          castShadow: shadowsEnabled,
+          castShadow: shadowsEnabled && !heavyCustom,
           receiveShadow: shadowsEnabled,
           userData: { isShape: true, id: shape.id },
           onClick: (e: any) => handleMeshClick(e, shape.id),
@@ -12483,7 +12486,7 @@ function Scene() {
                 );
               }
 
-              const hasVertexColors = isTerrainHeatmap || shape.type === 'scale_figure' || shape.type === 'bush' || shape.type === 'tree' || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0);
+              const hasVertexColors = isTerrainHeatmap || shape.type === 'scale_figure' || shape.type === 'bush' || shape.type === 'tree' || Boolean(shape.geometryData?.colors && shape.geometryData.colors.length > 0) || Boolean(shape.geometryData?.data?.attributes?.color);
 
               return (
                 <meshStandardMaterial
@@ -12517,7 +12520,7 @@ function Scene() {
               return <RunEdges planes={ends ? joinedEndPlanes(shape, ends) : []} wall={shape} neighbours={junctionWalls} {...lineProps} />;
             }
             // Custom meshes (roofs, parapets, combined objects) are often stored double-sided.
-            if (shape.type === 'custom') return <RunEdges planes={[]} singleSided {...lineProps} />;
+            if (shape.type === 'custom') return heavyCustom ? null : <RunEdges planes={[]} singleSided {...lineProps} />;
             return <Edges threshold={15} {...lineProps} />;
           })()}
         </mesh>
@@ -14645,6 +14648,10 @@ function CustomGeometry({ shape }: { shape: Shape }) {
       if (geometry) geometry.dispose();
     };
   }, [geometry]);
+
+  // A very big imported mesh is only pickable through a bounding volume tree built once it is on screen.
+  const heavy = isHeavyCustomShape(shape);
+  useEffect(() => (heavy && geometry ? prepareHeavyGeometry(geometry) : undefined), [geometry, heavy]);
 
   return <primitive object={geometry} attach="geometry" />;
 }

@@ -18,6 +18,8 @@ export interface MeshContext {
   inheritedMaterial: SkpMaterial | undefined;
   fallbackLayerColor: RgbColor;
   respectVisibility: boolean;
+  /** Draw a face with no paint of its own on the back as one double-sided surface, not as a second, reversed copy. */
+  mergeDefaultBacks?: boolean;
 }
 
 /** All the triangles of one definition that share a colour, texture and sidedness. */
@@ -262,7 +264,8 @@ export function buildFaceGroups(template: DefTemplate, ctx: MeshContext): Finish
   for (let f = 0; f < template.faceCount; f++) {
     if (ctx.respectVisibility && template.hidden[f]) continue;
     const frontMaterial = ctx.resolveMaterial(template.front[f]) ?? ctx.inheritedMaterial;
-    const backMaterial = ctx.resolveMaterial(template.back[f]) ?? ctx.inheritedMaterial;
+    const explicitBack = ctx.resolveMaterial(template.back[f]);
+    const backMaterial = explicitBack ?? ctx.inheritedMaterial;
     const frontColor = frontMaterial?.color ?? fallbackColor;
     const backColor = backMaterial?.color ?? fallbackColor;
     const nx = template.normals[f * 3];
@@ -270,7 +273,10 @@ export function buildFaceGroups(template: DefTemplate, ctx: MeshContext): Finish
     const nz = template.normals[f * 3 + 2];
     const basis = faceBasis(nx, ny, nz);
     const placement = template.uv?.get(f);
-    if (frontColor.r === backColor.r && frontColor.g === backColor.g && frontColor.b === backColor.b) {
+    if (ctx.mergeDefaultBacks && !explicitBack) {
+      // Nothing was painted on the back, so a viewer's default back colour is not worth a second copy of the face.
+      addSide(f, frontColor, true, false, frontMaterial, placement?.front ?? null, basis);
+    } else if (frontColor.r === backColor.r && frontColor.g === backColor.g && frontColor.b === backColor.b) {
       addSide(f, frontColor, true, false, frontMaterial, placement?.front ?? null, basis);
     } else {
       addSide(f, frontColor, false, false, frontMaterial, placement?.front ?? null, basis);
