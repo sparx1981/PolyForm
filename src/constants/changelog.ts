@@ -5,6 +5,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    date: 'October 2, 2026',
+    items: [
+      'Interior Studio has five new room types: Office, Home office, Kitchen, Bathroom and Toilet. Offices seat a chair at each desk, kitchens size a run of base and wall units (with sink, hob and hood) to the wall and add a fridge freezer and, if there is space, a dining table and chairs, and bathrooms and toilets fit a bath, toilet, basin and shower. Anything that does not fit is left out and reported. The new furniture (desk, office chair, bookcase, filing cabinet, kitchen units, fridge, dining table and chair, bath, shower, toilet, basin) can also be added one piece at a time from the Developer API.',
+      'Bathroom, toilet and kitchen fixtures follow plumbing rules: they only stand against walls, keep clear space in front (60 cm for a toilet, 90 cm for kitchen units), and cluster next to each other so supply and waste pipes stay short. Each carries its water supply and waste needs for later use.',
+    ],
+  },
+  {
     date: 'September 29, 2026',
     items: [
       'The Developers page has a "Try it live" playground: pick an example (a room with a roof, a row of columns, spiral steps, colours and finishes), edit the script and press Run to see what it builds in a 3D preview with the Console output beside it. Scripts run in an isolated sandbox with no network access and stop after 5 seconds. The examples and all the text are editable in the CMS.',

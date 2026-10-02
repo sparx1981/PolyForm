@@ -536,11 +536,11 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('furnish_room', {
     title: 'Furnish a detected room',
-    description: 'Collision-aware Interior Studio furnishing. Call list_rooms first and pass its room id. Presets include soft furnishings with sofa and curtains.',
+    description: 'Collision-aware Interior Studio furnishing. Call list_rooms first and pass its room id. Presets include soft furnishings with sofa and curtains, office, home-office, kitchen, bathroom and toilet. Kitchen, bathroom and toilet fixtures sit on walls and share a wet wall; items that do not fit are reported as left out.',
     inputSchema: {
       model: modelRef,
       room: z.string().describe('Room id from list_rooms'),
-      preset: z.enum(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal']),
+      preset: z.enum(['bedroom', 'living-room', 'soft-furnishings', 'storage', 'minimal', 'office', 'home-office', 'kitchen', 'bathroom', 'toilet']),
       settle_soft: z.boolean().default(true),
       settle_strength: z.number().min(0).max(1).optional().describe('Override settling strength; when omitted PolyForm uses the Interior Studio defaults: 0.32 for cloth and 0.42 for soft bodies'),
     },

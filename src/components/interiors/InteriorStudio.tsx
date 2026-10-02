@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Armchair, BedDouble, Box, Check, Loader2, Sofa, Sparkles, X } from 'lucide-react';
+import { Armchair, Bath, BedDouble, Box, Briefcase, Check, CookingPot, Laptop, Loader2, Sofa, Sparkles, Toilet, X } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { detectRooms } from '../../lib/spatial/rooms';
 import { type FurnishingPreset } from '../../lib/interiors/smartFurnish';
@@ -20,6 +20,11 @@ const PRESETS: Array<{
   { id: 'soft-furnishings', label: 'Soft furnishings', description: 'Upholstered seating and draped curtains fitted inside real windows.', icon: <Sparkles size={17} /> },
   { id: 'storage', label: 'Storage', description: 'Three cabinets distributed around available walls.', icon: <Box size={17} /> },
   { id: 'minimal', label: 'Minimal', description: 'One sofa placed conservatively.', icon: <Armchair size={17} /> },
+  { id: 'office', label: 'Office', description: 'Up to three desks, each with its chair, plus a bookcase and filing cabinets.', icon: <Briefcase size={17} /> },
+  { id: 'home-office', label: 'Home office', description: 'A desk and chair, bookcase, reading chair and curtains at the window.', icon: <Laptop size={17} /> },
+  { id: 'kitchen', label: 'Kitchen', description: 'Base and wall units with sink and hob sized to the wall, a fridge freezer and, if there is space, a dining table and chairs.', icon: <CookingPot size={17} /> },
+  { id: 'bathroom', label: 'Bathroom', description: 'Bath, toilet, basin and a shower if it fits. Fixtures sit on walls and share a wet wall.', icon: <Bath size={17} /> },
+  { id: 'toilet', label: 'Toilet', description: 'A toilet and a small basin with proper space in front.', icon: <Toilet size={17} /> },
 ];
 
 export default function InteriorStudio() {

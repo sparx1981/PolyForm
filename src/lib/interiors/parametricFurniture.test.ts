@@ -4,7 +4,11 @@ import { billOfMaterials } from '../presentation/bom';
 
 describe('parametric interior furniture', () => {
   it('ships primary furniture and supporting room pieces', () => {
-    expect(interiorFurnitureCatalog().map(x => x.type)).toEqual(['bed', 'sofa', 'cabinet', 'curtain', 'nightstand', 'coffee-table', 'armchair', 'console']);
+    expect(interiorFurnitureCatalog().map(x => x.type)).toEqual([
+      'bed', 'sofa', 'cabinet', 'curtain', 'nightstand', 'coffee-table', 'armchair', 'console',
+      'desk', 'office-chair', 'bookcase', 'filing-cabinet', 'kitchen-run', 'fridge', 'dining-table', 'dining-chair',
+      'bath', 'shower', 'toilet', 'basin',
+    ]);
   });
 
   it('generates furniture at requested dimensions', () => {

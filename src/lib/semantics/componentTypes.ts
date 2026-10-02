@@ -24,6 +24,12 @@ export interface PlacementProfile {
   allowOverlapWith?: SemanticObjectKind[];
 }
 
+/** Services a fixture needs. Wet fixtures are clustered on shared walls so pipework stays short. */
+export interface PlumbingProfile {
+  supply: Array<'cold' | 'hot'>;
+  waste: boolean;
+}
+
 export type SimulationType = 'cloth' | 'fluid' | 'softbody' | 'character';
 
 export interface SimulationProfile {
@@ -42,6 +48,7 @@ export interface ComponentDefinition<P extends Record<string, unknown> = Record<
   defaultParams: P;
   placement: PlacementProfile;
   simulation?: SimulationProfile;
+  plumbing?: PlumbingProfile;
   bom?: {
     group: string;
     item: string;

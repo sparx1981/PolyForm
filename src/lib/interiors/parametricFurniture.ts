@@ -1,25 +1,15 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { smoothPatchNormals } from './upholsteryNormals';
 import { createCurtainPanels } from './curtainCloth';
+import { box, merge, padded, type FurnitureParams, type FurnitureProfile } from './furnitureParts';
+import { createRoomFurnitureGeometry, roomProfiles, ROOM_FURNITURE_TYPES, type RoomFurnitureType } from './roomFurniture';
 import type { Shape } from '../../types';
-import type { ComponentDefinition, PlacementProfile, SimulationProfile } from '../semantics/componentTypes';
+import type { PlacementProfile, PlumbingProfile, SimulationProfile } from '../semantics/componentTypes';
 
-export type InteriorFurnitureType = 'bed' | 'sofa' | 'cabinet' | 'curtain' | 'nightstand' | 'coffee-table' | 'armchair' | 'console';
+export type { FurnitureParams } from './furnitureParts';
 
-export interface FurnitureParams {
-  width?: number;
-  height?: number;
-  depth?: number;
-  seatHeight?: number;
-  mattressHeight?: number;
-  headboardHeight?: number;
-  doorCount?: number;
-  openAmount?: number;
-  fullness?: number;
-  foldDepth?: number;
-}
+export type InteriorFurnitureType =
+  | 'bed' | 'sofa' | 'cabinet' | 'curtain' | 'nightstand' | 'coffee-table' | 'armchair' | 'console'
+  | RoomFurnitureType;
 
 export interface InteriorFurnitureOptions {
   id?: string;
@@ -30,11 +20,7 @@ export interface InteriorFurnitureOptions {
   roomId?: string;
 }
 
-const profiles: Record<string, {
-  definition: ComponentDefinition<Record<string, unknown>>;
-  defaults: Required<FurnitureParams>;
-  color: string;
-}> = {
+const profiles: Record<string, FurnitureProfile> = {
   bed: {
     definition: {
       id: 'polyform:interior/bed',
@@ -105,46 +91,7 @@ for (const [type, name, width, height, depth] of [
     color: type === 'armchair' ? '#b8a18b' : '#a98968',
   };
 }
-function padded(width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
-  const g = new RoundedBoxGeometry(width, height, depth, 3, Math.min(0.065, height / 4, depth / 4));
-  const position = g.getAttribute('position');
-  for (let i=0;i<position.count;i++) {
-    const px=position.getX(i), py=position.getY(i), pz=position.getZ(i);
-    const envelope=Math.max(0,1-(2*px/width)**2)*Math.max(0,1-(2*pz/depth)**2);
-    const loft=height*0.12*envelope;
-    const wrinkle=Math.sin(px*28 + pz*11)*height*0.018*envelope;
-    position.setY(i, py + Math.sign(py)*(loft+wrinkle));
-  }
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(smoothPatchNormals(position.array), 3));
-  g.userData.fabric = true;
-  g.translate(x, y, z);
-  return g;
-}
-
-function box(width: number, height: number, depth: number, x: number, y: number, z: number): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(Math.max(0.01, width), Math.max(0.01, height), Math.max(0.01, depth));
-  g.translate(x, y, z);
-  return g;
-}
-
-function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const flat = parts.map(part => part.index ? part.toNonIndexed() : part);
-  const result = mergeGeometries(flat, false);
-  if (result) {
-    let start=0;
-    for (let i=0;i<flat.length;i++) {
-      const count=flat[i].getAttribute('position').count;
-      result.addGroup(start,count,parts[i].userData.fabric ? 1 : 0);
-      start+=count;
-    }
-  }
-  for (const part of flat) if (!parts.includes(part)) part.dispose();
-  for (const part of parts) part.dispose();
-  if (!result) throw new Error('Could not merge furniture geometry');
-  result.computeBoundingBox();
-  result.computeBoundingSphere();
-  return result;
-}
+Object.assign(profiles, roomProfiles);
 
 function bedGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
   const frameH = Math.max(0.12, p.height - p.mattressHeight);
@@ -234,6 +181,9 @@ export function createInteriorFurnitureGeometry(type: InteriorFurnitureType, par
     case 'console': return cabinetGeometry(p);
     case 'coffee-table': return merge([padded(p.width, 0.065, p.depth, 0, p.height - 0.0325, 0), ...[-1, 1].flatMap(x => [-1, 1].map(z => box(0.045, p.height - 0.065, 0.045, x * (p.width / 2 - 0.1), (p.height - 0.065) / 2, z * (p.depth / 2 - 0.1))))]);
     case 'curtain': return curtainGeometry(p);
+    default:
+      if (ROOM_FURNITURE_TYPES.includes(type as RoomFurnitureType)) return createRoomFurnitureGeometry(type as RoomFurnitureType, p);
+      throw new Error(`Unknown interior furniture type: ${type}`);
   }
 }
 
@@ -260,6 +210,7 @@ export function createInteriorFurnitureShape(
   geometry.dispose();
   const placement: PlacementProfile = profile.definition.placement;
   const simulation: SimulationProfile | undefined = profile.definition.simulation;
+  const plumbing: PlumbingProfile | undefined = profile.definition.plumbing;
   return {
     id: options.id ?? Math.random().toString(36).slice(2, 11),
     name: profile.definition.name,
@@ -268,8 +219,8 @@ export function createInteriorFurnitureShape(
     rotation: [0, options.rotationY ?? 0, 0],
     args: [params.width, params.height, params.depth],
     color: options.color ?? profile.color,
-    roughness: type === 'cabinet' ? 0.58 : 0.82,
-    metalness: 0.02,
+    roughness: profile.surface?.roughness ?? (type === 'cabinet' ? 0.58 : 0.82),
+    metalness: profile.surface?.metalness ?? 0.02,
     tags: ['interior', 'furniture', `interior-${type}`],
     geometryData: data,
     customData: {
@@ -282,6 +233,7 @@ export function createInteriorFurnitureShape(
         roomId: options.roomId,
         placement,
         simulation,
+        ...(plumbing ? { plumbing } : {}),
       },
     },
   };
