@@ -290,7 +290,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [allTagsVisible, setAllTagsVisible] = useState(true);
   const [scenes, setScenes] = useState<SceneState[]>([]);
-  const [shadowsEnabled, setShadowsEnabled] = useState(false);
+  const [shadowsEnabled, setShadowsEnabled] = useState(true);
   const [showLightsource, setShowLightsource] = useState(false);
   const [showAllDimensions, setShowAllDimensions] = useState(false);
   // Task #155: familiar edge line rendering settings -- user-configurable on/off, colour, opacity.

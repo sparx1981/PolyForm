@@ -78,7 +78,7 @@ export default function AIToolbar({ dock = 'left' }: AIToolbarProps = {}) {
         <AIToolButton id="ai_query" icon={<Sparkles size={19} />} label="AI Query" subtitle="Ask AI assistant about your model & scene" onClick={() => setIsAIQueryOpen(true)} />
         <AIToolButton id="ai_generate" icon={<Wand2 size={19} />} label="AI Generate" subtitle="Generate 3D geometry from text prompt" onClick={() => setIsAIGenerateOpen(true)} />
         <AIToolButton id="ai_renderer" icon={<Search size={19} />} label="AI Renderer" subtitle="Generate photorealistic AI render from view" onClick={() => setIsAIRendererOpen(true)} />
-        <AIToolButton id="photo_to_3d" icon={<Camera size={19} />} label="Photo to 3D (AI)" subtitle="Turn a photo into a 3D model" onClick={() => window.dispatchEvent(new CustomEvent('polyform:photo-to-3d'))} />
+        <AIToolButton id="photo_to_3d" icon={<Camera size={19} />} label="Reconstruction Studio" subtitle="Turn photos and plans into 3D models" onClick={() => window.dispatchEvent(new CustomEvent('polyform:photo-to-3d'))} />
       </aside>
     </FlyoutSideContext.Provider>
   );

@@ -45,7 +45,7 @@ import { collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc, s
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, getSavedGeminiApiKey, setSavedGeminiApiKey } from '../lib/utils';
 import { usePhoneLayout } from '../lib/phoneLayout';
 import { buildProjectFile, parseProjectFile, projectFileName } from '../lib/storage/projectFile';
 import { storageProviders, STORAGE_LABELS } from '../lib/storage/registry';
@@ -55,39 +55,11 @@ import StorageChoice from './StorageChoice';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
-import { SkpService, HuggingFaceService } from '../services/skpService';
+import { SkpService, HuggingFaceService, mergeImportedGroup } from '../services/skpService';
 import { LOGIN_ACTIVITY_ADMIN_EMAIL } from '../lib/loginActivity';
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
 import { applySavedModelToAppState } from '../lib/loadSavedModel';
-
-function mergeBufferGeometriesLocal(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const hasUv = geometries.every(g => !!g.attributes.uv);
-  geometries.forEach(geo => {
-    const posAttr = geo.attributes.position;
-    const normAttr = geo.attributes.normal;
-    const uvAttr = geo.attributes.uv;
-    if (posAttr) {
-      for (let i = 0; i < posAttr.count; i++) {
-        positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-        if (normAttr) {
-          normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
-        } else {
-          normals.push(0, 1, 0);
-        }
-        if (hasUv && uvAttr) uvs.push(uvAttr.getX(i), uvAttr.getY(i));
-      }
-    }
-  });
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  if (hasUv) merged.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  return merged;
-}
 
 // Sanitizing for Firestore (stripping undefined values and wrapping nested
 // arrays) lives in firebase.ts as cleanFirestoreDataForSave, shared with
@@ -175,7 +147,12 @@ export default function TopBar() {
   const [hfTokenInput, setHfTokenInput] = useState<string>(() => HuggingFaceService.getToken());
   const [showHfToken, setShowHfToken] = useState(false);
   const [showMapsKey, setShowMapsKey] = useState(false);
-  useEffect(() => { if (isSettingsOpen) setHfTokenInput(HuggingFaceService.getToken()); }, [isSettingsOpen]);
+  const [importStatus, setImportStatus] = useState<{ name: string; message: string; fraction?: number } | null>(null);
+  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => getSavedGeminiApiKey());
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  useEffect(() => {
+    if (isSettingsOpen) { setHfTokenInput(HuggingFaceService.getToken()); setGeminiKeyInput(getSavedGeminiApiKey()); }
+  }, [isSettingsOpen]);
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [saveLocation, setSaveLocation] = useState<StorageLocation>('polyform');
   const [saveFolder, setSaveFolder] = useState<StorageFolder | null>(null);
@@ -593,6 +570,34 @@ export default function TopBar() {
     }, 100);
   };
 
+  /** Reads a 3D file into one custom shape, showing progress while a big file loads. */
+  const importModelAsShape = async (file: File) => {
+    setImportStatus({ name: file.name, message: 'Loading the file' });
+    try {
+      const group = await SkpService.importSKP(file, p => setImportStatus({ name: file.name, message: p.message, fraction: p.fraction }));
+      setImportStatus({ name: file.name, message: 'Adding it to the model' });
+      // Let the status paint before the long merge below.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      // CustomGeometry parses shape.geometryData with THREE.BufferGeometryLoader, which only understands a
+      // plain BufferGeometry.toJSON() payload - not an Object3D/group toJSON(). Passing the group's own
+      // toJSON() here always failed to parse and silently fell back to a 1x1x1 placeholder box, which is
+      // why every SKP import once appeared as "a small cube" regardless of the source model.
+      const merged = mergeImportedGroup(group);
+      diagLog('Import', 'Imported 3D file', { name: file.name, triangles: Math.round(merged.attributes.position.count / 3) });
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name.split('.')[0],
+        type: 'custom',
+        position: [0, 0, 0],
+        args: {},
+        color: '#ffffff',
+        geometryData: merged.toJSON()
+      } as any;
+    } finally {
+      setImportStatus(null);
+    }
+  };
+
   const handleOpenLocalFile = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -624,47 +629,12 @@ export default function TopBar() {
 
       // If it's a 3D file or other geometry format
       try {
-        const group = await SkpService.importSKP(file);
-        group.updateMatrixWorld(true);
-        const meshGeometries: THREE.BufferGeometry[] = [];
-        group.traverse((child: any) => {
-          if (child.isMesh && child.geometry) {
-            let geo = child.geometry.clone();
-            geo.applyMatrix4(child.matrixWorld);
-            if (geo.index) geo = geo.toNonIndexed();
-            if (!geo.attributes.normal) geo.computeVertexNormals();
-            meshGeometries.push(geo);
-          }
-        });
-        if (meshGeometries.length === 0) {
-          throw new Error('No mesh geometry found in the file.');
-        }
-        const commonAttrs = ['position', 'normal', 'uv'].filter(key =>
-          meshGeometries.every(geo => !!geo.attributes[key])
-        );
-        meshGeometries.forEach(geo => {
-          Object.keys(geo.attributes).forEach(key => {
-            if (!commonAttrs.includes(key)) geo.deleteAttribute(key);
-          });
-        });
-        const mergedGeo = meshGeometries.length === 1
-          ? meshGeometries[0]
-          : mergeBufferGeometriesLocal(meshGeometries);
-        const id = Math.random().toString(36).substr(2, 9);
-        const newShape: any = {
-          id,
-          name: file.name.split('.')[0],
-          type: 'custom',
-          position: [0, 0, 0],
-          args: {},
-          color: '#ffffff',
-          geometryData: mergedGeo.toJSON()
-        };
+        const newShape = await importModelAsShape(file);
         setShapes(prev => [...prev, newShape]);
         alert(`Imported ${file.name} successfully!`);
       } catch (err) {
         console.error('Import error:', err);
-        alert('Failed to import file. Ensure it is a valid .polyform, .skp, or .json file.');
+        alert(`Failed to import ${file.name}. ${err instanceof Error && err.message ? err.message : 'Ensure it is a valid .polyform, .skp, or .json file.'}`);
       }
       setIsMenuOpen(false);
     };
@@ -713,57 +683,12 @@ export default function TopBar() {
       
       diagLog('Import', 'Importing SKP file', { name: file.name });
       try {
-        const group = await SkpService.importSKP(file);
-        // Bridge the imported Object3D group into the single BufferGeometry
-        // that CustomGeometry expects. CustomGeometry parses shape.geometryData
-        // with THREE.BufferGeometryLoader, which only understands a plain
-        // BufferGeometry.toJSON() payload - not an Object3D/group toJSON().
-        // Passing the group's own toJSON() here always failed to parse and
-        // silently fell back to a 1x1x1 placeholder box, which is why every
-        // SKP import appeared as "a small cube" regardless of the source model.
-        group.updateMatrixWorld(true);
-        const meshGeometries: THREE.BufferGeometry[] = [];
-        group.traverse((child: any) => {
-          if (child.isMesh && child.geometry) {
-            let geo = child.geometry.clone();
-            geo.applyMatrix4(child.matrixWorld);
-            if (geo.index) geo = geo.toNonIndexed();
-            if (!geo.attributes.normal) geo.computeVertexNormals();
-            meshGeometries.push(geo);
-          }
-        });
-        if (meshGeometries.length === 0) {
-          throw new Error('No mesh geometry found in the imported SKP file.');
-        }
-        // mergeGeometries requires every geometry to share the same attribute
-        // set, so keep only the attributes common to all meshes.
-        const commonAttrs = ['position', 'normal', 'uv'].filter(key =>
-          meshGeometries.every(geo => !!geo.attributes[key])
-        );
-        meshGeometries.forEach(geo => {
-          Object.keys(geo.attributes).forEach(key => {
-            if (!commonAttrs.includes(key)) geo.deleteAttribute(key);
-          });
-        });
-        const mergedGeo = meshGeometries.length === 1
-          ? meshGeometries[0]
-          : mergeBufferGeometriesLocal(meshGeometries);
-        // Add as a custom shape
-        const id = Math.random().toString(36).substr(2, 9);
-        const newShape: any = {
-          id,
-          name: file.name.split('.')[0],
-          type: 'custom',
-          position: [0, 0, 0],
-          args: {},
-          color: '#ffffff',
-          geometryData: mergedGeo.toJSON()
-        };
+        const newShape = await importModelAsShape(file);
         setShapes(prev => [...prev, newShape]);
         alert('Imported SKP model successfully!');
       } catch (err) {
         console.error('Import error:', err);
-        alert('Failed to import SKP file. Ensure it is a valid bridge format.');
+        alert(`Failed to import ${file.name}. ${err instanceof Error && err.message ? err.message : 'Ensure it is a valid SKP, glTF or GLB file.'}`);
       }
     };
     input.click();
@@ -1365,7 +1290,7 @@ export default function TopBar() {
                   </CollapsibleSection>
 
                   <CollapsibleSection title="AI Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/20 rounded-lg px-2">
-                    {[{tool:'ai_query',label:'AI Query'}, {tool:'ai_generate',label:'AI Generate'}, {tool:'ai_renderer',label:'AI Renderer'}, {tool:'photo_to_3d',label:'Photo to 3D'}].map(({tool,label}) => <VisibilityToggle key={tool} label={label} isVisible={toolbarVisibility[tool] !== false} onToggle={() => setToolbarVisibility({...toolbarVisibility,[tool]:toolbarVisibility[tool] === false})} />)}
+                    {[{tool:'ai_query',label:'AI Query'}, {tool:'ai_generate',label:'AI Generate'}, {tool:'ai_renderer',label:'AI Renderer'}, {tool:'photo_to_3d',label:'Reconstruction Studio'}].map(({tool,label}) => <VisibilityToggle key={tool} label={label} isVisible={toolbarVisibility[tool] !== false} onToggle={() => setToolbarVisibility({...toolbarVisibility,[tool]:toolbarVisibility[tool] === false})} />)}
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Landscapes Toolbar Icons" className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-2">
@@ -1501,10 +1426,66 @@ export default function TopBar() {
                   </a>
                 </p>
               </div>
+
+              <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Gemini API Key</span>
+                  {geminiKeyInput ? (
+                    <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                      <CheckCircle2 size={12} /> Configured
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                      <AlertTriangle size={12} /> Not set
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type={showGeminiKey ? 'text' : 'password'}
+                    value={geminiKeyInput}
+                    onChange={(e) => {
+                      setGeminiKeyInput(e.target.value);
+                      setSavedGeminiApiKey(e.target.value);
+                    }}
+                    placeholder="Paste your Gemini API key"
+                    autoComplete="off"
+                    className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 pr-9 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-polyform-blue"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showGeminiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Powers Reconstruction Studio's AI plan recognition, plus AI Query and AI Generate. Stored only in this browser; the plan image is sent to Google Gemini when you use it.{' '}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-polyform-blue hover:underline"
+                  >
+                    Get a key <ExternalLink size={10} />
+                  </a>
+                </p>
+              </div>
             </div>
           )}
         </div>
       </Modal>
+      {importStatus && (
+        <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] w-80 rounded-lg bg-gray-900 text-white shadow-xl px-4 py-3 text-sm">
+          <div className="font-semibold truncate">Opening {importStatus.name}</div>
+          <div className="text-xs text-gray-300 mt-0.5">{importStatus.message}…</div>
+          <div className="mt-2 h-1.5 rounded bg-white/20 overflow-hidden">
+            <div className={cn('h-full bg-polyform-blue', importStatus.fraction === undefined && 'w-1/3 animate-pulse')}
+              style={importStatus.fraction === undefined ? undefined : { width: `${Math.round(Math.min(1, Math.max(0, importStatus.fraction)) * 100)}%` }} />
+          </div>
+        </div>
+      )}
     </header>
   );
 }

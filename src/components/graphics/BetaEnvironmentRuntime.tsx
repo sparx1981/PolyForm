@@ -4,6 +4,7 @@ import { Environment } from '@react-three/drei';
 import { LUT, SMAA, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import { CubeCamera, WebGLCubeRenderTarget, HalfFloatType, Scene, PointsMaterial, AdditiveBlending, BufferGeometry, Float32BufferAttribute, Color, Data3DTexture, DataTexture, Matrix4, TextureLoader, Vector2, Vector3, RedFormat, UnsignedByteType, RepeatWrapping, LinearFilter, NearestFilter, RGBAFormat, type Texture } from 'three';
+import { SUN_SHADOW_RADIUS } from '../../lib/graphics/shadowQuality';
 import { Atmosphere, Sky, SunLight, SkyLight, AtmosphereContext, type AtmosphereApi } from '@takram/three-atmosphere/r3f';
 import { PrecomputedTexturesLoader, type PrecomputedTextures } from '@takram/three-atmosphere';
 import { Clouds, CloudLayer } from '@takram/three-clouds/r3f';
@@ -102,6 +103,13 @@ function PublishEffects({ onEffects }: { onEffects: (effects: ReactNode) => void
   return null;
 }
 
+/** The Beta sun's shadow box. A low evening sun skims the ground, so with no bias along the surface normal
+ * the terrain shadowed itself in stair steps; the bias scales with the texel size like the standard sun
+ * (see SunShadowRig), and a bigger map keeps the edges fine. */
+const SUN_SHADOW_RADIUS_M = 40;
+const SUN_SHADOW_MAP = 4096;
+const SUN_SHADOW_NORMAL_BIAS = ((2 * SUN_SHADOW_RADIUS_M) / SUN_SHADOW_MAP) * 1.5;
+
 function CelestialScene({ worldToECEF, date }: { worldToECEF: Matrix4; date: Date }) {
   const { graphicsSettings, shadowsEnabled } = useApp();
   const sunLight = useRef<import('@takram/three-atmosphere').SunDirectionalLight>(null);
@@ -120,7 +128,9 @@ function CelestialScene({ worldToECEF, date }: { worldToECEF: Matrix4; date: Dat
     <Sky groundAlbedo={groundAlbedo} renderOrder={-1000} />
     <LocalStars data={assets.stars} date={date} worldToECEF={worldToECEF} sunDirection={direction} />
     <SunLight ref={sunLight} position={[camera.position.x, 0, camera.position.z]} distance={100} intensity={1} castShadow={shadowsEnabled}
-      shadow-mapSize={[2048,2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={40} shadow-camera-bottom={-40} shadow-camera-far={250} shadow-bias={-0.0001} />
+      shadow-mapSize={[SUN_SHADOW_MAP, SUN_SHADOW_MAP]} shadow-camera-left={-SUN_SHADOW_RADIUS_M} shadow-camera-right={SUN_SHADOW_RADIUS_M}
+      shadow-camera-top={SUN_SHADOW_RADIUS_M} shadow-camera-bottom={-SUN_SHADOW_RADIUS_M} shadow-camera-far={250}
+      shadow-bias={-0.0003} shadow-normalBias={SUN_SHADOW_NORMAL_BIAS} shadow-radius={SUN_SHADOW_RADIUS} />
       <SkyLight intensity={1} />
   </>;
 }

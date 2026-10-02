@@ -7,6 +7,12 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'October 4, 2026',
     items: [
+      'Large SketchUp files: .skp files are now read in the background with a progress bar instead of freezing the page, components used many times are stored once while reading, and the merge into your model uses far less memory. If a file still cannot open, the message now says why (for example, ran out of memory) and what to try, rather than a generic error.',
+      'Wall tool: drawing walls could freeze the page when the model was large or had a stray wall far from the building, because room detection scaled with the whole site area. It now looks only at the cells near each wall and caps the grid size.',
+      'Settings / API has a Gemini API Key section. Reconstruction Studio uses it for AI plan recognition (AI Query and AI Generate use it too). It is stored only in your browser.',
+      'The AI toolbar icon \"Photo to 3D\" is now \"Reconstruction Studio\".',
+      'Display Shadows is now on by default. The Warehouse High-Bay and Flush Ceiling lights now come in with a brightness of 6. The Camera Type tool has a Reset to default button.',
+      'Beta environment: the sun\'s shadows on terrain no longer show stepped edges at low sun angles (finer shadow map and a surface-normal bias).',
       'Recessed downlights are now truly recessed: only a flush trim ring and lens show below the ceiling, the can sits above it (inside a ceiling slab), and the light comes from open air just below the lens so nothing shadows it. Their default strength is 40. Roofing a building (the roof buttons and sdk.architecture.roofBuilding) now also adds a ceiling slab under the roof, with its underside at the top of the walls where room lights are placed; Stack Next Story already provides one as its floor slab.',
       'Interior Studio: rooms were outlined by a convex hull, so an L-shaped room claimed its notch outside the walls. Rooms now keep their true outline, which also fixes curtains (and any furniture) being placed on the outside of windows; curtains now hang on the room side of the wall whichever way the wall is drawn.',
       'Interior Studio is wider and tidier, with two tabs: Furnish rooms (shorter descriptions) and a Gallery of every piece with a picture, size and one-click Add that places it in the chosen room using the furnishing rules (chairs go to desks and tables already there).',

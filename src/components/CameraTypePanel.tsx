@@ -1,4 +1,4 @@
-import { FOV_RANGE, LENS_PRESETS, STANDARD_VIEWS, cameraView, useCameraView, type Projection, type StandardView } from '../lib/cameraView';
+import { DEFAULT_CAMERA_VIEW, FOV_RANGE, LENS_PRESETS, STANDARD_VIEWS, cameraView, useCameraView, type Projection, type StandardView } from '../lib/cameraView';
 import { cn } from '../lib/utils';
 
 const heading = 'text-[10px] text-gray-500 font-bold uppercase tracking-wider';
@@ -16,8 +16,14 @@ export function CameraTypePanel() {
   const ortho = projection === 'orthographic';
   const show = (view: StandardView, wanted?: Projection) => window.dispatchEvent(new CustomEvent('frame-view', { detail: { view, projection: wanted } }));
   const groups = ['Drawing', 'Isometric'] as const;
+  const isDefault = projection === DEFAULT_CAMERA_VIEW.projection && fov === DEFAULT_CAMERA_VIEW.fov;
   return (
     <div className="space-y-4">
+      <button type="button" disabled={isDefault} onClick={() => cameraView.reset()}
+        title="Back to Perspective with the Standard lens"
+        className="w-full px-2 py-1.5 rounded-md text-[11px] font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-polyform-blue disabled:opacity-40 disabled:hover:border-gray-300 disabled:cursor-default">
+        Reset to default
+      </button>
       <div className="space-y-1.5">
         <div className={heading}>Projection</div>
         <div role="group" aria-label="Projection" className="flex gap-1">

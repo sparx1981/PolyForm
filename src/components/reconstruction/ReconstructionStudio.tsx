@@ -447,7 +447,7 @@ export default function ReconstructionStudio() {
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI recognise and review
                 </button>
                 {!hasGeminiPlanKey() && (
-                  <div className="text-[10px] text-amber-600 dark:text-amber-400">No Gemini API key is configured, so AI recognition is unavailable.</div>
+                  <div className="text-[10px] text-amber-600 dark:text-amber-400">No Gemini API key is configured. Add one in Settings → API to use AI recognition.</div>
                 )}
                 <p className="text-xs text-gray-500">
                   Local detection works offline on clean, high-contrast, right-angled plans only. No image is uploaded.
