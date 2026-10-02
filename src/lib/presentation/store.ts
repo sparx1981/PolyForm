@@ -40,6 +40,8 @@ export interface PresentationState extends GlassSettings {
    * Fractions blend between neighbouring stages.
    */
   stage: number;
+  /** How much of the Sketch pencil drawing has been drawn, 0-1 (1 when not drawing); the timeline shows it. */
+  sketchProgress: number;
   /** The stage timeline is playing from Sketch to Built. */
   stagePlaying: boolean;
   /** Distinguishes a paused timeline from a manually selected Sketch. */
@@ -78,6 +80,7 @@ export const INITIAL_PRESENTATION: PresentationState = {
   blurStrength: 0.5,
   effectsBypassed: false,
   stage: 3,
+  sketchProgress: 1,
   stagePlaying: false,
   stagePlaybackStarted: false,
   dusk: false,
@@ -132,6 +135,20 @@ export function playStages() {
   presentation.set({ stage: 0, stagePlaying: true, stagePlaybackStarted: true, build: 1, buildPlaying: false, explode: 0 });
 }
 
+/** The first slice of the timeline bar is the pencil drawing, so the bar moves while Sketch is being drawn. */
+export const SKETCH_BAR_SHARE = 0.1;
+
+/** Where the timeline bar's dot sits, 0-1: the drawing first, then Sketch to Built. */
+export function barFraction(stage: number, sketchProgress: number): number {
+  if (stage < 0.02) return SKETCH_BAR_SHARE * Math.min(1, Math.max(0, sketchProgress));
+  return SKETCH_BAR_SHARE + (1 - SKETCH_BAR_SHARE) * Math.min(1, stage / 3);
+}
+
+/** The stage a click or drag at `t` along the bar means (the drawing slice is Sketch itself). */
+export function stageFromBar(t: number): number {
+  return Math.min(1, Math.max(0, (t - SKETCH_BAR_SHARE) / (1 - SKETCH_BAR_SHARE))) * 3;
+}
+
 export const STAGES = [
   { n: '01', name: 'Sketch', caption: 'From line to life', detail: 'The idea on paper' },
   { n: '02', name: 'Massing', caption: 'Space takes shape', detail: 'Volumes · thresholds · light' },
@@ -139,7 +156,7 @@ export const STAGES = [
   { n: '04', name: 'Built', caption: 'A place to come home to', detail: 'Material · light · life' },
 ] as const;
 
-/** Seconds for the transitions after the separate 18–31.5 second pencil drawing. */
+/** Seconds for the transitions after the separate 5–12 second pencil drawing. */
 export const STAGE_PLAY_SECONDS = 18;
 
 /** True while any effect changes how the model looks. */

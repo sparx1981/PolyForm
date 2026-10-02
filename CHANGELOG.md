@@ -4,9 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- **Connector building tools and checks**: `add_roof_window` places the real Velux roof window in a roof slope, `add_dormers` adds gable, hipped or flat dormers (including one full-width flat dormer), and `add_porch` builds a gable, lean-to or flat porch over a door. `add_stairs` can now find a spot that fits inside a room (`room`), takes `rotation_deg`, and refuses a flight that sticks out of the house, cuts through a wall or overlaps another flight; the floor above gets its stairwell opening. Furniture that would stand through the ceiling or a sloping roof is refused (or left out by `furnish_room`). The rules Claude is given now live in one file, `mcp/src/rules.ts`, and `npm run rules:export` writes them with every tool description and automatic check to `mcp/RULES.md`.
+- **Presentation mode**: glass, furniture and plants now fade or grow in between Massing, Detailed and Built instead of popping in, the timeline bar moves while the Sketch pencil drawing is drawn, and the drawing takes 5 to 12 seconds (it was 18 to 31) with fine stair detail left out.
+
 - **AI plan recognition in Reconstruction Studio**: a new "AI recognise and review" action reads a floor-plan image with Gemini and proposes walls at any angle, doors, windows and room names. Local clean-up then aligns walls to the drawn lines, joins corners and T-junctions, merges duplicates and hosts each opening on its nearest wall. Room names are reviewable and commit as floor text labels.
 
 ### Fixed
+- Connector: walls built with `add_room` on an upper floor were all filed under Level 1 in the Outliner, and upper floors each got a foundation. Walls and slabs are now filed under the level their height belongs to, and only the ground floor has a foundation.
 - Reconstruction Studio produced scattered, unrecognisable walls on text-heavy, dimensioned or non-orthogonal plans. The local detector is kept as an offline option for clean right-angled plans and is now labelled as such.
 
 ## [1.10.5] - 2026-09-16

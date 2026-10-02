@@ -56,7 +56,7 @@ interface Rect {
   width: number;
 }
 
-interface Level {
+export interface Level {
   level: number;
   elevation: number;
   walls: Shape[];
@@ -274,7 +274,7 @@ export const USABLE_HEADROOM = 1.5;
  * the underside of the lowest roof above the floor, or inside a dormer its ceiling. Roofs are
  * read from their own geometry (like the dormers), so any roof the roof tool built works.
  */
-function roofHeadroom(shapes: Shape[], levels: Level[]) {
+export function roofHeadroom(shapes: Shape[], levels: Level[]) {
   const roofs = shapes.filter(s => s.roofData && s.geometryData && !s.hidden && !s.tags?.includes('roof-extra'));
   if (!roofs.length) return null;
   const read = roofs.map(r => {

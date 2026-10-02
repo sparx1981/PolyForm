@@ -217,6 +217,12 @@ export interface Look {
   furniture: boolean;
   /** Real trees and plants (Built); before that they're drawn as pencil outlines. */
   plants: boolean;
+  /** How far glass has come in, 0-1: it fades in rather than switching on. */
+  glassIn: number;
+  /** How far furniture and fittings have come in, 0-1: they grow in rather than popping into view. */
+  furnitureIn: number;
+  /** How far the real trees and plants have come in, 0-1. */
+  plantsIn: number;
   /** Opacity of the pencil tree outlines. */
   treeSketch: number;
   /** How much of the paper backdrop shows instead of the real sky, 0-1. */
@@ -225,10 +231,13 @@ export interface Look {
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * clamp01(t);
+/** 0 below `from`, 1 above `to`, eased between, so things arrive gradually. */
+const smooth = (x: number, from: number, to: number) => { const t = clamp01((x - from) / (to - from)); return t * t * (3 - 2 * t); };
 
 /** How the model looks at a (fractional) stage between 0 (Sketch) and 3 (Built). */
 export function lookAt(stage: number): Look {
   const s = Math.min(3, Math.max(0, stage));
+  const glassIn = smooth(s, 1.3, 1.9), furnitureIn = smooth(s, 1.3, 1.9), plantsIn = smooth(s, 2.3, 2.9);
   return {
     surfaceOpacity: easeInOutCubic(clamp01(s)),
     mode: s >= 2.98 ? 'built' : s > 2 ? 'fade' : 'clay',
@@ -236,9 +245,10 @@ export function lookAt(stage: number): Look {
     pencil: s < 1 ? lerp(0.85, 0.5, s) : s < 2 ? lerp(0.5, 0.1, s - 1) : 0,
     pencilRoughness: s < 1 ? lerp(1, 0.22, s) : lerp(0.22, 0, s - 1),
     clayOver: s > 2 ? clamp01(3 - s) : 1,
-    glass: s >= 1.5,
-    furniture: s >= 1.5,
-    plants: s >= 2.5,
+    glass: glassIn > 0,
+    furniture: furnitureIn > 0,
+    plants: plantsIn > 0,
+    glassIn, furnitureIn, plantsIn,
     treeSketch: s < 2.5 ? (s < 2 ? 1 : lerp(1, 0, (s - 2) / 0.5)) : 0,
     paper: s < 2 ? 1 : clamp01((2.98 - s) / 0.98),
   };

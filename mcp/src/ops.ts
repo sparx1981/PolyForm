@@ -6,6 +6,7 @@ import type { PatioKind, PatioToolSettings } from '../../src/lib/patio/patioType
 import { polygonArea, denseOutline, type Vec2 } from '../../src/lib/patio/patioGeometry';
 import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { buildFence, buildPatio, buildWaterBody, originalGroundAt } from '../../src/lib/siteBuilders';
+import { RoofSurface } from '../../src/lib/roofSurface';
 import { ToolError } from './store';
 
 export type Vec3 = [number, number, number];
@@ -285,4 +286,159 @@ export function withTerrainTexture(s: Shape, textureId: string): Shape {
     metalness: preset.metalness ?? 0.05,
     terrainData: { ...s.terrainData, textureUrl: preset.id, textureScale: preset.defaultRepeat ?? s.terrainData.textureScale },
   };
+}
+
+/** Roofs the roof tool built (not their gutters, chimneys or dormer parts), the ones a roof window can sit in. */
+export function roofsIn(shapes: Shape[]): Shape[] {
+  return shapes.filter(s => s.roofData && s.geometryData && !s.hidden && !s.tags?.includes('roof-extra') && !s.tags?.includes('roof-part'));
+}
+
+/** The roof asked for, or the only roof; with several and none named, says which there are. */
+export function pickRoof(shapes: Shape[], ref?: string): Shape {
+  if (ref) {
+    const roof = findShape(shapes, ref);
+    if (!roofsIn([roof]).length) throw new ToolError(`"${roof.name ?? roof.id}" is not a roof made by add_roof.`);
+    return roof;
+  }
+  const roofs = roofsIn(shapes);
+  if (!roofs.length) throw new ToolError('There is no roof yet. Add one with add_roof first.');
+  if (roofs.length > 1) throw new ToolError(`There is more than one roof; say which with roof: ${roofs.map(r => `${r.id} (${r.name}, ridge at y ${round(r.position[1])})`).join('; ')}.`);
+  return roofs[0];
+}
+
+/**
+ * A Velux roof window lying in the slope of a roof, placed the way the app's window tool places one on
+ * a roof: turned to the slope, a hand's width above the covering, with the roof cutting its own opening.
+ * `at` is a world [x, z]; the height and tilt come from the roof's own surface there.
+ */
+export function roofWindow(roof: Shape, at: [number, number], opts: { width?: number; height?: number; color?: string } = {}): Shape {
+  const width = opts.width ?? 0.78, height = opts.height ?? 1.18;
+  const q = orientation(roof);
+  const toLocal = (x: number, z: number) => new THREE.Vector3(x - roof.position[0], 0, z - roof.position[2]).applyQuaternion(q.clone().invert());
+  const surface = new RoofSurface(roof);
+  try {
+    const l = toLocal(at[0], at[1]);
+    const hit = surface.at(l.x, l.z);
+    if (!hit) throw new ToolError(`[${round(at[0])}, ${round(at[1])}] is not on the roof. Pick a point over the roof slope (add_roof's footprint), not in the air or past the eaves.`);
+    if (hit.normal.y > 0.97) throw new ToolError('That part of the roof is flat. A Velux roof window needs a sloping roof; choose a point on a slope.');
+    // The whole window has to lie on this one slope: no ridge, hip or edge under it.
+    const horiz = Math.hypot(hit.normal.x, hit.normal.z) || 1;
+    const down = new THREE.Vector2(hit.normal.x / horiz, hit.normal.z / horiz);
+    const across = new THREE.Vector2(-down.y, down.x);
+    const slope = Math.atan2(horiz, hit.normal.y);
+    for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      const run = (v * height / 2) * Math.cos(slope);
+      const p = new THREE.Vector2(l.x, l.z).addScaledVector(across, u * width / 2).addScaledVector(down, -run);
+      const s = surface.at(p.x, p.y);
+      const h = s ? Math.hypot(s.normal.x, s.normal.z) || 1 : 0;
+      if (!s || (s.normal.x / h) * down.x + (s.normal.z / h) * down.y < 0.97) {
+        throw new ToolError(`A ${width} × ${height} m roof window there would run off the slope or cross a ridge or hip. Move it away from the edge and the ridge, or make it smaller.`);
+      }
+    }
+    const n = hit.normal.clone().applyQuaternion(q).normalize();
+    const world = new THREE.Vector3(l.x, hit.y, l.z).applyQuaternion(q).add(new THREE.Vector3(...roof.position)).addScaledVector(n, 0.04);
+    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), n).normalize();
+    const uphill = new THREE.Vector3().crossVectors(n, right).normalize();
+    const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, uphill, n));
+    return {
+      id: newId(),
+      name: 'Velux Roof Window',
+      type: 'window',
+      position: r3(world.toArray()) as Vec3,
+      quaternion: [turn.x, turn.y, turn.z, turn.w],
+      args: [width, height, 0.2],
+      color: opts.color ?? '#ffffff',
+      archStyle: 'velux-roof',
+      roughness: 0.4,
+      metalness: 0.05,
+      opacity: 1,
+    } as Shape;
+  } finally {
+    surface.dispose();
+  }
+}
+
+export interface PorchOptions {
+  width?: number;
+  depth?: number;
+  style?: 'flat' | 'lean-to' | 'gable';
+  post?: 'round' | 'square';
+  posts?: 2 | 4;
+  pitchDeg?: number;
+  color?: string;
+  roofColor?: string;
+}
+
+/**
+ * A porch over a door: a landing in front of it, posts at the outer corners and a canopy roof that rests
+ * on the wall above the door. Built in the frame of the wall the door is in, on the side facing away from
+ * the building, so it never sits inside the house. Returns the pieces, which are ordinary objects.
+ */
+export function porchOverDoor(shapes: Shape[], door: Shape, opts: PorchOptions = {}): Shape[] {
+  const wall = door.type === 'door' && door.hostWallId ? shapes.find(s => s.id === door.hostWallId) : undefined;
+  if (!wall || wall.type !== 'wall') throw new ToolError(`"${door.name ?? door.id}" is not a door set in a wall. Pass the id of a door from list_objects.`);
+  const [, wallH = 2.8, wallT = 0.2] = wall.args as number[];
+  const doorW = (door.args as number[])[0] ?? 0.9, doorH = (door.args as number[])[1] ?? 2.1;
+  const base = wall.position[1] - wallH / 2;
+  const q = orientation(wall);
+  const along = new THREE.Vector3(1, 0, 0).applyQuaternion(q).setY(0).normalize();
+  let out = new THREE.Vector3(0, 0, 1).applyQuaternion(q).setY(0).normalize();
+
+  // Outside is the side facing away from the middle of the building's walls on this floor.
+  const floorWalls = shapes.filter(s => s.type === 'wall' && !s.hidden && Math.abs(s.position[1] - (s.args as number[])[1] / 2 - base) < 0.5);
+  const centre = floorWalls.reduce((c, w) => c.add(new THREE.Vector3(w.position[0], 0, w.position[2])), new THREE.Vector3()).divideScalar(Math.max(1, floorWalls.length));
+  if (new THREE.Vector3(door.position[0], 0, door.position[2]).sub(centre).dot(out) < 0) out.negate();
+  if (new THREE.Vector3().crossVectors(along, new THREE.Vector3(0, 1, 0)).dot(out) < 0) along.negate();
+
+  const width = opts.width ?? Math.max(doorW + 1, 2);
+  const depth = opts.depth ?? 1.5;
+  const style = opts.style ?? 'gable';
+  const color = opts.color ?? '#f5f5f2';
+  const roofColor = opts.roofColor ?? '#3a3d42';
+  const postH = Math.max(2.4, doorH + 0.3);
+  const doorAt = new THREE.Vector3(door.position[0], 0, door.position[2]);
+  const spot = (u: number, n: number) => doorAt.clone().addScaledVector(along, u).addScaledVector(out, wallT / 2 + n);
+  const frame = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(along, new THREE.Vector3(0, 1, 0), out));
+  const made: Shape[] = [];
+  const keep = (list: Shape[], name: string, patch: Partial<Shape> = {}) => list.forEach(s => made.push({ ...s, name, color: patch.color ?? color, ...patch }));
+  const sdkMake = (run: (sdk: any) => unknown) => withSdk([], run).created;
+  const place = (v: THREE.Vector3, y: number): Vec3 => r3([v.x, y, v.z]) as Vec3;
+
+  // Landing, with a step down when the floor stands above the ground.
+  const landing = sdkMake(sdk => sdk.createBox({ width, height: 0.15, depth, position: [0, 0, 0] }));
+  keep(landing.map(s => ({ ...s, position: place(spot(0, depth / 2), base - 0.075), quaternion: [frame.x, frame.y, frame.z, frame.w] as [number, number, number, number] })), 'Porch landing', { color: '#b8b2a6' });
+  if (base > 0.25) {
+    const step = sdkMake(sdk => sdk.createBox({ width, height: base / 2, depth: 0.35, position: [0, 0, 0] }));
+    keep(step.map(s => ({ ...s, position: place(spot(0, depth + 0.175), base / 4), quaternion: [frame.x, frame.y, frame.z, frame.w] as [number, number, number, number] })), 'Porch step', { color: '#b8b2a6' });
+  }
+
+  // Posts at the outer corners (and in line with the door's wall too, for four).
+  const inset = 0.1;
+  const spots: [number, number][] = [[-width / 2 + inset, depth - inset], [width / 2 - inset, depth - inset]];
+  if (opts.posts === 4) spots.push([-width / 2 + inset, inset + wallT / 2], [width / 2 - inset, inset + wallT / 2]);
+  spots.forEach(([u, n], i) => {
+    const post = opts.post === 'square'
+      ? sdkMake(sdk => sdk.createBox({ width: 0.14, height: postH, depth: 0.14, position: [0, 0, 0] }))
+      : sdkMake(sdk => sdk.createCylinder({ radius: 0.07, height: postH, position: [0, 0, 0] }));
+    keep(post.map(s => ({ ...s, position: place(spot(u, n), base + postH / 2) })), `Porch post ${i + 1}`);
+  });
+
+  // The canopy, resting on the posts and on the wall above the door.
+  const top = base + postH;
+  if (style === 'gable') {
+    const w = width + 0.3, d = depth + 0.2;
+    // The roof tool runs the ridge along the longer side; turn it so that side lies along the wall or out from it.
+    const ridgeOut = d >= w;
+    const roof = sdkMake(sdk => sdk.architecture.createRoof({ roofType: 'gable', width: ridgeOut ? d : w, depth: ridgeOut ? w : d, pitchAngleDeg: opts.pitchDeg ?? 30, eaveOverhang: 0.12, color: roofColor }));
+    const turned = ridgeOut ? frame.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2)) : frame.clone();
+    keep(roof.map(s => ({ ...s, position: place(spot(0, depth / 2), top), quaternion: [turned.x, turned.y, turned.z, turned.w] as [number, number, number, number] })), 'Porch roof', { color: roofColor });
+  } else {
+    const slab = sdkMake(sdk => sdk.createBox({ width: width + 0.3, height: 0.12, depth: depth + 0.2, position: [0, 0, 0] }));
+    const tilt = style === 'lean-to' ? THREE.MathUtils.degToRad(opts.pitchDeg ?? 12) : 0;
+    const q2 = frame.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), tilt));
+    // Lean-to: the wall side stays at the top of the posts' height and the outer edge drops away from it.
+    const lift = style === 'lean-to' ? (Math.sin(tilt) * (depth + 0.2)) / 2 : 0;
+    keep(slab.map(s => ({ ...s, position: place(spot(0, (depth + 0.2) / 2 - 0.1), top + 0.06 + lift), quaternion: [q2.x, q2.y, q2.z, q2.w] as [number, number, number, number] })), 'Porch roof', { color: roofColor });
+  }
+  return made.map(s => ({ ...s, id: newId(), tags: [...(s.tags ?? []), 'porch'] }));
 }

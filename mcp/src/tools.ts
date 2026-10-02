@@ -11,7 +11,13 @@ import { initRoofSkeleton } from '../../src/lib/roofSkeleton';
 import { buildRoofsForBuilding } from '../../src/lib/buildingRoofs';
 import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
-import { floorPlans, withStoryTags } from './plans';
+import { floorPlans } from './plans';
+import { assertFitsUnderCeiling, checkStair, headroomIssues, placeStairInRoom, retagStories, storyForElevation } from './checks';
+import { applyStairwellHolesToSlabs } from '../../src/lib/archStairwell';
+import { detectRooms } from '../../src/lib/spatial/rooms';
+import { dormerFit, dormersOf, evenlySpaced, type Dormer } from '../../src/lib/dormers';
+import { eavePolygon, facingEdge, roofEdges, RoofSurface } from '../../src/lib/roofSurface';
+import { extrasOf, isRoofExtra, withRoofExtras } from '../../src/lib/roofExtras';
 import { svgToPng } from './raster';
 import { nodeSiteIO } from './site';
 import { buildSite, findSiteGround, replaceSite, type SiteIO } from '../../src/lib/worldSite/site';
@@ -22,7 +28,7 @@ import { KernelArcHost } from '../../src/tools/kernelArcHost';
 import { deserializeGraph, serializeGraph } from '../../src/lib/geometry/serialize';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../../src/lib/worldSite/geo';
 import {
-  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
+  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, pickRoof, porchOverDoor, roofWindow, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
 } from './ops';
 
 export interface ScreenshotOptions {
@@ -56,6 +62,7 @@ const modelRef = z.string().describe('Model id (from list_models or create_model
 const colour = z.string().regex(/^#[0-9a-fA-F]{6}$/).describe('Hex colour, e.g. #a3a7aa');
 
 type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+const round = (n: number, dp = 2) => Math.round(n * 10 ** dp) / 10 ** dp;
 const text = (value: unknown): { content: Content[] } => ({
   content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
 });
@@ -90,10 +97,19 @@ const DESTROY = { readOnlyHint: false, destructiveHint: true, openWorldHint: fal
 export function registerTools(server: McpServer, ctx: ToolContext) {
   const { caller, store } = ctx;
 
+  /**
+   * What every change ends with, as the app does after every edit: walls and slabs on the storey they
+   * stand at, and a stairwell cut in the floor above each flight of stairs.
+   */
+  const finish = (shapes: Shape[]) => {
+    const tagged = retagStories(shapes);
+    return tagged.some(s => s.type === 'staircase') ? applyStairwellHolesToSlabs(tagged) : tagged;
+  };
+
   /** Loads a model, changes its objects, and reports what was made. */
   async function change(ref: string, note: string, fn: (shapes: Shape[]) => { shapes: Shape[]; made?: Shape[]; message?: string }) {
     let out: ReturnType<typeof fn> = { shapes: [] };
-    const model = await store.changeShapes(caller, ref, note, shapes => withStoryTags(withQuaternions((out = fn(shapes)).shapes)));
+    const model = await store.changeShapes(caller, ref, note, shapes => finish(withQuaternions((out = fn(shapes)).shapes)));
     return text({
       model: `${model.name} (${model.id})`,
       done: out.message ?? note,
@@ -486,7 +502,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('add_room', {
     title: 'Add a room',
-    description: 'Four walls around a rectangle (width along x, length along z) plus a floor slab, centred on position (y is the floor level).',
+    description: 'Four walls around a rectangle (width along x, length along z) plus a floor slab, centred on position (y is the floor level). For an upper floor set position y to that floor\'s height (e.g. 2.8 for the first floor above 2.8 m walls): the walls are filed under the right level automatically and only the ground floor gets a foundation. Upper floors must sit inside the footprint of the floor below unless the design really overhangs.',
     inputSchema: {
       model: modelRef,
       width: z.number().min(1),
@@ -501,9 +517,12 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, `Added a ${a.width} × ${a.length} m room`, shapes => {
+    // Which storey this is, from the height it stands at; the ground floor is the only one with a foundation.
+    const story = storyForElevation(shapes, a.position[1]);
     const run = withSdk(shapes, sdk => sdk.architecture.createRoom({
       width: a.width, length: a.length, height: a.height, wallThickness: a.wall_thickness, position: a.position,
       includeFloor: a.floor, includeCeiling: a.ceiling, wallColor: a.wall_color, floorColor: a.floor_color,
+      story, includeFoundation: story === 1,
     }));
     return { shapes: run.shapes, made: run.created };
   })));
@@ -531,6 +550,7 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       const sim = item.customData?.semanticComponent?.simulation;
       return a.settle_soft && sim?.bakeable ? sdk.interiors.bakeSimulation(item.id, a.settle_strength) : item;
     });
+    assertFitsUnderCeiling(run.shapes, run.created);
     return { shapes: run.shapes, made: run.created };
   })));
 
@@ -561,10 +581,14 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       return plan;
     });
     const plan = run.result;
+    // Furnishing knows about walls and other furniture, not the sloping roof: drop anything that would stand through it.
+    const tooTall = headroomIssues(run.shapes, run.created);
+    const dropped = new Set(tooTall.map(i => i.item.id));
+    const left = tooTall.length ? ` Left out ${tooTall.length} item(s) too tall for the ceiling or sloping roof there: ${tooTall.map(i => `${i.item.name ?? i.item.type} (${i.height} m tall, ${i.headroom} m headroom)`).join(', ')}.` : '';
     return {
-      shapes: run.shapes,
-      made: run.created,
-      message: `Placed ${plan.shapes.length} item(s); ${plan.unplaced.length} could not be placed without a collision.${plan.lights?.length ? ` Added ${plan.lights.length} light fixture(s) for the room type.` : ''}`,
+      shapes: run.shapes.filter(s => !dropped.has(s.id)),
+      made: run.created.filter(s => !dropped.has(s.id)),
+      message: `Placed ${plan.shapes.length - tooTall.length} item(s); ${plan.unplaced.length} could not be placed without a collision.${left}${plan.lights?.length ? ` Added ${plan.lights.length} light fixture(s) for the room type.` : ''}`,
     };
   })));
 
@@ -640,13 +664,119 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     return { shapes: [...kept, ...made], made };
   }))));
 
+  server.registerTool('add_roof_window', {
+    title: 'Add Velux roof windows',
+    description: 'Places PolyForm\'s real Velux roof window (skylight) lying in the slope of a roof made by add_roof, turned to the pitch, with the roof cutting its own opening. Always use this for roof windows, skylights and rooflights: never draw them from boxes or kernel shapes. Give at (world [x, z] points over the roof slope) or facing + count (spaced evenly across that slope, a little up from the eave). Default size 0.78 × 1.18 m. A window cannot cross a ridge or hip; if it is refused, move it or make it smaller. For a window standing up out of the roof with its own little roof, use add_dormers instead.',
+    inputSchema: {
+      model: modelRef,
+      roof: z.string().optional().describe('Roof id from list_objects (needed only when there is more than one roof)'),
+      at: z.array(point2).min(1).max(12).optional().describe('World [x, z] of each window centre, over the roof'),
+      facing: z.enum(['south', 'north', 'east', 'west']).optional().describe('Which slope to space the windows along: the direction it faces (south = +z)'),
+      count: z.number().int().min(1).max(6).default(1),
+      width: z.number().positive().max(2).optional(),
+      height: z.number().positive().max(2).optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, 'Added roof windows', shapes => {
+    const roof = pickRoof(shapes, a.roof);
+    if (!a.at && !a.facing) throw new ToolError('Say where: at (points over the roof) or facing (which slope) with count.');
+    const points: [number, number][] = (a.at as [number, number][] | undefined)
+      ?? evenlySpaced(roof, a.count, a.facing!, { width: a.width ?? 0.78 }).map(d => [d.x + roof.position[0], d.z + roof.position[2]] as [number, number]);
+    const made = points.map(p => roofWindow(roof, p, { width: a.width, height: a.height }));
+    return { shapes: [...shapes, ...made], made, message: `Added ${made.length} Velux roof window(s).` };
+  })));
+
+  server.registerTool('add_dormers', {
+    title: 'Add dormers',
+    description: 'Adds dormers (a window box standing up out of a pitched roof, with its own roof) to a roof made by add_roof; the roof is cut open for each. Types: gable, hipped, flat. A full-width flat dormer across a slope (common on the back of a house) is full_width: true with type flat. Each dormer must sit wholly on one slope, clear of hips and the ridge; if one will not fit you are told why and nothing is added. Dormers are real objects with glass, walls, roofs and linings, so never fake them with boxes.',
+    inputSchema: {
+      model: modelRef,
+      roof: z.string().optional().describe('Roof id from list_objects (needed only when there is more than one roof)'),
+      facing: z.enum(['south', 'north', 'east', 'west']).describe('Which slope the dormers go on: the direction it faces (south = +z)'),
+      count: z.number().int().min(1).max(4).default(1),
+      type: z.enum(['gable', 'hipped', 'flat']).default('gable'),
+      width: z.number().min(0.6).max(12).optional().describe('Front wall width, metres (default 1.6)'),
+      height: z.number().min(0.8).max(2.5).optional().describe('Front wall height, metres (default 1.3)'),
+      flush: z.boolean().optional().describe('Front wall straight up from the wall below, breaking the eave (default false; true for full_width)'),
+      full_width: z.boolean().default(false).describe('One dormer across the whole slope, set in from each end'),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, `Added ${a.type} dormers`, shapes => {
+    const roof = pickRoof(shapes, a.roof);
+    // Only what was asked for: an explicit undefined would wipe the dormer defaults.
+    const spaced = (width?: number) => {
+      const base: Partial<Dormer> = { type: a.type, flush: a.flush ?? a.full_width };
+      if (width !== undefined) base.width = width;
+      if (a.height !== undefined) base.height = a.height;
+      return evenlySpaced(roof, a.full_width ? 1 : a.count, a.facing, base);
+    };
+    let fresh = spaced(a.width);
+    if (!fresh.length) throw new ToolError(`The roof has no ${a.facing}-facing slope to put dormers on.`);
+    if (a.full_width) {
+      // Across the whole slope: as wide as the slope stays one plane from the middle, less the dormer's own eaves.
+      const surface = new RoofSurface(roof);
+      try {
+        const edge = facingEdge(roofEdges(eavePolygon(roof), surface), a.facing)!;
+        const mid = fresh[0];
+        const reach = (sign: number) => {
+          const slopeAt = (t: number) => surface.at(mid.x + sign * edge.u[0] * t, mid.z + sign * edge.u[1] * t);
+          const here = slopeAt(0);
+          let t = 0;
+          while (t < 30) {
+            const next = slopeAt(t + 0.1);
+            if (!here || !next || next.normal.dot(here.normal) < 0.995) break;
+            t += 0.1;
+          }
+          return t;
+        };
+        const room = Math.min(reach(1), reach(-1)) * 2;
+        let width = Math.floor((room - 2 * 0.45) * 10) / 10;
+        let fit = dormerFit(roof, { ...fresh[0], width });
+        while (!fit.layout && width > 1) { width = Math.floor((width - 0.3) * 10) / 10; fit = dormerFit(roof, { ...fresh[0], width }); }
+        if (!fit.layout) throw new ToolError(`A full-width dormer does not fit that slope: ${fit.reason} Nothing was added.`);
+        fresh = spaced(width);
+      } finally {
+        surface.dispose();
+      }
+    }
+    const problems = fresh.map((d, i) => ({ i, fit: dormerFit(roof, d) })).filter(x => !x.fit.layout);
+    if (problems.length) throw new ToolError(`Dormer ${problems[0].i + 1} does not fit: ${problems[0].fit.reason} Nothing was added.`);
+    const extras = extrasOf(roof);
+    const next = withRoofExtras(shapes, roof.id, { ...extras, dormers: 0, dormerList: [...dormersOf(roof), ...fresh] });
+    const made = next.filter(s => isRoofExtra(s) && s.parentShapeId === roof.id);
+    return { shapes: next, made, message: `Added ${fresh.length} ${a.type} dormer(s) on the ${a.facing} slope.` };
+  })));
+
+  server.registerTool('add_porch', {
+    title: 'Add a porch over a door',
+    description: 'Builds a porch over a door: a landing in front of it (with a step down if the floor is raised), posts at the outer corners and a canopy roof resting on the wall above the door. It is built on the outside of the wall automatically. Styles: gable (small pitched roof; its ridge runs along the longer side, so a deeper-than-wide porch has a gable facing out), lean-to (a sloping canopy falling away from the wall), flat (a flat canopy). Match a reference image by choosing the style, width, depth, post shape and post count (2, or 4 with two against the wall). Pass the id of the front door from list_objects. Put porch dimensions in metres: a typical porch is 1.8 to 2.6 m wide and 1.2 to 1.8 m deep.',
+    inputSchema: {
+      model: modelRef,
+      door: z.string().describe('Id of the door the porch shelters (a door set in a wall)'),
+      style: z.enum(['gable', 'lean-to', 'flat']).default('gable'),
+      width: z.number().min(1).max(8).optional().describe('Across the front, metres (default: door width + 1 m)'),
+      depth: z.number().min(0.8).max(4).default(1.5).describe('How far it stands out from the wall, metres'),
+      posts: z.union([z.literal(2), z.literal(4)]).default(2),
+      post_shape: z.enum(['round', 'square']).default('square'),
+      pitch_deg: z.number().min(5).max(50).optional(),
+      color: colour.optional().describe('Posts, landing trim colour'),
+      roof_color: colour.optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, 'Added a porch', shapes => {
+    const made = porchOverDoor(shapes, findShape(shapes, a.door), {
+      style: a.style, width: a.width, depth: a.depth, posts: a.posts, post: a.post_shape, pitchDeg: a.pitch_deg, color: a.color, roofColor: a.roof_color,
+    });
+    return { shapes: [...shapes, ...made], made, message: `Added a ${a.style} porch (${made.length} parts).` };
+  })));
+
   server.registerTool('add_stairs', {
     title: 'Add stairs',
-    description: 'A flight of stairs with the same style, structure, step-count and parametric controls as PolyForm\'s stair tool. position = [x, floor level, z] of the bottom: for a straight flight, the centre of the first step\'s front edge; the flight climbs towards +z (use transform_objects rotate_deg to turn it). Other styles are centred on position.',
+    description: 'A flight of stairs with the same style, structure, step-count and parametric controls as PolyForm\'s stair tool. The stairs are checked: they must sit wholly inside one room on the floor they start from (they may not poke out of the house or cut through a wall into another room), and the floor above gets a stairwell opening automatically. Easiest: pass room (an id from list_rooms) and PolyForm finds a spot that fits, trying a straight flight, then an L, then a U. Otherwise give position = [x, floor level, z] of the bottom (for a straight flight the centre of the first step\'s front edge) and rotation_deg to turn it: 0 climbs towards +z, 90 towards +x, 180 towards -z, 270 towards -x. A straight flight for a 2.7 m rise is about 3.6 m long, so check the room is long enough. Never place stairs through a bedroom unless the user asked for it. Set rise to the floor-to-floor height. Only pass allow_outside for an external stair.',
     inputSchema: {
       model: modelRef,
       style: z.enum(['straight', 'l-shape', 'u-shape', 'c-shape', 'winder', 'spiral', 'curved', 'bifurcated']).default('straight'),
-      rise: z.number().positive().default(2.7).describe('Total height climbed'),
+      rise: z.number().positive().default(2.7).describe('Total height climbed: the floor-to-floor height'),
       width: z.number().positive().default(1),
       length: z.number().positive().optional().describe('Horizontal run in metres; when parametric is true this is recalculated from the ergonomic settings'),
       num_steps: z.number().int().min(4).max(100).optional(),
@@ -658,12 +788,14 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       handrail_height: z.number().min(0.5).max(1.5).optional(),
       color: colour.optional(),
       position: vec3.default([0, 0, 0]),
+      rotation_deg: z.number().default(0).describe('Turns the flight about its starting point: 0 climbs towards +z, 90 towards +x, 180 towards -z, 270 towards -x'),
+      room: z.string().optional().describe('Room id from list_rooms: place the stairs inside this room automatically (position and rotation_deg are then ignored)'),
+      allow_outside: z.boolean().default(false).describe('Allow the stairs outside the walls, for an external stair only'),
     },
     annotations: WRITE,
   }, safe(async (a) => change(a.model, 'Added stairs', shapes => {
-    // The stair mesh is centred on its position, halfway up; convert from the bottom.
-    const run = withSdk(shapes, sdk => sdk.architecture.createStairs({
-      style: a.style,
+    const make = (style: string) => withSdk(shapes, sdk => sdk.architecture.createStairs({
+      style,
       height: a.rise,
       width: a.width,
       length: a.length,
@@ -676,13 +808,36 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
       handrailHeight: a.handrail_height,
       color: a.color,
       position: [0, 0, 0],
-    }));
-    const [x, y, z] = a.position;
-    const made = run.created.map(s => {
-      const length = Array.isArray(s.args) ? Number(s.args[2]) || 0 : 0;
-      return { ...s, position: [x, y + a.rise / 2, a.style === 'straight' ? z + length / 2 : z] as Vec3 };
-    });
-    return { shapes: [...shapes, ...made], made };
+    })).created;
+    const warnings: string[] = [];
+    let made: Shape[];
+    if (a.room) {
+      const room = detectRooms(shapes).find(r => r.id === a.room);
+      if (!room) throw new ToolError(`No room "${a.room}". Use list_rooms to get the id.`);
+      const styles = a.style === 'straight' ? ['straight', 'l-shape', 'u-shape'] : [a.style];
+      const variants = styles.map(style => make(style)[0]).filter(Boolean).map(v => ({ ...v, position: [0, a.rise / 2, 0] as Vec3 }));
+      const placed = placeStairInRoom(shapes, room, variants);
+      if (!placed) throw new ToolError(`No stairs fit inside ${room.name ?? 'that room'} (${round(room.size[0])} × ${round(room.size[1])} m). A straight flight for a ${a.rise} m rise needs about 3.6 × ${a.width} m clear, an L or U about 2.2 × 2.2 m. Pick a bigger room, or a different style such as spiral.`);
+      made = [placed];
+    } else {
+      // The stair mesh is centred on its position, halfway up; a straight flight starts at its front edge.
+      const turn = a.rotation_deg * Math.PI / 180;
+      const [x, y, z] = a.position;
+      made = make(a.style).map(s => {
+        const length = Array.isArray(s.args) ? Number(s.args[2]) || 0 : 0;
+        const half = a.style === 'straight' ? length / 2 : 0;
+        return { ...s, position: [x + Math.sin(turn) * half, y + a.rise / 2, z + Math.cos(turn) * half] as Vec3, rotation: [0, turn, 0] as Vec3 };
+      });
+      const stair = made.find(s => s.type === 'staircase');
+      if (stair) {
+        const check = checkStair(shapes, stair, { allowOutside: a.allow_outside });
+        if (check.errors.length) {
+          throw new ToolError(`${check.errors.join(' ')} Nothing was added. Pass room (an id from list_rooms) to place them automatically, or change position and rotation_deg.`);
+        }
+        warnings.push(...check.warnings);
+      }
+    }
+    return { shapes: [...shapes, ...made], made, message: `Added stairs.${warnings.length ? ` Check: ${warnings.join(' ')}` : ''}` };
   })));
 
   server.registerTool('add_railing', {

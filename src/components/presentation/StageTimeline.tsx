@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Pause, Play, Sun, Moon } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { playStages, presentation, STAGES, usePresentation } from '../../lib/presentation/store';
+import { barFraction, playStages, presentation, STAGES, stageFromBar, usePresentation } from '../../lib/presentation/store';
 
 export const SERIF = "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif";
 
@@ -19,10 +19,11 @@ export function StageTimeline({ className }: { className?: string }) {
     if (!el) return;
     const r = el.getBoundingClientRect();
     const t = Math.min(1, Math.max(0, (clientX - r.left) / Math.max(1, r.width)));
-    presentation.set({ stage: t * 3, stagePlaying: false, stagePlaybackStarted: false, build: 1, buildPlaying: false });
+    presentation.set({ stage: stageFromBar(t), stagePlaying: false, stagePlaybackStarted: false, build: 1, buildPlaying: false });
   };
 
   const current = Math.min(3, Math.max(0, Math.round(s.stage)));
+  const along = barFraction(s.stage, s.sketchProgress);
   return (
     <div className={cn('rounded-2xl bg-[#f7f5f0]/90 backdrop-blur-md shadow-xl ring-1 ring-black/5 px-4 py-3 text-[#3a342d]', className)}
       onPointerDown={e => e.stopPropagation()}>
@@ -69,9 +70,9 @@ export function StageTimeline({ className }: { className?: string }) {
             }}
           >
             <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-[#cfc7bb]" />
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-px bg-[#b4553a]" style={{ width: `${(s.stage / 3) * 100}%` }} />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-px bg-[#b4553a]" style={{ width: `${along * 100}%` }} />
             <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-[#b4553a] ring-2 ring-[#f7f5f0]"
-              style={{ left: `${(s.stage / 3) * 100}%` }} />
+              style={{ left: `${along * 100}%` }} />
           </div>
         </div>
         <button

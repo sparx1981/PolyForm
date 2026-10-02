@@ -114,6 +114,8 @@ export default function PresentationDriver() {
     // come out nearly black from the post-processing pass.
     if (frame.current++ % 60 === 0) e.pageColour.set(pageColourBehind(gl.domElement));
     e.update(presentation.get(), Math.min(dt, 0.1), camera);
+    // The timeline bar follows the pencil while Sketch is being drawn, instead of sitting still.
+    presentation.set({ sketchProgress: e.sketchProgress });
     doors.current.update(Math.min(dt, 0.1));
   });
 

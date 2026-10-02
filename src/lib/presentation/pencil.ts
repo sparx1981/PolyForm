@@ -50,7 +50,20 @@ export function pencilDrawing(edges: THREE.BufferGeometry): PencilDrawing {
   return {geometry,ends,duration,strokes};
 }
 
-export function pencilSeconds(strokes:number) { return 0.75 * Math.min(42,Math.max(24,strokes*0.12)); }
+/** How long the pencil takes to draw a model of this many strokes: a few seconds for a simple one, never more than 12. */
+export function pencilSeconds(strokes:number) { return Math.min(12,Math.max(5,4+strokes*0.0015)); }
+
+/** The edges at least `min` long: balusters, treads' nosings and other fine detail only slow the drawing down. */
+export function withoutShortEdges(edges:THREE.BufferGeometry, min:number) {
+  const p=edges.attributes.position, out:number[]=[], a=new THREE.Vector3(), b=new THREE.Vector3();
+  for (let i=0;i+1<p.count;i+=2) {
+    a.fromBufferAttribute(p,i); b.fromBufferAttribute(p,i+1);
+    if (a.distanceTo(b)>=min) out.push(a.x,a.y,a.z,b.x,b.y,b.z);
+  }
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(out,3));
+  return geometry;
+}
 
 /** Include the current segment; the shader trims it to the moving pencil tip. */
 export function pencilDrawCount(ends:number[], distance:number) {

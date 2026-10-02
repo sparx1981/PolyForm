@@ -6,7 +6,7 @@ import {
 } from './classify';
 import { floorPlans } from './floorPlans';
 import { plantHeight, plantSpread } from './plants';
-import { pencilDrawing, pencilDrawCount, pencilMaterial, pencilSeconds, type PencilDrawing } from './pencil';
+import { pencilDrawing, pencilDrawCount, pencilMaterial, pencilSeconds, withoutShortEdges, type PencilDrawing } from './pencil';
 import type { PresentationState } from './store';
 
 /**
@@ -327,7 +327,7 @@ export class PresentationEngine {
     this.advanceSketch(state, dt);
 
     const build = state.active ? state.build : 1;
-    const moving = this.explodeNow > 0 || build < 1 || !look.furniture || !look.plants;
+    const moving = this.explodeNow > 0 || build < 1 || look.furnitureIn < 1 || look.plantsIn < 1;
     if (moving || this.touched) {
       for (const e of this.entries.values()) this.pose(e, build, look);
       this.touched = moving;
@@ -372,6 +372,7 @@ export class PresentationEngine {
     this.clayOver.emissive.copy(this.clay.color);
     this.clayOver.opacity = look.clayOver;
     this.pencil.opacity = look.pencil;
+    this.glass.opacity = 0.28 * look.glassIn;
     this.pencilSoft.opacity = look.pencil * 0.45;
     this.pencilInk.roughness.value = look.pencilRoughness;
     this.pencilSoftInk.roughness.value = look.pencilRoughness;
@@ -398,13 +399,14 @@ export class PresentationEngine {
     // Fittings and the timber frame show from the Detailed stage on, as before.
     const shape = this.shapes.get(e.instance ? this.instanceId(e) : String(e.obj.userData.id));
     const detail = e.category === 'other' || e.category === 'opening' || e.category === 'floorFrame' || e.category === 'frame' || e.category === 'roofFrame' || (shape?.tags?.includes('roof-part') && !isBasicRoof(shape));
-    const byStage = e.plant ? look.plants : detail ? look.furniture : true;
+    // Fittings and plants grow in as the stage passes, rather than switching on at once.
+    const arrived = e.plant ? look.plantsIn : detail ? look.furnitureIn : 1;
     const dy = e.lift * this.explodeNow + p.drop;
     o.position.copy(e.base);
     if (Math.abs(dy) > EPS) o.position.addScaledVector(e.up, dy);
     o.position.addScaledVector(e.spread, this.explodeNow);
-    o.scale.copy(e.baseScale).multiplyScalar(p.scale);
-    o.visible = e.baseVisible && p.visible && byStage;
+    o.scale.copy(e.baseScale).multiplyScalar(p.scale * Math.max(0.001, arrived));
+    o.visible = e.baseVisible && p.visible && arrived > 0.001;
     e.wrotePos = (e.wrotePos ?? new THREE.Vector3()).copy(o.position);
     e.wroteScale = (e.wroteScale ?? new THREE.Vector3()).copy(o.scale);
     e.wroteVisible = o.visible;
@@ -541,6 +543,9 @@ export class PresentationEngine {
     }
   }
 
+  /** How much of the Sketch pencil drawing is done (1 when it isn't being drawn). */
+  get sketchProgress() { return this.inSketch ? this.sketchT : 1; }
+
   /** The stage timeline waits at Sketch until the drawing is finished. */
   holdsSketch(stage: number): boolean {
     return stage < 0.02 && (this.stageNow > 0.05 || this.sketchT < 1);
@@ -578,10 +583,14 @@ export class PresentationEngine {
   }
 
   /** The part's edges, ordered bottom-up so a pencil would plausibly travel through them. */
-  private sketchEdgesFor(geometry: THREE.BufferGeometry) {
+  private sketchEdgesFor(geometry: THREE.BufferGeometry, minLength = 0) {
     let sorted = this.sketchEdgeCache.get(geometry);
     if (sorted) return sorted;
-    sorted = pencilDrawing(this.edgesFor(geometry));
+    const edges = this.edgesFor(geometry);
+    // Stairs are mostly small edges (treads, nosings, balusters): leave the fine ones out of the drawing.
+    const coarse = minLength > 0 ? withoutShortEdges(edges, minLength) : null;
+    sorted = pencilDrawing(coarse && coarse.attributes.position.count >= 24 ? coarse : edges);
+    coarse?.dispose();
     this.sketchEdgeCache.set(geometry, sorted);
     return sorted;
   }
@@ -589,7 +598,7 @@ export class PresentationEngine {
   private addSketchLines(mesh: THREE.Mesh, e: Entry) {
     if (!['slab','wall','roof','kernel','stair'].includes(e.category)) return;
     if (e.category === 'roof' && !isBasicRoof(this.shapes.get(String(e.obj.userData.id)))) return;
-    const drawing = this.sketchEdgesFor(mesh.geometry);
+    const drawing = this.sketchEdgesFor(mesh.geometry, e.category === 'stair' ? 0.25 : 0);
     const geometry = drawing.geometry.clone();
     const slot = this.schedule.get(e.key) ?? { start: 0, span: 1 };
     const main = new THREE.LineSegments(geometry, this.pencil);

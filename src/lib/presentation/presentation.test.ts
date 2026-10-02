@@ -7,7 +7,7 @@ import { floorPlans } from './floorPlans';
 import { newShareId, shareIdFromPath, SHARE_ID_PATTERN } from './share';
 import { pickVideoType, videoFileName } from './recorder';
 import { PresentationEngine } from './engine';
-import { INITIAL_PRESENTATION } from './store';
+import { barFraction, INITIAL_PRESENTATION, SKETCH_BAR_SHARE, stageFromBar } from './store';
 
 const wall = (id: string, x: number, z: number, len: number, rotY: number, base = 0): Shape => ({
   id, type: 'wall', position: [x, base + 1.4, z], rotation: [0, rotY, 0], args: [len, 2.8, 0.2], color: '#fff',
@@ -131,6 +131,40 @@ describe('look stages', () => {
     expect(lookAt(2.5)).toMatchObject({ mode: 'fade', clayOver: 0.5 });
     expect(lookAt(-1)).toEqual(sketch);
     expect(lookAt(9)).toEqual(built);
+  });
+});
+
+describe('stage transitions', () => {
+  it('brings glass, furniture and plants in gradually rather than switching them on', () => {
+    for (const key of ['glassIn', 'furnitureIn', 'plantsIn'] as const) {
+      let last = lookAt(0)[key];
+      for (let s = 0.05; s <= 3; s += 0.05) {
+        const now = lookAt(s)[key];
+        expect(now).toBeGreaterThanOrEqual(last);
+        // No single step of 0.05 of a stage jumps more than a fifth of the way.
+        expect(now - last).toBeLessThan(0.2);
+        last = now;
+      }
+      expect(lookAt(3)[key]).toBe(1);
+    }
+    expect(lookAt(1.6).furnitureIn).toBeGreaterThan(0);
+    expect(lookAt(1.6).furnitureIn).toBeLessThan(1);
+    expect(lookAt(2.6).plantsIn).toBeGreaterThan(0);
+    expect(lookAt(2.6).plantsIn).toBeLessThan(1);
+  });
+
+  it('moves the timeline bar while the pencil draws, and never backwards into the stages', () => {
+    expect(barFraction(0, 0)).toBe(0);
+    expect(barFraction(0, 0.5)).toBeCloseTo(SKETCH_BAR_SHARE / 2);
+    expect(barFraction(0, 1)).toBeCloseTo(SKETCH_BAR_SHARE);
+    // Drawing finished and the stages begin: the bar carries on from where the drawing left it.
+    expect(barFraction(0.03, 1)).toBeGreaterThanOrEqual(barFraction(0, 1));
+    expect(barFraction(3, 1)).toBe(1);
+    let last = -1;
+    for (let s = 0; s <= 3; s += 0.1) { const f = barFraction(s, 1); expect(f).toBeGreaterThanOrEqual(last); last = f; }
+    // Clicking the bar gives back the stage under it.
+    for (const stage of [0.5, 1, 2, 2.9]) expect(stageFromBar(barFraction(stage, 1))).toBeCloseTo(stage);
+    expect(stageFromBar(0.02)).toBe(0);
   });
 });
 

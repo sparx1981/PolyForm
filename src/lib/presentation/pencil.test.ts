@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { Shape } from '../../types';
 import { PresentationEngine } from './engine';
 import { INITIAL_PRESENTATION } from './store';
-import { pencilDrawing, pencilSeconds } from './pencil';
+import { pencilDrawing, pencilSeconds, withoutShortEdges } from './pencil';
 import { lookAt } from './classify';
 
 it('draws shared architectural geometry sequentially, pauses, and restores editor outlines', () => {
@@ -20,8 +20,10 @@ it('draws shared architectural geometry sequentially, pauses, and restores edito
   const engine = new PresentationEngine(scene); engine.sync(shapes);
   const state={...INITIAL_PRESENTATION,active:true,stage:0,stagePlaying:true};
   const tick=(seconds:number,s=state)=>{for(let i=0;i<seconds*10;i++) engine.update(s,0.1);};
-  tick(7);
+  tick(2);
   expect(engine.holdsSketch(0)).toBe(true);
+  expect(engine.sketchProgress).toBeGreaterThan(0);
+  expect(engine.sketchProgress).toBeLessThan(1);
   expect(outlines.map(o=>o.visible)).toEqual([false,false]);
   const strokes=meshes.flatMap(m=>m.children.filter(o=>o.userData.presentationAux && (o as THREE.Line).isLine) as THREE.LineSegments[]);
   expect(strokes).toHaveLength(4);
@@ -51,9 +53,9 @@ it('keeps freehand offsets deterministic, preserves source geometry, and settles
   expect(a.geometry.attributes.pencilOffset.array).toEqual(b.geometry.attributes.pencilOffset.array);
   expect(a.geometry.attributes.pencilOffset.array.some(n=>Math.abs(n)>0.002)).toBe(true);
   expect(a.geometry.attributes.position.count).toBeLessThanOrEqual(24000);
-  expect(pencilSeconds(a.strokes)).toBeGreaterThanOrEqual(18);
-  expect(pencilSeconds(10000)).toBe(31.5);
-  expect(pencilSeconds(0)).toBe(18);
+  expect(pencilSeconds(a.strokes)).toBeGreaterThanOrEqual(5);
+  expect(pencilSeconds(100000)).toBe(12);
+  expect(pencilSeconds(0)).toBe(5);
   expect(lookAt(0).pencilRoughness).toBe(1);
   expect(lookAt(1).pencilRoughness).toBeCloseTo(0.22);
   expect(lookAt(2).pencilRoughness).toBe(0);
@@ -100,4 +102,22 @@ it('includes high-detail roof form, gable infill and flat decks during Sketch, l
   engine.dispose();
   expect(meshes.every(mesh=>mesh.visible)).toBe(true);
   meshes.forEach(mesh=>{mesh.geometry.dispose();(mesh.material as THREE.Material).dispose();});
+});
+
+it('leaves fine detail like balusters and nosings out of a stair drawing', () => {
+  const tread = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 0.2, 0.3));
+  const baluster = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.03, 0.9, 0.03));
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute('position', new THREE.Float32BufferAttribute([...tread.attributes.position.array, ...baluster.attributes.position.array], 3));
+  const coarse = withoutShortEdges(merged, 0.25);
+  expect(coarse.attributes.position.count).toBeLessThan(merged.attributes.position.count);
+  expect(coarse.attributes.position.count).toBeGreaterThan(0);
+  // Longer edges stay; only edges under the limit go.
+  for (let i = 0; i < coarse.attributes.position.count; i += 2) {
+    const a = new THREE.Vector3().fromBufferAttribute(coarse.attributes.position, i), b = new THREE.Vector3().fromBufferAttribute(coarse.attributes.position, i + 1);
+    expect(a.distanceTo(b)).toBeGreaterThanOrEqual(0.25);
+  }
+  // A busy model is drawn quicker than before, and a stair adds little.
+  expect(pencilSeconds(5000)).toBeLessThanOrEqual(12);
+  expect(pencilSeconds(5000) - pencilSeconds(4000)).toBeLessThan(2);
 });
