@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertCircle, Box, Check, ImagePlus, Loader2, Ruler, ScanLine, X } from 'lucide-react';
+import { AlertCircle, Box, Check, ImagePlus, Loader2, Ruler, ScanLine, Sparkles, X } from 'lucide-react';
 import { useApp } from '../../AppContext';
 import { cn } from '../../lib/utils';
 import { useModalA11y } from '../ui/useModalA11y';
@@ -10,7 +10,9 @@ import {
   type ReferencePlanCalibration,
 } from '../../lib/reconstruction/referencePlan';
 import { recogniseOrthogonalFloorPlan } from '../../lib/reconstruction/localPlanRecognizer';
-import { imageObservationToDraft } from '../../lib/reconstruction/imageAdapter';
+import { imageObservationToDraft, type ImageReconstructionObservation } from '../../lib/reconstruction/imageAdapter';
+import { recogniseFloorPlanWithAi } from '../../lib/reconstruction/aiPlanRecognizer';
+import { createGeminiPlanGenerator, hasGeminiPlanKey } from '../../lib/reconstruction/geminiPlanClient';
 import {
   applyReconstructionReview,
   buildReconstructionReview,
@@ -18,6 +20,7 @@ import {
 } from '../../lib/reconstruction/review';
 import {
   commitReconstructionDraft,
+  roomHintId,
   type ReconstructionDraft,
 } from '../../lib/reconstruction/draft';
 import { checkModelHealth } from '../../lib/reconstruction/modelHealth';
@@ -28,6 +31,9 @@ import {
 } from '../../lib/assets/externalAsset';
 
 type PixelPoint = [number, number];
+
+/** Longest image side used for AI recognition and wall alignment. */
+const AI_MAX_DIMENSION = 2400;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -160,6 +166,25 @@ export default function ReconstructionStudio() {
     }
   };
 
+  const showObservation = (observation: ImageReconstructionObservation, emptyMessage: string) => {
+    const nextDraft = imageObservationToDraft(observation);
+    const nextReview = buildReconstructionReview(nextDraft);
+    const initial: Record<string, boolean> = {};
+    for (const item of nextReview.items) initial[item.id] = item.status !== 'error';
+    setDraft(nextDraft);
+    setReview(nextReview);
+    setDecisions(initial);
+    const count = (kind: string) => nextReview.items.filter(item => item.kind === kind).length;
+    const parts = [`${count('wall')} walls`];
+    if (count('opening')) parts.push(`${count('opening')} doors/windows`);
+    if (count('room')) parts.push(`${count('room')} room labels`);
+    setMessage(
+      count('wall')
+        ? `Detected ${parts.join(', ')}. Review them before adding geometry.`
+        : emptyMessage,
+    );
+  };
+
   const recognise = async () => {
     if (!imageUrl || !pixelSize || !calibrated) return;
     setBusy(true);
@@ -178,20 +203,45 @@ export default function ReconstructionStudio() {
         fileName,
         rotationY: rotationDeg * Math.PI / 180,
       });
-      const nextDraft = imageObservationToDraft(observation);
-      const nextReview = buildReconstructionReview(nextDraft);
-      const initial: Record<string, boolean> = {};
-      for (const item of nextReview.items) initial[item.id] = item.status !== 'error';
-      setDraft(nextDraft);
-      setReview(nextReview);
-      setDecisions(initial);
-      setMessage(
-        nextReview.items.length
-          ? `Detected ${nextReview.items.length} wall candidates. Review them before adding geometry.`
-          : 'No strong orthogonal walls were detected. Try a cleaner/high-contrast plan image or trace manually over the calibrated underlay.',
-      );
+      showObservation(observation, 'No strong orthogonal walls were detected. Try AI recognition, a cleaner plan image, or trace manually over the calibrated underlay.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Plan recognition failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recogniseWithAi = async () => {
+    if (!imageUrl || !pixelSize || !calibrated) return;
+    setBusy(true);
+    setMessage('Asking Gemini to read the plan…');
+    try {
+      const generate = createGeminiPlanGenerator();
+      const image = await loadImage(imageUrl);
+      // Work at a capped resolution: plenty for wall alignment, and a sensible upload size.
+      const scale = Math.min(1, AI_MAX_DIMENSION / Math.max(pixelSize[0], pixelSize[1]));
+      const width = Math.max(2, Math.round(pixelSize[0] * scale));
+      const height = Math.max(2, Math.round(pixelSize[1] * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) throw new Error('Browser image analysis is unavailable.');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(image, 0, 0, width, height);
+      const observation = await recogniseFloorPlanWithAi({
+        imageDataUrl: canvas.toDataURL('image/jpeg', 0.92),
+        imageSize: [width, height],
+        metresPerPixel: calibrated.metresPerPixel / scale,
+        generate,
+        raster: ctx.getImageData(0, 0, width, height),
+        fileName,
+        rotationY: rotationDeg * Math.PI / 180,
+      });
+      showObservation(observation, 'The AI did not find any walls in this image. Check the image is a floor plan, or trace manually over the calibrated underlay.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'AI plan recognition failed.');
     } finally {
       setBusy(false);
     }
@@ -228,6 +278,16 @@ export default function ReconstructionStudio() {
     }
   };
 
+  const reviewLabel = (id: string, kind: string) => {
+    if (kind === 'room') {
+      const room = draft?.rooms?.find((r, i) => roomHintId(r, i) === id);
+      return `Room: ${room?.name ?? id}`;
+    }
+    const opening = draft?.openings?.find(o => o.id === id);
+    if (opening) return `${opening.kind === 'door' ? 'Door' : 'Window'} ${id.replace(/^\D+-\D+-?/, '')}`.trim();
+    return id;
+  };
+
   const commitReviewed = () => {
     if (!draft) return;
     const reviewed = applyReconstructionReview(draft, decisions);
@@ -258,7 +318,7 @@ export default function ReconstructionStudio() {
           <header className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
             <div>
               <h2 className="font-bold text-gray-900 dark:text-white">Reconstruction Studio</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Calibrate a plan, recognise walls locally, review, then commit native PolyForm geometry.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Calibrate a plan, recognise walls, doors and rooms, review, then commit native PolyForm geometry.</p>
             </div>
             <button onClick={() => setOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close">
               <X size={18} />
@@ -324,7 +384,9 @@ export default function ReconstructionStudio() {
                           'w-2 h-2 rounded-full',
                           item.status === 'accepted' ? 'bg-emerald-500' : item.status === 'review' ? 'bg-amber-500' : 'bg-red-500',
                         )} />
-                        <span className="font-medium flex-1">{item.id}</span>
+                        <span className="font-medium flex-1 truncate">
+                          {reviewLabel(item.id, item.kind)}
+                        </span>
                         <span className="text-gray-500">{Math.round(item.confidence * 100)}%</span>
                         <span className="capitalize text-gray-500">{item.status}</span>
                       </label>
@@ -376,11 +438,23 @@ export default function ReconstructionStudio() {
               </div>
 
               <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-                <div className="flex items-center gap-2 font-bold text-sm"><ScanLine size={16} /> 3. Recognise walls</div>
-                <p className="text-xs text-gray-500">Local recognition works best on clean, high-contrast orthogonal floor plans. No image is uploaded.</p>
-                <button onClick={recognise} disabled={!calibrated || !imageUrl || busy}
+                <div className="flex items-center gap-2 font-bold text-sm"><ScanLine size={16} /> 3. Recognise plan</div>
+                <p className="text-xs text-gray-500">
+                  <strong>AI recognise</strong> reads walls at any angle, doors, windows and room names. It uploads the plan image to Google Gemini.
+                </p>
+                <button onClick={recogniseWithAi} disabled={!calibrated || !imageUrl || busy || !hasGeminiPlanKey()}
                   className="w-full px-3 py-2 rounded-lg bg-polyform-blue text-white text-xs font-bold disabled:opacity-40 flex items-center justify-center gap-2">
-                  {busy ? <Loader2 size={14} className="animate-spin" /> : <ScanLine size={14} />} Detect and review
+                  {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI recognise and review
+                </button>
+                {!hasGeminiPlanKey() && (
+                  <div className="text-[10px] text-amber-600 dark:text-amber-400">No Gemini API key is configured, so AI recognition is unavailable.</div>
+                )}
+                <p className="text-xs text-gray-500">
+                  Local detection works offline on clean, high-contrast, right-angled plans only. No image is uploaded.
+                </p>
+                <button onClick={recognise} disabled={!calibrated || !imageUrl || busy}
+                  className="w-full px-3 py-2 rounded-lg border border-polyform-blue text-polyform-blue text-xs font-bold disabled:opacity-40 flex items-center justify-center gap-2">
+                  {busy ? <Loader2 size={14} className="animate-spin" /> : <ScanLine size={14} />} Local detect and review
                 </button>
               </div>
 
@@ -394,7 +468,7 @@ export default function ReconstructionStudio() {
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <Box size={14} />} Generate 3D mesh
                 </button>
                 <div className="text-[10px] text-gray-400">
-                  Requires a Hugging Face API token. Floor-plan wall detection above stays entirely local.
+                  Requires a Hugging Face API token.
                 </div>
               </div>
 

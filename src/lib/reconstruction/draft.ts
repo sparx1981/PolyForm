@@ -1,4 +1,5 @@
 import type { Shape } from '../../types';
+import { buildTextShape } from '../textShapes';
 import { createInteriorFurnitureShape, type FurnitureParams, type InteriorFurnitureType } from '../interiors/parametricFurniture';
 
 export type ReconstructionSourceKind = 'pdf-vector' | 'image' | 'photo' | 'roomplan' | 'ifc';
@@ -41,6 +42,8 @@ export interface ReconstructionFurnitureCandidate {
 }
 
 export interface ReconstructionRoomHint {
+  /** Stable id used by the review step; assigned from the index when absent. */
+  id?: string;
   name?: string;
   at: [number, number];
   confidence?: number;
@@ -175,6 +178,10 @@ export function validateReconstructionDraft(
   return { valid: errors === 0, issues, errors, warnings };
 }
 
+export function roomHintId(room: ReconstructionRoomHint, index: number): string {
+  return room.id ?? `room-${index + 1}`;
+}
+
 function reconstructionMeta(draft: ReconstructionDraft, candidateId: string, confidence?: number) {
   return {
     source: draft.source,
@@ -236,7 +243,7 @@ function openingShape(
  */
 export function commitReconstructionDraft(
   draft: ReconstructionDraft,
-  options: { includeFurniture?: boolean } = {},
+  options: { includeFurniture?: boolean; includeRoomLabels?: boolean } = {},
 ): ReconstructionCommitResult {
   const validation = validateReconstructionDraft(draft);
   const rejected = new Set(validation.issues.filter(i => i.severity === 'error').map(i => i.entityId).filter(Boolean) as string[]);
@@ -273,6 +280,25 @@ export function commitReconstructionDraft(
       shapes.push(shape);
       acceptedIds.push(item.id);
     }
+  }
+
+  if (options.includeRoomLabels !== false) {
+    (draft.rooms ?? []).forEach((room, index) => {
+      const name = room.name?.trim();
+      if (!name || !finite2(room.at)) return;
+      const id = roomHintId(room, index);
+      shapes.push(buildTextShape('text', {
+        id,
+        name: `Room label "${name}"`,
+        text: name,
+        position: [room.at[0], 0.01, room.at[1]],
+        size: 0.35,
+        bold: true,
+      }));
+      shapes[shapes.length - 1].tags = ['reconstructed', 'room-label'];
+      shapes[shapes.length - 1].customData = { reconstruction: reconstructionMeta(draft, id, room.confidence) };
+      acceptedIds.push(id);
+    });
   }
 
   return { shapes, validation, acceptedIds, rejectedIds: [...rejected].sort() };
