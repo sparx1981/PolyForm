@@ -239,6 +239,8 @@ export function sheetAlongProfile(profile: Array<[number, number]>, z0: number, 
   g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((positions.length / 3) * 2).fill(0), 2));
   g.userData.fabric = true;
   g.userData.material = accent ? 2 : 1;
-  g.userData.part = { role: 'throw' as SoftRole, centre: [0, 0, 0], size: [1, 1, 1], rotation: [0, 0, 0] };
+  // No role on purpose: this sheet is already shaped to its furniture, and a role would let settling move it by
+  // rules written for a different layout (it once sank into the seat cushion). Its material is still recorded.
+  g.userData.part = {};
   return g;
 }

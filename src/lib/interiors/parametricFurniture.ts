@@ -160,22 +160,25 @@ function sofaGeometry(p: FurnitureSize): THREE.BufferGeometry {
   const lx = p.width / 2 - 0.09, lz = p.depth / 2 - 0.09;
   for (const x of [-lx, lx]) for (const z of [-lz, lz]) parts.push(box(0.05, legH, 0.05, x, legH / 2, z));
   if (dressed) {
-    // Scatter cushions stand on the seat against the back cushions, turned slightly in toward the middle.
+    // Scatter cushions stand on the seat against the back cushions, turned slightly in toward the middle. With a
+    // throw on the sofa, both cushions share the far end so the throw has the other end to itself.
     const sc = Math.min(0.44, inner / 2.4 + 0.1);
     const backFace = -p.depth / 2 + 0.415;
-    const spots = p.width >= 1.7 ? [-1, 1] : [1];
-    for (const side of spots) {
-      const size = side < 0 ? sc : sc * 0.92;
-      parts.push(propped(size, 0.12, size, p.width >= 1.7 ? side * (inner / 2 - size / 2 - 0.02) : 0.06, p.seatHeight + 0.012, backFace, side < 0 ? 1.2 : 1.12, -side * 0.28, { role: 'scatter', accent: true, radius: 0.058 }));
-    }
-    if (p.width >= 1.9) {
-      // A throw laid over one seat and arm, hanging down the outside.
-      const x0 = p.width / 2 - arm;
+    const withThrow = p.width >= 1.9;
+    const cushions = p.width >= 1.7
+      ? (withThrow ? [{ x: -(inner / 2 - sc / 2 - 0.02), size: sc, angle: 1.2, yaw: 0.28 }, { x: -(inner / 2 - sc * 1.45 - 0.02), size: sc * 0.9, angle: 1.1, yaw: -0.22 }]
+        : [{ x: -(inner / 2 - sc / 2 - 0.02), size: sc, angle: 1.2, yaw: 0.28 }, { x: inner / 2 - sc * 0.92 / 2 - 0.02, size: sc * 0.92, angle: 1.12, yaw: -0.28 }])
+      : [{ x: 0.06, size: sc * 0.92, angle: 1.12, yaw: -0.28 }];
+    for (const c of cushions) parts.push(propped(c.size, 0.12, c.size, c.x, p.seatHeight + 0.012, backFace, c.angle, c.yaw, { role: 'scatter', accent: true, radius: 0.058 }));
+    if (withThrow) {
+      // A throw lying across the front of the seat cushion at the right-hand end, over the arm and down its outside.
+      // It keeps clear of the cushion beneath (whose top is a little above the seat height) and of the arm's faces.
+      const x0 = p.width / 2 - arm, lie = p.seatHeight + 0.058;
       parts.push(sheetAlongProfile([
-        [x0 - 0.55, p.seatHeight + 0.05], [x0 - 0.1, p.seatHeight + 0.05], [x0 - 0.014, p.seatHeight + 0.09],
-        [x0 - 0.012, armTop - 0.05], [x0 + 0.02, armTop + 0.03], [p.width / 2 - 0.03, armTop + 0.034],
-        [p.width / 2 + 0.02, armTop - 0.03], [p.width / 2 + 0.03, armTop - 0.24],
-      ], -p.depth * 0.02, p.depth * 0.46));
+        [x0 - 0.6, lie], [x0 - 0.14, lie], [x0 - 0.045, lie + 0.03],
+        [x0 - 0.02, armTop - 0.06], [x0 + 0.015, armTop + 0.035], [p.width / 2 - 0.035, armTop + 0.04],
+        [p.width / 2 + 0.03, armTop - 0.02], [p.width / 2 + 0.045, armTop - 0.22],
+      ], 0, p.depth * 0.44));
     }
   }
   return merge(parts);

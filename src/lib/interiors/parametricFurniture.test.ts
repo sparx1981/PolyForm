@@ -69,7 +69,9 @@ describe('soft furnishings', () => {
   it('records each soft part so settling can shape it by role', () => {
     const sofa = createInteriorFurnitureShape('sofa');
     const roles = new Set((sofa.customData.furniturePartRanges as Array<{ role?: string }>).map(p => p.role));
-    for (const role of ['seat', 'back', 'arm', 'scatter', 'throw']) expect(roles, role).toContain(role);
+    for (const role of ['seat', 'back', 'arm', 'scatter']) expect(roles, role).toContain(role);
+    // The sofa's throw is already shaped to its furniture, so it deliberately has no settling role.
+    expect((sofa.customData.furniturePartRanges as Array<{ role?: string; material: number }>).some(p => !p.role && p.material === 2)).toBe(true);
     const bed = createInteriorFurnitureShape('bed');
     const bedRoles = new Set((bed.customData.furniturePartRanges as Array<{ role?: string }>).map(p => p.role));
     for (const role of ['mattress', 'duvet', 'pillow', 'scatter', 'throw']) expect(bedRoles, role).toContain(role);
@@ -156,6 +158,28 @@ describe('soft furnishings', () => {
         expect(topZ / topN).toBeLessThan(bottomZ / bottomN);
         expect(mid).toBeGreaterThan(back.lo[2]!);
       }
+    });
+
+    it('lays the sofa throw above the seat cushion, clear of the cushions, and settling leaves it alone', () => {
+      const sofa = createInteriorFurnitureShape('sofa');
+      const settled = bakeSemanticSimulation(sofa, 0.42);
+      const all = parts(sofa);
+      const throwPart = (all as Array<Part & { material: number }>).find(p => !p.role && p.material === 2)!;
+      expect(throwPart).toBeDefined();
+      const before = bounds(sofa, throwPart);
+      // Settling must not move it: it is already shaped to the sofa, and once sank 16 cm into the cushion.
+      expect(settled.geometryData.positions.slice(throwPart.start * 3, (throwPart.start + throwPart.count) * 3))
+        .toEqual(sofa.geometryData.positions.slice(throwPart.start * 3, (throwPart.start + throwPart.count) * 3));
+      // Where it lies on the seat it is above the cushion beneath, even before that cushion sinks.
+      const seatTop = Math.max(...all.filter(p => p.role === 'seat').map(p => bounds(sofa, p).hi[1]!));
+      let lying = 0;
+      for (let i = throwPart.start; i < throwPart.start + throwPart.count; i++) {
+        const x = sofa.geometryData.positions[i * 3]!, y = sofa.geometryData.positions[i * 3 + 1]!;
+        if (x < 0.8 && y < seatTop + 0.12) { expect(y).toBeGreaterThan(seatTop + 0.005); lying++; }
+      }
+      expect(lying).toBeGreaterThan(50);
+      // And it does not sit under a scatter cushion: they share no part of the sofa's width.
+      for (const cushion of all.filter(p => p.role === 'scatter')) expect(bounds(sofa, cushion).hi[0]!).toBeLessThan(before.lo[0]! + 0.02);
     });
 
     it('props the bed pillows against the headboard and leans cushions on them', () => {
