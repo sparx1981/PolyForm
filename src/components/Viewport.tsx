@@ -165,6 +165,7 @@ import {
 } from '../tools/tapeGuides';
 import { SectionCutter } from './SectionCutter';
 import { DIRECTIONAL_SHADOW, POINT_SHADOW, SPOT_SHADOW } from '../lib/graphics/shadowQuality';
+import { planLightBudget } from '../lib/lightBudget';
 import { NIGHT_AMBIENT_COLOR, NIGHT_BACKGROUND, daylightFactor, scaleForDaylight } from '../lib/graphics/daylight';
 import { SectionPlaneMesh } from './SectionPlaneMesh';
 import { activeSection, dragDistance, isSectionShape, moveSection, sectionLook, sectionOnFace, type SectionArgs } from '../tools/sectionPlanes';
@@ -1847,6 +1848,15 @@ function Scene() {
   const { resolved: resolvedMaterialBindings } = useMaterialBindings(usedMaterialBindings, '2k');
 
   const { raycaster, mouse, camera, scene, gl, size } = useThree();
+  // Every light adds to every lit material's shader, and every shadow takes a texture unit: past the GPU's
+  // limit the shader fails to compile and all lit surfaces vanish. Furnishing a house adds dozens of lights.
+  const lightBudget = useMemo(() => {
+    const context = gl.getContext();
+    return planLightBudget(customLights, {
+      maxTextureUnits: gl.capabilities.maxTextures,
+      maxFragmentUniformVectors: Number(context.getParameter(context.MAX_FRAGMENT_UNIFORM_VECTORS)) || undefined,
+    }, { selectedId: selectedLightId });
+  }, [customLights, selectedLightId, gl]);
   // Walls joined into runs (a curved wall of many pieces, or pieces in line) act as one wall.
   const wallRunInfo = useMemo(() => wallRuns(shapes), [shapes]);
   const wallJunctionKey = JSON.stringify(shapes.filter(s => s.type === 'wall').map(s => [s.id,s.hidden,s.position,s.args,s.quaternion,s.rotation,s.tags,s.wallMiterFootprint]));
@@ -11413,8 +11423,9 @@ function Scene() {
       {customLights.map(light => (
         <CustomLightComponent 
           key={light.id} 
-          light={light} 
-          shadowsEnabled={shadowsEnabled} 
+          light={light}
+          lit={lightBudget.lit.has(light.id)}
+          shadowsEnabled={shadowsEnabled && lightBudget.shadow.has(light.id)}
           showLightsource={showLightsource}
           activeTool={activeTool}
           selectedId={selectedId}
@@ -13940,6 +13951,7 @@ function ProjectorLight({ light, baseColor, shadowsEnabled }: { light: CustomLig
 
 function CustomLightComponent({ 
   light, 
+  lit,
   shadowsEnabled, 
   showLightsource,
   activeTool,
@@ -13953,6 +13965,8 @@ function CustomLightComponent({
   isDragging
 }: { 
   light: CustomLight, 
+  /** False when the light budget (lib/lightBudget.ts) has switched this light off: its handle stays, it emits nothing. */
+  lit: boolean,
   shadowsEnabled: boolean, 
   showLightsource: boolean,
   activeTool: string,
@@ -13993,7 +14007,7 @@ function CustomLightComponent({
 
   return (
     <React.Fragment>
-      {light.type === 'point' && (
+      {lit && light.type === 'point' && (
         <pointLight 
           position={(isDragging && selectedLightId === light.id) ? undefined : light.position} 
           color={baseColor} 
@@ -14003,7 +14017,7 @@ function CustomLightComponent({
           {...POINT_SHADOW}
         />
       )}
-      {light.type === 'directional' && (
+      {lit && light.type === 'directional' && (
         <directionalLight 
           position={(isDragging && selectedLightId === light.id) ? undefined : light.position} 
           color={baseColor} 
@@ -14013,7 +14027,7 @@ function CustomLightComponent({
           target={lightTarget}
         />
       )}
-      {light.type === 'spot' && (
+      {lit && light.type === 'spot' && (
         <spotLight 
           position={(isDragging && selectedLightId === light.id) ? undefined : light.position} 
           color={baseColor} 
@@ -14027,12 +14041,12 @@ function CustomLightComponent({
           decay={light.decay || 2}
         />
       )}
-      {light.type === 'projector' && light.map && (
+      {lit && light.type === 'projector' && light.map && (
         <Suspense fallback={null}>
           <ProjectorLight light={light} baseColor={baseColor} shadowsEnabled={shadowsEnabled} />
         </Suspense>
       )}
-      {light.type === 'rect' && (
+      {lit && light.type === 'rect' && (
         <rectAreaLight 
           ref={rectRef}
           position={(isDragging && selectedLightId === light.id) ? undefined : light.position} 
