@@ -46,12 +46,12 @@ export function relaxOffset(role: SoftRole | undefined, u: number, v: number, t:
 }
 
 /** Settles every soft part of an upholstered piece in place. Positions are a flat xyz array. */
-export function relaxSoftParts(positions: number[], parts: FurniturePartRange[], strength: number): void {
+export function relaxSoftParts(positions: number[], parts: FurniturePartRange[], strength: number, include: (part: FurniturePartRange) => boolean = () => true): void {
   const k = Math.min(2.5, Math.max(0, strength) / 0.4);
   if (!k) return;
   const toLocal = new THREE.Matrix4(), toWorld = new THREE.Matrix4(), v = new THREE.Vector3();
   for (const part of parts) {
-    if (!part.material || !part.role || !part.size || !part.centre) continue;
+    if (!part.material || !part.role || !part.size || !part.centre || !include(part)) continue;
     const [rx, ry, rz] = part.rotation ?? [0, 0, 0];
     toWorld.makeRotationZ(rz).multiply(new THREE.Matrix4().makeRotationY(ry)).multiply(new THREE.Matrix4().makeRotationX(rx));
     toLocal.copy(toWorld).invert();

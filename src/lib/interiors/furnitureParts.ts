@@ -51,6 +51,8 @@ export interface FurniturePartRange {
   rotation?: [number, number, number];
   /** Duvets and throws hang over the side beyond this fraction of their half-width. */
   edge?: number;
+  /** A flat sheet of cloth (duvet, throw) that settling drapes by simulation rather than by formula. */
+  sheet?: boolean;
 }
 
 export interface PaddedOptions {
@@ -64,6 +66,8 @@ export interface PaddedOptions {
   edge?: number;
   /** Corner radius; pillows and cushions use a large one so they read as stuffed, not boxed. */
   radius?: number;
+  /** Flat bedding that settling should drape over what is beneath it. */
+  sheet?: boolean;
   /** Finer cells where |x| exceeds this fraction of the half-width (where bedding hangs over the sides). */
   fineBeyond?: number;
 }
@@ -141,7 +145,7 @@ export function padded(width: number, height: number, depth: number, x: number, 
   g.translate(x, y, z);
   g.userData.fabric = true;
   g.userData.material = options.accent ? 2 : 1;
-  g.userData.part = { role: options.role, centre: [x, y, z], size: [width, height, depth], rotation, edge: options.edge };
+  g.userData.part = { role: options.role, centre: [x, y, z], size: [width, height, depth], rotation, edge: options.edge, ...(options.sheet ? { sheet: true } : {}) };
   return g;
 }
 

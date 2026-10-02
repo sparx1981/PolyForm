@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { smoothPatchNormals } from './upholsteryNormals';
 import { relaxCurtainPositions } from './curtainCloth';
 import { relaxSoftParts } from './softRelax';
+import { drapeSheetParts } from './drapeBake';
 import type { FurniturePartRange } from './furnitureParts';
 import type { Shape } from '../../types';
 import type { SimulationProfile } from '../semantics/componentTypes';
@@ -55,7 +56,13 @@ export function bakeSemanticSimulation(shape: Shape, strength = 0.35): Shape {
   const partRanges = shape.customData?.furniturePartRanges as FurniturePartRange[] | undefined;
   // Pieces built with part information settle part by part; older saved pieces use the whole-piece rule below.
   const byPart = simulation.type === 'softbody' && !!partRanges?.length;
-  if (byPart) relaxSoftParts(next, partRanges!, amount);
+  if (byPart) {
+    // Cushions, seats and mattresses settle by formula; bedding is dropped onto them with the cloth solver
+    // and, if that cannot be done, falls back to the formula too.
+    relaxSoftParts(next, partRanges!, amount, part => !part.sheet);
+    const draped = drapeSheetParts(next, partRanges!, amount);
+    relaxSoftParts(next, partRanges!, amount, part => !!part.sheet && !draped.has(part));
+  }
 
   for (let i = 0; i < next.length; i += 3) {
     if (byPart) break;

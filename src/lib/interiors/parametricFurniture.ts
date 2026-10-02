@@ -107,9 +107,9 @@ function bedGeometry(p: FurnitureSize): THREE.BufferGeometry {
     padded(mattW, p.mattressHeight, p.depth * 0.97, 0, frameH + p.mattressHeight / 2, 0, { role: 'mattress' }),
     padded(mattW + 0.24, p.headboardHeight, 0.12, 0, p.headboardHeight / 2, -p.depth / 2 + 0.06, { role: 'headboard' }),
     // The duvet is wider than the mattress and hangs over its sides; settling drapes it.
-    padded(p.width, 0.15, duvetLen, 0, top + 0.075, duvetZ, { role: 'duvet', edge, radius: 0.07, fineBeyond: edge - 0.02 }),
+    padded(p.width, 0.15, duvetLen, 0, top + 0.075, duvetZ, { role: 'duvet', edge, radius: 0.07, fineBeyond: edge - 0.02, sheet: true }),
     // Turned-back top edge of the duvet.
-    padded(p.width * 0.97, 0.11, 0.3, 0, top + 0.17, duvetZ - duvetLen / 2 + 0.17, { role: 'duvet', edge, radius: 0.05 }),
+    padded(p.width * 0.97, 0.11, 0.3, 0, top + 0.17, duvetZ - duvetLen / 2 + 0.17, { role: 'duvet', edge, radius: 0.05, sheet: true }),
   ];
   const lx = mattW / 2 + 0.02 - leg / 2, lz = p.depth / 2 - leg / 2;
   for (const x of [-lx, lx]) for (const z of [-lz, lz]) parts.push(box(leg, 0.12, leg, x, 0.06, z));
@@ -120,7 +120,7 @@ function bedGeometry(p: FurnitureSize): THREE.BufferGeometry {
       parts.push(padded(pw * 0.72, 0.1, 0.3, x * (pw * 0.4), top + 0.27, -p.depth / 2 + 0.62, { role: 'scatter', rotation: [0.95, -x * 0.18, 0], accent: true, radius: 0.055 }));
     }
     // A folded throw across the foot of the bed.
-    parts.push(padded(p.width * 0.94, 0.05, 0.5, 0, top + 0.2, p.depth / 2 - 0.3, { role: 'throw', accent: true, radius: 0.024, edge: Math.min(0.95, mattW / (p.width * 0.94)), fineBeyond: Math.min(0.95, mattW / (p.width * 0.94)) - 0.02 }));
+    parts.push(padded(p.width * 0.94, 0.05, 0.5, 0, top + 0.2, p.depth / 2 - 0.3, { role: 'throw', accent: true, radius: 0.024, sheet: true, edge: Math.min(0.95, mattW / (p.width * 0.94)), fineBeyond: Math.min(0.95, mattW / (p.width * 0.94)) - 0.02 }));
   }
   return merge(parts);
 }
