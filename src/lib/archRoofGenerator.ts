@@ -4,6 +4,7 @@ import { buildRoofModel, edgeFrame, facePlan, isCurveCrease, roofHeightAt, type 
 import { extensionRoofModel, type ExtensionKind } from './extensionRoof';
 import { Shape } from '../types';
 import { computeStairHoleForSlab } from './archStairwell';
+import { outerWallLoop } from './wallPerimeter';
 import { 
   RoofTileShape, 
   RoofTilePaletteItem, 
@@ -246,6 +247,7 @@ export function extractRoomFootprintPolygon(
   if (!worldPoly || worldPoly.length < 3) {
     outline = 'centerline';
     const segments: { pA: THREE.Vector2; pB: THREE.Vector2 }[] = [];
+    let thickest = 0.2;
     for (const w of roomWalls) {
       if (w.hidden) continue;
       const arg0 = Array.isArray(w.args) ? w.args[0] || 3.0 : 3.0;
@@ -253,6 +255,7 @@ export function extractRoomFootprintPolygon(
       const isUnrotatedZ = arg2 > arg0 && (!w.rotation || (w.rotation[0] === 0 && w.rotation[1] === 0 && w.rotation[2] === 0)) && (!w.quaternion || (w.quaternion[0] === 0 && w.quaternion[1] === 0 && w.quaternion[2] === 0));
 
       const wallL = isUnrotatedZ ? arg2 : arg0;
+      thickest = Math.max(thickest, isUnrotatedZ ? arg0 : arg2);
       const halfL = wallL / 2;
       const quat = w.quaternion
         ? new THREE.Quaternion(...w.quaternion)
@@ -265,8 +268,15 @@ export function extractRoomFootprintPolygon(
       segments.push({ pA, pB });
     }
 
-    if (segments.length >= 3) {
-      // Walk the walls end to end, each one pointing onward.
+    // The building's outer wall loop. Interior partitions (which meet the outer walls mid-span) and loose walls
+    // are not part of it; chaining every wall end to end instead tangled the outline whenever there was one.
+    const outerLoop = segments.length >= 3
+      ? outerWallLoop(segments.map(s => ({ a: [s.pA.x, s.pA.y] as [number, number], b: [s.pB.x, s.pB.y] as [number, number] })), Math.max(0.35, thickest * 1.25))
+      : null;
+    if (outerLoop) {
+      worldPoly = outerLoop;
+    } else if (segments.length >= 3) {
+      // The walls enclose nothing (an open run of walls): walk them end to end, each one pointing onward.
       const ordered: { a: THREE.Vector2; b: THREE.Vector2 }[] = [{ a: segments[0].pA, b: segments[0].pB }];
       const used = new Set<number>([0]);
       let cur = segments[0].pB;

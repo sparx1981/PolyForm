@@ -76,6 +76,49 @@ describe('ArchRoofGenerator & Multi-Story Stacking', () => {
   });
 });
 
+describe('Stacking a storey onto a house with interior walls', () => {
+  // Walls as the Wall tool draws them: length along local X, turned about Y to run between two plan points.
+  const wallBetween = (id: string, ax: number, az: number, bx: number, bz: number): Shape => {
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(-(bz - az), bx - ax));
+    return { id, type: 'wall', position: [(ax + bx) / 2, 1.4, (az + bz) / 2], args: [Math.hypot(bx - ax, bz - az), 2.8, 0.2], quaternion: [q.x, q.y, q.z, q.w], color: '#fff', tags: ['story-1'] };
+  };
+  const exterior = [
+    wallBetween('n', 0, 0, 10, 0), wallBetween('e', 10, 0, 10, 8), wallBetween('s', 10, 8, 0, 8), wallBetween('w', 0, 8, 0, 0),
+  ];
+  const partitions = [
+    wallBetween('p1', 5, 0, 5, 8), wallBetween('p2', 0, 4, 5, 4), wallBetween('p3', 5, 3, 10, 3),
+  ];
+  const slabOutline = (walls: Shape[]) => {
+    const slab = buildNextFloorLevel(walls, walls, true).newSlab!;
+    const [cx, , cz] = slab.position;
+    return (slab.args.vertices as [number, number][]).map(([x, z]) => [x + cx, z + cz] as [number, number]);
+  };
+  const FLOOR_AREA = (10 - 2 * 0.095) * (8 - 2 * 0.095);
+  const areaOf = (poly: [number, number][]) => Math.abs(poly.reduce((sum, p, i) => { const q = poly[(i + 1) % poly.length]; return sum + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+
+  it('makes the same upper floor whether or not the lower floor has partitions', () => {
+    const plain = slabOutline(exterior);
+    const divided = slabOutline([...exterior, ...partitions]);
+    expect(plain).toHaveLength(4);
+    expect(divided).toHaveLength(4);
+    expect(areaOf(divided)).toBeCloseTo(areaOf(plain), 5);
+    // The floor fills the house inside its walls: 10 x 8 on the centre lines, less just under half a wall each side.
+    expect(areaOf(divided)).toBeCloseTo(FLOOR_AREA, 3);
+  });
+
+  it('does not depend on the order the walls were drawn in', () => {
+    const walls = [...partitions, ...exterior];
+    expect(areaOf(slabOutline(walls))).toBeCloseTo(FLOOR_AREA, 3);
+    expect(areaOf(slabOutline([...walls].reverse()))).toBeCloseTo(FLOOR_AREA, 3);
+  });
+
+  it('still copies every wall, partitions included, up to the new storey', () => {
+    const { newWalls } = buildNextFloorLevel([...exterior, ...partitions], [...exterior, ...partitions], true);
+    expect(newWalls).toHaveLength(7);
+    expect(newWalls.every(w => w.tags?.includes('story-2'))).toBe(true);
+  });
+});
+
 describe('3D Roof Tile Placement (per-facet, matches the real roof shape)', () => {
   // Same L-shaped room footprint already used and verified in
   // timberFrameGenerator.test.ts - its courtyard/notch void is at
