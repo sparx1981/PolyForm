@@ -213,14 +213,24 @@ describe('readSkpToGlbLean', () => {
     expect(() => readSkpToGlb(toArrayBuffer(skp), {})).not.toThrow();
   });
 
-  it('describes the layout of a file: record kinds, counts and unfamiliar nested records', () => {
+  it('describes the layout of a file: nesting paths, counts, and the first bytes of plain records', () => {
     const odd = rec('7777', [rec('7778', Buffer.from([1, 2, 3])), rec('7779', Buffer.from([4]))]);
     const skp = buildSkp({ model: [rec('F901', [definition(1, 'Slab', gridGeometry(2, 2)), odd]), rec('F601', [instance(1, IDENTITY)])] });
     const report = diagnoseSkp(toArrayBuffer(skp));
     expect(report).toMatch(/7C15=1/);
     expect(report).toMatch(/AC0D=4/);
-    expect(report).toMatch(/7777 x1 .* nested1/);
+    expect(report).toMatch(/F401>F901>7777>7778 x1/);
     expect(report).toMatch(/top level: .*F901/);
+    expect(report).toMatch(/7778\(3\) 010203/);
+  });
+
+  it('keeps its place in the description when a record claims to be bigger than what holds it', () => {
+    const bogus = Buffer.concat([Buffer.from([0x4c, 0x61]), Buffer.from([0xff, 0xff, 0xff, 0x2f]), Buffer.alloc(10, 9)]);
+    const skp = buildSkp({ model: [rec('F901', [rec('993A', [bogus]), definition(1, 'Slab', gridGeometry(2, 2))]), rec('F601', [instance(1, IDENTITY)])] });
+    const report = diagnoseSkp(toArrayBuffer(skp));
+    expect(report).toMatch(/1 records did not fit/);
+    expect(report).toMatch(/7C15=1/);
+    expect(report).toMatch(/6419=1/);
   });
 
   it('produces a GLB that three.js loads, with every placed mesh drawn', async () => {
