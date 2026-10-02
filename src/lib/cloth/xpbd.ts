@@ -325,9 +325,10 @@ export class XpbdCloth {
     for (let k = 0; k < this.bendRest.length; k++) {
       if (this.prepareBend(k, buf) !== 2) continue;
       const a = this.bends[k * 4]!, b = this.bends[k * 4 + 1]!, c = this.bends[k * 4 + 2]!, d = this.bends[k * 4 + 3]!;
-      const ids = [a, b, c, d];
-      let weighted = 0;
-      for (let i = 0; i < 4; i++) { const o = 15 + i * 3; weighted += w[ids[i]!]! * (buf[o]! * buf[o]! + buf[o + 1]! * buf[o + 1]! + buf[o + 2]! * buf[o + 2]!); }
+      let weighted = w[a]! * (buf[15]! * buf[15]! + buf[16]! * buf[16]! + buf[17]! * buf[17]!)
+        + w[b]! * (buf[18]! * buf[18]! + buf[19]! * buf[19]! + buf[20]! * buf[20]!)
+        + w[c]! * (buf[21]! * buf[21]! + buf[22]! * buf[22]! + buf[23]! * buf[23]!)
+        + w[d]! * (buf[24]! * buf[24]! + buf[25]! * buf[25]! + buf[26]! * buf[26]!);
       // The mass-weighted gradient size depends on the mesh, so bending compliance is relative to it: this
       // makes bendCompliance mean the same on a coarse curtain and a fine bed sheet (c/h² of 1 halves
       // the correction; 1e-3 is soft velvet, 1e-6 near-rigid card at the usual substep size).
@@ -337,7 +338,7 @@ export class XpbdCloth {
       const dl = (-constraint - scaled * this.bendLambda[k]!) / (weighted + scaled);
       this.bendLambda[k] = this.bendLambda[k]! + dl;
       for (let i = 0; i < 4; i++) {
-        const id = ids[i]!, m = w[id]! * dl, o = 15 + i * 3;
+        const id = i === 0 ? a : i === 1 ? b : i === 2 ? c : d, m = w[id]! * dl, o = 15 + i * 3;
         p[id * 3] = p[id * 3]! + m * buf[o]!; p[id * 3 + 1] = p[id * 3 + 1]! + m * buf[o + 1]!; p[id * 3 + 2] = p[id * 3 + 2]! + m * buf[o + 2]!;
       }
     }
@@ -366,7 +367,8 @@ export class XpbdCloth {
       const fx = pressure * nx + lift * area * (rx - normal * nx);
       const fy = pressure * ny + lift * area * (ry - normal * ny);
       const fz = pressure * nz + lift * area * (rz - normal * nz);
-      for (const i of [a, b, c]) {
+      for (let corner = 0; corner < 3; corner++) {
+        const i = corner === 0 ? a : corner === 1 ? b : c;
         if (w[i] === 0) continue;
         v[i * 3] = v[i * 3]! + (fx / 3) * w[i]! * h; v[i * 3 + 1] = v[i * 3 + 1]! + (fy / 3) * w[i]! * h; v[i * 3 + 2] = v[i * 3 + 2]! + (fz / 3) * w[i]! * h;
       }
@@ -426,7 +428,7 @@ function bendGradients(buf: Float64Array, dot: number, l1: number, l2: number, s
     buf[g1 + i] = -buf[g2 + i]! - buf[g3 + i]! - buf[g4 + i]!;
   }
   // dC/dp = (1/sin) * q for this triangle winding (see the finite-difference test).
-  for (const o of [g1, g2, g3, g4]) for (let i = 0; i < 3; i++) buf[o + i] = buf[o + i]! / sine;
+  for (let i = 0; i < 3; i++) { buf[g1 + i] = buf[g1 + i]! / sine; buf[g2 + i] = buf[g2 + i]! / sine; buf[g3 + i] = buf[g3 + i]! / sine; buf[g4 + i] = buf[g4 + i]! / sine; }
 }
 
 /** Triangles and extra shear edges for a (columns+1) x (rows+1) grid of particles, row-major. */

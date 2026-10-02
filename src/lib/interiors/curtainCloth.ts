@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PlaneCollider, XpbdCloth, gridTopology, type ClothCollider } from '../cloth/xpbd';
 
 export interface CurtainDimensions {
   width: number; height: number; openAmount: number; fullness: number; foldDepth: number;
@@ -40,78 +41,65 @@ export function createCurtainPanels(p: CurtainDimensions): THREE.PlaneGeometry[]
   });
 }
 
-/** Position-based fabric: stretch/shear constraints, weak bending, pinned heading and free hem.
- * This is a thin cloth surface, not a volumetric soft-body or a room airflow simulation. */
+/**
+ * Live curtain fabric on the shared XPBD solver (see lib/cloth/xpbd.ts): stretch and shear with compliance,
+ * dihedral bending measured from the gathered rest folds, long-range tethers to the rod, and wind that acts
+ * on the surface, so a curtain billows into the room when the air hits it face-on and ignores a breeze
+ * skimming past. The heading is pinned to the rod; the glass and floor are planes. This is a thin cloth
+ * surface, not a volumetric soft-body or a room airflow simulation.
+ */
 export class CurtainCloth {
   readonly positions: Float32Array;
   readonly rest: Float32Array;
-  private previous: Float32Array;
-  private edges: { a: number; b: number; length: number; stiffness: number }[] = [];
+  private readonly solver: XpbdCloth;
+  private readonly colliders: ClothCollider[];
   private accumulator = 0;
   private time = 0;
   constructor(readonly geometry: THREE.PlaneGeometry) {
     this.positions = geometry.getAttribute('position').array as Float32Array;
     this.rest = this.positions.slice();
-    this.previous = this.rest.slice();
-    const edge = (a: number, b: number, stiffness: number) => {
-      const ia = a * 3, ib = b * 3;
-      this.edges.push({ a, b, stiffness, length: Math.hypot(this.rest[ia] - this.rest[ib], this.rest[ia+1] - this.rest[ib+1], this.rest[ia+2] - this.rest[ib+2]) });
-    };
-    for (let y = 0; y <= rows; y++) for (let x = 0; x <= columns; x++) {
-      const a = y * (columns + 1) + x;
-      if (x < columns) edge(a, a + 1, 1);
-      if (y < rows) edge(a, a + columns + 1, 1);
-      if (x < columns && y < rows) { edge(a, a + columns + 2, 0.7); edge(a + 1, a + columns + 1, 0.7); }
-      if (x < columns - 1) edge(a, a + 2, 0.025);
-      if (y < rows - 1) edge(a, a + 2 * (columns + 1), 0.025);
-    }
+    const { extraEdges } = gridTopology(columns, rows);
+    this.solver = new XpbdCloth({
+      positions: this.rest,
+      triangles: geometry.index!.array,
+      extraEdges,
+      pinned: Array.from({ length: columns + 1 }, (_, i) => i),
+      settings: { density: 0.25, stretchCompliance: 4e-7, bendCompliance: 2e-3, damping: 1.4, thickness: 0, friction: 0.2 },
+    });
+    // The window glass behind the curtain and the floor under its hem; the rod attachments stay exact.
+    this.colliders = [new PlaneCollider([0, 0.003, 0], [0, 1, 0]), new PlaneCollider([0, 0, -0.09], [0, 0, 1])];
   }
   update(delta: number, wind: ClothWind, walker?: { x: number; y: number; z: number; speed: number }) {
     const dt = 1 / 60;
     this.accumulator += Math.min(Math.max(delta, 0), 0.1);
     let moved = false;
+    const solved = this.solver.positions;
     while (this.accumulator + 1e-9 >= dt) {
       moved = true;
       this.accumulator -= dt; this.time += dt;
       const gust = 0.75 + 0.25 * Math.sin(this.time * wind.speed * 1.7);
-      const damping = Math.exp(-2.8 * dt);
-      for (let n = columns + 1; n < this.positions.length / 3; n++) {
-        const i = n * 3, x = this.positions[i], y = this.positions[i+1], z = this.positions[i+2];
-        const ripple = 1 + 0.22 * Math.sin(x * 3.2 + y * 2.1 - this.time * wind.speed * 2);
-        const wake = walker && walker.speed > 0 ? walker.speed * Math.exp(-((x - walker.x)**2 + (y - walker.y + 0.7)**2 + (z - walker.z)**2) / 0.8) : 0;
-        const forceX = wind.x * gust * ripple * 0.65;
-        const forceZ = wind.z * Math.abs(wind.z) * gust * ripple * 0.7 + wake * 9;
-        for (let axis = 0; axis < 3; axis++) {
-          const current = this.positions[i+axis];
-          const force = axis === 0 ? forceX : axis === 1 ? -9.81 : forceZ;
-          this.positions[i+axis] += (current - this.previous[i+axis]) * damping + force * dt * dt;
-          this.previous[i+axis] = current;
-        }
-      }
-      for (let iteration = 0; iteration < 5; iteration++) {
-        for (const e of this.edges) {
-          const a = e.a * 3, b = e.b * 3;
-          const wa = e.a > columns ? 1 : 0, wb = e.b > columns ? 1 : 0;
-          if (!wa && !wb) continue;
-          const dx = this.positions[b] - this.positions[a], dy = this.positions[b+1] - this.positions[a+1], dz = this.positions[b+2] - this.positions[a+2];
-          const length = Math.hypot(dx, dy, dz);
-          const correction = (length - e.length) / Math.max(length, 1e-8) * e.stiffness / (wa + wb);
-          for (let axis = 0; axis < 3; axis++) {
-            const difference = axis === 0 ? dx : axis === 1 ? dy : dz;
-            this.positions[a+axis] += difference * correction * wa;
-            this.positions[b+axis] -= difference * correction * wb;
-          }
-        }
-        // Glass/wall clearance and floor contact; rod attachments remain exact.
-        for (let n = columns + 1; n < this.positions.length / 3; n++) {
-          this.positions[n*3+1] = Math.max(0.003, this.positions[n*3+1]);
-          this.positions[n*3+2] = Math.max(-0.09, this.positions[n*3+2]);
-        }
-      }
+      // Artist wind strengths become air speed: z blows the curtain into the room, x skims across its face.
+      const air = { velocity: [wind.x * gust * WIND_SPEED, 0, Math.sign(wind.z) * Math.abs(wind.z) * gust * WIND_SPEED] as [number, number, number], drag: 0.9, lift: 0.08 };
+      this.solver.step(dt, {
+        substeps: 2, colliders: this.colliders, wind: air,
+        extraAcceleration: (i, out) => {
+          // Gusty turbulence along the cloth and the wake of someone walking past.
+          const x = solved[i * 3]!, y = solved[i * 3 + 1]!, z = solved[i * 3 + 2]!;
+          const ripple = Math.sin(x * 3.2 + y * 2.1 - this.time * wind.speed * 2);
+          out[2]! += wind.z * 0.5 * gust * ripple * 0.22;
+          if (walker && walker.speed > 0) out[2]! += walker.speed * Math.exp(-((x - walker.x) ** 2 + (y - walker.y + 0.7) ** 2 + (z - walker.z) ** 2) / 0.8) * 9;
+        },
+      });
     }
-    if (moved) geometryUpdated(this.geometry);
+    if (moved) {
+      for (let i = 0; i < solved.length; i++) this.positions[i] = solved[i]!;
+      geometryUpdated(this.geometry);
+    }
   }
 }
+
+/** Air speed (m/s) per unit of artist wind strength. */
+const WIND_SPEED = 0.55;
 
 function geometryUpdated(geometry: THREE.BufferGeometry) {
   geometry.getAttribute('position').needsUpdate = true;
