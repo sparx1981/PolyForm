@@ -1,9 +1,14 @@
-import { buildInstancedScene, buildScene, toGLB, toInstancedGLB } from 'openskp';
+import { readSkpToGlb } from '../lib/skp/skpRead';
 
 /**
  * Reads a SketchUp file off the main thread, so a big file does not freeze the page and the page can
  * show progress while it works. Components placed many times are kept as shared meshes (a chair placed a
  * thousand times is stored once), which is what keeps a large file within the browser's memory.
+ *
+ * Files from SketchUp 2021 and newer go through the low-memory reader first, which inflates the file a piece
+ * at a time and keeps only compact meshes. OpenSKP's own reader keeps an object for every record in the file,
+ * which needs about thirty times the file's size in memory and fails on big models. It is still used for the
+ * older file format, and for any file the low-memory reader cannot make sense of.
  */
 export interface SkpWorkerRequest { buffer: ArrayBuffer }
 export type SkpWorkerMessage =
@@ -21,14 +26,7 @@ self.onmessage = (event: MessageEvent<SkpWorkerRequest>) => {
     onProgress: (info: { stage: string; current: number; total: number }) => post({ type: 'progress', ...info }),
   };
   try {
-    let glb: Uint8Array;
-    try {
-      glb = toInstancedGLB(buildInstancedScene(buffer, options));
-    } catch (instancedError) {
-      // Fall back to the flattened reader, which handles files the instanced one cannot.
-      console.warn('[skpImport] Instanced read failed, falling back to the flattened reader', instancedError);
-      glb = toGLB(buildScene(buffer, options));
-    }
+    const glb = readSkpToGlb(buffer, options);
     const whole = glb.byteOffset === 0 && glb.byteLength === glb.buffer.byteLength;
     const out = (whole ? glb.buffer : glb.slice().buffer) as ArrayBuffer;
     post({ type: 'done', glb: out }, [out]);
