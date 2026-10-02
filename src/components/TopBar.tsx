@@ -55,7 +55,7 @@ import StorageChoice from './StorageChoice';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 // @ts-ignore
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
-import { SkpService, HuggingFaceService, mergeImportedGroup } from '../services/skpService';
+import { SkpService, HuggingFaceService, importedGroupToShapes } from '../services/skpService';
 import { LOGIN_ACTIVITY_ADMIN_EMAIL } from '../lib/loginActivity';
 import * as THREE from 'three';
 import OpenModel from './OpenModel';
@@ -570,29 +570,20 @@ export default function TopBar() {
     }, 100);
   };
 
-  /** Reads a 3D file into one custom shape, showing progress while a big file loads. */
-  const importModelAsShape = async (file: File) => {
+  /** Reads a 3D file into one custom shape per SketchUp group or component, showing progress while a big file loads. */
+  const importModelAsShapes = async (file: File) => {
     setImportStatus({ name: file.name, message: 'Loading the file' });
     try {
       const group = await SkpService.importSKP(file, p => setImportStatus({ name: file.name, message: p.message, fraction: p.fraction }));
       setImportStatus({ name: file.name, message: 'Adding it to the model' });
-      // Let the status paint before the long merge below.
-      await new Promise(resolve => setTimeout(resolve, 0));
-      // CustomGeometry parses shape.geometryData with THREE.BufferGeometryLoader, which only understands a
-      // plain BufferGeometry.toJSON() payload - not an Object3D/group toJSON(). Passing the group's own
-      // toJSON() here always failed to parse and silently fell back to a 1x1x1 placeholder box, which is
-      // why every SKP import once appeared as "a small cube" regardless of the source model.
-      const merged = mergeImportedGroup(group);
-      diagLog('Import', 'Imported 3D file', { name: file.name, triangles: Math.round((merged.index ? merged.index.count : merged.attributes.position.count) / 3) });
-      return {
-        id: Math.random().toString(36).substr(2, 9),
-        name: file.name.split('.')[0],
-        type: 'custom',
-        position: [0, 0, 0],
-        args: {},
-        color: '#ffffff',
-        geometryData: merged.toJSON()
-      } as any;
+      // Each part is stored as a plain BufferGeometry.toJSON() payload: CustomGeometry parses shape.geometryData with
+      // THREE.BufferGeometryLoader, which does not understand an Object3D/group toJSON(). Passing a group's own
+      // toJSON() once failed to parse and silently fell back to a 1x1x1 placeholder box (every SKP import appeared as
+      // "a small cube").
+      const { shapes: parts, triangles } = await importedGroupToShapes(group, (done, total) =>
+        setImportStatus({ name: file.name, message: `Adding it to the model (${done + 1} of ${total})`, fraction: total ? done / total : undefined }));
+      diagLog('Import', 'Imported 3D file', { name: file.name, parts: parts.length, triangles: Math.round(triangles) });
+      return parts as any[];
     } finally {
       setImportStatus(null);
     }
@@ -629,9 +620,9 @@ export default function TopBar() {
 
       // If it's a 3D file or other geometry format
       try {
-        const newShape = await importModelAsShape(file);
-        setShapes(prev => [...prev, newShape]);
-        alert(`Imported ${file.name} successfully!`);
+        const newShapes = await importModelAsShapes(file);
+        setShapes(prev => [...prev, ...newShapes]);
+        alert(`Imported ${file.name} successfully${newShapes.length > 1 ? ` (${newShapes.length} objects)` : ''}!`);
       } catch (err) {
         console.error('Import error:', err);
         alert(`Failed to import ${file.name}. ${err instanceof Error && err.message ? err.message : 'Ensure it is a valid .polyform, .skp, or .json file.'}`);
@@ -683,9 +674,9 @@ export default function TopBar() {
       
       diagLog('Import', 'Importing SKP file', { name: file.name });
       try {
-        const newShape = await importModelAsShape(file);
-        setShapes(prev => [...prev, newShape]);
-        alert('Imported SKP model successfully!');
+        const newShapes = await importModelAsShapes(file);
+        setShapes(prev => [...prev, ...newShapes]);
+        alert(`Imported SKP model successfully${newShapes.length > 1 ? ` (${newShapes.length} objects)` : ''}!`);
       } catch (err) {
         console.error('Import error:', err);
         alert(`Failed to import ${file.name}. ${err instanceof Error && err.message ? err.message : 'Ensure it is a valid SKP, glTF or GLB file.'}`);

@@ -75,7 +75,16 @@ const parseGlb = (glbBuffer: ArrayBuffer): Promise<THREE.Group> => new Promise((
   new GLTFLoader().parse(
     glbBuffer,
     '',
-    (gltf: any) => resolve(gltf.scene),
+    (gltf: any) => {
+      // Remember which objects are the file's own nodes (placed groups and components), as opposed to pieces of a mesh.
+      gltf.parser.associations.forEach((assoc: { nodes?: number }, obj: THREE.Object3D) => {
+        if (!obj || !(obj as any).isObject3D || assoc?.nodes === undefined) return;
+        obj.userData.skpNode = true;
+        // three.js turns spaces in node names into underscores; the file's own name is the one to show.
+        obj.userData.skpName = gltf.parser.json.nodes?.[assoc.nodes]?.name ?? obj.name;
+      });
+      resolve(gltf.scene);
+    },
     (error: any) => {
       console.error('[SkpService] GLB build error:', error);
       reject(new Error('Read the SKP file but could not build a viewable model from it.'));
@@ -86,6 +95,15 @@ const parseGlb = (glbBuffer: ArrayBuffer): Promise<THREE.Group> => new Promise((
 /** Largest imported mesh that keeps its texture coordinates. Past this they are dropped, since nothing here draws the textures. */
 const MAX_UV_VERTICES = 400_000;
 
+/** Every mesh under an object (and the object itself when it is one). */
+function meshesUnder(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((child: any) => {
+    if (child.isMesh && child.geometry?.attributes?.position) meshes.push(child);
+  });
+  return meshes;
+}
+
 /**
  * Joins every mesh in an imported model into one geometry in world space (what a custom shape holds), keeping
  * each material's colour as a vertex colour. Vertices stay shared as the source meshes share them, and everything is
@@ -94,18 +112,19 @@ const MAX_UV_VERTICES = 400_000;
  */
 export function mergeImportedGroup(group: THREE.Object3D): THREE.BufferGeometry {
   group.updateMatrixWorld(true);
-  const meshes: THREE.Mesh[] = [];
+  return mergeMeshes(meshesUnder(group));
+}
+
+export function mergeMeshes(meshes: THREE.Mesh[]): THREE.BufferGeometry {
   let vertexTotal = 0;
   let indexTotal = 0;
   let allUv = true;
-  group.traverse((child: any) => {
-    const position = child.isMesh && child.geometry?.attributes?.position;
-    if (!position) return;
-    meshes.push(child);
+  for (const child of meshes) {
+    const position = child.geometry.attributes.position;
     vertexTotal += position.count;
     indexTotal += child.geometry.index ? child.geometry.index.count : position.count;
     if (!child.geometry.attributes.uv) allUv = false;
-  });
+  }
   if (meshes.length === 0) throw new Error('No mesh geometry found in the file.');
 
   const positions = new Float32Array(vertexTotal * 3);
@@ -157,6 +176,112 @@ export function mergeImportedGroup(group: THREE.Object3D): THREE.BufferGeometry 
   if (uvs) merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   merged.setIndex(new THREE.BufferAttribute(indices, 1));
   return merged;
+}
+
+/** One selectable piece of an imported model: a group or component placed at its top level. */
+export interface ImportedPart {
+  name: string;
+  meshes: THREE.Mesh[];
+  triangles: number;
+}
+
+const trianglesOf = (meshes: THREE.Mesh[]): number => meshes.reduce((n, m) => n + (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3, 0);
+
+/** Parts smaller than this are gathered into batches, so a model with a thousand trees is not a thousand objects. */
+const SMALL_PART_TRIANGLES = 3000;
+const BATCH_TRIANGLES = 150_000;
+const BATCH_PARTS = 150;
+
+/**
+ * Splits an imported model into the groups and components SketchUp placed at its top level (the house, the terrain,
+ * each tree...). Geometry sitting loose at the top level becomes one more part, and tiny parts are gathered into batches.
+ */
+export function splitImportedGroup(scene: THREE.Object3D): ImportedPart[] {
+  scene.updateMatrixWorld(true);
+  const top = scene.children.length === 1 && scene.children[0].name === 'ROOT' ? scene.children[0] : scene;
+  const named: ImportedPart[] = [];
+  const loose: THREE.Mesh[] = [];
+  if ((top as any).isMesh && (top as any).geometry?.attributes?.position) loose.push(top as THREE.Mesh);
+  for (const child of top.children) {
+    if (child.userData.skpNode || !(child as any).isMesh) {
+      const meshes = meshesUnder(child);
+      if (meshes.length) named.push({ name: (child.userData.skpName as string) || child.name || `Part ${named.length + 1}`, meshes, triangles: trianglesOf(meshes) });
+    } else if ((child as any).geometry?.attributes?.position) {
+      loose.push(child as THREE.Mesh);
+    }
+  }
+  const parts: ImportedPart[] = [];
+  if (loose.length) parts.push({ name: 'Model surfaces', meshes: loose, triangles: trianglesOf(loose) });
+  let batch: (ImportedPart & { members: ImportedPart[] }) | null = null;
+  let batchNumber = 0;
+  const closeBatch = () => {
+    if (batch && batch.members.length === 1) {
+      batch.name = batch.members[0].name;
+    }
+    batch = null;
+  };
+  for (const part of named) {
+    if (part.triangles >= SMALL_PART_TRIANGLES) {
+      parts.push(part);
+      continue;
+    }
+    if (batch && (batch.triangles + part.triangles > BATCH_TRIANGLES || batch.members.length >= BATCH_PARTS)) closeBatch();
+    if (!batch) {
+      batch = { name: `Small parts ${++batchNumber}`, meshes: [], triangles: 0, members: [] };
+      parts.push(batch);
+    }
+    batch.meshes.push(...part.meshes);
+    batch.triangles += part.triangles;
+    batch.members.push(part);
+  }
+  closeBatch();
+  return parts;
+}
+
+export interface ImportedShape {
+  id: string;
+  name: string;
+  type: 'custom';
+  position: [number, number, number];
+  args: Record<string, never>;
+  color: string;
+  geometryData: any;
+  /** How big the whole import this piece came from is, so a big model can be drawn lightly piece by piece. */
+  customData: { skpImport: { triangles: number } };
+}
+
+/**
+ * Turns an imported model into one custom shape per part, each with its own origin at the middle of its box so it
+ * moves and rotates about itself.
+ */
+export async function importedGroupToShapes(scene: THREE.Object3D, onProgress?: (done: number, total: number) => void): Promise<{ shapes: ImportedShape[]; triangles: number }> {
+  const parts = splitImportedGroup(scene);
+  if (parts.length === 0) throw new Error('No mesh geometry found in the file.');
+  const shapes: ImportedShape[] = [];
+  let triangles = 0;
+  for (let i = 0; i < parts.length; i++) {
+    onProgress?.(i, parts.length);
+    // Let the page paint between parts, so a big model does not lock it up.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const geometry = mergeMeshes(parts[i].meshes);
+    geometry.computeBoundingBox();
+    const center = geometry.boundingBox!.getCenter(new THREE.Vector3());
+    geometry.translate(-center.x, -center.y, -center.z);
+    triangles += parts[i].triangles;
+    shapes.push({
+      id: Math.random().toString(36).substr(2, 9),
+      name: parts[i].name,
+      type: 'custom',
+      position: [center.x, center.y, center.z],
+      args: {},
+      color: '#ffffff',
+      geometryData: geometry.toJSON(),
+      customData: { skpImport: { triangles: 0 } },
+    });
+    geometry.dispose();
+  }
+  for (const shape of shapes) shape.customData.skpImport.triangles = Math.round(triangles);
+  return { shapes, triangles };
 }
 
 /**

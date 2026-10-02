@@ -16,8 +16,13 @@ export function customTriangleCount(data: any): number {
   return typeof positions === 'number' ? Math.floor(positions / 9) : 0;
 }
 
-export const isHeavyCustomShape = (shape: { type?: string; geometryData?: unknown }): boolean =>
-  shape.type === 'custom' && customTriangleCount(shape.geometryData) > HEAVY_TRIANGLES;
+/**
+ * A custom shape counts as heavy when its own mesh is huge, or when it is one piece of an import that is huge as a whole
+ * (a big SketchUp model arrives as many shapes, which together are as costly as one big one).
+ */
+export const isHeavyCustomShape = (shape: { type?: string; geometryData?: unknown; customData?: any }): boolean =>
+  shape.type === 'custom' &&
+  ((shape.customData?.skpImport?.triangles ?? 0) > HEAVY_TRIANGLES || customTriangleCount(shape.geometryData) > HEAVY_TRIANGLES);
 
 const heavyGeometries = new WeakSet<THREE.BufferGeometry>();
 let installed = false;

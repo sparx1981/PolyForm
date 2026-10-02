@@ -23,6 +23,10 @@ describe('isHeavyCustomShape', () => {
     expect(isHeavyCustomShape({ type: 'custom', geometryData: big })).toBe(true);
     expect(isHeavyCustomShape({ type: 'box', geometryData: big })).toBe(false);
     expect(isHeavyCustomShape({ type: 'custom', geometryData: new THREE.BufferGeometry().copy(new THREE.BoxGeometry()).toJSON() })).toBe(false);
+    // A small piece of a huge import is drawn lightly too.
+    const piece = new THREE.BufferGeometry().copy(new THREE.BoxGeometry()).toJSON();
+    expect(isHeavyCustomShape({ type: 'custom', geometryData: piece, customData: { skpImport: { triangles: HEAVY_TRIANGLES + 1 } } })).toBe(true);
+    expect(isHeavyCustomShape({ type: 'custom', geometryData: piece, customData: { skpImport: { triangles: 1000 } } })).toBe(false);
   });
 });
 
