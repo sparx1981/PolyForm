@@ -69,7 +69,7 @@ export function BetaToolbar() {
         {toggle('atmosphere','Atmospheric distance haze')}
         {toggle('flare','Lens flare')}{s.flare && <>{slider('flareIntensity','Flare intensity',0,1)}{slider('ghosts','Flare ghosts',0,1)}{slider('halo','Flare halo',0,1)}</>}
         {toggle('grading','Colour grading')}{s.grading && <><label>Grading preset<select className={selectClass} value={s.grade} onChange={e => update({ grade: e.target.value as typeof s.grade })}><option value="neutral">Neutral architecture</option><option value="warm">Warm</option><option value="cool">Cool</option></select></label>{slider('gradeStrength','Grading strength',0,1)}</>}
-        {slider('exposure','Exposure',0.1,4,0.05)}
+        {slider('exposure','Exposure',0.1,10,0.1)}
       </fieldset>
     </motion.section>;
   if (toolbarVisibility.beta_lab === false) return null;

@@ -13,7 +13,7 @@ it('rejects invalid astronomy dates and clamps imported quality and physical ran
   const result = normalizeBetaEnvironment({ date:'NaN', latitude:900, longitude:NaN, layers:50, quality:'ultra', coverage:-4, exposure:Infinity });
   expect(result.latitude).toBe(89.9); expect(result.longitude).toBe(defaultBetaEnvironment().longitude);
   expect(result.layers).toBe(3); expect(result.coverage).toBe(0); expect(result.quality).toBe('auto');
-  expect(result.date).toBe(defaultBetaEnvironment().date); expect(result.exposure).toBe(1);
+  expect(result.date).toBe(defaultBetaEnvironment().date); expect(result.exposure).toBe(3);
 });
 it('maps local east, up and south into ECEF without Google visual lift', () => {
   const lat=51.5,lng=-0.1,height=25;
@@ -31,4 +31,10 @@ it('keeps physical sky and stars on and intensity fixed when loading older model
   expect(result.animateDayCycle).toBe(true); expect(result.dayCycleSpeed).toBe(2);
   expect(normalizeBetaEnvironment({dayCycleSpeed:NaN}).dayCycleSpeed).toBe(0.2);
   expect(normalizeBetaEnvironment({dayCycleSpeed:0}).dayCycleSpeed).toBe(0.05);
+});
+
+it('lets a stored exposure up to 10 through and keeps the brighter default for models without one', () => {
+  expect(normalizeBetaEnvironment({ exposure: 8 }).exposure).toBe(8);
+  expect(normalizeBetaEnvironment({ exposure: 40 }).exposure).toBe(10);
+  expect(normalizeBetaEnvironment({}).exposure).toBe(3);
 });

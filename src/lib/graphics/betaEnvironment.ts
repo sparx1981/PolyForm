@@ -14,7 +14,7 @@ export function defaultBetaEnvironment(): BetaEnvironmentSettings {
     date: '2026-06-21T12:00', latitude: 51.5074, longitude: -0.1278, elevation: 0, useSite: true,
     starIntensity: 10, coverage: 0.35, cloudType: 'cumulus', altitude: 1500, thickness: 1000, layers: 1,
     quality: 'auto', windScale: 1, flareIntensity: 0.08, ghosts: 0.15, halo: 0.15,
-    grade: 'neutral', gradeStrength: 0.5, exposure: 1 };
+    grade: 'neutral', gradeStrength: 0.5, exposure: 3 };
 }
 
 export function normalizeBetaEnvironment(input: unknown): BetaEnvironmentSettings {
@@ -25,7 +25,7 @@ export function normalizeBetaEnvironment(input: unknown): BetaEnvironmentSetting
     if (typeof r[k] === 'boolean') result[k] = r[k];
   const ranges = { latitude: [-89.9,89.9], longitude: [-180,180], elevation: [-100,9000],
     dayCycleSpeed: [0.05,2], coverage: [0,1], altitude: [200,12000], thickness: [100,6000], layers: [1,3],
-    windScale: [0,5], flareIntensity: [0,1], ghosts: [0,1], halo: [0,1], gradeStrength: [0,1], exposure: [0.1,4] };
+    windScale: [0,5], flareIntensity: [0,1], ghosts: [0,1], halo: [0,1], gradeStrength: [0,1], exposure: [0.1,10] };
   for (const k of Object.keys(ranges) as Array<keyof typeof ranges>) {
     const v = r[k];
     if (typeof v === 'number' && Number.isFinite(v)) result[k] = Math.max(ranges[k][0], Math.min(ranges[k][1], v));
