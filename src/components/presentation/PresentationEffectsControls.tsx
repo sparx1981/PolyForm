@@ -8,12 +8,14 @@ import { Popover, Slider } from './PresentationPanel';
 export default function PresentationEffectsControls(){
   const s=usePresentation();
   const [picking,setPicking]=useState(false);
+  const [missed,setMissed]=useState(false);
   useEffect(()=>{if(!s.depthOfField)setPicking(false);},[s.depthOfField]);
+  useEffect(()=>{if(!picking)setMissed(false);},[picking]);
   usePickOnModel(picking&&s.depthOfField,point=>{
     const camera=orbitControls()?.object;
     const distance=camera?focusDepth(camera,point,s.focusDistance):s.focusDistance;
     presentation.set({focusPoint:point,focusDistance:Math.round(distance*100)/100});setPicking(false);
-  },()=>setPicking(false));
+  },()=>setPicking(false),()=>setMissed(true));
   const configured=s.bloom>0||(s.depthOfField&&s.blurStrength>0);
   return <Popover title="Presentation effects" hint="Optional · off by default">
     <div className="space-y-3">
@@ -30,7 +32,7 @@ export default function PresentationEffectsControls(){
           <button type="button" aria-pressed={picking} onClick={()=>setPicking(!picking)} className="rounded bg-sky-600 px-3 py-2">{picking?'Cancel focus pick':'Pick focus on model'}</button>
           {s.focusPoint&&<button type="button" onClick={()=>{setPicking(false);presentation.set({focusPoint:null});}} className="rounded bg-white/10 px-3 py-2">Use distance</button>}
         </div>
-        {picking&&<p role="status" className="text-xs text-sky-200">Click or tap a surface to focus. Escape cancels.</p>}
+        {picking&&<p role="status" className={missed?'text-xs text-amber-200':'text-xs text-sky-200'}>{missed?'No solid surface there (glass, sky or empty space). Try a wall, floor or object. Escape cancels.':'Click or tap a surface to focus. Escape cancels.'}</p>}
         {s.focusPoint?<p className="text-[11px] text-white/65">The picked detail stays in focus as you move the camera.</p>:<label className="flex items-center justify-between text-xs">Focus distance
           <span className="flex items-center gap-1"><input type="number" aria-label="Focus distance" min={.1} max={5000} step={.1} value={s.focusDistance}
             onChange={e=>{const v=e.currentTarget.valueAsNumber;if(Number.isFinite(v))presentation.set({focusDistance:Math.max(.1,Math.min(5000,v))});}}

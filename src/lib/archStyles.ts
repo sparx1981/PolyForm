@@ -273,11 +273,11 @@ export const DOOR_STYLES: ArchStyleDef[] = [
     type: 'door',
     name: 'French Doors with Louvered Shutters',
     category: 'Classic',
-    description: 'Full-lite French glass doors flanked by authentic operable louvered exterior timber shutters with wrought iron strap hinges.',
+    description: 'Divided-light French doors filling the opening, with louvered timber shutters folded back flat on the outside face of the wall either side, on iron strap hinges. The width is the doors themselves; the shutters sit outside it.',
     defaultDimensions: [1.8, 2.1, 0.18],
     hasGlass: true,
     tags: ['Exterior', 'Patio', 'Pairs'],
-    features: ['Dual French Glass Leafs', 'Operable Louvered Shutters', 'Wrought Iron Strap Hinges', 'Traditional Architectural Charm']
+    features: ['Divided-Light French Leaves (Width = Doors)', 'Louvered Shutters on the Outside Wall Face', 'Wrought Iron Strap Hinges & Shutter Dogs', 'Lever Handles & Espagnolette Bolt']
   },
   {
     id: 'garage-sectional',
@@ -390,6 +390,16 @@ export const WINDOW_STYLES: ArchStyleDef[] = [
     defaultDimensions: [1.2, 1.2, 0.12],
     hasGlass: true,
     features: ['2x2 Divided Light Grid', 'Sill Ledge Overhang', 'Clear See-Through Glass']
+  },
+  {
+    id: 'casement-shutters',
+    type: 'window',
+    name: 'Casement Window with Louvered Shutters',
+    category: 'Classic',
+    description: 'A pair of divided-light casement sashes filling the opening, with louvered timber shutters folded back flat on the outside face of the wall either side. Matches the French Doors with Louvered Shutters.',
+    defaultDimensions: [1.2, 1.5, 0.15],
+    hasGlass: true,
+    features: ['Divided-Light Casement Pair (Width = Window)', 'Louvered Shutters on the Outside Wall Face', 'Wrought Iron Strap Hinges & Shutter Dogs', 'Projecting Sill']
   },
   {
     id: 'picture',
