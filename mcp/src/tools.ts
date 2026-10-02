@@ -13,6 +13,9 @@ import { buildRoofsForBuilding } from '../../src/lib/buildingRoofs';
 import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans } from './plans';
+import { analyzeWallConversion, planWithThickness, heightWarnings, PIECE_MIN_FOR_DOOR, PIECE_MIN_FOR_WINDOW, type WallConversionPlan } from '../../src/tools/kernelConvertToWall';
+import { deleteGroupFacesAndEdges, groupContaining } from '../../src/tools/kernelSelection';
+import type { FaceId } from '../../src/lib/geometry/types';
 import { checkLayout } from './layout';
 import { checkGeometry } from './geometry';
 import { assertFitsUnderCeiling, checkStair, headroomIssues, placeStairInRoom, retagStories, storyForElevation } from './checks';
@@ -31,7 +34,7 @@ import { KernelArcHost } from '../../src/tools/kernelArcHost';
 import { deserializeGraph, serializeGraph } from '../../src/lib/geometry/serialize';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../../src/lib/worldSite/geo';
 import {
-  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, monoPitchSite, pickRoof, porchOverDoor, roofWindow, wallRaisedBy, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
+  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, arcPoints, buildWallShapes, monoPitchSite, pickRoof, porchOverDoor, roofWindow, wallPlanAlong, wallRaisedBy, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
 } from './ops';
 
 export interface ScreenshotOptions {
@@ -635,6 +638,109 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     const run = withSdk(shapes, sdk => sdk.architecture.createWall({ start: a.start, end: a.end, height: a.height, thickness: a.thickness, color: a.color }));
     return { shapes: run.shapes, made: run.created };
   })));
+
+  /** What a set of wall pieces can take: how many are long enough for a door or a window. */
+  const openingNote = (lengths: number[]) => {
+    const doors = lengths.filter(l => l >= PIECE_MIN_FOR_DOOR).length, windows = lengths.filter(l => l >= PIECE_MIN_FOR_WINDOW).length;
+    return `${lengths.length} wall pieces from ${round(Math.min(...lengths))} to ${round(Math.max(...lengths))} m long: ${doors} can take a door (at least ${PIECE_MIN_FOR_DOOR} m), ${windows} a window (at least ${PIECE_MIN_FOR_WINDOW} m). Use add_opening on a piece id. For longer pieces use fewer segments.`;
+  };
+
+  server.registerTool('add_curved_wall', {
+    title: 'Add a curved or bent wall',
+    description: 'Builds real walls along an arc or a list of points: a bay, a curved porch wall, a rotunda, a bent wall. Each stretch is a wall piece with its ends cut so the corners close, the same walls the app makes from Convert To Wall, so doors, windows, roofs and floor plans work on them. Give centre + radius + sweep_deg for an arc (angle 0 along +x, increasing towards +z; sweep 360 makes a closed round wall), or points (plan [x, z] list) with closed. y is the floor level. Choose the outside face with outer_side. A curve is a run of short straight pieces: a door needs a piece at least 1.1 m long and a window 0.7 m, so for a wall that will have openings use fewer, longer segments (the reply says how many pieces can take one).',
+    inputSchema: {
+      model: modelRef,
+      centre: point2.optional().describe('Arc centre [x, z]'),
+      radius: z.number().min(0.3).max(100).optional(),
+      start_angle_deg: z.number().default(0),
+      sweep_deg: z.number().min(-360).max(360).optional().describe('How far round the arc goes; 360 or -360 closes it'),
+      segments: z.number().int().min(2).max(120).optional().describe('Pieces round the arc (default one per 15 degrees)'),
+      points: z.array(point2).min(2).max(200).optional().describe('Centreline [x, z] points instead of an arc'),
+      closed: z.boolean().default(false).describe('Join the last point back to the first (points only)'),
+      outer_side: z.enum(['left', 'right', 'convex']).default('convex').describe('Which way the outside face looks. Arcs: convex = away from the centre. Points: right/left of the direction of travel, with north up and z down the plan (walking east, right is south).'),
+      y: z.number().default(0).describe('Floor level the wall stands on'),
+      height: z.number().positive().default(2.7),
+      thickness: z.number().min(0.05).max(1).default(0.2),
+      color: colour.optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, 'Added a curved wall', shapes => {
+    let line: { x: number; z: number }[];
+    let closed = a.closed, curved = false;
+    let radialCentre: { x: number; z: number } | undefined;
+    if (a.points) {
+      line = (a.points as [number, number][]).map(([x, zz]) => ({ x, z: zz }));
+    } else {
+      if (!a.centre || a.radius === undefined || a.sweep_deg === undefined) throw new ToolError('Give centre, radius and sweep_deg for an arc, or points for a bent wall.');
+      const segments = a.segments ?? Math.max(2, Math.ceil(Math.abs(a.sweep_deg) / 15));
+      closed = Math.abs(a.sweep_deg) >= 359.999;
+      line = arcPoints(a.centre as [number, number], a.radius, a.start_angle_deg, a.sweep_deg, segments);
+      if (closed) line.pop();
+      curved = true;
+      radialCentre = { x: a.centre[0], z: a.centre[1] };
+    }
+    if (a.outer_side === 'convex' && !radialCentre) throw new ToolError('outer_side convex only applies to an arc; for points choose left or right.');
+    const plan = wallPlanAlong(line, a.thickness, { closed, side: a.outer_side === 'left' ? 'left' : 'right', baseY: a.y, radialCentre: a.outer_side === 'convex' ? radialCentre : undefined, curved });
+    const shortest = Math.min(...plan.pieces.map(p => p.length));
+    if (shortest < 0.3) throw new ToolError(`A piece would be only ${round(shortest)} m long. Use fewer segments, or a larger radius.`);
+    const story = storyForElevation(shapes, a.y);
+    const walls = buildWallShapes(plan, { height: a.height, color: a.color ?? '#e2e8f0', story, makeId: newId, existingWallCount: shapes.filter(s => s.type === 'wall').length })
+      .map((w, i) => ({ ...w, name: `${curved ? 'Curved' : 'Bent'} Wall ${i + 1}` }));
+    return { shapes: [...shapes, ...walls], made: walls, message: `Added a ${curved ? 'curved' : 'bent'} wall: ${openingNote(plan.pieces.map(p => p.length))}` };
+  })));
+
+  server.registerTool('convert_to_walls', {
+    title: 'Turn a drawn shape into walls',
+    description: 'Does what Convert To Wall does in the app: a shape drawn flat, given a wall thickness with edit_drawn_faces offset (and, usually, pulled straight up with push-pull to a flat, level top) becomes real wall pieces, one per straight edge with mitred corners (a curve becomes a run of short pieces), and the drawn shape is removed. Pass any face id of the shape from list_drawn_faces. If the shape has not been pulled up, pass height. thickness (optional) changes the wall thickness from the drawn one. The shape must be an offset ring of constant thickness; free-form shapes with varying thickness or sloping tops cannot become walls and stay drawn geometry. This is two changes (the walls, then the removal of the drawn shape), so undo_last_change twice reverses it. For a plain curved or bent wall, add_curved_wall is simpler.',
+    inputSchema: {
+      model: modelRef,
+      face: z.number().int().positive().describe('A face id of the drawn shape, from list_drawn_faces'),
+      height: z.number().positive().optional().describe('Wall height, needed when the ring has not been pulled up'),
+      thickness: z.number().min(0.02).max(1).optional().describe('Change the wall thickness from the drawn one'),
+      color: colour.optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => {
+    const model = await store.loadModel(caller, a.model);
+    const host = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } }, deserializeGraph((model.kernel ?? null) as any));
+    const face = a.face as unknown as FaceId;
+    if (!host.graph.faces.has(face)) throw new ToolError(`There is no drawn face ${a.face}. Use list_drawn_faces to get the ids.`);
+    const analysed = analyzeWallConversion(host.graph, face, groupContaining(host.graph, face));
+    if ('reason' in analysed) throw new ToolError(`That shape cannot become walls: ${analysed.reason}`);
+    let plan: WallConversionPlan = analysed;
+    if (a.thickness !== undefined) {
+      const changed = planWithThickness(plan, a.thickness);
+      if ('reason' in changed) throw new ToolError(changed.reason);
+      plan = changed;
+    }
+    const height = plan.height ?? a.height;
+    if (height === undefined) throw new ToolError('This outline has not been pulled up, so say how high the walls are: pass height.');
+    const notes = [...plan.warnings, ...heightWarnings(height, plan.baseY)].map(w => w.message);
+    const walls = buildWallShapes(plan, {
+      height, color: a.color ?? plan.color ?? '#e2e8f0', story: storyForElevation(model.shapes, plan.baseY), makeId: newId,
+      existingWallCount: model.shapes.filter(s => s.type === 'wall').length,
+    }).map((w, i) => ({ ...w, name: `${plan.pieces[i]?.curved ? 'Curved' : 'Converted'} Wall ${i + 1}` }));
+    await store.changeShapes(caller, model.id, 'Converted a drawn shape to walls', shapes => finish(withQuaternions([...shapes, ...walls])));
+    try {
+      await store.changeKernel(caller, model.id, 'Removed the drawn shape that became walls', kernel => {
+        const h = new KernelArcHost({ upAxis: { x: 0, y: 1, z: 0 } }, deserializeGraph((kernel ?? null) as any));
+        if (plan.sourceFaces.some(id => !h.graph.faces.has(id))) throw new ToolError('The drawn shape changed while it was being converted. Nothing was changed.');
+        deleteGroupFacesAndEdges(h.graph, plan.sourceFaces);
+        h.refreshIndex();
+        return serializeGraph(h.graph);
+      });
+    } catch (e) {
+      await store.undo(caller, model.id);
+      throw e;
+    }
+    return text({
+      model: `${model.name} (${model.id})`,
+      done: `Converted to ${walls.length} wall${walls.length === 1 ? '' : 's'} (${Math.round(plan.thickness * 1000)} mm thick, ${round(height)} m high). ${openingNote(plan.pieces.map(p => p.length))}`,
+      notes: notes.length ? notes : undefined,
+      created: walls.map(describe),
+      tip: 'undo_last_change twice reverses this (the walls, then the drawn shape). When the design is finished, call preview_model.',
+    });
+  }));
 
   server.registerTool('add_opening', {
     title: 'Add a door or window to a wall',

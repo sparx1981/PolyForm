@@ -8,6 +8,7 @@ import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { buildFence, buildPatio, buildWaterBody, originalGroundAt } from '../../src/lib/siteBuilders';
 import { RoofSurface, FACING, type Facing } from '../../src/lib/roofSurface';
 import { extractRoomFootprintPolygon, type RoofParams } from '../../src/lib/archRoofGenerator';
+import { buildWallShapes, type WallConversionPlan, type WallPiece } from '../../src/tools/kernelConvertToWall';
 import { ToolError } from './store';
 
 export type Vec3 = [number, number, number];
@@ -486,3 +487,67 @@ export function wallRaisedBy(wall: Shape, rise: number): Shape {
   const [length = 1, height = 2.8, thick = 0.2] = wall.args as number[];
   return { ...wall, id: newId(), name: 'Raised wall (mono-pitch roof)', position: [wall.position[0], wall.position[1] + height / 2 + rise / 2, wall.position[2]], args: [length, rise, thick], customData: undefined, hostWallId: undefined, wallMiterFootprint: undefined } as Shape;
 }
+
+type P2 = { x: number; z: number };
+
+/** Points along an arc about a centre in plan, angle 0 along +x and increasing towards +z. */
+export function arcPoints(centre: [number, number], radius: number, startDeg: number, sweepDeg: number, segments: number): P2[] {
+  const out: P2[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const a = THREE.MathUtils.degToRad(startDeg + (sweepDeg * i) / segments);
+    out.push({ x: centre[0] + radius * Math.cos(a), z: centre[1] + radius * Math.sin(a) });
+  }
+  return out;
+}
+
+/**
+ * Wall pieces along a centreline, each with its mitred footprint so the corners close at any angle: the
+ * same plan the app's Convert To Wall makes from an offset ring. `side` says which way the outside face looks
+ * (right or left of the direction of travel, with north up and z pointing down the plan); `radialCentre` makes
+ * it face away from a centre instead (the convex side of an arc).
+ */
+export function wallPlanAlong(points: P2[], thickness: number, opts: { closed: boolean; side: 'left' | 'right'; baseY: number; radialCentre?: P2; curved: boolean }): WallConversionPlan {
+  const n = points.length, segs = opts.closed ? n : n - 1;
+  if (segs < 1) throw new ToolError('A wall needs at least two points.');
+  const half = thickness / 2;
+  const seg = Array.from({ length: segs }, (_, i) => {
+    const a = points[i], b = points[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    if (len < 1e-6) throw new ToolError('Two points of the wall are in the same place.');
+    const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+    let out = opts.side === 'right' ? { x: -u.z, z: u.x } : { x: u.z, z: -u.x };
+    if (opts.radialCentre) {
+      const m = { x: (a.x + b.x) / 2 - opts.radialCentre.x, z: (a.z + b.z) / 2 - opts.radialCentre.z };
+      if (m.x * out.x + m.z * out.z < 0) out = { x: -out.x, z: -out.z };
+    }
+    return { a, b, u, out, len };
+  });
+  // The corner at the start of each piece: where the shifted faces of the piece before and this one meet.
+  const joint = (k: number, side: 1 | -1): P2 => {
+    const cur = seg[k];
+    const shiftedStart = (s: typeof cur): P2 => ({ x: s.a.x + s.out.x * half * side, z: s.a.z + s.out.z * half * side });
+    if (!opts.closed && k === 0) return shiftedStart(cur);
+    const prev = seg[(k - 1 + segs) % segs];
+    const p1 = shiftedStart(prev), p2 = shiftedStart(cur);
+    const cross = prev.u.x * cur.u.z - prev.u.z * cur.u.x;
+    if (Math.abs(cross) < 1e-6) return p2;
+    const w = { x: p2.x - p1.x, z: p2.z - p1.z };
+    const t = (w.x * cur.u.z - w.z * cur.u.x) / cross;
+    const hit = { x: p1.x + prev.u.x * t, z: p1.z + prev.u.z * t };
+    // A very sharp turn would throw the corner far out; refuse rather than make a spike.
+    if (Math.hypot(hit.x - cur.a.x, hit.z - cur.a.z) > thickness * 4) throw new ToolError('One corner turns too sharply for a mitred wall. Use gentler turns, or separate walls.');
+    return hit;
+  };
+  const endCorner = (k: number, side: 1 | -1): P2 => {
+    if (!opts.closed && k === segs - 1) { const s = seg[k]; return { x: s.b.x + s.out.x * half * side, z: s.b.z + s.out.z * half * side }; }
+    return joint((k + 1) % segs, side);
+  };
+  const pieces: WallPiece[] = seg.map((s, k) => {
+    const outerA = joint(k, 1), innerA = joint(k, -1), outerB = endCorner(k, 1), innerB = endCorner(k, -1);
+    const start = { x: (outerA.x + innerA.x) / 2, z: (outerA.z + innerA.z) / 2 }, end = { x: (outerB.x + innerB.x) / 2, z: (outerB.z + innerB.z) / 2 };
+    return { start, end, outward: s.out, corners: [outerA, innerA, innerB, outerB] as WallPiece['corners'], length: Math.hypot(end.x - start.x, end.z - start.z), curved: opts.curved };
+  });
+  return { ok: true, sourceFaces: [], flat: false, baseY: opts.baseY, height: null, thickness, pieces, color: null, warnings: [] };
+}
+
+export { buildWallShapes };

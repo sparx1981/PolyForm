@@ -11,8 +11,8 @@ Prefer a check in code over a sentence when a mistake can be detected: Claude ca
 
 ## Size of what is sent
 
-76 rules in 6 groups. Sent to Claude on every connection: **18,233 characters (about 4,558 tokens)**,
-rule text only. Sending every reason as well would be 24,432 characters (about 6,108 tokens). Tool descriptions are sent as well, separately (section 6).
+77 rules in 6 groups. Sent to Claude on every connection: **18,907 characters (about 4,727 tokens)**,
+rule text only. Sending every reason as well would be 25,200 characters (about 6,300 tokens). Tool descriptions are sent as well, separately (section 6).
 Token figures are characters divided by four, a rough guide.
 
 ## 1. General rules (sent)
@@ -122,10 +122,11 @@ How far each rule is backed by the connector: **enforced** (a tool refuses, warn
 | B14 | **Do not use circulation as furniture space.** Required furniture operating zones may overlap each other only when the uses can reasonably occur together, and must not consume the only required circulation route. | A nominally clear passage may disappear when furniture is actually being used. | UNCHECKED: P6, P7. |
 | B15 | **Furnish with furnish_room.** Use furnish_room where suitable, then verify both collision clearance and functional use space. Read and respond to any items that the tool omitted. | Automatic furnishing is a starting point, not proof of a usable layout. | partly checked: furnish_room is collision-aware and drops what is too tall (C5); check_layout then checks routes. |
 | B16 | **Mind ceilings and roof slopes.** Keep tall furniture, standing use zones and circulation out of areas where ceilings or sloping roofs do not provide adequate height. | Floor-plan clearance alone does not guarantee usable three-dimensional space. | partly checked: C5 for furniture; standing-use zones and circulation are not checked (P9). |
-| B17 | **Use real building objects.** Use add_roof_window for roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for porches, add_opening for doors/windows, add_stairs for stairs, add_railing for railings and add_roof for roofs (gable, hip, flat parapet, or single-slope mono). Do not imitate them with generic boxes or kernel geometry. | Look-alikes do not cut hosts, appear correctly on plans or behave like native building objects. | partly checked: The tools exist; nothing stops a look-alike. |
+| B17 | **Use real building objects.** Use add_roof_window for roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for porches, add_opening for doors/windows, add_stairs for stairs, add_railing for railings, add_curved_wall for curved or bent walls, convert_to_walls for a drawn offset ring that should become walls, and add_roof for roofs (gable, hip, flat parapet, or single-slope mono). Do not imitate them with generic boxes or kernel geometry. | Look-alikes do not cut hosts, appear correctly on plans or behave like native building objects. | partly checked: The tools exist; nothing stops a look-alike. |
 | B18 | **Approximate unsupported roof forms explicitly.** Use supported roof forms and native roof features to create the closest valid representation of unsupported geometry. Explain what was approximated. | Unsupported roof topology should not be hidden behind visually similar but structurally unrelated geometry. | advice |
 | B19 | **Align vertically where intended.** Where walls, columns, openings or structural lines are intended to align between storeys, derive them from common axes or coordinates. | Independent floor modelling causes subtle vertical drift. | partly checked: check_geometry finds walls a few centimetres off the wall below; columns, openings and slabs are not checked (P12). |
 | B20 | **Validate against the building intent.** Before completion, check footprint, room topology, levels, circulation, stairs, roof form, openings, repeated spacing, functional clearances and major proportions against the supplied requirements or reference. | A technically healthy model can still be a poor or unusable reconstruction. | partly checked: check_model_health, check_layout, preview_model. |
+| B21 | **Curved and abstract walls are walls, not drawings.** A curved, round or bent wall must be real wall pieces: use add_curved_wall for an arc or a list of points, or draw an outline, give it a thickness with edit_drawn_faces offset, pull it up, and use convert_to_walls. Do not leave drawn kernel solids standing in for walls. A curve is a run of short straight pieces, so choose segments to suit any door (a piece of at least 1.1 m) or window (0.7 m). Shapes whose thickness varies or whose top slopes cannot become walls: keep them as drawn geometry and say so. | Drawn solids take no doors or windows and do not count in rooms, levels, roofs or plans. | partly checked: add_curved_wall and convert_to_walls make real walls and report which pieces can take a door or window; add_curved_wall refuses pieces under 0.3 m; convert_to_walls refuses shapes that are not offset rings. Nothing stops a drawn solid standing in for a wall (P1/P2). |
 
 ### Interior and space-planning rules
 
@@ -199,6 +200,7 @@ How far each rule is backed by the connector: **enforced** (a tool refuses, warn
 | C10 | check_model_health | Walls on different storeys are not duplicates; rotated walls and furniture are read from their quaternion; furniture on another floor, or standing on another item, is not a collision. Orphan and over-wide openings, walls under 0.2 m and furniture collisions or clearance overlaps are reported. |
 | C11 | check_geometry | On request (it does not run on every change): numbers that are not numbers and paper-thin solids; doors and windows outside their wall, overlapping each other, within 0.1 m of a wall end, or (doors) off the floor; wall ends that stop 2 to 35 cm short of another wall on the same floor; furniture floating over or sunk into the floor it stands on (items on another item, ceiling fittings and people are exempt); upper-floor walls 2 to 30 cm off the wall below. The report lists what ran and what could not. |
 | C12 | add_roof with roof_type mono | A single-slope roof needs a straight wall on the side opposite the way it falls; it uses the app's own lean-to roof (so the roof panel can edit it), and the high wall is carried up to meet it. |
+| C13 | add_curved_wall, convert_to_walls | Walls are built as pieces with their ends cut to meet (the app's own wall conversion), filed under the storey of their floor level. add_curved_wall refuses a wall with a piece under 0.3 m, a corner that turns too sharply to mitre, or repeated points; convert_to_walls accepts only a flat offset ring of constant thickness pulled up to a level top, and removes the drawn shape only after the walls are added (undoing the first change if the second fails). Both report how many pieces are long enough for a door or window. |
 
 Validation tools built: `check_model_health`, `check_layout`.
 
@@ -317,6 +319,14 @@ Collision-aware Interior Studio furnishing. Call list_rooms first and pass its r
 ### `add_wall`: Add a wall
 
 A straight wall from start to end ([x, y, z], y = the floor it stands on).
+
+### `add_curved_wall`: Add a curved or bent wall
+
+Builds real walls along an arc or a list of points: a bay, a curved porch wall, a rotunda, a bent wall. Each stretch is a wall piece with its ends cut so the corners close, the same walls the app makes from Convert To Wall, so doors, windows, roofs and floor plans work on them. Give centre + radius + sweep_deg for an arc (angle 0 along +x, increasing towards +z; sweep 360 makes a closed round wall), or points (plan [x, z] list) with closed. y is the floor level. Choose the outside face with outer_side. A curve is a run of short straight pieces: a door needs a piece at least 1.1 m long and a window 0.7 m, so for a wall that will have openings use fewer, longer segments (the reply says how many pieces can take one).
+
+### `convert_to_walls`: Turn a drawn shape into walls
+
+Does what Convert To Wall does in the app: a shape drawn flat, given a wall thickness with edit_drawn_faces offset (and, usually, pulled straight up with push-pull to a flat, level top) becomes real wall pieces, one per straight edge with mitred corners (a curve becomes a run of short pieces), and the drawn shape is removed. Pass any face id of the shape from list_drawn_faces. If the shape has not been pulled up, pass height. thickness (optional) changes the wall thickness from the drawn one. The shape must be an offset ring of constant thickness; free-form shapes with varying thickness or sloping tops cannot become walls and stay drawn geometry. This is two changes (the walls, then the removal of the drawn shape), so undo_last_change twice reverses it. For a plain curved or bent wall, add_curved_wall is simpler.
 
 ### `add_opening`: Add a door or window to a wall
 

@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { Shape } from '../../src/types';
@@ -455,5 +456,142 @@ describe('geometry checks', () => {
     const report = await h.call('check_geometry', { model: id });
     expect(report.checked.length).toBeGreaterThan(0);
     expect(report.skipped.length).toBeGreaterThan(0);
+  });
+});
+
+describe('curved walls and drawn shapes as walls', () => {
+  const user = { uid: 'u1', email: 'me@example.com' };
+  const wallsOf = async (h: Harness, id: string) => (await shapesOf(h, id)).filter(s => s.type === 'wall');
+  /** The way a wall's outside face looks, in plan (its local +z). */
+  const outward = (w: Shape) => { const v = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...w.quaternion!)); return [v.x, v.z]; };
+
+  it('builds a quarter-round wall of pieces whose outside faces away from the centre', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Arc' });
+    const result = await h.call('add_curved_wall', { model: id, centre: [0, 0], radius: 4, start_angle_deg: 0, sweep_deg: 90, segments: 6, thickness: 0.2, height: 2.7 });
+    expect(result.error).toBeUndefined();
+    const walls = await wallsOf({ ...h, id } as any, id);
+    expect(walls).toHaveLength(6);
+    for (const w of walls) {
+      expect((w.args as number[])[1]).toBe(2.7);
+      expect((w.args as number[])[2]).toBeCloseTo(0.2);
+      expect(w.tags).toContain('story-1');
+      expect(w.wallMiterFootprint).toBeDefined();
+      // The wall sits on the arc, and its outside looks away from the centre.
+      expect(Math.hypot(w.position[0], w.position[2])).toBeGreaterThan(3.8);
+      expect(Math.hypot(w.position[0], w.position[2])).toBeLessThan(4.1);
+      const [ox, oz] = outward(w);
+      expect(ox * w.position[0] + oz * w.position[2]).toBeGreaterThan(0);
+    }
+    // Together the pieces run the length of the arc (the chords of a 4 m radius quarter turn).
+    const total = walls.reduce((n, w) => n + (w.args as number[])[0], 0);
+    expect(total).toBeGreaterThan(6.2);
+    expect(total).toBeLessThan(2 * Math.PI * 4 / 4 + 0.3);
+    expect(result.done).toMatch(/can take a door/);
+  });
+
+  it('closes a full circle with no gap at the joint', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Round' });
+    await h.call('add_curved_wall', { model: id, centre: [0, 0], radius: 3, sweep_deg: 360, segments: 16 });
+    const walls = await wallsOf({ ...h, id } as any, id);
+    expect(walls).toHaveLength(16);
+    // Each piece's outer end corner is the next piece's outer start corner.
+    const world = (w: Shape) => {
+      const q = new THREE.Quaternion(...w.quaternion!);
+      return w.wallMiterFootprint!.map(([x, z]: [number, number]) => { const v = new THREE.Vector3(x, 0, z).applyQuaternion(q); return [w.position[0] + v.x, w.position[2] + v.z]; });
+    };
+    const ends = walls.map(world);
+    const snap = (n: number) => (Math.round(n * 200) / 200 + 0).toFixed(3);
+    const key = (p: number[]) => `${snap(p[0])},${snap(p[1])}`;
+    const corners = new Map<string, number>();
+    for (const c of ends) for (const p of c) corners.set(key(p), (corners.get(key(p)) ?? 0) + 1);
+    // 16 pieces, each corner shared by exactly two neighbours: 32 corners are 32 distinct shared points.
+    expect([...corners.values()].every(n => n === 2)).toBe(true);
+    const health = await h.call('check_model_health', { model: id });
+    expect(health.issues.filter((i: any) => i.code === 'wall-too-short')).toEqual([]);
+  });
+
+  it('puts the outside on the side asked for along a bent wall', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Bent' });
+    await h.call('add_curved_wall', { model: id, points: [[0, 0], [4, 0], [4, 3]], outer_side: 'right' });
+    const walls = await wallsOf({ ...h, id } as any, id);
+    expect(walls).toHaveLength(2);
+    // Walking east, right is south (+z); then walking south (+z), right is west (-x).
+    const east = walls.find(w => Math.abs(w.position[2]) < 0.01)!;
+    const south = walls.find(w => Math.abs(w.position[0] - 4) < 0.15 && w.position[2] > 0.5)!;
+    expect(outward(east)[1]).toBeGreaterThan(0.9);
+    expect(outward(south)[0]).toBeLessThan(-0.9);
+    await h.call('undo_last_change', { model: id });
+    await h.call('add_curved_wall', { model: id, points: [[0, 0], [4, 0], [4, 3]], outer_side: 'left' });
+    const flipped = (await wallsOf({ ...h, id } as any, id)).find(w => Math.abs(w.position[2]) < 0.01)!;
+    expect(outward(flipped)[1]).toBeLessThan(-0.9);
+  });
+
+  it('takes a door in a long enough piece, and refuses pieces too short to be useful', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Door' });
+    await h.call('add_curved_wall', { model: id, centre: [0, 0], radius: 4, sweep_deg: 90, segments: 3 });
+    const walls = await wallsOf({ ...h, id } as any, id);
+    const door = await h.call('add_opening', { model: id, wall: walls[1].id, kind: 'door' });
+    expect(door.error).toBeUndefined();
+    const tiny = await h.call('add_curved_wall', { model: id, centre: [10, 0], radius: 0.5, sweep_deg: 360, segments: 40 });
+    expect(tiny.error).toMatch(/only .* m long/);
+    const needsInfo = await h.call('add_curved_wall', { model: id });
+    expect(needsInfo.error).toMatch(/centre, radius and sweep_deg/);
+  });
+
+  it('files a curved wall on an upper floor under its own level, and a roof will cover a round building', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Upstairs' });
+    await h.call('add_room', { model: id, width: 8, length: 8, position: [0, 0, 0], height: 2.8 });
+    await h.call('add_curved_wall', { model: id, centre: [0, 0], radius: 3, sweep_deg: 360, y: 2.8, segments: 12 });
+    const upper = (await wallsOf({ ...h, id } as any, id)).filter(w => w.position[1] > 2);
+    expect(upper).toHaveLength(12);
+    expect(upper.every(w => w.tags!.includes('story-2'))).toBe(true);
+    const roof = await h.call('add_roof', { model: id, roof_type: 'hip' });
+    expect(roof.error).toBeUndefined();
+  });
+
+  /** A 6 × 4 m rectangle drawn on the ground, offset inwards 0.2 m to a ring (face 2). */
+  async function drawnRing() {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Drawn' });
+    await h.call('draw_primitive', { model: id, kind: 'rectangle', centre: [0, 0, 0], width: 6, depth: 4, normal: [0, 1, 0] });
+    await h.call('edit_drawn_faces', { model: id, operation: 'offset', faces: [1], distance: -0.2 });
+    return { ...h, id };
+  }
+
+  it('turns a drawn ring into walls, removes the drawing, and undoes in two steps', async () => {
+    const { id, call, store } = await drawnRing();
+    const needsHeight = await call('convert_to_walls', { model: id, face: 2 });
+    expect(needsHeight.error).toMatch(/pass height/);
+    const result = await call('convert_to_walls', { model: id, face: 2, height: 2.7 });
+    expect(result.error).toBeUndefined();
+    const walls = (await store.loadModel(user, id)).shapes.filter(s => s.type === 'wall');
+    expect(walls).toHaveLength(4);
+    expect(walls.every(w => (w.args as number[])[1] === 2.7 && w.tags!.includes('converted-wall'))).toBe(true);
+    // The wall ring is gone from the drawing (the floor face inside is left, as in the app).
+    expect((await call('list_drawn_faces', { model: id })).map((f: any) => f.id)).toEqual([3]);
+    await call('undo_last_change', { model: id });
+    await call('undo_last_change', { model: id });
+    expect((await call('list_drawn_faces', { model: id })).map((f: any) => f.id)).toEqual([2, 3]);
+    expect((await store.loadModel(user, id)).shapes.filter(s => s.type === 'wall')).toHaveLength(0);
+  });
+
+  it('uses the height it was pulled up to, can change the thickness, and refuses what is not a ring', async () => {
+    const { id, call, store } = await drawnRing();
+    await call('edit_drawn_faces', { model: id, operation: 'push-pull', faces: [2], distance: 3 });
+    const result = await call('convert_to_walls', { model: id, face: 2, thickness: 0.3 });
+    expect(result.error).toBeUndefined();
+    const walls = (await store.loadModel(user, id)).shapes.filter(s => s.type === 'wall');
+    expect((walls[0].args as number[])[1]).toBeCloseTo(3);
+    expect((walls[0].args as number[])[2]).toBeCloseTo(0.3);
+    const lone = harness();
+    const { id: id2 } = await lone.call('create_model', { name: 'Plain' });
+    await lone.call('draw_primitive', { model: id2, kind: 'rectangle', centre: [0, 0, 0], width: 2, depth: 2, normal: [0, 1, 0] });
+    expect((await lone.call('convert_to_walls', { model: id2, face: 1, height: 2.7 })).error).toMatch(/cannot become walls/);
+    expect((await lone.call('convert_to_walls', { model: id2, face: 99, height: 2.7 })).error).toMatch(/no drawn face 99/);
   });
 });

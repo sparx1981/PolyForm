@@ -407,7 +407,7 @@ export const BUILDING_RULES: PolyFormRule[] = [
     id: 'B17',
     title: 'Use real building objects',
     rule:
-      'Use add_roof_window for roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for porches, add_opening for doors/windows, add_stairs for stairs, add_railing for railings and add_roof for roofs (gable, hip, flat parapet, or single-slope mono). Do not imitate them with generic boxes or kernel geometry.',
+      'Use add_roof_window for roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for porches, add_opening for doors/windows, add_stairs for stairs, add_railing for railings, add_curved_wall for curved or bent walls, convert_to_walls for a drawn offset ring that should become walls, and add_roof for roofs (gable, hip, flat parapet, or single-slope mono). Do not imitate them with generic boxes or kernel geometry.',
     why:
       'Look-alikes do not cut hosts, appear correctly on plans or behave like native building objects.',
   },
@@ -434,6 +434,14 @@ export const BUILDING_RULES: PolyFormRule[] = [
       'Before completion, check footprint, room topology, levels, circulation, stairs, roof form, openings, repeated spacing, functional clearances and major proportions against the supplied requirements or reference.',
     why:
       'A technically healthy model can still be a poor or unusable reconstruction.',
+  },
+  {
+    id: 'B21',
+    title: 'Curved and abstract walls are walls, not drawings',
+    rule:
+      'A curved, round or bent wall must be real wall pieces: use add_curved_wall for an arc or a list of points, or draw an outline, give it a thickness with edit_drawn_faces offset, pull it up, and use convert_to_walls. Do not leave drawn kernel solids standing in for walls. A curve is a run of short straight pieces, so choose segments to suit any door (a piece of at least 1.1 m) or window (0.7 m). Shapes whose thickness varies or whose top slopes cannot become walls: keep them as drawn geometry and say so.',
+    why:
+      'Drawn solids take no doors or windows and do not count in rooms, levels, roofs or plans.',
   },
 ];
 
@@ -837,6 +845,12 @@ export const AUTOMATIC_CHECKS: {
     check:
       'A single-slope roof needs a straight wall on the side opposite the way it falls; it uses the app\'s own lean-to roof (so the roof panel can edit it), and the high wall is carried up to meet it.',
   },
+  {
+    id: 'C13',
+    where: 'add_curved_wall, convert_to_walls',
+    check:
+      'Walls are built as pieces with their ends cut to meet (the app\'s own wall conversion), filed under the storey of their floor level. add_curved_wall refuses a wall with a piece under 0.3 m, a corner that turns too sharply to mitre, or repeated points; convert_to_walls accepts only a flat offset ring of constant thickness pulled up to a level top, and removes the drawn shape only after the walls are added (undoing the first change if the second fails). Both report how many pieces are long enough for a door or window.',
+  },
 ];
 
 /**
@@ -949,6 +963,7 @@ export const RULE_ENFORCEMENT: Record<string, { level: Enforcement; by?: string 
   B18: { level: 'advice' },
   B19: { level: 'partial', by: 'check_geometry finds walls a few centimetres off the wall below; columns, openings and slabs are not checked (P12).' },
   B20: { level: 'partial', by: 'check_model_health, check_layout, preview_model.' },
+  B21: { level: 'partial', by: 'add_curved_wall and convert_to_walls make real walls and report which pieces can take a door or window; add_curved_wall refuses pieces under 0.3 m; convert_to_walls refuses shapes that are not offset rings. Nothing stops a drawn solid standing in for a wall (P1/P2).' },
   I1: { level: 'advice' },
   I2: { level: 'partial', by: 'check_layout reaches rooms, not individual destinations (P7).' },
   I3: { level: 'partial', by: 'As B13 (P6).' },
