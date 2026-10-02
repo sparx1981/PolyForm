@@ -12,6 +12,7 @@ import { buildRoofsForBuilding } from '../../src/lib/buildingRoofs';
 import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans } from './plans';
+import { checkLayout } from './layout';
 import { assertFitsUnderCeiling, checkStair, headroomIssues, placeStairInRoom, retagStories, storyForElevation } from './checks';
 import { applyStairwellHolesToSlabs } from '../../src/lib/archStairwell';
 import { detectRooms } from '../../src/lib/spatial/rooms';
@@ -237,6 +238,20 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
   }, safe(async ({ model }) => {
     const m = await store.loadModel(caller, model);
     return text(withSdk(m.shapes, sdk => sdk.reconstruction.checkModelHealth()).result);
+  }));
+
+  server.registerTool('check_layout', {
+    title: 'Check how the building works',
+    description: 'Checks how a building is used, which check_model_health does not: whether each hinged door has room to swing, whether a person can walk from the front door (and up the stairs) to every room at 0.75 m wide and 0.9 m wide, whether furniture blocks a doorway or passage, headroom over the stairs, and rooms with no window. Returns what was checked and what could not be. Run it after furnishing and after adding stairs. Widths are modelling defaults; pass circulation_width or local_width if the user gave their own. It is not an accessibility or building-code check and must never be reported as one.',
+    inputSchema: {
+      model: modelRef,
+      circulation_width: z.number().min(0.5).max(2).optional().describe('Main route width to test, metres (default 0.9)'),
+      local_width: z.number().min(0.4).max(2).optional().describe('Minimum width into any room, metres (default 0.75)'),
+    },
+    annotations: READ,
+  }, safe(async ({ model, circulation_width, local_width }) => {
+    const m = await store.loadModel(caller, model);
+    return text(checkLayout(m.shapes, { circulationWidth: circulation_width, localWidth: local_width }));
   }));
 
   server.registerTool('get_object', {
@@ -745,6 +760,40 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     const next = withRoofExtras(shapes, roof.id, { ...extras, dormers: 0, dormerList: [...dormersOf(roof), ...fresh] });
     const made = next.filter(s => isRoofExtra(s) && s.parentShapeId === roof.id);
     return { shapes: next, made, message: `Added ${fresh.length} ${a.type} dormer(s) on the ${a.facing} slope.` };
+  })));
+
+  server.registerTool('set_roof_extras', {
+    title: 'Add gutters, a chimney or solar panels to a roof',
+    description: 'Adds or removes the roof extras the app\'s roof panel has: gutters with downpipes, a chimney, and solar panels on a slope. Pass only what you want to change; the rest of the roof\'s extras (including dormers) are kept. chimney_x and chimney_z place the chimney across the roof from -1 to 1 of each half-extent (0, 0 is the middle; x runs along the building\'s x axis, z along its z axis). Solar panels go on the slope facing solar_facing (south = +z). Always use this rather than drawing a chimney, gutters or panels from boxes.',
+    inputSchema: {
+      model: modelRef,
+      roof: z.string().optional().describe('Roof id from list_objects (needed only when there is more than one roof)'),
+      gutters: z.boolean().optional(),
+      gutter_color: colour.optional(),
+      chimney: z.boolean().optional(),
+      chimney_x: z.number().min(-1).max(1).optional(),
+      chimney_z: z.number().min(-1).max(1).optional(),
+      chimney_color: colour.optional(),
+      solar: z.boolean().optional(),
+      solar_facing: z.enum(['south', 'north', 'east', 'west']).optional(),
+    },
+    annotations: WRITE,
+  }, safe(async (a) => change(a.model, 'Set roof extras', shapes => {
+    const roof = pickRoof(shapes, a.roof);
+    const extras = { ...extrasOf(roof) };
+    if (a.gutters !== undefined) extras.gutters = a.gutters;
+    if (a.gutter_color) extras.gutterColor = a.gutter_color;
+    if (a.chimney !== undefined) extras.chimney = a.chimney;
+    if (a.chimney_x !== undefined) extras.chimneyX = a.chimney_x;
+    if (a.chimney_z !== undefined) extras.chimneyZ = a.chimney_z;
+    if (a.chimney_color) extras.chimneyColor = a.chimney_color;
+    if (a.solar !== undefined) extras.solar = a.solar;
+    if (a.solar_facing) extras.solarFacing = a.solar_facing;
+    if (extras.dormerList === undefined && dormersOf(roof).length) extras.dormerList = dormersOf(roof);
+    const next = withRoofExtras(shapes, roof.id, extras);
+    const made = next.filter(s => isRoofExtra(s) && s.parentShapeId === roof.id);
+    const on = [extras.gutters && 'gutters', extras.chimney && 'chimney', extras.solar && 'solar panels'].filter(Boolean);
+    return { shapes: next, made, message: `Roof extras now: ${on.length ? on.join(', ') : 'none'}.` };
   })));
 
   server.registerTool('add_porch', {

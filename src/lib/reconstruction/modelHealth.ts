@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { Shape } from '../../types';
 import { placementCollisions, type OrientedFootprint } from '../spatial/placement';
 import type { PlacementProfile, SemanticObjectKind } from '../semantics/componentTypes';
@@ -26,10 +27,27 @@ export interface ModelHealthReport {
   healthy: boolean;
 }
 
+/** Turn about the vertical axis, from whichever of quaternion or rotation the object carries (the connector saves quaternions). */
+function yawOf(shape: Shape): number {
+  if (shape.quaternion) return new THREE.Euler().setFromQuaternion(new THREE.Quaternion(...shape.quaternion), 'YXZ').y;
+  return shape.rotation?.[1] ?? 0;
+}
+
+/** Height range [bottom, top] a wall covers. */
+function wallSpan(shape: Shape): [number, number] {
+  const height = Array.isArray(shape.args) ? Number(shape.args[1]) || 2.8 : 2.8;
+  return [shape.position[1] - height / 2, shape.position[1] + height / 2];
+}
+
+/** Whether two height ranges share more than a sliver (touching, as when a lamp stands on a table, does not count). */
+function stacked([a0, a1]: [number, number], [b0, b1]: [number, number], tolerance = 0.05): boolean {
+  return Math.min(a1, b1) - Math.max(a0, b0) > tolerance;
+}
+
 function wallEnds(shape: Shape): [[number, number], [number, number]] | null {
   if (shape.type !== 'wall' || !Array.isArray(shape.args)) return null;
   const length = Number(shape.args[0]) || 0;
-  const angle = shape.rotation?.[1] ?? 0;
+  const angle = yawOf(shape);
   const dx = Math.cos(angle) * length / 2;
   const dz = -Math.sin(angle) * length / 2;
   return [
@@ -45,6 +63,8 @@ function close(a: [number, number], b: [number, number], tolerance = 0.03) {
 function wallsDuplicate(a: Shape, b: Shape): boolean {
   const ea = wallEnds(a), eb = wallEnds(b);
   if (!ea || !eb) return false;
+  // Walls one above the other (storeys) share a plan line without being duplicates.
+  if (!stacked(wallSpan(a), wallSpan(b), 0.3)) return false;
   return (close(ea[0], eb[0]) && close(ea[1], eb[1]))
     || (close(ea[0], eb[1]) && close(ea[1], eb[0]));
 }
@@ -81,8 +101,16 @@ function footprintOf(shape: Shape): OrientedFootprint | null {
     kind: kindOf(shape),
     center: [shape.position[0], shape.position[2]],
     halfSize: [width / 2, depth / 2],
-    rotationY: shape.rotation?.[1] ?? 0,
+    rotationY: yawOf(shape),
   };
+}
+
+/** Height range an item occupies, when it says how tall it is (its position is its base); undefined otherwise. */
+function verticalSpan(shape: Shape): [number, number] | undefined {
+  const params = semantic(shape)?.params ?? {};
+  const height = Number(params.height ?? (Array.isArray(shape.args) ? shape.args[1] : NaN));
+  if (!(height > 0) || !Number.isFinite(height)) return undefined;
+  return [shape.position[1], shape.position[1] + height];
 }
 
 export function checkModelHealth(shapes: readonly Shape[]): ModelHealthReport {
@@ -141,6 +169,7 @@ export function checkModelHealth(shapes: readonly Shape[]): ModelHealthReport {
     .map(footprintOf)
     .filter((footprint): footprint is OrientedFootprint => footprint !== null);
   const footprintById = new Map(footprints.map(f => [f.id!, f]));
+  const spanById = new Map(semanticShapes.map(shape => [shape.id, verticalSpan(shape)]));
 
   const seenCollisionPairs = new Set<string>();
   for (const shape of semanticShapes) {
@@ -155,7 +184,13 @@ export function checkModelHealth(shapes: readonly Shape[]): ModelHealthReport {
       });
       continue;
     }
-    const obstacles = footprints.filter(f => f.id !== shape.id);
+    // Only things at the same height can be in the way: not another floor's furniture, nor what stands on top.
+    const mine = verticalSpan(shape);
+    const obstacles = footprints.filter(f => {
+      if (f.id === shape.id) return false;
+      const theirs = spanById.get(f.id!);
+      return !(mine && theirs) || stacked(mine, theirs);
+    });
     const collisions = placementCollisions(footprint, obstacles, profile);
     for (const collision of collisions) {
       if (!collision.obstacleId) continue;

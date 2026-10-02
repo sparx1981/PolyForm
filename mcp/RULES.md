@@ -38,7 +38,7 @@ Each change can be reversed with undo_last_change.
 
 ### B4. Real objects, not look-alikes
 
-**Rule:** Use the app's own tools for anything it already has: add_roof_window for Velux roof windows and skylights, add_dormers for dormers, add_porch for a porch over a door, add_opening for doors and windows in walls, add_stairs, add_railing, add_roof. Never draw these from boxes, kernel shapes or push/pull.
+**Rule:** Use the app's own tools for anything it already has: add_roof_window for Velux roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for a porch over a door, add_opening for doors and windows in walls, add_stairs, add_railing, add_roof. Never draw these from boxes, kernel shapes or push/pull.
 
 **Why:** Look-alikes do not cut the roof, move with the building, show on plans or match the app's own objects.
 
@@ -50,7 +50,7 @@ Each change can be reversed with undo_last_change.
 
 ### B6. Match the reference, then check it
 
-**Rule:** After building, call check_model_health and preview_model, then compare the picture with the reference. Name anything that does not match (porch, roof form, window count, proportions) and offer to fix it. Do not claim a match you have not checked.
+**Rule:** After building, call check_model_health and check_layout (doors, routes, stair headroom), then preview_model, and compare the picture with the reference. Report which checks ran and which could not; check_layout is a design check, never an accessibility or code check. Name anything that does not match (porch, roof form, window count, proportions) and offer to fix it. Do not claim a match you have not checked.
 
 **Why:** A porch was silently missed on the first attempt.
 
@@ -71,6 +71,8 @@ Each change can be reversed with undo_last_change.
 | C5 | add_interior_furniture, furnish_room | Every point of a new item must be under the ceiling or sloping roof above it. add_interior_furniture refuses a tall item; furnish_room drops it and says so. |
 | C6 | add_roof_window | A roof window must lie wholly on one roof slope (not off the roof, across a ridge or hip, or on a flat roof). |
 | C7 | add_dormers | Each dormer must fit wholly on one slope. A full-width dormer is measured from the slope and narrowed until it fits. |
+| C9 | check_layout | Door swing (a square of the door width must be clear on one side), walking routes from the front door and stairs to every room at 0.75 m and 0.9 m wide with furniture in place, stair headroom against the 2.0 m target, and rooms with no window. The report lists what ran and what could not. Widths come from SPATIAL_DEFAULTS. |
+| C10 | check_model_health | Walls on different storeys are not duplicates, rotated walls and furniture are read from their quaternion, and furniture on another floor (or standing on another item) is not a collision. |
 | C8 | add_porch | The porch is built on the outside of the door's wall (the side facing away from the building) and its roof is above the door head. |
 
 ## 4. Tool descriptions (what Claude reads about each tool)
@@ -102,6 +104,10 @@ Lists PolyForm civil terrain modifiers such as roads and grading pads, including
 ### `check_model_health`: Check model health
 
 Runs PolyForm reconstruction/model-health checks and returns errors and warnings before further editing or generation.
+
+### `check_layout`: Check how the building works
+
+Checks how a building is used, which check_model_health does not: whether each hinged door has room to swing, whether a person can walk from the front door (and up the stairs) to every room at 0.75 m wide and 0.9 m wide, whether furniture blocks a doorway or passage, headroom over the stairs, and rooms with no window. Returns what was checked and what could not be. Run it after furnishing and after adding stairs. Widths are modelling defaults; pass circulation_width or local_width if the user gave their own. It is not an accessibility or building-code check and must never be reported as one.
 
 ### `get_object`: Show one object
 
@@ -174,6 +180,10 @@ Places PolyForm's real Velux roof window (skylight) lying in the slope of a roof
 ### `add_dormers`: Add dormers
 
 Adds dormers (a window box standing up out of a pitched roof, with its own roof) to a roof made by add_roof; the roof is cut open for each. Types: gable, hipped, flat. A full-width flat dormer across a slope (common on the back of a house) is full_width: true with type flat. Each dormer must sit wholly on one slope, clear of hips and the ridge; if one will not fit you are told why and nothing is added. Dormers are real objects with glass, walls, roofs and linings, so never fake them with boxes.
+
+### `set_roof_extras`: Add gutters, a chimney or solar panels to a roof
+
+Adds or removes the roof extras the app's roof panel has: gutters with downpipes, a chimney, and solar panels on a slope. Pass only what you want to change; the rest of the roof's extras (including dormers) are kept. chimney_x and chimney_z place the chimney across the roof from -1 to 1 of each half-extent (0, 0 is the middle; x runs along the building's x axis, z along its z axis). Solar panels go on the slope facing solar_facing (south = +z). Always use this rather than drawing a chimney, gutters or panels from boxes.
 
 ### `add_porch`: Add a porch over a door
 

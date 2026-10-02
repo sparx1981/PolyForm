@@ -17,12 +17,12 @@ const LEVEL_GAP = 0.5;
 const round = (n: number, dp = 2) => Math.round(n * 10 ** dp) / 10 ** dp;
 const nums = (s: Shape) => (Array.isArray(s.args) ? (s.args as number[]) : []);
 
-function orientation(s: Shape): THREE.Quaternion {
+export function orientation(s: Shape): THREE.Quaternion {
   if (s.quaternion) return new THREE.Quaternion(...s.quaternion);
   return new THREE.Quaternion().setFromEuler(new THREE.Euler(...(s.rotation ?? [0, 0, 0])));
 }
 
-const wallBase = (w: Shape) => w.position[1] - (nums(w)[1] ?? 2.8) / 2;
+export const wallBase = (w: Shape) => w.position[1] - (nums(w)[1] ?? 2.8) / 2;
 
 // ── Storeys ──────────────────────────────────────────────────────────────────────────────
 
@@ -125,7 +125,7 @@ export function stairFootprint(stair: Shape): StairFootprint {
   };
 }
 
-function inPolygon(p: V2, poly: V2[]): boolean {
+export function inPolygon(p: V2, poly: V2[]): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const [xi, zi] = poly[i], [xj, zj] = poly[j];
@@ -149,7 +149,7 @@ function overlapsOnAxis(a: V2[], b: V2[], axis: V2): boolean {
 }
 
 /** True when two convex plan boxes overlap (separating-axis test). */
-function boxesOverlap(a: V2[], b: V2[]): boolean {
+export function boxesOverlap(a: V2[], b: V2[]): boolean {
   for (const box of [a, b]) {
     for (let i = 0; i < 2; i++) {
       const e: V2 = [box[i + 1][0] - box[i][0], box[i + 1][1] - box[i][1]];
@@ -160,7 +160,7 @@ function boxesOverlap(a: V2[], b: V2[]): boolean {
   return true;
 }
 
-function wallCorners(w: Shape): V2[] {
+export function wallCorners(w: Shape): V2[] {
   const [length = 1, , thickness = 0.2] = nums(w);
   const d = new THREE.Vector3(1, 0, 0).applyQuaternion(orientation(w));
   const len = Math.hypot(d.x, d.z) || 1;
@@ -320,7 +320,7 @@ export interface HeadroomIssue {
 }
 
 /** World-space vertices of an item (from its mesh, or its box when it has none), thinned for speed. */
-function worldPoints(s: Shape, max = 600): THREE.Vector3[] {
+export function worldPoints(s: Shape, max = 600): THREE.Vector3[] {
   const q = orientation(s);
   const m = new THREE.Matrix4().compose(new THREE.Vector3(...s.position), q, new THREE.Vector3(...(s.scale ?? [1, 1, 1])));
   const pos = s.geometryData?.positions as number[] | undefined;

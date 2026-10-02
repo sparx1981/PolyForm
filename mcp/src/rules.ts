@@ -6,6 +6,22 @@
  * Keep each rule short and testable, and say why: Claude follows a rule it understands.
  */
 
+/**
+ * Fallback spatial design targets, in metres, used when the user, project or a chosen standard gives none.
+ * These are modelling defaults, not legal minima and not proof of accessibility or code compliance.
+ * The layout checks read these, so the numbers live in one place.
+ */
+export const SPATIAL_DEFAULTS = {
+  primaryCirculationWidth: 0.9,
+  secondaryCirculationWidth: 0.75,
+  doorSwingBuffer: 0.05,
+  standingUseDepth: 0.6,
+  seatedFurnitureUseDepth: 0.75,
+  bedsideAccessWidth: 0.6,
+  generalWorkAisleWidth: 1.0,
+  targetHeadroom: 2.0,
+} as const;
+
 export const GENERAL_RULES = `PolyForm is a 3D modelling app for buildings and gardens. Units are metres; y is up and the ground is y = 0 (or the terrain).
 Find the model first (list_models), then read it (get_model, list_objects) before changing it. Always pass the model's id, not its name, to every tool after that. Building tools add real PolyForm objects that also appear live in the app if it is open.
 Screenshots are slow and costly: take one only when you need to check something you can't tell from list_objects, not after every change. When a design is finished (created or changed), always call preview_model once and show the user its pictures: a 3D view and, for buildings, a floor plan of each level. Pass room_labels naming the rooms you built.
@@ -34,7 +50,7 @@ export const BUILDING_RULES: { id: string; title: string; rule: string; why: str
   {
     id: 'B4',
     title: 'Real objects, not look-alikes',
-    rule: 'Use the app\'s own tools for anything it already has: add_roof_window for Velux roof windows and skylights, add_dormers for dormers, add_porch for a porch over a door, add_opening for doors and windows in walls, add_stairs, add_railing, add_roof. Never draw these from boxes, kernel shapes or push/pull.',
+    rule: 'Use the app\'s own tools for anything it already has: add_roof_window for Velux roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for a porch over a door, add_opening for doors and windows in walls, add_stairs, add_railing, add_roof. Never draw these from boxes, kernel shapes or push/pull.',
     why: 'Look-alikes do not cut the roof, move with the building, show on plans or match the app\'s own objects.',
   },
   {
@@ -46,7 +62,7 @@ export const BUILDING_RULES: { id: string; title: string; rule: string; why: str
   {
     id: 'B6',
     title: 'Match the reference, then check it',
-    rule: 'After building, call check_model_health and preview_model, then compare the picture with the reference. Name anything that does not match (porch, roof form, window count, proportions) and offer to fix it. Do not claim a match you have not checked.',
+    rule: 'After building, call check_model_health and check_layout (doors, routes, stair headroom), then preview_model, and compare the picture with the reference. Report which checks ran and which could not; check_layout is a design check, never an accessibility or code check. Name anything that does not match (porch, roof form, window count, proportions) and offer to fix it. Do not claim a match you have not checked.',
     why: 'A porch was silently missed on the first attempt.',
   },
   {
@@ -66,6 +82,8 @@ export const AUTOMATIC_CHECKS: { id: string; where: string; check: string }[] = 
   { id: 'C5', where: 'add_interior_furniture, furnish_room', check: 'Every point of a new item must be under the ceiling or sloping roof above it. add_interior_furniture refuses a tall item; furnish_room drops it and says so.' },
   { id: 'C6', where: 'add_roof_window', check: 'A roof window must lie wholly on one roof slope (not off the roof, across a ridge or hip, or on a flat roof).' },
   { id: 'C7', where: 'add_dormers', check: 'Each dormer must fit wholly on one slope. A full-width dormer is measured from the slope and narrowed until it fits.' },
+  { id: 'C9', where: 'check_layout', check: 'Door swing (a square of the door width must be clear on one side), walking routes from the front door and stairs to every room at 0.75 m and 0.9 m wide with furniture in place, stair headroom against the 2.0 m target, and rooms with no window. The report lists what ran and what could not. Widths come from SPATIAL_DEFAULTS.' },
+  { id: 'C10', where: 'check_model_health', check: 'Walls on different storeys are not duplicates, rotated walls and furniture are read from their quaternion, and furniture on another floor (or standing on another item) is not a collision.' },
   { id: 'C8', where: 'add_porch', check: 'The porch is built on the outside of the door\'s wall (the side facing away from the building) and its roof is above the door head.' },
 ];
 

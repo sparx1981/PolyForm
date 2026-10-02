@@ -38,4 +38,27 @@ describe('model health', () => {
     expect(report.errors).toBe(0);
     expect(report.healthy).toBe(true);
   });
+
+  it('does not call walls on different storeys duplicates', () => {
+    const upper: Shape = { ...wall('b', 0, 0, 4), position: [0, 4.2, 0] };
+    expect(checkModelHealth([wall('a', 0, 0, 4), upper]).issues.filter(i => i.code === 'duplicate-wall')).toEqual([]);
+  });
+
+  it('reads the turn of a wall from its quaternion, as the connector saves it', () => {
+    // Two walls meeting at a corner: one along x, one along z (a quarter turn saved only as a quaternion).
+    const along: Shape = wall('a', 0, 0, 4);
+    const across: Shape = { ...wall('b', 2, 2, 4), quaternion: [0, Math.SQRT1_2, 0, Math.SQRT1_2] };
+    expect(checkModelHealth([along, across]).issues.filter(i => i.code === 'duplicate-wall')).toEqual([]);
+    // The same wall twice, turned: still a duplicate.
+    const again: Shape = { ...across, id: 'c' };
+    expect(checkModelHealth([across, again]).issues.some(i => i.code === 'duplicate-wall')).toBe(true);
+  });
+
+  it('ignores furniture on another floor, but still finds real collisions on the same one', () => {
+    const sofa = createInteriorFurnitureShape('sofa', { id: 'sofa', position: [0, 0, 0] });
+    const upstairs = createInteriorFurnitureShape('bed', { id: 'bed', position: [0.4, 2.8, 0] });
+    expect(checkModelHealth([sofa, upstairs]).issues.filter(i => i.code.startsWith('furniture'))).toEqual([]);
+    const sameFloor = createInteriorFurnitureShape('bed', { id: 'bed2', position: [0.4, 0, 0] });
+    expect(checkModelHealth([sofa, sameFloor]).issues.some(i => i.code === 'furniture-collision')).toBe(true);
+  });
 });

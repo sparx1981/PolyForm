@@ -56,6 +56,16 @@ describe('storeys', () => {
   });
 });
 
+describe('model health', () => {
+  it('no longer calls the storeys of a house duplicate walls, or furniture on another floor a collision', async () => {
+    const { id, call } = await house();
+    const rooms = await call('list_rooms', { model: id });
+    for (const room of rooms) await call('furnish_room', { model: id, room: room.id, preset: 'living-room', settle_soft: false });
+    const health = await call('check_model_health', { model: id });
+    expect(health.issues.filter((i: any) => i.code === 'duplicate-wall')).toEqual([]);
+  });
+});
+
 describe('stairs', () => {
   it('refuses a flight that would stick out of the house', async () => {
     const { id, call } = await house();
@@ -145,6 +155,20 @@ describe('roofs: windows and dormers', () => {
     expect(result.error).toMatch(/not on the roof/);
   });
 
+  it('adds gutters, a chimney and solar panels, keeping dormers already on the roof', async () => {
+    const { id, call } = await roofed();
+    await call('add_dormers', { model: id, facing: 'south', type: 'gable' });
+    const result = await call('set_roof_extras', { model: id, gutters: true, chimney: true, chimney_x: 0.3, chimney_z: 0.2, solar: true, solar_facing: 'north' });
+    expect(result.error).toBeUndefined();
+    const names = result.created.map((s: any) => s.name).join(' | ');
+    expect(names).toMatch(/Gutters/);
+    expect(names).toMatch(/Chimney/);
+    expect(names).toMatch(/Solar/);
+    expect(names).toMatch(/Dormers/);
+    const off = await call('set_roof_extras', { model: id, chimney: false });
+    expect(off.created.map((s: any) => s.name).join(' | ')).not.toMatch(/Chimney/);
+  });
+
   it('adds a full-width flat dormer on a slope', async () => {
     const { id, call } = await roofed();
     let result: any;
@@ -213,5 +237,89 @@ describe('porch', () => {
     const { id, call, front } = await withFrontDoor();
     const result = await call('add_porch', { model: id, door: front.id });
     expect(result.error).toMatch(/not a door/);
+  });
+});
+
+describe('layout checks', () => {
+  /** A 10 × 6 m ground floor with a front door, split by a wall at x = 0 with a doorway of the given width. */
+  async function twoRooms(doorWidth = 0.9) {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Layout' });
+    await h.call('add_room', { model: id, width: 10, length: 6, position: [0, 0, 0], height: 2.8 });
+    const walls = await h.call('list_objects', { model: id, type: 'wall' });
+    const front = walls.objects.reduce((a: any, b: any) => (b.position[2] > a.position[2] ? b : a));
+    await h.call('add_opening', { model: id, wall: front.id, kind: 'door', along: 2, width: 0.9 });
+    const part = await h.call('add_wall', { model: id, start: [0, 0, -3], end: [0, 0, 3], thickness: 0.12 });
+    const inner = await h.call('add_opening', { model: id, wall: part.created[0].id, kind: 'door', along: 3, width: doorWidth });
+    return { ...h, id, innerDoor: inner.created[0] };
+  }
+  const issuesOf = (r: any, code: string) => r.issues.filter((i: any) => i.code === code);
+
+  it('finds no problems in a plain house with a way in and a doorway between rooms', async () => {
+    const { id, call } = await twoRooms();
+    const report = await call('check_layout', { model: id });
+    expect(report.errors).toBe(0);
+    expect(issuesOf(report, 'unreachable-room')).toEqual([]);
+    expect(report.checked.join(' ')).toMatch(/circulation/);
+    expect(report.checked.join(' ')).toMatch(/door swing/);
+  });
+
+  it('says a room is unreachable when its only doorway is too narrow', async () => {
+    const { id, call } = await twoRooms(0.5);
+    const report = await call('check_layout', { model: id });
+    expect(issuesOf(report, 'unreachable-room').length).toBeGreaterThan(0);
+  });
+
+  it('says furniture blocks the way when it stands in the doorway', async () => {
+    const { id, call, innerDoor } = await twoRooms();
+    // A tall unit across the inner doorway, on the near side.
+    await call('add_shape', { model: id, shape: 'box', width: 0.6, height: 1.8, depth: 1.6, position: [-0.6, 0.9, innerDoor.position[2]], name: 'Wardrobe' });
+    await call('add_shape', { model: id, shape: 'box', width: 0.6, height: 1.8, depth: 1.6, position: [0.6, 0.9, innerDoor.position[2]], name: 'Chest' });
+    const report = await call('check_layout', { model: id });
+    expect(issuesOf(report, 'furniture-blocks-route').length + issuesOf(report, 'unreachable-room').length).toBeGreaterThan(0);
+    expect(issuesOf(report, 'furniture-blocks-route').length).toBeGreaterThan(0);
+  });
+
+  it('warns when a door cannot swing on either side', async () => {
+    const { id, call, innerDoor } = await twoRooms();
+    const z = innerDoor.position[2];
+    await call('add_shape', { model: id, shape: 'box', width: 0.5, height: 1, depth: 1.6, position: [-0.65, 0.5, z], name: 'Low unit A' });
+    await call('add_shape', { model: id, shape: 'box', width: 0.5, height: 1, depth: 1.6, position: [0.65, 0.5, z], name: 'Low unit B' });
+    const report = await call('check_layout', { model: id });
+    expect(issuesOf(report, 'door-swing').length).toBeGreaterThan(0);
+  });
+
+  it('does not report door swing when one side is clear', async () => {
+    const { id, call, innerDoor } = await twoRooms();
+    await call('add_shape', { model: id, shape: 'box', width: 0.5, height: 1, depth: 1.6, position: [-0.65, 0.5, innerDoor.position[2]], name: 'Low unit A' });
+    const report = await call('check_layout', { model: id });
+    expect(issuesOf(report, 'door-swing')).toEqual([]);
+  });
+
+  it('wants stairs to reach an upper floor, and finds none missing when they do', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Two floors' });
+    await h.call('add_room', { model: id, width: 10, length: 8, position: [0, 0, 0], height: 2.8 });
+    await h.call('add_room', { model: id, width: 10, length: 8, position: [0, 2.8, 0], height: 2.8 });
+    const walls = await h.call('list_objects', { model: id, type: 'wall' });
+    const ground = walls.objects.filter((w: any) => w.position[1] < 2);
+    const front = ground.reduce((a: any, b: any) => (b.position[2] > a.position[2] ? b : a));
+    await h.call('add_opening', { model: id, wall: front.id, kind: 'door', along: 5 });
+    const without = await h.call('check_layout', { model: id });
+    expect(issuesOf(without, 'no-stairs-to-level').map((i: any) => i.level)).toEqual([2]);
+    const rooms = await h.call('list_rooms', { model: id });
+    await h.call('add_stairs', { model: id, rise: 2.8, room: rooms.find((r: any) => r.level === 1).id });
+    const withStairs = await h.call('check_layout', { model: id });
+    expect(issuesOf(withStairs, 'no-stairs-to-level')).toEqual([]);
+    expect(issuesOf(withStairs, 'stair-headroom')).toEqual([]);
+    expect(withStairs.checked.join(' ')).toMatch(/stair headroom/);
+  });
+
+  it('says what it could not check when there is no building', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Garden' });
+    const report = await h.call('check_layout', { model: id });
+    expect(report.checked).toEqual([]);
+    expect(report.skipped.length).toBeGreaterThan(0);
   });
 });
