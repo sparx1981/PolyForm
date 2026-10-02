@@ -7,6 +7,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'October 4, 2026',
     items: [
+      'Reconstruction Studio: the floor plan underlay is now called Add floor plan surface and is explained in plain words. It lays your plan flat on the ground at your calibrated scale, mostly solid (85%) so walls, doors and windows can be checked against it, and appears in the Outliner as Floor plan surface so you can hide or delete it.',
       'Reconstruction Studio AI recognition is more accurate. Walls the AI broke at doors and windows are joined back into one wall (so those doors now have a wall to sit in), walls that stop just short of a corner are extended to close it, and door and window widths snap to standard sizes so they no longer come out stretched.',
       'Reconstruction Studio now checks your scale against the plan itself. It reads the room sizes printed on the plan (such as 16\' x 20\') and any overall dimensions, compares them with your calibration, and warns when they disagree, with a Use detected scale button that rebuilds the plan at the corrected scale without another Gemini call. It also warns when doors or the whole building come out an unlikely size.',
       'Reconstruction Studio: fixed a crash (Maximum call stack size exceeded) when adding geometry from a large plan. Room measuring now handles open-plan rooms of any size, and a failure in room detection can no longer take the page down.',

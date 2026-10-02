@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calibrateReferencePlan, createReferencePlanShape, referencePixelToWorld } from './referencePlan';
+import { DEFAULT_REFERENCE_OPACITY, calibrateReferencePlan, createReferencePlanShape, referencePixelToWorld } from './referencePlan';
 
 describe('calibrated floor-plan underlays', () => {
   it('calibrates a page from two known points', () => {
@@ -21,6 +21,8 @@ describe('calibrated floor-plan underlays', () => {
     expect(shape.args).toEqual([10, 0.004, 8]);
     expect(shape.customData.referencePlan.locked).toBe(true);
     expect(shape.textureUrl).toContain('data:image');
+    expect(shape.name).toBe('Floor plan surface');
+    expect(shape.opacity).toBe(DEFAULT_REFERENCE_OPACITY);
   });
 
   it('maps recognised source pixels into the underlay world transform', () => {

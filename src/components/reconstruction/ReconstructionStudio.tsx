@@ -7,6 +7,7 @@ import { useModalA11y } from '../ui/useModalA11y';
 import {
   calibrateReferencePlan,
   createReferencePlanShape,
+  DEFAULT_REFERENCE_OPACITY,
   type ReferencePlanCalibration,
 } from '../../lib/reconstruction/referencePlan';
 import { recogniseOrthogonalFloorPlan } from '../../lib/reconstruction/localPlanRecognizer';
@@ -67,7 +68,7 @@ export default function ReconstructionStudio() {
   const [pixelSize, setPixelSize] = useState<[number, number] | null>(null);
   const [points, setPoints] = useState<PixelPoint[]>([]);
   const [knownDistance, setKnownDistance] = useState('4');
-  const [opacity, setOpacity] = useState(0.55);
+  const [opacity, setOpacity] = useState(DEFAULT_REFERENCE_OPACITY);
   const [rotationDeg, setRotationDeg] = useState(0);
   const [draft, setDraft] = useState<ReconstructionDraft | null>(null);
   const [review, setReview] = useState<ReconstructionReview | null>(null);
@@ -167,7 +168,7 @@ export default function ReconstructionStudio() {
         },
       );
       setShapes(previous => [...previous, shape]);
-      setMessage(`Reference underlay added at ${calibrated?.widthM.toFixed(2)} × ${calibrated?.heightM.toFixed(2)} m.`);
+      setMessage(`Floor plan surface added (${calibrated?.widthM.toFixed(2)} × ${calibrated?.heightM.toFixed(2)} m). Find it in the Outliner to hide or delete it.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not add reference plan.');
     }
@@ -454,17 +455,20 @@ export default function ReconstructionStudio() {
               </div>
 
               <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-                <div className="font-bold text-sm">2. Reference underlay</div>
-                <label className="block text-xs">Opacity: {Math.round(opacity * 100)}%
+                <div className="font-bold text-sm">2. Show the floor plan in 3D</div>
+                <p className="text-xs text-gray-500">
+                  Lays your uploaded plan flat on the ground at the scale set above. Walls, doors and windows are built on top of it, so you can check they line up. It shows in the Outliner as “Floor plan surface”, where you can hide or delete it.
+                </p>
+                <label className="block text-xs">Plan visibility: {Math.round(opacity * 100)}%
                   <input type="range" min="0.1" max="1" step="0.05" value={opacity} onChange={e => setOpacity(Number(e.target.value))} className="w-full mt-1" />
                 </label>
-                <label className="block text-xs">Rotation
+                <label className="block text-xs">Rotate plan (degrees)
                   <input type="number" value={rotationDeg} onChange={e => setRotationDeg(Number(e.target.value) || 0)}
                     className="mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2" />
                 </label>
                 <button onClick={addReference} disabled={!calibrated || !imageUrl}
                   className="w-full px-3 py-2 rounded-lg border border-polyform-blue text-polyform-blue text-xs font-bold disabled:opacity-40">
-                  Add locked reference
+                  Add floor plan surface
                 </button>
               </div>
 

@@ -18,6 +18,9 @@ export interface ReferencePlanCalibration {
   knownDistanceM: number;
 }
 
+/** Mostly solid so the plan reads clearly, while still letting the ground show through slightly. */
+export const DEFAULT_REFERENCE_OPACITY = 0.85;
+
 export interface ReferencePlanSettings {
   opacity?: number;
   rotationY?: number;
@@ -66,10 +69,10 @@ export function createReferencePlanShape(
   settings: ReferencePlanSettings = {},
 ): Shape {
   const scale = calibrateReferencePlan(source, calibration);
-  const opacity = Math.max(0.05, Math.min(1, settings.opacity ?? 0.55));
+  const opacity = Math.max(0.05, Math.min(1, settings.opacity ?? DEFAULT_REFERENCE_OPACITY));
   return {
     id: Math.random().toString(36).slice(2, 11),
-    name: source.name ? `Reference: ${source.name}` : 'Reference plan',
+    name: 'Floor plan surface',
     type: 'box',
     position: settings.position ?? [0, 0.002, 0],
     rotation: [0, settings.rotationY ?? 0, 0],
