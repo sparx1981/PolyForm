@@ -64,7 +64,9 @@ export interface Level {
   stairs: Shape[];
 }
 
-const CELL = 0.05;
+/** The finest plan grid, metres. A very large site gets a coarser one (never more than MAX_CELLS cells), so a plan stays quick to draw. */
+const BASE_CELL = 0.05;
+const MAX_CELLS = 2_500_000;
 const LEVEL_GAP = 0.5;
 
 function quat(s: Shape) {
@@ -134,6 +136,8 @@ export function buildingLevels(shapes: Shape[]): Level[] {
 interface Grid {
   x0: number;
   z0: number;
+  /** Size of one grid cell, metres. */
+  cell: number;
   nx: number;
   nz: number;
 }
@@ -144,15 +148,15 @@ function findRooms(level: Level, grid: Grid, labels: RoomLabel[]) {
   const solid = new Uint8Array(nx * nz);
   for (const w of level.walls) {
     const r = wallRect(w);
-    const cs = corners({ ...r, length: r.length + r.width, width: r.width + CELL * 2 });
+    const cs = corners({ ...r, length: r.length + r.width, width: r.width + grid.cell * 2 });
     const xs = cs.map(c => c[0]), zs = cs.map(c => c[1]);
-    const i0 = Math.max(0, Math.floor((Math.min(...xs) - x0) / CELL) - 1), i1 = Math.min(nx - 1, Math.ceil((Math.max(...xs) - x0) / CELL) + 1);
-    const j0 = Math.max(0, Math.floor((Math.min(...zs) - z0) / CELL) - 1), j1 = Math.min(nz - 1, Math.ceil((Math.max(...zs) - z0) / CELL) + 1);
+    const i0 = Math.max(0, Math.floor((Math.min(...xs) - x0) / grid.cell) - 1), i1 = Math.min(nx - 1, Math.ceil((Math.max(...xs) - x0) / grid.cell) + 1);
+    const j0 = Math.max(0, Math.floor((Math.min(...zs) - z0) / grid.cell) - 1), j1 = Math.min(nz - 1, Math.ceil((Math.max(...zs) - z0) / grid.cell) + 1);
     // Run each wall on past its ends so corners close, and keep thin walls at least a cell wide.
-    const a = r.length / 2 + r.width / 2, b = Math.max(r.width / 2, CELL * 0.75) + 0.005;
+    const a = r.length / 2 + r.width / 2, b = Math.max(r.width / 2, grid.cell * 0.75) + 0.005;
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
-        const dx = x0 + (i + 0.5) * CELL - r.centre[0], dz = z0 + (j + 0.5) * CELL - r.centre[1];
+        const dx = x0 + (i + 0.5) * grid.cell - r.centre[0], dz = z0 + (j + 0.5) * grid.cell - r.centre[1];
         const u = dx * r.dir[0] + dz * r.dir[1], v = -dx * r.dir[1] + dz * r.dir[0];
         if (Math.abs(u) <= a && Math.abs(v) <= b) solid[j * nx + i] = 1;
       }
@@ -205,7 +209,7 @@ function findRooms(level: Level, grid: Grid, labels: RoomLabel[]) {
     for (let k = 0; k < dist.length; k++) {
       if (!dist[k]) continue;
       const i = k % nx, j = (k - i) / nx;
-      const ox = x0 + (i + 0.5) * CELL - st.position[0], oz = z0 + (j + 0.5) * CELL - st.position[2];
+      const ox = x0 + (i + 0.5) * grid.cell - st.position[0], oz = z0 + (j + 0.5) * grid.cell - st.position[2];
       if (Math.abs(ox * dx + oz * dz) <= sl / 2 + 0.2 && Math.abs(-ox * dz + oz * dx) <= sw / 2 + 0.2) dist[k] = 0;
     }
   }
@@ -230,13 +234,13 @@ function findRooms(level: Level, grid: Grid, labels: RoomLabel[]) {
   }
   for (const l of labels) {
     if (l.level !== level.level) continue;
-    const i = Math.floor((l.at[0] - x0) / CELL), j = Math.floor((l.at[1] - z0) / CELL);
+    const i = Math.floor((l.at[0] - x0) / grid.cell), j = Math.floor((l.at[1] - z0) / grid.cell);
     if (i < 0 || j < 0 || i >= nx || j >= nz) continue;
     const room = byId.get(label[j * nx + i]);
     if (room) room.name = room.name ? `${room.name} / ${l.name}` : l.name;
   }
   // Leave out slivers (cavities in wall joints, a gap behind a stair).
-  return { rooms: rooms.filter(r => r.cells * CELL * CELL >= 1), label };
+  return { rooms: rooms.filter(r => r.cells * grid.cell * grid.cell >= 1), label };
 }
 
 /** A wall drawn on past each end that meets another wall, so corners and T-joints close. */
@@ -311,7 +315,7 @@ function usableCells(
   for (let j = r.minJ; j <= r.maxJ; j++) {
     for (let i = r.minI; i <= r.maxI; i++) {
       if (label[j * grid.nx + i] !== r.id) continue;
-      if (headroom(grid.x0 + (i + 0.5) * CELL, grid.z0 + (j + 0.5) * CELL) >= USABLE_HEADROOM) n++;
+      if (headroom(grid.x0 + (i + 0.5) * grid.cell, grid.z0 + (j + 0.5) * grid.cell) >= USABLE_HEADROOM) n++;
     }
   }
   return n;
@@ -370,9 +374,10 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
   const pts = levels.flatMap(l => l.walls.flatMap(w => corners(wallRect(w))));
   let minX = Math.min(...pts.map(p => p[0])), maxX = Math.max(...pts.map(p => p[0]));
   let minZ = Math.min(...pts.map(p => p[1])), maxZ = Math.max(...pts.map(p => p[1]));
+  const cell = Math.max(BASE_CELL, Math.sqrt(((maxX - minX + 2) * (maxZ - minZ + 2)) / MAX_CELLS));
   const grid: Grid = {
-    x0: minX - 1, z0: minZ - 1,
-    nx: Math.ceil((maxX - minX + 2) / CELL), nz: Math.ceil((maxZ - minZ + 2) / CELL),
+    x0: minX - 1, z0: minZ - 1, cell,
+    nx: Math.ceil((maxX - minX + 2) / cell), nz: Math.ceil((maxZ - minZ + 2) / cell),
   };
   const house = { minX, maxX, minZ, maxZ };
 
@@ -411,12 +416,12 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
     // Rooms (tinted), then walls on top.
     const planRooms: PlanRoom[] = [];
     rooms.forEach((r, n) => {
-      const x = grid.x0 + r.minI * CELL, z = grid.z0 + r.minJ * CELL;
-      const w = (r.maxI - r.minI + 1) * CELL, d = (r.maxJ - r.minJ + 1) * CELL;
+      const x = grid.x0 + r.minI * grid.cell, z = grid.z0 + r.minJ * grid.cell;
+      const w = (r.maxI - r.minI + 1) * grid.cell, d = (r.maxJ - r.minJ + 1) * grid.cell;
       const bi = r.best % grid.nx, bj = (r.best - bi) / grid.nx;
-      const areaM2 = +(r.cells * CELL * CELL).toFixed(1);
-      const usable = headroom ? usableCells(r, label, grid, (x, z) => headroom(x, z, level.elevation)) * CELL * CELL : r.cells * CELL * CELL;
-      const at: V2 = [+(grid.x0 + (bi + 0.5) * CELL).toFixed(2), +(grid.z0 + (bj + 0.5) * CELL).toFixed(2)];
+      const areaM2 = +(r.cells * grid.cell * grid.cell).toFixed(1);
+      const usable = headroom ? usableCells(r, label, grid, (x, z) => headroom(x, z, level.elevation)) * grid.cell * grid.cell : r.cells * grid.cell * grid.cell;
+      const at: V2 = [+(grid.x0 + (bi + 0.5) * grid.cell).toFixed(2), +(grid.z0 + (bj + 0.5) * grid.cell).toFixed(2)];
       const candidates = spatialRooms.filter(room => room.level === level.level);
       const semantic = candidates.reduce<SpatialRoom | undefined>((best, room) => {
         if (!best) return room;
@@ -442,8 +447,8 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
           if (label[j * grid.nx + i] !== r.id) { i++; continue; }
           const start = i;
           while (i <= r.maxI && label[j * grid.nx + i] === r.id) i++;
-          const rx = grid.x0 + (start - 1) * CELL, rz = grid.z0 + (j - 1) * CELL;
-          runs.push(`<rect x="${f(X(rx))}" y="${f(Z(rz))}" width="${f((i - start + 2) * CELL * scale)}" height="${f(3 * CELL * scale)}"/>`);
+          const rx = grid.x0 + (start - 1) * grid.cell, rz = grid.z0 + (j - 1) * grid.cell;
+          runs.push(`<rect x="${f(X(rx))}" y="${f(Z(rz))}" width="${f((i - start + 2) * grid.cell * scale)}" height="${f(3 * grid.cell * scale)}"/>`);
         }
       }
       out.push(`<g fill="${fill}">${runs.join('')}</g>`);
@@ -526,10 +531,10 @@ export function floorPlans(shapes: Shape[], labels: RoomLabel[] = [], widthPx = 
 
     rooms.forEach((r, n) => {
       const k = r.best, i = k % grid.nx, j = (k - i) / grid.nx;
-      const cx = X(grid.x0 + (i + 0.5) * CELL), cz = Z(grid.z0 + (j + 0.5) * CELL);
+      const cx = X(grid.x0 + (i + 0.5) * grid.cell), cz = Z(grid.z0 + (j + 0.5) * grid.cell);
       const room = planRooms[n];
       const size = `${room.size[0].toFixed(1)} × ${room.size[1].toFixed(1)} m`;
-      const small = r.bestD * CELL * scale < 40;
+      const small = r.bestD * grid.cell * scale < 40;
       if (room.name) out.push(`<text x="${f(cx)}" y="${f(cz - (small ? 4 : 10))}" font-size="${small ? 12 : 16}" font-weight="bold" text-anchor="middle" fill="${ink}">${esc(room.name)}</text>`);
       out.push(`<text x="${f(cx)}" y="${f(cz + (room.name ? (small ? 10 : 10) : 0))}" font-size="${small ? 11 : 14}" text-anchor="middle" fill="#444">${m2(room.areaM2)}</text>`);
       const extra = [!small && !art ? size : '', room.usableM2 !== undefined ? `${m2(room.usableM2)} usable` : ''].filter(Boolean).join(' · ');
@@ -572,7 +577,7 @@ function wallDimensionLines(level: Level, grid: Grid, label: Int32Array, X: (x: 
   const out: string[] = ['<g stroke="#6b7280" stroke-width="1" fill="none">'];
   const text: string[] = [];
   const outside = (x: number, z: number) => {
-    const i = Math.floor((x - grid.x0) / CELL), j = Math.floor((z - grid.z0) / CELL);
+    const i = Math.floor((x - grid.x0) / grid.cell), j = Math.floor((z - grid.z0) / grid.cell);
     if (i < 0 || j < 0 || i >= grid.nx || j >= grid.nz) return true;
     return label[j * grid.nx + i] === 2;
   };

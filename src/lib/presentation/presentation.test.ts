@@ -463,3 +463,18 @@ describe('clickable doors', () => {
     expect(french.children).toHaveLength(0);
   });
 });
+
+describe('floor plans of very large sites', () => {
+  it('draws a building hundreds of metres across in reasonable time, on a coarser grid', () => {
+    const wall = (id: string, x: number, z: number, length: number, turn: number): Shape => ({
+      id, type: 'wall', position: [x, 1.4, z], rotation: [0, turn, 0], args: [length, 2.8, 0.3], color: '#fff',
+    });
+    const big: Shape[] = [wall('n', 0, -150, 300, 0), wall('s', 0, 150, 300, 0), wall('e', 150, 0, 300, Math.PI / 2), wall('w', -150, 0, 300, Math.PI / 2)];
+    const started = Date.now();
+    const plans = floorPlans(big, [{ level: 1, at: [0, 0], name: 'Hall' }], 1000);
+    expect(Date.now() - started).toBeLessThan(30_000);
+    expect(plans).toHaveLength(1);
+    expect(plans[0].rooms[0].areaM2).toBeGreaterThan(80_000);
+    expect(plans[0].rooms[0].name).toBe('Hall');
+  }, 60_000);
+});

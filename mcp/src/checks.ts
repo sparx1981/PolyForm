@@ -258,7 +258,11 @@ export function placeStairInRoom(shapes: Shape[], room: SpatialRoom, variants: S
   const xs = room.boundary.map(p => p[0]), zs = room.boundary.map(p => p[1]);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
   const flights = otherStairs(shapes, { bottom: room.elevation, top: room.elevation + (nums(variants[0])[1] ?? 2.7) } as StairFootprint).map(b => expand(b, 0.1));
-  const STEP = 0.1;
+  // A coarse pass over the room, then a fine pass round the best spot: scanning a very large room
+  // (a hall 200 m across) on a 10 cm grid took minutes, longer than the connector is allowed.
+  const started = Date.now(), BUDGET_MS = 20_000;
+  const coarse = Math.min(1, Math.max(0.1, Math.sqrt(((x1 - x0) * (z1 - z0)) / 6000)));
+  const timedOut = () => Date.now() - started > BUDGET_MS;
 
   for (const variant of variants) {
     const rise = nums(variant)[1] ?? 2.7;
@@ -267,25 +271,44 @@ export function placeStairInRoom(shapes: Shape[], room: SpatialRoom, variants: S
       const probe: Shape = { ...variant, position: [0, rise / 2, 0], rotation: [0, THREE.MathUtils.degToRad(turn), 0], quaternion: undefined };
       const f0 = stairFootprint(probe);
       const offs = f0.corners.map(c => [c[0] - f0.centre[0], c[1] - f0.centre[1]] as V2);
-      for (let x = x0; x <= x1; x += STEP) {
-        for (let z = z0; z <= z1; z += STEP) {
-          const corners = offs.map(o => [x + o[0], z + o[1]] as V2);
-          const inner = shrink(corners, [x, z], 0.04);
-          if (!inner.every(p => inPolygon(p, room.boundary))) continue;
-          if (wallBoxes.some(b => boxesOverlap(inner, b))) continue;
-          if (flights.some(b => boxesOverlap(inner, b))) continue;
-          if (doors.some(d => inPolygon([d.position[0], d.position[2]], expand(corners, 0.45)))) continue;
-          const gap = Math.min(...room.boundary.map(p => Math.hypot(p[0] - x, p[1] - z)));
-          const wall = Math.min(...wallBoxes.map(b => distanceToBox([x, z], b)), 99);
-          const score = (wall < Math.max(f0.width, f0.length) ? 0 : 100) + gap;
-          if (!best || score < best.score) {
-            const shape: Shape = { ...probe, position: [x + (probe.position[0] - f0.centre[0]), room.elevation + rise / 2, z + (probe.position[2] - f0.centre[1])] };
-            best = { shape, score };
-          }
+      const reach = Math.max(f0.width, f0.length);
+      const tryAt = (x: number, z: number) => {
+        const corners = offs.map(o => [x + o[0], z + o[1]] as V2);
+        const inner = shrink(corners, [x, z], 0.04);
+        if (!inner.every(p => inPolygon(p, room.boundary))) return;
+        if (wallBoxes.some(b => boxesOverlap(inner, b))) return;
+        if (flights.some(b => boxesOverlap(inner, b))) return;
+        if (doors.some(d => inPolygon([d.position[0], d.position[2]], expand(corners, 0.45)))) return;
+        const gap = Math.min(...room.boundary.map(p => Math.hypot(p[0] - x, p[1] - z)));
+        const wall = Math.min(...wallBoxes.map(b => distanceToBox([x, z], b)), 99);
+        const score = (wall < reach ? 0 : 100) + gap;
+        if (!best || score < best.score) {
+          best = { shape: { ...probe, position: [x + (probe.position[0] - f0.centre[0]), room.elevation + rise / 2, z + (probe.position[2] - f0.centre[1])] }, score };
         }
+      };
+      for (let x = x0; x <= x1 && !timedOut(); x += coarse) for (let z = z0; z <= z1; z += coarse) tryAt(x, z);
+    }
+    // Refine round the best coarse spot, down to 10 cm.
+    if (best && coarse > 0.1 && !timedOut()) {
+      const centre = best.shape.position, quat = best.shape;
+      const turn = Math.round(THREE.MathUtils.radToDeg(new THREE.Euler().setFromQuaternion(orientation(quat), 'YXZ').y));
+      const probe: Shape = { ...variant, position: [0, rise / 2, 0], rotation: [0, THREE.MathUtils.degToRad(turn), 0], quaternion: undefined };
+      const f0 = stairFootprint(probe);
+      const offs = f0.corners.map(c => [c[0] - f0.centre[0], c[1] - f0.centre[1]] as V2);
+      const reach = Math.max(f0.width, f0.length);
+      for (let x = centre[0] - 2 * coarse; x <= centre[0] + 2 * coarse; x += 0.1) for (let z = centre[2] - 2 * coarse; z <= centre[2] + 2 * coarse; z += 0.1) {
+        const corners = offs.map(o => [x + o[0], z + o[1]] as V2);
+        const inner = shrink(corners, [x, z], 0.04);
+        if (!inner.every(p => inPolygon(p, room.boundary)) || wallBoxes.some(b => boxesOverlap(inner, b)) || flights.some(b => boxesOverlap(inner, b))) continue;
+        if (doors.some(d => inPolygon([d.position[0], d.position[2]], expand(corners, 0.45)))) continue;
+        const gap = Math.min(...room.boundary.map(p => Math.hypot(p[0] - x, p[1] - z)));
+        const wall = Math.min(...wallBoxes.map(b => distanceToBox([x, z], b)), 99);
+        const score = (wall < reach ? 0 : 100) + gap;
+        if (score < best.score) best = { shape: { ...probe, position: [x + (probe.position[0] - f0.centre[0]), room.elevation + rise / 2, z + (probe.position[2] - f0.centre[1])] }, score };
       }
     }
     if (best) return best.shape;
+    if (timedOut()) throw new ToolError('This room is so large that finding a place for the stairs took too long. Give position and rotation_deg for the stairs instead, or add them in a smaller room (a stair hall).');
   }
   return null;
 }

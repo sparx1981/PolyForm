@@ -115,6 +115,19 @@ describe('stairs', () => {
     expect(Math.hypot(a[0] - b[0], a[1] - b[1])).toBeGreaterThan(1);
   });
 
+  it('places stairs in a very large hall quickly (the search once took over two minutes and timed the connector out)', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Hall' });
+    await h.call('add_room', { model: id, width: 150, length: 60, position: [0, 0, 0], height: 4 });
+    const rooms = await h.call('list_rooms', { model: id });
+    const started = Date.now();
+    const result = await h.call('add_stairs', { model: id, rise: 4, room: rooms[0].id });
+    expect(result.error).toBeUndefined();
+    expect(Date.now() - started).toBeLessThan(30_000);
+    const stair = (await shapesOf({ ...h, id } as any, id)).find(s => s.type === 'staircase')!;
+    expect(checkStair(await shapesOf({ ...h, id } as any, id), stair).errors).toEqual([]);
+  }, 60_000);
+
   it('says so when no flight fits the room', async () => {
     const h = harness();
     const { id } = await h.call('create_model', { name: 'Small' });

@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - **AI plan recognition in Reconstruction Studio**: a new "AI recognise and review" action reads a floor-plan image with Gemini and proposes walls at any angle, doors, windows and room names. Local clean-up then aligns walls to the drawn lines, joins corners and T-junctions, merges duplicates and hosts each opening on its nearest wall. Room names are reviewable and commit as floor text labels.
 
 ### Fixed
+- Connector: `add_stairs` with `room` could run for minutes in a very large room (a 200 m hall took 140 seconds) and the connector timed out. It now searches coarsely, then finely around the best spot, within a 20-second budget, and says so if the room is too large.
+- Floor plans of a very large site (hundreds of metres across) are drawn on a coarser grid, capped at 2.5 million cells like room detection, instead of taking minutes.
 - Connector: walls built with `add_room` on an upper floor were all filed under Level 1 in the Outliner, and upper floors each got a foundation. Walls and slabs are now filed under the level their height belongs to, and only the ground floor has a foundation.
 - Reconstruction Studio produced scattered, unrecognisable walls on text-heavy, dimensioned or non-orthogonal plans. The local detector is kept as an offline option for clean right-angled plans and is now labelled as such.
 
