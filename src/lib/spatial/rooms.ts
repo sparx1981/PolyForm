@@ -391,11 +391,14 @@ export function detectRooms(shapes: Shape[], options: RoomDetectionOptions = {})
         .sort();
 
       const boundary = roomOutline(cells, centres, nx, nz, minX, minZ, cell);
-      const xs = centres.map(p => p[0]), zs = centres.map(p => p[1]);
-      const size: [number, number] = [
-        Math.max(...xs) - Math.min(...xs) + cell,
-        Math.max(...zs) - Math.min(...zs) + cell,
-      ];
+      // A loop, not Math.max(...list): a big open-plan region has hundreds of thousands of cells, and spreading
+      // that many arguments overflows the call stack ("Maximum call stack size exceeded").
+      let lowCx = Infinity, highCx = -Infinity, lowCz = Infinity, highCz = -Infinity;
+      for (const [x, z] of centres) {
+        if (x < lowCx) lowCx = x; if (x > highCx) highCx = x;
+        if (z < lowCz) lowCz = z; if (z > highCz) highCz = z;
+      }
+      const size: [number, number] = [highCx - lowCx + cell, highCz - lowCz + cell];
       out.push({
         id: roomId(level.level, boundaryWallIds),
         level: level.level,

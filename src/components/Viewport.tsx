@@ -4351,7 +4351,11 @@ function Scene() {
   const wallRoomKey = shapes.filter(shape => shape.type === 'wall' && !shape.hidden)
     .map(shape => `${shape.id}:${shape.position.join(',')}:${JSON.stringify(shape.quaternion ?? shape.rotation)}:${JSON.stringify(shape.args)}`).join('|');
   // Furniture/terrain edits must not re-rasterize every room during a drag.
-  const wallRooms = useMemo(() => detectRooms(shapes.filter(shape => shape.type === 'wall')), [wallRoomKey]);
+  const wallRooms = useMemo(() => {
+    // Room detection is a convenience: if it ever fails, the model must still draw.
+    try { return detectRooms(shapes.filter(shape => shape.type === 'wall')); }
+    catch (error) { console.error('[rooms] Room detection failed', error); return []; }
+  }, [wallRoomKey]);
 
   // Helper to test if a 2D position lies inside an existing enclosed room or floor slab
   const isPointInsideRoom = useCallback((point: THREE.Vector3): boolean =>

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   attachOpenings,
+  bridgeOpeningGaps,
   cleanWalls,
+  realisticOpeningWidth,
   parseAiPlanResponse,
   recogniseFloorPlanWithAi,
   refineWallsToInk,
@@ -109,7 +111,7 @@ describe('attachOpenings', () => {
     expect(dropped).toBe(0);
     expect(openings[0]).toMatchObject({ wallId: 'w1', kind: 'door', id: 'ai-door-1' });
     expect(openings[0].centerT).toBeCloseTo(-0.25, 2);
-    expect(openings[0].width).toBeCloseTo(0.9, 2);
+    expect(openings[0].width).toBeCloseTo(0.91, 2); // 0.9 m snaps to the standard 36 in leaf
   });
 
   it('drops floating openings and de-duplicates overlapping ones', () => {
@@ -186,5 +188,78 @@ describe('recogniseFloorPlanWithAi', () => {
     await expect(recogniseFloorPlanWithAi({
       imageDataUrl: '', imageSize: [10, 10], metresPerPixel: 0.1, generate: async () => 'nope',
     })).rejects.toThrow(/valid JSON/);
+  });
+});
+
+describe('bridgeOpeningGaps', () => {
+  it('makes one wall of two pieces with a door between them, and leaves real gaps alone', () => {
+    const pieces = [wall(0, 100, 300, 100), wall(380, 101, 700, 100)];
+    const bridged = bridgeOpeningGaps(pieces, [{ at: [340, 100], widthPx: 70 }], { tolerance: 10, maxGap: 200 });
+    expect(bridged).toHaveLength(1);
+    expect(Math.min(bridged[0].a[0], bridged[0].b[0])).toBeCloseTo(0, 5);
+    expect(Math.max(bridged[0].a[0], bridged[0].b[0])).toBeCloseTo(700, 5);
+    // Nothing in the gap: an open doorway-less break stays open.
+    expect(bridgeOpeningGaps(pieces, [], { tolerance: 10, maxGap: 200 })).toHaveLength(2);
+    // An opening on some other wall does not bridge it.
+    expect(bridgeOpeningGaps(pieces, [{ at: [340, 400], widthPx: 70 }], { tolerance: 10, maxGap: 200 })).toHaveLength(2);
+    // A gap wider than a door is not bridged.
+    expect(bridgeOpeningGaps(pieces, [{ at: [340, 100], widthPx: 70 }], { tolerance: 10, maxGap: 50 })).toHaveLength(2);
+  });
+});
+
+describe('cleanWalls extension', () => {
+  it('closes a corner where one wall stops short of the other', () => {
+    // The vertical wall stops 25 px below the horizontal one: too far for the join step, near enough to extend.
+    const cleaned = cleanWalls([wall(0, 0, 500, 0), wall(500, 25, 500, 500)], { tolerance: 12, minLength: 6 });
+    const vertical = cleaned.find(w => w.a[0] === w.b[0])!;
+    expect(Math.min(vertical.a[1], vertical.b[1])).toBeCloseTo(0, 3);
+    expect(Math.max(vertical.a[1], vertical.b[1])).toBeCloseTo(500, 3);
+  });
+  it('does not extend a wall that already ends on another', () => {
+    const cleaned = cleanWalls([wall(0, 0, 500, 0), wall(500, 0, 500, 400)], { tolerance: 12, minLength: 6 });
+    expect(cleaned).toHaveLength(2);
+    const horizontal = cleaned.find(w => w.a[1] === w.b[1])!;
+    expect(Math.max(horizontal.a[0], horizontal.b[0])).toBeCloseTo(500, 3);
+  });
+});
+
+describe('realisticOpeningWidth', () => {
+  it('snaps doors to standard sizes and windows to 5 cm', () => {
+    expect(realisticOpeningWidth('door', 0.87)).toBe(0.91);
+    expect(realisticOpeningWidth('door', 1.3)).toBe(1.2);
+    expect(realisticOpeningWidth('door', 1.7)).toBe(1.83);
+    expect(realisticOpeningWidth('door', 0.2)).toBe(0.76);
+    expect(realisticOpeningWidth('door', 5)).toBe(2.4);
+    expect(realisticOpeningWidth('window', 1.234)).toBeCloseTo(1.25, 6);
+  });
+});
+
+describe('recogniseFloorPlanWithAi scale check', () => {
+  const rooms = [
+    { name: 'A', x: 150, y: 150, x1: 100, y1: 100, x2: 200, y2: 200, printedSize: "16' x 16'" },
+    { name: 'B', x: 350, y: 150, x1: 300, y1: 100, x2: 400, y2: 200, printedSize: "16' x 16'" },
+    { name: 'C', x: 550, y: 150, x1: 500, y1: 100, x2: 600, y2: 200, printedSize: "16' x 16'" },
+    { name: 'D', x: 750, y: 150, x1: 700, y1: 100, x2: 800, y2: 200, printedSize: "16' x 16'" },
+  ];
+  const walls = [{ x1: 100, y1: 100, x2: 800, y2: 100 }, { x1: 800, y1: 100, x2: 800, y2: 200 }, { x1: 800, y1: 200, x2: 100, y2: 200 }, { x1: 100, y1: 200, x2: 100, y2: 100 }];
+
+  it('suggests the scale printed room sizes imply when the calibration is far off', async () => {
+    // 100/1000 of a 1000 px image is 100 px = 16 ft = 4.877 m, so the true scale is 0.04877 m/px.
+    const observation = await recogniseFloorPlanWithAi({
+      imageDataUrl: '', imageSize: [1000, 1000], metresPerPixel: 0.1,
+      generate: async () => JSON.stringify({ walls, openings: [], rooms }),
+    });
+    const suggestion = observation.scaleCheck?.suggestion;
+    expect(suggestion?.basis).toBe('room sizes');
+    expect(suggestion?.ratio).toBeCloseTo(0.4877, 3);
+    expect(observation.uncertainties?.join(' ')).toMatch(/room sizes printed on the plan/);
+  });
+
+  it('says nothing when the calibration matches the printed sizes', async () => {
+    const observation = await recogniseFloorPlanWithAi({
+      imageDataUrl: '', imageSize: [1000, 1000], metresPerPixel: 0.048768,
+      generate: async () => JSON.stringify({ walls, openings: [], rooms }),
+    });
+    expect(observation.scaleCheck?.warnings).toEqual([]);
   });
 });

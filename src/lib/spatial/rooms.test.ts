@@ -124,4 +124,18 @@ describe('spatial room intelligence', () => {
     ];
     expect(detectRooms(shapes, { cell: 0.1 })).toHaveLength(1);
   });
+
+  it('measures a very large open-plan room without overflowing the call stack', () => {
+    // 30 m x 30 m at the default 5 cm grid is about 360,000 cells, far past what Math.max(...list) can take.
+    const shapes = [
+      wall('north', 0, -15, 30),
+      wall('south', 0, 15, 30),
+      wall('west', -15, 0, 30, Math.PI / 2),
+      wall('east', 15, 0, 30, Math.PI / 2),
+    ];
+    const rooms = detectRooms(shapes);
+    expect(rooms).toHaveLength(1);
+    expect(rooms[0].size[0]).toBeGreaterThan(29);
+    expect(rooms[0].areaM2).toBeGreaterThan(800);
+  });
 });

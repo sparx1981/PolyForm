@@ -5,6 +5,7 @@ import type {
   RecognisedWall,
 } from './imageAdapter';
 import type { RasterImageData } from './localPlanRecognizer';
+import { checkPlanScale, estimateScaleFromOverall, estimateScaleFromRooms, parsePrintedLength, parsePrintedSize, type ScaleRoomSample } from './planScale';
 
 /**
  * AI-assisted floor-plan recognition.
@@ -46,6 +47,10 @@ export interface AiPlanRoom {
   name: string;
   x: number;
   y: number;
+  /** The room's interior extent, 0-1000: x1, y1, x2, y2. */
+  box?: [number, number, number, number];
+  /** The size printed with the room's label, exactly as written, such as "16' x 20'". */
+  printedSize?: string;
   confidence?: number;
 }
 
@@ -53,6 +58,8 @@ export interface AiPlanResponse {
   walls: AiPlanWall[];
   openings: AiPlanOpening[];
   rooms: AiPlanRoom[];
+  /** Overall building dimensions printed on the plan, exactly as written. */
+  overall?: { width?: string; depth?: string };
   notes: string[];
 }
 
@@ -72,14 +79,19 @@ walls: one entry per wall segment, as its CENTRELINE from (x1,y1) to (x2,y2).
 - Include exterior walls and interior partitions, at ANY angle. Do not force walls to be horizontal or vertical; plans may be skewed, triangular or irregular.
 - A wall drawn as two parallel lines, or as a solid thick bar, is ONE wall: give its centreline.
 - Start a new wall segment at each corner and where another wall joins it; make endpoints meet exactly at corners.
+- A wall is ONE continuous segment across the doors and windows in it. Do NOT break a wall at a door or window: those are listed separately under openings. Only end a wall at a corner, at a T-junction, or at a genuinely open gap (a wide cased opening drawn with dashed lines).
 - Do not include dimension lines, extension lines, grid or section lines, text, furniture, fixtures, stair treads, door swing arcs, hatching or the title block / border.
 - Set exterior=true for walls on the outside of the building. Give thickness if you can see it.
 
 openings: doors and windows.
-- x,y is the CENTRE of the opening in the wall; width is its width along the wall.
+- x,y is the CENTRE of the opening in the wall; width is its width along the wall. For a door, measure the gap in the wall (the door leaf), not the swing arc.
 - Doors are shown by a gap with a swing arc or a leaf; windows by thin parallel lines or a break in the wall; include sliding/french doors as doors. Do not list unlabelled garage doors unless clearly drawn.
 
 rooms: one entry per labelled room or space (e.g. "KITCHEN", "Bedroom 2", "Garage"). name is the label text in title case; x,y is a point well inside that room. Use a short descriptive name if a space is unlabelled but obviously a bathroom, stair, hall, etc.
+- x1,y1,x2,y2: the room's interior extent (the rectangle that just contains the room inside its walls), on the same 0-1000 scale.
+- printedSize: the size printed with the room's label, copied exactly as written (e.g. "16' x 20'" or "4.5 x 3.2 m"). Leave it out when no size is printed. Never work a size out yourself.
+
+overall: if the plan prints overall building dimensions (for example "WIDTH - 82'" and "DEPTH - 100'"), give them as width and depth strings exactly as printed. Leave out what is not printed.
 
 notes: short strings for anything uncertain (illegible areas, partial drawings, several floors on one sheet). If the sheet shows several floors, reconstruct only the first/main one and say so.
 
@@ -135,13 +147,21 @@ export function parseAiPlanResponse(text: string): AiPlanResponse {
     const x = num(r?.x), y = num(r?.y);
     const name = typeof r?.name === 'string' ? r.name.trim().slice(0, 60) : '';
     if (x === undefined || y === undefined || !name) continue;
-    rooms.push({ name, x: clampScale(x), y: clampScale(y), confidence: conf(r.confidence) });
+    const box = [num(r.x1), num(r.y1), num(r.x2), num(r.y2)];
+    rooms.push({
+      name, x: clampScale(x), y: clampScale(y),
+      box: box.every(v => v !== undefined) ? box.map(v => clampScale(v as number)) as [number, number, number, number] : undefined,
+      printedSize: typeof r.printedSize === 'string' && r.printedSize.trim() ? r.printedSize.trim().slice(0, 40) : undefined,
+      confidence: conf(r.confidence),
+    });
   }
+  const shortText = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 40) : undefined);
+  const overall = raw.overall && typeof raw.overall === 'object' ? { width: shortText(raw.overall.width), depth: shortText(raw.overall.depth) } : undefined;
 
   const notes = Array.isArray(raw.notes)
     ? raw.notes.filter((n: unknown): n is string => typeof n === 'string' && !!n.trim()).slice(0, 8)
     : [];
-  return { walls, openings, rooms, notes };
+  return { walls, openings, rooms, overall, notes };
 }
 
 // ---------------------------------------------------------------- geometry
@@ -229,13 +249,65 @@ export function refineWallsToInk(
 }
 
 /**
+ * Joins two collinear wall pieces that have a door or window between them. Models tend to end a wall at each
+ * door; the wall is really continuous and the opening is cut into it, so the pieces are made one wall (which
+ * also gives the opening a wall to sit in). Only gaps that actually contain an opening are bridged.
+ */
+export function bridgeOpeningGaps(
+  input: PxWall[],
+  openings: Array<{ at: P; widthPx: number }>,
+  options: { tolerance: number; maxGap: number },
+): PxWall[] {
+  const tol = options.tolerance;
+  const walls = input.map(w => ({ ...w, a: [...w.a] as P, b: [...w.b] as P }));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    outer: for (let i = 0; i < walls.length; i++) {
+      for (let j = i + 1; j < walls.length; j++) {
+        const A = walls[i], B = walls[j];
+        const la = len(A);
+        if (la < 1e-6 || angleDiff(lineAngle(A), lineAngle(B)) > 4 * Math.PI / 180) continue;
+        const ux = (A.b[0] - A.a[0]) / la, uy = (A.b[1] - A.a[1]) / la;
+        const along = (p: P) => (p[0] - A.a[0]) * ux + (p[1] - A.a[1]) * uy;
+        const across = (p: P) => Math.abs((p[0] - A.a[0]) * -uy + (p[1] - A.a[1]) * ux);
+        if (across(B.a) > tol * 1.2 || across(B.b) > tol * 1.2) continue;
+        const aLo = 0, aHi = la;
+        const bLo = Math.min(along(B.a), along(B.b)), bHi = Math.max(along(B.a), along(B.b));
+        const gapStart = Math.min(aHi, bHi), gapEnd = Math.max(aLo, bLo);
+        const gap = gapEnd - gapStart;
+        if (gap <= tol || gap > options.maxGap) continue;
+        // The gap must hold a door or window, or it is a real opening in the plan.
+        const holdsOpening = openings.some(o => {
+          const t = along(o.at);
+          return t >= gapStart - tol && t <= gapEnd + tol && across(o.at) <= tol * 2.5;
+        });
+        if (!holdsOpening) continue;
+        const lo = Math.min(aLo, bLo), hi = Math.max(aHi, bHi);
+        walls[i] = {
+          a: [A.a[0] + ux * lo, A.a[1] + uy * lo],
+          b: [A.a[0] + ux * hi, A.a[1] + uy * hi],
+          thickness: Math.max(A.thickness ?? 0, B.thickness ?? 0) || undefined,
+          exterior: A.exterior || B.exterior,
+          confidence: Math.min(A.confidence, B.confidence),
+        };
+        walls.splice(j, 1);
+        changed = true;
+        break outer;
+      }
+    }
+  }
+  return walls;
+}
+
+/**
  * Tidies raw wall lines into a connected plan: near-axis walls become exactly
  * axis-aligned, collinear overlaps merge, nearby endpoints join, endpoints
  * that touch another wall's side snap onto it, and slivers/duplicates go.
  */
 export function cleanWalls(
   input: PxWall[],
-  options: { tolerance: number; minLength: number; axisSnapDeg?: number },
+  options: { tolerance: number; minLength: number; axisSnapDeg?: number; extendReach?: number },
 ): PxWall[] {
   const tol = options.tolerance;
   const axisSnap = (options.axisSnapDeg ?? 3) * Math.PI / 180;
@@ -364,6 +436,35 @@ export function cleanWalls(
     }
   }
 
+  // 4b. A wall that stops just short of another wall is extended to meet it, along its own direction, so
+  //     corners the model drew with a small gap are closed.
+  const reach = options.extendReach ?? tol * 3;
+  for (let i = 0; i < walls.length; i++) {
+    for (const end of ['a', 'b'] as const) {
+      const p = walls[i][end];
+      const q = walls[i][end === 'a' ? 'b' : 'a'];
+      const lw = Math.hypot(p[0] - q[0], p[1] - q[1]);
+      if (lw < 1e-6) continue;
+      // Already joined to something: leave it.
+      if (walls.some((w, j) => j !== i && distToSegment(p, w.a, w.b).dist <= tol * 0.5)) continue;
+      const dx = (p[0] - q[0]) / lw, dy = (p[1] - q[1]) / lw;
+      let bestS = Infinity;
+      for (let j = 0; j < walls.length; j++) {
+        if (j === i) continue;
+        const rx = walls[j].b[0] - walls[j].a[0], ry = walls[j].b[1] - walls[j].a[1];
+        const lr = Math.hypot(rx, ry);
+        if (lr < 1e-6) continue;
+        const denom = dx * ry - dy * rx;
+        if (Math.abs(denom) < 0.2 * lr) continue; // nearly parallel: it would never meet cleanly
+        const apx = walls[j].a[0] - p[0], apy = walls[j].a[1] - p[1];
+        const s = (apx * ry - apy * rx) / denom;
+        const t = (apx * dy - apy * dx) / denom;
+        if (s > 0 && s <= reach && t >= -tol / lr && t <= 1 + tol / lr && s < bestS) bestS = s;
+      }
+      if (bestS < Infinity) walls[i][end] = [p[0] + dx * bestS, p[1] + dy * bestS];
+    }
+  }
+
   // 5. Drop slivers and exact duplicates.
   const out: PxWall[] = [];
   for (const { lock: _lock, ...w } of walls) {
@@ -378,6 +479,24 @@ export function cleanWalls(
 
 const DOOR_WIDTH_M: [number, number] = [0.7, 2.4];
 const WINDOW_WIDTH_M: [number, number] = [0.5, 3.5];
+
+const SINGLE_DOORS = [0.76, 0.81, 0.91, 1.0];
+const DOUBLE_DOORS = [1.5, 1.83];
+const nearest = (value: number, options: number[]) => options.reduce((best, o) => (Math.abs(o - value) < Math.abs(best - value) ? o : best));
+
+/**
+ * A door or window width a builder would recognise. The AI's width is only a rough measurement, and a plan scale
+ * that is a little off stretches it further, so single doors snap to standard leaf sizes, double doors to
+ * standard pairs, and windows to the nearest 5 cm.
+ */
+export function realisticOpeningWidth(kind: 'door' | 'window', widthM: number): number {
+  if (kind === 'window') return Math.round(Math.min(Math.max(widthM, WINDOW_WIDTH_M[0]), WINDOW_WIDTH_M[1]) * 20) / 20;
+  const w = Math.min(Math.max(widthM, DOOR_WIDTH_M[0]), DOOR_WIDTH_M[1]);
+  if (w <= 1.1) return nearest(w, SINGLE_DOORS);
+  if (w <= 1.4) return 1.2;
+  if (w <= 2.1) return nearest(w, DOUBLE_DOORS);
+  return w;
+}
 
 /**
  * Hosts each opening on its nearest wall and converts its pixel position and
@@ -400,8 +519,7 @@ export function attachOpenings(
     }
     if (!best || best.dist > Math.max(tolerance * 2.5, (best.wall.thickness ?? 0) * 1.5)) { dropped++; continue; }
     const wallLenM = len(best.wall) * metresPerPixel;
-    const [lo, hi] = op.kind === 'door' ? DOOR_WIDTH_M : WINDOW_WIDTH_M;
-    const width = Math.min(Math.max(op.widthPx * metresPerPixel, lo), hi, wallLenM - 0.2);
+    const width = Math.min(realisticOpeningWidth(op.kind, op.widthPx * metresPerPixel), wallLenM - 0.2);
     if (!(width >= 0.4)) { dropped++; continue; }
     // Keep the opening fully inside the wall.
     const half = width / 2 / wallLenM;
@@ -458,7 +576,7 @@ export async function recogniseFloorPlanWithAi(
   const toPx = (x: number, y: number): P => [x / AI_PLAN_SCALE * W, y / AI_PLAN_SCALE * H];
 
   const big = Math.max(W, H);
-  const tolerance = Math.max(4, big * 0.007);
+  const tolerance = Math.max(4, big * 0.009);
   const minLength = Math.max(6, big * 0.008);
 
   let walls: PxWall[] = response.walls.map(w => ({
@@ -469,6 +587,14 @@ export async function recogniseFloorPlanWithAi(
     confidence: w.confidence ?? 0.8,
   }));
   if (options.raster) walls = refineWallsToInk(walls, options.raster, { reach: tolerance * 1.6 });
+  const openingsPx = response.openings.map(o => ({
+    kind: o.kind,
+    at: toPx(o.x, o.y),
+    widthPx: o.width / AI_PLAN_SCALE * W,
+    confidence: o.confidence ?? 0.7,
+  }));
+  // Walls the model ended at a door or window become one wall again, with the opening cut into it.
+  walls = bridgeOpeningGaps(walls, openingsPx, { tolerance, maxGap: 3.2 / mpp });
   walls = cleanWalls(walls, { tolerance, minLength });
 
   const recognisedWalls: RecognisedWall[] = walls.map((w, i) => {
@@ -484,17 +610,7 @@ export async function recogniseFloorPlanWithAi(
 
   // Openings need the cleaned wall geometry, in pixels, to find their host.
   const hosts = recognisedWalls.map(w => ({ id: w.id, a: w.start, b: w.end, thickness: (w.thickness ?? 0) / mpp }));
-  const attached = attachOpenings(
-    response.openings.map(o => ({
-      kind: o.kind,
-      at: toPx(o.x, o.y),
-      widthPx: o.width / AI_PLAN_SCALE * W,
-      confidence: o.confidence ?? 0.7,
-    })),
-    hosts,
-    mpp,
-    tolerance,
-  );
+  const attached = attachOpenings(openingsPx, hosts, mpp, tolerance);
 
   const rooms: RecognisedRoom[] = response.rooms.map(r => ({
     name: r.name,
@@ -502,8 +618,32 @@ export async function recogniseFloorPlanWithAi(
     confidence: r.confidence ?? 0.75,
   }));
 
+  // Does the plan's own text agree with the calibration?
+  let wallsPx: [number, number] = [0, 0];
+  if (walls.length) {
+    const xs = walls.flatMap(w => [w.a[0], w.b[0]]), ys = walls.flatMap(w => [w.a[1], w.b[1]]);
+    wallsPx = [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)];
+  }
+  const roomSamples: ScaleRoomSample[] = [];
+  for (const r of response.rooms) {
+    const printed = r.printedSize ? parsePrintedSize(r.printedSize) : null;
+    if (!printed || !r.box) continue;
+    roomSamples.push({ printed, measuredPx: [Math.abs(r.box[2] - r.box[0]) / AI_PLAN_SCALE * W, Math.abs(r.box[3] - r.box[1]) / AI_PLAN_SCALE * H] });
+  }
+  const overall = {
+    width: response.overall?.width ? parsePrintedLength(response.overall.width) ?? undefined : undefined,
+    depth: response.overall?.depth ? parsePrintedLength(response.overall.depth) ?? undefined : undefined,
+  };
+  const scaleCheck = checkPlanScale({
+    metresPerPixel: mpp,
+    wallsPx,
+    doorWidthsPx: openingsPx.filter(o => o.kind === 'door').map(o => o.widthPx),
+    estimate: estimateScaleFromRooms(roomSamples) ?? estimateScaleFromOverall(overall, wallsPx),
+  });
+
   const uncertainties = [
     'AI recognition is approximate: review every wall, door, window and room label before committing.',
+    ...scaleCheck.warnings,
     ...response.notes,
   ];
   if (attached.dropped) uncertainties.push(`${attached.dropped} door/window(s) could not be matched to a wall and were skipped.`);
@@ -517,5 +657,6 @@ export async function recogniseFloorPlanWithAi(
     openings: attached.openings,
     rooms,
     uncertainties,
+    scaleCheck,
   };
 }

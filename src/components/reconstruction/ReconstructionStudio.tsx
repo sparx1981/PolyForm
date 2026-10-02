@@ -12,7 +12,9 @@ import {
 import { recogniseOrthogonalFloorPlan } from '../../lib/reconstruction/localPlanRecognizer';
 import { imageObservationToDraft, type ImageReconstructionObservation } from '../../lib/reconstruction/imageAdapter';
 import { recogniseFloorPlanWithAi } from '../../lib/reconstruction/aiPlanRecognizer';
+import type { ScaleCheck } from '../../lib/reconstruction/planScale';
 import { createGeminiPlanGenerator, hasGeminiPlanKey } from '../../lib/reconstruction/geminiPlanClient';
+import type { AiPlanGenerator } from '../../lib/reconstruction/aiPlanRecognizer';
 import {
   applyReconstructionReview,
   buildReconstructionReview,
@@ -72,6 +74,10 @@ export default function ReconstructionStudio() {
   const [decisions, setDecisions] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [scaleCheck, setScaleCheck] = useState<ScaleCheck | null>(null);
+  // The model's last answer for this image, so applying a corrected scale does not need another Gemini call.
+  const aiAnswer = useRef<{ imageUrl: string; text: string } | null>(null);
+  const [rerunWithCachedAnswer, setRerunWithCachedAnswer] = useState(false);
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -103,6 +109,7 @@ export default function ReconstructionStudio() {
   }, [calibration, pixelSize]);
 
   const resetRecognition = () => {
+    setScaleCheck(null);
     setDraft(null);
     setReview(null);
     setDecisions({});
@@ -171,6 +178,7 @@ export default function ReconstructionStudio() {
     const nextReview = buildReconstructionReview(nextDraft);
     const initial: Record<string, boolean> = {};
     for (const item of nextReview.items) initial[item.id] = item.status !== 'error';
+    setScaleCheck(observation.scaleCheck?.warnings.length ? observation.scaleCheck : null);
     setDraft(nextDraft);
     setReview(nextReview);
     setDecisions(initial);
@@ -211,12 +219,18 @@ export default function ReconstructionStudio() {
     }
   };
 
-  const recogniseWithAi = async () => {
+  const recogniseWithAi = async (reuseAnswer = false) => {
     if (!imageUrl || !pixelSize || !calibrated) return;
     setBusy(true);
-    setMessage('Asking Gemini to read the plan…');
+    setMessage(reuseAnswer ? 'Rebuilding the plan at the new scale…' : 'Asking Gemini to read the plan…');
     try {
-      const generate = createGeminiPlanGenerator();
+      const gemini = reuseAnswer && aiAnswer.current?.imageUrl === imageUrl ? null : createGeminiPlanGenerator();
+      const generate: AiPlanGenerator = async request => {
+        if (!gemini) return aiAnswer.current!.text;
+        const text = await gemini(request);
+        aiAnswer.current = { imageUrl, text };
+        return text;
+      };
       const image = await loadImage(imageUrl);
       // Work at a capped resolution: plenty for wall alignment, and a sensible upload size.
       const scale = Math.min(1, AI_MAX_DIMENSION / Math.max(pixelSize[0], pixelSize[1]));
@@ -246,6 +260,23 @@ export default function ReconstructionStudio() {
       setBusy(false);
     }
   };
+
+  /** Sets the calibration's known distance so the plan comes out at the scale its own numbers point to, then rebuilds. */
+  const useDetectedScale = () => {
+    const ratio = scaleCheck?.suggestion?.ratio;
+    const distance = Number(knownDistance);
+    if (!ratio || !(distance > 0)) return;
+    setKnownDistance(String(Number((distance * ratio).toPrecision(4))));
+    resetRecognition();
+    setRerunWithCachedAnswer(true);
+  };
+
+  useEffect(() => {
+    if (!rerunWithCachedAnswer || !calibrated || busy) return;
+    setRerunWithCachedAnswer(false);
+    void recogniseWithAi(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rerunWithCachedAnswer, calibrated]);
 
   const generatePhotoMesh = async () => {
     if (!sourceFile) return;
@@ -442,7 +473,7 @@ export default function ReconstructionStudio() {
                 <p className="text-xs text-gray-500">
                   <strong>AI recognise</strong> reads walls at any angle, doors, windows and room names. It uploads the plan image to Google Gemini.
                 </p>
-                <button onClick={recogniseWithAi} disabled={!calibrated || !imageUrl || busy || !hasGeminiPlanKey()}
+                <button onClick={() => recogniseWithAi()} disabled={!calibrated || !imageUrl || busy || !hasGeminiPlanKey()}
                   className="w-full px-3 py-2 rounded-lg bg-polyform-blue text-white text-xs font-bold disabled:opacity-40 flex items-center justify-center gap-2">
                   {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI recognise and review
                 </button>
@@ -471,6 +502,24 @@ export default function ReconstructionStudio() {
                   Requires a Hugging Face API token.
                 </div>
               </div>
+
+              {scaleCheck && scaleCheck.warnings.length > 0 && (
+                <div role="alert" className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs space-y-2 text-amber-900 dark:text-amber-200">
+                  <div className="flex gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="font-bold">Check the scale</div>
+                      {scaleCheck.warnings.map(warning => <p key={warning}>{warning}</p>)}
+                    </div>
+                  </div>
+                  {scaleCheck.suggestion && (
+                    <button onClick={useDetectedScale} disabled={busy}
+                      className="w-full px-3 py-2 rounded-lg bg-amber-600 text-white font-bold disabled:opacity-40">
+                      Use detected scale ({scaleCheck.suggestion.buildingM[0].toFixed(1)} × {scaleCheck.suggestion.buildingM[1].toFixed(1)} m)
+                    </button>
+                  )}
+                </div>
+              )}
 
               {message && (
                 <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-3 text-xs flex gap-2 text-blue-800 dark:text-blue-200">
