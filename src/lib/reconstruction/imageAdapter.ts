@@ -1,4 +1,5 @@
 import type { FurnitureParams, InteriorFurnitureType } from '../interiors/parametricFurniture';
+import type { ScaleCheck } from './planScale';
 import type {
   ReconstructionDraft,
   ReconstructionFurnitureCandidate,
@@ -65,6 +66,8 @@ export interface ImageReconstructionObservation {
   furniture?: RecognisedFurniture[];
   rooms?: RecognisedRoom[];
   uncertainties?: string[];
+  /** How the calibration compares with the plan's own numbers and normal building sizes. */
+  scaleCheck?: ScaleCheck;
 }
 
 export interface ImageReconstructionProviderRequest {

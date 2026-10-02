@@ -7,6 +7,8 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'October 4, 2026',
     items: [
+      'Reconstruction Studio AI recognition is more accurate. Walls the AI broke at doors and windows are joined back into one wall (so those doors now have a wall to sit in), walls that stop just short of a corner are extended to close it, and door and window widths snap to standard sizes so they no longer come out stretched.',
+      'Reconstruction Studio now checks your scale against the plan itself. It reads the room sizes printed on the plan (such as 16\' x 20\') and any overall dimensions, compares them with your calibration, and warns when they disagree, with a Use detected scale button that rebuilds the plan at the corrected scale without another Gemini call. It also warns when doors or the whole building come out an unlikely size.',
       'Reconstruction Studio: fixed a crash (Maximum call stack size exceeded) when adding geometry from a large plan. Room measuring now handles open-plan rooms of any size, and a failure in room detection can no longer take the page down.',
       'Large SketchUp files: .skp files are now read in the background with a progress bar instead of freezing the page, components used many times are stored once while reading, and the merge into your model uses far less memory. If a file still cannot open, the message now says why (for example, ran out of memory) and what to try, rather than a generic error.',
       'Wall tool: drawing walls could freeze the page when the model was large or had a stray wall far from the building, because room detection scaled with the whole site area. It now looks only at the cells near each wall and caps the grid size.',

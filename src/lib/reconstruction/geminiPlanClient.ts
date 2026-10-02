@@ -42,10 +42,16 @@ const responseSchema = {
         properties: {
           name: { type: Type.STRING },
           x: point, y: point,
+          x1: point, y1: point, x2: point, y2: point,
+          printedSize: { type: Type.STRING },
           confidence: { type: Type.NUMBER },
         },
         required: ['name', 'x', 'y'],
       },
+    },
+    overall: {
+      type: Type.OBJECT,
+      properties: { width: { type: Type.STRING }, depth: { type: Type.STRING } },
     },
     notes: { type: Type.ARRAY, items: { type: Type.STRING } },
   },
