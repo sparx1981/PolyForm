@@ -31,6 +31,7 @@ import StatusBar from './components/StatusBar';
 import Viewport from './components/Viewport';
 import AIRenderer from './components/AIRenderer';
 import PresentationPanel from './components/presentation/PresentationPanel';
+import { GlassToolHandle } from './components/presentation/LoupeHandle';
 import ClientPresentationPage from './components/presentation/ClientPresentationPage';
 import { shareIdFromPath } from './lib/presentation/share';
 import AIQuery from './components/AIQuery';
@@ -389,6 +390,7 @@ function AppContent() {
   const modals = (
     <>
       <PresentationPanel />
+      <GlassToolHandle />
       <AIRenderer />
       <AIGenerate />
       <AIQuery />

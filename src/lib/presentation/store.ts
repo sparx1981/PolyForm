@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { DEFAULT_GLASS, GLASS_KEYS, loadGlassSettings, saveGlassSettings, type GlassSettings } from './glass';
 
 /**
  * Presentation mode's live settings. A small store of its own (rather than more AppContext
@@ -7,7 +8,7 @@ import { useSyncExternalStore } from 'react';
  */
 export type CutMode = 'off' | 'plan' | 'section-x' | 'section-z';
 
-export interface PresentationState {
+export interface PresentationState extends GlassSettings {
   /** The editor's presentation panel is open (the client page is always "active"). */
   active: boolean;
   /** Target explode amount, 0-1; the scene eases towards it. */
@@ -22,6 +23,8 @@ export interface PresentationState {
   loupeZoom: number;
   loupeRadius: number;
   loupePosition: [number, number];
+  /** The lens is being pressed or dragged (drives its liquid squash); never saved. */
+  loupePressed: boolean;
   bloom: number;
   depthOfField: boolean;
   focusDistance: number;
@@ -62,6 +65,8 @@ export const INITIAL_PRESENTATION: PresentationState = {
   loupeZoom: 2.5,
   loupeRadius: 110,
   loupePosition: [0.5, 0.45],
+  loupePressed: false,
+  ...DEFAULT_GLASS,
   bloom: 0,
   depthOfField: false,
   focusDistance: 10,
@@ -80,7 +85,8 @@ export const INITIAL_PRESENTATION: PresentationState = {
   storeys: 0,
 };
 
-let state: PresentationState = INITIAL_PRESENTATION;
+// The glass look is the one thing here that is remembered between sessions, and is shared by Presentation mode and the Camera tool.
+let state: PresentationState = { ...INITIAL_PRESENTATION, ...loadGlassSettings() };
 const listeners = new Set<() => void>();
 
 export const presentation = {
@@ -93,11 +99,14 @@ export const presentation = {
     }
     if (!changed) return;
     state = { ...state, ...next };
+    if (GLASS_KEYS.some(key => key in next)) saveGlassSettings(state);
     listeners.forEach(l => l());
   },
   /** Everything back to normal (effects off), keeping `active` as given. */
   reset(active = state.active) {
-    state = { ...INITIAL_PRESENTATION, active, bounds: state.bounds, storeys: state.storeys, buildSeconds: state.buildSeconds };
+    // The glass look and its lens size, zoom and follow setting are preferences, not effects, so they stay.
+    const keep = Object.fromEntries([...GLASS_KEYS, 'loupeZoom', 'loupeRadius'].map(key => [key, (state as any)[key]]));
+    state = { ...INITIAL_PRESENTATION, ...keep, active, bounds: state.bounds, storeys: state.storeys, buildSeconds: state.buildSeconds };
     listeners.forEach(l => l());
   },
   subscribe(listener: () => void) {

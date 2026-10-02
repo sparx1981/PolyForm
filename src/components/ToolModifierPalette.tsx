@@ -4,7 +4,8 @@ import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import WorldViewPanel from './WorldView';
 import { SectionToolPanel } from './SectionToolPanel';
-import { Settings, Info, Zap, RotateCw, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Spline, Hexagon, Lasso, SquareDashed, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe, Slice } from 'lucide-react';
+import { GlassSettingsPanel } from './presentation/GlassSettingsPanel';
+import { Settings, Info, Zap, RotateCw, PanelRightClose, Building2, Home, AlignCenter, AlignLeft, AlignRight, CheckCircle2, ChevronDown, ChevronUp, Hammer, Spline, Hexagon, Lasso, SquareDashed, AlertCircle, Loader2, SlidersHorizontal, PersonStanding, Crop, Globe, Slice, ScanSearch } from 'lucide-react';
 import { buildNextFloorLevel, buildCeilingSlabForRoom, RoofParams } from '../lib/archRoofGenerator';
 import { generateTimberFrameForBuilding } from '../lib/timberFrameGenerator';
 import { describeRoofs, roofBuilding } from '../lib/buildingRoofs';
@@ -101,6 +102,7 @@ export const ToolModifierPalette: React.FC = () => {
     'scale_figure',
     'clipping',
     'section'
+    , 'glass'
     , 'lamp'
     , 'worldview'
   ].includes(activeTool);
@@ -256,6 +258,8 @@ export const ToolModifierPalette: React.FC = () => {
             <Crop size={14} className="text-sky-500" />
           ) : activeTool === 'section' ? (
             <Slice size={14} className="text-sky-500" />
+          ) : activeTool === 'glass' ? (
+            <ScanSearch size={14} className="text-sky-500" />
           ) : activeTool === 'worldview' ? (
             <Globe size={14} className="text-polyform-blue" />
           ) : activeTool === 'lamp' ? (
@@ -268,7 +272,7 @@ export const ToolModifierPalette: React.FC = () => {
             <Settings size={14} className="text-polyform-blue" />
           )}
           <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 dark:text-gray-100">
-            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'worldview' ? 'WorldView Modifiers' : activeTool === 'section' ? 'Section Plane Modifiers' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
+            {activeTool === 'wall' ? 'Architecture Modifiers' : activeTool === 'timber-frame' ? 'Timber Frame Modifiers' : activeTool === 'roof' ? 'Roof Modifiers' : activeTool === 'scale_figure' ? 'Scale Figure Modifiers' : activeTool === 'clipping' ? 'Camera Clipping Modifiers' : activeTool === 'worldview' ? 'WorldView Modifiers' : activeTool === 'section' ? 'Section Plane Modifiers' : activeTool === 'glass' ? 'Glass Modifiers' : activeTool === 'lamp' ? 'Light Fixture Modifiers' : activeTool === 'bezier' ? 'Bézier Modifiers' : activeTool === 'walk' ? 'Walk Mode Modifiers' : (activeTool === 'select' || activeTool === 'lasso') ? 'Selection Modifiers' : 'Tool Modifiers'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -299,6 +303,7 @@ export const ToolModifierPalette: React.FC = () => {
           <div className={cn("p-3 space-y-4 overflow-y-auto flex-1 select-text", !isPhone && "max-h-[calc(100vh-180px)]")}>
         {activeTool === 'worldview' && <WorldViewPanel />}
         {activeTool === 'section' && <SectionToolPanel />}
+        {activeTool === 'glass' && <GlassSettingsPanel tone="themed" follow />}
         {activeTool === 'wall' && (
           <div className="space-y-3">
             {/* Justification Selector */}

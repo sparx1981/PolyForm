@@ -18,6 +18,7 @@ import ShareWithClientDialog from './ShareWithClientDialog';
 import { findSiteGround } from '../../lib/worldSite/site';
 import { STREET_LIFE_LEVELS, withSiteSettings } from '../../lib/worldSite/streets';
 import { actionLabel } from '../../lib/macroRecorder';
+import { GlassSettingsPanel } from './GlassSettingsPanel';
 import LoupeHandle from './LoupeHandle';
 import PresentationEffectsControls from './PresentationEffectsControls';
 import type { StreetLifeLevel } from '../../types';
@@ -170,11 +171,8 @@ export default function PresentationPanel() {
         onPointerDown={e => e.stopPropagation()}
       >
         {open === 'loupe' && (
-          <Popover title="Detail loupe" hint="Drag the glass to inspect a detail">
-            <Slider label="Magnification" value={s.loupeZoom} min={1.5} max={6} step={.1}
-              onChange={v => presentation.set({ loupeZoom: v })} format={v => `${v.toFixed(1)}×`} />
-            <Slider label="Lens size" value={s.loupeRadius} min={70} max={180} step={5}
-              onChange={v => presentation.set({ loupeRadius: v })} format={v => `${Math.round(v * 2)} px`} />
+          <Popover title="Glass" hint="Drag the glass to inspect a detail" scroll>
+            <GlassSettingsPanel />
           </Popover>
         )}
         {open === 'effects' && <PresentationEffectsControls />}
@@ -320,9 +318,9 @@ function Divider() {
   return <div className="w-px self-stretch bg-white/15 mx-1" />;
 }
 
-export function Popover({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+export function Popover({ title, hint, children, scroll }: { title: string; hint?: string; children: React.ReactNode; scroll?: boolean }) {
   return (
-    <div className="mb-2 mx-auto w-[min(360px,calc(100vw-16px))] rounded-2xl bg-slate-900/85 backdrop-blur-md border border-white/10 shadow-2xl p-4 text-white">
+    <div className={cn('mb-2 mx-auto w-[min(360px,calc(100vw-16px))] rounded-2xl bg-slate-900/85 backdrop-blur-md border border-white/10 shadow-2xl p-4 text-white', scroll && 'max-h-[min(60vh,520px)] overflow-y-auto')}>
       <div className="flex items-baseline justify-between mb-3">
         <span className="text-sm font-bold">{title}</span>
         {hint && <span className="text-[11px] text-white/50">{hint}</span>}

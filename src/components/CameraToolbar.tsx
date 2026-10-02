@@ -1,5 +1,5 @@
 import React, { useRef, useState, createContext, useContext } from 'react';
-import { Aperture, RotateCcw, Crop, Footprints, Orbit, Hand, Eye, ZoomIn, Slice } from 'lucide-react';
+import { Aperture, RotateCcw, Crop, Footprints, Orbit, Hand, Eye, ZoomIn, Slice, ScanSearch } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { ToolType } from '../types';
 import { cn } from '../lib/utils';
@@ -155,6 +155,18 @@ export default function CameraToolbar({ dock = 'left' }: CameraToolbarProps = {}
           icon={<Slice size={19} />}
           label="Section Plane"
           subtitle="Slice the model to see inside: click a wall or floor to cut along it"
+        />
+
+        {/* Glass lens: shared with Presentation mode's Glass */}
+        <CameraToolButton
+          tool="glass"
+          icon={<ScanSearch size={19} />}
+          label="Glass Lens"
+          subtitle="A refracting magnifier: drag it over a detail, or let it follow the cursor"
+          onClick={() => {
+            setActiveTool('glass');
+            if (isToolModifierDocked && !rightPanelVisible) setRightPanelVisible(true);
+          }}
         />
 
         {/* Reset Camera Position */}

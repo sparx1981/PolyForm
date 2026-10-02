@@ -1327,6 +1327,7 @@ export default function TopBar() {
                       { tool: 'teleport', label: 'Portal Navigation' },
                       { tool: 'walk', label: 'Walk Mode' },
                       { tool: 'section', label: 'Section Plane' },
+                      { tool: 'glass', label: 'Glass Lens' },
                       { tool: 'reset_camera', label: 'Reset Camera Position' },
                       { tool: 'clipping', label: 'Camera Depth Clipping' },
                     ].map(({ tool, label }) => (

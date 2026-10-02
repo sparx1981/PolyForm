@@ -32,6 +32,7 @@ import {
   Hand,
   Eye,
   ZoomIn,
+  ScanSearch,
   Sparkles,
   CircleDot,
   CornerUpRight,
@@ -1161,6 +1162,19 @@ export default function UnifiedToolRail({ variant = 'rail', landscape = false, m
           isActive: (s) => s.activeTool === 'section',
           onClick: (s) => s.setActiveTool('section'),
           keywords: ['section', 'cut', 'slice', 'plan cut', 'section plane', 'see inside']
+        },
+        {
+          id: 'glass',
+          tool: 'glass',
+          label: 'Glass Lens',
+          subtitle: 'A refracting magnifier glass: drag it over a detail, or let it follow the cursor',
+          icon: <ScanSearch size={19} className="text-sky-500 dark:text-sky-400" />,
+          isActive: (s) => s.activeTool === 'glass',
+          onClick: (s) => {
+            s.setActiveTool('glass');
+            if (s.isToolModifierDocked && !s.rightPanelVisible) s.setRightPanelVisible(true);
+          },
+          keywords: ['glass', 'lens', 'magnify', 'magnifier', 'loupe', 'zoom', 'refraction', 'detail', 'follow cursor']
         },
         {
           id: 'reset_camera',
