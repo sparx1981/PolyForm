@@ -331,7 +331,7 @@ export function planRoomFurnishing(allShapes: readonly Shape[], room: SpatialRoo
           const halfWidth = Number(anchor.customData.semanticComponent.params.width ?? 2.2) / 2;
           const sofaDepth = Number(anchor.customData.semanticComponent.params.depth ?? 0.9);
           const local = type === 'coffee-table' ? [[0, sofaDepth / 2 + 0.75 + size.depth / 2]]
-            : type === 'nightstand' ? [[-1.13, -0.7], [1.13, -0.7]]
+            : type === 'nightstand' ? [[-(halfWidth + size.width / 2 + 0.06), -0.7], [halfWidth + size.width / 2 + 0.06, -0.7]]
             : type === 'side-table' ? [[-(halfWidth + size.width / 2 + 0.08), -0.1], [halfWidth + size.width / 2 + 0.08, -0.1]]
             : [[-(halfWidth + 0.7), 1.4], [halfWidth + 0.7, 1.4]];
           for (const [x,z] of local) candidates.push({ position: [anchor.position[0]+c*x+s*z, room.elevation, anchor.position[2]-s*x+c*z], yaw: yaw + (type === 'armchair' ? Math.PI : 0) });

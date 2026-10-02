@@ -153,7 +153,7 @@ export const roomProfiles: Record<RoomFurnitureType, FurnitureProfile> = {
   },
 };
 
-type P = Required<import('./furnitureParts').FurnitureParams>;
+type P = import('./furnitureParts').FurnitureSize;
 type G = THREE.BufferGeometry;
 
 function deskGeometry(p: P): G {

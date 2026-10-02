@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { smoothPatchNormals } from './upholsteryNormals';
 import { relaxCurtainPositions } from './curtainCloth';
+import { relaxSoftParts } from './softRelax';
+import type { FurniturePartRange } from './furnitureParts';
 import type { Shape } from '../../types';
 import type { SimulationProfile } from '../semantics/componentTypes';
 
@@ -33,13 +35,14 @@ export function bakeSemanticSimulation(shape: Shape, strength = 0.35): Shape {
 
   const amount = Math.max(0, Math.min(1, strength));
   const next = [...positions];
-  const xs: number[] = [], ys: number[] = [], zs: number[] = [];
+  // Plain loop: spreading a six-figure vertex array into Math.min overflows the call stack.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (let i = 0; i < next.length; i += 3) {
-    xs.push(next[i]); ys.push(next[i + 1]); zs.push(next[i + 2]);
+    const x = next[i]!, y = next[i + 1]!, z = next[i + 2]!;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
   }
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const minZ = Math.min(...zs), maxZ = Math.max(...zs);
   const width = Math.max(0.001, maxX - minX);
   const height = Math.max(0.001, maxY - minY);
   const depth = Math.max(0.001, maxZ - minZ);
@@ -47,9 +50,15 @@ export function bakeSemanticSimulation(shape: Shape, strength = 0.35): Shape {
 
   const groups = shape.customData?.furnitureMaterialGroups as Array<{ start: number; count: number; materialIndex: number }> | undefined;
   const fabric = groups?.length ? new Uint8Array(next.length / 3) : undefined;
-  for (const group of groups ?? []) if (group.materialIndex === 1) fabric?.fill(1, group.start, group.start + group.count);
+  for (const group of groups ?? []) if (group.materialIndex !== 0) fabric?.fill(1, group.start, group.start + group.count);
+
+  const partRanges = shape.customData?.furniturePartRanges as FurniturePartRange[] | undefined;
+  // Pieces built with part information settle part by part; older saved pieces use the whole-piece rule below.
+  const byPart = simulation.type === 'softbody' && !!partRanges?.length;
+  if (byPart) relaxSoftParts(next, partRanges!, amount);
 
   for (let i = 0; i < next.length; i += 3) {
+    if (byPart) break;
     if (simulation.type === 'softbody' && fabric && !fabric[i / 3]) continue;
     const x = next[i], y = next[i + 1], z = next[i + 2];
     const nx = Math.max(-1, Math.min(1, (x - cx) / (width / 2)));
@@ -80,7 +89,7 @@ export function bakeSemanticSimulation(shape: Shape, strength = 0.35): Shape {
 
   const normals = rebuildNormals(next, shape.geometryData?.uvs);
   if (simulation.type === 'softbody' && groups) for (const group of groups) {
-    if (group.materialIndex !== 1) continue;
+    if (group.materialIndex === 0) continue;
     const start=group.start*3, length=group.count*3;
     const smooth = smoothPatchNormals(next.slice(start,start+length));
     for(let i=0;i<smooth.length;i++) normals[start+i]=smooth[i];

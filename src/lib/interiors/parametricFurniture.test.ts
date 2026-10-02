@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInteriorFurnitureGeometry, createInteriorFurnitureShape, interiorFurnitureCatalog } from './parametricFurniture';
+import { bakeSemanticSimulation } from './bakeSimulation';
 import { billOfMaterials } from '../presentation/bom';
 
 describe('parametric interior furniture', () => {
@@ -57,6 +58,65 @@ describe('parametric interior furniture', () => {
       expect(Array.from(g.getAttribute('position').array).every(Number.isFinite)).toBe(true);
       expect(g.getAttribute('normal').count).toBe(g.getAttribute('position').count);
       g.dispose();
+    }
+  });
+
+});
+
+describe('soft furnishings', () => {
+  const maxMove = (a: number[], b: number[]) => { let m = 0; for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i]! - b[i]!)); return m; };
+
+  it('records each soft part so settling can shape it by role', () => {
+    const sofa = createInteriorFurnitureShape('sofa');
+    const roles = new Set((sofa.customData.furniturePartRanges as Array<{ role?: string }>).map(p => p.role));
+    for (const role of ['seat', 'back', 'arm', 'scatter', 'throw']) expect(roles, role).toContain(role);
+    const bed = createInteriorFurnitureShape('bed');
+    const bedRoles = new Set((bed.customData.furniturePartRanges as Array<{ role?: string }>).map(p => p.role));
+    for (const role of ['mattress', 'duvet', 'pillow', 'scatter', 'throw']) expect(bedRoles, role).toContain(role);
+  });
+
+  it('leaves cushions, throws and pillows off when dressing is 0', () => {
+    for (const type of ['sofa', 'bed'] as const) {
+      const bare = createInteriorFurnitureShape(type, { params: { dressing: 0 } });
+      const roles = (bare.customData.furniturePartRanges as Array<{ role?: string }>).map(p => p.role);
+      expect(roles).not.toContain('scatter');
+      expect(roles).not.toContain('throw');
+    }
+  });
+
+  it('visibly settles a sofa and a bed at the Interior Studio strengths', () => {
+    for (const [type, strength, minimum] of [['sofa', 0.42, 0.03], ['armchair', 0.42, 0.03], ['bed', 0.42, 0.08]] as const) {
+      const shape = createInteriorFurnitureShape(type);
+      const settled = bakeSemanticSimulation(shape, strength);
+      // Centimetres, not millimetres: this is what makes Relax upholstery visible.
+      expect(maxMove(shape.geometryData.positions, settled.geometryData.positions), type).toBeGreaterThan(minimum);
+      expect(settled.geometryData.positions.every(Number.isFinite)).toBe(true);
+    }
+  });
+
+  it('settles harder at a higher strength and does nothing at zero', () => {
+    const shape = createInteriorFurnitureShape('sofa');
+    const soft = maxMove(shape.geometryData.positions, bakeSemanticSimulation(shape, 0.2).geometryData.positions);
+    const firm = maxMove(shape.geometryData.positions, bakeSemanticSimulation(shape, 0.8).geometryData.positions);
+    expect(firm).toBeGreaterThan(soft);
+    expect(maxMove(shape.geometryData.positions, bakeSemanticSimulation(shape, 0).geometryData.positions)).toBeLessThan(1e-6);
+  });
+
+  it('keeps the hard frame exactly where it was', () => {
+    const shape = createInteriorFurnitureShape('bed');
+    const settled = bakeSemanticSimulation(shape, 0.42);
+    for (const part of shape.customData.furniturePartRanges as Array<{ start: number; count: number; material: number }>) {
+      if (part.material !== 0) continue;
+      const a = shape.geometryData.positions.slice(part.start * 3, (part.start + part.count) * 3);
+      expect(maxMove(a, settled.geometryData.positions.slice(part.start * 3, (part.start + part.count) * 3))).toBe(0);
+    }
+  });
+
+  it('keeps saved size in check: no piece is heavier than a couple of megabytes', () => {
+    for (const type of ['bed', 'sofa', 'armchair'] as const) {
+      const shape = createInteriorFurnitureShape(type);
+      expect(JSON.stringify(shape).length, type).toBeLessThan(2 * 1024 * 1024);
+      expect(() => bakeSemanticSimulation(shape, 0.42)).not.toThrow();
     }
   });
 

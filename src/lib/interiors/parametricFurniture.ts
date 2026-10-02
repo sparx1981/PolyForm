@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCurtainPanels } from './curtainCloth';
-import { box, merge, padded, type FurnitureParams, type FurnitureProfile } from './furnitureParts';
+import { box, merge, padded, sheetAlongProfile, type FurnitureParams, type FurniturePartRange, type FurnitureProfile, type FurnitureSize } from './furnitureParts';
 import { createRoomFurnitureGeometry, roomProfiles, ROOM_FURNITURE_TYPES, type RoomFurnitureType } from './roomFurniture';
 import type { Shape } from '../../types';
 import type { PlacementProfile, PlumbingProfile, SimulationProfile } from '../semantics/componentTypes';
@@ -31,7 +31,7 @@ const profiles: Record<string, FurnitureProfile> = {
       simulation: { type: 'softbody', bakeable: true },
       bom: { group: 'Fixtures & furniture', item: 'Bed', unit: 'no.' },
     },
-    defaults: { width: 1.6, height: 0.55, depth: 2.0, seatHeight: 0.45, mattressHeight: 0.22, headboardHeight: 1.05, doorCount: 0, openAmount: 0, fullness: 1, foldDepth: 0 },
+    defaults: { width: 1.8, height: 0.55, depth: 2.0, seatHeight: 0.45, mattressHeight: 0.22, headboardHeight: 1.05, doorCount: 0, openAmount: 0, fullness: 1, foldDepth: 0 },
     color: '#d8d1c7',
   },
   sofa: {
@@ -93,44 +93,80 @@ for (const [type, name, width, height, depth] of [
 }
 Object.assign(profiles, roomProfiles);
 
-function bedGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
+function bedGeometry(p: FurnitureSize): THREE.BufferGeometry {
+  const dressed = (p.dressing ?? 1) > 0;
+  // Width is the whole bed with the duvet hanging over each side; the mattress sits inside it.
+  const mattW = Math.max(0.6, p.width - 0.34);
   const frameH = Math.max(0.12, p.height - p.mattressHeight);
   const leg = 0.08;
+  const top = p.height;
+  const duvetLen = p.depth * 0.74, duvetZ = p.depth / 2 - duvetLen / 2 + 0.04;
+  const edge = mattW / p.width;
   const parts: THREE.BufferGeometry[] = [
-    box(p.width, frameH, p.depth, 0, frameH / 2, 0),
-    padded(p.width * 0.96, p.mattressHeight, p.depth * 0.94, 0, frameH + p.mattressHeight / 2, 0),
-    box(p.width, p.headboardHeight, 0.1, 0, p.headboardHeight / 2, -p.depth / 2 + 0.05),
+    box(mattW + 0.04, frameH, p.depth, 0, frameH / 2, 0),
+    padded(mattW, p.mattressHeight, p.depth * 0.97, 0, frameH + p.mattressHeight / 2, 0, { role: 'mattress' }),
+    padded(mattW + 0.24, p.headboardHeight, 0.12, 0, p.headboardHeight / 2, -p.depth / 2 + 0.06, { role: 'headboard' }),
+    // The duvet is wider than the mattress and hangs over its sides; settling drapes it.
+    padded(p.width, 0.15, duvetLen, 0, top + 0.075, duvetZ, { role: 'duvet', edge, radius: 0.07, fineBeyond: edge - 0.02 }),
+    // Turned-back top edge of the duvet.
+    padded(p.width * 0.97, 0.11, 0.3, 0, top + 0.17, duvetZ - duvetLen / 2 + 0.17, { role: 'duvet', edge, radius: 0.05 }),
   ];
-  parts.push(padded(p.width * 0.97, 0.12, p.depth * 0.65, 0, p.height + 0.025, p.depth * 0.14));
-  for (const x of [-p.width * 0.24, p.width * 0.24])
-    parts.push(padded(p.width * 0.42, 0.16, 0.42, x, p.height + 0.08, -p.depth * 0.3));
-  const lx = p.width / 2 - leg / 2, lz = p.depth / 2 - leg / 2;
+  const lx = mattW / 2 + 0.02 - leg / 2, lz = p.depth / 2 - leg / 2;
   for (const x of [-lx, lx]) for (const z of [-lz, lz]) parts.push(box(leg, 0.12, leg, x, 0.06, z));
-  return merge(parts);
-}
-
-function sofaGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
-  const arm = Math.min(0.18, p.width * 0.1);
-  const seatDepth = p.depth * 0.68;
-  const cushionH = 0.16;
-  const backH = Math.max(0.3, p.height - p.seatHeight);
-  const parts: THREE.BufferGeometry[] = [
-    padded(p.width, 0.18, p.depth * 0.78, 0, p.seatHeight - 0.09, 0.06),
-    padded(p.width, backH, 0.18, 0, p.seatHeight + backH / 2, -p.depth / 2 + 0.09),
-    padded(arm, p.height * 0.62, p.depth, -p.width / 2 + arm / 2, p.height * 0.31, 0),
-    padded(arm, p.height * 0.62, p.depth, p.width / 2 - arm / 2, p.height * 0.31, 0),
-  ];
-  const cushionCount = Math.max(1, Math.round(p.width / 0.72));
-  const cushionW = (p.width - arm * 2.5) / cushionCount;
-  for (let i = 0; i < cushionCount; i++) {
-    const x = -p.width / 2 + arm * 1.25 + cushionW * (i + 0.5);
-    parts.push(padded(cushionW * 0.96, cushionH, seatDepth, x, p.seatHeight + cushionH / 2, 0.08));
-    parts.push(padded(cushionW * 0.94, backH * 0.58, 0.14, x, p.seatHeight + cushionH + backH * 0.29, -p.depth / 2 + 0.2));
+  if (dressed) {
+    const pw = Math.min(0.62, mattW * 0.42);
+    for (const x of [-1, 1]) {
+      parts.push(padded(pw, 0.15, 0.42, x * (pw / 2 + 0.04), top + 0.1, -p.depth / 2 + 0.34, { role: 'pillow', rotation: [-0.2, 0, 0], radius: 0.07 }));
+      parts.push(padded(pw * 0.72, 0.1, 0.3, x * (pw * 0.4), top + 0.25, -p.depth / 2 + 0.7, { role: 'scatter', rotation: [-0.95, x * 0.22, 0], accent: true, radius: 0.055 }));
+    }
+    // A folded throw across the foot of the bed.
+    parts.push(padded(p.width * 0.94, 0.05, 0.5, 0, top + 0.2, p.depth / 2 - 0.3, { role: 'throw', accent: true, radius: 0.024, edge: Math.min(0.95, mattW / (p.width * 0.94)), fineBeyond: Math.min(0.95, mattW / (p.width * 0.94)) - 0.02 }));
   }
   return merge(parts);
 }
 
-function cabinetGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
+/** Sofas and armchairs: framed base, rolled arms, a back that leans, loose seat and back cushions. */
+function sofaGeometry(p: FurnitureSize): THREE.BufferGeometry {
+  const dressed = (p.dressing ?? 1) > 0;
+  const arm = Math.min(0.2, p.width * 0.11);
+  const cushionH = Math.max(0.12, p.mattressHeight || 0.16);
+  const legH = 0.1;
+  const armTop = p.seatHeight + 0.2;
+  const baseH = Math.max(0.1, p.seatHeight - cushionH - legH);
+  const inner = p.width - 2 * arm;
+  const count = Math.max(1, Math.round(inner / 0.68));
+  const cw = inner / count;
+  const backH = Math.max(0.3, p.height - p.seatHeight - 0.02);
+  const parts: THREE.BufferGeometry[] = [
+    padded(inner + 0.04, baseH, p.depth * 0.96, 0, legH + baseH / 2, 0.01, { role: 'base' }),
+    padded(p.width - 0.04, p.height - legH - 0.14, 0.2, 0, legH + (p.height - legH - 0.14) / 2, -p.depth / 2 + 0.1, { role: 'base' }),
+  ];
+  for (const side of [-1, 1]) parts.push(padded(arm, armTop - legH, p.depth, side * (p.width / 2 - arm / 2), legH + (armTop - legH) / 2, 0, { role: 'arm' }));
+  for (let i = 0; i < count; i++) {
+    const x = -inner / 2 + cw * (i + 0.5);
+    parts.push(padded(cw * 0.985, cushionH, p.depth * 0.66, x, p.seatHeight - cushionH / 2, 0.1, { role: 'seat' }));
+    parts.push(padded(cw * 0.97, backH * 0.9, 0.17, x, p.seatHeight + backH * 0.45, -p.depth / 2 + 0.3, { role: 'back', rotation: [-0.16, 0, 0] }));
+  }
+  const lx = p.width / 2 - 0.09, lz = p.depth / 2 - 0.09;
+  for (const x of [-lx, lx]) for (const z of [-lz, lz]) parts.push(box(0.05, legH, 0.05, x, legH / 2, z));
+  if (dressed) {
+    const sc = Math.min(0.42, inner / 2.4 + 0.1);
+    const spots = p.width >= 1.7 ? [-1, 1] : [1];
+    for (const side of spots) parts.push(padded(sc, 0.13, sc, side * (inner / 2 - sc / 2 - 0.02), p.seatHeight + 0.16, -p.depth / 2 + 0.36, { role: 'scatter', rotation: [-1.0, side * 0.3, side * 0.12], accent: true, radius: 0.058 }));
+    if (p.width >= 1.9) {
+      // A throw laid over one seat and arm, hanging down the outside.
+      const x0 = p.width / 2 - arm;
+      parts.push(sheetAlongProfile([
+        [x0 - 0.55, p.seatHeight + 0.05], [x0 - 0.1, p.seatHeight + 0.05], [x0 - 0.014, p.seatHeight + 0.09],
+        [x0 - 0.012, armTop - 0.05], [x0 + 0.02, armTop + 0.03], [p.width / 2 - 0.03, armTop + 0.034],
+        [p.width / 2 + 0.02, armTop - 0.03], [p.width / 2 + 0.03, armTop - 0.24],
+      ], -p.depth * 0.02, p.depth * 0.46));
+    }
+  }
+  return merge(parts);
+}
+
+function cabinetGeometry(p: FurnitureSize): THREE.BufferGeometry {
   const t = 0.035;
   const parts: THREE.BufferGeometry[] = [
     box(t, p.height, p.depth, -p.width / 2 + t / 2, p.height / 2, 0),
@@ -150,7 +186,7 @@ function cabinetGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
   return merge(parts);
 }
 
-function curtainGeometry(p: Required<FurnitureParams>): THREE.BufferGeometry {
+function curtainGeometry(p: FurnitureSize): THREE.BufferGeometry {
   const rod = box(p.width + 0.12, 0.035, 0.035, 0, p.height + 0.055, -0.01);
   return merge([...createCurtainPanels(p), rod]);
 }
@@ -190,9 +226,10 @@ export function createInteriorFurnitureGeometry(type: InteriorFurnitureType, par
 function geometryData(geometry: THREE.BufferGeometry) {
   const g = geometry.index ? geometry.toNonIndexed() : geometry;
   const data = {
-    positions: Array.from(g.getAttribute('position').array as ArrayLike<number>),
-    normals: g.getAttribute('normal') ? Array.from(g.getAttribute('normal').array as ArrayLike<number>) : [],
-    uvs: g.getAttribute('uv') ? Array.from(g.getAttribute('uv').array as ArrayLike<number>) : undefined,
+    // Rounded to 0.1 mm and 0.001 so saved models stay small; neither is visible.
+    positions: Array.from(g.getAttribute('position').array as ArrayLike<number>, v => Math.round(v * 1e4) / 1e4),
+    normals: g.getAttribute('normal') ? Array.from(g.getAttribute('normal').array as ArrayLike<number>, v => Math.round(v * 1e3) / 1e3) : [],
+    uvs: g.getAttribute('uv') ? Array.from(g.getAttribute('uv').array as ArrayLike<number>, v => Math.round(v * 1e3) / 1e3) : undefined,
   };
   if (g !== geometry) g.dispose();
   return data;
@@ -207,6 +244,7 @@ export function createInteriorFurnitureShape(
   const geometry = createInteriorFurnitureGeometry(type, params);
   const data = geometryData(geometry);
   const furnitureMaterialGroups = geometry.groups.map(group => ({ ...group }));
+  const furniturePartRanges = geometry.userData.parts as FurniturePartRange[] | undefined;
   geometry.dispose();
   const placement: PlacementProfile = profile.definition.placement;
   const simulation: SimulationProfile | undefined = profile.definition.simulation;
@@ -226,6 +264,7 @@ export function createInteriorFurnitureShape(
     customData: {
       furnitureType: type,
       furnitureMaterialGroups,
+      ...(furniturePartRanges ? { furniturePartRanges } : {}),
       semanticComponent: {
         definitionId: profile.definition.id,
         kind: profile.definition.kind,

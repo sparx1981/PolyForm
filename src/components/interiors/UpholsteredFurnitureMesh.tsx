@@ -22,7 +22,7 @@ export function UpholsteredFurnitureMesh({shape,meshProps,surface,selectionHighl
       template.dispose();
       groups ??= [{start:0,count:g.getAttribute('position').count,materialIndex:1}];
       const normals=g.getAttribute('normal') as THREE.BufferAttribute;
-      for(const group of groups) if(group.materialIndex===1){
+      for(const group of groups) if(group.materialIndex!==0){
         const start=group.start*3, end=(group.start+group.count)*3;
         const smooth=smoothPatchNormals(data.positions!.slice(start,end));
         for(let i=0;i<group.count;i++)normals.setXYZ(group.start+i,smooth[i*3],smooth[i*3+1],smooth[i*3+2]);
@@ -42,11 +42,20 @@ export function UpholsteredFurnitureMesh({shape,meshProps,surface,selectionHighl
   },[]);
   useEffect(()=>()=>geometry.dispose(),[geometry]);
   useEffect(()=>()=>weave.dispose(),[weave]);
+  // Cushions and throws are an accent fabric: chosen on the shape, or a muted contrast to the upholstery.
+  const accent=useMemo(()=>{
+    const chosen=shape.customData.accentColor;
+    if(typeof chosen==='string')return chosen;
+    const c=new THREE.Color(shape.color.startsWith('#')?shape.color:'#ffffff'),hsl={h:0,s:0,l:0};c.getHSL(hsl);
+    // A muted complement: a warm ochre against blue, a soft slate against cream.
+    return '#'+new THREE.Color().setHSL((hsl.h+0.5)%1,Math.min(0.42,0.18+hsl.s*0.3),hsl.l>0.6?0.42:0.62).getHexString();
+  },[shape.color,shape.customData.accentColor]);
   return <group {...meshProps}>
     <mesh geometry={geometry} castShadow={meshProps.castShadow} receiveShadow={meshProps.receiveShadow} userData={{isShape:true,id:shape.id}}>
       <meshStandardMaterial attach="material-0" color="#76604a" roughness={0.6} opacity={surface?.opacity ?? 1} transparent={surface?.transparent ?? false} depthWrite={surface?.depthWrite ?? true} />
       <meshPhysicalMaterial attach="material-1" color={shape.color.startsWith('#') ? shape.color : '#ffffff'} roughness={0.92}
         sheen={0.5} sheenRoughness={0.85} sheenColor={surface?.color ?? '#ffffff'} {...surface} normalMap={surface?.normalMap ?? weave} normalScale={surface?.normalMap ? surface.normalScale ?? [1, 1] : [0.25, 0.25]} />
+      <meshPhysicalMaterial attach="material-2" color={accent} roughness={0.9} sheen={0.55} sheenRoughness={0.8} sheenColor="#ffffff" normalMap={weave} normalScale={[0.3,0.3]} />
     </mesh>
     {selectionHighlight}
   </group>;
