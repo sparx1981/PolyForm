@@ -36,7 +36,8 @@ describe('the rules sent to Claude', () => {
 
   it('marks rules nothing checks as [unchecked] and sends only rule text, not reasons', () => {
     const sent = instructions();
-    expect(sent).toMatch(/B13\. .*\[unchecked\]/);
+    expect(sent).toMatch(/B14\. .*\[unchecked\]/);
+    expect(sent).not.toMatch(/B13\. .*\[unchecked\]/);
     expect(sent).not.toMatch(/B9\. .*\[unchecked\]/);
     expect(sent).not.toContain(allRules.find(r => r.id === 'B9')!.why);
     for (const rule of WORKFLOW_RULES) expect(sent).toContain(`${rule.id}. ${rule.title}`);

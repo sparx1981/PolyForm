@@ -3,6 +3,7 @@ import type { Shape } from '../../src/types';
 import { buildingLevels, roofHeadroom } from '../../src/lib/presentation/floorPlans';
 import { detectRooms, type SpatialRoom } from '../../src/lib/spatial/rooms';
 import { computeStairHoleForSlab } from '../../src/lib/archStairwell';
+import { clearanceFootprint, type OrientedFootprint } from '../../src/lib/spatial/placement';
 import { SPATIAL_DEFAULTS } from './rules';
 import { inPolygon, orientation, stairFootprint, wallCorners, worldPoints } from './checks';
 
@@ -16,7 +17,7 @@ type V2 = [number, number];
 
 export interface LayoutIssue {
   severity: 'error' | 'warning' | 'info';
-  code: 'door-swing' | 'unreachable-room' | 'furniture-blocks-route' | 'narrow-passage' | 'no-entrance' | 'no-stairs-to-level' | 'stair-headroom' | 'room-no-window';
+  code: 'door-swing' | 'use-zone-blocked' | 'unreachable-room' | 'furniture-blocks-route' | 'narrow-passage' | 'no-entrance' | 'no-stairs-to-level' | 'stair-headroom' | 'room-no-window';
   message: string;
   ids: string[];
   level?: number;
@@ -135,7 +136,7 @@ function obstaclesAt(shapes: Shape[], elevation: number): { shape: Shape; rect: 
   const out: { shape: Shape; rect: V2[] }[] = [];
   for (const s of shapes) {
     if (isStructure(s)) continue;
-    const points = worldPoints(s, 200);
+    const points = worldPoints(s, 2000);
     if (!points.length) continue;
     const low = Math.min(...points.map(p => p.y)) - elevation, high = Math.max(...points.map(p => p.y)) - elevation;
     // Only what stands on this storey's floor and rises into the walker's height.
@@ -144,6 +145,27 @@ function obstaclesAt(shapes: Shape[], elevation: number): { shape: Shape; rect: 
     if (rect) out.push({ shape: s, rect });
   }
   return out;
+}
+
+/** Corners of an oriented plan box, in order round it (the placement code's own axes). */
+function footprintCorners(f: OrientedFootprint): V2[] {
+  const c = Math.cos(f.rotationY), s = Math.sin(f.rotationY);
+  const [cx, cz] = f.center, [hx, hz] = f.halfSize;
+  const at = (a: number, b: number): V2 => [cx + c * hx * a + s * hz * b, cz - s * hx * a + c * hz * b];
+  return [at(1, 1), at(1, -1), at(-1, -1), at(-1, 1)];
+}
+
+/** An item's plan box and the box that includes the space needed to use it, from its own placement profile. */
+function useZoneOf(item: Shape): { body: V2[]; zone: V2[]; name: string } | null {
+  const data = item.customData?.semanticComponent;
+  const clear = data?.placement?.clearanceM;
+  if (!clear) return null;
+  const params = data.params ?? {};
+  const width = Number(params.width ?? nums(item)[0]), depth = Number(params.depth ?? nums(item)[2]);
+  if (!(width > 0) || !(depth > 0)) return null;
+  const yaw = new THREE.Euler().setFromQuaternion(orientation(item), 'YXZ').y;
+  const body: OrientedFootprint = { center: [item.position[0], item.position[2]], halfSize: [width / 2, depth / 2], rotationY: yaw };
+  return { body: footprintCorners(body), zone: footprintCorners(clearanceFootprint(body, clear)), name: item.name ?? item.type };
 }
 
 const isSliding = (d: Shape) => /slid|bifold|roller|garage|pocket|curtain/i.test(`${d.archStyle ?? ''} ${d.name ?? ''}`);
@@ -228,6 +250,21 @@ export function checkLayout(shapes: Shape[], opts: { circulationWidth?: number; 
       }
     }
 
+    // Use zones: the space in front of (and beside) furniture that is needed to use it must not be inside a wall.
+    for (const item of shapes) {
+      if (item.hidden || Math.abs(item.position[1] - level.elevation) > LEVEL_GAP) continue;
+      const z = useZoneOf(item);
+      if (!z) continue;
+      const bodyMask = new Uint8Array(wallMask.length), zoneMask = new Uint8Array(wallMask.length);
+      paint(g, bodyMask, z.body);
+      paint(g, zoneMask, z.zone);
+      let zoneCells = 0, inWall = 0;
+      for (let k = 0; k < zoneMask.length; k++) if (zoneMask[k] && !bodyMask[k]) { zoneCells++; if (open[k]) inWall++; }
+      if (zoneCells > 8 && inWall / zoneCells > 0.25) {
+        issues.push({ severity: 'info', code: 'use-zone-blocked', level: level.level, ids: [item.id], message: `${z.name} (${item.id}) is too close to a wall: part of the space needed to use it (in front or beside it) is inside the wall. Move it away from the wall or turn it.` });
+      }
+    }
+
     // Circulation: from the way in, can a walker of the given width reach every room?
     const blockedNoFurn = open;
     const blocked = new Uint8Array(open.length);
@@ -288,6 +325,7 @@ export function checkLayout(shapes: Shape[], opts: { circulationWidth?: number; 
       }
     }
   }
+  checked.push('furniture use zones against walls');
   if (ranDoors) checked.push('door swing'); else skipped.push('door swing: no hinged doors found');
   if (ranCirculation) checked.push('circulation (can every room be reached on foot)'); else skipped.push('circulation: no entrance or stairs to start from');
 

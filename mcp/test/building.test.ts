@@ -16,7 +16,8 @@ function harness() {
     const tool = tools.get(name)!;
     const result = await tool.run(tool.schema.parse(args));
     const text: string = result.content[0].text;
-    return result.isError ? { error: text } : JSON.parse(text);
+    if (result.isError) return { error: text };
+    try { return JSON.parse(text); } catch { return { text }; }
   };
   return { store, call };
 }
@@ -315,11 +316,144 @@ describe('layout checks', () => {
     expect(withStairs.checked.join(' ')).toMatch(/stair headroom/);
   });
 
+  it('says when the space in front of furniture is inside a wall, and not when it is clear', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Zones' });
+    await h.call('add_room', { model: id, width: 8, length: 6, position: [0, 0, 0] });
+    // A cabinet standing in the middle: its front zone is clear.
+    const middle = await h.call('add_interior_furniture', { model: id, type: 'cabinet', position: [0, 0, 0], settle_soft: false });
+    expect((await h.call('check_layout', { model: id })).issues.filter((i: any) => i.code === 'use-zone-blocked')).toEqual([]);
+    await h.call('delete_objects', { model: id, objects: [middle.created[0].id] });
+    // The same cabinet 0.2 m from the back wall, facing it (turned half a turn so its front is towards the wall).
+    const walled = await h.call('add_interior_furniture', { model: id, type: 'cabinet', position: [0, 0, -2.6], rotation_deg: 180, settle_soft: false });
+    const zones = (await h.call('check_layout', { model: id })).issues.filter((i: any) => i.code === 'use-zone-blocked');
+    expect(zones.map((i: any) => i.ids[0])).toContain(walled.created[0].id);
+  });
+
   it('says what it could not check when there is no building', async () => {
     const h = harness();
     const { id } = await h.call('create_model', { name: 'Garden' });
     const report = await h.call('check_layout', { model: id });
     expect(report.checked).toEqual([]);
+    expect(report.skipped.length).toBeGreaterThan(0);
+  });
+});
+
+describe('single-slope roof', () => {
+  it('slopes down one way, rising to a raised high wall on the other side', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Mono' });
+    await h.call('add_room', { model: id, width: 8, length: 5, position: [0, 0, 0], height: 2.7 });
+    const result = await h.call('add_roof', { model: id, roof_type: 'mono', falls_toward: 'south', pitch_deg: 15 });
+    expect(result.error).toBeUndefined();
+    const roofShape = (await h.store.loadModel({ uid: 'u1', email: 'me@example.com' }, id)).shapes.find(s => s.roofData && s.tags?.includes('roof-slopes'))!;
+    expect(roofShape.roofData.extension.kind).toBe('lean-to');
+    expect(Math.round(roofShape.roofData.pitchAngleDeg)).toBe(15);
+    // The roof is high on the north side (z = -2.5) and low on the south side (z = +2.5).
+    const { RoofSurface } = await import('../../src/lib/roofSurface');
+    const surface = new RoofSurface(roofShape);
+    const north = surface.at(0, -2.0)!.y, south = surface.at(0, 2.0)!.y;
+    expect(north).toBeGreaterThan(south + 0.8);
+    // Pitch: rise over 4 m between those points is about tan 15° × 4.
+    expect((north - south) / 4).toBeCloseTo(Math.tan(15 * Math.PI / 180), 1);
+    surface.dispose();
+    // The north wall is carried up to the roof.
+    const raised = (await h.call('list_objects', { model: id, name_contains: 'Raised wall' })).objects;
+    expect(raised).toHaveLength(1);
+    expect(raised[0].position[2]).toBeCloseTo(-2.5, 1);
+  });
+
+  it('takes Velux windows on its slope like any other roof', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Mono 2' });
+    await h.call('add_room', { model: id, width: 8, length: 5, position: [0, 0, 0], height: 2.7 });
+    await h.call('add_roof', { model: id, roof_type: 'mono', falls_toward: 'east', pitch_deg: 20 });
+    const win = await h.call('add_roof_window', { model: id, at: [[0, 0]] });
+    expect(win.error).toBeUndefined();
+  });
+
+  it('falls the other way when asked, defaulting to 15 degrees', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Mono 3' });
+    await h.call('add_room', { model: id, width: 8, length: 5, position: [0, 0, 0], height: 2.7 });
+    await h.call('add_roof', { model: id, roof_type: 'mono', falls_toward: 'north' });
+    const roof = (await h.store.loadModel({ uid: 'u1', email: 'me@example.com' }, id)).shapes.find(s => s.roofData && s.tags?.includes('roof-slopes'))!;
+    expect(Math.round(roof.roofData.pitchAngleDeg)).toBe(15);
+    const { RoofSurface } = await import('../../src/lib/roofSurface');
+    const surface = new RoofSurface(roof);
+    expect(surface.at(0, 2.0)!.y).toBeGreaterThan(surface.at(0, -2.0)!.y + 0.8);
+    surface.dispose();
+    const raised = (await h.call('list_objects', { model: id, name_contains: 'Raised wall' })).objects;
+    expect(raised[0].position[2]).toBeCloseTo(2.5, 1);
+  });
+});
+
+describe('geometry checks', () => {
+  const codes = (r: any, code: string) => r.issues.filter((i: any) => i.code === code);
+
+  it('finds nothing wrong in a plain two-storey house', async () => {
+    const { id, call } = await house();
+    const walls = await call('list_objects', { model: id, type: 'wall' });
+    const front = walls.objects.filter((w: any) => w.position[1] < 2).reduce((a: any, b: any) => (b.position[2] > a.position[2] ? b : a));
+    await call('add_opening', { model: id, wall: front.id, kind: 'door', along: 5 });
+    await call('add_opening', { model: id, wall: front.id, kind: 'window', along: 8, width: 1.2 });
+    const report = await call('check_geometry', { model: id });
+    expect(report.errors).toBe(0);
+    expect(report.warnings).toBe(0);
+    expect(report.checked.join(' ')).toMatch(/junctions/);
+    expect(report.checked.join(' ')).toMatch(/lining up/);
+  });
+
+  it('finds overlapping openings and an opening near the corner', async () => {
+    const { id, call } = await house();
+    const walls = await call('list_objects', { model: id, type: 'wall' });
+    const front = walls.objects.filter((w: any) => w.position[1] < 2).reduce((a: any, b: any) => (b.position[2] > a.position[2] ? b : a));
+    await call('add_opening', { model: id, wall: front.id, kind: 'window', along: 5, width: 1.2 });
+    await call('add_opening', { model: id, wall: front.id, kind: 'window', along: 5.5, width: 1.2 });
+    await call('add_opening', { model: id, wall: front.id, kind: 'window', along: 0.65, width: 1.2 });
+    const report = await call('check_geometry', { model: id });
+    expect(codes(report, 'openings-overlap').length).toBeGreaterThan(0);
+    expect(codes(report, 'opening-near-corner').length).toBeGreaterThan(0);
+  });
+
+  it('finds a wall that stops short of the wall it should meet', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Gap' });
+    await h.call('add_room', { model: id, width: 8, length: 6, position: [0, 0, 0] });
+    // A partition from the front wall that stops 0.2 m short of the back wall (z = -3).
+    await h.call('add_wall', { model: id, start: [0, 0, 3], end: [0, 0, -2.7], thickness: 0.12 });
+    const report = await h.call('check_geometry', { model: id });
+    expect(codes(report, 'wall-gap').length).toBeGreaterThan(0);
+    // The same partition carried right through to the wall is fine.
+    await h.call('undo_last_change', { model: id });
+    await h.call('add_wall', { model: id, start: [0, 0, 3], end: [0, 0, -3], thickness: 0.12 });
+    expect(codes(await h.call('check_geometry', { model: id }), 'wall-gap')).toEqual([]);
+  });
+
+  it('finds a wall on the upper floor that does not sit over the wall below', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Drift' });
+    await h.call('add_room', { model: id, width: 8, length: 6, position: [0, 0, 0], height: 2.8 });
+    await h.call('add_room', { model: id, width: 8, length: 6.2, position: [0, 2.8, 0], height: 2.8 });
+    const report = await h.call('check_geometry', { model: id });
+    expect(codes(report, 'vertical-drift').length).toBeGreaterThan(0);
+  });
+
+  it('finds furniture floating above the floor, and not furniture standing on it', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Float' });
+    await h.call('add_room', { model: id, width: 8, length: 6, position: [0, 0, 0] });
+    const sofa = await h.call('add_interior_furniture', { model: id, type: 'sofa', position: [0, 0, 0], settle_soft: false });
+    expect(codes(await h.call('check_geometry', { model: id }), 'floating-object')).toEqual([]);
+    await h.call('transform_objects', { model: id, objects: [sofa.created[0].id], offset: [0, 0.6, 0] });
+    expect(codes(await h.call('check_geometry', { model: id }), 'floating-object').length).toBe(1);
+  });
+
+  it('says what it could not check', async () => {
+    const h = harness();
+    const { id } = await h.call('create_model', { name: 'Empty' });
+    const report = await h.call('check_geometry', { model: id });
+    expect(report.checked.length).toBeGreaterThan(0);
     expect(report.skipped.length).toBeGreaterThan(0);
   });
 });

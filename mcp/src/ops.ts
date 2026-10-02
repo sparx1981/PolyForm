@@ -6,7 +6,8 @@ import type { PatioKind, PatioToolSettings } from '../../src/lib/patio/patioType
 import { polygonArea, denseOutline, type Vec2 } from '../../src/lib/patio/patioGeometry';
 import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { buildFence, buildPatio, buildWaterBody, originalGroundAt } from '../../src/lib/siteBuilders';
-import { RoofSurface } from '../../src/lib/roofSurface';
+import { RoofSurface, FACING, type Facing } from '../../src/lib/roofSurface';
+import { extractRoomFootprintPolygon, type RoofParams } from '../../src/lib/archRoofGenerator';
 import { ToolError } from './store';
 
 export type Vec3 = [number, number, number];
@@ -441,4 +442,47 @@ export function porchOverDoor(shapes: Shape[], door: Shape, opts: PorchOptions =
     keep(slab.map(s => ({ ...s, position: place(spot(0, (depth + 0.2) / 2 - 0.1), top + 0.06 + lift), quaternion: [q2.x, q2.y, q2.z, q2.w] as [number, number, number, number] })), 'Porch roof', { color: roofColor });
   }
   return made.map(s => ({ ...s, id: newId(), tags: [...(s.tags ?? []), 'porch'] }));
+}
+
+/**
+ * A single-slope (mono-pitch) roof over `walls`, as the app's own lean-to roof: one plane that rises to the wall
+ * on the side opposite `falls`, and falls away to the eave on that side, with cheeks closing the two ends.
+ * Returns the extension settings for the roof generator and the walls along the high side, which the caller
+ * raises to meet the roof.
+ */
+export function monoPitchSite(shapes: Shape[], walls: Shape[], falls: Facing): { extension: NonNullable<RoofParams['extension']>; highWalls: Shape[] } {
+  const footprint = extractRoomFootprintPolygon(walls, shapes);
+  if (!footprint) throw new ToolError('Those walls do not enclose a footprint a roof can cover.');
+  const poly = footprint.polygon;
+  let area = 0;
+  poly.forEach(([x1, z1], i) => { const [x2, z2] = poly[(i + 1) % poly.length]; area += x1 * z2 - x2 * z1; });
+  const ccw = area > 0;
+  const want = FACING[falls];
+  let best: { a: [number, number]; b: [number, number]; len: number } | null = null;
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % poly.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < 0.5) return;
+    const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+    const out = ccw ? [u[1], -u[0]] : [-u[1], u[0]];
+    // The high wall faces away from the way the roof falls.
+    if (out[0] * want[0] + out[1] * want[1] < -0.95 && (!best || len > best.len)) best = { a, b, len };
+  });
+  if (!best) throw new ToolError(`There is no wall on the ${falls === 'north' ? 'south' : falls === 'south' ? 'north' : falls === 'east' ? 'west' : 'east'} side to be the high wall of a roof that falls towards the ${falls}. Use a gable roof, or choose the side the building has a straight wall on.`);
+  const { a, b, len } = best as { a: [number, number]; b: [number, number]; len: number };
+  const dir = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+  const highWalls = walls.filter(w => {
+    if (w.type !== 'wall') return false;
+    const d = new THREE.Vector3(1, 0, 0).applyQuaternion(orientation(w));
+    const parallel = Math.abs(d.x * dir[0] + d.z * dir[1]) > 0.99;
+    const off = Math.abs((w.position[0] - a[0]) * -dir[1] + (w.position[2] - a[1]) * dir[0]);
+    return parallel && off < 0.2;
+  });
+  return { extension: { kind: 'lean-to', abut: { a, b }, houseWallThickness: footprint.bounds.wallThickness }, highWalls };
+}
+
+/** A copy of a wall stood on top of it, `rise` metres high: the high wall of a mono-pitch roof carried up to the roof. */
+export function wallRaisedBy(wall: Shape, rise: number): Shape {
+  const [length = 1, height = 2.8, thick = 0.2] = wall.args as number[];
+  return { ...wall, id: newId(), name: 'Raised wall (mono-pitch roof)', position: [wall.position[0], wall.position[1] + height / 2 + rise / 2, wall.position[2]], args: [length, rise, thick], customData: undefined, hostWallId: undefined, wallMiterFootprint: undefined } as Shape;
 }

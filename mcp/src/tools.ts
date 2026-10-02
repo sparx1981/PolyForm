@@ -6,13 +6,15 @@ import { PLAIN_FINISHES } from '../../src/lib/materials/plainFinishes';
 import { PLANT_SPECIES_CATALOG } from '../../src/lib/plantLibrary';
 import { LANDSCAPE_TEXTURES } from '../../src/lib/landscapeTextures';
 import { FENCE_STYLES, WOOD_FINISHES } from '../../src/lib/fence/fenceTypes';
-import { buildRoofAssemblyForRoom } from '../../src/lib/archRoofGenerator';
+import { buildRoofAssemblyForRoom, type RoofParams } from '../../src/lib/archRoofGenerator';
+import { buildingLevels } from '../../src/lib/presentation/floorPlans';
 import { initRoofSkeleton } from '../../src/lib/roofSkeleton';
 import { buildRoofsForBuilding } from '../../src/lib/buildingRoofs';
 import type { GraphicsSettings } from '../../src/lib/graphics/graphicsSettings';
 import { ToolError, type Caller, type ModelStore } from './store';
 import { floorPlans } from './plans';
 import { checkLayout } from './layout';
+import { checkGeometry } from './geometry';
 import { assertFitsUnderCeiling, checkStair, headroomIssues, placeStairInRoom, retagStories, storyForElevation } from './checks';
 import { applyStairwellHolesToSlabs } from '../../src/lib/archStairwell';
 import { detectRooms } from '../../src/lib/spatial/rooms';
@@ -29,7 +31,7 @@ import { KernelArcHost } from '../../src/tools/kernelArcHost';
 import { deserializeGraph, serializeGraph } from '../../src/lib/geometry/serialize';
 import { MAX_SITE_SIZE, MIN_SITE_SIZE } from '../../src/lib/worldSite/geo';
 import {
-  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, pickRoof, porchOverDoor, roofWindow, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
+  carryHosted, describe, detail, fenceRun, findShape, groundAt, newId, openingInWall, monoPitchSite, pickRoof, porchOverDoor, roofWindow, wallRaisedBy, withQuaternions, withTerrainTexture, patioOrDeck, summarize, transformShape, waterBody, withSdk, type Vec3,
 } from './ops';
 
 export interface ScreenshotOptions {
@@ -252,6 +254,16 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
   }, safe(async ({ model, circulation_width, local_width }) => {
     const m = await store.loadModel(caller, model);
     return text(checkLayout(m.shapes, { circulationWidth: circulation_width, localWidth: local_width }));
+  }));
+
+  server.registerTool('check_geometry', {
+    title: 'Check the geometry is sound',
+    description: 'Checks that the model\'s geometry is sound, which check_model_health only partly does: numbers that are not numbers and paper-thin solids; doors and windows that run outside their wall, overlap each other, sit at a wall corner, or (doors) stand off the floor; wall ends that stop a few centimetres short of the wall they should meet; furniture floating above or sunk into the floor; and upper-floor walls a few centimetres off the wall below. Returns what was checked and what could not be. Run it after building the structure (before furnishing) and again at the end. It reports problems; it never changes the model.',
+    inputSchema: { model: modelRef },
+    annotations: READ,
+  }, safe(async ({ model }) => {
+    const m = await store.loadModel(caller, model);
+    return text(checkGeometry(m.shapes));
   }));
 
   server.registerTool('get_object', {
@@ -645,12 +657,13 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
 
   server.registerTool('add_roof', {
     title: 'Add a roof',
-    description: 'Builds a full roof assembly (covering, gables or hips, ridge cap, fascia, soffits) over walls, as the app\'s roof tool does. It fits the footprint the walls enclose (any shape). By default it roofs the whole building storey by storey (the main roof on the top storey, and a lean-to on any part of a lower storey that sticks out beyond the one above) and replaces any existing roof; with walls given, it roofs just those.',
+    description: 'Builds a full roof assembly (covering, gables or hips, ridge cap, fascia, soffits) over walls, as the app\'s roof tool does. roof_type mono is a single slope: one plane that rises to the wall on the side opposite falls_toward and falls away to the eave on falls_toward (default south, low pitch 15 degrees), with the high wall carried up to meet it; it roofs the top storey only. It is the app\'s own lean-to roof, so the roof panel can edit it. It fits the footprint the walls enclose (any shape). By default it roofs the whole building storey by storey (the main roof on the top storey, and a lean-to on any part of a lower storey that sticks out beyond the one above) and replaces any existing roof; with walls given, it roofs just those.',
     inputSchema: {
       model: modelRef,
-      roof_type: z.enum(['gable', 'hip', 'parapet']).default('gable'),
+      roof_type: z.enum(['gable', 'hip', 'parapet', 'mono']).default('gable'),
+      falls_toward: z.enum(['south', 'north', 'east', 'west']).default('south').describe('mono only: the side the roof slopes down to (south = +z); its high wall is the opposite side'),
       walls: z.array(z.string()).optional().describe('Wall ids to roof over (default: all walls)'),
-      pitch_deg: z.number().min(5).max(70).default(35),
+      pitch_deg: z.number().min(5).max(70).optional().describe('Slope in degrees (default 35, or 15 for mono)'),
       overhang: z.number().min(0).max(2).default(0.3),
       color: colour.optional(),
       tiles: z.enum(['none', 'flat', 'roman', 'pantile', 'scallop', 'diamond', 'standing-seam']).default('none').describe('3D roof covering: flat = slate/shingle, roman = barrel tiles'),
@@ -658,22 +671,34 @@ export function registerTools(server: McpServer, ctx: ToolContext) {
     },
     annotations: WRITE,
   }, safe(async (a) => (await initRoofSkeleton(), change(a.model, `Added a ${a.roof_type} roof`, shapes => {
-    const walls = a.walls ? a.walls.map(ref => findShape(shapes, ref)) : shapes.filter(s => s.type === 'wall');
+    const mono = a.roof_type === 'mono';
+    const onTop = mono && !a.walls ? buildingLevels(shapes).at(-1)?.walls ?? [] : undefined;
+    const walls = a.walls ? a.walls.map(ref => findShape(shapes, ref)) : onTop ?? shapes.filter(s => s.type === 'wall');
     if (!walls.length || walls.some(w => w.type !== 'wall')) throw new ToolError('A roof needs walls to sit on; add a room or walls first.');
     const parapet = a.roof_type === 'parapet';
-    const params = {
-      roofType: a.roof_type,
-      pitchAngleDeg: parapet ? 0 : a.pitch_deg,
+    const params: RoofParams = {
+      roofType: mono ? 'gable' : a.roof_type as RoofParams['roofType'],
+      pitchAngleDeg: parapet ? 0 : a.pitch_deg ?? (mono ? 15 : 35),
       usePitchAngle: !parapet,
       eaveOverhang: a.overhang,
       color: a.color ?? (parapet ? '#475569' : '#991b1b'),
       fasciaColor: '#ffffff',
       tileShape: a.tiles,
     };
-    // Over every wall: storey by storey, like the app's roof button (the main roof on the top
-    // storey, and a lean-to on any part of a lower storey that sticks out beyond the one above).
-    const building = a.walls ? null : buildRoofsForBuilding(shapes, params);
-    const made = building?.shapes ?? buildRoofAssemblyForRoom(walls, params, shapes)?.allShapes;
+    let made: Shape[] | undefined;
+    if (mono) {
+      // One plane up to the high wall (the app's lean-to roof), and that wall carried up to meet it.
+      const site = monoPitchSite(shapes, walls, a.falls_toward);
+      const roof = buildRoofAssemblyForRoom(walls, { ...params, extension: site.extension }, shapes);
+      if (!roof) throw new ToolError('Those walls do not enclose a footprint a single-slope roof can cover.');
+      const rise = Number(roof.roofShape.roofData?.ridgeHeight ?? 0);
+      made = [...roof.allShapes, ...site.highWalls.map(w => wallRaisedBy(w, rise))];
+    } else {
+      // Over every wall: storey by storey, like the app's roof button (the main roof on the top
+      // storey, and a lean-to on any part of a lower storey that sticks out beyond the one above).
+      const building = a.walls ? null : buildRoofsForBuilding(shapes, params);
+      made = building?.shapes ?? buildRoofAssemblyForRoom(walls, params, shapes)?.allShapes;
+    }
     if (!made) throw new ToolError('Those walls do not enclose a footprint a roof can cover.');
     const kept = a.replace_existing ? shapes.filter(s => !isRoofShape(s)) : shapes;
     return { shapes: [...kept, ...made], made };

@@ -320,7 +320,7 @@ export interface HeadroomIssue {
 }
 
 /** World-space vertices of an item (from its mesh, or its box when it has none), thinned for speed. */
-export function worldPoints(s: Shape, max = 600): THREE.Vector3[] {
+export function worldPoints(s: Shape, max = 4000): THREE.Vector3[] {
   const q = orientation(s);
   const m = new THREE.Matrix4().compose(new THREE.Vector3(...s.position), q, new THREE.Vector3(...(s.scale ?? [1, 1, 1])));
   const pos = s.geometryData?.positions as number[] | undefined;

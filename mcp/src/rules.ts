@@ -88,7 +88,8 @@ Screenshots are slow and costly. Read model data and measurements first. Use scr
 
 When a design is finished or materially changed:
 - run check_model_health;
-- for buildings, run check_layout (door swing, walking routes, stair headroom, rooms with no window);
+- run check_geometry (openings, wall junctions, floating or sunk furniture, drift between storeys);
+- for buildings, run check_layout (door swing, walking routes, furniture use zones, stair headroom, rooms with no window);
 - call preview_model once;
 - inspect the resulting views before claiming completion.
 
@@ -406,7 +407,7 @@ export const BUILDING_RULES: PolyFormRule[] = [
     id: 'B17',
     title: 'Use real building objects',
     rule:
-      'Use add_roof_window for roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for porches, add_opening for doors/windows, add_stairs for stairs, add_railing for railings and add_roof for roofs. Do not imitate them with generic boxes or kernel geometry.',
+      'Use add_roof_window for roof windows and skylights, add_dormers for dormers, set_roof_extras for chimneys, gutters and solar panels, add_porch for porches, add_opening for doors/windows, add_stairs for stairs, add_railing for railings and add_roof for roofs (gable, hip, flat parapet, or single-slope mono). Do not imitate them with generic boxes or kernel geometry.',
     why:
       'Look-alikes do not cut hosts, appear correctly on plans or behave like native building objects.',
   },
@@ -816,13 +817,25 @@ export const AUTOMATIC_CHECKS: {
     id: 'C9',
     where: 'check_layout',
     check:
-      'Door swing (a square of the door width, plus the swing buffer, must be clear on one side; the hinge side is not known, so both are tried); walking routes from the front door (and from the stairs, upstairs) to every room at the secondary width, with furniture in place, and a warning below the primary width; furniture blocking a doorway; headroom along each stair against the target; rooms with no window. The report lists what ran and what could not. Widths come from SPATIAL_DEFAULTS or the arguments.',
+      'Door swing (a square of the door width, plus the swing buffer, must be clear on one side; the hinge side is not known, so both are tried); furniture use zones (the space in front of and beside an item, from its own placement profile) not inside a wall; walking routes from the front door (and from the stairs, upstairs) to every room at the secondary width, with furniture in place, and a warning below the primary width; furniture blocking a doorway; headroom along each stair against the target; rooms with no window. The report lists what ran and what could not. Widths come from SPATIAL_DEFAULTS or the arguments.',
   },
   {
     id: 'C10',
     where: 'check_model_health',
     check:
       'Walls on different storeys are not duplicates; rotated walls and furniture are read from their quaternion; furniture on another floor, or standing on another item, is not a collision. Orphan and over-wide openings, walls under 0.2 m and furniture collisions or clearance overlaps are reported.',
+  },
+  {
+    id: 'C11',
+    where: 'check_geometry',
+    check:
+      'On request (it does not run on every change): numbers that are not numbers and paper-thin solids; doors and windows outside their wall, overlapping each other, within 0.1 m of a wall end, or (doors) off the floor; wall ends that stop 2 to 35 cm short of another wall on the same floor; furniture floating over or sunk into the floor it stands on (items on another item, ceiling fittings and people are exempt); upper-floor walls 2 to 30 cm off the wall below. The report lists what ran and what could not.',
+  },
+  {
+    id: 'C12',
+    where: 'add_roof with roof_type mono',
+    check:
+      'A single-slope roof needs a straight wall on the side opposite the way it falls; it uses the app\'s own lean-to roof (so the roof panel can edit it), and the high wall is carried up to meet it.',
   },
 ];
 
@@ -840,19 +853,19 @@ export const PROPOSED_AUTOMATIC_CHECKS: {
   where: string;
   check: string;
 }[] = [
-  { id: 'P1', where: 'every geometry change', check: 'Reject NaN, infinite coordinates, invalid transforms, zero-area faces, degenerate solids and other obviously invalid geometry.' },
+  { id: 'P1', where: 'every geometry change', check: 'Reject NaN, infinite coordinates, invalid transforms, zero-area faces, degenerate solids and other obviously invalid geometry at the moment of change (check_geometry reports non-finite numbers and paper-thin boxes and walls, but only when asked, and not degenerate meshes).' },
   { id: 'P2', where: 'every geometry change', check: 'Detect new unintended intersections between changed objects and unrelated geometry, while allowing recognised host/intersection relationships.' },
   { id: 'P3', where: 'hosted objects', check: 'Verify hosted objects remain within their host boundaries except where projection is explicitly intended (today only roof windows and dormers are checked at creation).' },
-  { id: 'P4', where: 'supported objects', check: 'Detect objects intended to be supported that are floating above or significantly embedded into their support surface.' },
+  { id: 'P4', where: 'supported objects', check: 'Detect objects other than furniture (steps, structures, fences, water features) that float above or sink into their support surface or the terrain (check_geometry covers furniture on a floor).' },
   { id: 'P5', where: 'windows and operable elements', check: 'Where operation metadata exists, validate the opening/movement envelope against nearby obstructions.' },
-  { id: 'P6', where: 'furniture and equipment', check: 'Evaluate both physical bounds and functional use envelopes such as seating, standing, drawer, wardrobe, appliance and maintenance zones (check_layout treats furniture as its physical footprint only).' },
+  { id: 'P6', where: 'furniture and equipment', check: 'Evaluate both physical bounds and functional use envelopes such as seating, standing, drawer, wardrobe, appliance and maintenance zones (check_layout checks an item\'s use zone against walls only; zones against doors, against other items\' zones and simultaneous use are not checked, though check_model_health reports overlapping clearances between items).' },
   { id: 'P7', where: 'rooms and circulation', check: 'Calculate usable walkable space after walls, fixed objects, furniture and functional envelopes are applied, and verify that individual destinations (a bed, a basin), not just rooms, are reachable.' },
   { id: 'P8', where: 'rooms and circulation', check: 'Report the narrowest point along each route between entrances, rooms and stairs (check_layout only reports that a route narrows below the primary width, not where).' },
   { id: 'P9', where: 'standing-use zones', check: 'Evaluate three-dimensional headroom over the occupied envelope of showers, work areas and tall furniture, not only along stairs.' },
   { id: 'P10', where: 'doors and circulation', check: 'Check the walkable layout both with doors closed and through the required door-opening sequence so a nominal route is not blocked during normal operation, using the real hinge side and swing direction.' },
   { id: 'P11', where: 'repeated objects', check: 'When objects are created as a pattern, verify count, spacing, alignment and orientation against the requested pattern.' },
-  { id: 'P12', where: 'multi-storey buildings', check: 'Verify intended vertical alignments between levels and report unexplained wall, column or opening drift.' },
-  { id: 'P13', where: 'building junctions', check: 'Detect micro-gaps and accidental overlaps at intended wall, slab and roof junctions using a small geometric tolerance.' },
+  { id: 'P12', where: 'multi-storey buildings', check: 'Verify intended vertical alignments of columns, openings and slabs between levels (check_geometry reports walls that are 2 to 30 cm off the wall below).' },
+  { id: 'P13', where: 'building junctions', check: 'Detect micro-gaps and accidental overlaps at wall-to-slab and slab-to-roof junctions, and wall overlaps (check_geometry reports gaps between wall ends only).' },
   { id: 'P14', where: 'terrain-hosted objects', check: 'Evaluate terrain contact using the actual terrain surface rather than assuming a constant y level (add_plant, add_fence, add_patio and add_pond read the terrain when they place objects, but nothing checks it afterwards).' },
   { id: 'P15', where: 'every change', check: 'Separate newly introduced validation problems from pre-existing model problems so edits can be judged without hiding regressions.' },
 ];
@@ -908,7 +921,7 @@ export const RULE_ENFORCEMENT: Record<string, { level: Enforcement; by?: string 
   D10: { level: 'partial', by: 'add_roof_window, add_dormers and add_plant space repeats evenly; no general pattern tool.' },
   D11: { level: 'partial', by: 'The tools exist (rule B17) but nothing stops generic geometry.' },
   D12: { level: 'partial', by: 'check_layout (door swing, routes); furniture use zones are not checked.' },
-  D13: { level: 'unchecked', by: 'No support/floating check (P4).' },
+  D13: { level: 'partial', by: 'check_geometry finds furniture floating over or sunk into a floor; nothing checks steps, structures or terrain contact (P4).' },
   D14: { level: 'partial', by: 'add_opening, add_roof_window and add_dormers check placement; check_model_health finds orphan and over-wide openings.' },
   D15: { level: 'partial', by: 'check_model_health, check_layout.' },
   D16: { level: 'advice' },
@@ -919,26 +932,26 @@ export const RULE_ENFORCEMENT: Record<string, { level: Enforcement; by?: string 
   B1: { level: 'advice' },
   B2: { level: 'enforced', by: 'C1, C2.' },
   B3: { level: 'advice' },
-  B4: { level: 'unchecked', by: 'No junction gap check (P13).' },
+  B4: { level: 'partial', by: 'check_geometry finds wall ends that stop short of another wall; slab and roof junctions are not checked (P13).' },
   B5: { level: 'enforced', by: 'C3, C4.' },
   B6: { level: 'partial', by: 'C3 warns if the top lands outside a room; check_layout warns if a floor has no stairs arriving. Whether the space is usable is not checked.' },
   B7: { level: 'enforced', by: 'check_layout stair headroom (C9).' },
-  B8: { level: 'partial', by: 'add_opening refuses over-wide or over-tall openings; check_model_health finds orphan openings. Sill/head and overlap are not checked.' },
+  B8: { level: 'partial', by: 'add_opening refuses over-wide or over-tall openings; check_geometry finds openings outside the wall, overlapping, at a wall end or (doors) off the floor; check_model_health finds orphan openings. Sill and head heights being plausible is not checked.' },
   B9: { level: 'enforced', by: 'check_layout door swing (C9); hinge side is not known, so a clear side is enough.' },
   B10: { level: 'partial', by: 'check_layout routes and swing; trapped-by-the-leaf cases are not.' },
   B11: { level: 'enforced', by: 'check_layout routes (C9).' },
   B12: { level: 'partial', by: 'check_layout reports a room whose route narrows below the primary width, not where (P8).' },
-  B13: { level: 'unchecked', by: 'Furniture is checked as its footprint only (P6).' },
+  B13: { level: 'partial', by: 'check_layout finds use zones inside walls; check_model_health finds overlapping clearances between items. Zones against doors and simultaneous use are not checked (P6).' },
   B14: { level: 'unchecked', by: 'P6, P7.' },
   B15: { level: 'partial', by: 'furnish_room is collision-aware and drops what is too tall (C5); check_layout then checks routes.' },
   B16: { level: 'partial', by: 'C5 for furniture; standing-use zones and circulation are not checked (P9).' },
   B17: { level: 'partial', by: 'The tools exist; nothing stops a look-alike.' },
   B18: { level: 'advice' },
-  B19: { level: 'unchecked', by: 'No vertical alignment check (P12).' },
+  B19: { level: 'partial', by: 'check_geometry finds walls a few centimetres off the wall below; columns, openings and slabs are not checked (P12).' },
   B20: { level: 'partial', by: 'check_model_health, check_layout, preview_model.' },
   I1: { level: 'advice' },
   I2: { level: 'partial', by: 'check_layout reaches rooms, not individual destinations (P7).' },
-  I3: { level: 'unchecked', by: 'P6.' },
+  I3: { level: 'partial', by: 'As B13 (P6).' },
   I4: { level: 'unchecked', by: 'P6, P10.' },
   I5: { level: 'advice' }, I6: { level: 'advice' },
   I7: { level: 'partial', by: 'Door swing is checked (C9); windows are not.' },
@@ -954,7 +967,7 @@ export const RULE_ENFORCEMENT: Record<string, { level: Enforcement; by?: string 
   L8: { level: 'unchecked', by: 'No boundary check.' },
   O1: { level: 'advice' }, O2: { level: 'advice' }, O3: { level: 'unchecked', by: 'P11.' },
   O4: { level: 'unchecked', by: 'P4.' },
-  O5: { level: 'unchecked', by: 'P1.' },
+  O5: { level: 'partial', by: 'check_geometry finds paper-thin boxes and walls; self-intersecting geometry is not checked (P1).' },
   O6: { level: 'unchecked', by: 'No moving-part check.' },
   O7: { level: 'unchecked', by: 'P4.' },
   O8: { level: 'advice' },
