@@ -7,6 +7,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'October 4, 2026',
     items: [
+      'Reconstruction Studio: fixed a crash (Maximum call stack size exceeded) when adding geometry from a large plan. Room measuring now handles open-plan rooms of any size, and a failure in room detection can no longer take the page down.',
       'Large SketchUp files: .skp files are now read in the background with a progress bar instead of freezing the page, components used many times are stored once while reading, and the merge into your model uses far less memory. If a file still cannot open, the message now says why (for example, ran out of memory) and what to try, rather than a generic error.',
       'Wall tool: drawing walls could freeze the page when the model was large or had a stray wall far from the building, because room detection scaled with the whole site area. It now looks only at the cells near each wall and caps the grid size.',
       'Settings / API has a Gemini API Key section. Reconstruction Studio uses it for AI plan recognition (AI Query and AI Generate use it too). It is stored only in your browser.',
