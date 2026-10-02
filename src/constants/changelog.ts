@@ -7,6 +7,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     date: 'October 2, 2026',
     items: [
+      'Distant grass is less patchy. The tuft layer used to begin only where the far single blades ended, so the middle distance had thin, isolated blades over bare ground colour. Tufts now start where the middle blade ring ends, and the far tufts are packed about twice as close (about 1 m apart for normal lawn, so neighbouring tufts overlap). Taller grass also gets a denser far blade ring. Cost in a 400 m test field: about 2% more triangles for ordinary grass, about 10% more for 0.9 m grass, and no extra draw calls.',
       'Interior Studio has five new room types: Office, Home office, Kitchen, Bathroom and Toilet. Offices seat a chair at each desk, kitchens size a run of base and wall units (with sink, hob and hood) to the wall and add a fridge freezer and, if there is space, a dining table and chairs, and bathrooms and toilets fit a bath, toilet, basin and shower. Anything that does not fit is left out and reported. The new furniture (desk, office chair, bookcase, filing cabinet, kitchen units, fridge, dining table and chair, bath, shower, toilet, basin) can also be added one piece at a time from the Developer API.',
       'Bathroom, toilet and kitchen fixtures follow plumbing rules: they only stand against walls, keep clear space in front (60 cm for a toilet, 90 cm for kitchen units), and cluster next to each other so supply and waste pipes stay short. Each carries its water supply and waste needs for later use.',
     ],

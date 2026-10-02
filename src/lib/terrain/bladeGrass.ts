@@ -30,6 +30,11 @@ export interface GrassRing {
    * to keep the same ground coverage; they are only ever seen from a distance.
    */
   widthScale: number;
+  /**
+   * Radius at which this ring starts to thin in. Normally the end of the ring before it; the tuft
+   * layer starts earlier, so cards fill the ground between the sparse single blades of the far ring.
+   */
+  fadeInRadius?: number;
 }
 
 /** Mirrors the shader's integer hierarchy for identity checks and diagnostics. */
@@ -50,7 +55,7 @@ export const GRASS_FADE_START = 0.72;
 export const GRASS_FADE_END = 0.97;
 
 /** Instanced roots per ring (near, middle, far blades, distant tuft cards) are capped to keep a GPU budget. */
-export const MAX_RING_BLADES = [300_000, 280_000, 160_000, 80_000];
+export const MAX_RING_BLADES = [300_000, 280_000, 300_000, 600_000];
 
 /** Blades per square metre for the 1–25 density slider (a real lawn has thousands). */
 export function bladesPerSquareMetre(density: number): number {
@@ -64,7 +69,8 @@ export function bladesPerSquareMetre(density: number): number {
  * at most 2x wider, far ones (a pixel or two across) at most 4x; distance itself keeps blades at
  * least a pixel wide in the shader, so nearby grass never reads as a different, fatter model. Taller grass stays
  * visible further away, so its rings are larger. A fourth two-triangle tuft layer extends
- * coverage to 180–450 m without extending the expensive blade rings.
+ * coverage to 180–450 m without extending the expensive blade rings. It starts thinning in where the middle ring ends, rather than
+ * where the far blades end, because those far blades are single sparse strands that leave the sward patchy on their own.
  */
 export function grassRings(settings: Pick<GrassSettings, 'density' | 'baseHeight' | 'heightVariance'>): GrassRing[] {
   const height = settings.baseHeight + settings.heightVariance;
@@ -88,7 +94,7 @@ export function grassRings(settings: Pick<GrassSettings, 'density' | 'baseHeight
     previousStride = stride;
     const spacing = nearSpacing * stride;
     return { ...spec, spacing, baseSpacing: nearSpacing, stride, widthScale: Math.min(maxWiden, stride), cells: Math.ceil((2 * spec.radius) / spacing) };
-  });
+  }).map((ring, index, rings) => ring.kind === 'clump' && index >= 2 ? { ...ring, fadeInRadius: rings[1]!.radius } : ring);
 }
 
 /**

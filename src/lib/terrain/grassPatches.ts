@@ -67,7 +67,7 @@ export class GrassPatchBatch {
       for (let z = startZ; z < endZ; z++) for (let x = startX; x < endX; x++)
         this.occupied[i++] = grassPatchOccupied(field,x*size,z*size,(x+1)*size,(z+1)*size) ? 1 : 0;
     }
-    const outer = ring.radius * GRASS_FADE_END - lodBias, inner = finer ? finer.radius * GRASS_FADE_START - lodBias : -1;
+    const outer = ring.radius * GRASS_FADE_END - lodBias, inner = (ring.fadeInRadius ?? finer?.radius) !== undefined ? (ring.fadeInRadius ?? finer!.radius) * GRASS_FADE_START - lodBias : -1;
     let count = 0, changed = false, maskIndex = 0;
     this.candidatePatches = (endX - startX) * (endZ - startZ);
     for (let z = startZ; z < endZ; z++) for (let x = startX; x < endX; x++) {

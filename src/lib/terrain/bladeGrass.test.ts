@@ -24,6 +24,25 @@ describe('Dense blade grass', () => {
       });
     }
   });
+  it('starts the tuft cards where the middle ring ends and keeps them close enough to overlap', () => {
+    for (const heights of [{ baseHeight: 0.05, heightVariance: 0.1 }, { baseHeight: 0.25, heightVariance: 0.2 }, { baseHeight: 0.6, heightVariance: 0.3 }]) {
+      const rings = grassRings({ ...DEFAULT_GRASS_SETTINGS, density: 10, ...heights });
+      const clump = rings[3]!;
+      expect(clump.kind).toBe('clump');
+      expect(clump.fadeInRadius).toBe(rings[1]!.radius);
+      expect(rings[2]!.fadeInRadius).toBeUndefined();
+      // Cards are 0.3-1.2 m wide: at ~1 m spacing neighbouring cards overlap instead of leaving bare ground.
+      expect(clump.spacing).toBeLessThanOrEqual(1.3);
+    }
+  });
+  it('thins the tuft layer in from its own start radius', () => {
+    const rings = grassRings({ ...DEFAULT_GRASS_SETTINGS });
+    const uniforms = createBladeRingUniforms();
+    updateRingUniforms(uniforms, rings[3]!, rings[2], 0, 0);
+    expect(uniforms.uFadeIn.value.x).toBeCloseTo(rings[1]!.radius * 0.72);
+    updateRingUniforms(uniforms, rings[2]!, rings[1], 0, 0);
+    expect(uniforms.uFadeIn.value.x).toBeCloseTo(rings[1]!.radius * 0.72);
+  });
   it('draws hundreds of blades per square metre and stays within the ring budgets', () => {
     expect(bladesPerSquareMetre(DEFAULT_GRASS_SETTINGS.density)).toBeGreaterThanOrEqual(300);
     for (const density of [1, 10, 25]) {

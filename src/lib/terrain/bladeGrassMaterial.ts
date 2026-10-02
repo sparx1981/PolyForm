@@ -108,7 +108,8 @@ export function updateRingUniforms(uniforms: BladeRingUniforms, ring: GrassRing,
   uniforms.uWidthScale.value = ring.widthScale;
   // Hand over gradually across the outer part of each ring, so density falls off smoothly.
   uniforms.uFade.value.set(ring.radius * GRASS_FADE_START, ring.radius * GRASS_FADE_END);
-  if (finer) uniforms.uFadeIn.value.set(finer.radius * GRASS_FADE_START, finer.radius * GRASS_FADE_END);
+  const inner = ring.fadeInRadius ?? finer?.radius;
+  if (inner !== undefined) uniforms.uFadeIn.value.set(inner * GRASS_FADE_START, inner * GRASS_FADE_END);
   else uniforms.uFadeIn.value.set(0, -1);
 }
 
