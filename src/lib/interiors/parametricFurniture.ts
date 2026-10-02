@@ -93,6 +93,18 @@ for (const [type, name, width, height, depth] of [
 }
 Object.assign(profiles, roomProfiles);
 
+/**
+ * A cushion or pillow propped at `angle` radians from flat, leaning back (its top edge toward -z): its lowest
+ * edge rests on `baseY` and its rearmost edge touches `backZ`. Placing from the contacts, rather than a
+ * guessed centre, keeps cushions sitting on the seat and against the back instead of hovering.
+ */
+function propped(width: number, thickness: number, length: number, x: number, baseY: number, backZ: number, angle: number, yaw: number, options: { role: 'pillow' | 'scatter'; accent?: boolean; radius: number }): THREE.BufferGeometry {
+  const t = thickness * 1.12; // padded() lofts the faces a little
+  const y = baseY + (length / 2) * Math.sin(angle) + (t / 2) * Math.cos(angle);
+  const z = backZ + (length / 2) * Math.cos(angle) + (t / 2) * Math.sin(angle);
+  return padded(width, thickness, length, x, y, z, { ...options, rotation: [angle, yaw, 0] });
+}
+
 function bedGeometry(p: FurnitureSize): THREE.BufferGeometry {
   const dressed = (p.dressing ?? 1) > 0;
   // Width is the whole bed with the duvet hanging over each side; the mattress sits inside it.
@@ -108,17 +120,15 @@ function bedGeometry(p: FurnitureSize): THREE.BufferGeometry {
     padded(mattW + 0.24, p.headboardHeight, 0.12, 0, p.headboardHeight / 2, -p.depth / 2 + 0.06, { role: 'headboard' }),
     // The duvet is wider than the mattress and hangs over its sides; settling drapes it.
     padded(p.width, 0.15, duvetLen, 0, top + 0.075, duvetZ, { role: 'duvet', edge, radius: 0.07, fineBeyond: edge - 0.02, sheet: true }),
-    // Turned-back top edge of the duvet.
-    padded(p.width * 0.97, 0.11, 0.3, 0, top + 0.17, duvetZ - duvetLen / 2 + 0.17, { role: 'duvet', edge, radius: 0.05, sheet: true }),
   ];
   const lx = mattW / 2 + 0.02 - leg / 2, lz = p.depth / 2 - leg / 2;
   for (const x of [-lx, lx]) for (const z of [-lz, lz]) parts.push(box(leg, 0.12, leg, x, 0.06, z));
   if (dressed) {
-    const pw = Math.min(0.62, mattW * 0.42);
-    for (const x of [-1, 1]) {
-      parts.push(padded(pw, 0.15, 0.42, x * (pw / 2 + 0.04), top + 0.1, -p.depth / 2 + 0.34, { role: 'pillow', rotation: [0.2, 0, 0], radius: 0.07 }));
-      parts.push(padded(pw * 0.72, 0.1, 0.3, x * (pw * 0.4), top + 0.27, -p.depth / 2 + 0.62, { role: 'scatter', rotation: [0.95, -x * 0.18, 0], accent: true, radius: 0.055 }));
-    }
+    // Two sleeping pillows propped against the headboard, with scatter cushions leaning on them.
+    const pw = Math.min(0.72, mattW / 2 - 0.03), headFace = -p.depth / 2 + 0.125;
+    for (const x of [-1, 1]) parts.push(propped(pw, 0.14, 0.5, x * (pw / 2 + 0.02), top, headFace, 1.12, -x * 0.05, { role: 'pillow', radius: 0.07 }));
+    parts.push(propped(0.44, 0.11, 0.44, -0.27, top + 0.14, headFace + 0.37, 0.95, 0.14, { role: 'scatter', accent: true, radius: 0.05 }));
+    parts.push(propped(0.4, 0.11, 0.4, 0.3, top + 0.14, headFace + 0.38, 1.0, -0.18, { role: 'scatter', accent: true, radius: 0.05 }));
     // A folded throw across the foot of the bed.
     parts.push(padded(p.width * 0.94, 0.05, 0.5, 0, top + 0.2, p.depth / 2 - 0.3, { role: 'throw', accent: true, radius: 0.024, sheet: true, edge: Math.min(0.95, mattW / (p.width * 0.94)), fineBeyond: Math.min(0.95, mattW / (p.width * 0.94)) - 0.02 }));
   }
@@ -150,9 +160,14 @@ function sofaGeometry(p: FurnitureSize): THREE.BufferGeometry {
   const lx = p.width / 2 - 0.09, lz = p.depth / 2 - 0.09;
   for (const x of [-lx, lx]) for (const z of [-lz, lz]) parts.push(box(0.05, legH, 0.05, x, legH / 2, z));
   if (dressed) {
-    const sc = Math.min(0.42, inner / 2.4 + 0.1);
+    // Scatter cushions stand on the seat against the back cushions, turned slightly in toward the middle.
+    const sc = Math.min(0.44, inner / 2.4 + 0.1);
+    const backFace = -p.depth / 2 + 0.415;
     const spots = p.width >= 1.7 ? [-1, 1] : [1];
-    for (const side of spots) parts.push(padded(sc, 0.13, sc, side * (inner / 2 - sc / 2 - 0.02), p.seatHeight + 0.2, -p.depth / 2 + 0.5, { role: 'scatter', rotation: [1.0, -side * 0.25, 0], accent: true, radius: 0.058 }));
+    for (const side of spots) {
+      const size = side < 0 ? sc : sc * 0.92;
+      parts.push(propped(size, 0.12, size, p.width >= 1.7 ? side * (inner / 2 - size / 2 - 0.02) : 0.06, p.seatHeight + 0.012, backFace, side < 0 ? 1.2 : 1.12, -side * 0.28, { role: 'scatter', accent: true, radius: 0.058 }));
+    }
     if (p.width >= 1.9) {
       // A throw laid over one seat and arm, hanging down the outside.
       const x0 = p.width / 2 - arm;

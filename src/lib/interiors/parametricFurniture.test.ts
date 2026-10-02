@@ -120,4 +120,63 @@ describe('soft furnishings', () => {
     }
   });
 
+
+  describe('scatter cushion and pillow placement', () => {
+    type Part = { role?: string; start: number; count: number };
+    const bounds = (shape: ReturnType<typeof createInteriorFurnitureShape>, part: Part) => {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = part.start; i < part.start + part.count; i++) for (let a = 0; a < 3; a++) {
+        const v = shape.geometryData.positions[i * 3 + a]!; lo[a] = Math.min(lo[a]!, v); hi[a] = Math.max(hi[a]!, v);
+      }
+      return { lo, hi };
+    };
+    const parts = (shape: ReturnType<typeof createInteriorFurnitureShape>) => shape.customData.furniturePartRanges as Part[];
+
+    it('stands sofa cushions on the seat, against the back, leaning back', () => {
+      const sofa = createInteriorFurnitureShape('sofa');
+      const seat = bounds(sofa, parts(sofa).find(p => p.role === 'seat')!);
+      const back = bounds(sofa, parts(sofa).find(p => p.role === 'back')!);
+      const cushions = parts(sofa).filter(p => p.role === 'scatter');
+      expect(cushions).toHaveLength(2);
+      for (const part of cushions) {
+        const b = bounds(sofa, part);
+        // Resting on the seat, not hovering above it or sunk into it.
+        expect(b.lo[1]! - seat.hi[1]!).toBeGreaterThan(-0.03);
+        expect(b.lo[1]! - seat.hi[1]!).toBeLessThan(0.04);
+        // Upright enough to read as sitting up, and its rear edge touching the back cushions.
+        expect(b.hi[1]! - b.lo[1]!).toBeGreaterThan(0.3);
+        expect(Math.abs(b.lo[2]! - back.hi[2]!)).toBeLessThan(0.08);
+        // Leaning back: the top of the cushion is behind its bottom.
+        const mid = (b.lo[2]! + b.hi[2]!) / 2;
+        let topZ = 0, topN = 0, bottomZ = 0, bottomN = 0;
+        for (let i = part.start; i < part.start + part.count; i++) {
+          const y = sofa.geometryData.positions[i * 3 + 1]!, z = sofa.geometryData.positions[i * 3 + 2]!;
+          if (y > b.hi[1]! - 0.05) { topZ += z; topN++; } else if (y < b.lo[1]! + 0.05) { bottomZ += z; bottomN++; }
+        }
+        expect(topZ / topN).toBeLessThan(bottomZ / bottomN);
+        expect(mid).toBeGreaterThan(back.lo[2]!);
+      }
+    });
+
+    it('props the bed pillows against the headboard and leans cushions on them', () => {
+      const bed = createInteriorFurnitureShape('bed');
+      const mattress = bounds(bed, parts(bed).find(p => p.role === 'mattress')!);
+      const headboard = bounds(bed, parts(bed).find(p => p.role === 'headboard')!);
+      const pillows = parts(bed).filter(p => p.role === 'pillow');
+      expect(pillows).toHaveLength(2);
+      for (const part of pillows) {
+        const b = bounds(bed, part);
+        expect(Math.abs(b.lo[1]! - mattress.hi[1]!)).toBeLessThan(0.04);                 // resting on the mattress
+        expect(b.lo[2]! - (headboard.lo[2]! + 0.12)).toBeLessThan(0.05);                  // back against the headboard face
+        expect(b.hi[1]! - b.lo[1]!).toBeGreaterThan(0.3);                                 // propped up, not lying flat
+      }
+      const frontOfPillows = Math.max(...pillows.map(p => bounds(bed, p).hi[2]!));
+      for (const part of parts(bed).filter(p => p.role === 'scatter')) {
+        const b = bounds(bed, part);
+        expect(b.lo[2]!).toBeLessThan(frontOfPillows + 0.06);                             // right in front of the pillows, leaning on them
+        expect(b.lo[1]!).toBeGreaterThan(mattress.hi[1]! + 0.05);                         // standing on the duvet, not the bare mattress
+        expect(b.lo[1]!).toBeLessThan(mattress.hi[1]! + 0.3);
+      }
+    });
+  });
 });

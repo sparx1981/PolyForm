@@ -37,6 +37,6 @@ describe('cloth fingerprints', () => {
     const duvet = (bed.customData.furniturePartRanges as Array<{ role?: string; start: number; count: number }>).filter(p => p.role === 'duvet').reduce((a, b) => (b.count > a.count ? b : a));
     let sum = 0;
     for (let i = duvet.start; i < duvet.start + duvet.count; i++) sum += baked.geometryData.positions[i * 3 + 1]!;
-    near(sum / duvet.count, 0.61468);
+    near(sum / duvet.count, 0.5993);
   });
 });

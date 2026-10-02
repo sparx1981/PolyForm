@@ -133,7 +133,7 @@ export function drapeSheetParts(positions: number[], parts: FurniturePartRange[]
         if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
       }
       if (maxX - minX > 0.15 && maxY - minY > 0.05 && maxZ - minZ > 0.15) base.push(new BoxCollider([(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2], [(maxX - minX) / 2, (maxY - minY) / 2, (maxZ - minZ) / 2]));
-    } else if (part.size && part.centre && part.role && part.role !== 'throw') {
+    } else if (part.size && part.centre && part.role && part.role !== 'throw' && part.role !== 'scatter') {
       const [w, h, d] = part.size;
       base.push(new BoxCollider(part.centre, [w / 2 * 0.97, h / 2 * 1.08, d / 2 * 0.97], rowMajor(part.rotation ?? [0, 0, 0])));
     }
